@@ -1,0 +1,35 @@
+# Gradle
+.gradle/
+build/
+!gradle-wrapper.jar
+local.properties
+
+# IDE
+.idea/
+*.iml
+.fleet/
+.vscode/
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# Crash logs
+hs_err_pid*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keystore — never commit signing keys
+*.jks
+*.keystore
+keystore.properties
