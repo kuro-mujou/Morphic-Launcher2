@@ -19,9 +19,11 @@ data class ComponentKey(
     val className: String,
     val userSerial: Long = 0L,
 ) {
+    /** Serializes this key to a stable string `packageName/className#userSerial` (inverse of [parse]). */
     fun flatten(): String = "$packageName/$className#$userSerial"
 
     companion object {
+        /** Parses a string produced by [flatten]; returns null when it is malformed. */
         fun parse(flat: String): ComponentKey? {
             val hashIdx = flat.lastIndexOf('#')
             if (hashIdx == -1) return null

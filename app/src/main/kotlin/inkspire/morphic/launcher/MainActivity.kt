@@ -11,6 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
+/**
+ * The launcher's single Activity and P0 entry point. Sets a Compose content root that currently shows a
+ * placeholder hello screen; the real home/side surfaces replace this from P4 onward.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

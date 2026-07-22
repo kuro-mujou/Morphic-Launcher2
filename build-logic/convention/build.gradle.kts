@@ -4,7 +4,7 @@ plugins {
     `kotlin-dsl`
 }
 
-group = "com.morphic.buildlogic"
+group = "inkspire.morphic.buildlogic"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -28,31 +28,31 @@ gradlePlugin {
     plugins {
         register("androidApplication") {
             id = "launcher.android.application"
-            implementationClass = "com.morphic.buildlogic.AndroidApplicationConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.AndroidApplicationConventionPlugin"
         }
         register("androidApplicationCompose") {
             id = "launcher.android.application.compose"
-            implementationClass = "com.morphic.buildlogic.AndroidApplicationComposeConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.AndroidApplicationComposeConventionPlugin"
         }
         register("androidLibrary") {
             id = "launcher.android.library"
-            implementationClass = "com.morphic.buildlogic.AndroidLibraryConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.AndroidLibraryConventionPlugin"
         }
         register("androidLibraryCompose") {
             id = "launcher.android.library.compose"
-            implementationClass = "com.morphic.buildlogic.AndroidLibraryComposeConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.AndroidLibraryComposeConventionPlugin"
         }
         register("androidFeature") {
             id = "launcher.android.feature"
-            implementationClass = "com.morphic.buildlogic.AndroidFeatureConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.AndroidFeatureConventionPlugin"
         }
         register("androidRoom") {
             id = "launcher.android.room"
-            implementationClass = "com.morphic.buildlogic.AndroidRoomConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.AndroidRoomConventionPlugin"
         }
         register("jvmLibrary") {
             id = "launcher.jvm.library"
-            implementationClass = "com.morphic.buildlogic.JvmLibraryConventionPlugin"
+            implementationClass = "inkspire.morphic.buildlogic.JvmLibraryConventionPlugin"
         }
     }
 }

@@ -6,3 +6,8 @@ plugins {
 android {
     namespace = "inkspire.morphic.core.designsystem"
 }
+
+dependencies {
+    implementation(projects.core.model)
+    implementation(libs.androidx.compose.material3.adaptive)
+}

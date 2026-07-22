@@ -1,12 +1,28 @@
-# Morphic Launcher 2 — Rewrite Plan (learning build)
+# Morphic Launcher 2 — Rewrite Plan (learning + cleanup build)
 
-**Goal:** rebuild Morphic Launcher from scratch, bottom-up, so the author (a junior Android dev)
-actually understands every layer. The original at `../Morphic-Launcher` is the **reference / answer key** —
-never deleted, always available to compare against.
+**Goal:** rebuild Morphic Launcher from scratch, bottom-up, with TWO intertwined aims: (1) the author
+(a junior Android dev) understands every layer, and (2) the codebase comes out **clean**. Launcher 2 is a
+**refactor**, not a re-type. The original at `../Morphic-Launcher` is the **reference / answer key** —
+it *runs*, but it's fragile and full of code smells (duplication, poor separation, logic in the wrong layer).
+It is never deleted; we compare against it and then do it better.
+
+**Refactor mandate:** do NOT port Launcher 1 code verbatim. For each piece, first understand what the
+reference does and *why*, then question the design before writing it: is this duplicated? is the name honest?
+is this concern in the right module/layer? Fix the smell in Launcher 2. Examples already found this way:
+`GridBlueprint` (centralised scattered grid config; dropped a wrong interface abstraction + dead `max` fields);
+`DeviceConfiguration` (split the pure enum into `core:model`, detection stays in `core:designsystem`);
+`GridPlacement` (merged the near-duplicate `GridRect` + `AppPosition` into one type — rejected a `Vector` name
+because it carries spans, so it's a box not a vector).
 
 **Workflow:** the author writes the code (with local-AI autocomplete); Claude observes, explains the *why*,
-reviews, and unblocks — coaching, not code-dumping. Milestones are kept small so each ends in a visible win.
-Dependencies are added to each module's `build.gradle.kts` *as the code that needs them is written*.
+reviews, proposes the cleaner design, and unblocks — coaching, not code-dumping. Milestones are kept small so
+each ends in a visible win. Dependencies are added to each module's `build.gradle.kts` *as the code that needs
+them is written*.
+
+**Docs convention (Launcher 2):** every class / interface / enum / top-level gets a **KDoc** stating what it
+is and what it's for — this is a *learning + cleanup* build, so the intent should be readable from the source.
+Document non-obvious members/functions too (params, edge cases, units). Keep it concise — explain *purpose*,
+not a line-by-line narration. (This intentionally **differs** from Launcher 1's "docs on request only" rule.)
 
 ## Phases
 
@@ -45,17 +61,21 @@ Grouped by concern. `[x]` = done. ⚠️ = has real logic/geometry (pair with Cl
 **G1 — App identity & grouping** (needed now → P1/P2)
 - [x] `ComponentKey` — unique app identity (package + class + user) + `flatten`/`parse`
 - [x] `AppInfo` — display info; *contains* a `ComponentKey`
-- [ ] `AppEvent` — a change signal (installed / removed / updated) the data layer reacts to
-- [ ] `AppCategory` — enum of Android's system categories (game, social, …)
-- [ ] `Category` — a user-defined group of apps
-- [ ] `CategoryGroup` — a grouping of categories
+- [x] `AppEvent` — a change signal (installed / removed / updated) the data layer reacts to
+- [x] `AppCategory` — enum of Android's system categories (game, social, …)
+- [x] `Category` — a user-defined group of apps
+- [x] `CategoryGroup` — a grouping of categories
 
 **G2 — Grid & geometry** ⚠️ (P2 layout, P4+ UI)
-- [ ] `Orientation` — enum (portrait / landscape)
-- [ ] `GridConfig` — rows × columns of a grid
-- [ ] `GridRect` ⚠️ — a rectangular region on the grid (incl. rotation math — has a unit test)
-- [ ] `GridEdge` — grid edge descriptor
-- [ ] `AppPosition` — where an app sits on the grid
+- [x] `Orientation` — enum (portrait / landscape)
+- [x] `GridConfig` — rows × columns of a grid
+- [x] `GridPlacement` ⚠️ — paged-grid rect (page + row/col + spans) with overlap/contains/fit/rotation math.
+      **Merged `GridRect` + `AppPosition`** into one honest type (they were near-duplicates). Named a *placement*
+      not a `Vector` — it carries spans (extent), so it's a box, not a vector. ⚠️ needs the rotation unit test.
+- [x] `DeviceConfiguration` — device/orientation enum (phone/tablet × portrait/landscape). Pure enum in
+      `core:model`; window-size detection (`fromWindowSizeClass`, `currentDeviceConfiguration`) in `core:designsystem`.
+- [x] `GridBlueprint` — **was `GridEdge`**: centralises per-(surface × layout) grid config — sizing, cell
+      multiplier, free-placement, per-`DeviceConfiguration` defaults, optional edit range; holds `GridEditorEdge`.
 
 **G3 — Layout containers & arrangement** (P2 layout, P4–P7)
 - [ ] `IconContainer`, `IconArrangement`, `DrawerSlot`, `Folder`,
