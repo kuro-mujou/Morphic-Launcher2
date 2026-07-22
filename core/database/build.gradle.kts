@@ -6,3 +6,8 @@ plugins {
 android {
     namespace = "inkspire.morphic.core.database"
 }
+
+dependencies {
+    implementation(projects.core.model)
+    implementation(projects.core.common)
+}
