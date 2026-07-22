@@ -37,3 +37,38 @@ Dependencies are added to each module's `build.gradle.kts` *as the code that nee
 | `data:*` | `android.library` (+ serialization for `icons`) |
 | `feature:*` | `android.feature` (auto-adds core:model/common/designsystem + Compose/Koin/coroutines/lifecycle) |
 | `app` | `android.application` + `application.compose` |
+
+## `core:model` inventory (write each when its phase needs it — not all up front)
+
+Grouped by concern. `[x]` = done. ⚠️ = has real logic/geometry (pair with Claude for the concept).
+
+**G1 — App identity & grouping** (needed now → P1/P2)
+- [x] `ComponentKey` — unique app identity (package + class + user) + `flatten`/`parse`
+- [x] `AppInfo` — display info; *contains* a `ComponentKey`
+- [ ] `AppEvent` — a change signal (installed / removed / updated) the data layer reacts to
+- [ ] `AppCategory` — enum of Android's system categories (game, social, …)
+- [ ] `Category` — a user-defined group of apps
+- [ ] `CategoryGroup` — a grouping of categories
+
+**G2 — Grid & geometry** ⚠️ (P2 layout, P4+ UI)
+- [ ] `Orientation` — enum (portrait / landscape)
+- [ ] `GridConfig` — rows × columns of a grid
+- [ ] `GridRect` ⚠️ — a rectangular region on the grid (incl. rotation math — has a unit test)
+- [ ] `GridEdge` — grid edge descriptor
+- [ ] `AppPosition` — where an app sits on the grid
+
+**G3 — Layout containers & arrangement** (P2 layout, P4–P7)
+- [ ] `IconContainer`, `IconArrangement`, `DrawerSlot`, `Folder`,
+      `LayoutChange`, `LayoutCombination`, `AppDrawerLayout`, `AppLibraryLayout`
+
+**G4 — Surfaces & navigation** (P3–P5)
+- [ ] `Surface`, `HomeSurfaceKind`, `SideSurfaceKind`, `SurfaceTransition`,
+      `TabBarPosition`, `SearchPosition`
+
+**G5 — Widgets** (later, ~P6) — `WidgetInfo`, `WidgetContainer`
+**G6 — Wallpaper & effects** (late, ~P8) — `WallpaperEffect`, `WallpaperEffectParams`
+
+### How we work from here
+The author drives — picks the next piece from this map. Claude's job: (1) teach the *concept* on the
+⚠️ geometry/logic ones, (2) review on request. No more per-class prompts. Principle stands: don't write a
+model in a vacuum — write it when the database/UI that consumes it is being built, so it has context.
