@@ -56,38 +56,6 @@ not a line-by-line narration. (This intentionally **differs** from Launcher 1's 
 
 ## `core:model` inventory (write each when its phase needs it — not all up front)
 
-Grouped by concern. `[x]` = done. ⚠️ = has real logic/geometry (pair with Claude for the concept).
-
-**G1 — App identity & grouping** (needed now → P1/P2)
-- [x] `ComponentKey` — unique app identity (package + class + user) + `flatten`/`parse`
-- [x] `AppInfo` — display info; *contains* a `ComponentKey`
-- [x] `AppEvent` — a change signal (installed / removed / updated) the data layer reacts to
-- [x] `AppCategory` — enum of Android's system categories (game, social, …)
-- [x] `Category` — a user-defined group of apps
-- [x] `CategoryGroup` — a grouping of categories
-
-**G2 — Grid & geometry** ⚠️ (P2 layout, P4+ UI)
-- [x] `Orientation` — enum (portrait / landscape)
-- [x] `GridConfig` — rows × columns of a grid
-- [x] `GridPlacement` ⚠️ — paged-grid rect (page + row/col + spans) with overlap/contains/fit/rotation math.
-      **Merged `GridRect` + `AppPosition`** into one honest type (they were near-duplicates). Named a *placement*
-      not a `Vector` — it carries spans (extent), so it's a box, not a vector. ⚠️ needs the rotation unit test.
-- [x] `DeviceConfiguration` — device/orientation enum (phone/tablet × portrait/landscape). Pure enum in
-      `core:model`; window-size detection (`fromWindowSizeClass`, `currentDeviceConfiguration`) in `core:designsystem`.
-- [x] `GridBlueprint` — **was `GridEdge`**: centralises per-(surface × layout) grid config — sizing, cell
-      multiplier, free-placement, per-`DeviceConfiguration` defaults, optional edit range; holds `GridEditorEdge`.
-
-**G3 — Layout containers & arrangement** (P2 layout, P4–P7)
-- [ ] `IconContainer`, `IconArrangement`, `DrawerSlot`, `Folder`,
-      `LayoutChange`, `LayoutCombination`, `AppDrawerLayout`, `AppLibraryLayout`
-
-**G4 — Surfaces & navigation** (P3–P5)
-- [ ] `Surface`, `HomeSurfaceKind`, `SideSurfaceKind`, `SurfaceTransition`,
-      `TabBarPosition`, `SearchPosition`
-
-**G5 — Widgets** (later, ~P6) — `WidgetInfo`, `WidgetContainer`
-**G6 — Wallpaper & effects** (late, ~P8) — `WallpaperEffect`, `WallpaperEffectParams`
-
 ### How we work from here
 The author drives — picks the next piece from this map. Claude's job: (1) teach the *concept* on the
 ⚠️ geometry/logic ones, (2) review on request. No more per-class prompts. Principle stands: don't write a
@@ -99,6 +67,9 @@ Everything below `feature:*`, in rough **dependency order** (each stage may depe
 Class lists are taken from the Launcher 1 reference at `../launcher`. Legend: ⚠️ = real logic — understand
 before porting; 🔧 = known smell — refactor, don't copy. Build a module only when a consumer needs it (the
 "no model in a vacuum" principle); this map is the *shape*, not a "write it all now" list.
+
+### B0 — `core:model` 
+- copy/migrate all model from original launcher project
 
 ### B1 — `core:common` — DI + coroutine plumbing (needed early, by almost everything)
 - `dispatcher/AppDispatchers` — injectable IO/Default/Main dispatcher set (makes coroutines testable).
