@@ -23,8 +23,8 @@ interface AppInfoDao {
     @Query("DELETE FROM app_info WHERE component IN (:components)")
     suspend fun delete(components: List<ComponentKey>)
 
-    @Query("DELETE FROM app_info WHERE component LIKE :packagePrefix || '/%'")
-    suspend fun deleteByPackage(packagePrefix: String)
+    @Query("DELETE FROM app_info WHERE substr(component, 1, instr(component, '/') - 1) = :packageName")
+    suspend fun deleteByPackage(packageName: String)
 
     @Query("DELETE FROM app_info")
     suspend fun clear()
