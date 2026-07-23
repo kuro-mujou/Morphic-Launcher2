@@ -31,6 +31,7 @@ Thumbs.db
 
 # Local MCP config (machine-specific paths)
 .mcp.json
+.serena/
 
 # Keystore — never commit signing keys
 *.jks
