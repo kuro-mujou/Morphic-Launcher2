@@ -165,3 +165,38 @@ Large; port per-component as feature screens need them, not up front. Groups:
 `core:model` (finish G3–G6 as needed) → `core:common` → `core:database` → `core:icon` → `data:settings` →
 `data:apps` → `data:layout` → `data:icons` → `data:widgets` → `core:designsystem`/`core:navigation` (as
 `feature:*` screens demand them).
+
+### Arrangement persistence model (locked 2026-07-23)
+
+How each surface/layout stores *where its items go*. Two primitives cover everything:
+
+- **Coordinate** — item → `GridPlacement` (page/row/col/spans), **per orientation**, gaps allowed. Used
+  ONLY by HOME (pager main, dock, widget area) + home folders/containers. → Room `*_placement` tables keyed
+  by owner + orientation + **`zone: HomeZone`** (MAIN/DOCK/WIDGET_AREA). *(L1's conflated `surface` column
+  became `zone`; L1 `Surface{HOME,DOCK,WIDGET_AREA}` split into L2 `Surface{HOME,APPS}` + `HomeZone`.)*
+- **Order** — item → an ordinal within a bucket (1-D flow); the render re-paginates it. Everything else.
+
+| Surface / layout | Kind | Store | Per-orientation |
+|---|---|---|---|
+| HOME pager / dock / widget area | coordinate | `*_placement` + `zone` | yes |
+| HOME vertical list | order | `home_list_item` | no |
+| APPS vertical list / grid | derived (A–Z) | none | — |
+| APPS pager | paged order (explicit page + in-page slot; gaps per page) | `apps_pager_item` | yes — two lists |
+| APPS pager-w/-category + category card | order within category | `category` + `category_item` (shared) | no |
+| Folder contents | order (dense) | `folder_item.sortOrder` (exists) | no |
+
+Decisions: APPS pager (Samsung-style) stores an explicit **page + in-page slot** per app — pages are hard
+boundaries, so a move compacts only the source page (gap parks at that page's end) and overflow cascades to
+the next page. It keeps **two saved lists** (portrait + landscape): the second is seeded on first rotate by
+re-paginating the first to the new capacity (if the new capacity is smaller, the per-page overflow cascades
+forward), then saved independently; rotating back restores the other verbatim. That re-pagination is
+repository logic — the DB just holds both lists. The two category layouts **share** one category+order store;
+the home vertical list, category, and folder orders are single **orientation-independent** lists (scrollable,
+no page capacity). Only HOME **coordinate** placements (pager/dock/widget area) and the APPS pager are
+**per-orientation**. Categories (defs + membership) live in **Room** (users will
+create custom ones), not the L1 settings blob.
+
+Stores — existing: `*_placement` (coordinate), `folder_item.sortOrder`. Built in B2:
+`apps_pager_item(component, orientation, page, positionInPage)`; `category(id, name, sortOrder)` +
+`category_item(component, categoryId, sortOrder)`; `home_list_item(component, sortOrder)` (apps only, single shared list across orientations).
+Derived/none: APPS vertical list & grid. Layout choice, grid/icon config, sort mode → `data:settings` (B7).
