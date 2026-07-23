@@ -1,28 +1,11 @@
 # Morphic Launcher 2 — Rewrite Plan (learning + cleanup build)
 
-**Goal:** rebuild Morphic Launcher from scratch, bottom-up, with TWO intertwined aims: (1) the author
-(a junior Android dev) understands every layer, and (2) the codebase comes out **clean**. Launcher 2 is a
-**refactor**, not a re-type. The original at `../Morphic-Launcher` is the **reference / answer key** —
-it *runs*, but it's fragile and full of code smells (duplication, poor separation, logic in the wrong layer).
-It is never deleted; we compare against it and then do it better.
+**Goal:** rebuild Morphic Launcher from scratch, bottom-up, as a clean **refactor** (not a re-type) of the
+original at `../Morphic-Launcher` — the reference / answer key, never deleted.
 
-**Refactor mandate:** do NOT port Launcher 1 code verbatim. For each piece, first understand what the
-reference does and *why*, then question the design before writing it: is this duplicated? is the name honest?
-is this concern in the right module/layer? Fix the smell in Launcher 2. Examples already found this way:
-`GridBlueprint` (centralised scattered grid config; dropped a wrong interface abstraction + dead `max` fields);
-`DeviceConfiguration` (split the pure enum into `core:model`, detection stays in `core:designsystem`);
-`GridPlacement` (merged the near-duplicate `GridRect` + `AppPosition` into one type — rejected a `Vector` name
-because it carries spans, so it's a box not a vector).
-
-**Workflow:** the author writes the code (with local-AI autocomplete); Claude observes, explains the *why*,
-reviews, proposes the cleaner design, and unblocks — coaching, not code-dumping. Milestones are kept small so
-each ends in a visible win. Dependencies are added to each module's `build.gradle.kts` *as the code that needs
-them is written*.
-
-**Docs convention (Launcher 2):** every class / interface / enum / top-level gets a **KDoc** stating what it
-is and what it's for — this is a *learning + cleanup* build, so the intent should be readable from the source.
-Document non-obvious members/functions too (params, edge cases, units). Keep it concise — explain *purpose*,
-not a line-by-line narration. (This intentionally **differs** from Launcher 1's "docs on request only" rule.)
+> Working model, refactor mandate, docs/KDoc convention, and the domain concepts (surface taxonomy, layout
+> persistence) live in [CLAUDE.md](../CLAUDE.md). This file holds **only the plan**: phases, the build map,
+> and build order.
 
 ## Phases
 
@@ -53,13 +36,6 @@ not a line-by-line narration. (This intentionally **differs** from Launcher 1's 
 | `data:*` | `android.library` (+ serialization for `icons`) |
 | `feature:*` | `android.feature` (auto-adds core:model/common/designsystem + Compose/Koin/coroutines/lifecycle) |
 | `app` | `android.application` + `application.compose` |
-
-## `core:model` inventory (write each when its phase needs it — not all up front)
-
-### How we work from here
-The author drives — picks the next piece from this map. Claude's job: (1) teach the *concept* on the
-⚠️ geometry/logic ones, (2) review on request. No more per-class prompts. Principle stands: don't write a
-model in a vacuum — write it when the database/UI that consumes it is being built, so it has context.
 
 ## Bottom-layer build map (`core:*` + `data:*`)
 
