@@ -124,6 +124,19 @@ Large; port per-component as feature screens need them, not up front. Groups:
 
 ### B8 — `data:layout` — placement engine + layout persistence (depends on model, database) ⚠️ **highest-logic module**
 - Repository: `LayoutRepository`(+`Impl`), `di/LayoutModule`, mappers (`AppPlacement`/`Folder`/`IconContainer`/`Widget`).
+- 🔧 `LayoutChange` (the layout write-command vocabulary) **lives here, NOT in `core:model`** — it is the
+  repository's command set, not a persisted shape. Refactor while porting (L1 has 19 near-duplicate ops):
+  - Collapse the 5 `Move*` → one `Move(item: GridItem, to: GridPlacement, zone: HomeZone)`, using the
+    `core:model` `GridItem`/`GridPlacement`/`HomeZone` (drop `AppPosition`/`Surface`).
+  - Collapse `AddAppToIconContainer` + `AddFolderToIconContainer` → one `AddToIconContainer(id, item: IconItem)`.
+  - **Removal is NOT one command** (the naive single `Remove(GridItem)` is wrong). Two distinct intents:
+    - **remove** = detach from a placement; the app stays installed. Context-specific, mirroring the Add ops:
+      `RemoveFromGrid(GridItem)`, `RemoveFromFolder(folderId, app)`, `RemoveFromIconContainer(id, IconItem)`,
+      `RemoveFromWidgetContainer(id, appWidgetId)`. Widget remove = unbind; container remove = destroy container.
+    - **uninstall** = destroy the package — a **system action, not a `LayoutChange`**. Belongs in `data:apps`;
+      the layout reacts to the resulting `AppEvent` removal and prunes placements. Uninstall is available
+      wherever an app shows — including the APPS drawer, where it is the *only* removal (you can't "remove"
+      an app from the full installed-app list).
 - Geometry ⚠️: `GridOccupancy`, `PlacementResolver`, `GridReflow`, `GridEdit`, `DockGridEdit`, `WidgetSpan`.
 - 🔧 FLOW engine (`FlowReflow`, `SpreadPush`, `PushPath`): Launcher 1's `FLOW_TO_DRAWER_PLAN` **drops FLOW from
   home**. Decide up front whether L2 even ports these, or moves the packed-grid behaviour straight to the drawer.
