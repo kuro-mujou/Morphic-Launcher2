@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Package visibility (Android 11+): to enumerate every launchable app and read its icon through
+      LauncherApps we must declare the launcher intent here. This is deliberately narrower than
+      QUERY_ALL_PACKAGES — it exposes only activities that answer MAIN/LAUNCHER, which is exactly the set we
+      list. Once L2 is the default home app (P9) LauncherApps is exempt from visibility filtering anyway;
+      this keeps it working while L2 is still an ordinary app. Merges into the app manifest.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+</manifest>

@@ -12,6 +12,13 @@ android {
 }
 
 dependencies {
+    implementation(projects.core.common)
+    implementation(projects.core.database)
+    implementation(projects.core.icon)
+    implementation(projects.data.apps)
+
+    implementation(libs.koin.android)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

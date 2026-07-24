@@ -150,7 +150,9 @@ that alternate fg source — it is not a third stack layer.
 **Editor.** fg/bg are the base; the user inserts **custom layers below bg / between fg&bg / above fg**. The
 only ordering rule is **fg stays above bg** (customs are otherwise free). Per layer:
 - **transform** — X/Y (in a normalized square frame), zoom, rotation.
-- **shape** — an `IconShape` (circle/squircle/…), **fg & bg only**; custom layers keep their own alpha (not shaped).
+- **shape** — an `IconShape`, **fg & bg only**; custom layers keep their own alpha (not shaped). A shape is
+  **backed by a vector drawable** (prepared as a resource) and referenced by a stable id; the clip mask is
+  built from that drawable's silhouette, so adding a shape = drop in a drawable, no path math in code.
 - **effects/filters** — extensible (monochrome + more); do **not** hard-model these as columns.
 
 **Rendering — hybrid:**
