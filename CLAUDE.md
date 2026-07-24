@@ -173,11 +173,50 @@ field-merge, no variable-length-list diffing. **Consequence for B2:** the curren
 **Deferred:** icon packs as a layer source; skin/backing-plate (L1's separate live-Compose backdrop, distinct
 from the baked stack).
 
+## Design system (`core:designsystem`)
+
+- **Keep Expressive *motion*, drop Expressive *visuals*.** New/reworked UI uses Material 3 **Expressive
+  motion** but not its look. `LauncherTheme` sets `motionScheme = MotionScheme.expressive()` on the base
+  MaterialTheme; components get the expressive spring choreography by consuming `MaterialTheme.motionScheme`.
+  The Compose BOM does **not** carry the Expressive APIs, so `material3` is pinned to `1.5.0-alpha22` in the
+  version catalog; opt in per-usage with `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` where the
+  compiler asks.
+- **Monochrome palette.** Greyscale chrome so the wallpaper + app icons carry the colour. `accent` is a
+  high-contrast greyscale *emphasis* (not a hue) — selection/active read by contrast; **red is reserved for
+  `error`** only. **Both light and dark are first-class** (dark mode is an accessibility barrier for some
+  users). Semantic tokens live in [theme/MorphicColors.kt](core/designsystem/src/main/kotlin/inkspire/morphic/core/designsystem/theme/MorphicColors.kt).
+- **Theme layering + monochrome M3 bridge.** `MorphicTheme` provides our colours only (`LocalMorphicColors`).
+  `LauncherTheme` = M3 base + expressive motion + `MorphicTheme`, and it feeds MaterialTheme a **monochrome
+  M3 `ColorScheme` bridged from `MorphicColors`** (`MorphicColors.toM3ColorScheme(dark)`), so stock M3
+  components render greyscale *and* keep Expressive motion. Use `LauncherTheme` as the app wrapper.
+- **Build components *on* M3, restyle — go fully custom only where M3 has no equivalent.** Because the scheme
+  is bridged monochrome, wrap the real M3 component and get its native Expressive motion for free:
+  `MorphicButton` = the M3 button family + `ButtonDefaults.shapes()` (press shape-morph); `MorphicSlider` =
+  M3 `Slider` with custom `thumb`/`track` slots (our thin look, M3's grab). Reserve fully-custom `Row`/`Canvas`
+  for controls M3 lacks — the **2D pad**, the **segmented control**, and a **vertical slider** (M3 has none).
+  The **range slider** maps to M3 `RangeSlider`; range + vertical are deferred until a consumer exists.
+- **Settings vs launcher colour = one theme, two "is-dark" inputs** (not two palettes). Settings feeds
+  `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a **wallpaper-brightness**
+  signal (chrome must contrast the wallpaper — bright wallpaper → Light scheme/black tint, dark → Dark/white).
+  Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
+  `LauncherTheme` overrides its subtree. The wallpaper-brightness analyzer, transparent/frosted launcher
+  surfaces, and `FrostedTextField` are a **deferred launcher-UI subsystem**; settings needs none of it.
+- **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
+  colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
+  package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
+- **Port per-consumer.** L1's `core:designsystem` is ~50 files / 5.4k LOC — pull a group only when the
+  screen that needs it is built, not up front.
+- A **dev gallery** (`app` → `dev/DevGalleryScreen`) hosts every `Morphic*` component + the palette under a
+  light/dark toggle; add each new component to it.
+
 ## Current status
 
-Per the rewrite plan: **P0 (scaffold) done; P1 (Core) in progress.** Done: `core:model` (B0, migrated +
-refactored) and `core:common` (B1, DI + coroutine plumbing). `core:database` (B2 — Room entities, DAOs,
-converters, DI) is implemented; not yet reviewed for correctness. Next in P1/P2 per the build order.
+Per the rewrite plan: **P0 done; P1 (Core) done** — `core:model` (B0), `core:common` (B1), `core:database`
+(B2, reviewed + fixed). **B3 `core:icon` done** — full pipeline: parse → layer model → render/bake →
+`IconRenderManager` → `LauncherIcon`. Per-layer effects and the live editor render path are deferred (to
+revisit when the icon editor is built). **B6 `data:apps` partial** — LauncherApps wrapper, `AppRepository`
++ Room cache, `RawIconSource`; app categorization and `AppEvent` live updates/pruning deferred. App-level
+Koin start + `LocalIconRenderManager` are wired; build is green. **Now: B4 `core:designsystem`.**
 Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 ## Conventions summary
