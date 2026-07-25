@@ -145,7 +145,7 @@ sealed interface CellIntent { data class Push(val dir: PushDirection); object Me
 
 | Surface | Partition of the destination cell | Merge |
 |---|---|---|
-| **Home free-grid**, **Dock** | **icon area only** (excludes label). Outer ring = **4 directional push** (finger on top sub-zone → push occupant toward bottom, etc.); inner ring = **merge**. | merge ring present **only if** target is precomputed mergeable at lift (§6c); otherwise whole cell is 4-way push. |
+| **Home free-grid**, **Dock** | **per target item, not per cell** — the partition spans the hovered occupant's **whole rectangle**, so a multi-cell item (2×2 widget) is **one** target: one 4-way push split by its diagonals (finger in top triangle → push occupant down, etc.) + **one** central merge ring, not one partition per sub-cell. Empty cells have no partition (plain place). | merge ring present **only if** target is precomputed mergeable at lift (§6c); otherwise the whole item is 4-way push. |
 | **APPS pager (no category)** | full cell incl. label, **`[left \| center \| right]`**; center = merge; **near-side zone disabled**, far-side = push (§6b). | yes (3-zone) |
 | **APPS pager (category)**, **Folder view** | same, **`[left \| right]`** | no folders allowed → 2-zone, no merge |
 | **Home vertical list** | center-cross (Reorderable-style 1-D) | no |

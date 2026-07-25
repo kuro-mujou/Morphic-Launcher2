@@ -57,7 +57,6 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.PushDirection
 import kotlin.math.abs
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -111,26 +110,29 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                 val span = placements[item] ?: return@DropPlanner null
                 val occupants = placements.filterKeys { it != item }
 
-                // Merge: finger in the inner ring of an occupant this item can combine with. Eligibility is
-                // checked per hover (equivalent to §6c's lift-time precompute) — a non-mergeable target simply
-                // never offers the ring, so its whole cell stays a push zone with no conflict.
+                // The occupant under the finger (if any) is the push/merge target: its **whole rectangle**
+                // forms one 4-way push partition with a single central merge ring — so a 2×2 is one target,
+                // not four per-cell partitions (§6a). Eligibility is checked per hover (≈ §6c's precompute).
                 val hovered = geo.cellAt(fingerInRoot)
-                if (hovered != null && geo.inMergeRing(fingerInRoot)) {
-                    val target = occupants.entries.firstOrNull { it.value.covers(hovered) }
-                    if (target != null && canMerge(item, target.key)) {
-                        return@DropPlanner FreeGridPlanner.plan(target.value, occupants, config, merge = true)
-                    }
-                }
+                val target = hovered?.let { h -> occupants.entries.firstOrNull { it.value.covers(h) } }
 
-                // Otherwise place/push. Snap the footprint to the dragged item's own position (finger-centred),
-                // rounded to the nearest cell — it holds still until the item has moved half a cell, then steps
-                // one cell in the drag direction. Clamped so a multi-cell footprint stays inside the grid.
+                // Footprint snaps to the dragged item's own position (finger-centred, rounded to nearest cell —
+                // half-cell hysteresis), clamped on-grid.
                 val topLeft = geo.snapTopLeftCell(fingerInRoot, span.colSpan, span.rowSpan)
                 val footprint = GridPlacement(0, topLeft.row, topLeft.col, span.rowSpan, span.colSpan)
-                // Which quadrant of the hovered cell the finger sits in decides the push direction; FreePush
-                // tries this first, then falls back to any direction that fits (the "nearest slot" backup).
-                val preferred = geo.pushDirectionAt(fingerInRoot)
-                FreeGridPlanner.plan(footprint, occupants, config, preferred)
+
+                if (target != null) {
+                    val rect = target.value
+                    if (canMerge(item, target.key) && geo.inMergeRingOf(fingerInRoot, rect)) {
+                        return@DropPlanner FreeGridPlanner.plan(rect, occupants, config, merge = true)
+                    }
+                    // Which triangle of the target item the finger is in decides the push direction.
+                    val preferred = geo.pushDirectionInRect(fingerInRoot, rect)
+                    return@DropPlanner FreeGridPlanner.plan(footprint, occupants, config, preferred)
+                }
+
+                // No occupant under the finger → plain place (nearest-edge push if the footprint still clips one).
+                FreeGridPlanner.plan(footprint, occupants, config)
             }
         }
         val coordinator = rememberDragCoordinator(planner)
@@ -202,7 +204,7 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                     }
                 }
 
-                if (showGuides) ZoneGuides(cellPx, Modifier.matchParentSize())
+                if (showGuides) ZoneGuides(placements.values.toList(), cellPx, Modifier.matchParentSize())
             }
 
             // ── Zone debug toggle ───────────────────────────────────────────────────────
@@ -249,36 +251,38 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
 }
 
 /**
- * Debug overlay drawing each cell's partition so the merge/push zones are visible: the two diagonals split the
- * cell into the four push triangles, the inner ring is the merge target, and each arrow shows which way an
- * occupant is shoved from that push zone (away from the edge the finger enters).
+ * Debug overlay drawing each **item's** partition so the merge/push zones are visible. Zones belong to
+ * occupants, not cells: one item (however many cells it spans) gets one set of diagonals splitting its whole
+ * rectangle into four push triangles, one central merge ring, and four arrows showing which way it is shoved
+ * from each zone. Empty cells have no zones — nothing to push or merge there.
  */
 @Composable
-private fun ZoneGuides(cellPx: Float, modifier: Modifier = Modifier) {
+private fun ZoneGuides(rects: List<GridPlacement>, cellPx: Float, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val line = Color.White.copy(alpha = 0.20f)
         val ring = Color(0xFF63C7C9).copy(alpha = 0.6f)
         val arrowColor = Color.White.copy(alpha = 0.45f)
         val thin = 1.dp.toPx()
-        val off = cellPx * 0.28f
-        val len = cellPx * 0.14f
-        for (r in 0 until ROWS) {
-            for (c in 0 until COLS) {
-                val l = c * cellPx
-                val t = r * cellPx
-                val cx = l + cellPx / 2f
-                val cy = t + cellPx / 2f
-                // Diagonals → the four push triangles (top / bottom / left / right).
-                drawLine(line, Offset(l, t), Offset(l + cellPx, t + cellPx), thin)
-                drawLine(line, Offset(l + cellPx, t), Offset(l, t + cellPx), thin)
-                // Inner merge ring.
-                drawCircle(ring, MERGE_INNER_RADIUS * cellPx, Offset(cx, cy), style = Stroke(1.5.dp.toPx()))
-                // Push arrows (occupant is shoved away from the entered edge).
-                arrow(arrowColor, Offset(cx, t + off), Offset(cx, t + off + len), thin)                     // top → down
-                arrow(arrowColor, Offset(cx, t + cellPx - off), Offset(cx, t + cellPx - off - len), thin)   // bottom → up
-                arrow(arrowColor, Offset(l + off, cy), Offset(l + off + len, cy), thin)                     // left → right
-                arrow(arrowColor, Offset(l + cellPx - off, cy), Offset(l + cellPx - off - len, cy), thin)   // right → left
-            }
+        for (rect in rects) {
+            val l = rect.col * cellPx
+            val t = rect.row * cellPx
+            val w = rect.colSpan * cellPx
+            val h = rect.rowSpan * cellPx
+            val cx = l + w / 2f
+            val cy = t + h / 2f
+            val offX = w * 0.24f
+            val offY = h * 0.24f
+            val len = minOf(w, h) * 0.14f
+            // Diagonals → the four push triangles across the whole item.
+            drawLine(line, Offset(l, t), Offset(l + w, t + h), thin)
+            drawLine(line, Offset(l + w, t), Offset(l, t + h), thin)
+            // A single inner merge ring, scaled by the item's smaller span.
+            drawCircle(ring, MERGE_INNER_RADIUS * minOf(w, h), Offset(cx, cy), style = Stroke(1.5.dp.toPx()))
+            // Push arrows (occupant is shoved away from the entered edge).
+            arrow(arrowColor, Offset(cx, t + offY), Offset(cx, t + offY + len), thin)             // top → down
+            arrow(arrowColor, Offset(cx, t + h - offY), Offset(cx, t + h - offY - len), thin)     // bottom → up
+            arrow(arrowColor, Offset(l + offX, cy), Offset(l + offX + len, cy), thin)             // left → right
+            arrow(arrowColor, Offset(l + w - offX, cy), Offset(l + w - offX - len, cy), thin)     // right → left
         }
     }
 }
@@ -373,36 +377,37 @@ private data class GridGeometry(
         return if (row in 0 until rows && col in 0 until cols) Cell(row, col) else null
     }
 
+    /** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller span. */
+    fun mergeRadius(rect: GridPlacement): Float = MERGE_INNER_RADIUS * minOf(rect.colSpan, rect.rowSpan) * cellPx
+
     /**
-     * True when the finger sits in the **inner ring** of its hovered cell — the central merge target, inside
-     * the outer push ring (docs/DRAG_AND_DROP_DESIGN.md §6a). Measured as a small circle around the cell
-     * centre.
+     * True when the finger sits in the **inner merge ring** of the item occupying [rect] — a single circle at
+     * the item's centre. The whole item is one target (not per sub-cell), so a multi-cell item has exactly one
+     * ring (docs/DRAG_AND_DROP_DESIGN.md §6a).
      */
-    fun inMergeRing(rootPosition: Offset): Boolean {
-        val lx = rootPosition.x - originInRoot.x
-        val ly = rootPosition.y - originInRoot.y
-        val dx = lx / cellPx - floor(lx / cellPx) - 0.5f
-        val dy = ly / cellPx - floor(ly / cellPx) - 0.5f
-        return dx * dx + dy * dy < MERGE_INNER_RADIUS * MERGE_INNER_RADIUS
+    fun inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
+        val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellPx)
+        val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellPx)
+        val radius = mergeRadius(rect)
+        return dx * dx + dy * dy < radius * radius
     }
 
     fun topLeftInRoot(row: Int, col: Int): Offset =
         Offset(originInRoot.x + col * cellPx, originInRoot.y + row * cellPx)
 
     /**
-     * Which way to push, from where the finger sits *within* its hovered cell. The cell is split into four
-     * quadrants by its diagonals; the occupant is shoved away from the edge the finger is nearest — finger in
-     * the left quadrant pushes right, top pushes down, and so on (docs/DRAG_AND_DROP_DESIGN.md §6a).
+     * Which way to push the item occupying [rect], from where the finger sits **within that item's rectangle**.
+     * The rectangle is split into four triangles by its diagonals; the occupant is shoved away from the edge
+     * the finger is nearest — left triangle pushes right, top pushes down, and so on. Being relative to the
+     * whole item, a multi-cell item is one 4-way partition, not one per sub-cell (docs/DRAG_AND_DROP_DESIGN.md §6a).
      */
-    fun pushDirectionAt(rootPosition: Offset): PushDirection {
-        val lx = rootPosition.x - originInRoot.x
-        val ly = rootPosition.y - originInRoot.y
-        val fracX = lx / cellPx - floor(lx / cellPx) - 0.5f  // signed offset from cell centre, [-0.5, 0.5)
-        val fracY = ly / cellPx - floor(ly / cellPx) - 0.5f
-        return if (abs(fracX) > abs(fracY)) {
-            if (fracX < 0f) PushDirection.RIGHT else PushDirection.LEFT
+    fun pushDirectionInRect(fingerInRoot: Offset, rect: GridPlacement): PushDirection {
+        val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellPx)) / (rect.colSpan * cellPx) - 0.5f
+        val fy = (fingerInRoot.y - (originInRoot.y + rect.row * cellPx)) / (rect.rowSpan * cellPx) - 0.5f
+        return if (abs(fx) > abs(fy)) {
+            if (fx < 0f) PushDirection.RIGHT else PushDirection.LEFT
         } else {
-            if (fracY < 0f) PushDirection.DOWN else PushDirection.UP
+            if (fy < 0f) PushDirection.DOWN else PushDirection.UP
         }
     }
 }
@@ -411,7 +416,7 @@ private data class Cell(val row: Int, val col: Int)
 
 private const val ROWS = 6
 private const val COLS = 4
-/** Inner-ring radius as a fraction of the cell (0.5 = the cell edge); inside it is the merge target. */
+/** Merge-ring radius as a fraction of the item's smaller span (×cellPx); inside it is the merge target. */
 private const val MERGE_INNER_RADIUS = 0.3f
 private val GridZoneId = ZoneId("playground-grid")
 
