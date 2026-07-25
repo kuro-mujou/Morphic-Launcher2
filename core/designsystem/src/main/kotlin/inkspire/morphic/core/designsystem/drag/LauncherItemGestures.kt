@@ -1,0 +1,128 @@
+package inkspire.morphic.core.designsystem.drag
+
+import android.annotation.SuppressLint
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * Attaches the launcher's item-gesture contract to a composable, driving the shared [ItemGestureMachine] and
+ * reporting its effects through these callbacks. One modifier per draggable item, on every surface, so the
+ * behaviour is identical everywhere (docs/DRAG_AND_DROP_DESIGN.md §5) — the antidote to L1's four divergent
+ * per-surface recognizers.
+ *
+ * This is the thin I/O shell over the pure machine: it races the [ItemGestureConfig.longPressTimeoutMillis]
+ * timer against pointer movement, turns finger changes into the machine's [ItemGestureEvent]s, and dispatches
+ * the returned [ItemGestureEffect]s to the callbacks. The drag callbacks receive the finger in **root/window**
+ * coordinates — the space the [DragCoordinator] hit-tests in.
+ *
+ * Scope note: the item's own pointer stream tracks the whole gesture, which is correct as long as the item
+ * stays composed (single-surface drag — the dragged item remains in the tree, only visually offset). A
+ * cross-surface drag, where the source surface can leave composition mid-drag, needs a root-level overlay to
+ * take over tracking; that arrives with the multi-zone/folder work.
+ *
+ * @param config shared slop + long-press timing.
+ * @param onOpen a completed tap.
+ * @param onEdgeAction a press-and-swipe in the given direction (custom action; a toast for now).
+ * @param onShowMenu the long-press fired: open the item's context menu.
+ * @param onDismissMenu take the menu back down (drag started, or released with no move).
+ * @param onBeginDrag lift into a drag; the finger is at the given root position.
+ * @param onDragTo the drag moved to the given root position.
+ * @param onDrop release the drag.
+ * @param onCancelDrag the gesture was cancelled mid-drag.
+ */
+@SuppressLint("ReturnFromAwaitPointerEventScope", "MultipleAwaitPointerEventScopes")
+fun Modifier.launcherItemGestures(
+    config: ItemGestureConfig,
+    onOpen: () -> Unit,
+    onEdgeAction: (SwipeDirection) -> Unit,
+    onShowMenu: () -> Unit,
+    onDismissMenu: () -> Unit,
+    onBeginDrag: (rootPosition: Offset) -> Unit,
+    onDragTo: (rootPosition: Offset) -> Unit,
+    onDrop: () -> Unit,
+    onCancelDrag: () -> Unit,
+): Modifier = composed {
+    // Captured so we can turn item-local finger positions into root coordinates for the coordinator.
+    var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    onGloballyPositioned { coordinates = it }
+        .pointerInput(config) {
+            val machine = ItemGestureMachine(config)
+
+            fun rootOf(local: Offset): Offset = coordinates?.localToRoot(local) ?: local
+
+            fun perform(effects: List<ItemGestureEffect>, local: Offset) {
+                for (effect in effects) when (effect) {
+                    ItemGestureEffect.OpenItem -> onOpen()
+                    is ItemGestureEffect.EdgeAction -> onEdgeAction(effect.direction)
+                    ItemGestureEffect.ShowMenu -> onShowMenu()
+                    ItemGestureEffect.DismissMenu -> onDismissMenu()
+                    ItemGestureEffect.BeginDrag -> onBeginDrag(rootOf(local))
+                    is ItemGestureEffect.DragTo -> onDragTo(rootOf(local))
+                    ItemGestureEffect.Drop -> onDrop()
+                    ItemGestureEffect.CancelDrag -> onCancelDrag()
+                }
+            }
+
+            coroutineScope {
+                while (true) {
+                    val down = awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
+                    val pointerId: PointerId = down.id
+                    var local = down.position
+                    perform(machine.onEvent(ItemGestureEvent.Down), local)
+
+                    // The long-press timer runs beside the event loop; the machine ignores it if the gesture
+                    // has already moved on (swiped/dragging), so no explicit cancellation race is needed.
+                    val longPress = launch {
+                        delay(config.longPressTimeoutMillis.milliseconds)
+                        perform(machine.onEvent(ItemGestureEvent.LongPress), local)
+                    }
+
+                    awaitPointerEventScope {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
+                            if (change == null) {
+                                perform(machine.onEvent(ItemGestureEvent.Cancel), local)
+                                break
+                            }
+                            local = change.position
+                            if (change.changedToUpIgnoreConsumed()) {
+                                perform(machine.onEvent(ItemGestureEvent.Up), local)
+                                break
+                            }
+                            if (!change.pressed) {
+                                perform(machine.onEvent(ItemGestureEvent.Cancel), local)
+                                break
+                            }
+                            if (change.positionChanged()) {
+                                perform(machine.onEvent(ItemGestureEvent.Move(local - down.position)), local)
+                                // Once the gesture is claimed as a swipe or a drag, stop the parent
+                                // (pager/scroller) from also reacting to the same finger movement.
+                                val phase = machine.phase
+                                if (phase is ItemGesturePhase.Swiped || phase == ItemGesturePhase.Dragging) {
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                    longPress.cancel()
+                }
+            }
+        }
+}

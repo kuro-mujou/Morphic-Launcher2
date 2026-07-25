@@ -257,7 +257,13 @@ in one sitting.
   zone registry, topmost-z + accept-filtered hit-testing, drop resolution. Driven by an injected `DropPlanner`
   port (fake in tests). Unit-tested (11 cases). Rendering + gestures deferred; `DropZone` will grow
   `geometry`/`behavior` when the real planner lands.
-- [ ] **3. The gesture pipeline** (§5 state machine) wired to one grid.
+- [x] **3a. The gesture state machine** (`ItemGestureMachine`) — pure reducer of the §5 contract
+  (tap / press-swipe / long-press→menu→drag), one machine + one `ItemGestureConfig` for every item. Unit-tested
+  (13 cases).
+- [x] **3b. The gesture Compose modifier** (`Modifier.launcherItemGestures`) — thin `pointerInput` shell:
+  races the long-press timer against movement, feeds pointer changes to `ItemGestureMachine`, dispatches its
+  effects to callbacks (drag callbacks in root coordinates). Not unit-tested (plumbing); verified end-to-end
+  with the first real surface. Single-surface tracking only; cross-surface root-overlay takeover deferred.
 - [ ] **4. `FloatingDragIcon` + `DropFootprint`** rendering from `PlacementPlan` (§7 states).
 - [ ] **5. Multi-zone**: register dock + a side surface → prove cross-surface drop.
 - [ ] **6. Folder overlay zone** → prove drag-out.
