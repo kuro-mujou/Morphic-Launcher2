@@ -284,11 +284,11 @@ in one sitting.
   partition** (the hovered cell's 4 quadrants pick the push direction; `FreePush`'s nearest-edge order is the
   fallback), and the **§6a merge ring** (inner circle of a mergeable occupant → MERGE plan + expanded shadow;
   eligibility checked per hover ≈ §6c). No dock / pager / cross-surface yet.
-- [~] **5b. Multi-zone**: harness now registers **home + dock** as two free-grid zones; one coordinator
-  hit-tests both and the planner dispatches on `zone.id` (per-zone geometry/placements/config). Cross-zone drag
-  works — behaviour travels with the destination zone, item moves source→dest on drop. Both zones stay
-  composed, so no takeover needed yet. **Still to do:** a side surface that leaves composition mid-drag → the
-  root-overlay gesture takeover.
+- [x] **5b. Multi-zone + cross-surface takeover**: harness registers **home + dock + drawer** as free-grid
+  zones; one coordinator hit-tests all, planner dispatches on `zone.id`. Cross-zone drag moves items
+  source→dest. The **drawer unmounts when a drag leaves it**, so its tile leaves composition mid-gesture — and
+  a root-level `DragTrackingOverlay` (passive until a drag starts, then the sole mover, rooted so it outlives
+  the source) keeps the drag alive to drop on home/dock. The structural replacement for L1's HomeDragBridge.
 - [ ] **6. Folder overlay zone** → prove drag-out.
 - [ ] **7. `EjectToHome`** (vertical grids) + wire `MovingGap`/`DenseReorder` partitions.
 - [ ] **8. Page-flip on edge dwell** (§9) and cross-page repagination on drop.
