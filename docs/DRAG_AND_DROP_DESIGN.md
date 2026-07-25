@@ -264,7 +264,11 @@ in one sitting.
   races the long-press timer against movement, feeds pointer changes to `ItemGestureMachine`, dispatches its
   effects to callbacks (drag callbacks in root coordinates). Not unit-tested (plumbing); verified end-to-end
   with the first real surface. Single-surface tracking only; cross-surface root-overlay takeover deferred.
-- [ ] **4. `FloatingDragIcon` + `DropFootprint`** rendering from `PlacementPlan` (§7 states).
+- [x] **4. `FloatingDragIcon` + `DropFootprint`** — the drag visuals. `DropFootprint` renders the four §7
+  shadow states from `DropIntent` (monochrome; red only for INVALID; PUSH is a debug tint); `FloatingDragIcon`
+  is the root-positioned, lifted proxy that follows the finger. Positioning/wiring is the surface's job (Part
+  5). Also hardened `PlacementPlan.footprint` to non-null (INVALID keeps the hovered cell so the red shadow has
+  somewhere to paint; "no target" is a null plan).
 - [ ] **5. Multi-zone**: register dock + a side surface → prove cross-surface drop.
 - [ ] **6. Folder overlay zone** → prove drag-out.
 - [ ] **7. `EjectToHome`** (vertical grids) + wire `MovingGap`/`DenseReorder` partitions.

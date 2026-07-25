@@ -43,7 +43,8 @@ object FreeGridPlanner {
                 intent = if (result.moves.isEmpty()) DropIntent.PLACE else DropIntent.PUSH,
                 moves = result.moves,
             )
-            PushResult.Blocked -> PlacementPlan(footprint = null, intent = DropIntent.INVALID)
+            // Still report the hovered footprint so the shadow can paint red there, not vanish.
+            PushResult.Blocked -> PlacementPlan(footprint = footprint, intent = DropIntent.INVALID)
         }
     }
 }

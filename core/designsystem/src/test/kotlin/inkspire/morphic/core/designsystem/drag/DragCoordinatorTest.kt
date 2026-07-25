@@ -123,7 +123,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `drop over an invalid target is a no-op`() {
-        val invalid = PlacementPlan(footprint = null, intent = DropIntent.INVALID)
+        val invalid = PlacementPlan(GridPlacement(0, 0, 0), intent = DropIntent.INVALID)
         val coordinator = DragCoordinator(plannerReturning(invalid))
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
         coordinator.start(app("a"), Offset(50f, 50f))

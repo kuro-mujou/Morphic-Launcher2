@@ -6,7 +6,6 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,13 +39,13 @@ class FreeGridPlannerTest {
     }
 
     @Test
-    fun `a drop with nowhere to push is INVALID with no footprint`() {
+    fun `a drop with nowhere to push is INVALID but keeps the hovered footprint`() {
         val small = GridConfig(rows = 2, cols = 2)
         val footprint = GridPlacement(0, 0, 0, rowSpan = 2, colSpan = 2)
         val occupants = mapOf(app("a") to GridPlacement(0, 0, 0))
         val plan = FreeGridPlanner.plan(footprint, occupants, small)
         assertEquals(DropIntent.INVALID, plan.intent)
-        assertNull(plan.footprint)
+        assertEquals(footprint, plan.footprint)  // shadow paints red at the hovered cell
         assertTrue(plan.moves.isEmpty())
     }
 

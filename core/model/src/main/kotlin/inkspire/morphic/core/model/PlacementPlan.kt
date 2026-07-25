@@ -18,13 +18,17 @@ enum class DropIntent { PLACE, PUSH, MERGE, INVALID }
  * touches Compose or persistence. Translating a committed plan into the repository's `LayoutChange`s is a
  * separate `data:layout` concern.
  *
- * @property footprint where the dragged item would land; null only when [intent] is [DropIntent.INVALID].
+ * A plan always has a [footprint] — the target cell under the finger — even when [intent] is
+ * [DropIntent.INVALID], so the shadow can be painted red *there*. "Finger over no target at all" is a
+ * different thing: it is a `null` plan (no shadow), not an INVALID plan.
+ *
+ * @property footprint the target cell the dragged item would occupy.
  * @property intent what the drop does — and therefore how the shadow reads.
  * @property moves occupants a push would displace, at their new placements; empty unless [intent] is
  *   [DropIntent.PUSH].
  */
 data class PlacementPlan(
-    val footprint: GridPlacement?,
+    val footprint: GridPlacement,
     val intent: DropIntent,
     val moves: Map<GridItem, GridPlacement> = emptyMap(),
 )
