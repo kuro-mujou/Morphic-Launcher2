@@ -31,10 +31,12 @@ import kotlin.time.Duration.Companion.milliseconds
  * the returned [ItemGestureEffect]s to the callbacks. The drag callbacks receive the finger in **root/window**
  * coordinates — the space the [DragCoordinator] hit-tests in.
  *
- * Scope note: the item's own pointer stream tracks the whole gesture, which is correct as long as the item
- * stays composed (single-surface drag — the dragged item remains in the tree, only visually offset). A
- * cross-surface drag, where the source surface can leave composition mid-drag, needs a root-level overlay to
- * take over tracking; that arrives with the multi-zone/folder work.
+ * Scope note: the item's own pointer stream tracks the whole gesture — once the pointer is down the gesture
+ * owns it until release, wherever the finger travels, so a drag from one surface can land on another. This
+ * holds as long as the item stays composed, so the rule is to **keep a source surface composed while a drag
+ * from it is in flight** (a "closing" side surface slides/fades but stays in the tree until drop). A root-level
+ * pointer overlay was tried for this and rejected: a full-screen `pointerInput` swallows the items' events
+ * (docs/DRAG_AND_DROP_DESIGN.md §5).
  *
  * @param config shared slop + long-press timing.
  * @param onOpen a completed tap.

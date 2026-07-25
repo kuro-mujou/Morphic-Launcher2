@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
@@ -34,9 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -162,29 +158,14 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
             applyOutcome(surfaces, outcome.item, outcome.zone, outcome.plan)
         }
 
-        // The drawer *unmounts* when a drag that started in it leaves its bounds — the moment its tile leaves
-        // composition, only the root DragTrackingOverlay can keep the drag alive. This is the cross-surface
-        // case L1 needed HomeDragBridge for. It remounts once the drag ends.
-        var drawerMounted by remember { mutableStateOf(true) }
-        val activeZone = coordinator.session?.activeZone
-        LaunchedEffect(activeZone) {
-            val s = coordinator.session
-            if (s != null && drawer.placements.containsKey(s.item) && s.activeZone != drawer.id) {
-                drawerMounted = false
-            }
-        }
-        LaunchedEffect(coordinator.isDragging) {
-            if (!coordinator.isDragging) drawerMounted = true
-        }
-
         Box(modifier.fillMaxSize().background(colors.background)) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                // Fixed-width slot so home/dock stay put when the drawer unmounts mid-drag (a real side surface
-                // floats over a stationary home rather than pushing it around).
+                // The drawer is a side surface: a normal always-composed zone. A drag out of it is tracked by
+                // the dragged tile's own pointer stream (it stays composed), exactly like home↔dock — so no
+                // root-overlay handoff is needed. The rule that replaces L1's HomeDragBridge is simply: keep a
+                // source surface composed while a drag from it is in flight (don't unmount it mid-gesture).
                 Box(Modifier.width(96.dp), contentAlignment = Alignment.Center) {
-                    if (drawerMounted) {
-                        GridSurface(drawer, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
-                    }
+                    GridSurface(drawer, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
                 }
                 Column(
                     modifier = Modifier.weight(1f),
@@ -233,45 +214,8 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
-
-            // Root-level tracker: owns the finger once a drag begins, so the drag survives the drawer (or any
-            // source surface) leaving composition mid-gesture.
-            DragTrackingOverlay(coordinator, ::handleDrop)
         }
     }
-}
-
-/**
- * A full-screen, transparent pointer layer at the root. It is **passive until a drag is in flight** (so taps,
- * long-press, and swipes on items work normally), then it drives [DragCoordinator.moveTo] / drop from its own
- * events. Because it lives at the root — not in any surface — it keeps tracking the finger even after the
- * source surface unmounts mid-drag. This is the structural replacement for L1's HomeDragBridge handoff (§5).
- */
-@Composable
-private fun DragTrackingOverlay(coordinator: DragCoordinator, onDrop: () -> Unit, modifier: Modifier = Modifier) {
-    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    Box(
-        modifier
-            .fillMaxSize()
-            .onGloballyPositioned { coords = it }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        // Do nothing until a drag exists, leaving item gestures untouched.
-                        if (!coordinator.isDragging) continue
-                        val change = event.changes.firstOrNull() ?: continue
-                        val root = coords?.localToRoot(change.position) ?: change.position
-                        if (change.changedToUpIgnoreConsumed() || !change.pressed) {
-                            onDrop()
-                        } else {
-                            coordinator.moveTo(root)
-                            change.consume() // become the sole mover, so the source tile doesn't double-track
-                        }
-                    }
-                }
-            },
-    )
 }
 
 /** One free-placement drop zone in the harness: its identity, grid, and the live map of what sits where. */

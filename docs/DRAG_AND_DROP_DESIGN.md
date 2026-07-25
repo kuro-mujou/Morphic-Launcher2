@@ -117,8 +117,8 @@ Items are pure render + registration; they do **not** attach their own drag reco
         └────┬───────┬───┘
    move>slop │       │ lift, no move
         ┌────▼────┐  └──▶ dismiss menu, do NOT fire tap
-        │ Dragging│         ← coordinator tracks finger at ROOT
-        └────┬────┘           (survives page-flip / folder-close / CrossPager collapse)
+        │ Dragging│         ← item's own pointer stream tracks the finger
+        └────┬────┘           (source surface kept composed for the drag; see below)
              │ release
         ┌────▼────┐
         │  Drop   │→ apply the already-computed PlacementPlan
@@ -127,9 +127,18 @@ Items are pure render + registration; they do **not** attach their own drag reco
    quick lift before timeout & no move ──▶ Tap → open item
 ```
 
-The moment `Dragging` begins, finger tracking is owned by the **root coordinator overlay**, not the item — so a
-page flip, folder close, or `CrossPager` collapse mid-drag can't drop the pointer. This is the structural
-replacement for L1's `HomeDragBridge` + `onDragOutMove/onDragOutEnd` re-tracking loop.
+**Tracking across surfaces (revised — the original root-overlay plan was wrong).** The dragged item's *own*
+`pointerInput` tracks the whole gesture: once the pointer is down, the gesture owns it until release, wherever
+the finger travels — which is exactly how a drag from home lands on the dock. The coordinator hit-tests that
+finger against every registered zone, so cross-surface just works. The **one rule** that makes this robust is:
+**keep a source surface composed while a drag from it is in flight** — don't unmount it mid-gesture (a side
+surface that "closes" slides/fades but stays in the tree until the drag ends). That single lifecycle rule is
+the structural replacement for L1's `HomeDragBridge` + `onDragOutMove/onDragOutEnd` re-tracking loop.
+
+> A tried-and-rejected alternative: a full-screen root **pointer overlay** that takes over tracking. In Compose
+> a full-screen `pointerInput` on top **swallows all events from the items beneath it** (pointer events are not
+> delivered to every overlapping sibling), so it broke every gesture. Keeping the source composed needs no
+> overlay and no handoff.
 
 ---
 
@@ -284,11 +293,11 @@ in one sitting.
   partition** (the hovered cell's 4 quadrants pick the push direction; `FreePush`'s nearest-edge order is the
   fallback), and the **§6a merge ring** (inner circle of a mergeable occupant → MERGE plan + expanded shadow;
   eligibility checked per hover ≈ §6c). No dock / pager / cross-surface yet.
-- [x] **5b. Multi-zone + cross-surface takeover**: harness registers **home + dock + drawer** as free-grid
-  zones; one coordinator hit-tests all, planner dispatches on `zone.id`. Cross-zone drag moves items
-  source→dest. The **drawer unmounts when a drag leaves it**, so its tile leaves composition mid-gesture — and
-  a root-level `DragTrackingOverlay` (passive until a drag starts, then the sole mover, rooted so it outlives
-  the source) keeps the drag alive to drop on home/dock. The structural replacement for L1's HomeDragBridge.
+- [x] **5b. Multi-zone + cross-surface**: harness registers **home + dock + drawer** as free-grid zones; one
+  coordinator hit-tests all, planner dispatches on `zone.id`. Cross-zone drag moves items source→dest, tracked
+  by the dragged tile's **own** pointer stream (no root overlay — that approach swallowed all item gestures and
+  was removed). The rule that replaces L1's HomeDragBridge: keep a source surface composed while a drag from it
+  is in flight (§5).
 - [ ] **6. Folder overlay zone** → prove drag-out.
 - [ ] **7. `EjectToHome`** (vertical grids) + wire `MovingGap`/`DenseReorder` partitions.
 - [ ] **8. Page-flip on edge dwell** (§9) and cross-page repagination on drop.
