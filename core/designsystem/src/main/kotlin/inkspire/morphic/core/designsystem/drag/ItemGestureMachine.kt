@@ -67,6 +67,13 @@ sealed interface ItemGesturePhase {
 
     /** A drag is in flight; the finger is being tracked at the root. */
     data object Dragging : ItemGesturePhase
+
+    /**
+     * Moved past slop before the long-press, in a direction the item does **not** have an edge action for — so
+     * the swipe is left to the parent (the pager, or home↔side-surface navigation). The item stops consuming;
+     * it does nothing else until the pointer lifts.
+     */
+    data object ReleasedToParent : ItemGesturePhase
 }
 
 /**
@@ -87,9 +94,19 @@ sealed interface ItemGesturePhase {
  * [ItemGestureEvent.LongPress] and ignores it once the gesture has already moved on. Not thread-safe — drive
  * it from the pointer thread.
  *
+ * **Edge actions gate swipe ownership.** A pre-long-press swipe is claimed as an [ItemGestureEffect.EdgeAction]
+ * only if its direction is in [edgeActions]; a swipe in an unregistered direction goes to
+ * [ItemGesturePhase.ReleasedToParent], so the parent (pager / surface navigation) handles it instead. Thus an
+ * item with no horizontal edge action lets horizontal swipes flow to the pager, and one with a LEFT/RIGHT
+ * action keeps them.
+ *
  * @param config the shared slop threshold.
+ * @param edgeActions the swipe directions this item handles itself; the rest are released to the parent.
  */
-class ItemGestureMachine(private val config: ItemGestureConfig) {
+class ItemGestureMachine(
+    private val config: ItemGestureConfig,
+    private val edgeActions: Set<SwipeDirection> = emptySet(),
+) {
 
     var phase: ItemGesturePhase = ItemGesturePhase.Idle
         private set
@@ -101,6 +118,7 @@ class ItemGestureMachine(private val config: ItemGestureConfig) {
         is ItemGesturePhase.Swiped -> onSwiped(current, event)
         ItemGesturePhase.MenuOpen -> onMenuOpen(event)
         ItemGesturePhase.Dragging -> onDragging(event)
+        ItemGesturePhase.ReleasedToParent -> onReleasedToParent(event)
     }
 
     private fun onIdle(event: ItemGestureEvent): List<ItemGestureEffect> {
@@ -114,8 +132,15 @@ class ItemGestureMachine(private val config: ItemGestureConfig) {
             if (!event.offsetFromDown.pastSlop()) {
                 noEffect()
             } else {
-                phase = ItemGesturePhase.Swiped(event.offsetFromDown.dominantDirection())
-                noEffect() // the action fires on release, so a swipe can be inspected/extended first
+                val direction = event.offsetFromDown.dominantDirection()
+                phase = if (direction in edgeActions) {
+                    // The item handles this direction — claim the swipe (fires on release).
+                    ItemGesturePhase.Swiped(direction)
+                } else {
+                    // Not ours — let the parent (pager / surface nav) take this swipe.
+                    ItemGesturePhase.ReleasedToParent
+                }
+                noEffect()
             }
         }
         ItemGestureEvent.LongPress -> {
@@ -176,6 +201,12 @@ class ItemGestureMachine(private val config: ItemGestureConfig) {
             effect(ItemGestureEffect.CancelDrag)
         }
         ItemGestureEvent.LongPress, ItemGestureEvent.Down -> noEffect()
+    }
+
+    // The swipe belongs to the parent now; do nothing until the pointer lifts, then reset.
+    private fun onReleasedToParent(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
+        ItemGestureEvent.Up, ItemGestureEvent.Cancel -> reset()
+        is ItemGestureEvent.Move, ItemGestureEvent.LongPress, ItemGestureEvent.Down -> noEffect()
     }
 
     private fun reset(): List<ItemGestureEffect> {

@@ -39,8 +39,11 @@ import kotlin.time.Duration.Companion.milliseconds
  * (docs/DRAG_AND_DROP_DESIGN.md §5).
  *
  * @param config shared slop + long-press timing.
+ * @param edgeActions the swipe directions this item handles as an edge action; swipes in other directions are
+ *   released to the parent (pager / surface navigation) instead of being consumed. Empty (default) → the item
+ *   claims no swipes, so every swipe flows to the parent.
  * @param onOpen a completed tap.
- * @param onEdgeAction a press-and-swipe in the given direction (custom action; a toast for now).
+ * @param onEdgeAction a press-and-swipe in a registered direction (custom action; a toast for now).
  * @param onShowMenu the long-press fired: open the item's context menu.
  * @param onDismissMenu take the menu back down (drag started, or released with no move).
  * @param onBeginDrag lift into a drag; the finger is at the given root position.
@@ -51,6 +54,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @SuppressLint("ReturnFromAwaitPointerEventScope", "MultipleAwaitPointerEventScopes")
 fun Modifier.launcherItemGestures(
     config: ItemGestureConfig,
+    edgeActions: Set<SwipeDirection> = emptySet(),
     onOpen: () -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
     onShowMenu: () -> Unit,
@@ -64,8 +68,8 @@ fun Modifier.launcherItemGestures(
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     onGloballyPositioned { coordinates = it }
-        .pointerInput(config) {
-            val machine = ItemGestureMachine(config)
+        .pointerInput(config, edgeActions) {
+            val machine = ItemGestureMachine(config, edgeActions)
 
             fun rootOf(local: Offset): Offset = coordinates?.localToRoot(local) ?: local
 

@@ -54,6 +54,7 @@ import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -318,6 +319,7 @@ private fun GridSurface(
                         .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                         .launcherItemGestures(
                             config = gestureConfig,
+                            edgeActions = SwipeDirection.entries.toSet(),
                             onOpen = { onToast("open ${label(item)}") },
                             onEdgeAction = { onToast("swipe $it on ${label(item)}") },
                             onShowMenu = { onToast("menu: ${label(item)}") },
@@ -390,6 +392,7 @@ private fun OrderedSurface(
                         .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                         .launcherItemGestures(
                             config = gestureConfig,
+                            edgeActions = SwipeDirection.entries.toSet(),
                             onOpen = { onToast("open ${label(entry)}") },
                             onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
                             onShowMenu = { onToast("menu: ${label(entry)}") },

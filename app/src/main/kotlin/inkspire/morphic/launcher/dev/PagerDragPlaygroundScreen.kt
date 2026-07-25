@@ -39,6 +39,7 @@ import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.pager.LauncherPager
@@ -246,6 +247,7 @@ private fun PageGrid(
                         .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                         .launcherItemGestures(
                             config = gestureConfig,
+                            edgeActions = setOf(SwipeDirection.UP, SwipeDirection.DOWN),
                             onOpen = { onToast("open ${label(item)}") },
                             onEdgeAction = { onToast("swipe $it on ${label(item)}") },
                             onShowMenu = { onToast("menu: ${label(item)}") },

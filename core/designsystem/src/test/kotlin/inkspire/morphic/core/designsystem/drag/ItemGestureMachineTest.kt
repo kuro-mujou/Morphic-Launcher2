@@ -12,8 +12,10 @@ import org.junit.Test
 class ItemGestureMachineTest {
 
     private val slop = 10f
-    private fun machine() =
-        ItemGestureMachine(ItemGestureConfig(touchSlopPx = slop, longPressTimeoutMillis = 400L))
+
+    /** Defaults to all directions registered, so the edge-swipe tests below keep claiming their swipe. */
+    private fun machine(edgeActions: Set<SwipeDirection> = SwipeDirection.entries.toSet()) =
+        ItemGestureMachine(ItemGestureConfig(touchSlopPx = slop, longPressTimeoutMillis = 400L), edgeActions)
 
     private val wobble = Offset(3f, 3f)          // under slop
     private fun far(x: Float, y: Float) = Offset(x, y)  // past slop
@@ -148,6 +150,34 @@ class ItemGestureMachineTest {
         m.onEvent(ItemGestureEvent.Move(far(30f, 0f)))         // now Swiped
         assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.LongPress))
         assertEquals(ItemGesturePhase.Swiped(SwipeDirection.RIGHT), m.phase)
+    }
+
+    @Test
+    fun `a swipe in an unregistered direction is released to the parent`() {
+        val m = machine(edgeActions = emptySet())
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(30f, 2f))))
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+        // Releasing does nothing: no edge action, and crucially no tap.
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    @Test
+    fun `only registered directions are claimed - horizontal released when only vertical is registered`() {
+        val m = machine(edgeActions = setOf(SwipeDirection.UP, SwipeDirection.DOWN))
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(30f, 0f))) // horizontal, not registered
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+    }
+
+    @Test
+    fun `a registered vertical swipe still fires its edge action`() {
+        val m = machine(edgeActions = setOf(SwipeDirection.UP, SwipeDirection.DOWN))
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(2f, -30f))) // up, registered
+        assertEquals(ItemGesturePhase.Swiped(SwipeDirection.UP), m.phase)
+        assertEquals(listOf(ItemGestureEffect.EdgeAction(SwipeDirection.UP)), m.onEvent(ItemGestureEvent.Up))
     }
 
     @Test

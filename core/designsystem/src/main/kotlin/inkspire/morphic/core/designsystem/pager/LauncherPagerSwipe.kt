@@ -47,11 +47,11 @@ fun Modifier.launcherPagerSwipe(
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 tracker.addPointerInputChange(change)
 
-                // If we already claimed a horizontal swipe but an item has since taken over the gesture as a
-                // drag (enabled() went false), hand off: snap back to the page we started on and stop. This
-                // undoes the small scroll that sneaks in between the pager's touch slop and the item's larger
-                // drag slop.
-                if (horizontal && !enabled()) {
+                // If we already claimed a horizontal swipe but a child has since consumed the gesture (an item
+                // drag, or an item's registered edge swipe), hand off: snap back to the page we started on and
+                // stop. This undoes the small scroll that sneaks in between the pager's touch slop and the
+                // item's larger slop.
+                if (horizontal && change.isConsumed) {
                     scope.launch { state.animateToPage(startPage) }
                     flung = true
                     break
