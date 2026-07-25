@@ -50,7 +50,9 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.layout.FreeGridPlanner
+import inkspire.morphic.data.layout.PushDirection
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -109,7 +111,10 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                 val row = cell.row.coerceIn(0, (config.rows - span.rowSpan).coerceAtLeast(0))
                 val footprint = GridPlacement(0, row, col, span.rowSpan, span.colSpan)
                 val occupants = placements.filterKeys { it != item }
-                FreeGridPlanner.plan(footprint, occupants, config)
+                // Which quadrant of the hovered cell the finger sits in decides the push direction; FreePush
+                // tries this first, then falls back to any direction that fits (the "nearest slot" backup).
+                val preferred = geo.pushDirectionAt(fingerInRoot)
+                FreeGridPlanner.plan(footprint, occupants, config, preferred)
             }
         }
         val coordinator = rememberDragCoordinator(planner)
@@ -246,6 +251,23 @@ private data class GridGeometry(
 
     fun topLeftInRoot(row: Int, col: Int): Offset =
         Offset(originInRoot.x + col * cellPx, originInRoot.y + row * cellPx)
+
+    /**
+     * Which way to push, from where the finger sits *within* its hovered cell. The cell is split into four
+     * quadrants by its diagonals; the occupant is shoved away from the edge the finger is nearest — finger in
+     * the left quadrant pushes right, top pushes down, and so on (docs/DRAG_AND_DROP_DESIGN.md §6a).
+     */
+    fun pushDirectionAt(rootPosition: Offset): PushDirection {
+        val lx = rootPosition.x - originInRoot.x
+        val ly = rootPosition.y - originInRoot.y
+        val fracX = lx / cellPx - floor(lx / cellPx) - 0.5f  // signed offset from cell centre, [-0.5, 0.5)
+        val fracY = ly / cellPx - floor(ly / cellPx) - 0.5f
+        return if (abs(fracX) > abs(fracY)) {
+            if (fracX < 0f) PushDirection.RIGHT else PushDirection.LEFT
+        } else {
+            if (fracY < 0f) PushDirection.DOWN else PushDirection.UP
+        }
+    }
 }
 
 private data class Cell(val row: Int, val col: Int)
