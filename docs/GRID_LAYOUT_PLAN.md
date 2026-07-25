@@ -46,6 +46,22 @@ places at exact coordinates, **gaps allowed**. No packing.
 - **Right tool per surface:** custom `Layout` for coordinate grids + pager; a `LazyColumn` for pure scrolling
   lists (home list, APPS list) — don't force those through a custom layout.
 
+## Pager (built first, independent of the grid)
+
+The custom **`LauncherPager`** is ported from L1 (`core:designsystem/pager`) — a good L1 layer, like the
+placement engine. It's orthogonal to `LauncherGrid` (pager lays out *pages* = viewport; each page holds a
+grid), so it's built and validated first, standalone (`app/dev/PagerPlaygroundScreen`).
+
+- [x] **P1 — Port `LauncherPager` + `LauncherPagerState` + `launcherPagerSwipe` + `PageTransformScope`**.
+  Infinite is a **toggle** via modular offset on the real `pageCount` (no Int.MAX); `isBounded = dragMode ||
+  !infiniteScroll` keeps paging stable under a drag; `normalizeWrapPosition` bounds the scroll float.
+  Refactors from L1: renamed (`InfiniteLauncherPager`→`LauncherPager`, `LauncherState`→`LauncherPagerState`),
+  dropped grid-inset coupling + the dead fling `decay` param. Standalone test screen validates swipe / wrap /
+  bounded / fling / transform.
+- [ ] **P2 — Integrate** with the drag harness: gate `launcherPagerSwipe(enabled = { !coordinator.isDragging })`
+  and wire edge-dwell page-flip (§9) to `animateToPage`. Each page hosts a grid; the active page provides the
+  drop zone.
+
 ## Build order — each phase ends by validating in the harness
 
 - [ ] **G1 — Static `LauncherGrid`, no drag.** Build the `Layout` + `gridPlacement` ParentData + scope +

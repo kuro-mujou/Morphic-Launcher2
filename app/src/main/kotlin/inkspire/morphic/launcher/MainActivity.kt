@@ -6,13 +6,13 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import inkspire.morphic.core.icon.compose.LocalIconRenderManager
 import inkspire.morphic.core.icon.render.IconRenderManager
-import inkspire.morphic.launcher.dev.DragPlaygroundScreen
+import inkspire.morphic.launcher.dev.DevRootScreen
 import org.koin.android.ext.android.inject
 
 /**
- * The launcher's single Activity. For now it hosts a dev screen under the icon-render manager provider; the
- * real home / side surfaces replace this from P4 onward. Currently showing [DragPlaygroundScreen] to exercise
- * the drag-and-drop stack end-to-end (swap back to `DevGalleryScreen()` for the component gallery).
+ * The launcher's single Activity. For now it hosts the dev harness ([DevRootScreen], which switches between the
+ * drag playground and the pager test) under the icon-render manager provider; the real home / side surfaces
+ * replace this from P4 onward.
  */
 class MainActivity : ComponentActivity() {
 
@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             CompositionLocalProvider(LocalIconRenderManager provides iconRenderManager) {
-                DragPlaygroundScreen()
+                DevRootScreen()
             }
         }
     }
