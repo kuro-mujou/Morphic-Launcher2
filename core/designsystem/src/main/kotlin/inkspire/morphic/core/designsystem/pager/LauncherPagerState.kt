@@ -52,8 +52,22 @@ class LauncherPagerState(
 
     private val positionAnimatable = Animatable(0f)
 
-    /** Continuous scroll position in page units (e.g. 1.5 = halfway between pages 1 and 2). */
-    val pagePosition: Float get() = positionAnimatable.value
+    /**
+     * The scroll position (in page units) the layout places from. Within range it is the raw position; **past a
+     * bound it is rubber-banded** — the content follows a little, with increasing resistance, then springs back
+     * on release. A translation bounce, deliberately not the M3 stretch/glow.
+     */
+    val pagePosition: Float
+        get() {
+            val raw = positionAnimatable.value
+            if (!isBounded) return raw
+            val max = (pageCount - 1).toFloat()
+            return when {
+                raw < 0f -> -rubberBand(-raw)
+                raw > max -> max + rubberBand(raw - max)
+                else -> raw
+            }
+        }
 
     val isPagerAnimating: Boolean get() = positionAnimatable.isRunning
 
@@ -69,10 +83,20 @@ class LauncherPagerState(
     val currentPageOffsetFraction: Float
         get() = positionAnimatable.value.let { it - it.roundToInt() }
 
-    /** Scrolls by a raw pixel delta (a finger drag); bounded positions clamp to the page range. */
+    /**
+     * Scrolls by a raw pixel delta (a finger drag). When bounded, the raw position may go a little past the
+     * ends — capped by [RAW_OVERSCROLL_LIMIT] so the snap-back stays short — and [pagePosition] rubber-bands
+     * the *visual*. Unbounded (infinite) scroll is free; wrapping handles the ends.
+     */
     suspend fun dragHorizontalBy(deltaPx: Float) {
         if (pageSize <= 0 || pageCount <= 1) return
-        positionAnimatable.snapTo(clampIfBounded(positionAnimatable.value - deltaPx / pageSize))
+        val next = positionAnimatable.value - deltaPx / pageSize
+        val target = if (isBounded) {
+            next.coerceIn(-RAW_OVERSCROLL_LIMIT, (pageCount - 1) + RAW_OVERSCROLL_LIMIT)
+        } else {
+            next
+        }
+        positionAnimatable.snapTo(target)
     }
 
     suspend fun snapToPage(page: Int) = positionAnimatable.snapTo(clampIfBounded(page.toFloat()))
@@ -110,6 +134,15 @@ class LauncherPagerState(
     private fun clampIfBounded(value: Float): Float =
         if (isBounded) value.coerceIn(0f, (pageCount - 1).toFloat()) else value
 
+    /**
+     * The rubber-band curve: maps a raw overshoot (pages past a bound) to a damped one that asymptotes to
+     * [MAX_OVERSCROLL_PAGES] — responsive at first, then increasingly resistant.
+     */
+    private fun rubberBand(overshoot: Float): Float {
+        val x = overshoot.coerceAtLeast(0f)
+        return MAX_OVERSCROLL_PAGES * (1f - 1f / (x / MAX_OVERSCROLL_PAGES * RUBBER_BAND_STIFFNESS + 1f))
+    }
+
     /** Snap the settled position back into one lap `[0, pageCount)` so the float can't grow unbounded. */
     private suspend fun normalizeWrapPosition() {
         if (isBounded) return
@@ -122,6 +155,16 @@ class LauncherPagerState(
     private companion object {
         const val PAGE_FLING_THRESHOLD = 400f
         const val MAX_FLING_VELOCITY = 4000f
+
+        /** Visual overscroll ceiling, in page widths (the rubber-band asymptote). */
+        const val MAX_OVERSCROLL_PAGES = 0.16f
+
+        /** How far the *raw* position may go past a bound, so the snap-back animation stays short. */
+        const val RAW_OVERSCROLL_LIMIT = 0.6f
+
+        /** Higher = the rubber-band tightens up sooner. */
+        const val RUBBER_BAND_STIFFNESS = 3f
+
         val pagerSpring = spring<Float>(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 0.001f)
     }
 }
