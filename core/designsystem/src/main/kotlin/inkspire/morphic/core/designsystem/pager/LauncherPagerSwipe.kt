@@ -35,6 +35,7 @@ fun Modifier.launcherPagerSwipe(
 
             var decided = false
             var horizontal = false
+            var flung = false
             var dx = 0f
             var dy = 0f
             val tracker = VelocityTracker()
@@ -49,6 +50,7 @@ fun Modifier.launcherPagerSwipe(
                     if (horizontal) {
                         change.consume()
                         scope.launch { state.flingHorizontal(tracker.calculateVelocity().x) }
+                        flung = true
                     }
                     break
                 }
@@ -72,6 +74,11 @@ fun Modifier.launcherPagerSwipe(
                     scope.launch { state.dragHorizontalBy(delta.x) }
                 }
             }
+
+            // We froze any in-flight settle on the down. If this gesture didn't take it over with a fling —
+            // a tap, or a vertical/other gesture — re-settle to the nearest page so the pager never stops
+            // mid-scroll. (No-op when already resting on a page.)
+            if (!flung) scope.launch { state.settleToNearestPage() }
         }
     }
 }
