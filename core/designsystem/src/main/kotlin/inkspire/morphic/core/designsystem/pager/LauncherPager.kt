@@ -23,6 +23,9 @@ import kotlin.math.roundToInt
  * may apply a per-page `graphicsLayer` effect from the page's [PageTransformScope.pageOffset].
  *
  * @param state paging position + wrap/bounded policy.
+ * @param keepAllPagesPlaced when true, off-screen pages are still *placed* (far off, clipped) instead of
+ *   culled. Set this during an item drag: a page that scrolls away must stay placed so a tile being dragged
+ *   out of it keeps its pointer stream (an unplaced node stops receiving events).
  * @param pageTransform optional per-page `graphicsLayer` block (parallax/scale/fade).
  * @param pageContent renders the content of a given page index.
  */
@@ -30,6 +33,7 @@ import kotlin.math.roundToInt
 fun LauncherPager(
     state: LauncherPagerState,
     modifier: Modifier = Modifier,
+    keepAllPagesPlaced: Boolean = false,
     pageTransform: (GraphicsLayerScope.(PageTransformScope) -> Unit)? = null,
     pageContent: @Composable (page: Int) -> Unit,
 ) {
@@ -64,7 +68,7 @@ fun LauncherPager(
                 } else {
                     pageIndex - raw
                 }
-                if (abs(pageOffset) > 1.5f) return@forEachIndexed // cull off-screen pages
+                if (!keepAllPagesPlaced && abs(pageOffset) > 1.5f) return@forEachIndexed // cull off-screen pages
 
                 val x = (pageOffset * pageWidth).roundToInt()
                 if (pageTransform != null) {

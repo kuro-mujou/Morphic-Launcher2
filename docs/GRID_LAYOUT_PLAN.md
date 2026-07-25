@@ -58,9 +58,11 @@ grid), so it's built and validated first, standalone (`app/dev/PagerPlaygroundSc
   Refactors from L1: renamed (`InfiniteLauncherPager`→`LauncherPager`, `LauncherState`→`LauncherPagerState`),
   dropped grid-inset coupling + the dead fling `decay` param. Standalone test screen validates swipe / wrap /
   bounded / fling / transform.
-- [ ] **P2 — Integrate** with the drag harness: gate `launcherPagerSwipe(enabled = { !coordinator.isDragging })`
-  and wire edge-dwell page-flip (§9) to `animateToPage`. Each page hosts a grid; the active page provides the
-  drop zone.
+- [x] **P2 — Integrate** with the drag harness (`app/dev/PagerDragPlaygroundScreen`): page-swipe gated off
+  during a drag (`launcherPagerSwipe(enabled = { !isDragging })`); one drop zone = the viewport, footprint page
+  = `currentPage`; edge-dwell page-flip via `animateToPage`; `keepAllPagesPlaced = isDragging` keeps the source
+  page placed so a cross-page drag survives it scrolling off. Uses `FreeGridPlanner` (nearest-edge). Standalone
+  third harness screen; `DragPlaygroundScreen` untouched.
 
 ## Build order — each phase ends by validating in the harness
 
