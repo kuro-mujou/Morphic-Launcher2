@@ -269,7 +269,13 @@ in one sitting.
   is the root-positioned, lifted proxy that follows the finger. Positioning/wiring is the surface's job (Part
   5). Also hardened `PlacementPlan.footprint` to non-null (INVALID keeps the hovered cell so the red shadow has
   somewhere to paint; "no target" is a null plan).
-- [ ] **5. Multi-zone**: register dock + a side surface → prove cross-surface drop.
+- [x] **5a. Single-grid dev harness** (`app` → `dev/DragPlaygroundScreen`) — the first end-to-end run: one
+  free-placement grid, fake tile items, one registered `DropZone`, `launcherItemGestures` per cell, the
+  engine-backed `DropPlanner` (`FreeGridPlanner`), and the `FloatingDragIcon`/`DropFootprint` overlay. Dragged
+  tile stays composed (alpha 0) so its pointer stream survives. Proves push/place/invalid on a device. No
+  spans/merge/dock/pager/cross-surface yet.
+- [ ] **5b. Multi-zone**: register dock + a side surface → prove cross-surface drop (needs the root-overlay
+  gesture takeover for source-leaves-composition).
 - [ ] **6. Folder overlay zone** → prove drag-out.
 - [ ] **7. `EjectToHome`** (vertical grids) + wire `MovingGap`/`DenseReorder` partitions.
 - [ ] **8. Page-flip on edge dwell** (§9) and cross-page repagination on drop.

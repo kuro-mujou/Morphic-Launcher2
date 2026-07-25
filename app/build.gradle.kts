@@ -16,7 +16,9 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.icon)
     implementation(projects.core.designsystem)
+    implementation(projects.core.model)
     implementation(projects.data.apps)
+    implementation(projects.data.layout)
 
     implementation(libs.koin.android)
 
