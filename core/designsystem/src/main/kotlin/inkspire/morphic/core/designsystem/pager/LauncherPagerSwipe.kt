@@ -31,6 +31,7 @@ fun Modifier.launcherPagerSwipe(
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             if (!enabled()) return@awaitEachGesture
+            val startPage = state.currentPage
             scope.launch { state.stopAllAnimations() }
 
             var decided = false
@@ -45,6 +46,16 @@ fun Modifier.launcherPagerSwipe(
                 val event = awaitPointerEvent()
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 tracker.addPointerInputChange(change)
+
+                // If we already claimed a horizontal swipe but an item has since taken over the gesture as a
+                // drag (enabled() went false), hand off: snap back to the page we started on and stop. This
+                // undoes the small scroll that sneaks in between the pager's touch slop and the item's larger
+                // drag slop.
+                if (horizontal && !enabled()) {
+                    scope.launch { state.animateToPage(startPage) }
+                    flung = true
+                    break
+                }
 
                 if (!change.pressed) {
                     if (horizontal) {
