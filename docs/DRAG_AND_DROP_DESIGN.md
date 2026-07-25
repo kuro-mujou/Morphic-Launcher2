@@ -280,9 +280,10 @@ in one sitting.
   free-placement grid, fake tile items, one registered `DropZone`, `launcherItemGestures` per cell, the
   engine-backed `DropPlanner` (`FreeGridPlanner`), and the `FloatingDragIcon`/`DropFootprint` overlay. Dragged
   tile stays composed (alpha 0) so its pointer stream survives. Proves push/place/invalid, **multi-cell spans**
-  (1×1, wide, 2×2; footprint/proxy/push all span-aware, top-left clamped in-grid), and the **§6a directional
-  push partition** (the hovered cell's 4 quadrants pick the push direction; `FreePush`'s nearest-edge order is
-  the fallback). No merge ring / dock / pager / cross-surface yet.
+  (1×1, wide, 2×2; footprint/proxy/push all span-aware, top-left clamped in-grid), the **§6a directional push
+  partition** (the hovered cell's 4 quadrants pick the push direction; `FreePush`'s nearest-edge order is the
+  fallback), and the **§6a merge ring** (inner circle of a mergeable occupant → MERGE plan + expanded shadow;
+  eligibility checked per hover ≈ §6c). No dock / pager / cross-surface yet.
 - [ ] **5b. Multi-zone**: register dock + a side surface → prove cross-surface drop (needs the root-overlay
   gesture takeover for source-leaves-composition).
 - [ ] **6. Folder overlay zone** → prove drag-out.

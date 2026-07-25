@@ -45,6 +45,7 @@ import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -104,12 +105,24 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
             DropPlanner { _, item, fingerInRoot ->
                 val geo = geometry ?: return@DropPlanner null
                 val span = placements[item] ?: return@DropPlanner null
-                // Snap the footprint to the dragged item's own position (finger-centred), rounded to the
-                // nearest cell — so it holds still until the item has travelled half a cell, then steps one
-                // cell in the drag direction. Clamped so a multi-cell footprint stays inside the grid.
+                val occupants = placements.filterKeys { it != item }
+
+                // Merge: finger in the inner ring of an occupant this item can combine with. Eligibility is
+                // checked per hover (equivalent to §6c's lift-time precompute) — a non-mergeable target simply
+                // never offers the ring, so its whole cell stays a push zone with no conflict.
+                val hovered = geo.cellAt(fingerInRoot)
+                if (hovered != null && geo.inMergeRing(fingerInRoot)) {
+                    val target = occupants.entries.firstOrNull { it.value.covers(hovered) }
+                    if (target != null && canMerge(item, target.key)) {
+                        return@DropPlanner FreeGridPlanner.plan(target.value, occupants, config, merge = true)
+                    }
+                }
+
+                // Otherwise place/push. Snap the footprint to the dragged item's own position (finger-centred),
+                // rounded to the nearest cell — it holds still until the item has moved half a cell, then steps
+                // one cell in the drag direction. Clamped so a multi-cell footprint stays inside the grid.
                 val topLeft = geo.snapTopLeftCell(fingerInRoot, span.colSpan, span.rowSpan)
                 val footprint = GridPlacement(0, topLeft.row, topLeft.col, span.rowSpan, span.colSpan)
-                val occupants = placements.filterKeys { it != item }
                 // Which quadrant of the hovered cell the finger sits in decides the push direction; FreePush
                 // tries this first, then falls back to any direction that fits (the "nearest slot" backup).
                 val preferred = geo.pushDirectionAt(fingerInRoot)
@@ -164,7 +177,17 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                                     onDismissMenu = {},
                                     onBeginDrag = { root -> coordinator.start(item, root) },
                                     onDragTo = { root -> coordinator.moveTo(root) },
-                                    onDrop = { coordinator.drop()?.let { applyDrop(placements, it.item, it.plan) } },
+                                    onDrop = {
+                                        coordinator.drop()?.let { outcome ->
+                                            if (outcome.plan.intent == DropIntent.MERGE) {
+                                                val onto = placements.entries.firstOrNull {
+                                                    it.key != outcome.item && it.value == outcome.plan.footprint
+                                                }
+                                                toast("merge ${label(outcome.item)} → ${onto?.key?.let(::label) ?: "?"}")
+                                            }
+                                            applyDrop(placements, outcome.item, outcome.plan)
+                                        }
+                                    },
                                     onCancelDrag = { coordinator.cancel() },
                                 ),
                             contentAlignment = Alignment.Center,
@@ -222,15 +245,35 @@ private fun ItemTile(item: GridItem, modifier: Modifier = Modifier) {
     }
 }
 
-/** Applies a committed drop: shift the pushed occupants, then drop the dragged item onto its footprint. */
+/**
+ * Applies a committed drop. A MERGE drops the dragged item *into* the target — here (no real folders yet) that
+ * just removes it from the grid. Otherwise it shifts the pushed occupants, then places the item on its
+ * footprint.
+ */
 private fun applyDrop(
     placements: SnapshotStateMap<GridItem, GridPlacement>,
     item: GridItem,
     plan: PlacementPlan,
 ) {
+    if (plan.intent == DropIntent.MERGE) {
+        placements.remove(item)
+        return
+    }
     plan.moves.forEach { (moved, placement) -> placements[moved] = placement }
     placements[item] = plan.footprint
 }
+
+/** Whether [cell] falls inside this placement's rectangle. */
+private fun GridPlacement.covers(cell: Cell): Boolean =
+    cell.row in row until rowEndExclusive && cell.col in col until colEndExclusive
+
+/**
+ * Whether [dragged] can merge onto [target]. In the harness everything is an app, so any two distinct apps
+ * combine (a folder, in production). Real rules differ by type — apps combine, widgets combine with widgets,
+ * an app drops into a folder — and would gate the merge ring per §6c.
+ */
+private fun canMerge(dragged: GridItem, target: GridItem): Boolean =
+    dragged is GridItem.App && target is GridItem.App && dragged != target
 
 /** The grid's placement in root/window space, plus the maths mapping a finger to a cell and back. */
 private data class GridGeometry(
@@ -251,6 +294,29 @@ private data class GridGeometry(
         val col = (topLeftX / cellPx).roundToInt().coerceIn(0, (cols - colSpan).coerceAtLeast(0))
         val row = (topLeftY / cellPx).roundToInt().coerceIn(0, (rows - rowSpan).coerceAtLeast(0))
         return Cell(row, col)
+    }
+
+    /** The cell directly under [rootPosition], or null when the finger is outside the grid. */
+    fun cellAt(rootPosition: Offset): Cell? {
+        val lx = rootPosition.x - originInRoot.x
+        val ly = rootPosition.y - originInRoot.y
+        if (lx < 0f || ly < 0f) return null
+        val col = (lx / cellPx).toInt()
+        val row = (ly / cellPx).toInt()
+        return if (row in 0 until rows && col in 0 until cols) Cell(row, col) else null
+    }
+
+    /**
+     * True when the finger sits in the **inner ring** of its hovered cell — the central merge target, inside
+     * the outer push ring (docs/DRAG_AND_DROP_DESIGN.md §6a). Measured as a small circle around the cell
+     * centre.
+     */
+    fun inMergeRing(rootPosition: Offset): Boolean {
+        val lx = rootPosition.x - originInRoot.x
+        val ly = rootPosition.y - originInRoot.y
+        val dx = lx / cellPx - floor(lx / cellPx) - 0.5f
+        val dy = ly / cellPx - floor(ly / cellPx) - 0.5f
+        return dx * dx + dy * dy < MERGE_INNER_RADIUS * MERGE_INNER_RADIUS
     }
 
     fun topLeftInRoot(row: Int, col: Int): Offset =
@@ -278,6 +344,8 @@ private data class Cell(val row: Int, val col: Int)
 
 private const val ROWS = 6
 private const val COLS = 4
+/** Inner-ring radius as a fraction of the cell (0.5 = the cell edge); inside it is the merge target. */
+private const val MERGE_INNER_RADIUS = 0.3f
 private val GridZoneId = ZoneId("playground-grid")
 
 private fun demoApp(name: String): GridItem = GridItem.App(ComponentKey("demo", name))
