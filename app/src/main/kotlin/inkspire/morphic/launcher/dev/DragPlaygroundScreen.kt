@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -77,15 +78,19 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
         val cellPx = with(density) { cellDp.toPx() }
         val config = remember { GridConfig(rows = ROWS, cols = COLS) }
 
-        // The live layout: which item sits where. Mutated on drop; drives recomposition.
+        // The live layout: which item sits where, and how big. Mutated on drop; drives recomposition. A mix
+        // of 1×1, wide, and 2×2 items exercises span-aware push.
         val placements = remember {
             mutableStateMapOf(
                 demoApp("Phone") to GridPlacement(0, 0, 0),
                 demoApp("Messages") to GridPlacement(0, 0, 1),
+                demoApp("Weather") to GridPlacement(0, 0, 2, rowSpan = 2, colSpan = 2),
                 demoApp("Camera") to GridPlacement(0, 1, 0),
-                demoApp("Maps") to GridPlacement(0, 2, 2),
-                demoApp("Clock") to GridPlacement(0, 3, 1),
+                demoApp("Maps") to GridPlacement(0, 1, 1),
+                demoApp("Music") to GridPlacement(0, 2, 0, rowSpan = 1, colSpan = 2),
+                demoApp("Clock") to GridPlacement(0, 2, 2),
                 demoApp("Notes") to GridPlacement(0, 3, 3),
+                demoApp("Photos") to GridPlacement(0, 4, 0, rowSpan = 2, colSpan = 2),
             )
         }
 
@@ -97,7 +102,12 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
             DropPlanner { _, item, fingerInRoot ->
                 val geo = geometry ?: return@DropPlanner null
                 val cell = geo.cellAt(fingerInRoot) ?: return@DropPlanner null
-                val footprint = GridPlacement(page = 0, row = cell.row, col = cell.col)
+                val span = placements[item] ?: return@DropPlanner null
+                // Clamp the top-left so a multi-cell footprint stays inside the grid instead of reading as an
+                // off-grid INVALID whenever the finger nears the right/bottom edge.
+                val col = cell.col.coerceIn(0, (config.cols - span.colSpan).coerceAtLeast(0))
+                val row = cell.row.coerceIn(0, (config.rows - span.rowSpan).coerceAtLeast(0))
+                val footprint = GridPlacement(0, row, col, span.rowSpan, span.colSpan)
                 val occupants = placements.filterKeys { it != item }
                 FreeGridPlanner.plan(footprint, occupants, config)
             }
@@ -138,7 +148,7 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                                         y = (placement.row * cellPx).roundToInt(),
                                     )
                                 }
-                                .size(cellDp)
+                                .size(width = cellDp * placement.colSpan, height = cellDp * placement.rowSpan)
                                 // Keep the dragged tile composed (its pointerInput must survive the drag) but
                                 // invisible — the floating proxy stands in for it while it's in flight.
                                 .graphicsLayer { alpha = if (isDragged) 0f else 1f }
@@ -155,7 +165,7 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
-                            ItemTile(item)
+                            ItemTile(item, Modifier.fillMaxSize())
                         }
                     }
                 }
@@ -166,35 +176,40 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
             val geo = geometry
             if (session != null && geo != null) {
                 session.plan?.let { plan ->
-                    val topLeft = geo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
+                    val footprint = plan.footprint
+                    val topLeft = geo.topLeftInRoot(footprint.row, footprint.col)
                     DropFootprint(
                         intent = plan.intent,
                         modifier = Modifier
                             .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
-                            .size(cellDp),
+                            .size(width = cellDp * footprint.colSpan, height = cellDp * footprint.rowSpan),
                     )
                 }
-                val finger = session.fingerInRoot
-                FloatingDragIcon(
-                    rootOffset = IntOffset(
-                        x = (finger.x - cellPx / 2f).roundToInt(),
-                        y = (finger.y - cellPx / 2f).roundToInt(),
-                    ),
-                    size = DpSize(cellDp, cellDp),
-                ) {
-                    ItemTile(session.item)
+                // Proxy is sized to the dragged item's span and centred on the finger.
+                val span = placements[session.item]
+                if (span != null) {
+                    val finger = session.fingerInRoot
+                    FloatingDragIcon(
+                        rootOffset = IntOffset(
+                            x = (finger.x - cellPx * span.colSpan / 2f).roundToInt(),
+                            y = (finger.y - cellPx * span.rowSpan / 2f).roundToInt(),
+                        ),
+                        size = DpSize(cellDp * span.colSpan, cellDp * span.rowSpan),
+                    ) {
+                        ItemTile(session.item, Modifier.fillMaxSize())
+                    }
                 }
             }
         }
     }
 }
 
-/** A fake app tile standing in for an app icon: a coloured rounded square with the app's initial. */
+/** A fake app tile standing in for an app icon: a coloured rounded box (span-sized by the caller). */
 @Composable
-private fun ItemTile(item: GridItem) {
+private fun ItemTile(item: GridItem, modifier: Modifier = Modifier) {
     Box(
-        Modifier
-            .size(60.dp)
+        modifier
+            .padding(6.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(tileColor(label(item))),
         contentAlignment = Alignment.Center,

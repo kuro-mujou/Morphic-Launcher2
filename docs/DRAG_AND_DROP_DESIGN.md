@@ -272,8 +272,9 @@ in one sitting.
 - [x] **5a. Single-grid dev harness** (`app` → `dev/DragPlaygroundScreen`) — the first end-to-end run: one
   free-placement grid, fake tile items, one registered `DropZone`, `launcherItemGestures` per cell, the
   engine-backed `DropPlanner` (`FreeGridPlanner`), and the `FloatingDragIcon`/`DropFootprint` overlay. Dragged
-  tile stays composed (alpha 0) so its pointer stream survives. Proves push/place/invalid on a device. No
-  spans/merge/dock/pager/cross-surface yet.
+  tile stays composed (alpha 0) so its pointer stream survives. Proves push/place/invalid **and multi-cell
+  spans** (1×1, wide, 2×2 items; footprint/proxy/push all span-aware, top-left clamped in-grid) on a device.
+  No merge ring / directional sub-zones / dock / pager / cross-surface yet.
 - [ ] **5b. Multi-zone**: register dock + a side surface → prove cross-surface drop (needs the root-overlay
   gesture takeover for source-leaves-composition).
 - [ ] **6. Folder overlay zone** → prove drag-out.
