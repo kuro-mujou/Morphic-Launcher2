@@ -185,6 +185,13 @@ the `PlacementPlan`** — so it can never lie about the outcome (L1's 3×-Spread
 | Merge | shadow **expands** over target | `plan.intent == Merge` |
 | Push  | debug tint (dev only) | `plan.intent == Push` |
 
+**Positioning — half-cell hysteresis.** The target cell is the **dragged item's own snapped position**, not the
+cell under the finger: take the item's top-left (its proxy is finger-centred) and **round** to the nearest cell.
+Rounding gives free hysteresis — the footprint holds still until the item has travelled half a cell, then steps
+one cell in the drag direction — so it never jitters cell-to-cell on small movements. The top-left is clamped so
+a multi-cell footprint stays on the grid. (This is a surface-geometry rule, so every real surface applies it,
+not just the dev harness.)
+
 ---
 
 ## 8. The engine (`data:layout`, B8)

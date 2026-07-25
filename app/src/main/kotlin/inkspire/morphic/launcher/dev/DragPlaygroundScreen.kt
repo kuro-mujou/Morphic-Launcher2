@@ -103,13 +103,12 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
         val planner = remember {
             DropPlanner { _, item, fingerInRoot ->
                 val geo = geometry ?: return@DropPlanner null
-                val cell = geo.cellAt(fingerInRoot) ?: return@DropPlanner null
                 val span = placements[item] ?: return@DropPlanner null
-                // Clamp the top-left so a multi-cell footprint stays inside the grid instead of reading as an
-                // off-grid INVALID whenever the finger nears the right/bottom edge.
-                val col = cell.col.coerceIn(0, (config.cols - span.colSpan).coerceAtLeast(0))
-                val row = cell.row.coerceIn(0, (config.rows - span.rowSpan).coerceAtLeast(0))
-                val footprint = GridPlacement(0, row, col, span.rowSpan, span.colSpan)
+                // Snap the footprint to the dragged item's own position (finger-centred), rounded to the
+                // nearest cell — so it holds still until the item has travelled half a cell, then steps one
+                // cell in the drag direction. Clamped so a multi-cell footprint stays inside the grid.
+                val topLeft = geo.snapTopLeftCell(fingerInRoot, span.colSpan, span.rowSpan)
+                val footprint = GridPlacement(0, topLeft.row, topLeft.col, span.rowSpan, span.colSpan)
                 val occupants = placements.filterKeys { it != item }
                 // Which quadrant of the hovered cell the finger sits in decides the push direction; FreePush
                 // tries this first, then falls back to any direction that fits (the "nearest slot" backup).
@@ -240,13 +239,18 @@ private data class GridGeometry(
     val cols: Int,
     val rows: Int,
 ) {
-    fun cellAt(rootPosition: Offset): Cell? {
-        val lx = rootPosition.x - originInRoot.x
-        val ly = rootPosition.y - originInRoot.y
-        if (lx < 0f || ly < 0f) return null
-        val col = (lx / cellPx).toInt()
-        val row = (ly / cellPx).toInt()
-        return if (row in 0 until rows && col in 0 until cols) Cell(row, col) else null
+    /**
+     * The footprint's top-left cell for an item of [colSpan]×[rowSpan] whose proxy is centred on the finger.
+     * Uses the item's own top-left, **rounded** to the nearest cell — so the footprint holds still until the
+     * item has moved half a cell, then steps one cell over (the half-cell hysteresis). Clamped so the span
+     * stays on the grid.
+     */
+    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
+        val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellPx / 2f
+        val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellPx / 2f
+        val col = (topLeftX / cellPx).roundToInt().coerceIn(0, (cols - colSpan).coerceAtLeast(0))
+        val row = (topLeftY / cellPx).roundToInt().coerceIn(0, (rows - rowSpan).coerceAtLeast(0))
+        return Cell(row, col)
     }
 
     fun topLeftInRoot(row: Int, col: Int): Offset =
