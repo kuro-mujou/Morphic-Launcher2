@@ -1,8 +1,10 @@
 package inkspire.morphic.launcher.dev
 
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -24,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -133,6 +137,7 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
         val gestureConfig = remember {
             ItemGestureConfig(touchSlopPx = cellPx * 0.25f, longPressTimeoutMillis = 400L)
         }
+        var showGuides by remember { mutableStateOf(true) }
 
         DisposableEffect(coordinator) {
             onDispose { coordinator.unregisterZone(GridZoneId) }
@@ -196,7 +201,19 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+
+                if (showGuides) ZoneGuides(cellPx, Modifier.matchParentSize())
             }
+
+            // ── Zone debug toggle ───────────────────────────────────────────────────────
+            Text(
+                text = if (showGuides) "zones: on" else "zones: off",
+                color = colors.contentMuted,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .clickable { showGuides = !showGuides },
+            )
 
             // ── Drag overlay (root space): the drop shadow + the floating proxy ──────────
             val session = coordinator.session
@@ -229,6 +246,56 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * Debug overlay drawing each cell's partition so the merge/push zones are visible: the two diagonals split the
+ * cell into the four push triangles, the inner ring is the merge target, and each arrow shows which way an
+ * occupant is shoved from that push zone (away from the edge the finger enters).
+ */
+@Composable
+private fun ZoneGuides(cellPx: Float, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val line = Color.White.copy(alpha = 0.20f)
+        val ring = Color(0xFF63C7C9).copy(alpha = 0.6f)
+        val arrowColor = Color.White.copy(alpha = 0.45f)
+        val thin = 1.dp.toPx()
+        val off = cellPx * 0.28f
+        val len = cellPx * 0.14f
+        for (r in 0 until ROWS) {
+            for (c in 0 until COLS) {
+                val l = c * cellPx
+                val t = r * cellPx
+                val cx = l + cellPx / 2f
+                val cy = t + cellPx / 2f
+                // Diagonals → the four push triangles (top / bottom / left / right).
+                drawLine(line, Offset(l, t), Offset(l + cellPx, t + cellPx), thin)
+                drawLine(line, Offset(l + cellPx, t), Offset(l, t + cellPx), thin)
+                // Inner merge ring.
+                drawCircle(ring, MERGE_INNER_RADIUS * cellPx, Offset(cx, cy), style = Stroke(1.5.dp.toPx()))
+                // Push arrows (occupant is shoved away from the entered edge).
+                arrow(arrowColor, Offset(cx, t + off), Offset(cx, t + off + len), thin)                     // top → down
+                arrow(arrowColor, Offset(cx, t + cellPx - off), Offset(cx, t + cellPx - off - len), thin)   // bottom → up
+                arrow(arrowColor, Offset(l + off, cy), Offset(l + off + len, cy), thin)                     // left → right
+                arrow(arrowColor, Offset(l + cellPx - off, cy), Offset(l + cellPx - off - len, cy), thin)   // right → left
+            }
+        }
+    }
+}
+
+/** Draws a short line from [from] to [to] with a small arrowhead at [to]. */
+private fun DrawScope.arrow(color: Color, from: Offset, to: Offset, width: Float) {
+    drawLine(color, from, to, width)
+    val d = to - from
+    val n = d.getDistance().coerceAtLeast(0.001f)
+    val ux = d.x / n
+    val uy = d.y / n
+    val head = 7.dp.toPx()
+    val spread = 0.5f
+    val b1 = Offset(to.x - head * (ux + -uy * spread), to.y - head * (uy + ux * spread))
+    val b2 = Offset(to.x - head * (ux - -uy * spread), to.y - head * (uy - ux * spread))
+    drawLine(color, to, b1, width)
+    drawLine(color, to, b2, width)
 }
 
 /** A fake app tile standing in for an app icon: a coloured rounded box (span-sized by the caller). */
