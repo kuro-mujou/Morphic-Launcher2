@@ -267,8 +267,10 @@ in one sitting.
   L1's five parallel typed maps collapsed to one generic `Map<K, GridPlacement>`. Pure, unit-tested.
 - [x] **1c. `PlacementPlan` + `DropIntent` (`core:model`) + `FreeGridPlanner` (`data:layout`)** — the "planner
   face": turns a resolved hover into the one plan preview + commit share. Pure, unit-tested.
-- [ ] **1d. `MovingGap`** (APPS pager / folder 1-D reflow) + `DenseReorder` (vertical list). *(Deferred — the
-  gap-migration engine core is thin and folds in with the partition strategy; §6b.)*
+- [x] **1d. `MovingGap`** (APPS pager / folder 1-D reflow) — done in the harness as the ordered-surface path:
+  a visible gap migrates via the `[left|center|right]` per-cell partition (left/right set the insertion index
+  before/after the hovered item, center merges), items animate around it, and the flow densifies on drop. Lives
+  in the render/partition layer as designed (§6b), not `data:layout`. `DenseReorder` (vertical list) still TODO.
 - [x] **2. `DropZone` registry + `DragCoordinator` state** (`core:designsystem/drag`) — root-owned drag state,
   zone registry, topmost-z + accept-filtered hit-testing, drop resolution. Driven by an injected `DropPlanner`
   port (fake in tests). Unit-tested (11 cases). Rendering + gestures deferred; `DropZone` will grow

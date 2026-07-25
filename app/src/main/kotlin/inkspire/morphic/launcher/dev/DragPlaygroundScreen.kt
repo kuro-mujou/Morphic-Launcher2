@@ -1,6 +1,7 @@
 package inkspire.morphic.launcher.dev
 
 import android.widget.Toast
+import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,12 +19,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,19 +67,20 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.PushDirection
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
- * Dev harness for the drag-and-drop stack. Now with **two free-placement zones** — a home grid and a dock —
- * to exercise cross-surface drag: one [DragCoordinator] hit-tests both registered [DropZone]s, and behaviour
- * travels with the **destination** zone (a drop into the dock uses the dock's grid/geometry, whatever the drag
- * came from). Both zones stay composed, so the dragged tile's own pointer stream still tracks the whole
- * gesture — the root-overlay takeover is only needed once a *source* surface can leave composition mid-drag
- * (a side surface), which is the next step.
+ * Dev harness for the drag-and-drop stack, exercising **both reflow families** across several zones:
+ * - **Coordinate / free-placement** (home, dock, drawer): items keep exact cells; a drop pushes occupants out
+ *   of the way (§6a free-grid partition), spans allowed. Handled by `FreeGridPlanner`.
+ * - **Ordered / MovingGap** (the apps pager): items are a 1-D flow; lifting one leaves a *visible gap* that
+ *   migrates as you drag (`[left|center|right]` per cell — left/right move the gap, center merges), and the
+ *   flow densifies only on drop (§6b MovingGap).
  *
- * Items are fake colour tiles standing in for app icons. Try: drag a tile between home and the dock; the drop
- * shadow follows into whichever zone the finger is over. Long-press → menu toast; tap → open toast;
- * press-and-swipe → direction toast. Toggle the zone guides with the "zones" label.
+ * One [DragCoordinator] hit-tests every zone; the planner dispatches on the destination zone's model. Cross
+ * zone drags carry the item source→dest. Items are fake colour tiles. Toggle coordinate-zone guides via the
+ * "zones" label.
  */
 @Composable
 fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
@@ -84,96 +89,114 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
         val context = LocalContext.current
         val density = LocalDensity.current
 
-        val cellDp = 76.dp
+        val cellDp = 64.dp
         val cellPx = with(density) { cellDp.toPx() }
         val gestureConfig = remember {
             ItemGestureConfig(touchSlopPx = cellPx * 0.25f, longPressTimeoutMillis = 400L)
         }
         var showGuides by remember { mutableStateOf(true) }
 
-        // Two zones, each with its own grid + live placements.
         val home = remember {
             DemoSurface(
-                id = ZoneId("home"),
-                config = GridConfig(rows = HOME_ROWS, cols = COLS),
-                placements = mutableStateMapOf(
-                    demoApp("Phone") to GridPlacement(0, 0, 0),
-                    demoApp("Messages") to GridPlacement(0, 0, 1),
-                    demoApp("Weather") to GridPlacement(0, 0, 2, rowSpan = 2, colSpan = 2),
-                    demoApp("Camera") to GridPlacement(0, 1, 0),
-                    demoApp("Maps") to GridPlacement(0, 1, 1),
-                    demoApp("Music") to GridPlacement(0, 2, 0, rowSpan = 1, colSpan = 2),
-                    demoApp("Clock") to GridPlacement(0, 2, 2),
-                    demoApp("Photos") to GridPlacement(0, 3, 0, rowSpan = 2, colSpan = 2),
-                    demoApp("Notes") to GridPlacement(0, 4, 3),
+                ZoneId("home"), GridConfig(rows = HOME_ROWS, cols = COLS),
+                SurfaceModel.Coordinate(
+                    mutableStateMapOf(
+                        demoApp("Phone") to GridPlacement(0, 0, 0),
+                        demoApp("Messages") to GridPlacement(0, 0, 1),
+                        demoApp("Weather") to GridPlacement(0, 0, 2, rowSpan = 2, colSpan = 2),
+                        demoApp("Camera") to GridPlacement(0, 1, 0),
+                        demoApp("Maps") to GridPlacement(0, 1, 1),
+                        demoApp("Photos") to GridPlacement(0, 2, 0, rowSpan = 2, colSpan = 2),
+                        demoApp("Music") to GridPlacement(0, 2, 2, rowSpan = 1, colSpan = 2),
+                        demoApp("Clock") to GridPlacement(0, 3, 2),
+                        demoApp("Notes") to GridPlacement(0, 3, 3),
+                    ),
                 ),
             )
         }
         val dock = remember {
             DemoSurface(
-                id = ZoneId("dock"),
-                config = GridConfig(rows = DOCK_ROWS, cols = COLS),
-                placements = mutableStateMapOf(
-                    demoApp("Dialer") to GridPlacement(0, 0, 0),
-                    demoApp("Browser") to GridPlacement(0, 0, 1),
+                ZoneId("dock"), GridConfig(rows = DOCK_ROWS, cols = COLS),
+                SurfaceModel.Coordinate(
+                    mutableStateMapOf(
+                        demoApp("Dialer") to GridPlacement(0, 0, 0),
+                        demoApp("Browser") to GridPlacement(0, 0, 1),
+                    ),
                 ),
             )
         }
         val drawer = remember {
             DemoSurface(
-                id = ZoneId("drawer"),
-                config = GridConfig(rows = 3, cols = 1),
-                placements = mutableStateMapOf(
-                    demoApp("Gmail") to GridPlacement(0, 0, 0),
-                    demoApp("Chrome") to GridPlacement(0, 1, 0),
-                    demoApp("Slack") to GridPlacement(0, 2, 0),
+                ZoneId("drawer"), GridConfig(rows = 3, cols = 1),
+                SurfaceModel.Coordinate(
+                    mutableStateMapOf(
+                        demoApp("Gmail") to GridPlacement(0, 0, 0),
+                        demoApp("Chrome") to GridPlacement(0, 1, 0),
+                        demoApp("Slack") to GridPlacement(0, 2, 0),
+                    ),
                 ),
             )
         }
-        val surfaces = remember { listOf(home, dock, drawer) }
+        val appsPager = remember {
+            DemoSurface(
+                ZoneId("apps"), GridConfig(rows = 3, cols = COLS),
+                SurfaceModel.Ordered(
+                    order = mutableStateListOf(
+                        demoApp("A"), demoApp("B"), demoApp("C"), demoApp("D"), demoApp("E"),
+                        demoApp("F"), demoApp("G"), demoApp("H"), demoApp("I"),
+                    ),
+                    allowMerge = true,
+                ),
+            )
+        }
+        val surfaces = remember { listOf(home, dock, drawer, appsPager) }
 
-        // The engine-backed planner dispatches on the destination zone: it plans within *that* surface's grid,
-        // using its geometry, occupants, and config. The dragged item's span is looked up wherever it lives.
+        // The planner dispatches on the destination zone's model: free-grid push/merge, or MovingGap reorder.
         val planner = remember {
             DropPlanner { zone, item, fingerInRoot ->
                 val surface = surfaces.firstOrNull { it.id == zone.id } ?: return@DropPlanner null
                 val geo = surface.geometry ?: return@DropPlanner null
-                val span = surfaces.firstNotNullOfOrNull { it.placements[item] } ?: return@DropPlanner null
-                planWithin(surface, geo, item, span, fingerInRoot)
+                when (val m = surface.model) {
+                    is SurfaceModel.Coordinate -> {
+                        val span = spanOf(surfaces, item) ?: return@DropPlanner null
+                        planWithin(m.placements, geo, surface.config, item, span, fingerInRoot)
+                    }
+                    is SurfaceModel.Ordered -> orderedPlan(m, geo, surface.config, item, fingerInRoot)
+                }
             }
         }
         val coordinator = rememberDragCoordinator(planner)
+
+        // Reset every MovingGap surface's transient gap once no drag is in flight.
+        LaunchedEffect(coordinator.isDragging) {
+            if (!coordinator.isDragging) {
+                surfaces.forEach { (it.model as? SurfaceModel.Ordered)?.gap = -1 }
+            }
+        }
 
         fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
         fun handleDrop() {
             val outcome = coordinator.drop() ?: return
-            if (outcome.plan.intent == DropIntent.MERGE) {
-                val dest = surfaces.first { it.id == outcome.zone }
-                val onto = dest.placements.entries.firstOrNull {
-                    it.key != outcome.item && it.value == outcome.plan.footprint
-                }
-                toast("merge ${label(outcome.item)} → ${onto?.key?.let(::label) ?: "?"}")
-            }
+            if (outcome.plan.intent == DropIntent.MERGE) toast("merge ${label(outcome.item)}")
             applyOutcome(surfaces, outcome.item, outcome.zone, outcome.plan)
         }
 
         Box(modifier.fillMaxSize().background(colors.background)) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                // The drawer is a side surface: a normal always-composed zone. A drag out of it is tracked by
-                // the dragged tile's own pointer stream (it stays composed), exactly like home↔dock — so no
-                // root-overlay handoff is needed. The rule that replaces L1's HomeDragBridge is simply: keep a
-                // source surface composed while a drag from it is in flight (don't unmount it mid-gesture).
-                Box(Modifier.width(96.dp), contentAlignment = Alignment.Center) {
+                // Side surface — a normal always-composed zone; a drag out of it is tracked by the tile's own
+                // pointer stream (kept composed), so no root overlay is needed.
+                Box(Modifier.width(80.dp), contentAlignment = Alignment.Center) {
                     GridSurface(drawer, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
                 }
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
                 ) {
                     GridSurface(home, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
                     GridSurface(dock, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
+                    OrderedSurface(appsPager, coordinator, cellDp, cellPx, gestureConfig, ::toast, ::handleDrop)
                 }
             }
 
@@ -200,7 +223,7 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                             .size(width = cellDp * plan.footprint.colSpan, height = cellDp * plan.footprint.rowSpan),
                     )
                 }
-                val span = surfaces.firstNotNullOfOrNull { it.placements[session.item] }
+                val span = spanOf(surfaces, session.item)
                 if (span != null) {
                     val finger = session.fingerInRoot
                     FloatingDragIcon(
@@ -218,17 +241,44 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** One free-placement drop zone in the harness: its identity, grid, and the live map of what sits where. */
-private class DemoSurface(
-    val id: ZoneId,
-    val config: GridConfig,
-    val placements: SnapshotStateMap<GridItem, GridPlacement>,
-) {
+// ── Surfaces ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** One drop zone in the harness: identity, grid, and its placement model. */
+private class DemoSurface(val id: ZoneId, val config: GridConfig, val model: SurfaceModel) {
     /** Where this zone sits in root/window space; set as it measures, read by the planner + overlay. */
     var geometry: GridGeometry? by mutableStateOf(null)
 }
 
-/** Renders one zone: registers its [DropZone], lays out its tiles with the gesture modifier, draws guides. */
+/** How a surface stores where its items go — the two primitives of the arrangement model. */
+private sealed interface SurfaceModel {
+    /** Free placement: item → exact [GridPlacement]; a drop pushes occupants. */
+    class Coordinate(val placements: SnapshotStateMap<GridItem, GridPlacement>) : SurfaceModel
+
+    /** MovingGap flow: item → ordinal in [order]; a drag migrates a visible gap, densified on drop. */
+    class Ordered(val order: SnapshotStateList<GridItem>, val allowMerge: Boolean) : SurfaceModel {
+        /** Live insertion index (0..others) while a drag is over this surface; -1 when idle. */
+        var gap: Int by mutableStateOf(-1)
+    }
+}
+
+private val DemoSurface.coordinatePlacements: SnapshotStateMap<GridItem, GridPlacement>?
+    get() = (model as? SurfaceModel.Coordinate)?.placements
+private val DemoSurface.orderList: SnapshotStateList<GridItem>?
+    get() = (model as? SurfaceModel.Ordered)?.order
+
+private fun DemoSurface.contains(item: GridItem): Boolean =
+    coordinatePlacements?.containsKey(item) == true || orderList?.contains(item) == true
+
+/** The dragged item's span. Coordinate items keep their placement; ordered items are always 1×1. */
+private fun spanOf(surfaces: List<DemoSurface>, item: GridItem): GridPlacement? {
+    for (s in surfaces) {
+        s.coordinatePlacements?.get(item)?.let { return it }
+        if (s.orderList?.contains(item) == true) return GridPlacement(0, 0, 0)
+    }
+    return null
+}
+
+/** Renders a coordinate (free-placement) zone: registers its [DropZone], lays out tiles, draws guides. */
 @Composable
 private fun GridSurface(
     surface: DemoSurface,
@@ -239,16 +289,16 @@ private fun GridSurface(
     gestureConfig: ItemGestureConfig,
     onToast: (String) -> Unit,
     onDrop: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
+    val placements = (surface.model as SurfaceModel.Coordinate).placements
 
     DisposableEffect(surface, coordinator) {
         onDispose { coordinator.unregisterZone(surface.id) }
     }
 
     Box(
-        modifier
+        Modifier
             .size(width = cellDp * surface.config.cols, height = cellDp * surface.config.rows)
             .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
             .onGloballyPositioned {
@@ -256,19 +306,15 @@ private fun GridSurface(
                 coordinator.registerZone(DropZone(surface.id, it.boundsInRoot(), z = 0) { true })
             },
     ) {
-        for ((item, placement) in surface.placements) {
+        for ((item, placement) in placements) {
             val isDragged = coordinator.session?.item == item
             key(item) {
                 Box(
                     Modifier
                         .offset {
-                            IntOffset(
-                                x = (placement.col * cellPx).roundToInt(),
-                                y = (placement.row * cellPx).roundToInt(),
-                            )
+                            IntOffset((placement.col * cellPx).roundToInt(), (placement.row * cellPx).roundToInt())
                         }
                         .size(width = cellDp * placement.colSpan, height = cellDp * placement.rowSpan)
-                        // Keep the dragged tile composed (pointerInput must survive the drag) but invisible.
                         .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                         .launcherItemGestures(
                             config = gestureConfig,
@@ -287,26 +333,97 @@ private fun GridSurface(
                 }
             }
         }
-        if (showGuides) ZoneGuides(surface.placements.values.toList(), cellPx, Modifier.matchParentSize())
+        if (showGuides) ZoneGuides(placements.values.toList(), cellPx, Modifier.matchParentSize())
     }
 }
 
 /**
- * Plans a drop within one [surface]: the occupant under the finger (if any) is the push/merge target — its
- * whole rectangle is one 4-way push partition with a central merge ring (§6a). The footprint snaps to the
- * dragged item's own position (half-cell hysteresis). Occupants exclude the dragged item, so dragging it
- * within its home surface doesn't collide with itself.
+ * Renders an ordered (MovingGap) zone. Items flow row-major by [SurfaceModel.Ordered.order]. During a drag of
+ * one of its items, the others render around a gap at the live insertion index (animated), and the dragged tile
+ * is kept composed but invisible — the floating proxy stands in. Only accepts its own items (reorder); items
+ * are extracted to coordinate zones by dropping there.
+ */
+@Composable
+private fun OrderedSurface(
+    surface: DemoSurface,
+    coordinator: DragCoordinator,
+    cellDp: Dp,
+    cellPx: Float,
+    gestureConfig: ItemGestureConfig,
+    onToast: (String) -> Unit,
+    onDrop: () -> Unit,
+) {
+    val colors = LocalMorphicColors.current
+    val model = surface.model as SurfaceModel.Ordered
+    val cols = surface.config.cols
+
+    DisposableEffect(surface, coordinator) {
+        onDispose { coordinator.unregisterZone(surface.id) }
+    }
+
+    Box(
+        Modifier
+            .size(width = cellDp * cols, height = cellDp * surface.config.rows)
+            .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
+            .onGloballyPositioned {
+                surface.geometry = GridGeometry(it.positionInRoot(), cellPx, cols, surface.config.rows)
+                coordinator.registerZone(DropZone(surface.id, it.boundsInRoot(), z = 0) { it in model.order })
+            },
+    ) {
+        val dragged = coordinator.session?.item?.takeIf { it in model.order }
+        val gap = when {
+            dragged == null -> -1
+            model.gap >= 0 -> model.gap
+            else -> model.order.indexOf(dragged)
+        }
+        val slots = displaySlots(model.order, dragged, gap)
+        for (entry in model.order) {
+            val slot = slots.getValue(entry)
+            val isDragged = entry == dragged
+            key(entry) {
+                val target = IntOffset(((slot % cols) * cellPx).roundToInt(), ((slot / cols) * cellPx).roundToInt())
+                val animated by animateIntOffsetAsState(target, label = "orderedSlot")
+                Box(
+                    Modifier
+                        .offset { animated }
+                        .size(cellDp)
+                        .graphicsLayer { alpha = if (isDragged) 0f else 1f }
+                        .launcherItemGestures(
+                            config = gestureConfig,
+                            onOpen = { onToast("open ${label(entry)}") },
+                            onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
+                            onShowMenu = { onToast("menu: ${label(entry)}") },
+                            onDismissMenu = {},
+                            onBeginDrag = { root -> coordinator.start(entry, root) },
+                            onDragTo = { root -> coordinator.moveTo(root) },
+                            onDrop = { onDrop() },
+                            onCancelDrag = { coordinator.cancel() },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ItemTile(entry, Modifier.fillMaxSize())
+                }
+            }
+        }
+    }
+}
+
+// ── Planning ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Plans a drop within a coordinate zone: the occupant under the finger (if any) is the push/merge target —
+ * its whole rectangle is one 4-way push partition with a central merge ring (§6a). The footprint snaps to the
+ * dragged item's own position (half-cell hysteresis).
  */
 private fun planWithin(
-    surface: DemoSurface,
+    placements: SnapshotStateMap<GridItem, GridPlacement>,
     geo: GridGeometry,
+    config: GridConfig,
     item: GridItem,
     span: GridPlacement,
     fingerInRoot: Offset,
 ): PlacementPlan {
-    val config = surface.config
-    val occupants = surface.placements.filterKeys { it != item }
-
+    val occupants = placements.filterKeys { it != item }
     val hovered = geo.cellAt(fingerInRoot)
     val target = hovered?.let { h -> occupants.entries.firstOrNull { it.value.covers(h) } }
 
@@ -325,33 +442,103 @@ private fun planWithin(
 }
 
 /**
- * Applies a committed drop across zones. The destination is [zone]; the source is wherever [item] currently
- * lives. A MERGE drops the item into its target (here, removed from the grid). Otherwise the pushed occupants
- * shift **in the destination**, the item leaves its source zone (if different), and lands on its footprint.
+ * Plans a drop within an ordered (MovingGap) zone, updating the live [SurfaceModel.Ordered.gap]. `others` is
+ * the order minus the dragged item; the gap is an insertion index into it. The cell the finger is over maps to
+ * a display slot; the item there and which horizontal third decide the new gap — LEFT third → before it,
+ * RIGHT → after it, CENTER (if mergeable) → merge. The footprint (for the shadow) is the gap cell, or the
+ * target's cell when merging.
  */
-private fun applyOutcome(
-    surfaces: List<DemoSurface>,
+private fun orderedPlan(
+    model: SurfaceModel.Ordered,
+    geo: GridGeometry,
+    config: GridConfig,
     item: GridItem,
-    zone: ZoneId,
-    plan: PlacementPlan,
-) {
-    val dest = surfaces.first { it.id == zone }
-    val source = surfaces.first { item in it.placements }
+    fingerInRoot: Offset,
+): PlacementPlan? {
+    val cols = config.cols
+    val cell = geo.cellAt(fingerInRoot) ?: return null
+    val others = model.order.filter { it != item }
+    if (model.gap < 0) model.gap = model.order.indexOf(item).coerceIn(0, others.size)
+    var g = model.gap.coerceIn(0, others.size)
+    val slot = cell.row * cols + cell.col
 
-    if (plan.intent == DropIntent.MERGE) {
-        source.placements.remove(item)
-        return
+    when {
+        slot > others.size -> g = others.size          // empty trailing cell → append
+        slot == g -> Unit                               // over the gap itself → no change
+        else -> {
+            val j = if (slot < g) slot else slot - 1    // others-index of the hovered item
+            if (j in others.indices) {
+                when (val third = geo.thirdInCell(fingerInRoot)) {
+                    Third.CENTER -> if (model.allowMerge && canMerge(item, others[j])) {
+                        model.gap = g
+                        return PlacementPlan(GridPlacement(0, slot / cols, slot % cols), DropIntent.MERGE)
+                    }
+                    Third.LEFT -> g = j
+                    Third.RIGHT -> g = j + 1
+                }
+            }
+        }
     }
-    plan.moves.forEach { (moved, placement) -> dest.placements[moved] = placement }
-    if (source !== dest) source.placements.remove(item)
-    dest.placements[item] = plan.footprint
+    model.gap = g
+    return PlacementPlan(GridPlacement(0, g / cols, g % cols), DropIntent.PLACE)
+}
+
+/** Item → display slot when rendering [order] with [dragged] lifted and its gap at index [g]. */
+private fun displaySlots(order: List<GridItem>, dragged: GridItem?, g: Int): Map<GridItem, Int> {
+    if (dragged == null) return order.withIndex().associate { (i, it) -> it to i }
+    val map = HashMap<GridItem, Int>(order.size)
+    var k = 0
+    for (entry in order) {
+        if (entry == dragged) continue
+        map[entry] = if (k < g) k else k + 1
+        k++
+    }
+    map[dragged] = g
+    return map
 }
 
 /**
- * Debug overlay drawing each **item's** partition so the merge/push zones are visible. Zones belong to
- * occupants, not cells: one item (however many cells it spans) gets one set of diagonals splitting its whole
- * rectangle into four push triangles, one central merge ring, and four arrows showing which way it is shoved
- * from each zone. Empty cells have no zones — nothing to push or merge there.
+ * Applies a committed drop. Removes the item from its source (placement map or order), then lands it in the
+ * destination: a coordinate zone shifts pushed occupants and places it on the footprint; an ordered zone
+ * splices it into the flow at the gap index the footprint encodes. A MERGE just removes it (no real folders).
+ */
+private fun applyOutcome(surfaces: List<DemoSurface>, item: GridItem, zone: ZoneId, plan: PlacementPlan) {
+    val dest = surfaces.first { it.id == zone }
+    val source = surfaces.first { it.contains(item) }
+
+    fun removeFromSource() {
+        source.coordinatePlacements?.remove(item)
+        source.orderList?.remove(item)
+    }
+
+    when (val dm = dest.model) {
+        is SurfaceModel.Coordinate -> {
+            if (plan.intent == DropIntent.MERGE) {
+                removeFromSource()
+                return
+            }
+            plan.moves.forEach { (moved, placement) -> dm.placements[moved] = placement }
+            removeFromSource()
+            dm.placements[item] = plan.footprint
+        }
+        is SurfaceModel.Ordered -> {
+            if (plan.intent == DropIntent.MERGE) {
+                removeFromSource()
+                return
+            }
+            val g = plan.footprint.row * dest.config.cols + plan.footprint.col
+            removeFromSource() // if same surface, this is the item leaving its old slot
+            dm.order.add(g.coerceIn(0, dm.order.size), item)
+        }
+    }
+}
+
+// ── Rendering helpers ────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Debug overlay drawing each **item's** partition for coordinate zones: the two diagonals split the item's
+ * whole rectangle into four push triangles, a single central merge ring, and four arrows for the push
+ * directions. Empty cells have no zones.
  */
 @Composable
 private fun ZoneGuides(rects: List<GridPlacement>, cellPx: Float, modifier: Modifier = Modifier) {
@@ -370,12 +557,9 @@ private fun ZoneGuides(rects: List<GridPlacement>, cellPx: Float, modifier: Modi
             val offX = w * 0.24f
             val offY = h * 0.24f
             val len = minOf(w, h) * 0.14f
-            // Diagonals → the four push triangles across the whole item.
             drawLine(line, Offset(l, t), Offset(l + w, t + h), thin)
             drawLine(line, Offset(l + w, t), Offset(l, t + h), thin)
-            // A single inner merge ring, scaled by the item's smaller span.
             drawCircle(ring, MERGE_INNER_RADIUS * minOf(w, h), Offset(cx, cy), style = Stroke(1.5.dp.toPx()))
-            // Push arrows (occupant is shoved away from the entered edge).
             arrow(arrowColor, Offset(cx, t + offY), Offset(cx, t + offY + len), thin)             // top → down
             arrow(arrowColor, Offset(cx, t + h - offY), Offset(cx, t + h - offY - len), thin)     // bottom → up
             arrow(arrowColor, Offset(l + offX, cy), Offset(l + offX + len, cy), thin)             // left → right
@@ -413,8 +597,10 @@ private fun ItemTile(item: GridItem, modifier: Modifier = Modifier) {
     }
 }
 
+// ── Rules + geometry ─────────────────────────────────────────────────────────────────────────────────────
+
 /** Whether [dragged] can merge onto [target]. In the harness everything is an app, so any two distinct apps
- * combine (a folder, in production). Real rules differ by type and would gate the merge ring per §6c. */
+ * combine (a folder, in production). Real rules differ by type and would gate the merge per §6c. */
 private fun canMerge(dragged: GridItem, target: GridItem): Boolean =
     dragged is GridItem.App && target is GridItem.App && dragged != target
 
@@ -422,7 +608,10 @@ private fun canMerge(dragged: GridItem, target: GridItem): Boolean =
 private fun GridPlacement.covers(cell: Cell): Boolean =
     cell.row in row until rowEndExclusive && cell.col in col until colEndExclusive
 
-/** A zone's placement in root/window space, plus the maths mapping a finger to a cell / item-relative zone. */
+/** The horizontal third of a cell — the `[left | center | right]` partition of the MovingGap surfaces (§6a). */
+private enum class Third { LEFT, CENTER, RIGHT }
+
+/** A zone's placement in root/window space, plus the maths mapping a finger to cells and item-relative zones. */
 private data class GridGeometry(
     val originInRoot: Offset,
     val cellPx: Float,
@@ -452,6 +641,17 @@ private data class GridGeometry(
         return if (row in 0 until rows && col in 0 until cols) Cell(row, col) else null
     }
 
+    /** The horizontal third of the hovered cell the finger sits in (MovingGap partition). */
+    fun thirdInCell(rootPosition: Offset): Third {
+        val lx = rootPosition.x - originInRoot.x
+        val fx = lx / cellPx - floor(lx / cellPx)
+        return when {
+            fx < 1f / 3f -> Third.LEFT
+            fx > 2f / 3f -> Third.RIGHT
+            else -> Third.CENTER
+        }
+    }
+
     /** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller span. */
     fun mergeRadius(rect: GridPlacement): Float = MERGE_INNER_RADIUS * minOf(rect.colSpan, rect.rowSpan) * cellPx
 
@@ -469,8 +669,7 @@ private data class GridGeometry(
     /**
      * Which way to push the item occupying [rect], from where the finger sits **within that item's rectangle**.
      * The rectangle is split into four triangles by its diagonals; the occupant is shoved away from the edge
-     * the finger is nearest — left triangle pushes right, top pushes down, and so on. Relative to the whole
-     * item, so a multi-cell item is one 4-way partition, not one per sub-cell (§6a).
+     * the finger is nearest — left triangle pushes right, top pushes down, and so on (§6a).
      */
     fun pushDirectionInRect(fingerInRoot: Offset, rect: GridPlacement): PushDirection {
         val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellPx)) / (rect.colSpan * cellPx) - 0.5f
@@ -488,7 +687,7 @@ private data class GridGeometry(
 
 private data class Cell(val row: Int, val col: Int)
 
-private const val HOME_ROWS = 5
+private const val HOME_ROWS = 4
 private const val DOCK_ROWS = 1
 private const val COLS = 4
 
