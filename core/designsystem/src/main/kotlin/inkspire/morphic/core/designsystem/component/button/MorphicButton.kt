@@ -42,7 +42,10 @@ fun MorphicButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
-    val shapes = ButtonDefaults.shapes()
+    val shapes = ButtonDefaults.shapes(
+        shape = RoundedCornerShape(12.dp),
+        pressedShape = RoundedCornerShape(6.dp),
+    )
     when (style) {
         MorphicButtonStyle.Filled ->
             Button(onClick = onClick, modifier = modifier, enabled = enabled, shapes = shapes, content = content)

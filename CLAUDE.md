@@ -192,9 +192,20 @@ from the baked stack).
 - **Build components *on* M3, restyle — go fully custom only where M3 has no equivalent.** Because the scheme
   is bridged monochrome, wrap the real M3 component and get its native Expressive motion for free:
   `MorphicButton` = the M3 button family + `ButtonDefaults.shapes()` (press shape-morph); `MorphicSlider` =
-  M3 `Slider` with custom `thumb`/`track` slots (our thin look, M3's grab). Reserve fully-custom `Row`/`Canvas`
-  for controls M3 lacks — the **2D pad**, the **segmented control**, and a **vertical slider** (M3 has none).
-  The **range slider** maps to M3 `RangeSlider`; range + vertical are deferred until a consumer exists.
+  M3 `Slider` with a custom `thumb` slot over M3's own track (our grow-on-press thumb, M3's track + grab). Reserve fully-custom `Row`/`Canvas`
+  for controls M3 lacks — the **2D pad** and the **segmented control**. The **range slider** is built on M3
+  `RangeSlider` (custom thumbs, M3 track); a **vertical slider** (custom Canvas — M3 has none) is deferred
+  until a consumer needs it.
+- **Modern state APIs behind convenient facades.** Components sit on the **state-hoisted** M3 APIs internally
+  (`rememberSliderState`/`rememberRangeSliderState`) — not the value-based overloads (deprecation path). But
+  they expose a plain `value`/`onValueChange` API and create + bridge the state *inside* (`LaunchedEffect(value)`
+  in, `snapshotFlow { … }.drop(1)` out), so call sites need no `remember*State`. **Exception — the text field
+  keeps a hoisted `TextFieldState`** (`rememberTextFieldState()` at the call site): its config-change survival
+  needs the caller to own the state, so hiding it would throw that benefit away.
+- **The text field wraps `BasicTextField` (foundation primitive) + a `decorator`, not M3's `TextField`.** M3's
+  styled field is too opinionated about focus/label/indicator; the primitive gives full focus control — our
+  own `onFocusChanged` state, the focus ring, placeholder-behind-field, and clearing focus when the IME is
+  dismissed (`WindowInsets.isImeVisible`).
 - **Settings vs launcher colour = one theme, two "is-dark" inputs** (not two palettes). Settings feeds
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a **wallpaper-brightness**
   signal (chrome must contrast the wallpaper — bright wallpaper → Light scheme/black tint, dark → Dark/white).

@@ -9,6 +9,7 @@ android {
 
 dependencies {
     implementation(projects.core.model)
+    implementation(projects.core.icon)
 
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui)

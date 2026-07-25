@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,6 +36,7 @@ import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
+import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSlider
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -124,17 +126,26 @@ private fun ButtonsDemo() {
 private fun SlidersDemo() {
     val colors = LocalMorphicColors.current
     var basic by remember { mutableStateOf(0.4f) }
-    var ranged by remember { mutableStateOf(0f) }
+    var wide by remember { mutableStateOf(0f) }
     var stepped by remember { mutableStateOf(0.5f) }
+    var range by remember { mutableStateOf(0.3f..0.7f) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "Built on M3 — monochrome, native grab animation · basic / range / stepped",
+            "Single — basic / −1..1 / stepped",
             color = colors.contentMuted,
             style = MaterialTheme.typography.labelMedium,
         )
         MorphicSlider(value = basic, onValueChange = { basic = it })
-        MorphicSlider(value = ranged, onValueChange = { ranged = it }, valueRange = -1f..1f)
+        MorphicSlider(value = wide, onValueChange = { wide = it }, valueRange = -1f..1f)
         MorphicSlider(value = stepped, onValueChange = { stepped = it }, steps = 4)
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Range (min/max — the per-layout icon-size rail)",
+            color = colors.contentMuted,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        MorphicRangeSlider(value = range, onValueChange = { range = it })
     }
 }
 
@@ -166,8 +177,8 @@ private fun PadDemo() {
 @Composable
 private fun TextFieldDemo() {
     val colors = LocalMorphicColors.current
-    var name by remember { mutableStateOf("") }
-    var invalid by remember { mutableStateOf("bad name") }
+    val name = rememberTextFieldState()
+    val invalid = rememberTextFieldState(initialText = "bad name")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             "Morphic text field (settings) — normal + error",
@@ -175,14 +186,12 @@ private fun TextFieldDemo() {
             style = MaterialTheme.typography.labelMedium,
         )
         MorphicTextField(
-            value = name,
-            onValueChange = { name = it },
+            state = name,
             placeholder = "Folder name",
             modifier = Modifier.fillMaxWidth(),
         )
         MorphicTextField(
-            value = invalid,
-            onValueChange = { invalid = it },
+            state = invalid,
             placeholder = "Name",
             isError = true,
             modifier = Modifier.fillMaxWidth(),

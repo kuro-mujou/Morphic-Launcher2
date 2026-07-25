@@ -24,9 +24,9 @@ val LocalIconRenderManager = staticCompositionLocalOf<IconRenderManager?> { null
 /** The global default layer set every app icon uses until per-app overrides land (data:icons, B9). */
 val LocalIconLayerSet = staticCompositionLocalOf { IconLayerSet.Base }
 
-// TODO(B4 / core:designsystem AppCell): TEMPORARY fallback bake resolution — REMOVE once the layout
-//  passes a real sizePx from IconMetrics (the layout owns icon size). This magic number is not
-//  density-aware and only exists so LauncherIcon renders standalone / in @Preview before that wiring.
+// TODO(B4): fallback bake resolution. The grid `AppCell` now passes a real sizePx (from IconMetrics), so this
+//  is only for standalone / @Preview callers and any layout cell that doesn't yet pass a size (e.g. the list
+//  row / folder cell). Remove once every cell passes sizePx. Not density-aware.
 private const val DEFAULT_ICON_RENDER_PX = 192
 
 /**
