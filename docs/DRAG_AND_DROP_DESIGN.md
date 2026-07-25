@@ -253,8 +253,10 @@ in one sitting.
   face": turns a resolved hover into the one plan preview + commit share. Pure, unit-tested.
 - [ ] **1d. `MovingGap`** (APPS pager / folder 1-D reflow) + `DenseReorder` (vertical list). *(Deferred — the
   gap-migration engine core is thin and folds in with the partition strategy; §6b.)*
-- [ ] **2. `DropZone` registry + `DragCoordinator` state** (`core:designsystem/drag`) driven by a fake planner +
-  one test surface. No cross-surface yet.
+- [x] **2. `DropZone` registry + `DragCoordinator` state** (`core:designsystem/drag`) — root-owned drag state,
+  zone registry, topmost-z + accept-filtered hit-testing, drop resolution. Driven by an injected `DropPlanner`
+  port (fake in tests). Unit-tested (11 cases). Rendering + gestures deferred; `DropZone` will grow
+  `geometry`/`behavior` when the real planner lands.
 - [ ] **3. The gesture pipeline** (§5 state machine) wired to one grid.
 - [ ] **4. `FloatingDragIcon` + `DropFootprint`** rendering from `PlacementPlan` (§7 states).
 - [ ] **5. Multi-zone**: register dock + a side surface → prove cross-surface drop.

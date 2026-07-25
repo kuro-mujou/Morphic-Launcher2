@@ -30,7 +30,7 @@ fun AppCell(
     IconLabelCell(label = app.label, modifier = modifier, metrics = metrics) { iconSize ->
         val sizePx = with(LocalDensity.current) { iconSize.roundToPx() }
         LauncherIcon(
-            component = app.component,
+            component = app.componentKey,
             contentDescription = app.label,
             sizePx = sizePx,
             modifier = Modifier
