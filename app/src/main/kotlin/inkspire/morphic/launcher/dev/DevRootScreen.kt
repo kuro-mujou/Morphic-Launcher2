@@ -25,6 +25,7 @@ private enum class DevScreen(val label: String) {
     PagerDrag("Pager+Drag"),
     Surface("Surface"),
     Grid("Grid"),
+    Reflow("Reflow"),
     ;
 
     fun next(): DevScreen = entries[(ordinal + 1) % entries.size]
@@ -44,6 +45,7 @@ fun DevRootScreen(modifier: Modifier = Modifier) {
             DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
             DevScreen.Surface -> SurfacePagerPlaygroundScreen()
             DevScreen.Grid -> GridPlaygroundScreen()
+            DevScreen.Reflow -> ReflowPlaygroundScreen()
         }
         // Theme-independent chip so it reads over either screen; label shows what tapping switches TO.
         Text(
