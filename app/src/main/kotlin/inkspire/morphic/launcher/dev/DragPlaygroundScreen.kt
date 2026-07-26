@@ -1,7 +1,6 @@
 package inkspire.morphic.launcher.dev
 
 import android.widget.Toast
-import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,7 +9,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,11 +41,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -57,6 +57,7 @@ import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.ComponentKey
@@ -188,16 +189,52 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                 // Side surface — a normal always-composed zone; a drag out of it is tracked by the tile's own
                 // pointer stream (kept composed), so no root overlay is needed.
                 Box(Modifier.width(80.dp), contentAlignment = Alignment.Center) {
-                    GridSurface(drawer, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
+                    // Fixed-cell coordinate surface: box sized to cellDp, so its measured cells come out 64dp.
+                    GridSurface(
+                        surface = drawer,
+                        coordinator = coordinator,
+                        sizeModifier = Modifier.size(width = cellDp * drawer.config.cols, height = cellDp * drawer.config.rows),
+                        showGuides = showGuides,
+                        gestureConfig = gestureConfig,
+                        onToast = ::toast,
+                        onDrop = ::handleDrop,
+                    )
                 }
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
                 ) {
-                    GridSurface(home, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
-                    GridSurface(dock, coordinator, cellDp, cellPx, showGuides, gestureConfig, ::toast, ::handleDrop)
-                    OrderedSurface(appsPager, coordinator, cellDp, cellPx, gestureConfig, ::toast, ::handleDrop)
+                    // Home fills its width: cells are measured from real space (non-square, screen-dependent),
+                    // which is exactly what the geometry seam has to survive.
+                    GridSurface(
+                        surface = home,
+                        coordinator = coordinator,
+                        sizeModifier = Modifier.fillMaxWidth().height(260.dp),
+                        showGuides = showGuides,
+                        gestureConfig = gestureConfig,
+                        onToast = ::toast,
+                        onDrop = ::handleDrop,
+                    )
+                    GridSurface(
+                        surface = dock,
+                        coordinator = coordinator,
+                        sizeModifier = Modifier.size(width = cellDp * dock.config.cols, height = cellDp * dock.config.rows),
+                        showGuides = showGuides,
+                        gestureConfig = gestureConfig,
+                        onToast = ::toast,
+                        onDrop = ::handleDrop,
+                    )
+                    // Ordered surface now on LauncherGrid too; kept fixed-cell (measured 64dp) to isolate the
+                    // grid swap from the responsiveness already proven on home.
+                    OrderedSurface(
+                        surface = appsPager,
+                        coordinator = coordinator,
+                        sizeModifier = Modifier.size(width = cellDp * appsPager.config.cols, height = cellDp * appsPager.config.rows),
+                        gestureConfig = gestureConfig,
+                        onToast = ::toast,
+                        onDrop = ::handleDrop,
+                    )
                 }
             }
 
@@ -211,6 +248,9 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
             )
 
             // ── Drag overlay (root space): the drop shadow (in the destination zone) + the floating proxy ──
+            // Both sized from *measured* geometry (cellW/cellH), so they track each zone's real cell size — the
+            // whole point of the seam. The footprint uses the destination zone; the proxy falls back to the
+            // source zone when the finger is between zones, so it still has a size.
             val session = coordinator.session
             if (session != null) {
                 val destGeo = surfaces.firstOrNull { it.id == session.activeZone }?.geometry
@@ -221,18 +261,25 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                         intent = plan.intent,
                         modifier = Modifier
                             .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
-                            .size(width = cellDp * plan.footprint.colSpan, height = cellDp * plan.footprint.rowSpan),
+                            .size(
+                                width = with(density) { (destGeo.cellW * plan.footprint.colSpan).toDp() },
+                                height = with(density) { (destGeo.cellH * plan.footprint.rowSpan).toDp() },
+                            ),
                     )
                 }
                 val span = spanOf(surfaces, session.item)
-                if (span != null) {
+                val sizingGeo = destGeo ?: surfaces.firstOrNull { it.contains(session.item) }?.geometry
+                if (span != null && sizingGeo != null) {
                     val finger = session.fingerInRoot
                     FloatingDragIcon(
                         rootOffset = IntOffset(
-                            x = (finger.x - cellPx * span.colSpan / 2f).roundToInt(),
-                            y = (finger.y - cellPx * span.rowSpan / 2f).roundToInt(),
+                            x = (finger.x - sizingGeo.cellW * span.colSpan / 2f).roundToInt(),
+                            y = (finger.y - sizingGeo.cellH * span.rowSpan / 2f).roundToInt(),
                         ),
-                        size = DpSize(cellDp * span.colSpan, cellDp * span.rowSpan),
+                        size = DpSize(
+                            with(density) { (sizingGeo.cellW * span.colSpan).toDp() },
+                            with(density) { (sizingGeo.cellH * span.rowSpan).toDp() },
+                        ),
                     ) {
                         ItemTile(session.item, Modifier.fillMaxSize())
                     }
@@ -279,13 +326,18 @@ private fun spanOf(surfaces: List<DemoSurface>, item: GridItem): GridPlacement? 
     return null
 }
 
-/** Renders a coordinate (free-placement) zone: registers its [DropZone], lays out tiles, draws guides. */
+/**
+ * Renders a coordinate (free-placement) zone on [LauncherGrid]. The zone box is sized by [sizeModifier]; the
+ * grid fills it and lays out each tile from its [GridPlacement] against *measured* cells. The zone's
+ * [GridGeometry] is derived from the box's measured bounds (origin + cell size = bounds ÷ cols/rows) — the
+ * geometry seam — so the drag layer's finger→cell maths reads the same cell size the grid draws with, and
+ * can't drift when the surface resizes. Tiles are no longer given an explicit size; the grid measures them.
+ */
 @Composable
 private fun GridSurface(
     surface: DemoSurface,
     coordinator: DragCoordinator,
-    cellDp: Dp,
-    cellPx: Float,
+    sizeModifier: Modifier,
     showGuides: Boolean,
     gestureConfig: ItemGestureConfig,
     onToast: (String) -> Unit,
@@ -299,58 +351,69 @@ private fun GridSurface(
     }
 
     Box(
-        Modifier
-            .size(width = cellDp * surface.config.cols, height = cellDp * surface.config.rows)
+        sizeModifier
             .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
             .onGloballyPositioned {
-                surface.geometry = GridGeometry(it.positionInRoot(), cellPx, surface.config.cols, surface.config.rows)
-                coordinator.registerZone(DropZone(surface.id, it.boundsInRoot(), z = 0) { true })
+                val b = it.boundsInRoot()
+                surface.geometry = GridGeometry(
+                    originInRoot = Offset(b.left, b.top),
+                    cellW = b.width / surface.config.cols,
+                    cellH = b.height / surface.config.rows,
+                    cols = surface.config.cols,
+                    rows = surface.config.rows,
+                )
+                coordinator.registerZone(DropZone(surface.id, b, z = 0) { true })
             },
     ) {
-        for ((item, placement) in placements) {
-            val isDragged = coordinator.session?.item == item
-            key(item) {
-                Box(
-                    Modifier
-                        .offset {
-                            IntOffset((placement.col * cellPx).roundToInt(), (placement.row * cellPx).roundToInt())
-                        }
-                        .size(width = cellDp * placement.colSpan, height = cellDp * placement.rowSpan)
-                        .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                        .launcherItemGestures(
-                            config = gestureConfig,
-                            edgeActions = SwipeDirection.entries.toSet(),
-                            onOpen = { onToast("open ${label(item)}") },
-                            onEdgeAction = { onToast("swipe $it on ${label(item)}") },
-                            onShowMenu = { onToast("menu: ${label(item)}") },
-                            onDismissMenu = {},
-                            onBeginDrag = { root -> coordinator.start(item, root) },
-                            onDragTo = { root -> coordinator.moveTo(root) },
-                            onDrop = { onDrop() },
-                            onCancelDrag = { coordinator.cancel() },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    ItemTile(item, Modifier.fillMaxSize())
+        LauncherGrid(config = surface.config, modifier = Modifier.fillMaxSize()) {
+            for ((item, placement) in placements) {
+                val isDragged = coordinator.session?.item == item
+                key(item) {
+                    Box(
+                        Modifier
+                            .gridPlacement(placement)
+                            .graphicsLayer { alpha = if (isDragged) 0f else 1f }
+                            .launcherItemGestures(
+                                config = gestureConfig,
+                                edgeActions = SwipeDirection.entries.toSet(),
+                                onOpen = { onToast("open ${label(item)}") },
+                                onEdgeAction = { onToast("swipe $it on ${label(item)}") },
+                                onShowMenu = { onToast("menu: ${label(item)}") },
+                                onDismissMenu = {},
+                                onBeginDrag = { root -> coordinator.start(item, root) },
+                                onDragTo = { root -> coordinator.moveTo(root) },
+                                onDrop = { onDrop() },
+                                onCancelDrag = { coordinator.cancel() },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ItemTile(item, Modifier.fillMaxSize())
+                    }
                 }
             }
         }
-        if (showGuides) ZoneGuides(placements.values.toList(), cellPx, Modifier.matchParentSize())
+        if (showGuides) ZoneGuides(placements.values.toList(), surface.config, Modifier.matchParentSize())
     }
 }
 
 /**
- * Renders an ordered (MovingGap) zone. Items flow row-major by [SurfaceModel.Ordered.order]. During a drag of
- * one of its items, the others render around a gap at the live insertion index (animated), and the dragged tile
- * is kept composed but invisible — the floating proxy stands in. Only accepts its own items (reorder); items
- * are extracted to coordinate zones by dropping there.
+ * Renders an ordered (MovingGap) zone **on [LauncherGrid]** — the same grid the coordinate surfaces use, proving
+ * the ordered flow reduces to placements. Each item's display slot (from [displaySlots], accounting for the live
+ * gap) becomes a `GridPlacement(row = slot / cols, col = slot % cols)`; the grid places it against measured
+ * cells, and the geometry seam is derived from the box bounds exactly like the coordinate surfaces. The dragged
+ * tile is kept composed but invisible — the floating proxy stands in. Only accepts its own items (reorder);
+ * items are extracted to coordinate zones by dropping there.
+ *
+ * Slot changes currently **snap** (no gap-migration animation): swapping onto the grid dropped the per-tile
+ * `animateIntOffsetAsState`. Animation returns for *both* coordinate push and ordered gap through one
+ * `LookaheadScope` mechanism in the next phase (grid plan G4) — the plan deliberately unifies them there rather
+ * than re-adding a one-off tween here.
  */
 @Composable
 private fun OrderedSurface(
     surface: DemoSurface,
     coordinator: DragCoordinator,
-    cellDp: Dp,
-    cellPx: Float,
+    sizeModifier: Modifier,
     gestureConfig: ItemGestureConfig,
     onToast: (String) -> Unit,
     onDrop: () -> Unit,
@@ -364,12 +427,18 @@ private fun OrderedSurface(
     }
 
     Box(
-        Modifier
-            .size(width = cellDp * cols, height = cellDp * surface.config.rows)
+        sizeModifier
             .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
             .onGloballyPositioned {
-                surface.geometry = GridGeometry(it.positionInRoot(), cellPx, cols, surface.config.rows)
-                coordinator.registerZone(DropZone(surface.id, it.boundsInRoot(), z = 0) { it in model.order })
+                val b = it.boundsInRoot()
+                surface.geometry = GridGeometry(
+                    originInRoot = Offset(b.left, b.top),
+                    cellW = b.width / cols,
+                    cellH = b.height / surface.config.rows,
+                    cols = cols,
+                    rows = surface.config.rows,
+                )
+                coordinator.registerZone(DropZone(surface.id, b, z = 0) { it in model.order })
             },
     ) {
         val dragged = coordinator.session?.item?.takeIf { it in model.order }
@@ -379,32 +448,31 @@ private fun OrderedSurface(
             else -> model.order.indexOf(dragged)
         }
         val slots = displaySlots(model.order, dragged, gap)
-        for (entry in model.order) {
-            val slot = slots.getValue(entry)
-            val isDragged = entry == dragged
-            key(entry) {
-                val target = IntOffset(((slot % cols) * cellPx).roundToInt(), ((slot / cols) * cellPx).roundToInt())
-                val animated by animateIntOffsetAsState(target, label = "orderedSlot")
-                Box(
-                    Modifier
-                        .offset { animated }
-                        .size(cellDp)
-                        .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                        .launcherItemGestures(
-                            config = gestureConfig,
-                            edgeActions = SwipeDirection.entries.toSet(),
-                            onOpen = { onToast("open ${label(entry)}") },
-                            onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
-                            onShowMenu = { onToast("menu: ${label(entry)}") },
-                            onDismissMenu = {},
-                            onBeginDrag = { root -> coordinator.start(entry, root) },
-                            onDragTo = { root -> coordinator.moveTo(root) },
-                            onDrop = { onDrop() },
-                            onCancelDrag = { coordinator.cancel() },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    ItemTile(entry, Modifier.fillMaxSize())
+        LauncherGrid(config = surface.config, modifier = Modifier.fillMaxSize()) {
+            for (entry in model.order) {
+                val slot = slots.getValue(entry)
+                val isDragged = entry == dragged
+                key(entry) {
+                    Box(
+                        Modifier
+                            .gridPlacement(GridPlacement(page = 0, row = slot / cols, col = slot % cols))
+                            .graphicsLayer { alpha = if (isDragged) 0f else 1f }
+                            .launcherItemGestures(
+                                config = gestureConfig,
+                                edgeActions = SwipeDirection.entries.toSet(),
+                                onOpen = { onToast("open ${label(entry)}") },
+                                onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
+                                onShowMenu = { onToast("menu: ${label(entry)}") },
+                                onDismissMenu = {},
+                                onBeginDrag = { root -> coordinator.start(entry, root) },
+                                onDragTo = { root -> coordinator.moveTo(root) },
+                                onDrop = { onDrop() },
+                                onCancelDrag = { coordinator.cancel() },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ItemTile(entry, Modifier.fillMaxSize())
+                    }
                 }
             }
         }
@@ -544,17 +612,20 @@ private fun applyOutcome(surfaces: List<DemoSurface>, item: GridItem, zone: Zone
  * directions. Empty cells have no zones.
  */
 @Composable
-private fun ZoneGuides(rects: List<GridPlacement>, cellPx: Float, modifier: Modifier = Modifier) {
+private fun ZoneGuides(rects: List<GridPlacement>, config: GridConfig, modifier: Modifier = Modifier) {
     Canvas(modifier) {
+        // Cell size measured from this overlay (which matches the grid it sits over), not a fixed constant.
+        val cellW = size.width / config.cols
+        val cellH = size.height / config.rows
         val line = Color.White.copy(alpha = 0.20f)
         val ring = Color(0xFF63C7C9).copy(alpha = 0.6f)
         val arrowColor = Color.White.copy(alpha = 0.45f)
         val thin = 1.dp.toPx()
         for (rect in rects) {
-            val l = rect.col * cellPx
-            val t = rect.row * cellPx
-            val w = rect.colSpan * cellPx
-            val h = rect.rowSpan * cellPx
+            val l = rect.col * cellW
+            val t = rect.row * cellH
+            val w = rect.colSpan * cellW
+            val h = rect.rowSpan * cellH
             val cx = l + w / 2f
             val cy = t + h / 2f
             val offX = w * 0.24f
@@ -614,10 +685,14 @@ private fun GridPlacement.covers(cell: Cell): Boolean =
 /** The horizontal third of a cell — the `[left | center | right]` partition of the MovingGap surfaces (§6a). */
 private enum class Third { LEFT, CENTER, RIGHT }
 
-/** A zone's placement in root/window space, plus the maths mapping a finger to cells and item-relative zones. */
+/**
+ * A zone's placement in root/window space, plus the maths mapping a finger to cells and item-relative zones.
+ * Cells may be non-square ([cellW] ≠ [cellH]) — a responsive grid derives each from measured space ÷ cols/rows.
+ */
 private data class GridGeometry(
     val originInRoot: Offset,
-    val cellPx: Float,
+    val cellW: Float,
+    val cellH: Float,
     val cols: Int,
     val rows: Int,
 ) {
@@ -627,10 +702,10 @@ private data class GridGeometry(
      * has moved half a cell, then steps one cell over (half-cell hysteresis). Clamped to stay on the grid.
      */
     fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
-        val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellPx / 2f
-        val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellPx / 2f
-        val col = (topLeftX / cellPx).roundToInt().coerceIn(0, (cols - colSpan).coerceAtLeast(0))
-        val row = (topLeftY / cellPx).roundToInt().coerceIn(0, (rows - rowSpan).coerceAtLeast(0))
+        val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellW / 2f
+        val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellH / 2f
+        val col = (topLeftX / cellW).roundToInt().coerceIn(0, (cols - colSpan).coerceAtLeast(0))
+        val row = (topLeftY / cellH).roundToInt().coerceIn(0, (rows - rowSpan).coerceAtLeast(0))
         return Cell(row, col)
     }
 
@@ -639,15 +714,15 @@ private data class GridGeometry(
         val lx = rootPosition.x - originInRoot.x
         val ly = rootPosition.y - originInRoot.y
         if (lx < 0f || ly < 0f) return null
-        val col = (lx / cellPx).toInt()
-        val row = (ly / cellPx).toInt()
+        val col = (lx / cellW).toInt()
+        val row = (ly / cellH).toInt()
         return if (row in 0 until rows && col in 0 until cols) Cell(row, col) else null
     }
 
     /** The horizontal third of the hovered cell the finger sits in (MovingGap partition). */
     fun thirdInCell(rootPosition: Offset): Third {
         val lx = rootPosition.x - originInRoot.x
-        val fx = lx / cellPx - floor(lx / cellPx)
+        val fx = lx / cellW - floor(lx / cellW)
         return when {
             fx < 1f / 3f -> Third.LEFT
             fx > 2f / 3f -> Third.RIGHT
@@ -655,16 +730,17 @@ private data class GridGeometry(
         }
     }
 
-    /** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller span. */
-    fun mergeRadius(rect: GridPlacement): Float = MERGE_INNER_RADIUS * minOf(rect.colSpan, rect.rowSpan) * cellPx
+    /** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller side. */
+    fun mergeRadius(rect: GridPlacement): Float =
+        MERGE_INNER_RADIUS * minOf(rect.colSpan * cellW, rect.rowSpan * cellH)
 
     /**
      * True when the finger sits in the **inner merge ring** of the item occupying [rect] — a single circle at
      * the item's centre. The whole item is one target, so a multi-cell item has exactly one ring (§6a).
      */
     fun inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
-        val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellPx)
-        val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellPx)
+        val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)
+        val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellH)
         val radius = mergeRadius(rect)
         return dx * dx + dy * dy < radius * radius
     }
@@ -675,8 +751,8 @@ private data class GridGeometry(
      * the finger is nearest — left triangle pushes right, top pushes down, and so on (§6a).
      */
     fun pushDirectionInRect(fingerInRoot: Offset, rect: GridPlacement): PushDirection {
-        val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellPx)) / (rect.colSpan * cellPx) - 0.5f
-        val fy = (fingerInRoot.y - (originInRoot.y + rect.row * cellPx)) / (rect.rowSpan * cellPx) - 0.5f
+        val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellW)) / (rect.colSpan * cellW) - 0.5f
+        val fy = (fingerInRoot.y - (originInRoot.y + rect.row * cellH)) / (rect.rowSpan * cellH) - 0.5f
         return if (abs(fx) > abs(fy)) {
             if (fx < 0f) PushDirection.RIGHT else PushDirection.LEFT
         } else {
@@ -685,7 +761,7 @@ private data class GridGeometry(
     }
 
     fun topLeftInRoot(row: Int, col: Int): Offset =
-        Offset(originInRoot.x + col * cellPx, originInRoot.y + row * cellPx)
+        Offset(originInRoot.x + col * cellW, originInRoot.y + row * cellH)
 }
 
 private data class Cell(val row: Int, val col: Int)
