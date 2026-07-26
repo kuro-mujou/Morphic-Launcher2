@@ -58,6 +58,7 @@ import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
+import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.ComponentKey
@@ -68,6 +69,7 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.PushDirection
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -350,6 +352,24 @@ private fun GridSurface(
         onDispose { coordinator.unregisterZone(surface.id) }
     }
 
+    // Live push preview, dwelled. The plan is recomputed every drag frame, but we only *apply* it to the tiles
+    // once the finger has rested on the same plan for PUSH_DWELL_MS: a fast drag keeps changing the plan, which
+    // restarts the timer, so occupants never strobe between pushed and home — they reflow only when the user
+    // pauses (signalling they might drop here). LaunchedEffect(livePlan) restarts on every plan change because
+    // PlacementPlan is a data class, so an unchanged footprint+moves (finger holding still) lets the delay
+    // finish. Dropping still commits the live plan regardless of the dwell.
+    val session = coordinator.session
+    val livePlan = session?.takeIf { it.activeZone == surface.id }?.plan
+    var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
+    LaunchedEffect(livePlan) {
+        if (livePlan == null) {
+            dwelledPlan = null // finger left the zone → occupants return home immediately
+        } else {
+            delay(PUSH_DWELL_MS)
+            dwelledPlan = livePlan
+        }
+    }
+
     Box(
         sizeModifier
             .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
@@ -367,11 +387,15 @@ private fun GridSurface(
     ) {
         LauncherGrid(config = surface.config, modifier = Modifier.fillMaxSize()) {
             for ((item, placement) in placements) {
-                val isDragged = coordinator.session?.item == item
+                val isDragged = session?.item == item
+                val shown = dwelledPlan?.moves?.get(item) ?: placement
                 key(item) {
                     Box(
                         Modifier
-                            .gridPlacement(placement)
+                            .gridPlacement(shown)
+                            // Occupants glide to their previewed (pushed) cells live; the dragged tile skips it so
+                            // it lands at the committed cell without gliding in from where it started.
+                            .then(if (isDragged) Modifier else Modifier.animatePlacement())
                             .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                             .launcherItemGestures(
                                 config = gestureConfig,
@@ -456,6 +480,8 @@ private fun OrderedSurface(
                     Box(
                         Modifier
                             .gridPlacement(GridPlacement(page = 0, row = slot / cols, col = slot % cols))
+                            // Items slide as the gap migrates; the dragged tile skips it (the proxy stands in).
+                            .then(if (isDragged) Modifier else Modifier.animatePlacement())
                             .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                             .launcherItemGestures(
                                 config = gestureConfig,
@@ -769,6 +795,10 @@ private data class Cell(val row: Int, val col: Int)
 private const val HOME_ROWS = 4
 private const val DOCK_ROWS = 1
 private const val COLS = 4
+
+/** How long the finger must rest on a push before occupants reflow — long enough a fast drag-through won't
+ * flicker, short enough a deliberate hover feels responsive. */
+private const val PUSH_DWELL_MS = 200L
 
 /** Merge-ring radius as a fraction of the item's smaller span (×cellPx); inside it is the merge target. */
 private const val MERGE_INNER_RADIUS = 0.3f
