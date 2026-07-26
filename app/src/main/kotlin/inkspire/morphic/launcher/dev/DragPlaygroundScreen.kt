@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +58,8 @@ import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.animatePlacement
+import inkspire.morphic.core.designsystem.grid.coordinateItems
+import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.ComponentKey
@@ -386,33 +387,34 @@ private fun GridSurface(
             },
     ) {
         LauncherGrid(config = surface.config, modifier = Modifier.fillMaxSize()) {
-            for ((item, placement) in placements) {
+            // Coordinate strategy: each item sits at an explicit cell — its stored placement, or its dwelled
+            // push-preview cell while a drag hovers this zone.
+            coordinateItems(
+                items = placements.keys.toList(),
+                placement = { dwelledPlan?.moves?.get(it) ?: placements.getValue(it) },
+            ) { item, cellModifier ->
                 val isDragged = session?.item == item
-                val shown = dwelledPlan?.moves?.get(item) ?: placement
-                key(item) {
-                    Box(
-                        Modifier
-                            .gridPlacement(shown)
-                            // Occupants glide to their previewed (pushed) cells live; the dragged tile skips it so
-                            // it lands at the committed cell without gliding in from where it started.
-                            .then(if (isDragged) Modifier else Modifier.animatePlacement())
-                            .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                            .launcherItemGestures(
-                                config = gestureConfig,
-                                edgeActions = SwipeDirection.entries.toSet(),
-                                onOpen = { onToast("open ${label(item)}") },
-                                onEdgeAction = { onToast("swipe $it on ${label(item)}") },
-                                onShowMenu = { onToast("menu: ${label(item)}") },
-                                onDismissMenu = {},
-                                onBeginDrag = { root -> coordinator.start(item, root) },
-                                onDragTo = { root -> coordinator.moveTo(root) },
-                                onDrop = { onDrop() },
-                                onCancelDrag = { coordinator.cancel() },
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        ItemTile(item, Modifier.fillMaxSize())
-                    }
+                Box(
+                    cellModifier
+                        // Occupants glide to their previewed (pushed) cells live; the dragged tile skips it so
+                        // it lands at the committed cell without gliding in from where it started.
+                        .then(if (isDragged) Modifier else Modifier.animatePlacement())
+                        .graphicsLayer { alpha = if (isDragged) 0f else 1f }
+                        .launcherItemGestures(
+                            config = gestureConfig,
+                            edgeActions = SwipeDirection.entries.toSet(),
+                            onOpen = { onToast("open ${label(item)}") },
+                            onEdgeAction = { onToast("swipe $it on ${label(item)}") },
+                            onShowMenu = { onToast("menu: ${label(item)}") },
+                            onDismissMenu = {},
+                            onBeginDrag = { root -> coordinator.start(item, root) },
+                            onDragTo = { root -> coordinator.moveTo(root) },
+                            onDrop = { onDrop() },
+                            onCancelDrag = { coordinator.cancel() },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ItemTile(item, Modifier.fillMaxSize())
                 }
             }
         }
@@ -472,33 +474,32 @@ private fun OrderedSurface(
             else -> model.order.indexOf(dragged)
         }
         val slots = displaySlots(model.order, dragged, gap)
+        // Flow strategy: sort the order by each item's live slot, and flowItems lays that list out row-major.
+        // A migrating gap just reorders this list, so the reflow falls out of the flow itself.
+        val displayOrder = model.order.sortedBy { slots.getValue(it) }
         LauncherGrid(config = surface.config, modifier = Modifier.fillMaxSize()) {
-            for (entry in model.order) {
-                val slot = slots.getValue(entry)
+            flowItems(displayOrder) { entry, cellModifier ->
                 val isDragged = entry == dragged
-                key(entry) {
-                    Box(
-                        Modifier
-                            .gridPlacement(GridPlacement(page = 0, row = slot / cols, col = slot % cols))
-                            // Items slide as the gap migrates; the dragged tile skips it (the proxy stands in).
-                            .then(if (isDragged) Modifier else Modifier.animatePlacement())
-                            .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                            .launcherItemGestures(
-                                config = gestureConfig,
-                                edgeActions = SwipeDirection.entries.toSet(),
-                                onOpen = { onToast("open ${label(entry)}") },
-                                onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
-                                onShowMenu = { onToast("menu: ${label(entry)}") },
-                                onDismissMenu = {},
-                                onBeginDrag = { root -> coordinator.start(entry, root) },
-                                onDragTo = { root -> coordinator.moveTo(root) },
-                                onDrop = { onDrop() },
-                                onCancelDrag = { coordinator.cancel() },
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        ItemTile(entry, Modifier.fillMaxSize())
-                    }
+                Box(
+                    cellModifier
+                        // Items slide as the gap migrates; the dragged tile skips it (the proxy stands in).
+                        .then(if (isDragged) Modifier else Modifier.animatePlacement())
+                        .graphicsLayer { alpha = if (isDragged) 0f else 1f }
+                        .launcherItemGestures(
+                            config = gestureConfig,
+                            edgeActions = SwipeDirection.entries.toSet(),
+                            onOpen = { onToast("open ${label(entry)}") },
+                            onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
+                            onShowMenu = { onToast("menu: ${label(entry)}") },
+                            onDismissMenu = {},
+                            onBeginDrag = { root -> coordinator.start(entry, root) },
+                            onDragTo = { root -> coordinator.moveTo(root) },
+                            onDrop = { onDrop() },
+                            onCancelDrag = { coordinator.cancel() },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ItemTile(entry, Modifier.fillMaxSize())
                 }
             }
         }

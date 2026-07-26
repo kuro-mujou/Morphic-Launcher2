@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -28,24 +27,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
+import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
-import inkspire.morphic.core.model.GridPlacement
 import kotlin.math.abs
 import kotlin.math.ceil
 
 /**
- * Spike: **ordered list → reflow → the same [LauncherGrid]** (static start of grid plan G3). Proves the reuse
- * claim — a 1-D ordered list becomes 2-D `GridPlacement`s by a small reflow function, and the identical grid
- * that renders home's stored coordinates renders these too, across pages of a [LauncherPager].
+ * Spike: **ordered list → the same [LauncherGrid]'s flow strategy** (static start of grid plan G3). Proves the
+ * reuse claim — the identical grid that renders home's stored coordinates renders an ordered list too, via
+ * [flowItems], across pages of a [LauncherPager].
  *
  * Play with it: **+/− items** overflow onto new pages; **+/− cols** reflows the whole list (fewer cols → taller
- * fill → more pages). Swipe to page. The grid itself is unchanged — only the order→placement mapping
- * ([reflowDense]) is new, which is exactly where folder / APPS-pager differ from home.
+ * fill → more pages). Swipe to page. Pagination is just *which slice* of the list each page gets; `flowItems`
+ * lays that slice out row-major — no coordinate maths in the caller.
  */
 @Composable
 fun ReflowPlaygroundScreen(modifier: Modifier = Modifier) {
@@ -56,7 +55,6 @@ fun ReflowPlaygroundScreen(modifier: Modifier = Modifier) {
         val rows = 4
 
         val config = GridConfig(rows = rows, cols = cols)
-        val placements = reflowDense(count, rows, cols)
         val perPage = rows * cols
 
         // pageCount reads the live state each call, so adding items / changing cols repaginates the pager.
@@ -94,14 +92,11 @@ fun ReflowPlaygroundScreen(modifier: Modifier = Modifier) {
             ) { page ->
                 Box(Modifier.fillMaxSize().padding(4.dp)) {
                     GridLines(config, colors.divider, Modifier.fillMaxSize())
+                    // Pagination = which slice of the list this page shows; flowItems positions the slice.
+                    val start = page * perPage
+                    val pageItems = (start until minOf(count, start + perPage)).toList()
                     LauncherGrid(config = config, modifier = Modifier.fillMaxSize()) {
-                        for (i in 0 until count) {
-                            val placement = placements[i]
-                            if (placement.page != page) continue
-                            key(i) {
-                                Cell(label = "${i + 1}", modifier = Modifier.gridPlacement(placement))
-                            }
-                        }
+                        flowItems(pageItems) { i, cellModifier -> Cell(label = "${i + 1}", modifier = cellModifier) }
                     }
                 }
             }
@@ -121,20 +116,6 @@ fun ReflowPlaygroundScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-    }
-}
-
-/**
- * The reflow: a 1-D ordered list of [count] items → dense row-major [GridPlacement]s, paginated into pages of
- * `rows × cols`. Item `i` lands at page `i / perPage`, then `(row, col)` within that page. This is the whole
- * "flow-reflow" mapping — no gaps, densely filled; a folder or the APPS pager start from exactly this and layer
- * their own move/compaction rules on top.
- */
-private fun reflowDense(count: Int, rows: Int, cols: Int): List<GridPlacement> {
-    val perPage = rows * cols
-    return (0 until count).map { i ->
-        val slot = i % perPage
-        GridPlacement(page = i / perPage, row = slot / cols, col = slot % cols)
     }
 }
 
