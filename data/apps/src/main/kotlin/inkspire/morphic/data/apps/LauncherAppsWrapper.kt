@@ -1,5 +1,6 @@
 package inkspire.morphic.data.apps
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
@@ -39,6 +40,16 @@ interface LauncherAppsWrapper {
      * serial back into the profile the platform APIs need.
      */
     fun serialForUser(user: UserHandle): Long
+
+    /**
+     * Launches [component]'s main activity in the profile named by its `userSerial`.
+     *
+     * The profile matters: resolving the [android.os.UserHandle] from `userSerial` (the same lookup [loadIcon]
+     * does) is what makes a work-profile app launch under the *work* user rather than the personal one. May
+     * throw platform exceptions (e.g. the activity was uninstalled between listing and tapping); the caller
+     * layer ([AppLauncher]) is responsible for guarding the call — this stays a thin platform pass-through.
+     */
+    fun launch(component: ComponentKey)
 }
 
 /**
@@ -72,4 +83,12 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
     }
 
     override fun serialForUser(user: UserHandle): Long = userManager.getSerialNumberForUser(user)
+
+    override fun launch(component: ComponentKey) {
+        // Resolve the profile the same way loadIcon does — a serial with no live user means the profile was
+        // removed, so there is nothing to launch.
+        val user = userManager.getUserForSerialNumber(component.userSerial) ?: return
+        val componentName = ComponentName(component.packageName, component.className)
+        launcherApps.startMainActivity(componentName, user, /* sourceBounds = */ null, /* opts = */ null)
+    }
 }

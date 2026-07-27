@@ -11,4 +11,6 @@ dependencies {
     implementation(projects.core.common)
     implementation(projects.core.database)
     implementation(projects.core.icon)
+
+    implementation(libs.timber)
 }
