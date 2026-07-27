@@ -56,6 +56,8 @@ import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.grid.Cell
+import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.grid.coordinateItems
@@ -712,86 +714,50 @@ private fun GridPlacement.covers(cell: Cell): Boolean =
 /** The horizontal third of a cell — the `[left | center | right]` partition of the MovingGap surfaces (§6a). */
 private enum class Third { LEFT, CENTER, RIGHT }
 
-/**
- * A zone's placement in root/window space, plus the maths mapping a finger to cells and item-relative zones.
- * Cells may be non-square ([cellW] ≠ [cellH]) — a responsive grid derives each from measured space ÷ cols/rows.
- */
-private data class GridGeometry(
-    val originInRoot: Offset,
-    val cellW: Float,
-    val cellH: Float,
-    val cols: Int,
-    val rows: Int,
-) {
-    /**
-     * The footprint's top-left cell for an item of [colSpan]×[rowSpan] whose proxy is centred on the finger.
-     * Uses the item's own top-left **rounded** to the nearest cell — the footprint holds still until the item
-     * has moved half a cell, then steps one cell over (half-cell hysteresis). Clamped to stay on the grid.
-     */
-    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
-        val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellW / 2f
-        val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellH / 2f
-        val col = (topLeftX / cellW).roundToInt().coerceIn(0, (cols - colSpan).coerceAtLeast(0))
-        val row = (topLeftY / cellH).roundToInt().coerceIn(0, (rows - rowSpan).coerceAtLeast(0))
-        return Cell(row, col)
+// The pure geometry (GridGeometry + Cell + cellAt/snapTopLeftCell/topLeftInRoot) now lives in
+// core:designsystem/grid. The drag-planning helpers below stay here as private extensions, since they pull in
+// data:layout (PushDirection) and the harness's MovingGap thirds / folder-merge rings.
+
+/** The horizontal third of the hovered cell the finger sits in (MovingGap partition). */
+private fun GridGeometry.thirdInCell(rootPosition: Offset): Third {
+    val lx = rootPosition.x - originInRoot.x
+    val fx = lx / cellW - floor(lx / cellW)
+    return when {
+        fx < 1f / 3f -> Third.LEFT
+        fx > 2f / 3f -> Third.RIGHT
+        else -> Third.CENTER
     }
-
-    /** The cell directly under [rootPosition], or null when the finger is outside the grid. */
-    fun cellAt(rootPosition: Offset): Cell? {
-        val lx = rootPosition.x - originInRoot.x
-        val ly = rootPosition.y - originInRoot.y
-        if (lx < 0f || ly < 0f) return null
-        val col = (lx / cellW).toInt()
-        val row = (ly / cellH).toInt()
-        return if (row in 0 until rows && col in 0 until cols) Cell(row, col) else null
-    }
-
-    /** The horizontal third of the hovered cell the finger sits in (MovingGap partition). */
-    fun thirdInCell(rootPosition: Offset): Third {
-        val lx = rootPosition.x - originInRoot.x
-        val fx = lx / cellW - floor(lx / cellW)
-        return when {
-            fx < 1f / 3f -> Third.LEFT
-            fx > 2f / 3f -> Third.RIGHT
-            else -> Third.CENTER
-        }
-    }
-
-    /** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller side. */
-    fun mergeRadius(rect: GridPlacement): Float =
-        MERGE_INNER_RADIUS * minOf(rect.colSpan * cellW, rect.rowSpan * cellH)
-
-    /**
-     * True when the finger sits in the **inner merge ring** of the item occupying [rect] — a single circle at
-     * the item's centre. The whole item is one target, so a multi-cell item has exactly one ring (§6a).
-     */
-    fun inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
-        val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)
-        val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellH)
-        val radius = mergeRadius(rect)
-        return dx * dx + dy * dy < radius * radius
-    }
-
-    /**
-     * Which way to push the item occupying [rect], from where the finger sits **within that item's rectangle**.
-     * The rectangle is split into four triangles by its diagonals; the occupant is shoved away from the edge
-     * the finger is nearest — left triangle pushes right, top pushes down, and so on (§6a).
-     */
-    fun pushDirectionInRect(fingerInRoot: Offset, rect: GridPlacement): PushDirection {
-        val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellW)) / (rect.colSpan * cellW) - 0.5f
-        val fy = (fingerInRoot.y - (originInRoot.y + rect.row * cellH)) / (rect.rowSpan * cellH) - 0.5f
-        return if (abs(fx) > abs(fy)) {
-            if (fx < 0f) PushDirection.RIGHT else PushDirection.LEFT
-        } else {
-            if (fy < 0f) PushDirection.DOWN else PushDirection.UP
-        }
-    }
-
-    fun topLeftInRoot(row: Int, col: Int): Offset =
-        Offset(originInRoot.x + col * cellW, originInRoot.y + row * cellH)
 }
 
-private data class Cell(val row: Int, val col: Int)
+/** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller side. */
+private fun GridGeometry.mergeRadius(rect: GridPlacement): Float =
+    MERGE_INNER_RADIUS * minOf(rect.colSpan * cellW, rect.rowSpan * cellH)
+
+/**
+ * True when the finger sits in the **inner merge ring** of the item occupying [rect] — a single circle at the
+ * item's centre. The whole item is one target, so a multi-cell item has exactly one ring (§6a).
+ */
+private fun GridGeometry.inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
+    val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)
+    val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellH)
+    val radius = mergeRadius(rect)
+    return dx * dx + dy * dy < radius * radius
+}
+
+/**
+ * Which way to push the item occupying [rect], from where the finger sits **within that item's rectangle**.
+ * The rectangle is split into four triangles by its diagonals; the occupant is shoved away from the edge the
+ * finger is nearest — left triangle pushes right, top pushes down, and so on (§6a).
+ */
+private fun GridGeometry.pushDirectionInRect(fingerInRoot: Offset, rect: GridPlacement): PushDirection {
+    val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellW)) / (rect.colSpan * cellW) - 0.5f
+    val fy = (fingerInRoot.y - (originInRoot.y + rect.row * cellH)) / (rect.rowSpan * cellH) - 0.5f
+    return if (abs(fx) > abs(fy)) {
+        if (fx < 0f) PushDirection.RIGHT else PushDirection.LEFT
+    } else {
+        if (fy < 0f) PushDirection.DOWN else PushDirection.UP
+    }
+}
 
 private const val HOME_ROWS = 4
 private const val DOCK_ROWS = 1
