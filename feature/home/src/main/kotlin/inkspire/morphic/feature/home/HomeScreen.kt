@@ -29,6 +29,7 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
@@ -57,9 +58,9 @@ private val HomeZone = ZoneId("home")
  * directional-push partition over a hovered occupant), the root drag overlay, and the tap→launch / merge-drop
  * wiring; the pager, per-page grids, gestures, dwelled preview, and edge-flip live in [CoordinateDragPager].
  * Dropping an app onto another (finger in its centre ring) **merges** them into a folder; folders render as a
- * [FolderCell]. First cut: apps + folders, folder open deferred, portrait only. A tap on an app launches it
- * (via [HomeViewModel.launch]); taps go through the gesture layer's `onOpen`, so a cell's own `onClick` is a
- * no-op here.
+ * [FolderCell] and tapping one opens a [FolderOverlay] to launch its apps. First cut: apps + folders, portrait
+ * only. A tap on an app launches it (via [HomeViewModel.launch]); taps go through the gesture layer's `onOpen`,
+ * so a cell's own `onClick` is a no-op here.
  */
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -125,6 +126,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // live inside CoordinateDragPager.
     val session = coordinator.session
 
+    // Which folder's overlay is open (by id), if any — pure UI navigation, so it lives in the composable.
+    var openFolderId by remember { mutableStateOf<Long?>(null) }
+
     fun handleDrop() {
         val outcome = coordinator.drop() ?: return
         val plan = outcome.plan
@@ -158,7 +162,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 onOpen = { item ->
                     when (item) {
                         is HomeItem.App -> viewModel.launch(item.info.componentKey)
-                        is HomeItem.Folder -> Unit // TODO(merge commit 2): open the folder overlay
+                        is HomeItem.Folder -> openFolderId = item.folder.id
                     }
                 },
             ) { item, cellModifier ->
@@ -206,6 +210,19 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+            }
+
+            // Opened-folder overlay, drawn above the grid. Resolved live from state so its contents track edits.
+            val openFolder = openFolderId?.let { id ->
+                state.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == id }
+            }
+            if (openFolder != null) {
+                FolderOverlay(
+                    label = openFolder.folder.label,
+                    apps = openFolder.apps,
+                    onLaunch = { component -> viewModel.launch(component); openFolderId = null },
+                    onDismiss = { openFolderId = null },
+                )
             }
         }
     }
