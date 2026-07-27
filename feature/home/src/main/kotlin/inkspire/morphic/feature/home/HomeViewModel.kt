@@ -6,6 +6,7 @@ import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
@@ -49,12 +50,18 @@ class HomeViewModel(
     private val placements = MutableStateFlow<Map<GridItem, GridPlacement>>(emptyMap())
 
     val state: StateFlow<HomeState> =
-        combine(placements, appRepository.observeApps()) { placed, apps ->
+        combine(placements, appRepository.observeApps(), layoutRepository.folders()) { placed, apps, folders ->
             val infoByComponent = apps.associateBy { it.componentKey }
+            val folderById = folders.associateBy { it.id }
             HomeState(
-                apps = placed.mapNotNull { (item, placement) ->
-                    val app = item as? GridItem.App ?: return@mapNotNull null
-                    infoByComponent[app.component]?.let { PlacedApp(it, placement) }
+                items = placed.mapNotNull { (item, placement) ->
+                    when (item) {
+                        is GridItem.App -> infoByComponent[item.component]?.let { HomeItem.App(it, placement) }
+                        is GridItem.Folder -> folderById[item.folderId]?.let { folder ->
+                            HomeItem.Folder(folder, folder.apps.mapNotNull(infoByComponent::get), placement)
+                        }
+                        else -> null // widgets / containers get their cells later
+                    }
                 },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
@@ -82,11 +89,45 @@ class HomeViewModel(
     /** Opens the app for [component] (a home tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
     fun launch(component: ComponentKey) = appLauncher.launch(component)
 
-    /** Applies layout [changes] optimistically to [placements] (so the UI updates now), then persists them. */
+    /**
+     * Applies layout [changes] optimistically to [placements] (so the UI updates now), then persists them.
+     *
+     * Pure `Move`/`RemoveFromGrid` stay fully optimistic — no round-trip, no drop flicker. Structural ops
+     * (e.g. `CreateFolder`) mint ids we can't predict, so once they've persisted the placement map is resynced
+     * from the store to pick up the new item and drop the ones folded into it.
+     */
     fun applyChanges(changes: List<LayoutChange>) {
         if (changes.isEmpty()) return
         placements.value = placements.value.withApplied(changes)
-        viewModelScope.launch { layoutRepository.apply(ORIENTATION, changes) }
+        viewModelScope.launch {
+            layoutRepository.apply(ORIENTATION, changes)
+            if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
+                placements.value = layoutRepository.placements(ORIENTATION).first().mapValues { it.value.placement }
+            }
+        }
+    }
+
+    /**
+     * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement]:
+     * app→app creates a new folder at the target's cell; app→folder appends to it. Returns null when there is no
+     * valid merge (target gone, or a combination not yet supported — folder-on-app, widgets and containers
+     * arrive with those item types). Kept in the ViewModel so the drop handler stays logic-free.
+     */
+    fun mergeChanges(dragged: GridItem, targetPlacement: GridPlacement): List<LayoutChange>? {
+        val draggedApp = (dragged as? GridItem.App)?.component ?: return null
+        val target = state.value.items.firstOrNull { it.gridItem != dragged && it.placement == targetPlacement }
+            ?: return null
+        return when (target) {
+            is HomeItem.App -> listOf(
+                LayoutChange.CreateFolder(
+                    label = DEFAULT_FOLDER_LABEL,
+                    apps = listOf(target.info.componentKey, draggedApp),
+                    at = targetPlacement,
+                    zone = HomeZone.MAIN,
+                ),
+            )
+            is HomeItem.Folder -> listOf(LayoutChange.AddToFolder(target.folder.id, draggedApp))
+        }
     }
 
     /**
@@ -124,6 +165,7 @@ class HomeViewModel(
     companion object {
         val ORIENTATION = Orientation.PORTRAIT
         private const val STOP_TIMEOUT_MS = 5_000L
+        private const val DEFAULT_FOLDER_LABEL = "Folder"
     }
 }
 

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
+import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
@@ -34,7 +35,6 @@ import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DropIntent
-import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.toGridConfig
@@ -53,11 +53,13 @@ private val HomeZone = ZoneId("home")
  * the surface instantly (optimistic) and persist to Room. Dragging to a side edge flips pages; a trailing empty
  * page appears mid-drag so an app can be carried onto a new page.
  *
- * This screen keeps only what is home-specific: the [DropPlanner] (span-snapped push onto the current page), the
- * root drag overlay, and the tap→launch wiring; the pager, per-page grids, gestures, dwelled preview, and
- * edge-flip live in [CoordinateDragPager]. First cut: apps only, no folder-merge, no directional-push
- * refinement, portrait only. A tap launches the app (via [HomeViewModel.launch]); the tap is handled by the
- * gesture layer's `onOpen`, so [AppCell]'s own `onClick` stays a no-op here.
+ * This screen keeps only what is home-specific: the [DropPlanner] (span-snapped push, plus the merge-ring /
+ * directional-push partition over a hovered occupant), the root drag overlay, and the tap→launch / merge-drop
+ * wiring; the pager, per-page grids, gestures, dwelled preview, and edge-flip live in [CoordinateDragPager].
+ * Dropping an app onto another (finger in its centre ring) **merges** them into a folder; folders render as a
+ * [FolderCell]. First cut: apps + folders, folder open deferred, portrait only. A tap on an app launches it
+ * (via [HomeViewModel.launch]); taps go through the gesture layer's `onOpen`, so a cell's own `onClick` is a
+ * no-op here.
  */
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -79,13 +81,13 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
     var geometry by remember { mutableStateOf<GridGeometry?>(null) }
     // The current placement map, read live by the planner while a drag is in flight.
-    val placements = state.apps.associate { GridItem.App(it.info.componentKey) as GridItem to it.placement }
+    val placements = state.items.associate { it.gridItem to it.placement }
     val livePlacements = rememberUpdatedState(placements)
 
     // Pager: page count is (highest occupied page + 1), plus one trailing empty page *while dragging* so an app
     // can be carried onto a brand-new page. `draggingPages` is synced from the coordinator below, because the
     // coordinator doesn't exist yet here and so can't be read directly inside the count lambda.
-    val maxPage = rememberUpdatedState(state.apps.maxOfOrNull { it.placement.page } ?: 0)
+    val maxPage = rememberUpdatedState(state.items.maxOfOrNull { it.placement.page } ?: 0)
     var draggingPages by remember { mutableStateOf(false) }
     val pagerState = rememberLauncherPagerState(
         pageCount = { maxPage.value + 1 + if (draggingPages) 1 else 0 },
@@ -100,9 +102,19 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         DropPlanner { _, item, fingerInRoot ->
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
+            val occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page }
             val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span, rowSpan = span, step = span)
             val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span, colSpan = span)
-            val occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page }
+
+            // If the finger is over an occupant, its cell partitions into a centre merge ring + four push
+            // triangles: the ring merges (folder), a triangle picks which way that occupant is shoved.
+            val target = geo.cellAt(fingerInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }
+            if (target != null) {
+                if (canMerge(item, target.key) && geo.inMergeRingOf(fingerInRoot, target.value)) {
+                    return@DropPlanner FreeGridPlanner.plan(target.value, occupants, config, merge = true)
+                }
+                return@DropPlanner FreeGridPlanner.plan(footprint, occupants, config, geo.pushDirectionInRect(fingerInRoot, target.value))
+            }
             FreeGridPlanner.plan(footprint, occupants, config)
         }
     }
@@ -115,30 +127,46 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
     fun handleDrop() {
         val outcome = coordinator.drop() ?: return
-        if (outcome.plan.intent == DropIntent.INVALID) return // no room — leave it where it was
-        val moves = outcome.plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to) } +
-            LayoutChange.Move(outcome.item, outcome.plan.footprint)
-        viewModel.applyChanges(moves)
+        val plan = outcome.plan
+        when (plan.intent) {
+            DropIntent.INVALID -> return // no room — leave it where it was
+            DropIntent.MERGE ->
+                viewModel.mergeChanges(outcome.item, plan.footprint)?.let(viewModel::applyChanges)
+            else -> {
+                val moves = plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to) } +
+                    LayoutChange.Move(outcome.item, plan.footprint)
+                viewModel.applyChanges(moves)
+            }
+        }
     }
 
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
         val colors = LocalMorphicColors.current
         Box(modifier.fillMaxSize().background(colors.background)) {
             CoordinateDragPager(
-                items = state.apps,
+                items = state.items,
                 config = config,
                 pagerState = pagerState,
                 coordinator = coordinator,
                 zoneId = HomeZone,
                 gestureConfig = gestureConfig,
-                dragItem = { GridItem.App(it.info.componentKey) },
+                dragItem = { it.gridItem },
                 placement = { it.placement },
                 onDrop = { handleDrop() },
                 modifier = Modifier.fillMaxSize().padding(16.dp),
                 onGeometryChange = { geometry = it },
-                onOpen = { viewModel.launch(it.info.componentKey) },
-            ) { placed, cellModifier ->
-                AppCell(app = placed.info, onClick = {}, modifier = cellModifier)
+                onOpen = { item ->
+                    when (item) {
+                        is HomeItem.App -> viewModel.launch(item.info.componentKey)
+                        is HomeItem.Folder -> Unit // TODO(merge commit 2): open the folder overlay
+                    }
+                },
+            ) { item, cellModifier ->
+                when (item) {
+                    is HomeItem.App -> AppCell(app = item.info, onClick = {}, modifier = cellModifier)
+                    is HomeItem.Folder ->
+                        FolderCell(label = item.folder.label, apps = item.apps, onClick = {}, modifier = cellModifier)
+                }
             }
 
             // Drag overlay (root space): the drop shadow in the grid + the floating proxy on the finger.
@@ -157,8 +185,8 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                             .size(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
                     )
                 }
-                val draggedApp = state.apps.firstOrNull { GridItem.App(it.info.componentKey) == session.item }?.info
-                if (draggedApp != null) {
+                val dragged = state.items.firstOrNull { it.gridItem == session.item }
+                if (dragged != null) {
                     val finger = session.fingerInRoot
                     FloatingDragIcon(
                         rootOffset = IntOffset(
@@ -167,7 +195,15 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         ),
                         size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
                     ) {
-                        AppCell(app = draggedApp, onClick = {}, modifier = Modifier.fillMaxSize())
+                        when (dragged) {
+                            is HomeItem.App -> AppCell(app = dragged.info, onClick = {}, modifier = Modifier.fillMaxSize())
+                            is HomeItem.Folder -> FolderCell(
+                                label = dragged.folder.label,
+                                apps = dragged.apps,
+                                onClick = {},
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
             }
