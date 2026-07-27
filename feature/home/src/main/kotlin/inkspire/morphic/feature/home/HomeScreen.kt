@@ -14,12 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
@@ -29,45 +24,38 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropPlanner
-import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.GridGeometry
-import inkspire.morphic.core.designsystem.grid.LauncherGrid
-import inkspire.morphic.core.designsystem.grid.animatePlacement
-import inkspire.morphic.core.designsystem.grid.coordinateItems
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomePagerGrid
-import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
-import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
 private val HomeZone = ZoneId("home")
-private const val PUSH_DWELL_MS = 200L
 
 /**
- * The real HOME surface: placed apps from [HomeViewModel] on a [LauncherGrid] (coordinate strategy), with
+ * The real HOME surface: placed apps on a [CoordinateDragGrid] (the shared free-placement drag zone), with
  * **drag-to-rearrange that persists**. Long-press an app to lift it; the free-grid planner ([FreeGridPlanner])
  * pushes occupants out of the way (previewed live, dwelled so a fast drag doesn't strobe), and the drop commits
  * through [HomeViewModel.applyChanges] as `Move` commands — which update the surface instantly (optimistic)
  * and persist to Room.
  *
- * This is the same drag stack the dev harness proved (coordinator + geometry seam + `FreeGridPlanner` +
- * `animatePlacement`), now on live data. First cut: apps only, no folder-merge, no directional-push
- * refinement, portrait only. A tap launches the app (via [HomeViewModel.launch]); the tap is handled by the
- * gesture layer's `onOpen`, so [AppCell]'s own `onClick` stays a no-op here. Extracting a reusable coordinate
- * drag-grid (shared with the harness) is a later cleanup.
+ * This screen keeps only what is home-specific: the [DropPlanner] (span-snapped push), the root drag overlay,
+ * and the tap→launch wiring; the per-zone grid + gestures + dwelled preview live in [CoordinateDragGrid]. First
+ * cut: apps only, no folder-merge, no directional-push refinement, portrait only. A tap launches the app (via
+ * [HomeViewModel.launch]); the tap is handled by the gesture layer's `onOpen`, so [AppCell]'s own `onClick`
+ * stays a no-op here.
  */
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -107,13 +95,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     }
     val coordinator = rememberDragCoordinator(planner)
 
-    // Dwelled push preview: only reflow occupants once the finger rests on the same plan (see the harness).
+    // The dragged item + hovered plan drive the root overlay below; the dwelled push preview now lives inside
+    // CoordinateDragGrid.
     val session = coordinator.session
-    val livePlan = session?.takeIf { it.activeZone == HomeZone }?.plan
-    var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
-    LaunchedEffect(livePlan) {
-        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS); dwelledPlan = livePlan }
-    }
 
     fun handleDrop() {
         val outcome = coordinator.drop() ?: return
@@ -126,53 +110,20 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
         val colors = LocalMorphicColors.current
         Box(modifier.fillMaxSize().background(colors.background)) {
-            LauncherGrid(
+            CoordinateDragGrid(
+                items = state.apps,
                 config = config,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-                    .onGloballyPositioned {
-                        val b = it.boundsInRoot()
-                        geometry = GridGeometry(
-                            originInRoot = Offset(b.left, b.top),
-                            cellW = b.width / config.cols,
-                            cellH = b.height / config.rows,
-                            cols = config.cols,
-                            rows = config.rows,
-                        )
-                        coordinator.registerZone(DropZone(HomeZone, b, z = 0) { true })
-                    },
-            ) {
-                coordinateItems(
-                    items = state.apps,
-                    itemKey = { it.info.componentKey },
-                    // Occupants render at their previewed (pushed) cell while a drag hovers; else their stored cell.
-                    placement = { placed ->
-                        dwelledPlan?.moves?.get(GridItem.App(placed.info.componentKey)) ?: placed.placement
-                    },
-                ) { placed, cellModifier ->
-                    val item = GridItem.App(placed.info.componentKey)
-                    val isDragged = session?.item == item
-                    Box(
-                        cellModifier
-                            .then(if (isDragged) Modifier else Modifier.animatePlacement())
-                            .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                            .launcherItemGestures(
-                                config = gestureConfig,
-                                edgeActions = emptySet(),
-                                onOpen = { viewModel.launch(placed.info.componentKey) },
-                                onEdgeAction = {},
-                                onShowMenu = {},
-                                onDismissMenu = {},
-                                onBeginDrag = { root -> coordinator.start(item, root) },
-                                onDragTo = { root -> coordinator.moveTo(root) },
-                                onDrop = { handleDrop() },
-                                onCancelDrag = { coordinator.cancel() },
-                            ),
-                    ) {
-                        AppCell(app = placed.info, onClick = {}, modifier = Modifier.fillMaxSize())
-                    }
-                }
+                coordinator = coordinator,
+                zoneId = HomeZone,
+                gestureConfig = gestureConfig,
+                dragItem = { GridItem.App(it.info.componentKey) },
+                placement = { it.placement },
+                onDrop = { handleDrop() },
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                onGeometryChange = { geometry = it },
+                onOpen = { viewModel.launch(it.info.componentKey) },
+            ) { placed, cellModifier ->
+                AppCell(app = placed.info, onClick = {}, modifier = cellModifier)
             }
 
             // Drag overlay (root space): the drop shadow in the grid + the floating proxy on the finger.
