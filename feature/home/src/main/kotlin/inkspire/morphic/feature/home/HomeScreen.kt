@@ -36,6 +36,7 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomePagerGrid
@@ -134,9 +135,24 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
     // Which folder's overlay is open (by id), if any — pure UI navigation, so it lives in the composable.
     var openFolderId by remember { mutableStateOf<Long?>(null) }
+    // An app being extracted out of a folder mid-drag (folderId → component); the drop commits it onto home.
+    var extractingFrom by remember { mutableStateOf<Pair<Long, ComponentKey>?>(null) }
 
     fun handleDrop() {
-        val outcome = coordinator.drop() ?: return
+        val extract = extractingFrom
+        val outcome = coordinator.drop()
+        if (extract != null) { // a drag handed off out of a folder — commit it on home (or leave it in the folder)
+            extractingFrom = null
+            openFolderId = null
+            val (folderId, component) = extract
+            val plan = outcome
+                ?.takeIf { it.zone == HomeZone && it.plan.intent != DropIntent.INVALID && it.plan.intent != DropIntent.MERGE }
+                ?.plan
+            if (plan != null) viewModel.dropExtractedApp(folderId, component, plan)
+            // else: no valid home spot → the app was never removed, so it stays in the folder
+            return
+        }
+        if (outcome == null) return
         if (outcome.zone != HomeZone) { // dropped on the folder zone → the folder commits its reorder
             folderDelegate.value?.commitReorder(outcome.item)
             return
@@ -236,10 +252,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     onReorder = { order ->
                         viewModel.applyChanges(listOf(LayoutChange.ReorderFolder(openFolder.folder.id, order)))
                     },
-                    onExtract = { component ->
-                        viewModel.extractFromFolder(openFolder.folder.id, component)
-                        openFolderId = null
-                    },
+                    onExtractStart = { component -> extractingFrom = openFolder.folder.id to component },
                     onDrop = { handleDrop() },
                     onPublishDelegate = { folderDelegate.value = it },
                     onDismiss = { openFolderId = null },

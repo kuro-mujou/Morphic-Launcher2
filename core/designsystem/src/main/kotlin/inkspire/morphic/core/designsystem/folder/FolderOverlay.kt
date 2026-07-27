@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -89,7 +90,10 @@ private const val ExtractDwellMs = 300L
  * The opened-folder view — two zones on the **shared** [DragCoordinator] the home owns (one coordinator over
  * both surfaces, per its design):
  * - the **outer zone** is the full-screen scrim: tapping it closes the folder, and holding a dragged app over it
- *   (~[ExtractDwellMs], i.e. the finger is off the inner grid) extracts the app — fires [onExtract]; and
+ *   (~[ExtractDwellMs], i.e. the finger is off the inner grid) hands the drag off to home — the overlay hides
+ *   itself but stays composed (so the dragged cell keeps its pointer stream) and drops its zone, so the shared
+ *   coordinator now targets home and the drag continues there; the caller ([onExtractStart]) tracks it and the
+ *   drop places the app on home + removes it from the folder; and
  * - the **inner zone** (registered as [FolderZoneId] at a higher `z` than home) is a bounded card holding the
  *   folder's app grid ([label] above it), sized by [folderInnerSize] so every folder is the same size.
  *
@@ -99,8 +103,8 @@ private const val ExtractDwellMs = 300L
  * without hoisting the folder's order/gap out. A tap launches ([onLaunch]); cells commit through the shared
  * [onDrop].
  *
- * Extract is still step B: [onExtract] ends the drag and the caller removes + re-places the app on home. The
- * seamless continue-onto-home (A-2) builds on this shared coordinator next. Reorder is within the current page.
+ * Extract is a **continuous hand-off**: the drag started here carries on as the *same* session onto home, no
+ * lift. Reorder is within the current page.
  *
  * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
  */
@@ -112,7 +116,7 @@ fun FolderOverlay(
     gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
     onReorder: (List<ComponentKey>) -> Unit,
-    onExtract: (ComponentKey) -> Unit,
+    onExtractStart: (ComponentKey) -> Unit,
     onDrop: () -> Unit,
     onPublishDelegate: (FolderDragDelegate?) -> Unit,
     onDismiss: () -> Unit,
@@ -185,21 +189,28 @@ fun FolderOverlay(
         onPublishDelegate(delegate)
         onDispose { onPublishDelegate(null) }
     }
-    LaunchedEffect(coordinator.isDragging) { if (!coordinator.isDragging) gap = -1 }
+    // True once a drag has dwelled off the grid and been handed off to home: the overlay hides but stays
+    // composed (the dragged cell keeps its pointer), and its zone is dropped so the coordinator targets home.
+    var extracting by remember { mutableStateOf(false) }
+    LaunchedEffect(coordinator.isDragging) {
+        if (!coordinator.isDragging) { gap = -1; extracting = false }
+    }
     DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(FolderZoneId) } }
 
     val session = coordinator.session
     val draggedComponent = (session?.item as? GridItem.App)?.component
 
-    // Dwell with the finger off the inner grid (over the outer zone / home behind it) extracts the app out of
-    // the folder. B: end the drag and hand the component to the caller (remove + re-place on home).
+    // Dwell with the finger off the inner grid (over the outer zone / home behind it) hands the drag off to
+    // home: hide + drop our zone so the shared coordinator targets home, and tell the caller which app is
+    // leaving. The drag continues; the drop (on home) does the actual move + folder removal.
     val overOuterZone = session != null && session.activeZone != FolderZoneId
-    LaunchedEffect(overOuterZone) {
-        if (!overOuterZone) return@LaunchedEffect
+    LaunchedEffect(overOuterZone, extracting) {
+        if (!overOuterZone || extracting) return@LaunchedEffect
         delay(ExtractDwellMs)
         val component = (coordinator.session?.item as? GridItem.App)?.component ?: return@LaunchedEffect
-        coordinator.cancel()
-        onExtract(component)
+        extracting = true
+        coordinator.unregisterZone(FolderZoneId)
+        onExtractStart(component)
     }
 
     val displayApps = movingGapDisplayOrder(effectiveOrder, draggedComponent, gap).mapNotNull(appByComponent::get)
@@ -209,18 +220,30 @@ fun FolderOverlay(
     val scrimInteraction = remember { MutableInteractionSource() }
     val innerInteraction = remember { MutableInteractionSource() }
 
-    // Outer scrim fills the whole screen (black behind the bars); the content region is inset to the safe area.
-    // The floating drag proxy is a sibling of the (inset) content so its root-space offset isn't shifted.
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss),
-    ) {
-        BoxWithConstraints(
-            Modifier.fillMaxSize().windowInsetsPadding(safeInsets),
-            contentAlignment = Alignment.Center,
+    // Root spans the screen; the floating proxy is a sibling of the content so its root-space offset isn't
+    // shifted by the content's inset.
+    Box(modifier.fillMaxSize()) {
+        // Backdrop (black behind the bars) + card. While extracting it's faded to nothing but kept composed —
+        // so the dragged cell keeps its pointer stream (the proven "closing surface fades but stays in the
+        // tree" rule). The modifier chain is kept structurally stable across that flip (only `alpha` and the
+        // clickable's `enabled` change), so the drag isn't disturbed; at alpha 0 the black vanishes and home
+        // shows through, and dismiss-on-tap is off.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = if (extracting) 0f else 1f }
+                .background(Color.Black)
+                .clickable(
+                    interactionSource = scrimInteraction,
+                    indication = null,
+                    enabled = !extracting,
+                    onClick = onDismiss,
+                ),
         ) {
+            BoxWithConstraints(
+                Modifier.fillMaxSize().windowInsetsPadding(safeInsets),
+                contentAlignment = Alignment.Center,
+            ) {
             val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, labelHeight, landscapeReserve)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -251,7 +274,10 @@ fun FolderOverlay(
                                     cols = grid.cols,
                                     rows = grid.rows,
                                 )
-                                coordinator.registerZone(DropZone(FolderZoneId, b, z = 1) { it is GridItem.App })
+                                // Don't re-register once we've handed off to home (the hidden grid may re-lay-out).
+                                if (!extracting) {
+                                    coordinator.registerZone(DropZone(FolderZoneId, b, z = 1) { it is GridItem.App })
+                                }
                             },
                     ) { pageIndex ->
                         LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
@@ -278,6 +304,7 @@ fun FolderOverlay(
                     if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
                 }
             }
+        }
         }
 
         // Floating proxy following the finger during a reorder drag (root space, above the content).
