@@ -1,6 +1,5 @@
 package inkspire.morphic.core.designsystem.grid
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -11,7 +10,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
@@ -19,7 +17,6 @@ import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -123,26 +120,16 @@ fun <T> CoordinateDragGrid(
             // cell. The dragged item isn't in `moves`, so it stays at its stored cell (drawn invisible below).
             placement = { item -> dwelledPlan?.moves?.get(dragItem(item)) ?: placement(item) },
         ) { item, cellModifier ->
-            val gridItem = dragItem(item)
-            val isDragged = session?.item == gridItem
-            Box(
-                cellModifier
-                    // Occupants glide to their previewed cells; the dragged tile skips the animation and is drawn
-                    // invisible (the floating proxy stands in for it) so it lands cleanly at the committed cell.
-                    .then(if (isDragged) Modifier else Modifier.animatePlacement())
-                    .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                    .launcherItemGestures(
-                        config = gestureConfig,
-                        edgeActions = edgeActions,
-                        onOpen = { onOpen(item) },
-                        onEdgeAction = { onEdgeAction(item, it) },
-                        onShowMenu = { onShowMenu(item) },
-                        onDismissMenu = {},
-                        onBeginDrag = { root -> coordinator.start(gridItem, root) },
-                        onDragTo = { root -> coordinator.moveTo(root) },
-                        onDrop = { onDrop() },
-                        onCancelDrag = { coordinator.cancel() },
-                    ),
+            LauncherDragCell(
+                coordinator = coordinator,
+                item = dragItem(item),
+                gestureConfig = gestureConfig,
+                onDrop = onDrop,
+                modifier = cellModifier,
+                edgeActions = edgeActions,
+                onOpen = { onOpen(item) },
+                onShowMenu = { onShowMenu(item) },
+                onEdgeAction = { direction -> onEdgeAction(item, direction) },
             ) {
                 itemContent(item, Modifier.fillMaxSize())
             }
