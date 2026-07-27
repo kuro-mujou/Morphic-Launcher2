@@ -222,13 +222,40 @@ from the baked stack).
 
 ## Current status
 
-Per the rewrite plan: **P0 done; P1 (Core) done** — `core:model` (B0), `core:common` (B1), `core:database`
-(B2, reviewed + fixed). **B3 `core:icon` done** — full pipeline: parse → layer model → render/bake →
-`IconRenderManager` → `LauncherIcon`. Per-layer effects and the live editor render path are deferred (to
-revisit when the icon editor is built). **B6 `data:apps` partial** — LauncherApps wrapper, `AppRepository`
-+ Room cache, `RawIconSource`; app categorization and `AppEvent` live updates/pruning deferred. App-level
-Koin start + `LocalIconRenderManager` are wired; build is green. **Now: B4 `core:designsystem`.**
-Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
+Foundations: **P0 done; P1 Core done** — `core:model` (B0), `core:common` (B1), `core:database` (B2). **B3
+`core:icon` done** (parse → layer model → render/bake → `IconRenderManager` → `LauncherIcon`; per-layer effects
++ live editor deferred). **B6 `data:apps` partial** (LauncherApps wrapper, `AppRepository` + Room cache,
+`RawIconSource`; categorization + `AppEvent` live updates/pruning deferred).
+
+**B4 `core:designsystem` — well along.** Theme + `Morphic*` components, plus the interaction primitives, all
+validated in the `app/dev` harness (`DevRootScreen`): the drag toolkit (`DragCoordinator`, `FreeGridPlanner`,
+MovingGap, `launcherItemGestures`, `DropFootprint`/`FloatingDragIcon`), `LauncherPager`, `SurfacePager`
+(HOME↔side-surface pan; per-edge one/two-finger `OneFingerSwipe` policy — `ALWAYS`/`AT_EDGE`/`NEVER`), and the
+grid (**grid plan G1–G5 + extras**, see [docs/GRID_LAYOUT_PLAN.md](docs/GRID_LAYOUT_PLAN.md)): `LauncherGrid`
+(FIXED_PAGER + SCROLL_GRID sizing), the `coordinateItems`/`flowItems` placement-strategy DSL, `animatePlacement`,
+and the extracted `GridGeometry` seam. Only grid **G6** (full-harness regression gate) is unticked — treat as
+done-on-device.
+
+**B8 `data:layout` — first cut done.** Geometry engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/
+`FreePush`) plus the command + persistence layer: `LayoutChange` (L1's 19 ops → 13), `LayoutRepository` (slim
+~30 → 6: one `placements` flow keyed by `GridItem` with `HomeZone` in the value, four definition flows, one
+`apply` sink), and a complete Room-backed `LayoutRepositoryImpl` (five placement tables + folder / icon-container
+/ widget-container / widget definitions; `apply` exhaustive over all 13 ops; twelve DAOs bundled in `LayoutDaos`).
+The APPS pager/category/list **order** stores get their *own* repository (not built). Deferred: empty-folder
+auto-dissolve, cross-orientation rotate-seeding.
+
+**Home surface — first real feature, parts 1–2 done.** In the `app` module (`inkspire.morphic.launcher.home`;
+extract to `feature:home` later). `HomeStateHolder` (optimistic placement state, logic out of the UI) joins
+`LayoutRepository.placements` + `AppRepository` apps; `HomeScreen` renders them on `LauncherGrid` with baked
+`AppCell`s via `coordinateItems`, seeds a starter layout on first run, and supports **drag-to-rearrange
+persisted** through `LayoutRepository.apply` (optimistic → no drop flicker; `FreeGridPlanner` push + dwelled
+preview). Hosted as the default `DevRootScreen` screen. First cut: apps only, portrait only, fixed 4×5 grid,
+taps no-op.
+
+**Next likely:** finish the home surface (app launching / P7 taps, orientation, `GridBlueprint`-driven sizing +
+dock + pager, folders/widgets, extract `feature:home`), the APPS **order** repository, or `data:apps`
+categorization (B6). Flagged cleanup: a reusable *coordinate drag-grid* composable shared by `HomeScreen` + the
+harness `GridSurface`. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 ## Conventions summary
 

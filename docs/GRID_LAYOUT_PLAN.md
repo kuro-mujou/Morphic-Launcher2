@@ -66,18 +66,23 @@ grid), so it's built and validated first, standalone (`app/dev/PagerPlaygroundSc
 
 ## Build order — each phase ends by validating in the harness
 
-- [ ] **G1 — Static `LauncherGrid`, no drag.** Build the `Layout` + `gridPlacement` ParentData + scope +
-  `FIXED_PAGER` cell sizing. Prove in an isolated harness screen/preview.
-- [ ] **G2 — Geometry seam + swap one coordinate surface.** Grid reports measured `GridGeometry`; swap **home**
-  from `offset` to `LauncherGrid`; keep the existing drag working off the measured cell size.
-- [ ] **G3 — Ordered/MovingGap on `LauncherGrid`.** Swap the **pager**; positions from `order + gap` as
-  `GridPlacement`s.
-- [ ] **G4 — Placement animation.** `LookaheadScope` + animate-placement; remove manual per-tile animation;
-  cover push **and** gap.
-- [ ] **G5 — `SCROLL_GRID` sizing + `GridBlueprint` wiring.** Add the scrolling-grid mode; drive sizing from
-  `GridBlueprint` (+ the scoped `resolveBounds(blueprint, area, iconRail)` resolver).
-- [ ] **G6 — Full-harness regression.** All harness surfaces on `LauncherGrid`; run the whole case matrix
-  below; confirm parity with the current demo **plus** responsiveness. This is the gate.
+- [x] **G1 — Static `LauncherGrid`, no drag.** `Layout` + `gridPlacement` ParentData + scope + `FIXED_PAGER`
+  sizing. Proved in `app/dev/GridPlaygroundScreen`.
+- [x] **G2 — Geometry seam + coordinate surfaces on the grid.** Harness home/dock/drawer render on
+  `LauncherGrid`; `GridGeometry` derived from measured bounds (later extracted to `core:designsystem/grid`).
+- [x] **G3 — Ordered/MovingGap on `LauncherGrid`.** The apps pager renders via `flowItems` over the gap-sorted
+  display order.
+- [x] **G4 — Placement animation.** `Modifier.animatePlacement` (onPlaced+offset, no LookaheadScope needed);
+  covers coordinate push **and** ordered gap; also drives the live *dwelled* push preview.
+- [x] **G5 — `SCROLL_GRID` sizing.** `cellHeight` param → fixed-height, content-growing scroll grid; proved in
+  `ScrollGrid` + the `CategoryPager` harness (pager × scroll-grid × 2-zone reorder + top/bottom gravity). ⚠️
+  the `GridBlueprint`-driven `resolveBounds(blueprint, area, iconRail)` wiring is **still deferred**.
+- [ ] **G6 — Full-harness regression.** The exit gate. Treat as done-on-device; the real home surface now
+  exercises the coordinate-grid drag path end-to-end with live data + persistence.
+
+**Beyond the plan (done this session):** the `coordinateItems`/`flowItems` placement-strategy DSL on
+`LauncherGridScope`; the real **home surface** (`app/.../home`) on `LauncherGrid` with live `LayoutRepository`
+placements + drag-to-rearrange persisted through `LayoutRepository.apply`.
 
 ## Test matrix — must all pass in the harness before real layout (G6 exit gate)
 

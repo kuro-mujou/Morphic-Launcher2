@@ -110,7 +110,13 @@ Large; port per-component as feature screens need them, not up front. Groups:
 - 🔧 `LauncherSettings` is a god-object and `GridConfigKind`/per-surface knobs live here — a lot of this is now
   expressed by `GridBlueprint` in `core:model`; move the static grid facts out and slim the settings blob.
 
-### B8 — `data:layout` — placement engine + layout persistence (depends on model, database) ⚠️ **highest-logic module**
+### B8 — `data:layout` — placement engine + layout persistence (depends on model, database) ⚠️ **highest-logic module** — ✅ first cut done
+
+> **Status:** engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/`FreePush`) + `LayoutChange` (19→13) +
+> slim `LayoutRepository` (~30→6) + complete Room-backed `LayoutRepositoryImpl` (all 5 placement tables + all
+> definitions; `apply` exhaustive over 13 ops; DAOs bundled in `LayoutDaos`) are done. **Not** done: the APPS
+> pager/category/list **order** stores (their *own* repository, per the arrangement model); `GridEdit`/
+> `DockGridEdit` unify; the FLOW-engine decision; empty-folder auto-dissolve; cross-orientation rotate-seeding.
 - Repository: `LayoutRepository`(+`Impl`), `di/LayoutModule`, mappers (`AppPlacement`/`Folder`/`IconContainer`/`Widget`).
 - 🔧 `LayoutChange` (the layout write-command vocabulary) **lives here, NOT in `core:model`** — it is the
   repository's command set, not a persisted shape. Refactor while porting (L1 has 19 near-duplicate ops):
