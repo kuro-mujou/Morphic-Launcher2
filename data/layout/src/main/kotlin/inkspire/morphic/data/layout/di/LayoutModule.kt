@@ -10,6 +10,6 @@ import org.koin.dsl.module
  */
 val layoutModule = module {
     single<LayoutRepository> {
-        LayoutRepositoryImpl(get(), get(), get(), get(), get(), get())
+        LayoutRepositoryImpl(get(), get(), get(), get(), get(), get(), get(), get())
     }
 }

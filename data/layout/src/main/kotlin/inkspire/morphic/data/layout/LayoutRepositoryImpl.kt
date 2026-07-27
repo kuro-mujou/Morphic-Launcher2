@@ -2,16 +2,22 @@ package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.database.dao.AppPlacementDao
+import inkspire.morphic.core.database.dao.FolderDao
+import inkspire.morphic.core.database.dao.FolderItemDao
 import inkspire.morphic.core.database.dao.FolderPlacementDao
 import inkspire.morphic.core.database.dao.IconContainerPlacementDao
 import inkspire.morphic.core.database.dao.WidgetContainerPlacementDao
 import inkspire.morphic.core.database.dao.WidgetPlacementDao
+import inkspire.morphic.core.database.entity.FolderEntity
+import inkspire.morphic.core.database.entity.FolderItemEntity
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.data.layout.mapper.foldersOf
 import inkspire.morphic.data.layout.mapper.toEntity
 import inkspire.morphic.data.layout.mapper.toEntry
 import kotlinx.coroutines.flow.Flow
@@ -22,10 +28,10 @@ import kotlinx.coroutines.withContext
 /**
  * Room-backed [LayoutRepository].
  *
- * [placements] unions all five `*_placement` tables into the one map, and [apply] routes each [LayoutChange] to
- * the matching store. **Placement (Move) is wired for every [GridItem] kind**; the container/folder/widget
- * *definitions* (their flows and the Create/Add/Remove-membership ops) are still stubbed and land in the next
- * part, along with the destroy semantics of [LayoutChange.RemoveFromGrid] for the non-app kinds.
+ * Wired so far: **placement of every [GridItem] kind** (the five `*_placement` tables), and the **folder**
+ * definition end-to-end (its flow, create/add/remove/reorder, and destroy). Icon containers, widget containers,
+ * and widget metadata are the remaining verticals — their flows still stub empty and their ops no-op, following
+ * the folder shape when built.
  *
  * Writes hop to [AppDispatchers.io]; the DAOs' `Flow`s stay on Room's own executor.
  */
@@ -35,6 +41,8 @@ internal class LayoutRepositoryImpl(
     private val widgetPlacementDao: WidgetPlacementDao,
     private val iconContainerPlacementDao: IconContainerPlacementDao,
     private val widgetContainerPlacementDao: WidgetContainerPlacementDao,
+    private val folderDao: FolderDao,
+    private val folderItemDao: FolderItemDao,
     private val dispatchers: AppDispatchers,
 ) : LayoutRepository {
 
@@ -54,8 +62,10 @@ internal class LayoutRepositoryImpl(
                 widgetContainers.map { it.toEntry() }).toMap()
         }
 
-    // ── Next part: real definition flows once the folder / container / widget stores are wired ──
-    override fun folders(): Flow<List<Folder>> = flowOf(emptyList())
+    override fun folders(): Flow<List<Folder>> =
+        combine(folderDao.observeAll(), folderItemDao.observeAll()) { folders, items -> foldersOf(folders, items) }
+
+    // ── Remaining verticals: real flows once the icon/widget container + widget stores are wired ──
     override fun iconContainers(): Flow<List<IconContainer>> = flowOf(emptyList())
     override fun widgetContainers(): Flow<List<WidgetContainer>> = flowOf(emptyList())
     override fun widgets(): Flow<List<WidgetInfo>> = flowOf(emptyList())
@@ -82,17 +92,40 @@ internal class LayoutRepositoryImpl(
                     widgetContainerPlacementDao.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
             }
 
-            // Remove from home = drop membership across *all* orientations (position is per-orientation, being
-            // on home is not). An app just detaches (stays installed).
+            // Remove from home = drop membership across *all* orientations. An app just detaches (stays
+            // installed); a folder is destroyed — deleting the row cascades its items + placement (FK).
             is LayoutChange.RemoveFromGrid -> when (val item = change.item) {
                 is GridItem.App -> appPlacementDao.deleteByComponent(item.component)
-                // Folder / Widget / *Container removal must *destroy the definition* (which cascades the
-                // placement) — deleting only the placement would orphan the def. Deferred to the next part,
-                // where the definition DAOs are wired.
-                else -> Unit
+                is GridItem.Folder -> folderDao.delete(item.folderId)
+                else -> Unit // icon/widget container + widget destroy — later verticals
             }
 
-            else -> Unit // folder / container / widget membership + create ops — next part
+            // ── Folders ──
+            is LayoutChange.CreateFolder -> {
+                val folderId = folderDao.insert(FolderEntity(label = change.label))
+                folderItemDao.upsert(change.apps.toItems(folderId))
+                folderPlacementDao.upsert(
+                    listOf(GridItem.Folder(folderId).toEntity(orientation, change.zone, change.at)),
+                )
+            }
+
+            is LayoutChange.AddToFolder -> {
+                val next = (folderItemDao.maxSortOrder(change.folderId) ?: -1) + 1
+                folderItemDao.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
+            }
+
+            is LayoutChange.RemoveFromFolder -> folderItemDao.remove(change.folderId, change.app)
+
+            is LayoutChange.ReorderFolder -> {
+                folderItemDao.clearFolder(change.folderId)
+                folderItemDao.upsert(change.apps.toItems(change.folderId))
+            }
+
+            else -> Unit // icon/widget container ops — later verticals
         }
     }
 }
+
+/** The apps of a folder as dense `folder_item` rows (index = sortOrder). */
+private fun List<ComponentKey>.toItems(folderId: Long): List<FolderItemEntity> =
+    mapIndexed { index, component -> FolderItemEntity(folderId, component, index) }
