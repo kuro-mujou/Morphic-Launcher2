@@ -1,10 +1,12 @@
-package inkspire.morphic.launcher.home
+package inkspire.morphic.feature.home
 
-import inkspire.morphic.core.common.scope.ApplicationScope
-import inkspire.morphic.core.model.AppInfo
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
@@ -17,8 +19,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Assembles the home render [state] and owns the write path. Kept out of the composable so the surface stays
- * declarative and this logic is testable (the POST_FIX_CLEANUP rule: no view-model logic in the UI).
+ * Screen-level state holder for the home surface: assembles the render [state] and owns the write path. Kept out
+ * of the composable so the surface stays declarative and this logic is unit-testable (no view-model logic in the
+ * UI). Plain MVVM — the UI reads one immutable [state] flow and calls typed methods ([launch], [applyChanges]);
+ * there is deliberately no sealed-intent/reducer layer, which is ceremony this small surface does not need.
+ *
+ * As an [androidx.lifecycle.ViewModel] it is scoped to the hosting screen's `ViewModelStore`, so it survives
+ * configuration changes (rotation) and its [viewModelScope] coroutines are cancelled automatically when the
+ * screen is finally gone — the reason to use the framework type rather than a hand-rolled singleton.
  *
  * **Optimistic placements.** The durable store is Room via [LayoutRepository], but the UI reads from an
  * in-memory [placements] flow: seeded once from the database on start, then updated **immediately** on every
@@ -30,11 +38,11 @@ import kotlinx.coroutines.launch
  * On construction it refreshes the app cache and, if nothing is placed, seeds the first apps so an empty
  * database still shows a populated home. Orientation is fixed to [Orientation.PORTRAIT] for now.
  */
-class HomeStateHolder(
+class HomeViewModel(
     private val layoutRepository: LayoutRepository,
     private val appRepository: AppRepository,
-    private val scope: ApplicationScope,
-) {
+    private val appLauncher: AppLauncher,
+) : ViewModel() {
     private val placements = MutableStateFlow<Map<GridItem, GridPlacement>>(emptyMap())
 
     val state: StateFlow<HomeState> =
@@ -46,10 +54,10 @@ class HomeStateHolder(
                     infoByComponent[app.component]?.let { PlacedApp(it, placement) }
                 },
             )
-        }.stateIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
     init {
-        scope.launch {
+        viewModelScope.launch {
             appRepository.refresh()
             seedIfEmpty()
             // Home renders the MAIN zone only for now; drop the zone, keep the coordinate.
@@ -57,11 +65,14 @@ class HomeStateHolder(
         }
     }
 
+    /** Opens the app for [component] (a home tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
+    fun launch(component: ComponentKey) = appLauncher.launch(component)
+
     /** Applies layout [changes] optimistically to [placements] (so the UI updates now), then persists them. */
     fun applyChanges(changes: List<LayoutChange>) {
         if (changes.isEmpty()) return
         placements.value = placements.value.withApplied(changes)
-        scope.launch { layoutRepository.apply(ORIENTATION, changes) }
+        viewModelScope.launch { layoutRepository.apply(ORIENTATION, changes) }
     }
 
     /** First-run default: with nothing placed, lay the first [ROWS] × [COLS] apps onto the grid in reading

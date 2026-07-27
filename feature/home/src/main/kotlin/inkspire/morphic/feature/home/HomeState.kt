@@ -1,4 +1,4 @@
-package inkspire.morphic.launcher.home
+package inkspire.morphic.feature.home
 
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.GridPlacement

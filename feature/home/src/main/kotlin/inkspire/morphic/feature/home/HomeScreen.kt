@@ -1,4 +1,4 @@
-package inkspire.morphic.launcher.home
+package inkspire.morphic.feature.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -47,31 +47,32 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
 import kotlinx.coroutines.delay
-import org.koin.compose.koinInject
+import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
 private val HomeZone = ZoneId("home")
 private const val PUSH_DWELL_MS = 200L
 
 /**
- * The real HOME surface: placed apps from [HomeStateHolder] on a [LauncherGrid] (coordinate strategy), with
+ * The real HOME surface: placed apps from [HomeViewModel] on a [LauncherGrid] (coordinate strategy), with
  * **drag-to-rearrange that persists**. Long-press an app to lift it; the free-grid planner ([FreeGridPlanner])
  * pushes occupants out of the way (previewed live, dwelled so a fast drag doesn't strobe), and the drop commits
- * through [HomeStateHolder.applyChanges] as `Move` commands — which update the surface instantly (optimistic)
+ * through [HomeViewModel.applyChanges] as `Move` commands — which update the surface instantly (optimistic)
  * and persist to Room.
  *
  * This is the same drag stack the dev harness proved (coordinator + geometry seam + `FreeGridPlanner` +
  * `animatePlacement`), now on live data. First cut: apps only, no folder-merge, no directional-push
- * refinement, portrait only; taps are a no-op until P7 wires launching. Extracting a reusable coordinate
+ * refinement, portrait only. A tap launches the app (via [HomeViewModel.launch]); the tap is handled by the
+ * gesture layer's `onOpen`, so [AppCell]'s own `onClick` stays a no-op here. Extracting a reusable coordinate
  * drag-grid (shared with the harness) is a later cleanup.
  */
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
-    val holder = koinInject<HomeStateHolder>()
-    val state by holder.state.collectAsStateWithLifecycle()
+    val viewModel = koinViewModel<HomeViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
 
-    val config = remember { GridConfig(rows = HomeStateHolder.ROWS, cols = HomeStateHolder.COLS) }
+    val config = remember { GridConfig(rows = HomeViewModel.ROWS, cols = HomeViewModel.COLS) }
     val gestureConfig = remember {
         ItemGestureConfig(touchSlopPx = with(density) { 20.dp.toPx() }, longPressTimeoutMillis = 400L)
     }
@@ -106,7 +107,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         if (outcome.plan.intent == DropIntent.INVALID) return // no room — leave it where it was
         val moves = outcome.plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to) } +
             LayoutChange.Move(outcome.item, outcome.plan.footprint)
-        holder.applyChanges(moves)
+        viewModel.applyChanges(moves)
     }
 
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
@@ -146,7 +147,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                             .launcherItemGestures(
                                 config = gestureConfig,
                                 edgeActions = emptySet(),
-                                onOpen = {}, // TODO(P7): launch the app
+                                onOpen = { viewModel.launch(placed.info.componentKey) },
                                 onEdgeAction = {},
                                 onShowMenu = {},
                                 onDismissMenu = {},

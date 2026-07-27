@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.launcher.home.HomeScreen
+import inkspire.morphic.feature.home.HomeScreen
 
 /** The dev harness screens; the floating chip switches between them. */
 private enum class DevScreen(val label: String) {

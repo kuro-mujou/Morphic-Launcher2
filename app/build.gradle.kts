@@ -19,6 +19,7 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.data.apps)
     implementation(projects.data.layout)
+    implementation(projects.feature.home)
 
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
