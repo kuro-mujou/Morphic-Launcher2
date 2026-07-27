@@ -28,8 +28,9 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
-import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
+import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DropIntent
@@ -45,17 +46,18 @@ import kotlin.math.roundToInt
 private val HomeZone = ZoneId("home")
 
 /**
- * The real HOME surface: placed apps on a [CoordinateDragGrid] (the shared free-placement drag zone), with
- * **drag-to-rearrange that persists**. Long-press an app to lift it; the free-grid planner ([FreeGridPlanner])
- * pushes occupants out of the way (previewed live, dwelled so a fast drag doesn't strobe), and the drop commits
- * through [HomeViewModel.applyChanges] as `Move` commands — which update the surface instantly (optimistic)
- * and persist to Room.
+ * The real HOME surface: placed apps on a **paged** [CoordinateDragPager] (the shared free-placement drag
+ * surface), with **drag-to-rearrange that persists**. Long-press an app to lift it; the free-grid planner
+ * ([FreeGridPlanner]) pushes that page's occupants out of the way (previewed live, dwelled so a fast drag
+ * doesn't strobe), and the drop commits through [HomeViewModel.applyChanges] as `Move` commands — which update
+ * the surface instantly (optimistic) and persist to Room. Dragging to a side edge flips pages; a trailing empty
+ * page appears mid-drag so an app can be carried onto a new page.
  *
- * This screen keeps only what is home-specific: the [DropPlanner] (span-snapped push), the root drag overlay,
- * and the tap→launch wiring; the per-zone grid + gestures + dwelled preview live in [CoordinateDragGrid]. First
- * cut: apps only, no folder-merge, no directional-push refinement, portrait only. A tap launches the app (via
- * [HomeViewModel.launch]); the tap is handled by the gesture layer's `onOpen`, so [AppCell]'s own `onClick`
- * stays a no-op here.
+ * This screen keeps only what is home-specific: the [DropPlanner] (span-snapped push onto the current page), the
+ * root drag overlay, and the tap→launch wiring; the pager, per-page grids, gestures, dwelled preview, and
+ * edge-flip live in [CoordinateDragPager]. First cut: apps only, no folder-merge, no directional-push
+ * refinement, portrait only. A tap launches the app (via [HomeViewModel.launch]); the tap is handled by the
+ * gesture layer's `onOpen`, so [AppCell]'s own `onClick` stays a no-op here.
  */
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -80,23 +82,35 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val placements = state.apps.associate { GridItem.App(it.info.componentKey) as GridItem to it.placement }
     val livePlacements = rememberUpdatedState(placements)
 
-    // Free-grid plan for the hovered cell: snap the app's (span × span) footprint to the visual lattice
-    // (step = the multiplier, so full-cell icons never land on a half-cell), push occupants aside. Same value
-    // the preview and the drop both read, so the shadow never lies about the result.
+    // Pager: page count is (highest occupied page + 1), plus one trailing empty page *while dragging* so an app
+    // can be carried onto a brand-new page. `draggingPages` is synced from the coordinator below, because the
+    // coordinator doesn't exist yet here and so can't be read directly inside the count lambda.
+    val maxPage = rememberUpdatedState(state.apps.maxOfOrNull { it.placement.page } ?: 0)
+    var draggingPages by remember { mutableStateOf(false) }
+    val pagerState = rememberLauncherPagerState(
+        pageCount = { maxPage.value + 1 + if (draggingPages) 1 else 0 },
+        infiniteScroll = { false },
+    )
+
+    // Free-grid plan for the hovered cell on the *current* page: snap the app's (span × span) footprint to the
+    // visual lattice (step = the multiplier, so full-cell icons never land on a half-cell), push that page's
+    // occupants aside. Same value the preview and the drop both read, so the shadow never lies about the result.
     val planner = remember(config) {
         val span = config.cellMultiplier
         DropPlanner { _, item, fingerInRoot ->
             val geo = geometry ?: return@DropPlanner null
-            val occupants = livePlacements.value.filterKeys { it != item }
+            val page = pagerState.currentPage
             val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span, rowSpan = span, step = span)
-            val footprint = GridPlacement(0, topLeft.row, topLeft.col, rowSpan = span, colSpan = span)
+            val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span, colSpan = span)
+            val occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page }
             FreeGridPlanner.plan(footprint, occupants, config)
         }
     }
     val coordinator = rememberDragCoordinator(planner)
+    LaunchedEffect(coordinator.isDragging) { draggingPages = coordinator.isDragging }
 
-    // The dragged item + hovered plan drive the root overlay below; the dwelled push preview now lives inside
-    // CoordinateDragGrid.
+    // The dragged item + hovered plan drive the root overlay below; the dwelled push preview + edge page-flip
+    // live inside CoordinateDragPager.
     val session = coordinator.session
 
     fun handleDrop() {
@@ -110,9 +124,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
         val colors = LocalMorphicColors.current
         Box(modifier.fillMaxSize().background(colors.background)) {
-            CoordinateDragGrid(
+            CoordinateDragPager(
                 items = state.apps,
                 config = config,
+                pagerState = pagerState,
                 coordinator = coordinator,
                 zoneId = HomeZone,
                 gestureConfig = gestureConfig,
