@@ -3,7 +3,24 @@ package inkspire.morphic.core.designsystem.folder
 import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.PlacementPlan
 import kotlin.math.floor
+
+/**
+ * The open folder's drag hooks, published to the shared `DragCoordinator`'s owner (the home) while the folder
+ * is open. The home runs one coordinator over both surfaces; its zone-dispatching planner and drop route the
+ * folder zone here, so the folder's MovingGap logic stays inside the overlay (its order/gap/geometry aren't
+ * hoisted). This is what lets a drag started in the folder continue as the *same* session onto home.
+ */
+interface FolderDragDelegate {
+    /** Plan a hover over the folder zone: migrate the reorder gap toward the finger (the cell reflow is the
+     *  preview, so there is no drop-shadow footprint — a placeholder placement is returned). */
+    fun plan(item: GridItem, fingerInRoot: Offset): PlacementPlan?
+
+    /** Commit the current reorder — the drop landed on the folder zone with [item] as the dragged app. */
+    fun commitReorder(item: GridItem)
+}
 
 /*
  * MovingGap reorder for the folder — the dense 1-D flow the folder uses (see the arrangement model). The folder

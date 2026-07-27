@@ -29,6 +29,7 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
 import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
@@ -95,12 +96,17 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         infiniteScroll = { false },
     )
 
-    // Free-grid plan for the hovered cell on the *current* page: snap the app's (span × span) footprint to the
-    // visual lattice (step = the multiplier, so full-cell icons never land on a half-cell), push that page's
-    // occupants aside. Same value the preview and the drop both read, so the shadow never lies about the result.
+    // The open folder's drag hooks (null when no folder is open). The one shared coordinator runs over both
+    // surfaces; its planner + drop dispatch the folder zone to this delegate, keeping folder reorder logic in
+    // the overlay (its order/gap aren't hoisted here).
+    val folderDelegate = remember { mutableStateOf<FolderDragDelegate?>(null) }
+
+    // Shared planner: the folder zone routes to the folder delegate; the home zone plans the free-grid
+    // push/merge for the hovered cell on the current page (span footprint snapped to the visual lattice).
     val planner = remember(config) {
         val span = config.cellMultiplier
-        DropPlanner { _, item, fingerInRoot ->
+        DropPlanner { zone, item, fingerInRoot ->
+            if (zone.id != HomeZone) return@DropPlanner folderDelegate.value?.plan(item, fingerInRoot)
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             val occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page }
@@ -131,6 +137,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
     fun handleDrop() {
         val outcome = coordinator.drop() ?: return
+        if (outcome.zone != HomeZone) { // dropped on the folder zone → the folder commits its reorder
+            folderDelegate.value?.commitReorder(outcome.item)
+            return
+        }
         val plan = outcome.plan
         when (plan.intent) {
             DropIntent.INVALID -> return // no room — leave it where it was
@@ -220,6 +230,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 FolderOverlay(
                     label = openFolder.folder.label,
                     apps = openFolder.apps,
+                    coordinator = coordinator,
                     gestureConfig = gestureConfig,
                     onLaunch = { component -> viewModel.launch(component); openFolderId = null },
                     onReorder = { order ->
@@ -229,6 +240,8 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         viewModel.extractFromFolder(openFolder.folder.id, component)
                         openFolderId = null
                     },
+                    onDrop = { handleDrop() },
+                    onPublishDelegate = { folderDelegate.value = it },
                     onDismiss = { openFolderId = null },
                 )
             }

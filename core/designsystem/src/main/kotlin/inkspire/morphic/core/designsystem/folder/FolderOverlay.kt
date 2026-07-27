@@ -47,12 +47,11 @@ import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.cellLabelHeight
-import inkspire.morphic.core.designsystem.drag.DropPlanner
+import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
@@ -80,31 +79,28 @@ private val FolderDotsHeight = 24.dp
 private val DotSize = 6.dp
 private val DotSpacing = 6.dp
 
+/** This overlay's inner-grid drop zone, registered above the home zone (`z = 1`) on the shared coordinator. */
 private val FolderZoneId = ZoneId("folder")
 
 /** How long a dragged app must dwell over the outer zone before it's extracted out of the folder. */
 private const val ExtractDwellMs = 300L
 
 /**
- * The opened-folder view — two zones:
- * - the **outer zone** is the full-screen scrim: tapping it (outside the inner zone) closes the folder, and
- *   holding a dragged app over it (~[ExtractDwellMs]) extracts the app out of the folder — B fires [onExtract]
- *   and ends the drag (the caller removes it and places it on home); the seamless continue-onto-home hand-off
- *   (A, on a shared coordinator) comes next;
- * - the **inner zone** is a bounded card holding the folder's app grid ([label] above it), sized by
- *   [folderInnerSize] so every folder is the same, consistent size on a given device.
+ * The opened-folder view — two zones on the **shared** [DragCoordinator] the home owns (one coordinator over
+ * both surfaces, per its design):
+ * - the **outer zone** is the full-screen scrim: tapping it closes the folder, and holding a dragged app over it
+ *   (~[ExtractDwellMs], i.e. the finger is off the inner grid) extracts the app — fires [onExtract]; and
+ * - the **inner zone** (registered as [FolderZoneId] at a higher `z` than home) is a bounded card holding the
+ *   folder's app grid ([label] above it), sized by [folderInnerSize] so every folder is the same size.
  *
- * The apps are a **dense flow** chunked into pages (page dots below), swipeable. Long-press an app to reorder it
- * within the flow ([MovingGap][movingGap]): the others shuffle around a migrating gap and the flow densifies on
- * drop ([onReorder]). A tap launches ([onLaunch]).
+ * The apps are a **dense flow** chunked into pages (dots below), swipeable. Long-press to reorder within the flow
+ * ([MovingGap][movingGap]) — the folder's plan/commit are exposed to the home via a [FolderDragDelegate]
+ * ([onPublishDelegate]) so the shared coordinator's zone-dispatching planner/drop route the folder zone here
+ * without hoisting the folder's order/gap out. A tap launches ([onLaunch]); cells commit through the shared
+ * [onDrop].
  *
- * A shared launcher surface: the home opens it for a folder tile, and the APPS surfaces reuse it for pager
- * folders and category cards. It stays parameterised — label + resolved [apps] + callbacks — so each caller
- * decides what launch/reorder/dismiss mean, and holds its **own** drag coordinator (reorder is self-contained).
- *
- * Reorder is **within the current page** for now: in a pager, a cell dragged onto another page's grid would be
- * disposed and lose its pointer stream. Cross-page reorder — and dragging an app *out* — need a drag layer that
- * outlives the page/overlay, which arrives with the extract hand-off (4b). Dismissed by Back or a tap outside.
+ * Extract is still step B: [onExtract] ends the drag and the caller removes + re-places the app on home. The
+ * seamless continue-onto-home (A-2) builds on this shared coordinator next. Reorder is within the current page.
  *
  * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
  */
@@ -112,10 +108,13 @@ private const val ExtractDwellMs = 300L
 fun FolderOverlay(
     label: String,
     apps: List<AppInfo>,
+    coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
     onReorder: (List<ComponentKey>) -> Unit,
     onExtract: (ComponentKey) -> Unit,
+    onDrop: () -> Unit,
+    onPublishDelegate: (FolderDragDelegate?) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
@@ -134,13 +133,12 @@ fun FolderOverlay(
     }
     val landscapeReserve = titleHeight + TitleBottomPadding + FolderDotsHeight
 
-    // ── Reorder (folder-local drag) ──
+    // ── Reorder state ──
     val orderComponents = apps.map { it.componentKey }
     val appByComponent = remember(apps) { apps.associateBy { it.componentKey } }
 
     // Optimistic order: on drop we show the new order immediately, then clear the override once the persisted
-    // [apps] catch up (same order) — or if membership changed underneath (a different set). Avoids the item
-    // snapping back to its old slot during the persist round-trip.
+    // [apps] catch up (same order) — or if membership changed underneath. Avoids the item snapping back.
     var orderOverride by remember { mutableStateOf<List<ComponentKey>?>(null) }
     LaunchedEffect(orderComponents) {
         val override = orderOverride ?: return@LaunchedEffect
@@ -155,30 +153,47 @@ fun FolderOverlay(
     val pageCount = rememberUpdatedState((orderComponents.size + pageSize - 1) / pageSize)
     val pagerState = rememberLauncherPagerState(pageCount = { pageCount.value.coerceAtLeast(1) }, infiniteScroll = { false })
 
-    val planner = remember(grid) {
-        DropPlanner { _, item, fingerInRoot ->
-            val geo = geometry ?: return@DropPlanner null
-            val dragged = (item as? GridItem.App)?.component ?: return@DropPlanner null
-            // Off the grid → keep the current gap (don't reflow). On a cell → migrate the gap to it.
-            val cell = geo.cellAt(fingerInRoot)
-                ?: return@DropPlanner PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
-            val flatSlot = pagerState.currentPage * pageSize + cell.row * grid.cols + cell.col
-            gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
-            // The reflow of the other cells is the preview; no drop-shadow footprint for an ordered surface.
-            PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+    // The folder's drag hooks for the shared coordinator, kept stable and reading live state. The plan migrates
+    // the reorder gap; commitReorder densifies and persists (optimistically first).
+    val gridState = rememberUpdatedState(grid)
+    val onReorderState = rememberUpdatedState(onReorder)
+    val delegate = remember {
+        object : FolderDragDelegate {
+            override fun plan(item: GridItem, fingerInRoot: Offset): PlacementPlan? {
+                val geo = geometry ?: return null
+                val dragged = (item as? GridItem.App)?.component ?: return null
+                val g = gridState.value
+                val ps = (g.cols * g.rows).coerceAtLeast(1)
+                // Off the grid → hold the current gap; on a cell → migrate the gap toward it.
+                val cell = geo.cellAt(fingerInRoot)
+                    ?: return PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+                val flatSlot = pagerState.currentPage * ps + cell.row * g.cols + cell.col
+                gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
+                return PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+            }
+
+            override fun commitReorder(item: GridItem) {
+                val dragged = (item as? GridItem.App)?.component ?: return
+                val newOrder = movingGapDisplayOrder(liveOrder.value, dragged, gap)
+                orderOverride = newOrder // show it now; persist and let the store catch up
+                onReorderState.value(newOrder)
+                gap = -1
+            }
         }
     }
-    val coordinator = rememberDragCoordinator(planner)
+    DisposableEffect(delegate) {
+        onPublishDelegate(delegate)
+        onDispose { onPublishDelegate(null) }
+    }
     LaunchedEffect(coordinator.isDragging) { if (!coordinator.isDragging) gap = -1 }
     DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(FolderZoneId) } }
 
     val session = coordinator.session
     val draggedComponent = (session?.item as? GridItem.App)?.component
 
-    // Dwell over the outer zone (dragging, but the finger is off the inner grid → no active zone) extracts the
-    // app out of the folder. B: end the drag and hand the component to the caller, which removes it and places
-    // it on home. (A — continuing the drag onto home without lifting — comes next, on a shared coordinator.)
-    val overOuterZone = session != null && session.activeZone == null
+    // Dwell with the finger off the inner grid (over the outer zone / home behind it) extracts the app out of
+    // the folder. B: end the drag and hand the component to the caller (remove + re-place on home).
+    val overOuterZone = session != null && session.activeZone != FolderZoneId
     LaunchedEffect(overOuterZone) {
         if (!overOuterZone) return@LaunchedEffect
         delay(ExtractDwellMs)
@@ -186,17 +201,9 @@ fun FolderOverlay(
         coordinator.cancel()
         onExtract(component)
     }
+
     val displayApps = movingGapDisplayOrder(effectiveOrder, draggedComponent, gap).mapNotNull(appByComponent::get)
     val pages = displayApps.chunked(pageSize)
-
-    fun handleReorderDrop() {
-        val outcome = coordinator.drop() ?: return
-        val dragged = (outcome.item as? GridItem.App)?.component ?: return
-        val newOrder = movingGapDisplayOrder(effectiveOrder, dragged, gap)
-        orderOverride = newOrder // show it now; persist and let the store catch up
-        onReorder(newOrder)
-        gap = -1
-    }
 
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     val scrimInteraction = remember { MutableInteractionSource() }
@@ -244,7 +251,7 @@ fun FolderOverlay(
                                     cols = grid.cols,
                                     rows = grid.rows,
                                 )
-                                coordinator.registerZone(DropZone(FolderZoneId, b, z = 0) { true })
+                                coordinator.registerZone(DropZone(FolderZoneId, b, z = 1) { it is GridItem.App })
                             },
                     ) { pageIndex ->
                         LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
@@ -256,7 +263,7 @@ fun FolderOverlay(
                                     coordinator = coordinator,
                                     item = GridItem.App(app.componentKey),
                                     gestureConfig = gestureConfig,
-                                    onDrop = { handleReorderDrop() },
+                                    onDrop = onDrop,
                                     modifier = cellModifier,
                                     onOpen = { onLaunch(app.componentKey) },
                                 ) {

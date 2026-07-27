@@ -96,11 +96,14 @@ fun <T> CoordinateDragPager(
         onDispose { coordinator.unregisterZone(zoneId) }
     }
 
-    // Edge-dwell page-flip: which edge (if any) the dragged finger is currently held near.
+    // Edge-dwell page-flip: which edge (if any) the dragged finger is currently held near. Only while the drag
+    // is actually over *this* pager's zone — on a shared coordinator another surface's drag (e.g. reordering
+    // inside an open folder) must not flip these pages behind it.
     var viewport by remember { mutableStateOf<Rect?>(null) }
     val flipEdge: FlipEdge? = run {
+        val active = session?.takeIf { it.activeZone == zoneId } ?: return@run null
         val vp = viewport ?: return@run null
-        val finger = session?.fingerInRoot ?: return@run null
+        val finger = active.fingerInRoot
         val edgePx = with(density) { EDGE_FLIP_DP.toPx() }
         when {
             finger.x < vp.left + edgePx -> FlipEdge.LEFT
