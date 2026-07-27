@@ -17,9 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.launcher.home.HomeScreen
 
 /** The dev harness screens; the floating chip switches between them. */
 private enum class DevScreen(val label: String) {
+    Home("Home"),
     Drag("Drag"),
     Pager("Pager"),
     PagerDrag("Pager+Drag"),
@@ -39,9 +41,10 @@ private enum class DevScreen(val label: String) {
  */
 @Composable
 fun DevRootScreen(modifier: Modifier = Modifier) {
-    var screen by remember { mutableStateOf(DevScreen.Drag) }
+    var screen by remember { mutableStateOf(DevScreen.Home) }
     Box(modifier.fillMaxSize()) {
         when (screen) {
+            DevScreen.Home -> HomeScreen()
             DevScreen.Drag -> DragPlaygroundScreen()
             DevScreen.Pager -> PagerPlaygroundScreen()
             DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
