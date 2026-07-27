@@ -1,59 +1,51 @@
 package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
-import inkspire.morphic.core.database.dao.AppPlacementDao
-import inkspire.morphic.core.database.dao.FolderDao
-import inkspire.morphic.core.database.dao.FolderItemDao
-import inkspire.morphic.core.database.dao.FolderPlacementDao
-import inkspire.morphic.core.database.dao.IconContainerPlacementDao
-import inkspire.morphic.core.database.dao.WidgetContainerPlacementDao
-import inkspire.morphic.core.database.dao.WidgetPlacementDao
 import inkspire.morphic.core.database.entity.FolderEntity
 import inkspire.morphic.core.database.entity.FolderItemEntity
+import inkspire.morphic.core.database.entity.IconContainerEntity
+import inkspire.morphic.core.database.entity.WidgetContainerEntity
+import inkspire.morphic.core.database.entity.WidgetContainerItemEntity
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
+import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.layout.mapper.foldersOf
+import inkspire.morphic.data.layout.mapper.iconContainersOf
 import inkspire.morphic.data.layout.mapper.toEntity
 import inkspire.morphic.data.layout.mapper.toEntry
+import inkspire.morphic.data.layout.mapper.toRow
+import inkspire.morphic.data.layout.mapper.toWidgetInfo
+import inkspire.morphic.data.layout.mapper.widgetContainersOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
- * Room-backed [LayoutRepository].
- *
- * Wired so far: **placement of every [GridItem] kind** (the five `*_placement` tables), and the **folder**
- * definition end-to-end (its flow, create/add/remove/reorder, and destroy). Icon containers, widget containers,
- * and widget metadata are the remaining verticals — their flows still stub empty and their ops no-op, following
- * the folder shape when built.
+ * Room-backed [LayoutRepository] — the complete HOME layout store: placement of every [GridItem] kind across
+ * the five `*_placement` tables, and the folder / icon-container / widget-container / widget definitions. Every
+ * [LayoutChange] is handled, so [apply]'s `when` is exhaustive over the vocabulary.
  *
  * Writes hop to [AppDispatchers.io]; the DAOs' `Flow`s stay on Room's own executor.
  */
 internal class LayoutRepositoryImpl(
-    private val appPlacementDao: AppPlacementDao,
-    private val folderPlacementDao: FolderPlacementDao,
-    private val widgetPlacementDao: WidgetPlacementDao,
-    private val iconContainerPlacementDao: IconContainerPlacementDao,
-    private val widgetContainerPlacementDao: WidgetContainerPlacementDao,
-    private val folderDao: FolderDao,
-    private val folderItemDao: FolderItemDao,
+    private val daos: LayoutDaos,
     private val dispatchers: AppDispatchers,
 ) : LayoutRepository {
 
     /** One map from the five per-type placement tables: each observed list maps to entries, concatenated. */
     override fun placements(orientation: Orientation): Flow<Map<GridItem, PlacedItem>> =
         combine(
-            appPlacementDao.observe(orientation),
-            folderPlacementDao.observe(orientation),
-            widgetPlacementDao.observe(orientation),
-            iconContainerPlacementDao.observe(orientation),
-            widgetContainerPlacementDao.observe(orientation),
+            daos.appPlacement.observe(orientation),
+            daos.folderPlacement.observe(orientation),
+            daos.widgetPlacement.observe(orientation),
+            daos.iconContainerPlacement.observe(orientation),
+            daos.widgetContainerPlacement.observe(orientation),
         ) { apps, folders, widgets, iconContainers, widgetContainers ->
             (apps.map { it.toEntry() } +
                 folders.map { it.toEntry() } +
@@ -63,12 +55,20 @@ internal class LayoutRepositoryImpl(
         }
 
     override fun folders(): Flow<List<Folder>> =
-        combine(folderDao.observeAll(), folderItemDao.observeAll()) { folders, items -> foldersOf(folders, items) }
+        combine(daos.folder.observeAll(), daos.folderItem.observeAll()) { folders, items -> foldersOf(folders, items) }
 
-    // ── Remaining verticals: real flows once the icon/widget container + widget stores are wired ──
-    override fun iconContainers(): Flow<List<IconContainer>> = flowOf(emptyList())
-    override fun widgetContainers(): Flow<List<WidgetContainer>> = flowOf(emptyList())
-    override fun widgets(): Flow<List<WidgetInfo>> = flowOf(emptyList())
+    override fun iconContainers(): Flow<List<IconContainer>> =
+        combine(daos.iconContainer.observeAll(), daos.iconContainerItem.observeAll()) { containers, items ->
+            iconContainersOf(containers, items)
+        }
+
+    override fun widgetContainers(): Flow<List<WidgetContainer>> =
+        combine(daos.widgetContainer.observeAll(), daos.widgetContainerItem.observeAll()) { containers, items ->
+            widgetContainersOf(containers, items)
+        }
+
+    override fun widgets(): Flow<List<WidgetInfo>> =
+        daos.widget.observeAll().map { widgets -> widgets.map { it.toWidgetInfo() } }
 
     override suspend fun apply(orientation: Orientation, changes: List<LayoutChange>) {
         withContext(dispatchers.io) {
@@ -78,54 +78,96 @@ internal class LayoutRepositoryImpl(
 
     private suspend fun applyChange(orientation: Orientation, change: LayoutChange) {
         when (change) {
-            // Place-or-move: upsert into the matching per-type placement table for this orientation.
+            // ── Placement: upsert into the matching per-type table for this orientation ──
             is LayoutChange.Move -> when (val item = change.item) {
                 is GridItem.App ->
-                    appPlacementDao.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.appPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
                 is GridItem.Folder ->
-                    folderPlacementDao.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.folderPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
                 is GridItem.Widget ->
-                    widgetPlacementDao.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.widgetPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
                 is GridItem.IconContainer ->
-                    iconContainerPlacementDao.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.iconContainerPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
                 is GridItem.WidgetContainer ->
-                    widgetContainerPlacementDao.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.widgetContainerPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
             }
 
-            // Remove from home = drop membership across *all* orientations. An app just detaches (stays
-            // installed); a folder is destroyed — deleting the row cascades its items + placement (FK).
+            // ── Remove from home = drop membership across all orientations ──
+            // An app detaches (stays installed); a folder/container/widget is destroyed — deleting the parent
+            // row FK-cascades its items and placement. (The AppWidgetHost *unbind* of a destroyed widget is a
+            // data:widgets system action; this only drops our records.)
             is LayoutChange.RemoveFromGrid -> when (val item = change.item) {
-                is GridItem.App -> appPlacementDao.deleteByComponent(item.component)
-                is GridItem.Folder -> folderDao.delete(item.folderId)
-                else -> Unit // icon/widget container + widget destroy — later verticals
+                is GridItem.App -> daos.appPlacement.deleteByComponent(item.component)
+                is GridItem.Folder -> daos.folder.delete(item.folderId)
+                is GridItem.IconContainer -> daos.iconContainer.delete(item.containerId)
+                is GridItem.WidgetContainer -> daos.widgetContainer.delete(item.containerId)
+                is GridItem.Widget -> daos.widget.delete(item.appWidgetId)
             }
 
             // ── Folders ──
             is LayoutChange.CreateFolder -> {
-                val folderId = folderDao.insert(FolderEntity(label = change.label))
-                folderItemDao.upsert(change.apps.toItems(folderId))
-                folderPlacementDao.upsert(
+                val folderId = daos.folder.insert(FolderEntity(label = change.label))
+                daos.folderItem.upsert(change.apps.toFolderItems(folderId))
+                daos.folderPlacement.upsert(
                     listOf(GridItem.Folder(folderId).toEntity(orientation, change.zone, change.at)),
                 )
             }
 
             is LayoutChange.AddToFolder -> {
-                val next = (folderItemDao.maxSortOrder(change.folderId) ?: -1) + 1
-                folderItemDao.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
+                val next = (daos.folderItem.maxSortOrder(change.folderId) ?: -1) + 1
+                daos.folderItem.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
             }
 
-            is LayoutChange.RemoveFromFolder -> folderItemDao.remove(change.folderId, change.app)
+            is LayoutChange.RemoveFromFolder -> daos.folderItem.remove(change.folderId, change.app)
 
             is LayoutChange.ReorderFolder -> {
-                folderItemDao.clearFolder(change.folderId)
-                folderItemDao.upsert(change.apps.toItems(change.folderId))
+                daos.folderItem.clearFolder(change.folderId)
+                daos.folderItem.upsert(change.apps.toFolderItems(change.folderId))
             }
 
-            else -> Unit // icon/widget container ops — later verticals
+            // ── Icon containers ──
+            is LayoutChange.CreateIconContainer -> {
+                val id = daos.iconContainer.insert(IconContainerEntity(arrangement = change.arrangement))
+                daos.iconContainerItem.upsert(change.items.mapIndexed { i, item -> item.toRow(id, i) })
+                daos.iconContainerPlacement.upsert(
+                    listOf(GridItem.IconContainer(id).toEntity(orientation, change.zone, change.at)),
+                )
+            }
+
+            is LayoutChange.AddToIconContainer -> {
+                val next = (daos.iconContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
+                daos.iconContainerItem.upsert(listOf(change.item.toRow(change.containerId, next)))
+            }
+
+            is LayoutChange.RemoveFromIconContainer -> when (val item = change.item) {
+                is IconItem.App -> daos.iconContainerItem.removeByComponent(item.component)
+                is IconItem.Folder -> daos.iconContainerItem.removeByFolder(item.folderId)
+            }
+
+            is LayoutChange.SetIconContainerArrangement ->
+                daos.iconContainer.setArrangement(change.containerId, change.arrangement)
+
+            // ── Widget containers ──
+            is LayoutChange.CreateWidgetContainer -> {
+                val id = daos.widgetContainer.insert(WidgetContainerEntity(axis = change.axis))
+                daos.widgetContainerItem.upsert(
+                    change.widgetIds.mapIndexed { i, w -> WidgetContainerItemEntity(id, w, i) },
+                )
+                daos.widgetContainerPlacement.upsert(
+                    listOf(GridItem.WidgetContainer(id).toEntity(orientation, change.zone, change.at)),
+                )
+            }
+
+            is LayoutChange.AddToWidgetContainer -> {
+                val next = (daos.widgetContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
+                daos.widgetContainerItem.upsert(listOf(WidgetContainerItemEntity(change.containerId, change.appWidgetId, next)))
+            }
+
+            is LayoutChange.RemoveFromWidgetContainer -> daos.widgetContainerItem.removeByWidget(change.appWidgetId)
         }
     }
 }
 
-/** The apps of a folder as dense `folder_item` rows (index = sortOrder). */
-private fun List<ComponentKey>.toItems(folderId: Long): List<FolderItemEntity> =
+/** Apps as dense `folder_item` rows (index = sortOrder). */
+private fun List<ComponentKey>.toFolderItems(folderId: Long): List<FolderItemEntity> =
     mapIndexed { index, component -> FolderItemEntity(folderId, component, index) }
