@@ -9,5 +9,7 @@ import org.koin.dsl.module
  * `AppDispatchers` are resolved from the database and common modules (which the app starts alongside this one).
  */
 val layoutModule = module {
-    single<LayoutRepository> { LayoutRepositoryImpl(get(), get()) }
+    single<LayoutRepository> {
+        LayoutRepositoryImpl(get(), get(), get(), get(), get(), get())
+    }
 }
