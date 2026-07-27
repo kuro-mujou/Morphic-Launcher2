@@ -91,8 +91,11 @@ class HomeViewModel(
 
     /**
      * First-run default: with nothing placed, lay the first apps onto the grid in reading order — one app per
-     * *visual* cell, left→right, top→bottom, filling [config]'s visual rows × cols. Idempotent — a persisted
-     * layout short-circuits it.
+     * *visual* cell, left→right, top→bottom. Fills all but the **last visual row**, so the page keeps slack.
+     * This matters: the free-placement push engine rearranges by shoving occupants into empty cells, so a
+     * 100%-full page can't be rearranged at all (every drop but the origin reads INVALID). Overflowing a truly
+     * full page onto the next page is future work; for now the seed simply doesn't pack the grid. Idempotent —
+     * a persisted layout short-circuits it.
      *
      * Each app occupies a whole visual cell, which is `cellMultiplier` logical cells on each axis; visual
      * coordinates are scaled by the multiplier so the stored placements are in the grid's logical space (and so
@@ -101,7 +104,8 @@ class HomeViewModel(
     private suspend fun seedIfEmpty(config: GridConfig) {
         if (layoutRepository.placements(ORIENTATION).first().isNotEmpty()) return
         val mult = config.cellMultiplier
-        val apps = appRepository.observeApps().first().take(config.visualRows * config.visualCols)
+        val seedRows = (config.visualRows - 1).coerceAtLeast(1)
+        val apps = appRepository.observeApps().first().take(seedRows * config.visualCols)
         val moves = apps.mapIndexed { index, app ->
             LayoutChange.Move(
                 item = GridItem.App(app.componentKey),
