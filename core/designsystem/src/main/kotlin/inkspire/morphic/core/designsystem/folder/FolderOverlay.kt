@@ -68,6 +68,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** Padding between the folder title and the inner zone. */
@@ -81,10 +82,15 @@ private val DotSpacing = 6.dp
 
 private val FolderZoneId = ZoneId("folder")
 
+/** How long a dragged app must dwell over the outer zone before it's extracted out of the folder. */
+private const val ExtractDwellMs = 300L
+
 /**
  * The opened-folder view — two zones:
- * - the **outer zone** is the full-screen scrim: tapping it (outside the inner zone) closes the folder, and it
- *   will later be the drop target for dragging an app *out* of the folder (the dwell-to-extract hand-off);
+ * - the **outer zone** is the full-screen scrim: tapping it (outside the inner zone) closes the folder, and
+ *   holding a dragged app over it (~[ExtractDwellMs]) extracts the app out of the folder — B fires [onExtract]
+ *   and ends the drag (the caller removes it and places it on home); the seamless continue-onto-home hand-off
+ *   (A, on a shared coordinator) comes next;
  * - the **inner zone** is a bounded card holding the folder's app grid ([label] above it), sized by
  *   [folderInnerSize] so every folder is the same, consistent size on a given device.
  *
@@ -109,6 +115,7 @@ fun FolderOverlay(
     gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
     onReorder: (List<ComponentKey>) -> Unit,
+    onExtract: (ComponentKey) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
@@ -167,6 +174,18 @@ fun FolderOverlay(
 
     val session = coordinator.session
     val draggedComponent = (session?.item as? GridItem.App)?.component
+
+    // Dwell over the outer zone (dragging, but the finger is off the inner grid → no active zone) extracts the
+    // app out of the folder. B: end the drag and hand the component to the caller, which removes it and places
+    // it on home. (A — continuing the drag onto home without lifting — comes next, on a shared coordinator.)
+    val overOuterZone = session != null && session.activeZone == null
+    LaunchedEffect(overOuterZone) {
+        if (!overOuterZone) return@LaunchedEffect
+        delay(ExtractDwellMs)
+        val component = (coordinator.session?.item as? GridItem.App)?.component ?: return@LaunchedEffect
+        coordinator.cancel()
+        onExtract(component)
+    }
     val displayApps = movingGapDisplayOrder(effectiveOrder, draggedComponent, gap).mapNotNull(appByComponent::get)
     val pages = displayApps.chunked(pageSize)
 

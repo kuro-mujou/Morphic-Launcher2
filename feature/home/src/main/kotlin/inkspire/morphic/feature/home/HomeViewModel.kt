@@ -108,6 +108,50 @@ class HomeViewModel(
     }
 
     /**
+     * Extracts [component] out of folder [folderId] onto the home grid: it lands at the first free cell.
+     *
+     * **Auto-dissolve:** a folder holds ≥ 2 apps, so extracting the second-last one would leave a folder of one.
+     * Instead the folder is dissolved — the single remaining app takes over the folder's cell and the folder is
+     * deleted (which cascades its membership + placement rows, so no explicit cleanup of the two apps' folder
+     * rows is needed). Otherwise it's a plain remove-from-folder. No-op until the grid config has arrived.
+     */
+    fun extractFromFolder(folderId: Long, component: ComponentKey) {
+        val config = configuredFor ?: return
+        val folder = state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == folderId }
+            ?: return
+        val remaining = folder.folder.apps.filter { it != component }
+        val changes = mutableListOf<LayoutChange>(LayoutChange.Move(GridItem.App(component), firstFreeCell(config)))
+        if (remaining.size <= 1) {
+            remaining.singleOrNull()?.let { last ->
+                changes += LayoutChange.Move(GridItem.App(last), folder.placement)
+            }
+            changes += LayoutChange.RemoveFromGrid(GridItem.Folder(folderId)) // deletes folder (cascades rows)
+        } else {
+            changes += LayoutChange.RemoveFromFolder(folderId, component)
+        }
+        applyChanges(changes)
+    }
+
+    /**
+     * The first empty visual cell scanning pages in reading order, as a `cellMultiplier`-span placement. Falls
+     * back to the top-left of a fresh trailing page when every existing page is full.
+     */
+    private fun firstFreeCell(config: GridConfig): GridPlacement {
+        val mult = config.cellMultiplier
+        val occupied = placements.value.values
+        val lastPage = occupied.maxOfOrNull { it.page } ?: 0
+        for (page in 0..lastPage + 1) {
+            for (row in 0 until config.visualRows) {
+                for (col in 0 until config.visualCols) {
+                    val cell = GridPlacement(page, row * mult, col * mult, rowSpan = mult, colSpan = mult)
+                    if (occupied.none { it.page == page && it.overlaps(cell) }) return cell
+                }
+            }
+        }
+        return GridPlacement(lastPage + 1, 0, 0, rowSpan = mult, colSpan = mult)
+    }
+
+    /**
      * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement]:
      * app→app creates a new folder at the target's cell; app→folder appends to it. Returns null when there is no
      * valid merge (target gone, or a combination not yet supported — folder-on-app, widgets and containers

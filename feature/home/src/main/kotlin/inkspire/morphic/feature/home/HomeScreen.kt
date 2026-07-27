@@ -225,6 +225,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     onReorder = { order ->
                         viewModel.applyChanges(listOf(LayoutChange.ReorderFolder(openFolder.folder.id, order)))
                     },
+                    onExtract = { component ->
+                        viewModel.extractFromFolder(openFolder.folder.id, component)
+                        openFolderId = null
+                    },
                     onDismiss = { openFolderId = null },
                 )
             }
