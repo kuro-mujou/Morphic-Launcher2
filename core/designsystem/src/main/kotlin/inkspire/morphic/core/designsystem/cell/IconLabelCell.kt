@@ -83,15 +83,6 @@ fun IconLabelCell(
     metrics: IconMetrics = LocalIconMetrics.current,
     icon: @Composable (iconSize: Dp) -> Unit,
 ) {
-    val density = LocalDensity.current
-    val baseStyle = MaterialTheme.typography.labelSmall
-    val fontSize = baseStyle.fontSize * metrics.labelScale
-    val lineHeight = if (baseStyle.lineHeight.isSpecified) {
-        baseStyle.lineHeight * metrics.labelScale
-    } else {
-        fontSize * 1.2f
-    }
-
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val availW = maxWidth - CellPadH * 2
 
@@ -108,7 +99,7 @@ fun IconLabelCell(
             return@BoxWithConstraints
         }
 
-        val labelHeight = with(density) { lineHeight.toDp() }
+        val labelHeight = cellLabelHeight(metrics)
         val iconArea = (maxHeight - CellPadV * 2 - LabelGap - labelHeight).coerceAtLeast(0.dp)
         val iconDp = metrics.resolveIconSize(availW, iconArea).coerceAtMost(iconArea)
         Column(
@@ -123,4 +114,18 @@ fun IconLabelCell(
             CellLabel(label = label, metrics = metrics)
         }
     }
+}
+
+/**
+ * The height of a cell's single-line label row, from the current type scale and [metrics] label scale — the
+ * `lineHeight` of `labelSmall` (scaled) in dp. Shared so [IconLabelCell] and the folder sizer agree on how much
+ * a label adds to a cell's height.
+ */
+@Composable
+internal fun cellLabelHeight(metrics: IconMetrics): Dp {
+    val density = LocalDensity.current
+    val baseStyle = MaterialTheme.typography.labelSmall
+    val fontSize = baseStyle.fontSize * metrics.labelScale
+    val lineHeight = if (baseStyle.lineHeight.isSpecified) baseStyle.lineHeight * metrics.labelScale else fontSize * 1.2f
+    return with(density) { lineHeight.toDp() }
 }
