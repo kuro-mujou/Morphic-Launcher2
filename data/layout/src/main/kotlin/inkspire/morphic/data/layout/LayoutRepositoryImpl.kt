@@ -108,6 +108,8 @@ internal class LayoutRepositoryImpl(
             is LayoutChange.CreateFolder -> {
                 val folderId = daos.folder.insert(FolderEntity(label = change.label))
                 daos.folderItem.upsert(change.apps.toFolderItems(folderId))
+                // The folded apps now live inside the folder, so they leave the grid (an app is in one place).
+                change.apps.forEach { daos.appPlacement.deleteByComponent(it) }
                 daos.folderPlacement.upsert(
                     listOf(GridItem.Folder(folderId).toEntity(orientation, change.zone, change.at)),
                 )
@@ -116,6 +118,8 @@ internal class LayoutRepositoryImpl(
             is LayoutChange.AddToFolder -> {
                 val next = (daos.folderItem.maxSortOrder(change.folderId) ?: -1) + 1
                 daos.folderItem.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
+                // The app moved into the folder, so it leaves the grid (no-op if it came from another folder).
+                daos.appPlacement.deleteByComponent(change.app)
             }
 
             is LayoutChange.RemoveFromFolder -> daos.folderItem.remove(change.folderId, change.app)
