@@ -4,27 +4,42 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
@@ -32,29 +47,58 @@ import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.cellLabelHeight
+import inkspire.morphic.core.designsystem.drag.DropPlanner
+import inkspire.morphic.core.designsystem.drag.DropZone
+import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
+import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
+import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.flowItems
+import inkspire.morphic.core.designsystem.pager.LauncherPager
+import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
+import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.FolderGrid
+import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
+import kotlin.math.roundToInt
 
 /** Padding between the folder title and the inner zone. */
 private val TitleBottomPadding = 12.dp
 
+/** Fixed height of the page-dots row below the inner zone (reserved even for a single page, so the card's
+ *  size doesn't depend on how many pages the folder happens to have). */
+private val FolderDotsHeight = 24.dp
+private val DotSize = 6.dp
+private val DotSpacing = 6.dp
+
+private val FolderZoneId = ZoneId("folder")
+
 /**
  * The opened-folder view — two zones:
  * - the **outer zone** is the full-screen scrim: tapping it (outside the inner zone) closes the folder, and it
- *   will later be the drop target for dragging an app *out* of the folder;
+ *   will later be the drop target for dragging an app *out* of the folder (the dwell-to-extract hand-off);
  * - the **inner zone** is a bounded card holding the folder's app grid ([label] above it), sized by
  *   [folderInnerSize] so every folder is the same, consistent size on a given device.
  *
- * A shared launcher surface: the home opens it for a folder tile, and the APPS surfaces reuse it for pager
- * folders and category cards. It stays dumb — label + resolved [apps] + [onLaunch]/[onDismiss] callbacks — so
- * each caller decides what launch/dismiss mean.
+ * The apps are a **dense flow** chunked into pages (page dots below), swipeable. Long-press an app to reorder it
+ * within the flow ([MovingGap][movingGap]): the others shuffle around a migrating gap and the flow densifies on
+ * drop ([onReorder]). A tap launches ([onLaunch]).
  *
- * First cut of the fuller view: single page (dense-flow pager is next), launch-only (in-folder reorder and
- * dwell-to-extract come after). Dismissed by Back or a tap on the outer zone.
+ * A shared launcher surface: the home opens it for a folder tile, and the APPS surfaces reuse it for pager
+ * folders and category cards. It stays parameterised — label + resolved [apps] + callbacks — so each caller
+ * decides what launch/reorder/dismiss mean, and holds its **own** drag coordinator (reorder is self-contained).
+ *
+ * Reorder is **within the current page** for now: in a pager, a cell dragged onto another page's grid would be
+ * disposed and lose its pointer stream. Cross-page reorder — and dragging an app *out* — need a drag layer that
+ * outlives the page/overlay, which arrives with the extract hand-off (4b). Dismissed by Back or a tap outside.
  *
  * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
  */
@@ -62,7 +106,9 @@ private val TitleBottomPadding = 12.dp
 fun FolderOverlay(
     label: String,
     apps: List<AppInfo>,
+    gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
+    onReorder: (List<ComponentKey>) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
@@ -72,58 +118,171 @@ fun FolderOverlay(
     val device = currentDeviceConfiguration()
     val grid = remember(device) { FolderGrid.toGridConfig(device) }
     val labelHeight = cellLabelHeight(metrics)
+    val pageSize = (grid.cols * grid.rows).coerceAtLeast(1)
 
-    // The title row's height (+ its bottom padding) is what landscape sizing must leave room for above the grid.
+    // The title row + the dots row are what landscape sizing must leave room for above/below the grid.
     val titleStyle = MaterialTheme.typography.titleMedium
     val titleHeight = with(LocalDensity.current) {
         (if (titleStyle.lineHeight.isSpecified) titleStyle.lineHeight else titleStyle.fontSize * 1.2f).toDp()
     }
-    val landscapeReserve = titleHeight + TitleBottomPadding
+    val landscapeReserve = titleHeight + TitleBottomPadding + FolderDotsHeight
 
-    // Inset by the system bars + display cutout (not `safeDrawing` — that would also inset the IME, which is
-    // irrelevant here) so the folder is sized against, and laid out within, the safe area — never under a bar.
+    // ── Reorder (folder-local drag) ──
+    val orderComponents = apps.map { it.componentKey }
+    val appByComponent = remember(apps) { apps.associateBy { it.componentKey } }
+
+    // Optimistic order: on drop we show the new order immediately, then clear the override once the persisted
+    // [apps] catch up (same order) — or if membership changed underneath (a different set). Avoids the item
+    // snapping back to its old slot during the persist round-trip.
+    var orderOverride by remember { mutableStateOf<List<ComponentKey>?>(null) }
+    LaunchedEffect(orderComponents) {
+        val override = orderOverride ?: return@LaunchedEffect
+        if (orderComponents == override || orderComponents.toSet() != override.toSet()) orderOverride = null
+    }
+    val effectiveOrder = orderOverride ?: orderComponents
+    val liveOrder = rememberUpdatedState(effectiveOrder)
+
+    var geometry by remember { mutableStateOf<GridGeometry?>(null) }
+    var gap by remember { mutableStateOf(-1) }
+
+    val pageCount = rememberUpdatedState((orderComponents.size + pageSize - 1) / pageSize)
+    val pagerState = rememberLauncherPagerState(pageCount = { pageCount.value.coerceAtLeast(1) }, infiniteScroll = { false })
+
+    val planner = remember(grid) {
+        DropPlanner { _, item, fingerInRoot ->
+            val geo = geometry ?: return@DropPlanner null
+            val dragged = (item as? GridItem.App)?.component ?: return@DropPlanner null
+            // Off the grid → keep the current gap (don't reflow). On a cell → migrate the gap to it.
+            val cell = geo.cellAt(fingerInRoot)
+                ?: return@DropPlanner PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+            val flatSlot = pagerState.currentPage * pageSize + cell.row * grid.cols + cell.col
+            gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
+            // The reflow of the other cells is the preview; no drop-shadow footprint for an ordered surface.
+            PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+        }
+    }
+    val coordinator = rememberDragCoordinator(planner)
+    LaunchedEffect(coordinator.isDragging) { if (!coordinator.isDragging) gap = -1 }
+    DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(FolderZoneId) } }
+
+    val session = coordinator.session
+    val draggedComponent = (session?.item as? GridItem.App)?.component
+    val displayApps = movingGapDisplayOrder(effectiveOrder, draggedComponent, gap).mapNotNull(appByComponent::get)
+    val pages = displayApps.chunked(pageSize)
+
+    fun handleReorderDrop() {
+        val outcome = coordinator.drop() ?: return
+        val dragged = (outcome.item as? GridItem.App)?.component ?: return
+        val newOrder = movingGapDisplayOrder(effectiveOrder, dragged, gap)
+        orderOverride = newOrder // show it now; persist and let the store catch up
+        onReorder(newOrder)
+        gap = -1
+    }
+
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
-
-    // Outer zone: tap anywhere on the scrim (outside the inner zone) closes it; no ripple on the full-screen
-    // backdrop. The black fills the whole screen (behind the bars); only the content region is inset.
     val scrimInteraction = remember { MutableInteractionSource() }
     val innerInteraction = remember { MutableInteractionSource() }
-    BoxWithConstraints(
+
+    // Outer scrim fills the whole screen (black behind the bars); the content region is inset to the safe area.
+    // The floating drag proxy is a sibling of the (inset) content so its root-space offset isn't shifted.
+    Box(
         modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss)
-            .windowInsetsPadding(safeInsets),
-        contentAlignment = Alignment.Center,
+            .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss),
     ) {
-        val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, labelHeight, landscapeReserve)
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = label,
-                style = titleStyle,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(bottom = TitleBottomPadding),
-            )
-            // Inner zone: the bounded app grid. A tap on its background is consumed so it doesn't close the folder.
-            Box(
-                Modifier
-                    .size(innerSize)
-                    .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
-            ) {
-                LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
-                    // TODO(dense-flow pager): page the ordered list; for now show the first page only.
-                    flowItems(items = apps.take(grid.cols * grid.rows), itemKey = { it.componentKey.flatten() }) { app, cellModifier ->
-                        AppCell(
-                            app = app,
-                            onClick = { onLaunch(app.componentKey) },
-                            modifier = cellModifier,
-                            metrics = metrics,
-                        )
+        BoxWithConstraints(
+            Modifier.fillMaxSize().windowInsetsPadding(safeInsets),
+            contentAlignment = Alignment.Center,
+        ) {
+            val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, labelHeight, landscapeReserve)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = label,
+                    style = titleStyle,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = TitleBottomPadding),
+                )
+                // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
+                Box(
+                    Modifier
+                        .size(innerSize)
+                        .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
+                ) {
+                    LauncherPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
+                            .onGloballyPositioned {
+                                val b = it.boundsInRoot()
+                                geometry = GridGeometry(
+                                    originInRoot = Offset(b.left, b.top),
+                                    cellW = b.width / grid.cols,
+                                    cellH = b.height / grid.rows,
+                                    cols = grid.cols,
+                                    rows = grid.rows,
+                                )
+                                coordinator.registerZone(DropZone(FolderZoneId, b, z = 0) { true })
+                            },
+                    ) { pageIndex ->
+                        LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
+                            flowItems(
+                                items = pages.getOrNull(pageIndex).orEmpty(),
+                                itemKey = { it.componentKey.flatten() },
+                            ) { app, cellModifier ->
+                                LauncherDragCell(
+                                    coordinator = coordinator,
+                                    item = GridItem.App(app.componentKey),
+                                    gestureConfig = gestureConfig,
+                                    onDrop = { handleReorderDrop() },
+                                    modifier = cellModifier,
+                                    onOpen = { onLaunch(app.componentKey) },
+                                ) {
+                                    AppCell(app = app, onClick = {}, modifier = Modifier.fillMaxSize(), metrics = metrics)
+                                }
+                            }
+                        }
                     }
                 }
+                // Page dots below the inner zone; the row's height is reserved even for a single page.
+                Box(Modifier.height(FolderDotsHeight), contentAlignment = Alignment.Center) {
+                    if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
+                }
             }
+        }
+
+        // Floating proxy following the finger during a reorder drag (root space, above the content).
+        val geo = geometry
+        val dragApp = draggedComponent?.let(appByComponent::get)
+        if (session != null && geo != null && dragApp != null) {
+            val finger = session.fingerInRoot
+            FloatingDragIcon(
+                rootOffset = IntOffset(
+                    (finger.x - geo.cellW / 2f).roundToInt(),
+                    (finger.y - geo.cellH / 2f).roundToInt(),
+                ),
+                size = DpSize(with(LocalDensity.current) { geo.cellW.toDp() }, with(LocalDensity.current) { geo.cellH.toDp() }),
+            ) {
+                AppCell(app = dragApp, onClick = {}, modifier = Modifier.fillMaxSize(), metrics = metrics)
+            }
+        }
+    }
+}
+
+/** A row of small dots marking the folder's pages, the [current] one filled. */
+@Composable
+private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(DotSpacing)) {
+        repeat(count) { index ->
+            Box(
+                Modifier
+                    .size(DotSize)
+                    .clip(CircleShape)
+                    .background(if (index == current) Color.White else Color.White.copy(alpha = 0.3f)),
+            )
         }
     }
 }

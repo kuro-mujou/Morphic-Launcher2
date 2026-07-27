@@ -220,7 +220,11 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 FolderOverlay(
                     label = openFolder.folder.label,
                     apps = openFolder.apps,
+                    gestureConfig = gestureConfig,
                     onLaunch = { component -> viewModel.launch(component); openFolderId = null },
+                    onReorder = { order ->
+                        viewModel.applyChanges(listOf(LayoutChange.ReorderFolder(openFolder.folder.id, order)))
+                    },
                     onDismiss = { openFolderId = null },
                 )
             }
