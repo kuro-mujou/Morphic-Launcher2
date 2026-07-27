@@ -69,6 +69,27 @@ private fun byDevice(
     DeviceConfiguration.TABLET_LANDSCAPE to tabletLandscape,
 )
 
+/**
+ * Resolves this blueprint's default size for [device] into a concrete [GridConfig] in **logical** cells.
+ *
+ * [GridDefault] holds *visual* columns/rows; both axes are multiplied by [GridBlueprint.cellMultiplier] so the
+ * returned config carries the blueprint's sub-cell resolution — e.g. the home pager's 4×5 visual default becomes
+ * an 8×10 logical grid at multiplier 2. Requires a fixed row count, so it is only meaningful for
+ * [GridSizing.FIXED_PAGER] grids (home, dock, drawer paged, folders); a [GridSizing.SCROLL_GRID] blueprint is
+ * column-only and derives its rows at runtime, so it has nothing to resolve here.
+ */
+fun GridBlueprint.toGridConfig(device: DeviceConfiguration): GridConfig {
+    val default = defaults.getValue(device)
+    val visualRows = requireNotNull(default.rows) {
+        "toGridConfig needs a fixed row count; $sizing grids resolve rows at runtime"
+    }
+    return GridConfig(
+        rows = visualRows * cellMultiplier,
+        cols = default.cols * cellMultiplier,
+        cellMultiplier = cellMultiplier,
+    )
+}
+
 /** Home free-placement pager — sub-cell grid (multiplier 2); rows and columns both editable. */
 val HomePagerGrid = GridBlueprint(
     sizing = GridSizing.FIXED_PAGER,

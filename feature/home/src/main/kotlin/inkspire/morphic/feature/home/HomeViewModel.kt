@@ -3,6 +3,7 @@ package inkspire.morphic.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.Orientation
@@ -35,8 +36,10 @@ import kotlinx.coroutines.launch
  * write just makes it durable. App metadata, by contrast, streams live from [AppRepository.observeApps] (installs
  * and removals should show through).
  *
- * On construction it refreshes the app cache and, if nothing is placed, seeds the first apps so an empty
- * database still shows a populated home. Orientation is fixed to [Orientation.PORTRAIT] for now.
+ * **Grid comes from the UI.** The concrete [GridConfig] is resolved from the home blueprint against the detected
+ * device (a `@Composable` read), so the surface pushes it in via [setGridConfig] rather than this holder guessing
+ * dimensions. That first call also refreshes the app cache and, if nothing is placed, seeds the first apps so an
+ * empty database still shows a populated home. Orientation is fixed to [Orientation.PORTRAIT] for now.
  */
 class HomeViewModel(
     private val layoutRepository: LayoutRepository,
@@ -56,10 +59,21 @@ class HomeViewModel(
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
-    init {
+    private var configuredFor: GridConfig? = null
+
+    /**
+     * Supplies the [config] resolved for the current device (detected in the UI). Idempotent per config value:
+     * the first call refreshes the app cache and seeds a first-run layout, then loads placements; a later call
+     * with a *different* config just reloads. Seeding is guarded on an empty store, so it never clobbers an
+     * arranged layout.
+     */
+    fun setGridConfig(config: GridConfig) {
+        if (config == configuredFor) return
+        val firstConfig = configuredFor == null
+        configuredFor = config
         viewModelScope.launch {
-            appRepository.refresh()
-            seedIfEmpty()
+            if (firstConfig) appRepository.refresh()
+            seedIfEmpty(config)
             // Home renders the MAIN zone only for now; drop the zone, keep the coordinate.
             placements.value = layoutRepository.placements(ORIENTATION).first().mapValues { it.value.placement }
         }
@@ -75,15 +89,29 @@ class HomeViewModel(
         viewModelScope.launch { layoutRepository.apply(ORIENTATION, changes) }
     }
 
-    /** First-run default: with nothing placed, lay the first [ROWS] × [COLS] apps onto the grid in reading
-     *  order. Idempotent — a persisted layout short-circuits it. */
-    private suspend fun seedIfEmpty() {
+    /**
+     * First-run default: with nothing placed, lay the first apps onto the grid in reading order — one app per
+     * *visual* cell, left→right, top→bottom, filling [config]'s visual rows × cols. Idempotent — a persisted
+     * layout short-circuits it.
+     *
+     * Each app occupies a whole visual cell, which is `cellMultiplier` logical cells on each axis; visual
+     * coordinates are scaled by the multiplier so the stored placements are in the grid's logical space (and so
+     * a future sub-cell item can sit between them without any migration).
+     */
+    private suspend fun seedIfEmpty(config: GridConfig) {
         if (layoutRepository.placements(ORIENTATION).first().isNotEmpty()) return
-        val apps = appRepository.observeApps().first().take(ROWS * COLS)
+        val mult = config.cellMultiplier
+        val apps = appRepository.observeApps().first().take(config.visualRows * config.visualCols)
         val moves = apps.mapIndexed { index, app ->
             LayoutChange.Move(
                 item = GridItem.App(app.componentKey),
-                to = GridPlacement(page = 0, row = index / COLS, col = index % COLS),
+                to = GridPlacement(
+                    page = 0,
+                    row = (index / config.visualCols) * mult,
+                    col = (index % config.visualCols) * mult,
+                    rowSpan = mult,
+                    colSpan = mult,
+                ),
             )
         }
         layoutRepository.apply(ORIENTATION, moves)
@@ -91,8 +119,6 @@ class HomeViewModel(
 
     companion object {
         val ORIENTATION = Orientation.PORTRAIT
-        const val ROWS = 5
-        const val COLS = 4
         private const val STOP_TIMEOUT_MS = 5_000L
     }
 }

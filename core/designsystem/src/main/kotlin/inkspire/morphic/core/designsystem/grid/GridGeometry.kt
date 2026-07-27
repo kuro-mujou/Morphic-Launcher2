@@ -26,13 +26,25 @@ data class GridGeometry(
     /**
      * The footprint's top-left [Cell] for a [colSpan]×[rowSpan] item whose proxy is centred on the finger —
      * the item's own top-left rounded to the nearest cell (half-cell hysteresis), clamped onto the grid.
+     *
+     * [step] coarsens the snap lattice: the top-left is rounded to the nearest multiple of [step] cells on each
+     * axis. The default `1` snaps to every logical cell; passing the grid's `cellMultiplier` snaps to whole
+     * *visual* cells, so full-cell items (e.g. app icons on a sub-cell home grid) stay aligned instead of
+     * landing on a half-cell offset. Grid dimensions are a multiple of the multiplier, so the clamp still lands
+     * on the lattice.
      */
-    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
+    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int, step: Int = 1): Cell {
         val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellW / 2f
         val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellH / 2f
-        val col = (topLeftX / cellW).roundToInt().coerceIn(0, (cols - colSpan).coerceAtLeast(0))
-        val row = (topLeftY / cellH).roundToInt().coerceIn(0, (rows - rowSpan).coerceAtLeast(0))
+        val col = snapToLattice(topLeftX / cellW, step, cols - colSpan)
+        val row = snapToLattice(topLeftY / cellH, step, rows - rowSpan)
         return Cell(row, col)
+    }
+
+    /** Rounds [cell] to the nearest multiple of [step], then clamps the start to `0..maxStart`. */
+    private fun snapToLattice(cell: Float, step: Int, maxStart: Int): Int {
+        val snapped = (cell / step).roundToInt() * step
+        return snapped.coerceIn(0, maxStart.coerceAtLeast(0))
     }
 
     /** The [Cell] directly under [rootPosition], or null when the finger is outside the grid. */
