@@ -1,0 +1,118 @@
+package inkspire.morphic.data.layout
+
+import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.IconArrangement
+import inkspire.morphic.core.model.IconItem
+import inkspire.morphic.core.model.WidgetContainerAxis
+
+/**
+ * The write-command vocabulary for the HOME layout — one value per intended change to *where items sit and
+ * which container holds what*. A UI gesture resolves to a list of these, and [LayoutRepository.apply] is the
+ * single sink that persists them; nothing else mutates the layout stores.
+ *
+ * **Why it lives in `data:layout`, not `core:model`.** It is the repository's *command set*, not a persisted
+ * shape — no row stores a `LayoutChange`. Keeping it beside the repository (rather than with the plain data
+ * models) is the honest home for a write-verb vocabulary. (L1 put it in `core:model`; that was the wrong
+ * layer.)
+ *
+ * **Orientation-free by design.** A change says *what* to do; the caller scopes *which* orientation via
+ * [LayoutRepository.apply]`(orientation, …)`, exactly as L1 did — so the same command replays into either
+ * orientation's tables.
+ *
+ * **Refactor: L1's 19 ops → 13.** L1 repeated the same four verbs once per item type. Because L2's model
+ * already unified those types, the duplication collapses:
+ * - **Move ×5 → 1.** `MoveApp/MoveFolder/MoveWidget/MoveWidgetContainer/MoveIconContainer` were an identical
+ *   `(id, to, surface)` differing only by id type → one [Move], keyed by the unified [GridItem]; L1's
+ *   `surface: Surface` param becomes [HomeZone].
+ * - **Add-to-icon-container ×2 → 1.** `AddAppToIconContainer` + `AddFolderToIconContainer` → one
+ *   [AddToIconContainer], since [IconItem] already *is* "app or folder".
+ * - **Removal is intent-split, not one `Remove(GridItem)`.** A naive single remove conflates distinct actions.
+ *   Detaching from the grid ([RemoveFromGrid]) is a different store and meaning from pulling an app out of a
+ *   folder ([RemoveFromFolder]) or a container ([RemoveFromIconContainer] / [RemoveFromWidgetContainer]) — each
+ *   mirrors its `Add`/`Create` counterpart. And **uninstall is not here at all**: destroying the package is a
+ *   system action in `data:apps`; the layout merely reacts to the resulting removal event and prunes.
+ *
+ * What did *not* collapse (genuinely distinct payloads, kept separate): the three `Create*` ops and the three
+ * `Add*`/`Remove*From*` membership ops — different holders hold different child types.
+ */
+sealed interface LayoutChange {
+
+    // ── Placement on the grid ────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Place-or-move [item] to cell [to] in [zone] (an upsert — this is also how an item is first *added* to the
+     * grid). The one command behind L1's five `Move*`, unified by [GridItem].
+     */
+    data class Move(
+        val item: GridItem,
+        val to: GridPlacement,
+        val zone: HomeZone = HomeZone.MAIN,
+    ) : LayoutChange
+
+    /**
+     * Detaches [item] from its grid cell. For a [GridItem.Folder] / [GridItem.IconContainer] /
+     * [GridItem.WidgetContainer] the now-unplaced container is destroyed; for a [GridItem.Widget] the widget is
+     * unbound. The referenced **app stays installed** — this is a layout detach, never an uninstall.
+     */
+    data class RemoveFromGrid(val item: GridItem) : LayoutChange
+
+    // ── Folders (hold apps only) ─────────────────────────────────────────────────────────────────────────
+
+    /** Creates a folder of [apps] labelled [label] and places it at [at] in [zone]. */
+    data class CreateFolder(
+        val label: String,
+        val apps: List<ComponentKey>,
+        val at: GridPlacement,
+        val zone: HomeZone = HomeZone.MAIN,
+    ) : LayoutChange
+
+    /** Adds [app] to the folder [folderId] (appended). */
+    data class AddToFolder(val folderId: Long, val app: ComponentKey) : LayoutChange
+
+    /** Removes [app] from the folder [folderId]; the app is not uninstalled. */
+    data class RemoveFromFolder(val folderId: Long, val app: ComponentKey) : LayoutChange
+
+    /** Reorders the folder [folderId] to exactly [apps] (a full new ordering). */
+    data class ReorderFolder(val folderId: Long, val apps: List<ComponentKey>) : LayoutChange
+
+    // ── Icon containers (hold apps or folders — [IconItem]) ──────────────────────────────────────────────
+
+    /** Creates an icon container laid out by [arrangement] holding [items], placed at [at] in [zone]. */
+    data class CreateIconContainer(
+        val arrangement: IconArrangement,
+        val items: List<IconItem>,
+        val at: GridPlacement,
+        val zone: HomeZone = HomeZone.MAIN,
+    ) : LayoutChange
+
+    /** Adds [item] (an app or folder) to icon container [containerId]. Collapses L1's two typed adds. */
+    data class AddToIconContainer(val containerId: Long, val item: IconItem) : LayoutChange
+
+    /** Removes [item] from icon container [containerId]. */
+    data class RemoveFromIconContainer(val containerId: Long, val item: IconItem) : LayoutChange
+
+    /** Changes how icon container [containerId] arranges its icons. */
+    data class SetIconContainerArrangement(
+        val containerId: Long,
+        val arrangement: IconArrangement,
+    ) : LayoutChange
+
+    // ── Widget containers (hold bound widgets) ───────────────────────────────────────────────────────────
+
+    /** Creates a widget container stacking [widgetIds] along [axis], placed at [at] in [zone]. */
+    data class CreateWidgetContainer(
+        val axis: WidgetContainerAxis,
+        val widgetIds: List<Int>,
+        val at: GridPlacement,
+        val zone: HomeZone = HomeZone.MAIN,
+    ) : LayoutChange
+
+    /** Adds bound widget [appWidgetId] to widget container [containerId]. */
+    data class AddToWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
+
+    /** Removes widget [appWidgetId] from container [containerId] — the widget is unbound. */
+    data class RemoveFromWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
+}

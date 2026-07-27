@@ -8,6 +8,8 @@ android {
 
 dependencies {
     implementation(projects.core.model)
+    implementation(projects.core.common)   // AppDispatchers + Koin + coroutines (api-exposed)
+    implementation(projects.core.database)  // placement DAOs + entities
 
     testImplementation(libs.junit)
 }
