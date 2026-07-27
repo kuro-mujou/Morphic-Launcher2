@@ -57,10 +57,10 @@ import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.Cell
+import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.animatePlacement
-import inkspire.morphic.core.designsystem.grid.coordinateItems
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -72,7 +72,6 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.PushDirection
-import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -332,11 +331,10 @@ private fun spanOf(surfaces: List<DemoSurface>, item: GridItem): GridPlacement? 
 }
 
 /**
- * Renders a coordinate (free-placement) zone on [LauncherGrid]. The zone box is sized by [sizeModifier]; the
- * grid fills it and lays out each tile from its [GridPlacement] against *measured* cells. The zone's
- * [GridGeometry] is derived from the box's measured bounds (origin + cell size = bounds ÷ cols/rows) — the
- * geometry seam — so the drag layer's finger→cell maths reads the same cell size the grid draws with, and
- * can't drift when the surface resizes. Tiles are no longer given an explicit size; the grid measures them.
+ * Renders a coordinate (free-placement) zone by delegating to the shared [CoordinateDragGrid] — the *same*
+ * composable the real home surface uses, so the harness exercises the production drag zone instead of a copy of
+ * it. The surface adds only harness chrome: a border and the optional [ZoneGuides] overlay. The zone's measured
+ * [GridGeometry] is published back onto [DemoSurface.geometry] (read by the planner and the root drag overlay).
  */
 @Composable
 private fun GridSurface(
@@ -351,74 +349,24 @@ private fun GridSurface(
     val colors = LocalMorphicColors.current
     val placements = (surface.model as SurfaceModel.Coordinate).placements
 
-    DisposableEffect(surface, coordinator) {
-        onDispose { coordinator.unregisterZone(surface.id) }
-    }
-
-    // Live push preview, dwelled. The plan is recomputed every drag frame, but we only *apply* it to the tiles
-    // once the finger has rested on the same plan for PUSH_DWELL_MS: a fast drag keeps changing the plan, which
-    // restarts the timer, so occupants never strobe between pushed and home — they reflow only when the user
-    // pauses (signalling they might drop here). LaunchedEffect(livePlan) restarts on every plan change because
-    // PlacementPlan is a data class, so an unchanged footprint+moves (finger holding still) lets the delay
-    // finish. Dropping still commits the live plan regardless of the dwell.
-    val session = coordinator.session
-    val livePlan = session?.takeIf { it.activeZone == surface.id }?.plan
-    var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
-    LaunchedEffect(livePlan) {
-        if (livePlan == null) {
-            dwelledPlan = null // finger left the zone → occupants return home immediately
-        } else {
-            delay(PUSH_DWELL_MS)
-            dwelledPlan = livePlan
-        }
-    }
-
-    Box(
-        sizeModifier
-            .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
-            .onGloballyPositioned {
-                val b = it.boundsInRoot()
-                surface.geometry = GridGeometry(
-                    originInRoot = Offset(b.left, b.top),
-                    cellW = b.width / surface.config.cols,
-                    cellH = b.height / surface.config.rows,
-                    cols = surface.config.cols,
-                    rows = surface.config.rows,
-                )
-                coordinator.registerZone(DropZone(surface.id, b, z = 0) { true })
-            },
-    ) {
-        LauncherGrid(config = surface.config, modifier = Modifier.fillMaxSize()) {
-            // Coordinate strategy: each item sits at an explicit cell — its stored placement, or its dwelled
-            // push-preview cell while a drag hovers this zone.
-            coordinateItems(
-                items = placements.keys.toList(),
-                placement = { dwelledPlan?.moves?.get(it) ?: placements.getValue(it) },
-            ) { item, cellModifier ->
-                val isDragged = session?.item == item
-                Box(
-                    cellModifier
-                        // Occupants glide to their previewed (pushed) cells live; the dragged tile skips it so
-                        // it lands at the committed cell without gliding in from where it started.
-                        .then(if (isDragged) Modifier else Modifier.animatePlacement())
-                        .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-                        .launcherItemGestures(
-                            config = gestureConfig,
-                            edgeActions = SwipeDirection.entries.toSet(),
-                            onOpen = { onToast("open ${label(item)}") },
-                            onEdgeAction = { onToast("swipe $it on ${label(item)}") },
-                            onShowMenu = { onToast("menu: ${label(item)}") },
-                            onDismissMenu = {},
-                            onBeginDrag = { root -> coordinator.start(item, root) },
-                            onDragTo = { root -> coordinator.moveTo(root) },
-                            onDrop = { onDrop() },
-                            onCancelDrag = { coordinator.cancel() },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    ItemTile(item, Modifier.fillMaxSize())
-                }
-            }
+    Box(sizeModifier.border(1.dp, colors.divider, RoundedCornerShape(8.dp))) {
+        CoordinateDragGrid(
+            items = placements.keys.toList(),
+            config = surface.config,
+            coordinator = coordinator,
+            zoneId = surface.id,
+            gestureConfig = gestureConfig,
+            dragItem = { it },
+            placement = { placements.getValue(it) },
+            onDrop = onDrop,
+            modifier = Modifier.fillMaxSize(),
+            edgeActions = SwipeDirection.entries.toSet(),
+            onGeometryChange = { surface.geometry = it },
+            onOpen = { onToast("open ${label(it)}") },
+            onShowMenu = { onToast("menu: ${label(it)}") },
+            onEdgeAction = { item, direction -> onToast("swipe $direction on ${label(item)}") },
+        ) { item, cellModifier ->
+            ItemTile(item, cellModifier)
         }
         if (showGuides) ZoneGuides(placements.values.toList(), surface.config, Modifier.matchParentSize())
     }
@@ -762,10 +710,6 @@ private fun GridGeometry.pushDirectionInRect(fingerInRoot: Offset, rect: GridPla
 private const val HOME_ROWS = 4
 private const val DOCK_ROWS = 1
 private const val COLS = 4
-
-/** How long the finger must rest on a push before occupants reflow — long enough a fast drag-through won't
- * flicker, short enough a deliberate hover feels responsive. */
-private const val PUSH_DWELL_MS = 200L
 
 /** Merge-ring radius as a fraction of the item's smaller span (×cellPx); inside it is the merge target. */
 private const val MERGE_INNER_RADIUS = 0.3f
