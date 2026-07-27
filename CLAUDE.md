@@ -220,6 +220,38 @@ from the baked stack).
 - A **dev gallery** (`app` → `dev/DevGalleryScreen`) hosts every `Morphic*` component + the palette under a
   light/dark toggle; add each new component to it.
 
+## Feature & presentation architecture (locked 2026-07-27)
+
+**Plain MVVM — no MVI, no reducer.** This is a hard rule precisely because L1 *claimed* "MVVM + MVI + clean
+architecture" and drifted into monolith ViewModels (a 500-line sealed-`HomeEvent` + `when(event)` block). We do
+**not** repeat that. The pattern for every screen:
+
+- **A `ViewModel` per screen** (`androidx.lifecycle.ViewModel`), not a hand-rolled singleton. It exposes **one
+  immutable `StateFlow<XxxState>`** (the "Model") and **plain typed methods** for events (`launch()`,
+  `applyChanges()`) — the Now-in-Android style. **No sealed `Intent`/`Event` hierarchy and no single `onEvent`
+  dispatcher**; that ceremony is what rotted L1. Unidirectional flow (UI → method → state → UI) with a single
+  state object is the whole of the "MVI" benefit, and we already have it without the machinery.
+- **Coroutines run on `viewModelScope`** (not an injected `ApplicationScope`), so work cancels with the screen.
+  Bind with Koin's `viewModel { }` DSL (`org.koin.core.module.dsl.viewModel`) and inject with
+  `koinViewModel<XxxViewModel>()` — this scopes the instance to the screen's `ViewModelStore` (survives
+  rotation, cleared with the screen).
+- **Keep logic out of the composable.** The composable reads `state` (via `collectAsStateWithLifecycle()`) and
+  calls methods; assembly, persistence, and optimistic state live in the ViewModel so it stays unit-testable.
+- **Reference:** [feature/home](feature/home/src/main/kotlin/inkspire/morphic/feature/home) — `HomeViewModel`
+  (StateFlow + `launch`/`applyChanges`), `HomeScreen`, `HomeState`, `di/HomeModule`.
+
+**Feature modules own their screens; `app` only assembles.** Each screen lives in its own `feature:*` module (not
+in `app`), applying the `launcher.android.feature` convention plugin — which is why that plugin pre-wires
+core:model/common/designsystem + lifecycle-viewmodel + koin-compose + Compose. A feature adds only the extra
+deps it needs (e.g. `feature:home` adds `data:apps` + `data:layout`). The `app` module is the shell: it starts
+Koin with every module's DI graph and hosts the entry points (currently the `dev/DevRootScreen` harness). New UI
+starts in a `feature:*` module from day one — do **not** prototype it in `app` and "extract later".
+
+**Repository vs command split.** A repository is *read/refresh* access to data (e.g. `AppRepository` streams the
+app cache). A side-effecting *command* gets its own honest type rather than being bolted onto a repository — e.g.
+launching is `AppLauncher` (`data:apps`), a one-method interface, not a `launch()` on `AppRepository`. (L1 folded
+launch onto the repository; we don't.)
+
 ## Current status
 
 Foundations: **P0 done; P1 Core done** — `core:model` (B0), `core:common` (B1), `core:database` (B2). **B3
@@ -245,14 +277,16 @@ The APPS pager/category/list **order** stores get their *own* repository (not bu
 auto-dissolve, cross-orientation rotate-seeding.
 
 **Home surface — first real feature, parts 1–2 done.** In the `app` module (`inkspire.morphic.launcher.home`;
-extract to `feature:home` later). `HomeStateHolder` (optimistic placement state, logic out of the UI) joins
+extract to `feature:home` later). `HomeViewModel` (a screen-scoped `ViewModel`; optimistic placement state, logic out of the UI) joins
 `LayoutRepository.placements` + `AppRepository` apps; `HomeScreen` renders them on `LauncherGrid` with baked
 `AppCell`s via `coordinateItems`, seeds a starter layout on first run, and supports **drag-to-rearrange
 persisted** through `LayoutRepository.apply` (optimistic → no drop flicker; `FreeGridPlanner` push + dwelled
-preview). Hosted as the default `DevRootScreen` screen. First cut: apps only, portrait only, fixed 4×5 grid,
-taps no-op.
+preview). Hosted as the default `DevRootScreen` screen. **Tapping an app launches it** (P7): the tap goes through
+the gesture layer's `onOpen` → `HomeViewModel.launch` → `AppLauncher` (a one-method command in `data:apps`,
+separate from `AppRepository`'s reads; resolves the per-profile user from `ComponentKey.userSerial`, unlike L1
+which hardcoded the personal user). First cut otherwise: apps only, portrait only, fixed 4×5 grid.
 
-**Next likely:** finish the home surface (app launching / P7 taps, orientation, `GridBlueprint`-driven sizing +
+**Next likely:** finish the home surface (orientation, `GridBlueprint`-driven sizing +
 dock + pager, folders/widgets, extract `feature:home`), the APPS **order** repository, or `data:apps`
 categorization (B6). Flagged cleanup: a reusable *coordinate drag-grid* composable shared by `HomeScreen` + the
 harness `GridSurface`. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
