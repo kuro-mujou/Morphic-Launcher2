@@ -3,7 +3,9 @@ package inkspire.morphic.core.designsystem.folder
 import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import kotlin.math.floor
 
@@ -14,13 +16,35 @@ import kotlin.math.floor
  * hoisted). This is what lets a drag started in the folder continue as the *same* session onto home.
  */
 interface FolderDragDelegate {
-    /** Plan a hover over the folder zone: migrate the reorder gap toward the finger (the cell reflow is the
-     *  preview, so there is no drop-shadow footprint — a placeholder placement is returned). */
-    fun plan(item: GridItem, fingerInRoot: Offset): PlacementPlan?
+    /**
+     * The drag moved to [fingerInRoot] over the folder zone: **advance the reorder gap** toward it and report
+     * that the folder accepts a drop here ([FolderReorderPlan]), or null if it can't take [item] at all.
+     *
+     * Unlike the `DropPlanner` it is reached through, this is a **command, not a query** — calling it changes the
+     * folder's gap, which is the reorder preview. Hence `onHover` rather than `plan`: it is safe only because the
+     * coordinator calls it exactly once per finger move, and a name that promised purity would invite a
+     * speculative second call that silently desynchronises the gap.
+     */
+    fun onHover(item: GridItem, fingerInRoot: Offset): PlacementPlan?
 
     /** Commit the current reorder — the drop landed on the folder zone with [item] as the dragged app. */
     fun commitReorder(item: GridItem)
 }
+
+/**
+ * The plan a folder zone reports for **every** hover it accepts: droppable, with a *meaningless* footprint.
+ *
+ * A folder previews a reorder by reflowing its own cells around the gap, so there is no target cell for a drop
+ * shadow to name — but `PlacementPlan.footprint` is non-null by design (it always names the cell the shadow paints
+ * at). This value is therefore a token: "the folder handled this hover", nothing more. The consequence for other
+ * surfaces on the shared coordinator is that they must not paint from a plan whose active zone isn't their own.
+ *
+ * Rejected alternative: a `DropIntent.REORDER` value, which would make "no shadow" representable in the model.
+ * `DropFootprint` switches exhaustively on the intent, so a new value would force a paint-nothing branch into a
+ * component whose whole contract is to paint. Worth revisiting when a second reflow-preview zone exists (the APPS
+ * pager, the dock) and there are two consumers to shape it — until then it is one file's concern.
+ */
+val FolderReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
 
 /*
  * MovingGap reorder for the folder — the dense 1-D flow the folder uses (see the arrangement model). The folder

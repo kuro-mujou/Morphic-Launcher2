@@ -113,7 +113,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val planner = remember(config) {
         val span = config.cellMultiplier
         DropPlanner { zone, item, fingerInRoot ->
-            if (zone.id != HomeZone) return@DropPlanner folderDelegate.value?.plan(item, fingerInRoot)
+            if (zone.id != HomeZone) return@DropPlanner folderDelegate.value?.onHover(item, fingerInRoot)
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             val occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page }

@@ -63,10 +63,8 @@ import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridItem
-import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
 import kotlinx.coroutines.delay
@@ -99,7 +97,8 @@ private const val ExtractDwellMs = 300L
  *   folder's app grid ([label] above it), sized by [folderInnerSize] so every folder is the same size.
  *
  * The apps are a **dense flow** chunked into pages (dots below), swipeable. Long-press to reorder within the flow
- * ([MovingGap][movingGap]) — the folder's plan/commit are exposed to the home via a [FolderDragDelegate]
+ * — a *moving gap*: the dragged app's slot travels through the ordered list and the flow densifies on drop (see
+ * `FolderReorder.kt`). The folder's hover/commit hooks are exposed to the home via a [FolderDragDelegate]
  * ([onPublishDelegate]) so the shared coordinator's zone-dispatching planner/drop route the folder zone here
  * without hoisting the folder's order/gap out. A tap launches ([onLaunch]); cells commit through the shared
  * [onDrop].
@@ -165,23 +164,22 @@ fun FolderOverlay(
     val pageCount = rememberUpdatedState((orderComponents.size + pageSize - 1) / pageSize)
     val pagerState = rememberLauncherPagerState(pageCount = { pageCount.value.coerceAtLeast(1) }, infiniteScroll = { false })
 
-    // The folder's drag hooks for the shared coordinator, kept stable and reading live state. The plan migrates
+    // The folder's drag hooks for the shared coordinator, kept stable and reading live state. onHover migrates
     // the reorder gap; commitReorder densifies and persists (optimistically first).
     val gridState = rememberUpdatedState(grid)
     val onReorderState = rememberUpdatedState(onReorder)
     val delegate = remember {
         object : FolderDragDelegate {
-            override fun plan(item: GridItem, fingerInRoot: Offset): PlacementPlan? {
+            override fun onHover(item: GridItem, fingerInRoot: Offset): PlacementPlan? {
                 val geo = geometry ?: return null
                 val dragged = (item as? GridItem.App)?.component ?: return null
                 val g = gridState.value
                 val ps = (g.cols * g.rows).coerceAtLeast(1)
                 // Off the grid → hold the current gap; on a cell → migrate the gap toward it.
-                val cell = geo.cellAt(fingerInRoot)
-                    ?: return PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+                val cell = geo.cellAt(fingerInRoot) ?: return FolderReorderPlan
                 val flatSlot = pagerState.currentPage * ps + cell.row * g.cols + cell.col
                 gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
-                return PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
+                return FolderReorderPlan
             }
 
             override fun commitReorder(item: GridItem) {
