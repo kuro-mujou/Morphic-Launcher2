@@ -89,14 +89,18 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     }
 
     var geometry by remember { mutableStateOf<GridGeometry?>(null) }
+    // Derived views of the placed items, keyed on the list so they survive a recomposition that didn't change it.
+    // This matters more than it looks: every cell reads the coordinator's session, so a drag recomposes this
+    // screen on *every finger move* — anything derived here without a `remember` is rebuilt at frame rate.
+    val placements = remember(state.items) { state.items.associate { it.gridItem to it.placement } }
+    val folders = remember(state.items) { state.items.filterIsInstance<HomeItem.Folder>() }
     // The current placement map, read live by the planner while a drag is in flight.
-    val placements = state.items.associate { it.gridItem to it.placement }
     val livePlacements = rememberUpdatedState(placements)
 
     // Pager: page count is (highest occupied page + 1), plus one trailing empty page *while dragging* so an app
     // can be carried onto a brand-new page. `draggingPages` is synced from the coordinator below, because the
     // coordinator doesn't exist yet here and so can't be read directly inside the count lambda.
-    val maxPage = rememberUpdatedState(state.items.maxOfOrNull { it.placement.page } ?: 0)
+    val maxPage = rememberUpdatedState(remember(state.items) { state.items.maxOfOrNull { it.placement.page } ?: 0 })
     var draggingPages by remember { mutableStateOf(false) }
     val pagerState = rememberLauncherPagerState(
         pageCount = { maxPage.value + 1 + if (draggingPages) 1 else 0 },
@@ -145,8 +149,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     var extractingFrom by remember { mutableStateOf<Pair<Long, ComponentKey>?>(null) }
     // An app dragged from home into a folder mid-drag; on drop it's added to the open folder at its slot.
     var incomingComponent by remember { mutableStateOf<ComponentKey?>(null) }
-    val incomingApp = incomingComponent?.let { c ->
-        state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
+    val incomingApp = remember(state.items, incomingComponent) {
+        incomingComponent?.let { c ->
+            state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
+        }
     }
 
     // A second, longer dwell on a folder's merge ring opens it mid-drag, handing the drag *into* the folder
@@ -154,7 +160,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val mergeFolder = run {
         val plan = session?.plan?.takeIf { it.intent == DropIntent.MERGE } ?: return@run null
         if (openFolderId != null) return@run null // already open — don't retrigger
-        state.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.placement == plan.footprint }
+        folders.firstOrNull { it.placement == plan.footprint }
     }
     LaunchedEffect(mergeFolder?.folder?.id) {
         val folder = mergeFolder ?: return@LaunchedEffect
@@ -303,9 +309,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             }
 
             // Opened-folder overlay, drawn above the grid. Resolved live from state so its contents track edits.
-            val openFolder = openFolderId?.let { id ->
-                state.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == id }
-            }
+            val openFolder = openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
             // Keyed by folder id: one overlay *instance* per folder, so switching folders doesn't inherit the
             // previous one's remembered state (its reorder gap, optimistic order, measured geometry, and — most
             // visibly — its pager position, which would otherwise render a 1-page folder scrolled past its end).
