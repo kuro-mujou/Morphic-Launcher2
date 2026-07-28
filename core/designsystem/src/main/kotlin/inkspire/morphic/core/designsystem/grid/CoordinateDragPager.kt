@@ -29,9 +29,6 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
 
-/** How long the finger must rest on a push before occupants reflow (matches [CoordinateDragGrid]). */
-private const val PUSH_DWELL_MS = 200L
-
 /** How near a viewport edge the dragged item must be held to trigger a page-flip, and the dwell between flips. */
 private val EDGE_FLIP_DP = 44.dp
 private const val EDGE_FLIP_DWELL_MS = 450L

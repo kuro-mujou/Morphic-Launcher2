@@ -23,9 +23,15 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
 
-/** How long the finger must rest on a push before occupants reflow — long enough that a fast drag-through won't
- *  flicker, short enough that a deliberate hover feels responsive. */
-private const val PUSH_DWELL_MS = 200L
+/**
+ * How long the finger must rest on a push before occupants reflow — long enough that a fast drag-through won't
+ * flicker, short enough that a deliberate hover feels responsive.
+ *
+ * Shared by [CoordinateDragGrid] and [CoordinateDragPager] rather than declared in each: the two must agree (a
+ * drag crosses between them, and the same hover should reflow at the same moment on either), and two constants
+ * that must agree are one constant.
+ */
+internal const val PUSH_DWELL_MS = 200L
 
 /**
  * One **coordinate (free-placement) drag zone** on a [LauncherGrid]: the piece every such surface (home MAIN,
