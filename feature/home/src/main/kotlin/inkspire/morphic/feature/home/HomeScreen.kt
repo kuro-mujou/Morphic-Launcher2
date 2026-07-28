@@ -97,9 +97,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // The current placement map, read live by the planner while a drag is in flight.
     val livePlacements = rememberUpdatedState(placements)
 
-    // Pager: page count is (highest occupied page + 1), plus one trailing empty page *while dragging* so an app
-    // can be carried onto a brand-new page. `draggingPages` is synced from the coordinator below, because the
-    // coordinator doesn't exist yet here and so can't be read directly inside the count lambda.
+    // Pager: page count is (highest occupied page + 1), plus one trailing empty page while a *home* drag is in
+    // flight, so an app can be carried onto a brand-new page. `draggingPages` is synced from the coordinator
+    // below, because the coordinator doesn't exist yet here and so can't be read directly inside the count lambda.
     val maxPage = rememberUpdatedState(remember(state.items) { state.items.maxOfOrNull { it.placement.page } ?: 0 })
     var draggingPages by remember { mutableStateOf(false) }
     val pagerState = rememberLauncherPagerState(
@@ -137,7 +137,6 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         }
     }
     val coordinator = rememberDragCoordinator(planner)
-    LaunchedEffect(coordinator.isDragging) { draggingPages = coordinator.isDragging }
 
     // The dragged item + hovered plan drive the root overlay below; the dwelled push preview + edge page-flip
     // live inside CoordinateDragPager.
@@ -154,6 +153,14 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
         }
     }
+
+    // Is a drag in flight that could still land on home? On the shared coordinator `isDragging` alone can't tell:
+    // it is equally true of a reorder happening inside the open folder, which is that surface's gesture and must
+    // not grow home's pager behind it. An extract *is* on its way here, so it counts. (Deliberately not the active
+    // zone — a home drag held over the pager's padding has no zone, and the page it is being carried to must not
+    // vanish from under the pager mid-drag.)
+    val homeDragInFlight = coordinator.isDragging && (openFolderId == null || extractingFrom != null)
+    LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
     // A second, longer dwell on a folder's merge ring opens it mid-drag, handing the drag *into* the folder
     // with the dragged app as the incoming item (the inverse of extract).
