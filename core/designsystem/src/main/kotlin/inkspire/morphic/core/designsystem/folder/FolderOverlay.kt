@@ -69,6 +69,9 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** Padding between the folder title and the inner zone. */
+/** Width of the outline drawn round the inner zone while a drag is in flight (its drop-target affordance). */
+private val InnerZoneOutline = 1.dp
+
 private val DotSize = 6.dp
 private val DotSpacing = 6.dp
 
@@ -252,7 +255,11 @@ fun FolderOverlay(
                 Box(
                     Modifier
                         .size(innerSize)
-                        .then(if (session != null) Modifier.border(1.dp, Color.White) else Modifier)
+                        // The outline is always in the chain and switches *colour*, so this chain stays
+                        // structurally stable across the drag flip — the same rule the backdrop above follows,
+                        // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
+                        // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
+                        .border(InnerZoneOutline, if (session != null) Color.White else Color.Transparent)
                         .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
                 ) {
                     LauncherPager(
