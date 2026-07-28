@@ -14,13 +14,25 @@ import inkspire.morphic.core.model.GridItem
  * One draggable coordinate cell — the per-item wiring every free-placement surface repeats, shared by the
  * single-zone [CoordinateDragGrid] and the paged [CoordinateDragPager] so there is one copy of it.
  *
- * Given the cell's placement [modifier] (from the grid layout), it applies the drag-state visuals and the
- * [launcherItemGestures] that lift/drag/drop [item] through [coordinator]:
+ * Given the cell's placement [modifier] (from the grid layout), it applies the drag-state visuals:
  * - occupants glide to their (previewed) cells via [animatePlacement]; the **lifted** item skips the animation
- *   and is drawn invisible (`alpha = 0`) — the floating proxy in the surface's overlay stands in for it;
- * - a tap fires [onOpen], a long-press [onShowMenu], and a press-and-swipe in [edgeActions] fires [onEdgeAction].
+ *   and is drawn invisible (`alpha = 0`) — the floating proxy in the surface's overlay stands in for it.
  *
- * [content] is the cell's visual (an app icon, a tile), laid out to fill the cell.
+ * **The gestures are handed to [content], not applied to the cell.** A cell is a *layout* footprint and is
+ * usually much larger than the item drawn in it — a home cell is a whole 2×2 visual slot around an icon and a
+ * one-line label. If the cell claimed the gestures, every pixel of that slack would lift/launch the item, and on
+ * a full page there would be nowhere left to press for the surface's own long-press (the wallpaper / home
+ * options menu). So [content] receives `itemGestures` and decides what is actually touchable: an icon cell puts
+ * it on the icon+label group (see [inkspire.morphic.core.designsystem.cell.IconLabelCell]), while content that
+ * genuinely fills its cell — a widget, a harness tile — just `.then()`s it onto its own root. Whatever is left
+ * uncovered stays free: [launcherItemGestures] never consumes a down, so those events reach the surface beneath.
+ *
+ * Handing down a modifier (rather than reading it from a composition local) keeps the choice visible in the
+ * signature: content that forgets to apply it is silently un-draggable, and a parameter says so where a local
+ * would not.
+ *
+ * A tap fires [onOpen], a long-press [onShowMenu], and a press-and-swipe in [edgeActions] fires [onEdgeAction] —
+ * all only within whatever bounds [content] gave the gestures.
  */
 @Composable
 fun LauncherDragCell(
@@ -33,14 +45,16 @@ fun LauncherDragCell(
     onOpen: () -> Unit = {},
     onShowMenu: () -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
-    content: @Composable () -> Unit,
+    content: @Composable (itemGestures: Modifier) -> Unit,
 ) {
     val isDragged = coordinator.session?.item == item
     Box(
         modifier
             .then(if (isDragged) Modifier else Modifier.animatePlacement())
-            .graphicsLayer { alpha = if (isDragged) 0f else 1f }
-            .launcherItemGestures(
+            .graphicsLayer { alpha = if (isDragged) 0f else 1f },
+    ) {
+        content(
+            Modifier.launcherItemGestures(
                 config = gestureConfig,
                 edgeActions = edgeActions,
                 onOpen = onOpen,
@@ -52,7 +66,6 @@ fun LauncherDragCell(
                 onDrop = { onDrop() },
                 onCancelDrag = { coordinator.cancel() },
             ),
-    ) {
-        content()
+        )
     }
 }

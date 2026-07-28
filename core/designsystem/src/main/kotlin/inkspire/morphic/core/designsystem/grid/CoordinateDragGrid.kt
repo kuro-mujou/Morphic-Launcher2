@@ -60,7 +60,9 @@ private const val PUSH_DWELL_MS = 200L
  * @param onOpen a completed tap on an item.
  * @param onShowMenu a long-press on an item.
  * @param onEdgeAction a press-and-swipe on an item in one of [edgeActions].
- * @param itemContent renders an item into its cell; the supplied `Modifier` fills the cell.
+ * @param itemContent renders an item into its cell. `cellModifier` fills the cell (the layout footprint);
+ *   `itemGestures` must be applied to whatever should actually be *touchable* — see [LauncherDragCell], which
+ *   deliberately does not claim the whole cell so the slack around a small icon stays free for the surface.
  */
 @Composable
 fun <T> CoordinateDragGrid(
@@ -79,7 +81,7 @@ fun <T> CoordinateDragGrid(
     onOpen: (T) -> Unit = {},
     onShowMenu: (T) -> Unit = {},
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
-    itemContent: @Composable (item: T, cellModifier: Modifier) -> Unit,
+    itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
     val session = coordinator.session
 
@@ -130,8 +132,8 @@ fun <T> CoordinateDragGrid(
                 onOpen = { onOpen(item) },
                 onShowMenu = { onShowMenu(item) },
                 onEdgeAction = { direction -> onEdgeAction(item, direction) },
-            ) {
-                itemContent(item, Modifier.fillMaxSize())
+            ) { itemGestures ->
+                itemContent(item, Modifier.fillMaxSize(), itemGestures)
             }
         }
     }

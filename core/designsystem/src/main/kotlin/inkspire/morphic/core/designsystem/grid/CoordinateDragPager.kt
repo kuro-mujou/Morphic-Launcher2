@@ -79,7 +79,7 @@ fun <T> CoordinateDragPager(
     onOpen: (T) -> Unit = {},
     onShowMenu: (T) -> Unit = {},
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
-    itemContent: @Composable (item: T, cellModifier: Modifier) -> Unit,
+    itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
     val density = LocalDensity.current
     val session = coordinator.session
@@ -158,8 +158,8 @@ fun <T> CoordinateDragPager(
                     onOpen = { onOpen(item) },
                     onShowMenu = { onShowMenu(item) },
                     onEdgeAction = { direction -> onEdgeAction(item, direction) },
-                ) {
-                    itemContent(item, Modifier.fillMaxSize())
+                ) { itemGestures ->
+                    itemContent(item, Modifier.fillMaxSize(), itemGestures)
                 }
             }
         }

@@ -365,8 +365,10 @@ private fun GridSurface(
             onOpen = { onToast("open ${label(it)}") },
             onShowMenu = { onToast("menu: ${label(it)}") },
             onEdgeAction = { item, direction -> onToast("swipe $direction on ${label(item)}") },
-        ) { item, cellModifier ->
-            ItemTile(item, cellModifier)
+        ) { item, cellModifier, itemGestures ->
+            // A harness tile fills its cell and *is* the item, so it takes the gestures on its own root — unlike an
+            // icon cell, which narrows them to the icon+label group. That choice is the content's to make.
+            ItemTile(item, cellModifier.then(itemGestures))
         }
         if (showGuides) ZoneGuides(placements.values.toList(), surface.config, Modifier.matchParentSize())
     }

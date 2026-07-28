@@ -1,6 +1,5 @@
 package inkspire.morphic.core.designsystem.cell
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -75,26 +74,38 @@ internal fun CellLabel(
  * group centred in the cell, so the label stays close under the icon instead of drifting to the bottom edge.
  * Since the group's height is ≤ the cell by construction (icon capped at the leftover), centring can't push
  * the label past the cell bound. [icon] receives the resolved size.
+ *
+ * **Two extents, deliberately different.** The cell is what the icon is *measured against* — sizing reads the
+ * whole cell, which is why the outer box fills it. [itemGestures] is applied to the packed group instead, so the
+ * item's **touch target is what you can see**: the icon, the gap, and the label, and nothing else. A grid cell is
+ * usually far larger than that (a home cell is a 2×2 visual slot), and a tap or long-press landing in that slack
+ * is not aimed at the item — it is aimed at the surface. Since [inkspire.morphic.core.designsystem.drag.launcherItemGestures]
+ * never consumes a down, leaving the slack uncovered lets those events fall through to whatever is beneath, which
+ * is what keeps a press-and-hold on a *full* page of icons available for the home's own options menu.
+ *
+ * The group wraps its content in both axes, so its width is `max(icon, label)` — capped at the cell's inner width
+ * because the label is single-line and ellipsised, which is exactly the visible bounding box.
+ *
+ * @param itemGestures the item-gesture modifier from the enclosing draggable cell (see
+ *   [inkspire.morphic.core.designsystem.grid.LauncherDragCell]). Defaults to none, which is right for a
+ *   non-interactive rendering such as a floating drag proxy.
  */
 @Composable
 fun IconLabelCell(
     label: String,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
+    itemGestures: Modifier = Modifier,
     icon: @Composable (iconSize: Dp) -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val availW = maxWidth - CellPadH * 2
+        val padding = Modifier.fillMaxSize().padding(horizontal = CellPadH, vertical = CellPadV)
 
         if (!metrics.showLabel) {
             val iconDp = metrics.resolveIconSize(availW, maxHeight - CellPadV * 2)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = CellPadH, vertical = CellPadV),
-                contentAlignment = Alignment.Center,
-            ) {
-                icon(iconDp)
+            Box(modifier = padding, contentAlignment = Alignment.Center) {
+                Box(itemGestures) { icon(iconDp) }
             }
             return@BoxWithConstraints
         }
@@ -102,16 +113,16 @@ fun IconLabelCell(
         val labelHeight = cellLabelHeight(metrics)
         val iconArea = (maxHeight - CellPadV * 2 - LabelGap - labelHeight).coerceAtLeast(0.dp)
         val iconDp = metrics.resolveIconSize(availW, iconArea).coerceAtMost(iconArea)
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = CellPadH, vertical = CellPadV),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            icon(iconDp)
-            Spacer(Modifier.height(LabelGap))
-            CellLabel(label = label, metrics = metrics)
+        // Outer box centres the group in the cell; the group itself wraps content and carries the gestures.
+        Box(modifier = padding, contentAlignment = Alignment.Center) {
+            Column(
+                modifier = itemGestures,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                icon(iconDp)
+                Spacer(Modifier.height(LabelGap))
+                CellLabel(label = label, metrics = metrics)
+            }
         }
     }
 }

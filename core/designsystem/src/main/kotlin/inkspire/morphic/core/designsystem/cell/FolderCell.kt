@@ -1,7 +1,6 @@
 package inkspire.morphic.core.designsystem.cell
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,18 +24,22 @@ import inkspire.morphic.core.model.AppInfo
  * an app cell line up on the grid and share the icon/label sizing.
  *
  * The preview shows at most the first four [apps]; a folder with fewer just leaves the trailing slots empty
- * (the model guarantees a folder holds ≥ 2). [onClick] opens the folder.
+ * (the model guarantees a folder holds ≥ 2).
+ *
+ * Opening the folder is a *tap*, which arrives through [itemGestures] like every other item interaction (see
+ * [AppCell]) — the plate carries no `clickable` of its own, so the touch target is the plate + label and nothing
+ * more of the cell.
  */
 @Composable
 fun FolderCell(
     label: String,
     apps: List<AppInfo>,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
+    itemGestures: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
-    IconLabelCell(label = label, modifier = modifier, metrics = metrics) { iconSize ->
+    IconLabelCell(label = label, modifier = modifier, metrics = metrics, itemGestures = itemGestures) { iconSize ->
         // TODO(launcher backing plate): a plain translucent surface for now. Replace with the themed
         //  skin/backing-plate (the deferred live-Compose backdrop) when that subsystem lands.
         val gap = iconSize * PREVIEW_GAP_FRACTION
@@ -47,7 +50,6 @@ fun FolderCell(
                 .size(iconSize)
                 .clip(RoundedCornerShape(iconSize * CORNER_FRACTION))
                 .background(colors.surface.copy(alpha = BACKING_ALPHA))
-                .clickable(onClick = onClick)
                 .padding(pad),
             verticalArrangement = Arrangement.spacedBy(gap),
         ) {

@@ -225,9 +225,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         is HomeItem.Folder -> openFolderId = item.folder.id
                     }
                 },
-            ) { item, cellModifier ->
+            ) { item, cellModifier, itemGestures ->
                 when (item) {
-                    is HomeItem.App -> AppCell(app = item.info, onClick = {}, modifier = cellModifier)
+                    is HomeItem.App ->
+                        AppCell(app = item.info, modifier = cellModifier, itemGestures = itemGestures)
                     is HomeItem.Folder -> {
                         // Hide the app currently being dragged (e.g. extracted out of this folder) from the tile
                         // preview, so it isn't shown in the folder icon and under the finger at the same time.
@@ -236,7 +237,12 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         val dragged = (session?.item as? GridItem.App)?.component
                         val preview =
                             if (dragged == null) item.apps else item.apps.filterNot { it.componentKey == dragged }
-                        FolderCell(label = item.folder.label, apps = preview, onClick = {}, modifier = cellModifier)
+                        FolderCell(
+                            label = item.folder.label,
+                            apps = preview,
+                            modifier = cellModifier,
+                            itemGestures = itemGestures,
+                        )
                     }
                 }
             }
@@ -282,12 +288,13 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         ),
                         size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
                     ) {
+                        // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target
+                        // (the lifted cell still owns the pointer stream).
                         when (dragged) {
-                            is HomeItem.App -> AppCell(app = dragged.info, onClick = {}, modifier = Modifier.fillMaxSize())
+                            is HomeItem.App -> AppCell(app = dragged.info, modifier = Modifier.fillMaxSize())
                             is HomeItem.Folder -> FolderCell(
                                 label = dragged.folder.label,
                                 apps = dragged.apps,
-                                onClick = {},
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }

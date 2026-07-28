@@ -105,6 +105,16 @@ One pointer pipeline in the coordinator, applied uniformly to every item on ever
 behavior — the thing L1's 4 recognizers could never guarantee). One timing config, one slop, one state machine.
 Items are pure render + registration; they do **not** attach their own drag recognizers.
 
+**Where the gesture applies: the item's visible extent, never its cell.** A grid cell is a *layout* footprint and
+is usually much bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon and a one-line
+label). The gesture goes on the **icon + label group**, not the cell, for a UX reason: on a full page of icons,
+if the slack around each icon lifted or launched it, there would be nowhere left to press-and-hold for the
+*surface's* own menu (wallpaper / home options). So `LauncherDragCell` hands the gesture modifier down to its
+content and the content decides its own touch target — an icon cell narrows it to the group (`IconLabelCell`),
+while content that genuinely fills its cell (a widget, a harness tile) applies it to its root. This works
+because `launcherItemGestures` **never consumes a down**: whatever the item leaves uncovered falls through to the
+surface beneath it.
+
 ```
         down on item
              │

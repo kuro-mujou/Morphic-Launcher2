@@ -301,8 +301,13 @@ fun FolderOverlay(
                                     onDrop = onDrop,
                                     modifier = cellModifier,
                                     onOpen = { onLaunch(app.componentKey) },
-                                ) {
-                                    AppCell(app = app, onClick = {}, modifier = Modifier.fillMaxSize(), metrics = metrics)
+                                ) { itemGestures ->
+                                    AppCell(
+                                        app = app,
+                                        modifier = Modifier.fillMaxSize(),
+                                        metrics = metrics,
+                                        itemGestures = itemGestures,
+                                    )
                                 }
                             }
                         }
@@ -328,7 +333,8 @@ fun FolderOverlay(
                 ),
                 size = DpSize(with(LocalDensity.current) { geo.cellW.toDp() }, with(LocalDensity.current) { geo.cellH.toDp() }),
             ) {
-                AppCell(app = dragApp, onClick = {}, modifier = Modifier.fillMaxSize(), metrics = metrics)
+                // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target.
+                AppCell(app = dragApp, modifier = Modifier.fillMaxSize(), metrics = metrics)
             }
         }
     }
