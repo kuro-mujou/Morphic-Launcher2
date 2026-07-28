@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.folder
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -267,6 +268,7 @@ fun FolderOverlay(
                 Box(
                     Modifier
                         .size(innerSize)
+                        .then(if (session != null) Modifier.border(1.dp, Color.White) else Modifier)
                         .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
                 ) {
                     LauncherPager(
