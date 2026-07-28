@@ -241,24 +241,39 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 }
             }
 
-            // Drag overlay (root space): the drop shadow in the grid + the floating proxy on the finger.
+            // Drag overlay (root space): the drop shadow in the grid + the floating proxy on the finger. The two
+            // are gated separately, because they answer different questions — "is there a cell of *this* grid to
+            // shadow?" and "whose job is it to draw the icon under the finger?".
             val geo = geometry
             if (session != null && geo != null) {
                 // The footprint spans `cellSpan` logical cells per axis (one visual cell), so size the overlays
                 // to that extent, not a single logical cell.
                 val footprintW = geo.cellW * cellSpan
                 val footprintH = geo.cellH * cellSpan
-                session.plan?.let { plan ->
-                    val topLeft = geo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
-                    DropFootprint(
-                        intent = plan.intent,
-                        modifier = Modifier
-                            .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
-                            .size(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
-                    )
+                // Only paint the shadow while the drag is over home's *own* zone. On the shared coordinator
+                // another zone's plan describes that zone's preview, not a cell here: the open folder previews a
+                // reorder by reflowing its cells and returns a token plan whose footprint is meaningless, which
+                // would otherwise paint a shadow at cell (0,0) behind the folder (invisible today only because
+                // that backdrop is opaque black — it won't be once the frosted backdrop lands). Extract is
+                // unaffected: its active zone really is home, which is exactly when the landing cell should show.
+                if (session.activeZone == HomeZone) {
+                    session.plan?.let { plan ->
+                        val topLeft = geo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
+                        DropFootprint(
+                            intent = plan.intent,
+                            modifier = Modifier
+                                .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
+                                .size(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
+                        )
+                    }
                 }
+                // The proxy belongs to whichever surface is *presenting* the drag, and while a folder is open that
+                // is the folder — it draws the dragged app at its own cell size, and keeps drawing it right through
+                // an extract hand-off. So home stands down rather than have both paint an icon under one finger.
+                // Note this is deliberately not gated on the active zone: a home drag held over a gap or the
+                // surface's padding has no zone, and its proxy must still follow the finger.
                 val dragged = state.items.firstOrNull { it.gridItem == session.item }
-                if (dragged != null) {
+                if (dragged != null && openFolderId == null) {
                     val finger = session.fingerInRoot
                     FloatingDragIcon(
                         rootOffset = IntOffset(
