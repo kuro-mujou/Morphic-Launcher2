@@ -299,7 +299,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                             viewModel.addToFolder(openFolder.folder.id, order, incoming)
                             incomingComponent = null
                         } else {
-                            viewModel.applyChanges(listOf(LayoutChange.ReorderFolder(openFolder.folder.id, order)))
+                            viewModel.reorderFolder(openFolder.folder.id, order)
                         }
                     },
                     onExtractStart = { component -> extractingFrom = openFolder.folder.id to component },

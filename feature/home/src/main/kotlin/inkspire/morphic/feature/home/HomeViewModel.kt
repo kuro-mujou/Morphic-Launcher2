@@ -109,14 +109,29 @@ class HomeViewModel(
     }
 
     /**
-     * Adds an app dragged in from home into folder [folderId], where [order] is the folder's new full membership
-     * (including [incoming]) in the dropped arrangement: set the membership/order and take [incoming] off the
-     * home grid.
+     * Reorders folder [folderId] to the arrangement the overlay [reported] on drop.
+     *
+     * The reported order covers only the members the UI could render, so it is reconciled against the real
+     * membership first ([reconcileFolderOrder]) — `ReorderFolder` replaces membership wholesale, and writing the
+     * UI's list verbatim would delete anything it couldn't draw.
      */
-    fun addToFolder(folderId: Long, order: List<ComponentKey>, incoming: ComponentKey) {
+    fun reorderFolder(folderId: Long, reported: List<ComponentKey>) {
+        val known = folderById(folderId)?.folder?.apps ?: return
+        applyChanges(listOf(LayoutChange.ReorderFolder(folderId, reconcileFolderOrder(known, reported))))
+    }
+
+    /**
+     * Adds an app dragged in from home into folder [folderId], where [reported] is the arrangement the overlay
+     * dropped (its members *plus* [incoming]): set the membership/order and take [incoming] off the home grid.
+     *
+     * [incoming] joins the known membership before reconciling, since it is a member as of this drop — otherwise
+     * the very app being added would be reconciled away as a non-member.
+     */
+    fun addToFolder(folderId: Long, reported: List<ComponentKey>, incoming: ComponentKey) {
+        val known = folderById(folderId)?.folder?.apps ?: return
         applyChanges(
             listOf(
-                LayoutChange.ReorderFolder(folderId, order),
+                LayoutChange.ReorderFolder(folderId, reconcileFolderOrder(known + incoming, reported)),
                 LayoutChange.RemoveFromGrid(GridItem.App(incoming)),
             ),
         )
@@ -131,8 +146,7 @@ class HomeViewModel(
      * deleted (its FK cascades drop the membership + placement rows). Otherwise it's a plain remove-from-folder.
      */
     fun dropExtractedApp(folderId: Long, component: ComponentKey, plan: PlacementPlan) {
-        val folder = state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == folderId }
-            ?: return
+        val folder = folderById(folderId) ?: return
         val remaining = folder.folder.apps.filter { it != component }
         val changes = mutableListOf<LayoutChange>()
         plan.moves.forEach { (moved, to) -> changes += LayoutChange.Move(moved, to) } // pushed home occupants
@@ -147,6 +161,10 @@ class HomeViewModel(
         }
         applyChanges(changes)
     }
+
+    /** The placed folder [folderId], or null when it is gone (dissolved, or its definition not resolved yet). */
+    private fun folderById(folderId: Long): HomeItem.Folder? =
+        state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == folderId }
 
     /**
      * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement]:
