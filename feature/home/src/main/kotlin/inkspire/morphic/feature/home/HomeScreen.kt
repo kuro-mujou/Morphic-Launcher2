@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -283,7 +284,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             val openFolder = openFolderId?.let { id ->
                 state.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == id }
             }
-            if (openFolder != null) {
+            // Keyed by folder id: one overlay *instance* per folder, so switching folders doesn't inherit the
+            // previous one's remembered state (its reorder gap, optimistic order, measured geometry, and — most
+            // visibly — its pager position, which would otherwise render a 1-page folder scrolled past its end).
+            if (openFolder != null) key(openFolder.folder.id) {
                 FolderOverlay(
                     label = openFolder.folder.label,
                     apps = openFolder.apps,
