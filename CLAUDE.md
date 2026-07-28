@@ -105,6 +105,16 @@ Key rules:
 - L1's conflated `surface` column became `zone`; L1 `Surface{HOME,DOCK,WIDGET_AREA}` split into L2
   `Surface{HOME,APPS}` + `HomeZone`.
 
+⚠️ **Open: folders on APPS aren't representable yet.** Folders are wanted on the **APPS pager** *and* the
+**category card**, but `apps_pager_item` and `category_item` are keyed on `component`, so neither row can hold a
+folder — and an APPS-hosted folder has nowhere to store its position (folder position exists only as the
+coordinate `folder_placement` + `zone`). Both stores need to become app-or-folder (the "exactly one of" shape
+`IconContainerItemEntity` already uses), with the folder's slot living in the order store rather than a placement
+table. That's a **B2 schema change + the unbuilt APPS order repository** — decide it before building either APPS
+layout. Note the harness prototype currently asserts the opposite for the category card (`CategoryPagerPlayground`:
+"no folders here", so its cell splits into halves with no merge ring) — reversing that is a deliberate call, not
+an oversight to patch. The UI side is ready: `FolderHostState` is surface-independent and already shared.
+
 Full rationale: [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md) → "Arrangement persistence model".
 
 ## Containers (icon & widget)
@@ -212,6 +222,14 @@ from the baked stack).
   Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
   `LauncherTheme` overrides its subtree. The wallpaper-brightness analyzer, transparent/frosted launcher
   surfaces, and `FrostedTextField` are a **deferred launcher-UI subsystem**; settings needs none of it.
+- **An item's touch target is its visible extent, never its cell.** A cell is a *layout* footprint, usually much
+  bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon + label). `LauncherDragCell`
+  therefore hands `itemGestures` **down to its content**, which decides what is touchable: `IconLabelCell` puts it
+  on the icon+label group; content that genuinely fills its cell (a widget, a harness tile) `.then()`s it onto its
+  root. The slack must stay free — otherwise a full page of icons leaves nowhere to press-and-hold for the
+  *surface's* menu. Works because `launcherItemGestures` never consumes a down. Consequence: cells (`AppCell`,
+  `FolderCell`) carry **no `onClick`** — taps arrive through the one gesture contract. See
+  [docs/DRAG_AND_DROP_DESIGN.md](docs/DRAG_AND_DROP_DESIGN.md) §5.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
   colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
@@ -269,8 +287,10 @@ and the extracted `GridGeometry` seam. Only grid **G6** (full-harness regression
 done-on-device. **Built for the home since:** the shared **coordinate drag surfaces** — `CoordinateDragGrid`
 (single zone) + `CoordinateDragPager` (paged, viewport zone + edge-flip) + the shared `LauncherDragCell`
 (per-item drag wiring), all reused by the harness `GridSurface`; the `AppCell`/`FolderCell` launcher cells (via
-`IconLabelCell` + `cellLabelHeight`); and the full **folder overlay** subsystem (`FolderOverlay`,
-`folderInnerSize`, `FolderReorder` MovingGap, `FolderDragDelegate`, `currentDeviceConfiguration`).
+`IconLabelCell` + `cellLabelHeight`); and the full **folder subsystem** — `FolderOverlay`, `folderInnerSize`
+(a `@Composable` facade over pure sizing arithmetic), `FolderReorder` MovingGap, `FolderDragDelegate`, and
+**`FolderHostState`/`FolderPhase`** (the open/extract/inject lifecycle any folder-hosting surface reuses; 21 unit
+tests). Item gestures are scoped to the icon+label group, not the cell — see the design-system rules above.
 
 **B8 `data:layout` — first cut done.** Geometry engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/
 `FreePush`) plus the command + persistence layer: `LayoutChange` (L1's 19 ops → 13), `LayoutRepository` (slim
@@ -303,11 +323,26 @@ the default `DevRootScreen` screen.
   `DragCoordinator`** — home + folder zones on it, planner/drop dispatch by zone, the folder publishes a
   `FolderDragDelegate`, and the overlay fades-but-stays-composed so the dragged cell keeps its pointer stream.
   Extracting the second-last app **auto-dissolves** the folder (last app inherits its cell).
+  The whole open/extract/inject lifecycle lives in `FolderHostState` (`core:designsystem`), not the screen; home
+  supplies only the surface-specific *"which folder does this merge plan target?"* lambda (a placement match) and
+  the commit calls. Two guards worth knowing: `reconcileFolderOrder` (`FolderOrder.kt`) folds a UI-reported order
+  back onto real membership, because `ReorderFolder` replaces membership wholesale and the UI can only report
+  members it could render — writing its list verbatim **deleted** anything unresolvable (an uninstalled app,
+  B6 pruning still deferred); and `FolderOverlay` is wrapped in `key(folderId)` so switching folders doesn't
+  inherit the previous one's pager position or reorder gap.
 
-**Next likely:** the folder **frosted backdrop** (currently solid black), **folders on the dock**, home
-**orientation** + `GridBlueprint`-driven **dock + pager**, widgets/containers on the grid, the APPS **order**
-repository, or `data:apps` categorization (B6). Folder follow-ups: rename, add-via-picker, cross-page reorder,
-onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
+**Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
+exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **folders on the
+dock**, home **orientation** + `GridBlueprint`-driven **dock + pager**, widgets/containers on the grid, the APPS
+**order** repository (+ the folders-on-APPS decision above), or `data:apps` categorization (B6). Folder follow-ups:
+rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent
+category is added last (P9), the final flip.
+
+**Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw
+`pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no
+ktlint/spotless/detekt), so style drift isn't caught. The Gradle **wrapper is missing** from the repo
+(`gradle/wrapper/gradle-wrapper.properties` is tracked but `gradlew`/`gradlew.bat`/`gradle-wrapper.jar` are not),
+so there is no CLI build from a fresh clone — Android Studio only.
 
 ## Conventions summary
 
