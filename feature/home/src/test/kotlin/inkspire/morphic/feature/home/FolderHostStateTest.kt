@@ -84,12 +84,35 @@ class FolderHostStateTest {
     }
 
     @Test
-    fun `injectCommitted clears the incoming app but keeps the folder open`() {
+    fun `injectCommitted keeps carrying the app until the store catches up`() {
+        // The app is off the surface (dropped optimistically) and not yet in the folder's persisted contents, so
+        // releasing it here is what made it blink out of existence for a frame or two.
         val host = host()
         host.beginInject(folderId, app)
         host.injectCommitted()
-        assertEquals(FolderPhase.Open(folderId), host.phase) // so the user sees the app land
-        assertNull(host.incomingComponent)
+        assertEquals(FolderPhase.Injected(folderId, app), host.phase)
+        assertEquals(app, host.incomingComponent) // still rendered by the folder, from the outside
+        assertEquals(folderId, host.openFolderId) // and the folder stays open, so the user sees it land
+    }
+
+    @Test
+    fun `the hand-off ends once the folder's members include the injected app`() {
+        val host = host()
+        host.beginInject(folderId, app)
+        host.injectCommitted()
+        host.onMembersChanged(listOf(other, app))
+        assertEquals(FolderPhase.Open(folderId), host.phase)
+        assertNull(host.incomingComponent) // the folder's own data can render it now
+    }
+
+    @Test
+    fun `membership without the injected app keeps carrying it`() {
+        // The pre-write membership arriving must not be mistaken for confirmation.
+        val host = host()
+        host.beginInject(folderId, app)
+        host.injectCommitted()
+        host.onMembersChanged(listOf(other))
+        assertEquals(FolderPhase.Injected(folderId, app), host.phase)
     }
 
     @Test
@@ -97,6 +120,14 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.injectCommitted()
+        assertEquals(FolderPhase.Open(folderId), host.phase)
+    }
+
+    @Test
+    fun `onMembersChanged does nothing when no inject is settling`() {
+        val host = host()
+        host.open(folderId)
+        host.onMembersChanged(listOf(app))
         assertEquals(FolderPhase.Open(folderId), host.phase)
     }
 
@@ -111,11 +142,14 @@ class FolderHostStateTest {
     }
 
     @Test
-    fun `a committed inject survives the end of the drag`() {
+    fun `a committed inject survives the end of the drag, still carrying the app`() {
+        // The drop that commits the inject also ends the drag, so this fires immediately afterwards — it must not
+        // undo the commit or drop the app that is still mid-hand-off.
         val host = host()
         host.beginInject(folderId, app)
         host.injectCommitted()
         host.onDragEnd()
+        assertEquals(FolderPhase.Injected(folderId, app), host.phase)
         assertEquals(folderId, host.openFolderId)
     }
 

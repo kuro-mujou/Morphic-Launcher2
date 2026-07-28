@@ -45,10 +45,27 @@ sealed interface FolderPhase {
     data class Extracting(override val folderId: Long, val app: ComponentKey) : FolderPhase
 
     /**
-     * [app] is being dragged *into* [folderId] from the surface. It isn't a member yet — the folder renders it as an
-     * extra cell so the drop can report an order that includes it.
+     * The phases where [app] is being brought into [folderId] from the surface and is therefore **in neither place's
+     * own data**: it is off the surface (or about to be) and not yet in the folder's persisted contents. Whoever
+     * renders the folder has to be handed the app explicitly for as long as this holds, or it is invisible.
      */
-    data class Injecting(override val folderId: Long, val app: ComponentKey) : FolderPhase
+    sealed interface Incoming : FolderPhase {
+        val app: ComponentKey
+        override val folderId: Long
+    }
+
+    /**
+     * [app] is mid-drag over [folderId]: not a member yet, rendered as an extra cell so the drop can report an
+     * order that includes it.
+     */
+    data class Injecting(override val folderId: Long, override val app: ComponentKey) : Incoming
+
+    /**
+     * [app] has been committed to [folderId], but the store hasn't caught up: the surface already dropped it
+     * optimistically, while the folder's contents still come from the pending write. The app would fall between the
+     * two and blink out of existence, so it stays [Incoming] until [FolderHostState.onMembersChanged] sees it land.
+     */
+    data class Injected(override val folderId: Long, override val app: ComponentKey) : Incoming
 }
 
 /**
@@ -82,8 +99,11 @@ class FolderHostState {
     /** The open folder's id, or null when none is open — true of every phase but [FolderPhase.Closed]. */
     val openFolderId: Long? get() = phase.folderId
 
-    /** The app being dragged *into* the open folder, or null when nothing is being injected. */
-    val incomingComponent: ComponentKey? get() = (phase as? FolderPhase.Injecting)?.app
+    /**
+     * The app being brought into the open folder that the folder's own data can't render yet — mid-drag *or* just
+     * committed (see [FolderPhase.Incoming]). Null otherwise.
+     */
+    val incomingComponent: ComponentKey? get() = (phase as? FolderPhase.Incoming)?.app
 
     /** Open [folderId]'s overlay (a tap on its cell — so no drag can be in flight, and nothing is discarded). */
     fun open(folderId: Long) {
@@ -108,19 +128,34 @@ class FolderHostState {
         phase = FolderPhase.Injecting(folderId, app)
     }
 
-    /** The injected app has been committed to the folder. The folder stays open so the user sees it land. */
+    /**
+     * The injected app has been written. The folder stays open so the user sees it land — and the app stays
+     * [FolderPhase.Incoming], because the write hasn't come back yet: the surface has already dropped it
+     * optimistically and the folder's contents don't include it, so releasing it here is what made it blink out.
+     * [onMembersChanged] finishes the hand-off.
+     */
     fun injectCommitted() {
         val injecting = phase as? FolderPhase.Injecting ?: return
-        phase = FolderPhase.Open(injecting.folderId)
+        phase = FolderPhase.Injected(injecting.folderId, injecting.app)
     }
 
     /**
-     * Any drag ended. The two hand-offs resolve differently, which is the whole reason this is one value and not two
-     * flags:
+     * The store now reports [members] as the open folder's contents. Once a just-committed injected app is among
+     * them, the folder can render it from its own data and the hand-off is over.
+     */
+    fun onMembersChanged(members: List<ComponentKey>) {
+        val injected = phase as? FolderPhase.Injected ?: return
+        if (injected.app in members) phase = FolderPhase.Open(injected.folderId)
+    }
+
+    /**
+     * Any drag ended. The hand-offs resolve differently, which is the whole reason this is one value and not
+     * several flags:
      * - an **extract** that reaches here was *cancelled* (a committed one goes through [close] on drop), and since
      *   nothing was removed, the app is still in the folder — so the folder stays open around it;
-     * - an **inject** in flight was never committed, and the folder was opened *by that gesture*, so it goes away
-     *   with it.
+     * - an **inject still in flight** was never committed, and the folder was opened *by that gesture*, so it goes
+     *   away with it;
+     * - an **inject already committed** outlives the drag: the app is landing, and the folder stays open to show it.
      *
      * A folder the user opened by tapping is untouched by a drag ending elsewhere.
      */
@@ -128,7 +163,7 @@ class FolderHostState {
         phase = when (val current = phase) {
             is FolderPhase.Extracting -> FolderPhase.Open(current.folderId)
             is FolderPhase.Injecting -> FolderPhase.Closed
-            is FolderPhase.Open, FolderPhase.Closed -> current
+            is FolderPhase.Injected, is FolderPhase.Open, FolderPhase.Closed -> current
         }
     }
 }

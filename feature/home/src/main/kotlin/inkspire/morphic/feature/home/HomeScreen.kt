@@ -144,7 +144,11 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val folderHost = rememberFolderHostState(coordinator) { plan ->
         folders.firstOrNull { it.placement == plan.footprint }?.folder?.id
     }
-    val incomingApp = remember(state.items, folderHost.incomingComponent) {
+    // The app being carried into the open folder, resolved for the overlay to render. Keyed on the *component only*,
+    // deliberately not on `state.items`: an inject begins with the app still placed on home, and committing it takes
+    // it off the grid optimistically — so re-deriving from the items afterwards would resolve to null and the app
+    // would vanish from both surfaces until the write came back. Resolve once, at the start, and hold it.
+    val incomingApp = remember(folderHost.incomingComponent) {
         folderHost.incomingComponent?.let { c ->
             state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
         }
@@ -289,6 +293,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
             // Opened-folder overlay, drawn above the grid. Resolved live from state so its contents track edits.
             val openFolder = folderHost.openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
+            // Report the folder's persisted membership back: it is what tells the host that a just-injected app has
+            // landed, so it can stop being carried separately.
+            val openFolderMembers = openFolder?.folder?.apps
+            LaunchedEffect(openFolderMembers) { folderHost.onMembersChanged(openFolderMembers.orEmpty()) }
             // Keyed by folder id: one overlay *instance* per folder, so switching folders doesn't inherit the
             // previous one's remembered state (its reorder gap, optimistic order, measured geometry, and — most
             // visibly — its pager position, which would otherwise render a 1-page folder scrolled past its end).
@@ -301,7 +309,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     incoming = incomingApp,
                     onLaunch = { component -> viewModel.launch(component); folderHost.close() },
                     onReorder = { order ->
-                        val incoming = folderHost.incomingComponent
+                        // Only an inject *still in flight* adds membership; once committed this is a plain reorder
+                        // (the app is already a member, even if the store hasn't said so yet).
+                        val incoming = (folderHost.phase as? FolderPhase.Injecting)?.app
                         if (incoming != null && order.contains(incoming)) {
                             // Injected an app from home: add it to the folder at its slot + take it off the grid.
                             // Keep the folder open afterwards so the user sees the app land in it.
