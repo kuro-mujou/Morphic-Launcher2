@@ -1,19 +1,36 @@
 package inkspire.morphic.core.designsystem.folder
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.CellPadV
+import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LabelGap
+import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.cell.cellLabelHeight
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 
+/** Padding between the folder title and the inner zone. */
+internal val TitleBottomPadding = 12.dp
+
+/** Fixed height of the page-dots row below the inner zone (reserved even for a single page, so the card's
+ *  size doesn't depend on how many pages the folder happens to have). */
+internal val FolderDotsHeight = 24.dp
+
 /**
- * The inner-zone size (the bounded card holding the folder's app grid) for a [FolderOverlay]. Pure arithmetic
- * over the device, the folder [grid] (from the FolderGrid blueprint), and the cell's [cellLabelHeight] — so it
- * is deterministic and needs **no persisted precompute**: identical inputs always yield the same size, which is
- * what keeps every folder (home, APPS category card, …) the same size on a given device.
+ * The inner-zone size (the bounded card holding the folder's app grid) for a [FolderOverlay].
+ *
+ * Deterministic: identical inputs always yield the same size, so it needs **no persisted precompute** — which is
+ * what keeps every folder (home, APPS category card, …) the same size on a given device. The inputs it doesn't
+ * take as parameters it reads from composition — the cell's label height (via [metrics]) and the card's own chrome
+ * — because both are ambient facts about the current theme and surface, and every caller would otherwise have to
+ * recompute the same two values to ask a simple question.
  *
  * Two modes by orientation:
  * - **width-driven** (portrait): inner width is a fraction of the window width; each cell's width follows from
@@ -21,26 +38,54 @@ import inkspire.morphic.core.model.GridConfig
  *   label row. Inner height = cell height × rows. The folder title sits *above* the inner zone (portrait has
  *   the vertical room), so it isn't part of this height.
  * - **height-driven** (landscape, where vertical space is scarce): inner height is a fraction of the window
- *   height minus [landscapeReserve] (the title row + its padding), and the width is derived back from it.
+ *   height minus the chrome the card puts above and below the grid, and the width is derived back from it.
  *
  * The cell maths mirrors [inkspire.morphic.core.designsystem.cell.IconLabelCell] (same paddings, gap, and
  * square icon area), so an `AppCell` placed in a resulting cell renders at the size assumed here.
  */
+@Composable
 fun folderInnerSize(
     window: DpSize,
     device: DeviceConfiguration,
     grid: GridConfig,
+    metrics: IconMetrics = LocalIconMetrics.current,
+): DpSize = folderInnerSize(window, device, grid, cellLabelHeight(metrics), folderChromeReserve())
+
+/**
+ * The pure core of [folderInnerSize] — the same maths with its two composition-read inputs supplied explicitly:
+ * [cellLabelHeight] (how much a cell's label row adds to its height) and [chromeReserve] (the title row + the dots
+ * row, which only the height-driven mode has to subtract). Kept separate from the `@Composable` facade so the
+ * arithmetic stays callable and testable without a composition.
+ */
+internal fun folderInnerSize(
+    window: DpSize,
+    device: DeviceConfiguration,
+    grid: GridConfig,
     cellLabelHeight: Dp,
-    landscapeReserve: Dp,
+    chromeReserve: Dp,
 ): DpSize = when (device) {
     DeviceConfiguration.PHONE_PORTRAIT ->
         widthDriven(window.width, PHONE_PORTRAIT_WIDTH_FRACTION, grid, cellLabelHeight)
     DeviceConfiguration.TABLET_PORTRAIT ->
         widthDriven(window.width, TABLET_PORTRAIT_WIDTH_FRACTION, grid, cellLabelHeight)
     DeviceConfiguration.PHONE_LANDSCAPE ->
-        heightDriven(window.height, PHONE_LANDSCAPE_HEIGHT_FRACTION, grid, cellLabelHeight, landscapeReserve)
+        heightDriven(window.height, PHONE_LANDSCAPE_HEIGHT_FRACTION, grid, cellLabelHeight, chromeReserve)
     DeviceConfiguration.TABLET_LANDSCAPE ->
-        heightDriven(window.height, TABLET_LANDSCAPE_HEIGHT_FRACTION, grid, cellLabelHeight, landscapeReserve)
+        heightDriven(window.height, TABLET_LANDSCAPE_HEIGHT_FRACTION, grid, cellLabelHeight, chromeReserve)
+}
+
+/**
+ * The vertical space the card spends on chrome rather than on the grid: the title row (its `lineHeight` at the
+ * current type scale) plus its bottom padding, plus the fixed page-dots row. Landscape sizing must leave room for
+ * it; portrait has the height to spare and ignores it.
+ */
+@Composable
+private fun folderChromeReserve(): Dp {
+    val titleStyle = MaterialTheme.typography.titleMedium
+    val titleHeight = with(LocalDensity.current) {
+        (if (titleStyle.lineHeight.isSpecified) titleStyle.lineHeight else titleStyle.fontSize * 1.2f).toDp()
+    }
+    return titleHeight + TitleBottomPadding + FolderDotsHeight
 }
 
 private fun widthDriven(windowWidth: Dp, fraction: Float, grid: GridConfig, labelHeight: Dp): DpSize {

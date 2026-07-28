@@ -43,12 +43,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
-import inkspire.morphic.core.designsystem.cell.cellLabelHeight
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
@@ -71,11 +69,6 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** Padding between the folder title and the inner zone. */
-private val TitleBottomPadding = 12.dp
-
-/** Fixed height of the page-dots row below the inner zone (reserved even for a single page, so the card's
- *  size doesn't depend on how many pages the folder happens to have). */
-private val FolderDotsHeight = 24.dp
 private val DotSize = 6.dp
 private val DotSpacing = 6.dp
 
@@ -128,15 +121,8 @@ fun FolderOverlay(
 
     val device = currentDeviceConfiguration()
     val grid = remember(device) { FolderGrid.toGridConfig(device) }
-    val labelHeight = cellLabelHeight(metrics)
     val pageSize = (grid.cols * grid.rows).coerceAtLeast(1)
-
-    // The title row + the dots row are what landscape sizing must leave room for above/below the grid.
     val titleStyle = MaterialTheme.typography.titleMedium
-    val titleHeight = with(LocalDensity.current) {
-        (if (titleStyle.lineHeight.isSpecified) titleStyle.lineHeight else titleStyle.fontSize * 1.2f).toDp()
-    }
-    val landscapeReserve = titleHeight + TitleBottomPadding + FolderDotsHeight
 
     // ── Reorder state ──
     // An app dragged in from home (not yet a member) is appended so the same MovingGap machinery positions it:
@@ -252,7 +238,7 @@ fun FolderOverlay(
                 Modifier.fillMaxSize().windowInsetsPadding(safeInsets),
                 contentAlignment = Alignment.Center,
             ) {
-            val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, labelHeight, landscapeReserve)
+            val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = label,
