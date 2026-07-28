@@ -122,6 +122,7 @@ fun FolderOverlay(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
+    incoming: AppInfo? = null,
 ) {
     BackHandler(onBack = onDismiss)
 
@@ -138,8 +139,14 @@ fun FolderOverlay(
     val landscapeReserve = titleHeight + TitleBottomPadding + FolderDotsHeight
 
     // ── Reorder state ──
-    val orderComponents = apps.map { it.componentKey }
-    val appByComponent = remember(apps) { apps.associateBy { it.componentKey } }
+    // An app dragged in from home (not yet a member) is appended so the same MovingGap machinery positions it:
+    // its cell is the dragged one → drawn invisible (the gap), the proxy floats, and the drop reports an order
+    // that includes it (the caller adds it to the folder + removes it from home).
+    val allApps = remember(apps, incoming) {
+        if (incoming != null && apps.none { it.componentKey == incoming.componentKey }) apps + incoming else apps
+    }
+    val orderComponents = allApps.map { it.componentKey }
+    val appByComponent = remember(allApps) { allApps.associateBy { it.componentKey } }
 
     // Optimistic order: on drop we show the new order immediately, then clear the override once the persisted
     // [apps] catch up (same order) — or if membership changed underneath. Avoids the item snapping back.
@@ -202,8 +209,10 @@ fun FolderOverlay(
 
     // Dwell with the finger off the inner grid (over the outer zone / home behind it) hands the drag off to
     // home: hide + drop our zone so the shared coordinator targets home, and tell the caller which app is
-    // leaving. The drag continues; the drop (on home) does the actual move + folder removal.
-    val overOuterZone = session != null && session.activeZone != FolderZoneId
+    // leaving. The drag continues; the drop (on home) does the actual move + folder removal. An app being
+    // dragged *in* (the incoming) is never extracted — it isn't a member to remove.
+    val draggedIsIncoming = draggedComponent != null && draggedComponent == incoming?.componentKey
+    val overOuterZone = session != null && session.activeZone != FolderZoneId && !draggedIsIncoming
     LaunchedEffect(overOuterZone, extracting) {
         if (!overOuterZone || extracting) return@LaunchedEffect
         delay(ExtractDwellMs)

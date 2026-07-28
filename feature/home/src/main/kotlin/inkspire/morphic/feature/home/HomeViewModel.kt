@@ -109,6 +109,20 @@ class HomeViewModel(
     }
 
     /**
+     * Adds an app dragged in from home into folder [folderId], where [order] is the folder's new full membership
+     * (including [incoming]) in the dropped arrangement: set the membership/order and take [incoming] off the
+     * home grid.
+     */
+    fun addToFolder(folderId: Long, order: List<ComponentKey>, incoming: ComponentKey) {
+        applyChanges(
+            listOf(
+                LayoutChange.ReorderFolder(folderId, order),
+                LayoutChange.RemoveFromGrid(GridItem.App(incoming)),
+            ),
+        )
+    }
+
+    /**
      * Commits an app dragged out of folder [folderId] and dropped on the home grid at [plan] (its footprint,
      * plus the home occupants it pushed): the app lands there and leaves the folder.
      *

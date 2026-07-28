@@ -44,10 +44,14 @@ import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
 private val HomeZone = ZoneId("home")
+
+/** How long a dragged app must dwell on a folder's merge ring before that folder opens mid-drag to take it in. */
+private const val OPEN_FOLDER_DWELL_MS = 500L
 
 /**
  * The real HOME surface: placed apps on a **paged** [CoordinateDragPager] (the shared free-placement drag
@@ -138,6 +142,34 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     var openFolderId by remember { mutableStateOf<Long?>(null) }
     // An app being extracted out of a folder mid-drag (folderId → component); the drop commits it onto home.
     var extractingFrom by remember { mutableStateOf<Pair<Long, ComponentKey>?>(null) }
+    // An app dragged from home into a folder mid-drag; on drop it's added to the open folder at its slot.
+    var incomingComponent by remember { mutableStateOf<ComponentKey?>(null) }
+    val incomingApp = incomingComponent?.let { c ->
+        state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
+    }
+
+    // A second, longer dwell on a folder's merge ring opens it mid-drag, handing the drag *into* the folder
+    // with the dragged app as the incoming item (the inverse of extract).
+    val mergeFolder = run {
+        val plan = session?.plan?.takeIf { it.intent == DropIntent.MERGE } ?: return@run null
+        if (openFolderId != null) return@run null // already open — don't retrigger
+        state.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.placement == plan.footprint }
+    }
+    LaunchedEffect(mergeFolder?.folder?.id) {
+        val folder = mergeFolder ?: return@LaunchedEffect
+        delay(OPEN_FOLDER_DWELL_MS)
+        val component = (coordinator.session?.item as? GridItem.App)?.component ?: return@LaunchedEffect
+        incomingComponent = component
+        openFolderId = folder.folder.id
+    }
+
+    // When any drag ends, clear the transient extract/inject state (and close a folder that was opened to inject).
+    LaunchedEffect(coordinator.isDragging) {
+        if (!coordinator.isDragging) {
+            extractingFrom = null
+            if (incomingComponent != null) { incomingComponent = null; openFolderId = null }
+        }
+    }
 
     fun handleDrop() {
         val extract = extractingFrom
@@ -257,9 +289,18 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     apps = openFolder.apps,
                     coordinator = coordinator,
                     gestureConfig = gestureConfig,
+                    incoming = incomingApp,
                     onLaunch = { component -> viewModel.launch(component); openFolderId = null },
                     onReorder = { order ->
-                        viewModel.applyChanges(listOf(LayoutChange.ReorderFolder(openFolder.folder.id, order)))
+                        val incoming = incomingComponent
+                        if (incoming != null && order.contains(incoming)) {
+                            // Injected an app from home: add it to the folder at its slot + take it off the grid.
+                            // Keep the folder open afterwards so the user sees the app land in it.
+                            viewModel.addToFolder(openFolder.folder.id, order, incoming)
+                            incomingComponent = null
+                        } else {
+                            viewModel.applyChanges(listOf(LayoutChange.ReorderFolder(openFolder.folder.id, order)))
+                        }
                     },
                     onExtractStart = { component -> extractingFrom = openFolder.folder.id to component },
                     onDrop = { handleDrop() },
