@@ -114,9 +114,11 @@ Large; port per-component as feature screens need them, not up front. Groups:
 
 > **Status:** engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/`FreePush`) + `LayoutChange` (19→13) +
 > slim `LayoutRepository` (~30→6) + complete Room-backed `LayoutRepositoryImpl` (all 5 placement tables + all
-> definitions; `apply` exhaustive over 13 ops; DAOs bundled in `LayoutDaos`) are done. **Not** done: the APPS
-> pager/category/list **order** stores (their *own* repository, per the arrangement model); `GridEdit`/
-> `DockGridEdit` unify; the FLOW-engine decision; empty-folder auto-dissolve; cross-orientation rotate-seeding.
+> definitions; `apply` exhaustive over 13 ops; DAOs bundled in `LayoutDaos`) are done. Folder ops now also
+> take the folded apps off the grid, and folder delete cascades its rows; **empty-folder auto-dissolve** is done
+> (in the home layer). **Not** done: the APPS pager/category/list **order** stores (their *own* repository, per
+> the arrangement model); `GridEdit`/`DockGridEdit` unify; the FLOW-engine decision; cross-orientation
+> rotate-seeding.
 - Repository: `LayoutRepository`(+`Impl`), `di/LayoutModule`, mappers (`AppPlacement`/`Folder`/`IconContainer`/`Widget`).
 - 🔧 `LayoutChange` (the layout write-command vocabulary) **lives here, NOT in `core:model`** — it is the
   repository's command set, not a persisted shape. Refactor while porting (L1 has 19 near-duplicate ops):

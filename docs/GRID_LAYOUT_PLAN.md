@@ -77,12 +77,14 @@ grid), so it's built and validated first, standalone (`app/dev/PagerPlaygroundSc
 - [x] **G5 — `SCROLL_GRID` sizing.** `cellHeight` param → fixed-height, content-growing scroll grid; proved in
   `ScrollGrid` + the `CategoryPager` harness (pager × scroll-grid × 2-zone reorder + top/bottom gravity). ⚠️
   the `GridBlueprint`-driven `resolveBounds(blueprint, area, iconRail)` wiring is **still deferred**.
-- [ ] **G6 — Full-harness regression.** The exit gate. Treat as done-on-device; the real home surface now
-  exercises the coordinate-grid drag path end-to-end with live data + persistence.
+- [ ] **G6 — Full-harness regression.** The exit gate. Treat as done-on-device; the real home surface (and the
+  folder overlay) now exercise the coordinate-grid + MovingGap drag paths end-to-end with live data + persistence.
 
-**Beyond the plan (done this session):** the `coordinateItems`/`flowItems` placement-strategy DSL on
-`LauncherGridScope`; the real **home surface** (`app/.../home`) on `LauncherGrid` with live `LayoutRepository`
-placements + drag-to-rearrange persisted through `LayoutRepository.apply`.
+**Beyond the plan (built on this base):** the `coordinateItems`/`flowItems` placement-strategy DSL on
+`LauncherGridScope`; the shared drag surfaces `CoordinateDragGrid` (single zone) + `CoordinateDragPager` (paged) +
+`LauncherDragCell`; and the real **home surface** (`feature:home`) on `CoordinateDragPager` with live
+`LayoutRepository` placements + folders, drag-to-rearrange + merge + a full continuous-drag folder subsystem
+(open / reorder / extract / inject) over one shared `DragCoordinator`.
 
 ## Test matrix — must all pass in the harness before real layout (G6 exit gate)
 

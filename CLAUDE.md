@@ -266,30 +266,48 @@ MovingGap, `launcherItemGestures`, `DropFootprint`/`FloatingDragIcon`), `Launche
 grid (**grid plan G1–G5 + extras**, see [docs/GRID_LAYOUT_PLAN.md](docs/GRID_LAYOUT_PLAN.md)): `LauncherGrid`
 (FIXED_PAGER + SCROLL_GRID sizing), the `coordinateItems`/`flowItems` placement-strategy DSL, `animatePlacement`,
 and the extracted `GridGeometry` seam. Only grid **G6** (full-harness regression gate) is unticked — treat as
-done-on-device.
+done-on-device. **Built for the home since:** the shared **coordinate drag surfaces** — `CoordinateDragGrid`
+(single zone) + `CoordinateDragPager` (paged, viewport zone + edge-flip) + the shared `LauncherDragCell`
+(per-item drag wiring), all reused by the harness `GridSurface`; the `AppCell`/`FolderCell` launcher cells (via
+`IconLabelCell` + `cellLabelHeight`); and the full **folder overlay** subsystem (`FolderOverlay`,
+`folderInnerSize`, `FolderReorder` MovingGap, `FolderDragDelegate`, `currentDeviceConfiguration`).
 
 **B8 `data:layout` — first cut done.** Geometry engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/
 `FreePush`) plus the command + persistence layer: `LayoutChange` (L1's 19 ops → 13), `LayoutRepository` (slim
 ~30 → 6: one `placements` flow keyed by `GridItem` with `HomeZone` in the value, four definition flows, one
 `apply` sink), and a complete Room-backed `LayoutRepositoryImpl` (five placement tables + folder / icon-container
 / widget-container / widget definitions; `apply` exhaustive over all 13 ops; twelve DAOs bundled in `LayoutDaos`).
-The APPS pager/category/list **order** stores get their *own* repository (not built). Deferred: empty-folder
-auto-dissolve, cross-orientation rotate-seeding.
+`CreateFolder`/`AddToFolder` also delete the folded apps' grid placements (an app lives in one place); folder
+delete cascades its membership + placement rows. The APPS pager/category/list **order** stores get their *own*
+repository (not built). Deferred: cross-orientation rotate-seeding (empty-folder auto-dissolve now done, in the
+home layer).
 
-**Home surface — first real feature, parts 1–2 done.** In the `app` module (`inkspire.morphic.launcher.home`;
-extract to `feature:home` later). `HomeViewModel` (a screen-scoped `ViewModel`; optimistic placement state, logic out of the UI) joins
-`LayoutRepository.placements` + `AppRepository` apps; `HomeScreen` renders them on `LauncherGrid` with baked
-`AppCell`s via `coordinateItems`, seeds a starter layout on first run, and supports **drag-to-rearrange
-persisted** through `LayoutRepository.apply` (optimistic → no drop flicker; `FreeGridPlanner` push + dwelled
-preview). Hosted as the default `DevRootScreen` screen. **Tapping an app launches it** (P7): the tap goes through
-the gesture layer's `onOpen` → `HomeViewModel.launch` → `AppLauncher` (a one-method command in `data:apps`,
-separate from `AppRepository`'s reads; resolves the per-profile user from `ComponentKey.userSerial`, unlike L1
-which hardcoded the personal user). First cut otherwise: apps only, portrait only, fixed 4×5 grid.
+**Home surface — extracted to `feature:home`, real-sized, with a full folder subsystem.** Its own module
+(`feature:home`, `inkspire.morphic.feature.home`); plain-MVVM `HomeViewModel` (screen-scoped `ViewModel`,
+optimistic placement state, logic out of the UI) joins `LayoutRepository.placements` + `AppRepository` apps +
+`LayoutRepository.folders`. Rendered on the paged `CoordinateDragPager` at the **real blueprint size**
+(`HomePagerGrid.toGridConfig(device)` — device-aware, `cellMultiplier = 2`, apps are 2×2 logical footprints
+snapped to the visual lattice; device detected in the UI, fed to the VM for seeding). Portrait only. Hosted as
+the default `DevRootScreen` screen.
+- **Launch** on tap → `AppLauncher` (`data:apps`, a one-method command separate from `AppRepository`'s reads;
+  resolves the per-profile user from `ComponentKey.userSerial`, unlike L1's hardcoded personal user).
+- **Drag-to-rearrange** persists through `LayoutRepository.apply` (optimistic → no flicker; `FreeGridPlanner`
+  push with directional-push + merge-ring partition, dwelled preview, edge-flip pages, trailing empty page mid-drag).
+  Seed leaves a free row so a full grid stays rearrangeable.
+- **Folders.** Dropping an app on another (centre merge ring) creates a folder; folders render as a `FolderCell`
+  (2×2 icon preview). Tapping opens `FolderOverlay` — two zones (black scrim + a bounded card sized live by
+  `folderInnerSize` per device/orientation, inset to `systemBars ∪ displayCutout`), a **dense-flow pager** of the
+  folder's ordered apps, launch on tap, in-folder **MovingGap reorder** (persist `ReorderFolder`), and a border
+  outlining the inner zone while dragging. **Extract** (dwell an app over the outer zone) and **inject** (second
+  dwell on a folder opens it mid-drag to drop an app in) are one **continuous drag** across a **single shared
+  `DragCoordinator`** — home + folder zones on it, planner/drop dispatch by zone, the folder publishes a
+  `FolderDragDelegate`, and the overlay fades-but-stays-composed so the dragged cell keeps its pointer stream.
+  Extracting the second-last app **auto-dissolves** the folder (last app inherits its cell).
 
-**Next likely:** finish the home surface (orientation, `GridBlueprint`-driven sizing +
-dock + pager, folders/widgets, extract `feature:home`), the APPS **order** repository, or `data:apps`
-categorization (B6). Flagged cleanup: a reusable *coordinate drag-grid* composable shared by `HomeScreen` + the
-harness `GridSurface`. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
+**Next likely:** the folder **frosted backdrop** (currently solid black), **folders on the dock**, home
+**orientation** + `GridBlueprint`-driven **dock + pager**, widgets/containers on the grid, the APPS **order**
+repository, or `data:apps` categorization (B6). Folder follow-ups: rename, add-via-picker, cross-page reorder,
+onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 ## Conventions summary
 
