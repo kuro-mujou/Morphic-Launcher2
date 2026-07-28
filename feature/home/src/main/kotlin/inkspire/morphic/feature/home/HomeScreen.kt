@@ -38,6 +38,7 @@ import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.toGridConfig
@@ -194,8 +195,16 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             ) { item, cellModifier ->
                 when (item) {
                     is HomeItem.App -> AppCell(app = item.info, onClick = {}, modifier = cellModifier)
-                    is HomeItem.Folder ->
-                        FolderCell(label = item.folder.label, apps = item.apps, onClick = {}, modifier = cellModifier)
+                    is HomeItem.Folder -> {
+                        // Hide the app currently being dragged (e.g. extracted out of this folder) from the tile
+                        // preview, so it isn't shown in the folder icon and under the finger at the same time.
+                        // The real folder removal commits on drop — removing it now would dispose the dragged
+                        // cell (it lives in the folder's grid) and kill the drag. (Mirrors L1's removedFromFolder.)
+                        val dragged = (session?.item as? GridItem.App)?.component
+                        val preview =
+                            if (dragged == null) item.apps else item.apps.filterNot { it.componentKey == dragged }
+                        FolderCell(label = item.folder.label, apps = preview, onClick = {}, modifier = cellModifier)
+                    }
                 }
             }
 
