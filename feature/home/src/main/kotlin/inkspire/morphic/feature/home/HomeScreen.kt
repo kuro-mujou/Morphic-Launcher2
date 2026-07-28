@@ -156,19 +156,18 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // zone — a home drag held over the pager's padding has no zone, and the page it is being carried to must not
     // vanish from under the pager mid-drag.)
     val homeDragInFlight = coordinator.isDragging &&
-        (folderHost.openFolderId == null || folderHost.extractingFrom != null)
+        (folderHost.openFolderId == null || folderHost.phase is FolderPhase.Extracting)
     LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
     fun handleDrop() {
-        val extract = folderHost.extractingFrom
+        val extract = folderHost.phase as? FolderPhase.Extracting
         val outcome = coordinator.drop()
         if (extract != null) { // a drag handed off out of a folder — commit it on home (or leave it in the folder)
-            folderHost.endExtract()
-            val (folderId, component) = extract
+            folderHost.close()
             val plan = outcome
                 ?.takeIf { it.zone == HomeZone && it.plan.intent != DropIntent.INVALID && it.plan.intent != DropIntent.MERGE }
                 ?.plan
-            if (plan != null) viewModel.dropExtractedApp(folderId, component, plan)
+            if (plan != null) viewModel.dropExtractedApp(extract.folderId, extract.app, plan)
             // else: no valid home spot → the app was never removed, so it stays in the folder
             return
         }

@@ -24,8 +24,8 @@ class FolderHostStateTest {
     @Test
     fun `starts with nothing open and nothing in flight`() {
         val host = host()
+        assertEquals(FolderPhase.Closed, host.phase)
         assertNull(host.openFolderId)
-        assertNull(host.extractingFrom)
         assertNull(host.incomingComponent)
     }
 
@@ -33,8 +33,10 @@ class FolderHostStateTest {
     fun `open then close`() {
         val host = host()
         host.open(folderId)
+        assertEquals(FolderPhase.Open(folderId), host.phase)
         assertEquals(folderId, host.openFolderId)
         host.close()
+        assertEquals(FolderPhase.Closed, host.phase)
         assertNull(host.openFolderId)
     }
 
@@ -45,30 +47,29 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.beginExtract(folderId, app)
-        assertEquals(folderId to app, host.extractingFrom)
+        assertEquals(FolderPhase.Extracting(folderId, app), host.phase)
         assertEquals(folderId, host.openFolderId) // the overlay hides itself, but the folder is still "open"
     }
 
     @Test
-    fun `endExtract stops tracking and closes the folder`() {
+    fun `a committed extract closes the folder`() {
         val host = host()
         host.open(folderId)
         host.beginExtract(folderId, app)
-        host.endExtract()
-        assertNull(host.extractingFrom)
+        host.close() // what the drop handler calls once it has committed (or declined) the landing
+        assertEquals(FolderPhase.Closed, host.phase)
         assertNull(host.openFolderId)
     }
 
     @Test
     fun `a cancelled extract drag leaves the folder open with the app still in it`() {
-        // The drop handler normally calls endExtract; onDragEnd is the safety net for a *cancelled* gesture, where
+        // The drop handler closes the folder itself; onDragEnd is the safety net for a *cancelled* gesture, where
         // returning to the open folder (nothing committed, nothing removed) is the right resting state.
         val host = host()
         host.open(folderId)
         host.beginExtract(folderId, app)
         host.onDragEnd()
-        assertNull(host.extractingFrom)
-        assertEquals(folderId, host.openFolderId)
+        assertEquals(FolderPhase.Open(folderId), host.phase)
     }
 
     // ── Inject: an app on its way in, from the surface ──
@@ -77,6 +78,7 @@ class FolderHostStateTest {
     fun `beginInject opens the folder and carries the app in`() {
         val host = host()
         host.beginInject(folderId, app)
+        assertEquals(FolderPhase.Injecting(folderId, app), host.phase)
         assertEquals(folderId, host.openFolderId)
         assertEquals(app, host.incomingComponent)
     }
@@ -86,8 +88,16 @@ class FolderHostStateTest {
         val host = host()
         host.beginInject(folderId, app)
         host.injectCommitted()
+        assertEquals(FolderPhase.Open(folderId), host.phase) // so the user sees the app land
         assertNull(host.incomingComponent)
-        assertEquals(folderId, host.openFolderId) // so the user sees the app land
+    }
+
+    @Test
+    fun `injectCommitted does nothing when no inject is in flight`() {
+        val host = host()
+        host.open(folderId)
+        host.injectCommitted()
+        assertEquals(FolderPhase.Open(folderId), host.phase)
     }
 
     @Test
@@ -96,8 +106,8 @@ class FolderHostStateTest {
         val host = host()
         host.beginInject(folderId, app)
         host.onDragEnd()
+        assertEquals(FolderPhase.Closed, host.phase)
         assertNull(host.incomingComponent)
-        assertNull(host.openFolderId)
     }
 
     @Test
@@ -119,12 +129,31 @@ class FolderHostStateTest {
 
     @Test
     fun `beginInject after another folder is open retargets to the new folder`() {
-        // Guards the ordering inside beginInject: it sets both the app and the folder, so the incoming app can
-        // never be left attached to the previously open folder.
+        // The phase carries its own folder id, so an incoming app can never be left attached to a folder that is
+        // no longer the open one.
         val host = host()
         host.open(folderId)
         host.beginInject(99L, other)
-        assertEquals(99L, host.openFolderId)
-        assertEquals(other, host.incomingComponent)
+        assertEquals(FolderPhase.Injecting(99L, other), host.phase)
+    }
+
+    // ── The two hand-offs are mutually exclusive: one finger, one direction ──
+
+    @Test
+    fun `beginExtract replaces a pending inject rather than coexisting with it`() {
+        val host = host()
+        host.beginInject(folderId, other)
+        host.beginExtract(folderId, app)
+        assertEquals(FolderPhase.Extracting(folderId, app), host.phase)
+        assertNull(host.incomingComponent) // no stale incoming app left behind
+    }
+
+    @Test
+    fun `beginInject replaces a pending extract rather than coexisting with it`() {
+        val host = host()
+        host.open(folderId)
+        host.beginExtract(folderId, app)
+        host.beginInject(folderId, other)
+        assertEquals(FolderPhase.Injecting(folderId, other), host.phase)
     }
 }

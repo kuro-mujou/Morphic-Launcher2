@@ -19,6 +19,39 @@ import kotlinx.coroutines.delay
 private const val OPEN_FOLDER_DWELL_MS = 500L
 
 /**
+ * Where a surface's folder interaction currently *is* — one value, so the states that cannot coexist cannot be
+ * written down. There is one finger, so an app can be on its way out of a folder or on its way in, never both; and
+ * neither is possible with no folder open. As three independent nullable flags those combinations were all
+ * expressible and had to be held apart by convention.
+ *
+ * @property folderId the folder this phase concerns, or null in [Closed].
+ */
+sealed interface FolderPhase {
+
+    val folderId: Long?
+
+    /** No folder is open. */
+    data object Closed : FolderPhase {
+        override val folderId: Long? get() = null
+    }
+
+    /** [folderId]'s overlay is open and idle. */
+    data class Open(override val folderId: Long) : FolderPhase
+
+    /**
+     * [app] is being dragged *out* of [folderId]: the drag has dwelled off the folder's inner zone and been handed
+     * to the surface, which will commit it on drop. Until then the app is still a member — nothing has been removed.
+     */
+    data class Extracting(override val folderId: Long, val app: ComponentKey) : FolderPhase
+
+    /**
+     * [app] is being dragged *into* [folderId] from the surface. It isn't a member yet — the folder renders it as an
+     * extra cell so the drop can report an order that includes it.
+     */
+    data class Injecting(override val folderId: Long, val app: ComponentKey) : FolderPhase
+}
+
+/**
  * The folder-interaction state a surface needs to **host** folders: which folder is open, and the two mid-drag
  * hand-offs between the surface and the open folder (an app on its way *out* of a folder, and one on its way
  * *in*). Pure UI state — nothing here persists; the surface's own write path commits the outcomes.
@@ -31,8 +64,7 @@ private const val OPEN_FOLDER_DWELL_MS = 500L
  * here. (It stays in `feature:home` until a second consumer exists to shape the seam.)
  *
  * Held as a class rather than loose `remember`s in the composable so the transitions have names and can be reasoned
- * about in one place: they are mutually exclusive in ways scattered flags don't express (one finger cannot be
- * extracting *and* injecting), and the surface's drop handler has to interrogate them in a specific order.
+ * about in one place, over a single [FolderPhase] rather than flags that have to be kept consistent with each other.
  *
  * The open folder's published [FolderDragDelegate] is deliberately *not* held here, even though it belongs to the
  * same concern: the surface's `DropPlanner` reads it, and that planner has to be constructed *before* the
@@ -43,65 +75,60 @@ private const val OPEN_FOLDER_DWELL_MS = 500L
 @Stable
 class FolderHostState {
 
-    /** The open folder's id, or null when none is open. */
-    var openFolderId: Long? by mutableStateOf(null)
+    /** Where the interaction currently is. The single source of truth; the properties below just read it. */
+    var phase: FolderPhase by mutableStateOf(FolderPhase.Closed)
         private set
 
-    /**
-     * An app being dragged *out* of a folder (`folderId` → the app), set once the drag has dwelled off the folder's
-     * inner zone and been handed to the surface. The drop commits it; until then the app is still in the folder.
-     */
-    var extractingFrom: Pair<Long, ComponentKey>? by mutableStateOf(null)
-        private set
+    /** The open folder's id, or null when none is open — true of every phase but [FolderPhase.Closed]. */
+    val openFolderId: Long? get() = phase.folderId
 
-    /**
-     * An app being dragged *into* the open folder from the surface. It isn't a member yet — the folder renders it
-     * as an extra cell so the drop can report an order that includes it.
-     */
-    var incomingComponent: ComponentKey? by mutableStateOf(null)
-        private set
+    /** The app being dragged *into* the open folder, or null when nothing is being injected. */
+    val incomingComponent: ComponentKey? get() = (phase as? FolderPhase.Injecting)?.app
 
-    /** Open [folderId]'s overlay (a tap on its cell). */
+    /** Open [folderId]'s overlay (a tap on its cell — so no drag can be in flight, and nothing is discarded). */
     fun open(folderId: Long) {
-        openFolderId = folderId
+        phase = FolderPhase.Open(folderId)
     }
 
-    /** Close the overlay (back, a tap on the scrim, or launching an app from inside). */
+    /**
+     * Close the overlay: back, a tap on the scrim, launching an app from inside, or an extract drag resolving (the
+     * app has landed on the surface, or failed to and stayed in the folder — either way the folder is done).
+     */
     fun close() {
-        openFolderId = null
+        phase = FolderPhase.Closed
     }
 
     /** The drag dwelled off the folder's inner zone: [app] is leaving [folderId], and the surface now owns the drag. */
     fun beginExtract(folderId: Long, app: ComponentKey) {
-        extractingFrom = folderId to app
-    }
-
-    /** The extract drag was released — stop tracking it and close the folder, whether or not the app found a home. */
-    fun endExtract() {
-        extractingFrom = null
-        openFolderId = null
+        phase = FolderPhase.Extracting(folderId, app)
     }
 
     /** The drag dwelled on [folderId]'s merge ring: open it and carry [app] in as the incoming item. */
     fun beginInject(folderId: Long, app: ComponentKey) {
-        incomingComponent = app
-        openFolderId = folderId
+        phase = FolderPhase.Injecting(folderId, app)
     }
 
     /** The injected app has been committed to the folder. The folder stays open so the user sees it land. */
     fun injectCommitted() {
-        incomingComponent = null
+        val injecting = phase as? FolderPhase.Injecting ?: return
+        phase = FolderPhase.Open(injecting.folderId)
     }
 
     /**
-     * Any drag ended: drop the transient hand-off state. A folder that was opened *to inject* closes with the drag
-     * (it was opened by the gesture, so it goes away with it); one the user opened by tapping stays open.
+     * Any drag ended. The two hand-offs resolve differently, which is the whole reason this is one value and not two
+     * flags:
+     * - an **extract** that reaches here was *cancelled* (a committed one goes through [close] on drop), and since
+     *   nothing was removed, the app is still in the folder — so the folder stays open around it;
+     * - an **inject** in flight was never committed, and the folder was opened *by that gesture*, so it goes away
+     *   with it.
+     *
+     * A folder the user opened by tapping is untouched by a drag ending elsewhere.
      */
     fun onDragEnd() {
-        extractingFrom = null
-        if (incomingComponent != null) {
-            incomingComponent = null
-            openFolderId = null
+        phase = when (val current = phase) {
+            is FolderPhase.Extracting -> FolderPhase.Open(current.folderId)
+            is FolderPhase.Injecting -> FolderPhase.Closed
+            is FolderPhase.Open, FolderPhase.Closed -> current
         }
     }
 }
