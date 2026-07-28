@@ -241,77 +241,77 @@ fun FolderOverlay(
                 Modifier.fillMaxSize().windowInsetsPadding(safeInsets),
                 contentAlignment = Alignment.Center,
             ) {
-            val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = label,
-                    style = titleStyle,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(bottom = TitleBottomPadding),
-                )
-                // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
-                Box(
-                    Modifier
-                        .size(innerSize)
-                        // The outline is always in the chain and switches *colour*, so this chain stays
-                        // structurally stable across the drag flip — the same rule the backdrop above follows,
-                        // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
-                        // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
-                        .border(InnerZoneOutline, if (session != null) Color.White else Color.Transparent)
-                        .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
-                ) {
-                    LauncherPager(
-                        state = pagerState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
-                            .onGloballyPositioned {
-                                val b = it.boundsInRoot()
-                                geometry = GridGeometry(
-                                    originInRoot = Offset(b.left, b.top),
-                                    cellW = b.width / grid.cols,
-                                    cellH = b.height / grid.rows,
-                                    cols = grid.cols,
-                                    rows = grid.rows,
-                                )
-                                // Don't re-register once we've handed off to home (the hidden grid may re-lay-out).
-                                if (!extracting) {
-                                    coordinator.registerZone(DropZone(FolderZoneId, b, z = 1) { it is GridItem.App })
-                                }
-                            },
-                    ) { pageIndex ->
-                        LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
-                            flowItems(
-                                items = pages.getOrNull(pageIndex).orEmpty(),
-                                itemKey = { it.componentKey.flatten() },
-                            ) { app, cellModifier ->
-                                LauncherDragCell(
-                                    coordinator = coordinator,
-                                    item = GridItem.App(app.componentKey),
-                                    gestureConfig = gestureConfig,
-                                    onDrop = onDrop,
-                                    modifier = cellModifier,
-                                    onOpen = { onLaunch(app.componentKey) },
-                                ) { itemGestures ->
-                                    AppCell(
-                                        app = app,
-                                        modifier = Modifier.fillMaxSize(),
-                                        metrics = metrics,
-                                        itemGestures = itemGestures,
+                val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = label,
+                        style = titleStyle,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(bottom = TitleBottomPadding),
+                    )
+                    // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
+                    Box(
+                        Modifier
+                            .size(innerSize)
+                            // The outline is always in the chain and switches *colour*, so this chain stays
+                            // structurally stable across the drag flip — the same rule the backdrop above follows,
+                            // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
+                            // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
+                            .border(InnerZoneOutline, if (session != null) Color.White else Color.Transparent)
+                            .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
+                    ) {
+                        LauncherPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
+                                .onGloballyPositioned {
+                                    val b = it.boundsInRoot()
+                                    geometry = GridGeometry(
+                                        originInRoot = Offset(b.left, b.top),
+                                        cellW = b.width / grid.cols,
+                                        cellH = b.height / grid.rows,
+                                        cols = grid.cols,
+                                        rows = grid.rows,
                                     )
+                                    // Don't re-register once we've handed off to home (the hidden grid may re-lay-out).
+                                    if (!extracting) {
+                                        coordinator.registerZone(DropZone(FolderZoneId, b, z = 1) { it is GridItem.App })
+                                    }
+                                },
+                        ) { pageIndex ->
+                            LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
+                                flowItems(
+                                    items = pages.getOrNull(pageIndex).orEmpty(),
+                                    itemKey = { it.componentKey.flatten() },
+                                ) { app, cellModifier ->
+                                    LauncherDragCell(
+                                        coordinator = coordinator,
+                                        item = GridItem.App(app.componentKey),
+                                        gestureConfig = gestureConfig,
+                                        onDrop = onDrop,
+                                        modifier = cellModifier,
+                                        onOpen = { onLaunch(app.componentKey) },
+                                    ) { itemGestures ->
+                                        AppCell(
+                                            app = app,
+                                            modifier = Modifier.fillMaxSize(),
+                                            metrics = metrics,
+                                            itemGestures = itemGestures,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                // Page dots below the inner zone; the row's height is reserved even for a single page.
-                Box(Modifier.height(FolderDotsHeight), contentAlignment = Alignment.Center) {
-                    if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
+                    // Page dots below the inner zone; the row's height is reserved even for a single page.
+                    Box(Modifier.height(FolderDotsHeight), contentAlignment = Alignment.Center) {
+                        if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
+                    }
                 }
             }
-        }
         }
 
         // Floating proxy following the finger during a reorder drag (root space, above the content).
