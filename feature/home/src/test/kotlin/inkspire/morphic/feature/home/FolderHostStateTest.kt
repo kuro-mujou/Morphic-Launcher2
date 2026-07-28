@@ -1,0 +1,130 @@
+package inkspire.morphic.feature.home
+
+import inkspire.morphic.core.model.ComponentKey
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/**
+ * Behaviour spec for [FolderHostState] — the folder-interaction lifecycle a surface hosts.
+ *
+ * These pin the transitions *as they behave today*, which is the point: the state was previously inline in
+ * `HomeScreen` and therefore untestable, so the extraction is the first chance to write them down. Anything that
+ * reshapes this state machine (collapsing the flags into one sealed phase, fixing the inject flicker) has to keep
+ * these green or explain itself.
+ */
+class FolderHostStateTest {
+
+    private val app = ComponentKey("pkg", "Main")
+    private val other = ComponentKey("pkg.other", "Main")
+    private val folderId = 7L
+
+    private fun host() = FolderHostState()
+
+    @Test
+    fun `starts with nothing open and nothing in flight`() {
+        val host = host()
+        assertNull(host.openFolderId)
+        assertNull(host.extractingFrom)
+        assertNull(host.incomingComponent)
+    }
+
+    @Test
+    fun `open then close`() {
+        val host = host()
+        host.open(folderId)
+        assertEquals(folderId, host.openFolderId)
+        host.close()
+        assertNull(host.openFolderId)
+    }
+
+    // ── Extract: an app on its way out of the folder, onto the surface ──
+
+    @Test
+    fun `beginExtract records the app and leaves the folder open`() {
+        val host = host()
+        host.open(folderId)
+        host.beginExtract(folderId, app)
+        assertEquals(folderId to app, host.extractingFrom)
+        assertEquals(folderId, host.openFolderId) // the overlay hides itself, but the folder is still "open"
+    }
+
+    @Test
+    fun `endExtract stops tracking and closes the folder`() {
+        val host = host()
+        host.open(folderId)
+        host.beginExtract(folderId, app)
+        host.endExtract()
+        assertNull(host.extractingFrom)
+        assertNull(host.openFolderId)
+    }
+
+    @Test
+    fun `a cancelled extract drag leaves the folder open with the app still in it`() {
+        // The drop handler normally calls endExtract; onDragEnd is the safety net for a *cancelled* gesture, where
+        // returning to the open folder (nothing committed, nothing removed) is the right resting state.
+        val host = host()
+        host.open(folderId)
+        host.beginExtract(folderId, app)
+        host.onDragEnd()
+        assertNull(host.extractingFrom)
+        assertEquals(folderId, host.openFolderId)
+    }
+
+    // ── Inject: an app on its way in, from the surface ──
+
+    @Test
+    fun `beginInject opens the folder and carries the app in`() {
+        val host = host()
+        host.beginInject(folderId, app)
+        assertEquals(folderId, host.openFolderId)
+        assertEquals(app, host.incomingComponent)
+    }
+
+    @Test
+    fun `injectCommitted clears the incoming app but keeps the folder open`() {
+        val host = host()
+        host.beginInject(folderId, app)
+        host.injectCommitted()
+        assertNull(host.incomingComponent)
+        assertEquals(folderId, host.openFolderId) // so the user sees the app land
+    }
+
+    @Test
+    fun `an inject dropped elsewhere closes the folder with the drag`() {
+        // The folder was opened *by the gesture*, so if the gesture ends without committing, it goes away again.
+        val host = host()
+        host.beginInject(folderId, app)
+        host.onDragEnd()
+        assertNull(host.incomingComponent)
+        assertNull(host.openFolderId)
+    }
+
+    @Test
+    fun `a committed inject survives the end of the drag`() {
+        val host = host()
+        host.beginInject(folderId, app)
+        host.injectCommitted()
+        host.onDragEnd()
+        assertEquals(folderId, host.openFolderId)
+    }
+
+    @Test
+    fun `a folder opened by tapping is unaffected by an unrelated drag ending`() {
+        val host = host()
+        host.open(folderId)
+        host.onDragEnd()
+        assertEquals(folderId, host.openFolderId)
+    }
+
+    @Test
+    fun `beginInject after another folder is open retargets to the new folder`() {
+        // Guards the ordering inside beginInject: it sets both the app and the folder, so the incoming app can
+        // never be left attached to the previously open folder.
+        val host = host()
+        host.open(folderId)
+        host.beginInject(99L, other)
+        assertEquals(99L, host.openFolderId)
+        assertEquals(other, host.incomingComponent)
+    }
+}

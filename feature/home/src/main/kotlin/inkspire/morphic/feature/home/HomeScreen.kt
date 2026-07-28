@@ -37,7 +37,6 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -45,14 +44,10 @@ import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
-import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
 private val HomeZone = ZoneId("home")
-
-/** How long a dragged app must dwell on a folder's merge ring before that folder opens mid-drag to take it in. */
-private const val OPEN_FOLDER_DWELL_MS = 500L
 
 /**
  * The real HOME surface: placed apps on a **paged** [CoordinateDragPager] (the shared free-placement drag
@@ -64,11 +59,11 @@ private const val OPEN_FOLDER_DWELL_MS = 500L
  *
  * This screen keeps only what is home-specific: the [DropPlanner] (span-snapped push, plus the merge-ring /
  * directional-push partition over a hovered occupant), the root drag overlay, and the tap→launch / merge-drop
- * wiring; the pager, per-page grids, gestures, dwelled preview, and edge-flip live in [CoordinateDragPager].
- * Dropping an app onto another (finger in its centre ring) **merges** them into a folder; folders render as a
- * [FolderCell] and tapping one opens a [FolderOverlay] to launch its apps. First cut: apps + folders, portrait
- * only. A tap on an app launches it (via [HomeViewModel.launch]); taps go through the gesture layer's `onOpen`,
- * so a cell's own `onClick` is a no-op here.
+ * wiring; the pager, per-page grids, gestures, dwelled preview, and edge-flip live in [CoordinateDragPager], and
+ * the folder-interaction lifecycle in [FolderHostState]. Dropping an app onto another (finger in its centre ring)
+ * **merges** them into a folder; folders render as a [FolderCell] and tapping one opens a [FolderOverlay]. First
+ * cut: apps + folders, portrait only. A tap on an app launches it (via [HomeViewModel.launch]) through the gesture
+ * layer's `onOpen`, so cells carry no click handler of their own.
  */
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -109,7 +104,8 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
     // The open folder's drag hooks (null when no folder is open). The one shared coordinator runs over both
     // surfaces; its planner + drop dispatch the folder zone to this delegate, keeping folder reorder logic in
-    // the overlay (its order/gap aren't hoisted here).
+    // the overlay (its order/gap aren't hoisted here). It lives here rather than on the folder host below because
+    // the planner reads it and must exist before the coordinator, which the host is created after.
     val folderDelegate = remember { mutableStateOf<FolderDragDelegate?>(null) }
 
     // Shared planner: the folder zone routes to the folder delegate; the home zone plans the free-grid
@@ -142,14 +138,14 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // live inside CoordinateDragPager.
     val session = coordinator.session
 
-    // Which folder's overlay is open (by id), if any — pure UI navigation, so it lives in the composable.
-    var openFolderId by remember { mutableStateOf<Long?>(null) }
-    // An app being extracted out of a folder mid-drag (folderId → component); the drop commits it onto home.
-    var extractingFrom by remember { mutableStateOf<Pair<Long, ComponentKey>?>(null) }
-    // An app dragged from home into a folder mid-drag; on drop it's added to the open folder at its slot.
-    var incomingComponent by remember { mutableStateOf<ComponentKey?>(null) }
-    val incomingApp = remember(state.items, incomingComponent) {
-        incomingComponent?.let { c ->
+    // Folder hosting: which folder is open, plus the two mid-drag hand-offs between home and the open folder
+    // (extract out / inject in) and the dwell that opens a folder to receive a drag. `folderIdAt` is home's answer
+    // to "which folder does this merge plan target?" — a placement match, because home is a coordinate surface.
+    val folderHost = rememberFolderHostState(coordinator) { plan ->
+        folders.firstOrNull { it.placement == plan.footprint }?.folder?.id
+    }
+    val incomingApp = remember(state.items, folderHost.incomingComponent) {
+        folderHost.incomingComponent?.let { c ->
             state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
         }
     }
@@ -159,38 +155,15 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // not grow home's pager behind it. An extract *is* on its way here, so it counts. (Deliberately not the active
     // zone — a home drag held over the pager's padding has no zone, and the page it is being carried to must not
     // vanish from under the pager mid-drag.)
-    val homeDragInFlight = coordinator.isDragging && (openFolderId == null || extractingFrom != null)
+    val homeDragInFlight = coordinator.isDragging &&
+        (folderHost.openFolderId == null || folderHost.extractingFrom != null)
     LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
-    // A second, longer dwell on a folder's merge ring opens it mid-drag, handing the drag *into* the folder
-    // with the dragged app as the incoming item (the inverse of extract).
-    val mergeFolder = run {
-        val plan = session?.plan?.takeIf { it.intent == DropIntent.MERGE } ?: return@run null
-        if (openFolderId != null) return@run null // already open — don't retrigger
-        folders.firstOrNull { it.placement == plan.footprint }
-    }
-    LaunchedEffect(mergeFolder?.folder?.id) {
-        val folder = mergeFolder ?: return@LaunchedEffect
-        delay(OPEN_FOLDER_DWELL_MS)
-        val component = (coordinator.session?.item as? GridItem.App)?.component ?: return@LaunchedEffect
-        incomingComponent = component
-        openFolderId = folder.folder.id
-    }
-
-    // When any drag ends, clear the transient extract/inject state (and close a folder that was opened to inject).
-    LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) {
-            extractingFrom = null
-            if (incomingComponent != null) { incomingComponent = null; openFolderId = null }
-        }
-    }
-
     fun handleDrop() {
-        val extract = extractingFrom
+        val extract = folderHost.extractingFrom
         val outcome = coordinator.drop()
         if (extract != null) { // a drag handed off out of a folder — commit it on home (or leave it in the folder)
-            extractingFrom = null
-            openFolderId = null
+            folderHost.endExtract()
             val (folderId, component) = extract
             val plan = outcome
                 ?.takeIf { it.zone == HomeZone && it.plan.intent != DropIntent.INVALID && it.plan.intent != DropIntent.MERGE }
@@ -235,7 +208,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 onOpen = { item ->
                     when (item) {
                         is HomeItem.App -> viewModel.launch(item.info.componentKey)
-                        is HomeItem.Folder -> openFolderId = item.folder.id
+                        is HomeItem.Folder -> folderHost.open(item.folder.id)
                     }
                 },
             ) { item, cellModifier, itemGestures ->
@@ -292,7 +265,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 // Note this is deliberately not gated on the active zone: a home drag held over a gap or the
                 // surface's padding has no zone, and its proxy must still follow the finger.
                 val dragged = state.items.firstOrNull { it.gridItem == session.item }
-                if (dragged != null && openFolderId == null) {
+                if (dragged != null && folderHost.openFolderId == null) {
                     val finger = session.fingerInRoot
                     FloatingDragIcon(
                         rootOffset = IntOffset(
@@ -316,7 +289,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             }
 
             // Opened-folder overlay, drawn above the grid. Resolved live from state so its contents track edits.
-            val openFolder = openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
+            val openFolder = folderHost.openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
             // Keyed by folder id: one overlay *instance* per folder, so switching folders doesn't inherit the
             // previous one's remembered state (its reorder gap, optimistic order, measured geometry, and — most
             // visibly — its pager position, which would otherwise render a 1-page folder scrolled past its end).
@@ -327,22 +300,22 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     coordinator = coordinator,
                     gestureConfig = gestureConfig,
                     incoming = incomingApp,
-                    onLaunch = { component -> viewModel.launch(component); openFolderId = null },
+                    onLaunch = { component -> viewModel.launch(component); folderHost.close() },
                     onReorder = { order ->
-                        val incoming = incomingComponent
+                        val incoming = folderHost.incomingComponent
                         if (incoming != null && order.contains(incoming)) {
                             // Injected an app from home: add it to the folder at its slot + take it off the grid.
                             // Keep the folder open afterwards so the user sees the app land in it.
                             viewModel.addToFolder(openFolder.folder.id, order, incoming)
-                            incomingComponent = null
+                            folderHost.injectCommitted()
                         } else {
                             viewModel.reorderFolder(openFolder.folder.id, order)
                         }
                     },
-                    onExtractStart = { component -> extractingFrom = openFolder.folder.id to component },
+                    onExtractStart = { component -> folderHost.beginExtract(openFolder.folder.id, component) },
                     onDrop = { handleDrop() },
                     onPublishDelegate = { folderDelegate.value = it },
-                    onDismiss = { openFolderId = null },
+                    onDismiss = { folderHost.close() },
                 )
             }
         }
