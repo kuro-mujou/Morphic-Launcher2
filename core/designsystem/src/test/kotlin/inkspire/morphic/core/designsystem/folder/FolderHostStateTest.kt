@@ -1,8 +1,10 @@
-package inkspire.morphic.feature.home
+package inkspire.morphic.core.designsystem.folder
 
 import inkspire.morphic.core.model.ComponentKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -169,6 +171,37 @@ class FolderHostStateTest {
         host.open(folderId)
         host.beginInject(99L, other)
         assertEquals(FolderPhase.Injecting(99L, other), host.phase)
+    }
+
+    // ── Whose drag is it? (one coordinator spans the surface and the folder on top of it) ──
+
+    @Test
+    fun `with no folder open every drag is the surface's`() {
+        assertFalse(host().dragBelongsToOpenFolder)
+    }
+
+    @Test
+    fun `a drag while a folder is open belongs to the folder`() {
+        val host = host()
+        host.open(folderId)
+        assertTrue(host.dragBelongsToOpenFolder) // e.g. reordering inside it — the surface must not react
+    }
+
+    @Test
+    fun `an inject belongs to the folder it is heading into`() {
+        val host = host()
+        host.beginInject(folderId, app)
+        assertTrue(host.dragBelongsToOpenFolder)
+    }
+
+    @Test
+    fun `an extract belongs to the surface, not the folder it came from`() {
+        // The drag started in the folder but has been handed off, so the surface owns it from here — this is what
+        // lets a coordinate surface grow a trailing page for an app being carried out onto it.
+        val host = host()
+        host.open(folderId)
+        host.beginExtract(folderId, app)
+        assertFalse(host.dragBelongsToOpenFolder)
     }
 
     // ── The two hand-offs are mutually exclusive: one finger, one direction ──

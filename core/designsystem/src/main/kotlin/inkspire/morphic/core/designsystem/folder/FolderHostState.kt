@@ -1,4 +1,4 @@
-package inkspire.morphic.feature.home
+package inkspire.morphic.core.designsystem.folder
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -8,7 +8,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
-import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -73,21 +72,23 @@ sealed interface FolderPhase {
  * hand-offs between the surface and the open folder (an app on its way *out* of a folder, and one on its way
  * *in*). Pure UI state — nothing here persists; the surface's own write path commits the outcomes.
  *
- * Extracted from `HomeScreen` because none of it is actually home-specific: a folder is opened, reordered,
- * extracted from, and injected into the same way wherever it sits, and [FolderOverlay][inkspire.morphic.core.designsystem.folder.FolderOverlay]
- * is already surface-agnostic. Home is simply the first surface to host folders; the APPS pager and category card
- * are the next two, which is why the one genuinely surface-specific question — *"which folder sits at the target
- * this drop would land on?"* — is a lambda ([rememberFolderHostState]) rather than a placement comparison baked in
- * here. (It stays in `feature:home` until a second consumer exists to shape the seam.)
+ * It lives here, beside [FolderOverlay], because none of it is home-specific: a folder is opened, reordered,
+ * extracted from, and injected into the same way wherever it sits, and the overlay was already surface-agnostic.
+ * Home is simply the first surface to host folders — the APPS pager and category card are next — so the one
+ * genuinely surface-specific question, *"which folder sits at the target this drop would land on?"*, is a lambda
+ * ([rememberFolderHostState]): a coordinate surface compares placements, an ordered one compares slots.
+ *
+ * **What is deliberately not here.** Two things a surface keeps for itself:
+ * - *Committing* the outcomes (place the extracted app, add the injected one, reorder the folder). Each surface
+ *   writes through its own repository, and there is no shared caller to dispatch through, so an interface over them
+ *   would have one implementor and no user. It can be introduced when APPS gives it a second one to be shaped by.
+ * - The open folder's published [FolderDragDelegate]. It belongs to this concern, but the surface's `DropPlanner`
+ *   reads it and must be constructed *before* the [DragCoordinator] it is given to — while this state is created
+ *   *after* the coordinator, since its effects observe the drag. The surface is the only place that can hold
+ *   something both sides of that construction order can see.
  *
  * Held as a class rather than loose `remember`s in the composable so the transitions have names and can be reasoned
  * about in one place, over a single [FolderPhase] rather than flags that have to be kept consistent with each other.
- *
- * The open folder's published [FolderDragDelegate] is deliberately *not* held here, even though it belongs to the
- * same concern: the surface's `DropPlanner` reads it, and that planner has to be constructed *before* the
- * [DragCoordinator] it is given to — while this state is created *after* the coordinator, since its effects observe
- * the drag. So the delegate's hand-off box stays with the surface, which is the only place that can hold something
- * both sides of that construction order can see.
  */
 @Stable
 class FolderHostState {
@@ -104,6 +105,20 @@ class FolderHostState {
      * committed (see [FolderPhase.Incoming]). Null otherwise.
      */
     val incomingComponent: ComponentKey? get() = (phase as? FolderPhase.Incoming)?.app
+
+    /**
+     * Whether a drag in flight is the **open folder's** rather than the surface's. One [DragCoordinator] spans both,
+     * so `isDragging` alone can't tell them apart, and a surface that assumes every drag is its own reacts to
+     * gestures happening inside a folder on top of it.
+     *
+     * True while a folder is open, *except* during an extract — that drag started in the folder but is on its way to
+     * the surface, so from here on it is the surface's business. Reading this rather than the active drop zone is
+     * deliberate: a surface drag held over a gap or padding has no zone, and must not be mistaken for a folder's.
+     *
+     * The surface combines it with its own drag state, e.g. `coordinator.isDragging && !dragBelongsToOpenFolder`.
+     */
+    val dragBelongsToOpenFolder: Boolean
+        get() = openFolderId != null && phase !is FolderPhase.Extracting
 
     /** Open [folderId]'s overlay (a tap on its cell — so no drag can be in flight, and nothing is discarded). */
     fun open(folderId: Long) {

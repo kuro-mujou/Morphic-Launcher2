@@ -32,6 +32,8 @@ import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
 import inkspire.morphic.core.designsystem.folder.FolderOverlay
+import inkspire.morphic.core.designsystem.folder.FolderPhase
+import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
@@ -154,13 +156,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Is a drag in flight that could still land on home? On the shared coordinator `isDragging` alone can't tell:
-    // it is equally true of a reorder happening inside the open folder, which is that surface's gesture and must
-    // not grow home's pager behind it. An extract *is* on its way here, so it counts. (Deliberately not the active
-    // zone — a home drag held over the pager's padding has no zone, and the page it is being carried to must not
-    // vanish from under the pager mid-drag.)
-    val homeDragInFlight = coordinator.isDragging &&
-        (folderHost.openFolderId == null || folderHost.phase is FolderPhase.Extracting)
+    // Is a drag in flight that could still land on home? Not one belonging to the open folder — a reorder inside it
+    // is that surface's gesture and must not grow home's pager behind it (an extract, on its way here, does count).
+    // The folder host owns that distinction, since it is the only thing that knows whose drag it is.
+    val homeDragInFlight = coordinator.isDragging && !folderHost.dragBelongsToOpenFolder
     LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
     fun handleDrop() {
