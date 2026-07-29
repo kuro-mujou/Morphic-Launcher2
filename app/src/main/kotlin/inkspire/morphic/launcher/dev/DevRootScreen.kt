@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.home.HomeScreen
 
@@ -24,6 +25,7 @@ import inkspire.morphic.feature.home.HomeScreen
 private enum class DevScreen(val label: String) {
     Home("Home"),
     Apps("Apps"),
+    AppsGrid("AppsGrid"),
     Drag("Drag"),
     Pager("Pager"),
     PagerDrag("Pager+Drag"),
@@ -48,6 +50,9 @@ fun DevRootScreen(modifier: Modifier = Modifier) {
         when (screen) {
             DevScreen.Home -> HomeScreen()
             DevScreen.Apps -> AppsScreen()
+            // The layout is normally a user setting (data:settings); until then the harness picks it
+            // per entry, which is also the cheapest way to eyeball two layouts side by side.
+            DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
             DevScreen.Drag -> DragPlaygroundScreen()
             DevScreen.Pager -> PagerPlaygroundScreen()
             DevScreen.PagerDrag -> PagerDragPlaygroundScreen()

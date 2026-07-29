@@ -430,24 +430,37 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   app cache and nothing else. Ordering is a locale-aware `Collator` + a component tie-break, deliberately not L1's
   `sortedBy { label.lowercase() }` — that compares raw UTF-16, so every accented label sorts after `Z` and a
   Vietnamese or French list breaks into two alphabets.
-- **`AppsVerticalList`** (`layout/`) is a `LazyColumn` of `AppRowCell` (`core:designsystem/cell` — the horizontal
-  sibling of `AppCell`), with **row height a flat placeholder** and the icon sized from the list's own
-  `IconMetrics` through `LocalIconMetrics`. Rows use the shared `launcherItemGestures` contract rather than a
-  `clickable`, so this list cannot drift from the rest of the launcher on long-press timing or slop — which is
-  exactly what L1 did, hand-rolling a recogniser (plus a click-suppression flag) inside its list composable.
-  **A row's touch target is the whole row** — the same "visible extent" rule as a grid cell, not an exception:
-  a row's visible extent *is* the full-width strip. Consequence: a list leaves no slack for a surface long-press.
+- **Both *derived* layouts are built** — the vertical list and the vertical grid. They came first together because
+  neither stores anything: each re-renders straight from the app cache, so between them the surface is proven end
+  to end (repository → ordering → cells → launch) without the APPS **order** repository, which is what every
+  remaining layout is blocked on.
+  - **`AppsVerticalList`** — a `LazyColumn` of `AppRowCell` (`core:designsystem/cell`, the horizontal sibling of
+    `AppCell`); **row height a flat placeholder**, icon sized from the list's own `IconMetrics`
+    (`iconPercent = 1f` — no label underneath to leave room for).
+  - **`AppsVerticalGrid`** — a `LazyVerticalGrid` of `AppCell`; **columns from the `AppsScrollGrid` blueprint**
+    (`colsFor(device)`, since a `SCROLL_GRID` blueprint has no rows and so can't go through `toGridConfig`), cell
+    height a flat placeholder, denser `IconMetrics` than home's. It is **not** `LauncherGrid`'s SCROLL_GRID mode:
+    that composes every child at once, which is right for the bounded per-category page it was built for and wrong
+    for hundreds of icon-baking cells. This is the grid plan's *right tool per surface* rule, and it costs nothing
+    because a derived layout is never dragged **within** itself — so it needs no shared lattice and no published
+    `GridGeometry` (a drag *out* is `EjectToHome`, which reads the finger).
+- Cells go through the shared `launcherItemGestures` contract rather than a `clickable`, so APPS cannot drift from
+  the rest of the launcher on long-press timing or slop — exactly what L1 did, hand-rolling a recogniser (plus a
+  click-suppression flag) inside its list composable. The tap-only wiring lives in one `appsItemGestures` shared by
+  both layouts, so a layout can't half-wire it and there's one file to change when the P7 menu and `EjectToHome`
+  land. **A row's touch target is the whole row** — the same "visible extent" rule as a grid cell, not an
+  exception: a row's visible extent *is* the full-width strip. Consequence: a list leaves no slack for a surface
+  long-press.
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
   helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
-  every layout but the list. The four ordered/paged layouts need the APPS **order** repository first.
+  the three **ordered** layouts (pager, pager-with-category, category card), which need the order repository.
 
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
 (which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
 above), home **orientation**, widgets/containers on the grid, or `data:apps` categorization (B6). On APPS: the
-**vertical grid** (the other derived layout, so it needs no store either), the alphabet filter strip, search, or
-the APPS **order** repository — which unblocks all three paged/category layouts at once and forces the
-folders-on-APPS decision above. Folder follow-ups: rename, add-via-picker, cross-page reorder,
+alphabet filter strip, search, or the APPS **order** repository — which unblocks all three remaining layouts at
+once and forces the folders-on-APPS decision above. Folder follow-ups: rename, add-via-picker, cross-page reorder,
 onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw

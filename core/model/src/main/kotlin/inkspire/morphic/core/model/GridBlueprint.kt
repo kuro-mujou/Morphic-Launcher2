@@ -90,6 +90,16 @@ fun GridBlueprint.toGridConfig(device: DeviceConfiguration): GridConfig {
     )
 }
 
+/**
+ * The default **visual** column count for [device] — which is the whole of a column-only
+ * ([GridSizing.SCROLL_GRID]) blueprint's size, since its row count is whatever its content reaches at runtime.
+ *
+ * The counterpart of [toGridConfig], which cannot serve those grids at all: a [GridConfig] requires a row count,
+ * and a scrolling grid has none to give. Visual (not logical) columns, because the consumer is a lazy grid asking
+ * "how many cells across?" — a scrolling app grid has no sub-cell items to need the multiplier.
+ */
+fun GridBlueprint.colsFor(device: DeviceConfiguration): Int = defaults.getValue(device).cols
+
 /** Home free-placement pager — sub-cell grid (multiplier 2); rows and columns both editable. */
 val HomePagerGrid = GridBlueprint(
     sizing = GridSizing.FIXED_PAGER,
