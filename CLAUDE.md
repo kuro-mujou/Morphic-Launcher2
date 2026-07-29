@@ -230,6 +230,13 @@ from the baked stack).
   *surface's* menu. Works because `launcherItemGestures` never consumes a down. Consequence: cells (`AppCell`,
   `FolderCell`) carry **no `onClick`** — taps arrive through the one gesture contract. See
   [docs/DRAG_AND_DROP_DESIGN.md](docs/DRAG_AND_DROP_DESIGN.md) §5.
+- **Don't invent a dimension nothing owns yet.** Launcher surface metrics (dock extent, home padding, icon size, grid
+  rows) are **settings-driven by design**. Until `data:settings` exists, use the plainest possible stand-in — a named
+  dp constant, or "fill the rest" — and KDoc it as a placeholder naming the setting that replaces it. Do **not** derive
+  it from something else to make it look principled: derived-looking arithmetic reads as a decision when it is really
+  a guess, and it hides that the value is still unowned (worse, it can invert the real dependency — the dock's row
+  count comes *from* its height, so sizing its height from a row count is backwards). `DockHeight` in `HomeScreen` is
+  the worked example.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
   colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
@@ -302,11 +309,11 @@ delete cascades its membership + placement rows. The APPS pager/category/list **
 repository (not built). Deferred: cross-orientation rotate-seeding (empty-folder auto-dissolve now done, in the
 home layer).
 
-**Home surface — extracted to `feature:home`, real-sized, with a full folder subsystem.** Its own module
-(`feature:home`, `inkspire.morphic.feature.home`); plain-MVVM `HomeViewModel` (screen-scoped `ViewModel`,
-optimistic placement state, logic out of the UI) joins `LayoutRepository.placements` + `AppRepository` apps +
-`LayoutRepository.folders`. Rendered on the paged `CoordinateDragPager` at the **real blueprint size**
-(`HomePagerGrid.toGridConfig(device)` — device-aware, `cellMultiplier = 2`, apps are 2×2 logical footprints
+**Home surface — extracted to `feature:home`, real-sized, two zones (pager + dock), with a full folder subsystem.**
+Its own module (`feature:home`, `inkspire.morphic.feature.home`); plain-MVVM `HomeViewModel` (screen-scoped
+`ViewModel`, optimistic placement state, logic out of the UI) joins `LayoutRepository.placements` + `AppRepository`
+apps + `LayoutRepository.folders`. The main area renders on the paged `CoordinateDragPager` at the **real blueprint
+size** (`HomePagerGrid.toGridConfig(device)` — device-aware, `cellMultiplier = 2`, apps are 2×2 logical footprints
 snapped to the visual lattice; device detected in the UI, fed to the VM for seeding). Portrait only. Hosted as
 the default `DevRootScreen` screen.
 - **Launch** on tap → `AppLauncher` (`data:apps`, a one-method command separate from `AppRepository`'s reads;
@@ -322,21 +329,72 @@ the default `DevRootScreen` screen.
   dwell on a folder opens it mid-drag to drop an app in) are one **continuous drag** across a **single shared
   `DragCoordinator`** — home + folder zones on it, planner/drop dispatch by zone, the folder publishes a
   `FolderDragDelegate`, and the overlay fades-but-stays-composed so the dragged cell keeps its pointer stream.
+  Both dwells are **~1s and equal** (opposite halves of one gesture), and **extract is armed only after the finger has
+  been over the inner grid**: a folder that opens mid-drag does so under wherever its cell sat, which for a folder near
+  a screen edge is already the outer zone — un-armed, the same held finger that put the app in would instantly eject
+  it. A drag that starts inside is armed on its first frame, so one rule covers arriving *and* leaving. Consequence:
+  an app can be carried in and taken straight back out, so the removal half handles a **non-member** extract (place it,
+  remove nothing, no dissolve — membership never changed).
+  A drag out of a folder can land on a **merge ring** too, not just an empty cell (`mergeExtractedApp`) — so an app
+  moves **folder→folder**, or folder→new-folder, in one gesture; dropping it back on its **origin folder cancels**
+  (nothing written, since it never left). Every landing shares one `leaveFolderChanges` (remove + auto-dissolve), so
+  the paths can't disagree about what leaving a folder means.
+- **Folder→folder is *continuous*: two overlays, one of them a pointer holder.** Dwelling on a second folder mid-extract
+  opens it and the drag carries on inside, so the app is placed at a chosen slot rather than appended. What makes that
+  possible: **`FolderHostState.dragOriginFolderId`** — the folder a drag was pulled out of, set at the *first* extract of
+  a drag (so A→B→out still owes A) and held until it ends. It answers two things at once: that folder's overlay must
+  **stay composed** (the cell that received the finger is in its grid, and an in-flight pointer stream **cannot** be
+  handed to another node — see the rule in `launcherItemGestures`; a root-level pointer overlay was tried and rejected
+  because it swallows item events), and that folder is **owed a removal** when the drag lands, wherever it lands. It is
+  deliberately *not* a `FolderPhase` field: it describes the **drag**, not where the interaction is, and once the app has
+  been carried into a second folder the phase names *that* folder. `FolderOverlay` gains `presenting` — false reduces it
+  to a pointer holder (no back handler, no published delegate, no proxy; already invisible + zone-less post-hand-off).
+  **Two traps if you touch this:** both overlays must be emitted from **one keyed call site** (a second call site is a
+  different composition position, so Compose disposes the folder and kills the drag it was preserving); and the incoming
+  app must be resolved from **placed apps *and* folder contents**, since one arriving from another folder has no
+  placement at all.
   Extracting the second-last app **auto-dissolves** the folder (last app inherits its cell).
   The whole open/extract/inject lifecycle lives in `FolderHostState` (`core:designsystem`), not the screen; home
-  supplies only the surface-specific *"which folder does this merge plan target?"* lambda (a placement match) and
-  the commit calls. Two guards worth knowing: `reconcileFolderOrder` (`FolderOrder.kt`) folds a UI-reported order
+  supplies only the surface-specific *"which folder does this merge plan target?"* lambda (a **zone + placement**
+  match — placement alone matches the other zone's folder at the same cell) and the commit calls. Two guards worth
+  knowing: `reconcileFolderOrder` (`FolderOrder.kt`) folds a UI-reported order
   back onto real membership, because `ReorderFolder` replaces membership wholesale and the UI can only report
   members it could render — writing its list verbatim **deleted** anything unresolvable (an uninstalled app,
   B6 pruning still deferred); and `FolderOverlay` is wrapped in `key(folderId)` so switching folders doesn't
   inherit the previous one's pager position or reorder gap.
+- **Dock — a second coordinate zone, a peer of the main area.** A single non-paged `CoordinateDragGrid`
+  (`DockGrid.toGridConfig(device)`) below the pager, registered as a second zone (`DockZoneId`) on the **same shared
+  `DragCoordinator`**. Because one coordinator hit-tests every zone in one space, **pager↔dock drag is not a feature
+  at all** — it is one gesture whose drop reports the zone it landed in, and `homeZoneOf(zoneId)` turns that into the
+  `HomeZone` the `Move` writes. It needs **no new op and no schema change**: `LayoutChange.Move` already carries
+  `zone`, and the `*_placement` tables key on *item + orientation* (not zone), so the same row is re-stamped.
+  Everything else is zone-generic rather than duplicated: one `planCoordinateDrop` serves both grids (differing only
+  in geometry/config/occupants/page — deliberately **not** L1's `resolveDockDrop`, a drifted near-copy of its home
+  resolver), one `handleDrop`, one `HomeItemCell`. The dock takes apps, folders and (later) widgets, merges into
+  folders, and hosts folders that open/reorder/extract/inject like any other — the folder hand-offs are continuous
+  across it (the overlay unregisters its own zone on extract, so the drag lands on whichever grid is beneath).
+  **The dock starts empty** — an app lives in exactly one place, so seeding it would carve apps out of the main
+  area, and *which* apps belong there is a default worth a picker; fill it by dragging.
+- **An item carries its zone; a placement alone is not a location.** Each zone is its own coordinate space, so dock
+  cell (0,0) and main cell (0,0) are the same `GridPlacement` value in different places. `HomeItem.zone` (mirroring
+  `PlacedItem`) is what disambiguates them, and the zone is part of *identifying* a target, not just of writing the
+  result — every per-zone derived list (grid contents, planner occupants, page count) must be built from one zone's
+  items alone. Two bugs came from getting this wrong, both worth not repeating: matching a merge target on placement
+  alone resolved a folder in the wrong zone, and scoping the *open-folder* lookup to MAIN left a tapped dock folder
+  with its id set on the host and nothing to render (opening is zone-independent; merge *targets* are per-zone).
+- **Layout: fixed-height dock, pager takes the rest, and no padding anywhere.** `DockHeight` is a flat placeholder
+  constant — the dock's extent is meant to come from a **dock setting**, with its **row count derived from that
+  extent and the icon size**, so any row-count-driven sizing inverts the real dependency. Home carries **no
+  decorative padding** either (L1 had a configurable horizontal padding; L2 adds it *with* the setting, not before).
+  The one applied inset is the bottom system bar, so the dock clears the navigation bar — a system constraint, not
+  styling. See the sizing rule in the design-system section.
 
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
-exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **folders on the
-dock**, home **orientation** + `GridBlueprint`-driven **dock + pager**, widgets/containers on the grid, the APPS
-**order** repository (+ the folders-on-APPS decision above), or `data:apps` categorization (B6). Folder follow-ups:
-rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent
-category is added last (P9), the final flip.
+exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
+(which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
+above), home **orientation**, widgets/containers on the grid, the APPS **order** repository (+ the folders-on-APPS
+decision above), or `data:apps` categorization (B6). Folder follow-ups: rename, add-via-picker, cross-page reorder,
+onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no
