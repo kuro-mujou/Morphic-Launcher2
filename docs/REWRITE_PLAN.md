@@ -89,7 +89,9 @@ Large; port per-component as feature screens need them, not up front. Groups:
   overlaps the `GridPlacement`/`GridConfig` concepts now in `core:model`; decide what stays render-only.
 - pager ⚠️: `InfiniteLauncherPager`, `LauncherPagerSwipe`, `LauncherState`, `PageTransformScope`.
 - drag ⚠️: `DragLift`, `DropFootprint`, `FloatingDragIcon`, `SurfaceDragState`, `SurfaceExtractEngagement`.
-- cells/components: `AppCell`, `IconLabelCell`, `FolderCell`, `AppListColumn`, `IconMetrics`, `ItemInteraction`.
+- cells/components: `AppCell`, `IconLabelCell`, `FolderCell`, `IconMetrics`, `ItemInteraction`. ✅ `AppListColumn`
+  landed as **`AppRowCell`** — the row only, since L1's version was a list *and* a row *and* the alphabet strip
+  *and* four letter-indexing helpers in one file; the list is `feature:apps`, the strip is still to come.
 - blur: `Backdrop`, `IconSkinBackdrop`, `LiquidGlass`. theme: `LauncherTheme`, `Typography`, `WallpaperColorScheme`.
 - misc: folder (`FolderGrid`/`FolderPager`/`FolderAppPickerSheet`), filter (`Alphabet*`), search/field, popup,
   indicator, dialog, settings rows, insets, `topaction/TopActionZone`.

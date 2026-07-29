@@ -48,7 +48,9 @@ root Gradle project name `Launcher2`.
   (Room), `icon`, `designsystem` (Compose), `navigation`.
 - **`data:*`** — `apps`, `icons`, `layout` (the highest-logic module — placement engine), `settings`,
   `widgets`. Each exposes repositories the UI consumes.
-- **`feature:*`** — `home`, `appdrawer`, `applibrary`, `settings`, `shell`.
+- **`feature:*`** — `home`, `apps`, `settings`, `shell`. One module **per surface**, not per look: `apps` is the
+  whole APPS surface and picks its arrangement from `AppsLayout` internally, which is why L1's separate
+  `appdrawer` + `applibrary` modules are gone rather than ported.
 - **`app`** — the launcher application shell.
 - **`build-logic/convention`** — custom Gradle convention plugins (see the module→plugin table in
   the rewrite plan). Versions are centralized in `gradle/libs.versions.toml`.
@@ -406,11 +408,39 @@ the default `DevRootScreen` screen.
   The one applied inset is the bottom of `systemBars ∪ displayCutout`, so the dock clears the navigation bar — a
   system constraint, not styling. See the sizing rule in the design-system section.
 
+**APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
+(`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were
+deleted, not ported, because they rendered the same apps with the same launch behaviour and differed only in
+arrangement — the model had already collapsed that into `Surface.APPS` + `AppsLayout`, and two modules made
+"drawer or library?" a question that had to be answered before, and separately from, "which layout?".
+- **`AppsScreen` is the one place a layout is chosen** — a `when` over `AppsLayout` above shared wiring (ViewModel,
+  ordering, theme, background), so no layout can disagree with another about what the app list *is*. The unbuilt
+  arms are listed individually rather than behind an `else`, so a new `AppsLayout` value fails to compile until it
+  is rendered. `layout` is a **parameter with a default** — the real choice is per-binding user preference and
+  belongs to `data:settings` (B7).
+- **One `AppsViewModel` per surface, not per layout** (switching layout must not reload anything), exposing one
+  `AppsState`. It has **no write path at all**: the list is a *derived* layout, so its order is a function of the
+  app cache and nothing else. Ordering is a locale-aware `Collator` + a component tie-break, deliberately not L1's
+  `sortedBy { label.lowercase() }` — that compares raw UTF-16, so every accented label sorts after `Z` and a
+  Vietnamese or French list breaks into two alphabets.
+- **`AppsVerticalList`** (`layout/`) is a `LazyColumn` of `AppRowCell` (`core:designsystem/cell` — the horizontal
+  sibling of `AppCell`), with **row height a flat placeholder** and the icon sized from the list's own
+  `IconMetrics` through `LocalIconMetrics`. Rows use the shared `launcherItemGestures` contract rather than a
+  `clickable`, so this list cannot drift from the rest of the launcher on long-press timing or slop — which is
+  exactly what L1 did, hand-rolling a recogniser (plus a click-suppression flag) inside its list composable.
+  **A row's touch target is the whole row** — the same "visible extent" rule as a grid cell, not an exception:
+  a row's visible extent *is* the full-width strip. Consequence: a list leaves no slack for a surface long-press.
+- Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
+  helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
+  every layout but the list. The four ordered/paged layouts need the APPS **order** repository first.
+
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
 (which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
-above), home **orientation**, widgets/containers on the grid, the APPS **order** repository (+ the folders-on-APPS
-decision above), or `data:apps` categorization (B6). Folder follow-ups: rename, add-via-picker, cross-page reorder,
+above), home **orientation**, widgets/containers on the grid, or `data:apps` categorization (B6). On APPS: the
+**vertical grid** (the other derived layout, so it needs no store either), the alphabet filter strip, search, or
+the APPS **order** repository — which unblocks all three paged/category layouts at once and forces the
+folders-on-APPS decision above. Folder follow-ups: rename, add-via-picker, cross-page reorder,
 onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw

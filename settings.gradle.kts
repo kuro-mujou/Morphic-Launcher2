@@ -41,7 +41,6 @@ include(":data:settings")
 include(":data:widgets")
 
 include(":feature:home")
-include(":feature:appdrawer")
-include(":feature:applibrary")
+include(":feature:apps")
 include(":feature:settings")
 include(":feature:shell")
