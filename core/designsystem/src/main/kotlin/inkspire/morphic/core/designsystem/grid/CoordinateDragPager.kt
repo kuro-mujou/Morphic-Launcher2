@@ -28,6 +28,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /** How near a viewport edge the dragged item must be held to trigger a page-flip, and the dwell between flips. */
 private val EDGE_FLIP_DP = 44.dp
@@ -86,7 +87,7 @@ fun <T> CoordinateDragPager(
     val livePlan = session?.takeIf { it.activeZone == zoneId }?.plan
     var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
     LaunchedEffect(livePlan) {
-        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS); dwelledPlan = livePlan }
+        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan }
     }
 
     DisposableEffect(coordinator, zoneId) {
@@ -111,7 +112,7 @@ fun <T> CoordinateDragPager(
     LaunchedEffect(flipEdge) {
         val active = flipEdge ?: return@LaunchedEffect
         while (true) {
-            delay(EDGE_FLIP_DWELL_MS)
+            delay(EDGE_FLIP_DWELL_MS.milliseconds)
             val target = pagerState.currentPage + if (active == FlipEdge.LEFT) -1 else 1
             if (target < 0 || target >= pagerState.pageCount) break
             pagerState.animateToPage(target)

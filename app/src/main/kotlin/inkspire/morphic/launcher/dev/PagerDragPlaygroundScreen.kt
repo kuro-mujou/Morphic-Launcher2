@@ -56,6 +56,7 @@ import inkspire.morphic.data.layout.FreeGridPlanner
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Harness for **pager × drag** integration (P2). A bounded [LauncherPager] of paged free-placement grids; a
@@ -145,7 +146,7 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
         LaunchedEffect(edge) {
             val active = edge ?: return@LaunchedEffect
             while (true) {
-                delay(EDGE_DWELL_MS)
+                delay(EDGE_DWELL_MS.milliseconds)
                 val target = pagerState.currentPage + if (active == FlipEdge.LEFT) -1 else 1
                 if (target < 0 || target >= PAGES) break
                 pagerState.animateToPage(target)

@@ -22,6 +22,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * How long the finger must rest on a push before occupants reflow — long enough that a fast drag-through won't
@@ -98,7 +99,7 @@ fun <T> CoordinateDragGrid(
     val livePlan = session?.takeIf { it.activeZone == zoneId }?.plan
     var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
     LaunchedEffect(livePlan) {
-        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS); dwelledPlan = livePlan }
+        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan }
     }
 
     DisposableEffect(coordinator, zoneId) {

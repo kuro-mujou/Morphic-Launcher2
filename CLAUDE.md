@@ -424,3 +424,7 @@ so there is no CLI build from a fresh clone — Android Studio only.
 - Kotlin + Gradle Kotlin DSL (`.kts`) throughout.
 - Follow the existing module boundaries and the build order in the rewrite plan.
 - Match surrounding style; keep KDoc current when changing a type's purpose.
+- **`delay` takes a `Duration`, not a bare `Long`** — `delay(FooDwellMs.milliseconds)`, never `delay(FooDwellMs)`
+  (`kotlin.time.Duration.Companion.milliseconds`). The IDE flags the `Long` overload, and this codebase is full of
+  dwell/timeout constants, so the unit belongs at the call site where a wrong one would otherwise be invisible. The
+  constants themselves stay `Long` with an `Ms`/`_MS` name; only the call converts.
