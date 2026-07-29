@@ -156,8 +156,10 @@ How each surface/layout stores *where its items go*. Two primitives cover everyt
 
 - **Coordinate** — item → `GridPlacement` (page/row/col/spans), **per orientation**, gaps allowed. Used
   ONLY by HOME (pager main, dock, widget area) + home folders/containers. → Room `*_placement` tables keyed
-  by owner + orientation + **`zone: HomeZone`** (MAIN/DOCK/WIDGET_AREA). *(L1's conflated `surface` column
-  became `zone`; L1 `Surface{HOME,DOCK,WIDGET_AREA}` split into L2 `Surface{HOME,APPS}` + `HomeZone`.)*
+  by owner + orientation, each row carrying a **`zone: HomeZone`** (MAIN/DOCK/WIDGET_AREA). The zone is a
+  *column, not part of the key*, which is what lets a drag between zones re-stamp the same row rather than
+  needing a new op or a migration. *(L1's conflated `surface` column became `zone`; L1
+  `Surface{HOME,DOCK,WIDGET_AREA}` split into L2 `Surface{HOME,APPS}` + `HomeZone`.)*
 - **Order** — item → an ordinal within a bucket (1-D flow); the render re-paginates it. Everything else.
 
 | Surface / layout | Kind | Store | Per-orientation |

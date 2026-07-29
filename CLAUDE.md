@@ -81,7 +81,9 @@ when adding any new placement:
 
 - **Coordinate** — item → `GridPlacement` (page/row/col/spans), stored **per orientation**, gaps
   allowed. Used **only by HOME** (pager main, dock, widget area) and home folders/containers. Lives in
-  Room `*_placement` tables keyed by owner + orientation + **`zone: HomeZone`** (MAIN/DOCK/WIDGET_AREA).
+  Room `*_placement` tables keyed by owner + orientation, each row carrying a **`zone: HomeZone`**
+  (MAIN/DOCK/WIDGET_AREA). The zone is a *column, not part of the key* — which is what lets a drag between zones
+  re-stamp the same row instead of needing a new op or a migration.
 - **Order** — item → an ordinal within a bucket (1-D flow); the render layer re-paginates it. Used by
   **everything else**.
 
@@ -401,8 +403,8 @@ the default `DevRootScreen` screen.
   constant — the dock's extent is meant to come from a **dock setting**, with its **row count derived from that
   extent and the icon size**, so any row-count-driven sizing inverts the real dependency. Home carries **no
   decorative padding** either (L1 had a configurable horizontal padding; L2 adds it *with* the setting, not before).
-  The one applied inset is the bottom system bar, so the dock clears the navigation bar — a system constraint, not
-  styling. See the sizing rule in the design-system section.
+  The one applied inset is the bottom of `systemBars ∪ displayCutout`, so the dock clears the navigation bar — a
+  system constraint, not styling. See the sizing rule in the design-system section.
 
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
