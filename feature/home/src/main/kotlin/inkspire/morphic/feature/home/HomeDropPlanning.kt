@@ -3,17 +3,61 @@ package inkspire.morphic.feature.home
 import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.core.designsystem.grid.Cell
 import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.PushDirection
 import kotlin.math.abs
 
 /*
- * Home drop-planning helpers: the cell-partition maths that turns a finger position over an occupant into a
- * merge or a directional push. They live in feature:home because they bridge GridGeometry (core:designsystem)
- * and PushDirection (data:layout) — neither of which depends on the other. The dev harness keeps its own copy;
- * a shared home-planner is a later extraction if a second surface needs it.
+ * Home drop-planning: the cell-partition maths that turns a finger position over an occupant into a merge or a
+ * directional push, and the one planner ([planCoordinateDrop]) that every free-placement zone on HOME runs. They
+ * live in feature:home because they bridge GridGeometry (core:designsystem) and PushDirection (data:layout) —
+ * neither of which depends on the other. The dev harness keeps its own copy.
  */
+
+/**
+ * Plans a drop of [item] at [fingerInRoot] on **any** free-placement zone of HOME — the pager's main area, the
+ * dock, and (later) the widget area all resolve a hover the same way, differing only in the arguments below.
+ *
+ * Having one function rather than one per zone is deliberate. L1 grew a `resolveDockDrop` that was a near-copy of
+ * its home resolver, and the copies drifted; the whole point of the coordinate primitives is that a zone is
+ * described by *data* (its geometry, its dimensions, its occupants) and not by its own algorithm.
+ *
+ * The rule, unchanged from the single-zone version:
+ * - the footprint is one **visual** cell (`span × span` logical cells) snapped to the visual lattice;
+ * - if the finger is over an occupant, that occupant's cell partitions into a centre merge ring plus four push
+ *   triangles — the ring merges into a folder, a triangle picks which way the occupant is shoved;
+ * - otherwise the free-grid engine pushes whatever the footprint lands on.
+ *
+ * @param geo the zone's measured geometry, as published by its grid — the same cells the user can see.
+ * @param config the zone's logical dimensions; `cellMultiplier` is the visual-cell span.
+ * @param page the page the drop lands on — the pager's current page, or 0 for a single (non-paged) zone.
+ * @param occupants the zone's items *excluding* [item], already restricted to [page].
+ * @return the plan the live drop shadow and the eventual commit both read, or null when there is nothing to plan.
+ */
+internal fun planCoordinateDrop(
+    geo: GridGeometry,
+    config: GridConfig,
+    page: Int,
+    occupants: Map<GridItem, GridPlacement>,
+    item: GridItem,
+    fingerInRoot: Offset,
+): PlacementPlan {
+    val span = config.cellMultiplier
+    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span, rowSpan = span, step = span)
+    val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span, colSpan = span)
+
+    val target = geo.cellAt(fingerInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }
+        ?: return FreeGridPlanner.plan(footprint, occupants, config)
+
+    if (canMerge(item, target.key) && geo.inMergeRingOf(fingerInRoot, target.value)) {
+        return FreeGridPlanner.plan(target.value, occupants, config, merge = true)
+    }
+    return FreeGridPlanner.plan(footprint, occupants, config, geo.pushDirectionInRect(fingerInRoot, target.value))
+}
 
 /** Merge-ring radius as a fraction of the target's smaller side; inside it a drop combines rather than pushes. */
 private const val MERGE_INNER_RADIUS = 0.3f

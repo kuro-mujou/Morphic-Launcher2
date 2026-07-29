@@ -78,17 +78,25 @@ private val DotSpacing = 6.dp
 /** This overlay's inner-grid drop zone, registered above the home zone (`z = 1`) on the shared coordinator. */
 private val FolderZoneId = ZoneId("folder")
 
-/** How long a dragged app must dwell over the outer zone before it's extracted out of the folder. */
-private const val ExtractDwellMs = 300L
+/**
+ * How long a dragged app must dwell over the outer zone before it's extracted out of the folder.
+ *
+ * Deliberately long — and matched to the dwell that *opens* a folder mid-drag (`OPEN_FOLDER_DWELL_MS`), because the
+ * two are opposite halves of the same gesture and a user who has learnt one hold has learnt both. A short dwell here
+ * made the folder feel like it was ejecting apps by accident: the outer zone is most of the screen, so merely
+ * travelling across the card's edge on the way to another cell was enough to trigger it.
+ */
+private const val ExtractDwellMs = 1000L
 
 /**
  * The opened-folder view — two zones on the **shared** [DragCoordinator] the home owns (one coordinator over
  * both surfaces, per its design):
  * - the **outer zone** is the full-screen scrim: tapping it closes the folder, and holding a dragged app over it
- *   (~[ExtractDwellMs], i.e. the finger is off the inner grid) hands the drag off to home — the overlay hides
- *   itself but stays composed (so the dragged cell keeps its pointer stream) and drops its zone, so the shared
- *   coordinator now targets home and the drag continues there; the caller ([onExtractStart]) tracks it and the
- *   drop places the app on home + removes it from the folder; and
+ *   (~[ExtractDwellMs], i.e. the finger is off the inner grid — and only once it has *been* on the inner grid, see
+ *   the arming note at that dwell) hands the drag off to home — the overlay hides itself but stays composed (so the
+ *   dragged cell keeps its pointer stream) and drops its zone, so the shared coordinator now targets home and the
+ *   drag continues there; the caller ([onExtractStart]) tracks it and the drop places the app on home + removes it
+ *   from the folder (nothing to remove if it had only just been carried in); and
  * - the **inner zone** (registered as [FolderZoneId] at a higher `z` than home) is a bounded card holding the
  *   folder's app grid ([label] above it), sized by [folderInnerSize] so every folder is the same size.
  *
@@ -101,6 +109,19 @@ private const val ExtractDwellMs = 300L
  *
  * Extract is a **continuous hand-off**: the drag started here carries on as the *same* session onto home, no
  * lift. Reorder is within the current page.
+ *
+ * **Two roles, selected by [presenting].** Normally an overlay *is* the folder view. But an app can be carried out of
+ * one folder and into another in a single drag, and the cell driving that drag lives in the **first** folder's grid —
+ * an in-flight pointer stream can't be moved to another node, so that folder has to stay composed or the gesture dies
+ * (the toolkit's "keep a source surface composed while a drag from it is in flight" rule). So the host composes it
+ * alongside the newly opened one with `presenting = false`: same overlay, reduced to a pointer holder — no back
+ * handler, no published delegate, no proxy, and (since a hand-off has by definition already happened) invisible with
+ * its drop zone unregistered. See [FolderHostState.dragOriginFolderId].
+ *
+ * @param presenting true when this overlay is the folder the user is looking at and interacting with; false when it is
+ *   composed only to keep an in-flight drag's pointer stream alive. A host must emit both from **one keyed call site**
+ *   — moving a folder to a second call site is a different composition position, which disposes it and defeats the
+ *   whole point.
  *
  * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
  */
@@ -119,8 +140,10 @@ fun FolderOverlay(
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
     incoming: AppInfo? = null,
+    presenting: Boolean = true,
 ) {
-    BackHandler(onBack = onDismiss)
+    // Only the presented folder answers back; a pointer holder is invisible and must not intercept it.
+    if (presenting) BackHandler(onBack = onDismiss)
 
     val device = currentDeviceConfiguration()
     val grid = remember(device) { FolderGrid.toGridConfig(device) }
@@ -180,29 +203,46 @@ fun FolderOverlay(
             }
         }
     }
-    DisposableEffect(delegate) {
-        onPublishDelegate(delegate)
-        onDispose { onPublishDelegate(null) }
+    // Only the presented folder's hooks go to the coordinator: it is the one holding the registered folder zone, so a
+    // pointer holder publishing too would leave the surface routing folder drops to a folder nobody is looking at.
+    DisposableEffect(delegate, presenting) {
+        if (presenting) onPublishDelegate(delegate)
+        onDispose { if (presenting) onPublishDelegate(null) }
     }
     // True once a drag has dwelled off the grid and been handed off to home: the overlay hides but stays
     // composed (the dragged cell keeps its pointer), and its zone is dropped so the coordinator targets home.
     var extracting by remember { mutableStateOf(false) }
+    // Whether the finger has been over the inner grid at all during this drag — see `armed` below.
+    var enteredInnerZone by remember { mutableStateOf(false) }
     LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) { gap = -1; extracting = false }
+        if (!coordinator.isDragging) { gap = -1; extracting = false; enteredInnerZone = false }
     }
     DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(FolderZoneId) } }
 
     val session = coordinator.session
     val draggedComponent = (session?.item as? GridItem.App)?.component
 
+    val overInnerZone = session != null && session.activeZone == FolderZoneId
+    LaunchedEffect(overInnerZone) { if (overInnerZone) enteredInnerZone = true }
+
     // Dwell with the finger off the inner grid (over the outer zone / home behind it) hands the drag off to
     // home: hide + drop our zone so the shared coordinator targets home, and tell the caller which app is
-    // leaving. The drag continues; the drop (on home) does the actual move + folder removal. An app being
-    // dragged *in* (the incoming) is never extracted — it isn't a member to remove.
-    val draggedIsIncoming = draggedComponent != null && draggedComponent == incoming?.componentKey
-    val overOuterZone = session != null && session.activeZone != FolderZoneId && !draggedIsIncoming
-    LaunchedEffect(overOuterZone, extracting) {
-        if (!overOuterZone || extracting) return@LaunchedEffect
+    // leaving. The drag continues; the drop (on home) does the actual move + folder removal.
+    //
+    // **Armed only after the finger has been inside.** A folder can *open mid-drag* to receive an app (the inject
+    // dwell), and when it does the finger is wherever the folder's cell happened to be — for a folder near a screen
+    // edge, that is already over this overlay's outer zone. Extracting from there would eject the app the instant it
+    // arrived: the user held still to put it *in*, and the same held finger would immediately take it back out. So a
+    // drag becomes extractable only once it has been over the inner grid, which is the user showing they are done
+    // arriving and are now choosing to leave.
+    //
+    // For a folder that opens under the middle of the screen the finger is already inside, so it arms at once and
+    // dragging out ejects as expected. And a drag that *starts* in the folder (reordering a member) begins on a cell
+    // of the inner grid, so it is armed from the first frame — one rule covers all three cases, which is why this
+    // replaced a narrower "never extract the incoming app" guard that also made case 2 impossible.
+    val overOuterZone = session != null && !overInnerZone
+    LaunchedEffect(overOuterZone, extracting, enteredInnerZone) {
+        if (!overOuterZone || extracting || !enteredInnerZone) return@LaunchedEffect
         delay(ExtractDwellMs)
         val component = (coordinator.session?.item as? GridItem.App)?.component ?: return@LaunchedEffect
         extracting = true
@@ -315,9 +355,17 @@ fun FolderOverlay(
         }
 
         // Floating proxy following the finger during a reorder drag (root space, above the content).
+        //
+        // Resolved once per dragged component and *held*, deliberately not re-derived from [appByComponent]: an app
+        // carried in from the surface is only in that map while the host still calls it `incoming`, and an extract
+        // hand-off ends exactly that — so re-deriving would lose the app mid-gesture and the icon under the finger
+        // would blink out (home won't draw it either; the folder owns the proxy while it is open). Same
+        // resolve-once-and-hold reasoning as the caller's own `incoming` lookup.
+        // A pointer holder draws nothing: the presented folder renders this same app as its `incoming` and paints the
+        // proxy, so both drawing one would put two icons under one finger.
         val geo = geometry
-        val dragApp = draggedComponent?.let(appByComponent::get)
-        if (session != null && geo != null && dragApp != null) {
+        val dragApp = remember(draggedComponent) { draggedComponent?.let(appByComponent::get) }
+        if (presenting && session != null && geo != null && dragApp != null) {
             val finger = session.fingerInRoot
             FloatingDragIcon(
                 rootOffset = IntOffset(

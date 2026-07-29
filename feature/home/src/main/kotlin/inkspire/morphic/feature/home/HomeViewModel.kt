@@ -13,6 +13,7 @@ import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.layout.PlacedItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,18 +49,24 @@ class HomeViewModel(
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
 ) : ViewModel() {
-    private val placements = MutableStateFlow<Map<GridItem, GridPlacement>>(emptyMap())
+    private val placements = MutableStateFlow<Map<GridItem, PlacedItem>>(emptyMap())
 
     val state: StateFlow<HomeState> =
         combine(placements, appRepository.observeApps(), layoutRepository.folders()) { placed, apps, folders ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             HomeState(
-                items = placed.mapNotNull { (item, placement) ->
+                items = placed.mapNotNull { (item, at) ->
                     when (item) {
-                        is GridItem.App -> infoByComponent[item.component]?.let { HomeItem.App(it, placement) }
+                        is GridItem.App ->
+                            infoByComponent[item.component]?.let { HomeItem.App(it, at.placement, at.zone) }
                         is GridItem.Folder -> folderById[item.folderId]?.let { folder ->
-                            HomeItem.Folder(folder, folder.apps.mapNotNull(infoByComponent::get), placement)
+                            HomeItem.Folder(
+                                folder = folder,
+                                apps = folder.apps.mapNotNull(infoByComponent::get),
+                                placement = at.placement,
+                                zone = at.zone,
+                            )
                         }
                         else -> null // widgets / containers get their cells later
                     }
@@ -82,8 +89,7 @@ class HomeViewModel(
         viewModelScope.launch {
             if (firstConfig) appRepository.refresh()
             seedIfEmpty(config)
-            // Home renders the MAIN zone only for now; drop the zone, keep the coordinate.
-            placements.value = layoutRepository.placements(ORIENTATION).first().mapValues { it.value.placement }
+            placements.value = layoutRepository.placements(ORIENTATION).first()
         }
     }
 
@@ -103,7 +109,7 @@ class HomeViewModel(
         viewModelScope.launch {
             layoutRepository.apply(ORIENTATION, changes)
             if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
-                placements.value = layoutRepository.placements(ORIENTATION).first().mapValues { it.value.placement }
+                placements.value = layoutRepository.placements(ORIENTATION).first()
             }
         }
     }
@@ -121,45 +127,91 @@ class HomeViewModel(
     }
 
     /**
-     * Adds an app dragged in from home into folder [folderId], where [reported] is the arrangement the overlay
-     * dropped (its members *plus* [incoming]): set the membership/order and take [incoming] off the home grid.
+     * Adds an app dragged into folder [folderId], where [reported] is the arrangement the overlay dropped (its members
+     * *plus* [incoming]): set the membership/order and take [incoming] off the home grid.
      *
      * [incoming] joins the known membership before reconciling, since it is a member as of this drop — otherwise
      * the very app being added would be reconciled away as a non-member.
+     *
+     * [from] is the folder the app was pulled **out of**, when it came from one rather than off a grid — the
+     * folder-to-folder move, committed as a single batch so the app is never briefly in both or neither. Its
+     * `RemoveFromGrid` is then a no-op (a folder member has no cell), which is harmless and keeps one code path.
      */
-    fun addToFolder(folderId: Long, reported: List<ComponentKey>, incoming: ComponentKey) {
+    fun addToFolder(folderId: Long, reported: List<ComponentKey>, incoming: ComponentKey, from: Long? = null) {
         val known = folderById(folderId)?.folder?.apps ?: return
+        val leaving = from?.takeIf { it != folderId }?.let(::folderById)
         applyChanges(
             listOf(
                 LayoutChange.ReorderFolder(folderId, reconcileFolderOrder(known + incoming, reported)),
                 LayoutChange.RemoveFromGrid(GridItem.App(incoming)),
-            ),
+            ) + leaving?.let { leaveFolderChanges(it, incoming) }.orEmpty(),
         )
     }
 
     /**
-     * Commits an app dragged out of folder [folderId] and dropped on the home grid at [plan] (its footprint,
-     * plus the home occupants it pushed): the app lands there and leaves the folder.
+     * Commits an app dragged out of folder [folderId] and dropped in [zone] at [plan] (its footprint, plus the
+     * occupants of that zone it pushed): the app lands there and leaves the folder.
      *
-     * **Auto-dissolve:** a folder holds ≥ 2 apps, so extracting the second-last one would leave a folder of one.
-     * Instead the folder is dissolved — the single remaining app takes over the folder's cell and the folder is
-     * deleted (its FK cascades drop the membership + placement rows). Otherwise it's a plain remove-from-folder.
+     * See [leaveFolderChanges] for the removal half (including auto-dissolve), which every landing shares.
      */
-    fun dropExtractedApp(folderId: Long, component: ComponentKey, plan: PlacementPlan) {
+    fun dropExtractedApp(folderId: Long, component: ComponentKey, plan: PlacementPlan, zone: HomeZone) {
         val folder = folderById(folderId) ?: return
-        val remaining = folder.folder.apps.filter { it != component }
         val changes = mutableListOf<LayoutChange>()
-        plan.moves.forEach { (moved, to) -> changes += LayoutChange.Move(moved, to) } // pushed home occupants
-        changes += LayoutChange.Move(GridItem.App(component), plan.footprint) // the extracted app lands here
-        if (remaining.size <= 1) {
-            remaining.singleOrNull()?.let { last ->
-                changes += LayoutChange.Move(GridItem.App(last), folder.placement)
-            }
-            changes += LayoutChange.RemoveFromGrid(GridItem.Folder(folderId)) // deletes folder (cascades rows)
-        } else {
-            changes += LayoutChange.RemoveFromFolder(folderId, component)
-        }
+        // Pushed occupants are already in the drop zone, so they move within it.
+        plan.moves.forEach { (moved, to) -> changes += LayoutChange.Move(moved, to, zone) }
+        changes += LayoutChange.Move(GridItem.App(component), plan.footprint, zone) // the extracted app lands here
+        changes += leaveFolderChanges(folder, component)
         applyChanges(changes)
+    }
+
+    /**
+     * Commits an app dragged out of folder [folderId] and dropped on the **merge ring** of whatever sits at
+     * [targetPlacement] in [zone]: it goes straight into that target — combining with an app to make a new folder, or
+     * joining an existing one — and leaves [folderId] in the same batch.
+     *
+     * This is what stops an extracted app being stranded. Without it a drag out of a folder could only ever land on an
+     * empty cell: the drop handler discarded a MERGE outcome, so releasing over another folder (or another app) did
+     * nothing and the app snapped back — an app could leave a folder but never move between folders in one gesture.
+     *
+     * **Dropped back on its own folder cancels.** The origin folder is still sitting on the grid throughout the drag,
+     * so its merge ring is a natural "put it back", and nothing is written — the app never actually left. Handling it
+     * here rather than as an add-then-remove pair keeps it a genuine no-op instead of two writes that cancel out.
+     */
+    fun mergeExtractedApp(folderId: Long, component: ComponentKey, targetPlacement: GridPlacement, zone: HomeZone) {
+        val folder = folderById(folderId) ?: return
+        val target = state.value.items.firstOrNull { it.placement == targetPlacement && it.zone == zone } ?: return
+        if (target.gridItem == GridItem.Folder(folderId)) return // back into the folder it came from — it never left
+        val merge = mergeChanges(GridItem.App(component), targetPlacement, zone) ?: return
+        applyChanges(merge + leaveFolderChanges(folder, component))
+    }
+
+    /**
+     * The changes that take [app] out of [folder] — the half shared by every way a dragged-out app can land (an empty
+     * cell, another folder, a new folder made by merging). Kept as one function so those paths cannot disagree about
+     * what leaving a folder means.
+     *
+     * **Auto-dissolve:** a folder holds ≥ 2 apps, so removing the second-last one would leave a folder of one. Instead
+     * the folder is dissolved — the single remaining app takes over the folder's cell and the folder is deleted (its FK
+     * cascades drop the membership + placement rows). Otherwise it's a plain remove-from-folder.
+     *
+     * The dissolve move carries **[folder]'s own zone**, not the drop's: the last app inherits the folder's cell, which
+     * is wherever the folder sat. The two differ whenever an app is dragged out of a folder in one zone and dropped in
+     * the other.
+     *
+     * **[app] may not be a member at all**, in which case this is empty. A folder can open mid-drag to receive an app
+     * from the grid, and that app can be dragged back out before it was ever committed — the same gesture, but with
+     * nothing to remove and no dissolve to consider, since membership never changed and so the count cannot have fallen.
+     */
+    private fun leaveFolderChanges(folder: HomeItem.Folder, app: ComponentKey): List<LayoutChange> {
+        if (app !in folder.folder.apps) return emptyList()
+        val remaining = folder.folder.apps.filter { it != app }
+        if (remaining.size > 1) return listOf(LayoutChange.RemoveFromFolder(folder.folder.id, app))
+        return buildList {
+            remaining.singleOrNull()?.let { last ->
+                add(LayoutChange.Move(GridItem.App(last), folder.placement, folder.zone))
+            }
+            add(LayoutChange.RemoveFromGrid(GridItem.Folder(folder.folder.id)))
+        }
     }
 
     /** The placed folder [folderId], or null when it is gone (dissolved, or its definition not resolved yet). */
@@ -167,22 +219,26 @@ class HomeViewModel(
         state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == folderId }
 
     /**
-     * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement]:
-     * app→app creates a new folder at the target's cell; app→folder appends to it. Returns null when there is no
-     * valid merge (target gone, or a combination not yet supported — folder-on-app, widgets and containers
+     * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement] in
+     * [zone]: app→app creates a new folder at the target's cell; app→folder appends to it. Returns null when there
+     * is no valid merge (target gone, or a combination not yet supported — folder-on-app, widgets and containers
      * arrive with those item types). Kept in the ViewModel so the drop handler stays logic-free.
+     *
+     * [zone] is part of *identifying the target*, not just of writing the result: each zone has its own coordinate
+     * space, so a placement alone matches items in every zone at once.
      */
-    fun mergeChanges(dragged: GridItem, targetPlacement: GridPlacement): List<LayoutChange>? {
+    fun mergeChanges(dragged: GridItem, targetPlacement: GridPlacement, zone: HomeZone): List<LayoutChange>? {
         val draggedApp = (dragged as? GridItem.App)?.component ?: return null
-        val target = state.value.items.firstOrNull { it.gridItem != dragged && it.placement == targetPlacement }
-            ?: return null
+        val target = state.value.items.firstOrNull {
+            it.gridItem != dragged && it.placement == targetPlacement && it.zone == zone
+        } ?: return null
         return when (target) {
             is HomeItem.App -> listOf(
                 LayoutChange.CreateFolder(
                     label = DEFAULT_FOLDER_LABEL,
                     apps = listOf(target.info.componentKey, draggedApp),
                     at = targetPlacement,
-                    zone = HomeZone.MAIN,
+                    zone = zone,
                 ),
             )
             is HomeItem.Folder -> listOf(LayoutChange.AddToFolder(target.folder.id, draggedApp))
@@ -200,6 +256,11 @@ class HomeViewModel(
      * Each app occupies a whole visual cell, which is `cellMultiplier` logical cells on each axis; visual
      * coordinates are scaled by the multiplier so the stored placements are in the grid's logical space (and so
      * a future sub-cell item can sit between them without any migration).
+     *
+     * **Only [HomeZone.MAIN] is seeded — the dock deliberately starts empty.** An app lives in exactly one place,
+     * so seeding the dock would mean carving apps out of this list, and picking *which* apps belong in a dock is a
+     * presentation default worth getting right on its own (with a picker) rather than guessing here. Until then the
+     * dock is filled by dragging an app into it, which is the flow that needs proving first.
      */
     private suspend fun seedIfEmpty(config: GridConfig) {
         if (layoutRepository.placements(ORIENTATION).first().isNotEmpty()) return
@@ -216,6 +277,7 @@ class HomeViewModel(
                     rowSpan = mult,
                     colSpan = mult,
                 ),
+                zone = HomeZone.MAIN,
             )
         }
         layoutRepository.apply(ORIENTATION, moves)
@@ -228,12 +290,19 @@ class HomeViewModel(
     }
 }
 
-/** Folds coordinate [changes] into a placement map — the in-memory mirror of what the repository persists. */
-private fun Map<GridItem, GridPlacement>.withApplied(changes: List<LayoutChange>): Map<GridItem, GridPlacement> =
+/**
+ * Folds coordinate [changes] into a placement map — the in-memory mirror of what the repository persists.
+ *
+ * A `Move` writes the change's **zone** along with the cell, which is what makes a cross-zone drag (home → dock)
+ * optimistic like any other: the item simply re-keys into the other zone's grid. It is also why zone must be part
+ * of the mirrored value — carrying only the coordinate would silently keep a moved item in its old zone until the
+ * write came back.
+ */
+private fun Map<GridItem, PlacedItem>.withApplied(changes: List<LayoutChange>): Map<GridItem, PlacedItem> =
     toMutableMap().apply {
         changes.forEach { change ->
             when (change) {
-                is LayoutChange.Move -> put(change.item, change.to)
+                is LayoutChange.Move -> put(change.item, PlacedItem(change.to, change.zone))
                 is LayoutChange.RemoveFromGrid -> remove(change.item)
                 else -> Unit // container/folder membership ops don't move grid placements
             }

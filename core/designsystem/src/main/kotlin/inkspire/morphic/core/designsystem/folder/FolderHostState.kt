@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
+import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -15,7 +16,7 @@ import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
 
 /** How long a dragged app must dwell on a folder's merge ring before that folder opens mid-drag to take it in. */
-private const val OPEN_FOLDER_DWELL_MS = 500L
+private const val OPEN_FOLDER_DWELL_MS = 1000L
 
 /**
  * Where a surface's folder interaction currently *is* — one value, so the states that cannot coexist cannot be
@@ -107,6 +108,29 @@ class FolderHostState {
     val incomingComponent: ComponentKey? get() = (phase as? FolderPhase.Incoming)?.app
 
     /**
+     * The folder an in-flight drag was pulled **out of**, or null when this drag didn't come from a folder.
+     *
+     * Two separate things need it, and they turn out to be the same folder:
+     * - **Its overlay must stay composed for as long as the drag lives.** The cell that received the finger is in that
+     *   folder's grid, and an in-flight pointer stream cannot be handed to another node, so disposing it kills the
+     *   gesture mid-drag. This is the folder-level form of the drag toolkit's standing rule — *keep a source surface
+     *   composed while a drag from it is in flight* — so a host renders this folder invisibly alongside whichever
+     *   folder is actually being *presented*.
+     * - **It is owed a removal when the drag lands.** Wherever the app comes to rest — an empty cell, another folder,
+     *   a new folder made by merging — it has to leave this one, and only this one.
+     *
+     * Deliberately *not* a field on [FolderPhase]: it is a property of the **drag**, not of where the interaction is,
+     * and the two are independent (which is why it doesn't reintroduce the flags-that-must-agree problem the phase was
+     * built to remove). The phase cannot answer it either — once an app has been carried into a second folder, the
+     * phase names *that* folder, not the one still owed a removal.
+     *
+     * Set at the **first** extract of a drag and held until the drag ends, so carrying an app out of A, into B, and
+     * back out of B again still owes A.
+     */
+    var dragOriginFolderId: Long? by mutableStateOf(null)
+        private set
+
+    /**
      * Whether a drag in flight is the **open folder's** rather than the surface's. One [DragCoordinator] spans both,
      * so `isDragging` alone can't tell them apart, and a surface that assumes every drag is its own reacts to
      * gestures happening inside a folder on top of it.
@@ -135,6 +159,9 @@ class FolderHostState {
 
     /** The drag dwelled off the folder's inner zone: [app] is leaving [folderId], and the surface now owns the drag. */
     fun beginExtract(folderId: Long, app: ComponentKey) {
+        // First extract of a drag wins — see [dragOriginFolderId]. An app carried out of A, into B, then out of B
+        // again still came from A, and it is A's overlay that holds the pointer and A's membership that owes a removal.
+        if (dragOriginFolderId == null) dragOriginFolderId = folderId
         phase = FolderPhase.Extracting(folderId, app)
     }
 
@@ -175,6 +202,7 @@ class FolderHostState {
      * A folder the user opened by tapping is untouched by a drag ending elsewhere.
      */
     fun onDragEnd() {
+        dragOriginFolderId = null // scoped to one drag; the pointer holder is free to go and nothing is owed
         phase = when (val current = phase) {
             is FolderPhase.Extracting -> FolderPhase.Open(current.folderId)
             is FolderPhase.Injecting -> FolderPhase.Closed
@@ -191,23 +219,41 @@ class FolderHostState {
  * - **drag-end cleanup**: releasing anywhere clears the hand-off state via [FolderHostState.onDragEnd].
  *
  * @param coordinator the shared drag coordinator the surface and its folders both run on.
- * @param folderIdAt resolves a merge plan to the folder it targets, or null when the target isn't a folder. This is
- *   the surface's own geometry question — a coordinate surface compares placements, an ordered one compares slots —
- *   and the only thing here that isn't surface-independent.
+ * @param folderIdAt resolves a merge plan **in a given zone** to the folder it targets, or null when the target
+ *   isn't a folder. This is the surface's own geometry question — a coordinate surface compares placements, an
+ *   ordered one compares slots — and the only thing here that isn't surface-independent.
+ *
+ *   The zone is passed because a plan alone does not identify a target: a surface may register **several** drop
+ *   zones on one coordinator (home is a pager *and* a dock), and each has its own coordinate space — so the same
+ *   footprint value names a different cell in each, and matching on the plan alone would resolve a folder in the
+ *   wrong zone.
  */
 @Composable
 fun rememberFolderHostState(
     coordinator: DragCoordinator,
-    folderIdAt: (PlacementPlan) -> Long?,
+    folderIdAt: (ZoneId, PlacementPlan) -> Long?,
 ): FolderHostState {
     val host = remember { FolderHostState() }
 
     // The folder currently being hovered for a merge, if any. Null (which cancels the dwell below) when the drag
     // isn't over a merge target, or when a folder is already open — that drag is the folder's own business.
     val mergeTargetId: Long? = run {
-        val plan = coordinator.session?.plan?.takeIf { it.intent == DropIntent.MERGE } ?: return@run null
-        if (host.openFolderId != null) return@run null
-        folderIdAt(plan)
+        val session = coordinator.session ?: return@run null
+        val plan = session.plan?.takeIf { it.intent == DropIntent.MERGE } ?: return@run null
+        // A plan only exists for a zone the finger is over, so this is non-null in practice; treat it as required
+        // rather than guessing a zone, since guessing wrong resolves the wrong folder.
+        val zone = session.activeZone ?: return@run null
+        // A drag that belongs to the open folder must not open anything else — a reorder inside it, or an app already
+        // being carried into it, are that folder's business. An **extract** is deliberately exempt: that drag is on its
+        // way out to the surface, and dwelling on another folder there is precisely how an app moves from one folder to
+        // another in a single gesture. What makes that safe is [dragOriginFolderId] — the folder being left stays
+        // composed to hold the pointer, so opening a second folder no longer disposes the cell driving the drag.
+        if (host.dragBelongsToOpenFolder) return@run null
+        val target = folderIdAt(zone, plan) ?: return@run null
+        // Never re-open the folder being left: the app is still a member, so there is nothing to carry *in*. Dropping
+        // on its ring instead cancels the extract, which the surface handles.
+        if (target == host.dragOriginFolderId) return@run null
+        target
     }
     LaunchedEffect(mergeTargetId) {
         val folderId = mergeTargetId ?: return@LaunchedEffect
