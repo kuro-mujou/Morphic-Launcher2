@@ -173,9 +173,11 @@ class HomeViewModel(
      * empty cell: the drop handler discarded a MERGE outcome, so releasing over another folder (or another app) did
      * nothing and the app snapped back — an app could leave a folder but never move between folders in one gesture.
      *
-     * **Dropped back on its own folder cancels.** The origin folder is still sitting on the grid throughout the drag,
-     * so its merge ring is a natural "put it back", and nothing is written — the app never actually left. Handling it
-     * here rather than as an add-then-remove pair keeps it a genuine no-op instead of two writes that cancel out.
+     * **Dropped back on its own folder is a no-op.** The folder is still sitting on the grid throughout the drag, so
+     * its merge ring is a natural "put it back" — and the app is still a member, since nothing is written until the
+     * drop, so there is genuinely nothing to do. Recognising that here keeps it one no-op instead of an add-and-remove
+     * pair that cancel out. (Dwelling on that same ring re-opens the folder instead, which is how the app is put back
+     * at a *chosen* slot.)
      */
     fun mergeExtractedApp(folderId: Long, component: ComponentKey, targetPlacement: GridPlacement, zone: HomeZone) {
         val folder = folderById(folderId) ?: return
@@ -198,9 +200,9 @@ class HomeViewModel(
      * is wherever the folder sat. The two differ whenever an app is dragged out of a folder in one zone and dropped in
      * the other.
      *
-     * **[app] may not be a member at all**, in which case this is empty. A folder can open mid-drag to receive an app
-     * from the grid, and that app can be dragged back out before it was ever committed — the same gesture, but with
-     * nothing to remove and no dissolve to consider, since membership never changed and so the count cannot have fallen.
+     * **A non-member yields no changes.** Callers pass the folder a drag *started* in, so the app is normally a member
+     * by construction — but membership is read from state that can move underneath a long gesture (an uninstall, a
+     * profile going away), and removing an app that isn't there must not also dissolve a folder whose count never fell.
      */
     private fun leaveFolderChanges(folder: HomeItem.Folder, app: ComponentKey): List<LayoutChange> {
         if (app !in folder.folder.apps) return emptyList()

@@ -14,15 +14,18 @@ import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /** How long a dragged app must dwell on a folder's merge ring before that folder opens mid-drag to take it in. */
 private const val OPEN_FOLDER_DWELL_MS = 1000L
 
 /**
- * Where a surface's folder interaction currently *is* — one value, so the states that cannot coexist cannot be
- * written down. There is one finger, so an app can be on its way out of a folder or on its way in, never both; and
- * neither is possible with no folder open. As three independent nullable flags those combinations were all
- * expressible and had to be held apart by convention.
+ * Which folder is on screen, and whether an app is being carried into it — one value, so the states that cannot
+ * coexist cannot be written down.
+ *
+ * **This says where the interaction *is*, never where the drag *came from*.** A single drag can visit any number of
+ * folders (open one, leave it, open the next), so the phase is rewritten at every hand-off; what the drag owes to the
+ * folder it started in is [FolderHostState.dragSourceFolderId], which outlives all of them.
  *
  * @property folderId the folder this phase concerns, or null in [Closed].
  */
@@ -30,7 +33,7 @@ sealed interface FolderPhase {
 
     val folderId: Long?
 
-    /** No folder is open. */
+    /** No folder is on screen. During a drag this is the app "in transit" over the surface. */
     data object Closed : FolderPhase {
         override val folderId: Long? get() = null
     }
@@ -39,15 +42,12 @@ sealed interface FolderPhase {
     data class Open(override val folderId: Long) : FolderPhase
 
     /**
-     * [app] is being dragged *out* of [folderId]: the drag has dwelled off the folder's inner zone and been handed
-     * to the surface, which will commit it on drop. Until then the app is still a member — nothing has been removed.
-     */
-    data class Extracting(override val folderId: Long, val app: ComponentKey) : FolderPhase
-
-    /**
-     * The phases where [app] is being brought into [folderId] from the surface and is therefore **in neither place's
-     * own data**: it is off the surface (or about to be) and not yet in the folder's persisted contents. Whoever
-     * renders the folder has to be handed the app explicitly for as long as this holds, or it is invisible.
+     * The phases where [app] is being brought into [folderId] and is therefore **in neither place's own data**: it is
+     * off the surface (or about to be) and not yet in the folder's persisted contents. Whoever renders the folder has
+     * to be handed the app explicitly for as long as this holds, or it is invisible.
+     *
+     * A re-entry is the harmless exception: an app carried back into the folder it came out of is still a member, so
+     * the overlay already has it and the extra copy is de-duplicated rather than special-cased.
      */
     sealed interface Incoming : FolderPhase {
         val app: ComponentKey
@@ -69,20 +69,25 @@ sealed interface FolderPhase {
 }
 
 /**
- * The folder-interaction state a surface needs to **host** folders: which folder is open, and the two mid-drag
- * hand-offs between the surface and the open folder (an app on its way *out* of a folder, and one on its way
- * *in*). Pure UI state — nothing here persists; the surface's own write path commits the outcomes.
+ * The folder-interaction state a surface needs to **host** folders: which folder is on screen, and what a drag in
+ * flight owes to the folder it started in. Pure UI state — nothing here persists; the surface's own write path
+ * commits the outcomes.
  *
- * It lives here, beside [FolderOverlay], because none of it is home-specific: a folder is opened, reordered,
- * extracted from, and injected into the same way wherever it sits, and the overlay was already surface-agnostic.
- * Home is simply the first surface to host folders — the APPS pager and category card are next — so the one
- * genuinely surface-specific question, *"which folder sits at the target this drop would land on?"*, is a lambda
- * ([rememberFolderHostState]): a coordinate surface compares placements, an ordered one compares slots.
+ * It lives here, beside [FolderOverlay], because none of it is home-specific: a folder is opened, reordered, left,
+ * and entered the same way wherever it sits, and the overlay was already surface-agnostic. Home is simply the first
+ * surface to host folders — the APPS pager and category card are next — so the one genuinely surface-specific
+ * question, *"which folder sits at the target this drop would land on?"*, is a lambda ([rememberFolderHostState]): a
+ * coordinate surface compares placements, an ordered one compares slots.
+ *
+ * **One drag, any number of folders.** Opening and leaving are symmetric dwells of the same length and are freely
+ * repeatable: hold over a folder's merge ring to open it and carry on dragging inside, hold outside its card to close
+ * it and carry on dragging over the surface, then open the next one — or the same one again. Nothing about a folder
+ * is latched for the rest of the drag, which is why [FolderPhase] has no "leaving" state: leaving *is* [Closed].
  *
  * **What is deliberately not here.** Two things a surface keeps for itself:
- * - *Committing* the outcomes (place the extracted app, add the injected one, reorder the folder). Each surface
- *   writes through its own repository, and there is no shared caller to dispatch through, so an interface over them
- *   would have one implementor and no user. It can be introduced when APPS gives it a second one to be shaped by.
+ * - *Committing* the outcomes (place the app, add it to a folder, reorder). Each surface writes through its own
+ *   repository, and there is no shared caller to dispatch through, so an interface over them would have one
+ *   implementor and no user. It can be introduced when APPS gives it a second one to be shaped by.
  * - The open folder's published [FolderDragDelegate]. It belongs to this concern, but the surface's `DropPlanner`
  *   reads it and must be constructed *before* the [DragCoordinator] it is given to — while this state is created
  *   *after* the coordinator, since its effects observe the drag. The surface is the only place that can hold
@@ -98,7 +103,7 @@ class FolderHostState {
     var phase: FolderPhase by mutableStateOf(FolderPhase.Closed)
         private set
 
-    /** The open folder's id, or null when none is open — true of every phase but [FolderPhase.Closed]. */
+    /** The on-screen folder's id, or null when none is — true of every phase but [FolderPhase.Closed]. */
     val openFolderId: Long? get() = phase.folderId
 
     /**
@@ -108,41 +113,29 @@ class FolderHostState {
     val incomingComponent: ComponentKey? get() = (phase as? FolderPhase.Incoming)?.app
 
     /**
-     * The folder an in-flight drag was pulled **out of**, or null when this drag didn't come from a folder.
+     * The folder the in-flight drag **started in**, or null when it started on the surface. Fixed for the whole drag,
+     * however many folders it then visits.
      *
-     * Two separate things need it, and they turn out to be the same folder:
-     * - **Its overlay must stay composed for as long as the drag lives.** The cell that received the finger is in that
-     *   folder's grid, and an in-flight pointer stream cannot be handed to another node, so disposing it kills the
-     *   gesture mid-drag. This is the folder-level form of the drag toolkit's standing rule — *keep a source surface
-     *   composed while a drag from it is in flight* — so a host renders this folder invisibly alongside whichever
-     *   folder is actually being *presented*.
-     * - **It is owed a removal when the drag lands.** Wherever the app comes to rest — an empty cell, another folder,
-     *   a new folder made by merging — it has to leave this one, and only this one.
+     * Two separate things need it, and they are the same folder for the same reason — the drag *began* on one of its
+     * cells:
+     * - **Its overlay must stay composed for as long as the drag lives.** That cell received the finger, and an
+     *   in-flight pointer stream cannot be handed to another node, so disposing it kills the gesture mid-drag. This is
+     *   the folder-level form of the drag toolkit's standing rule — *keep a source surface composed while a drag from
+     *   it is in flight* — so a host renders this folder invisibly alongside whichever folder is being *presented*.
+     * - **It is owed a removal when the drag lands.** The app is a member here and nowhere else, so wherever it comes
+     *   to rest — an empty cell, another folder, a new folder made by merging — it has to leave this one.
      *
      * Deliberately *not* a field on [FolderPhase]: it is a property of the **drag**, not of where the interaction is,
      * and the two are independent (which is why it doesn't reintroduce the flags-that-must-agree problem the phase was
-     * built to remove). The phase cannot answer it either — once an app has been carried into a second folder, the
-     * phase names *that* folder, not the one still owed a removal.
+     * built to remove). The phase cannot answer it either — it names whichever folder is on screen *now*, which after
+     * one hand-off is no longer the one still owed a removal.
      *
-     * Set at the **first** extract of a drag and held until the drag ends, so carrying an app out of A, into B, and
-     * back out of B again still owes A.
+     * Set from the phase at [onDragStart] rather than when the drag leaves the folder, which is the distinction that
+     * makes re-entry work: an app dragged *in* from the surface and then back out is owed to nobody, so its folder is
+     * neither pinned nor barred from being opened again.
      */
-    var dragOriginFolderId: Long? by mutableStateOf(null)
+    var dragSourceFolderId: Long? by mutableStateOf(null)
         private set
-
-    /**
-     * Whether a drag in flight is the **open folder's** rather than the surface's. One [DragCoordinator] spans both,
-     * so `isDragging` alone can't tell them apart, and a surface that assumes every drag is its own reacts to
-     * gestures happening inside a folder on top of it.
-     *
-     * True while a folder is open, *except* during an extract — that drag started in the folder but is on its way to
-     * the surface, so from here on it is the surface's business. Reading this rather than the active drop zone is
-     * deliberate: a surface drag held over a gap or padding has no zone, and must not be mistaken for a folder's.
-     *
-     * The surface combines it with its own drag state, e.g. `coordinator.isDragging && !dragBelongsToOpenFolder`.
-     */
-    val dragBelongsToOpenFolder: Boolean
-        get() = openFolderId != null && phase !is FolderPhase.Extracting
 
     /** Open [folderId]'s overlay (a tap on its cell — so no drag can be in flight, and nothing is discarded). */
     fun open(folderId: Long) {
@@ -150,19 +143,22 @@ class FolderHostState {
     }
 
     /**
-     * Close the overlay: back, a tap on the scrim, launching an app from inside, or an extract drag resolving (the
-     * app has landed on the surface, or failed to and stayed in the folder — either way the folder is done).
+     * Close the overlay: back, a tap on the scrim, launching an app from inside, or a drop resolving outside the
+     * folder.
      */
     fun close() {
         phase = FolderPhase.Closed
     }
 
-    /** The drag dwelled off the folder's inner zone: [app] is leaving [folderId], and the surface now owns the drag. */
-    fun beginExtract(folderId: Long, app: ComponentKey) {
-        // First extract of a drag wins — see [dragOriginFolderId]. An app carried out of A, into B, then out of B
-        // again still came from A, and it is A's overlay that holds the pointer and A's membership that owes a removal.
-        if (dragOriginFolderId == null) dragOriginFolderId = folderId
-        phase = FolderPhase.Extracting(folderId, app)
+    /**
+     * The drag dwelled off the open folder's card: it closes and the drag carries on over the surface beneath.
+     *
+     * Identical to [close] today, and named separately anyway — this is the *gesture* half of a symmetric pair with
+     * [beginInject], and reads at the call site as the counterpart of opening. Nothing is recorded because nothing
+     * needs to be: what the drag still owes is [dragSourceFolderId], which was fixed when it started.
+     */
+    fun leaveFolder() {
+        phase = FolderPhase.Closed
     }
 
     /** The drag dwelled on [folderId]'s merge ring: open it and carry [app] in as the incoming item. */
@@ -191,20 +187,24 @@ class FolderHostState {
     }
 
     /**
-     * Any drag ended. The hand-offs resolve differently, which is the whole reason this is one value and not
-     * several flags:
-     * - an **extract** that reaches here was *cancelled* (a committed one goes through [close] on drop), and since
-     *   nothing was removed, the app is still in the folder — so the folder stays open around it;
-     * - an **inject still in flight** was never committed, and the folder was opened *by that gesture*, so it goes
-     *   away with it;
-     * - an **inject already committed** outlives the drag: the app is landing, and the folder stays open to show it.
-     *
-     * A folder the user opened by tapping is untouched by a drag ending elsewhere.
+     * A drag began. If a folder is on screen the drag necessarily started **in** it — its scrim covers the surface, so
+     * no cell underneath can receive the press — and that folder is [dragSourceFolderId] for the rest of the gesture.
+     */
+    fun onDragStart() {
+        dragSourceFolderId = openFolderId
+    }
+
+    /**
+     * Any drag ended.
+     * - An **inject still in flight** was never committed, and the folder was opened *by that gesture*, so it goes
+     *   away with it.
+     * - An **inject already committed** outlives the drag: the app is landing, and the folder stays open to show it.
+     * - A folder the user opened by tapping, or one already closed by a hand-off, is left as it is — a drag ending
+     *   somewhere else says nothing about it.
      */
     fun onDragEnd() {
-        dragOriginFolderId = null // scoped to one drag; the pointer holder is free to go and nothing is owed
+        dragSourceFolderId = null // scoped to one drag; the pointer holder is free to go and nothing is owed
         phase = when (val current = phase) {
-            is FolderPhase.Extracting -> FolderPhase.Open(current.folderId)
             is FolderPhase.Injecting -> FolderPhase.Closed
             is FolderPhase.Injected, is FolderPhase.Open, FolderPhase.Closed -> current
         }
@@ -214,9 +214,15 @@ class FolderHostState {
 /**
  * Remembers a [FolderHostState] and hosts the two effects that drive it from the drag itself:
  * - **open-to-inject**: holding a dragged app on a folder's merge ring for [OPEN_FOLDER_DWELL_MS] opens that folder
- *   mid-drag, so the app can be dropped straight into it (the inverse of extract, which the overlay detects). The
- *   dwell is keyed on the *target* folder, so drifting off it and back restarts the timer.
- * - **drag-end cleanup**: releasing anywhere clears the hand-off state via [FolderHostState.onDragEnd].
+ *   mid-drag, so the app can be dropped straight into it (the inverse of leaving, which the overlay detects on the
+ *   same dwell). The dwell is keyed on the *target* folder, so drifting off it and back restarts the timer.
+ * - **drag boundaries**: the folder the drag started in is captured on lift ([FolderHostState.onDragStart]) and every
+ *   hand-off is cleared on release ([FolderHostState.onDragEnd]).
+ *
+ * The only folder this refuses to open is the one already on screen — that drag is its own business (a reorder, or an
+ * app being carried in). Every other folder is a valid target, **including one this drag has already visited and left**,
+ * which is what makes open→leave→open repeatable within a single gesture. Re-entry is safe because leaving genuinely
+ * closes a folder rather than latching it, and because the app's membership is decided at the drop, not on the way.
  *
  * @param coordinator the shared drag coordinator the surface and its folders both run on.
  * @param folderIdAt resolves a merge plan **in a given zone** to the folder it targets, or null when the target
@@ -236,34 +242,28 @@ fun rememberFolderHostState(
     val host = remember { FolderHostState() }
 
     // The folder currently being hovered for a merge, if any. Null (which cancels the dwell below) when the drag
-    // isn't over a merge target, or when a folder is already open — that drag is the folder's own business.
+    // isn't over a merge target, or when a folder is already open.
     val mergeTargetId: Long? = run {
         val session = coordinator.session ?: return@run null
         val plan = session.plan?.takeIf { it.intent == DropIntent.MERGE } ?: return@run null
         // A plan only exists for a zone the finger is over, so this is non-null in practice; treat it as required
         // rather than guessing a zone, since guessing wrong resolves the wrong folder.
         val zone = session.activeZone ?: return@run null
-        // A drag that belongs to the open folder must not open anything else — a reorder inside it, or an app already
-        // being carried into it, are that folder's business. An **extract** is deliberately exempt: that drag is on its
-        // way out to the surface, and dwelling on another folder there is precisely how an app moves from one folder to
-        // another in a single gesture. What makes that safe is [dragOriginFolderId] — the folder being left stays
-        // composed to hold the pointer, so opening a second folder no longer disposes the cell driving the drag.
-        if (host.dragBelongsToOpenFolder) return@run null
-        val target = folderIdAt(zone, plan) ?: return@run null
-        // Never re-open the folder being left: the app is still a member, so there is nothing to carry *in*. Dropping
-        // on its ring instead cancels the extract, which the surface handles.
-        if (target == host.dragOriginFolderId) return@run null
-        target
+        // While a folder is on screen the drag is its business — a reorder inside it, or an app being carried into
+        // it, must not also be opening something else. Leaving it (the outer dwell) is what makes the drag the
+        // surface's again, and from that moment *every* folder is a target once more, this one included.
+        if (host.openFolderId != null) return@run null
+        folderIdAt(zone, plan)
     }
     LaunchedEffect(mergeTargetId) {
         val folderId = mergeTargetId ?: return@LaunchedEffect
-        delay(OPEN_FOLDER_DWELL_MS)
+        delay(OPEN_FOLDER_DWELL_MS.milliseconds)
         val app = (coordinator.session?.item as? GridItem.App)?.component ?: return@LaunchedEffect
         host.beginInject(folderId, app)
     }
 
     LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) host.onDragEnd()
+        if (coordinator.isDragging) host.onDragStart() else host.onDragEnd()
     }
 
     return host

@@ -296,7 +296,7 @@ done-on-device. **Built for the home since:** the shared **coordinate drag surfa
 (per-item drag wiring), all reused by the harness `GridSurface`; the `AppCell`/`FolderCell` launcher cells (via
 `IconLabelCell` + `cellLabelHeight`); and the full **folder subsystem** — `FolderOverlay`, `folderInnerSize`
 (a `@Composable` facade over pure sizing arithmetic), `FolderReorder` MovingGap, `FolderDragDelegate`, and
-**`FolderHostState`/`FolderPhase`** (the open/extract/inject lifecycle any folder-hosting surface reuses; 21 unit
+**`FolderHostState`/`FolderPhase`** (the open/leave/enter lifecycle any folder-hosting surface reuses; 20 unit
 tests). Item gestures are scoped to the icon+label group, not the cell — see the design-system rules above.
 
 **B8 `data:layout` — first cut done.** Geometry engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/
@@ -325,36 +325,51 @@ the default `DevRootScreen` screen.
   (2×2 icon preview). Tapping opens `FolderOverlay` — two zones (black scrim + a bounded card sized live by
   `folderInnerSize` per device/orientation, inset to `systemBars ∪ displayCutout`), a **dense-flow pager** of the
   folder's ordered apps, launch on tap, in-folder **MovingGap reorder** (persist `ReorderFolder`), and a border
-  outlining the inner zone while dragging. **Extract** (dwell an app over the outer zone) and **inject** (second
-  dwell on a folder opens it mid-drag to drop an app in) are one **continuous drag** across a **single shared
-  `DragCoordinator`** — home + folder zones on it, planner/drop dispatch by zone, the folder publishes a
-  `FolderDragDelegate`, and the overlay fades-but-stays-composed so the dragged cell keeps its pointer stream.
-  Both dwells are **~1s and equal** (opposite halves of one gesture), and **extract is armed only after the finger has
-  been over the inner grid**: a folder that opens mid-drag does so under wherever its cell sat, which for a folder near
-  a screen edge is already the outer zone — un-armed, the same held finger that put the app in would instantly eject
-  it. A drag that starts inside is armed on its first frame, so one rule covers arriving *and* leaving. Consequence:
-  an app can be carried in and taken straight back out, so the removal half handles a **non-member** extract (place it,
-  remove nothing, no dissolve — membership never changed).
-  A drag out of a folder can land on a **merge ring** too, not just an empty cell (`mergeExtractedApp`) — so an app
-  moves **folder→folder**, or folder→new-folder, in one gesture; dropping it back on its **origin folder cancels**
-  (nothing written, since it never left). Every landing shares one `leaveFolderChanges` (remove + auto-dissolve), so
-  the paths can't disagree about what leaving a folder means.
-- **Folder→folder is *continuous*: two overlays, one of them a pointer holder.** Dwelling on a second folder mid-extract
-  opens it and the drag carries on inside, so the app is placed at a chosen slot rather than appended. What makes that
-  possible: **`FolderHostState.dragOriginFolderId`** — the folder a drag was pulled out of, set at the *first* extract of
-  a drag (so A→B→out still owes A) and held until it ends. It answers two things at once: that folder's overlay must
-  **stay composed** (the cell that received the finger is in its grid, and an in-flight pointer stream **cannot** be
-  handed to another node — see the rule in `launcherItemGestures`; a root-level pointer overlay was tried and rejected
-  because it swallows item events), and that folder is **owed a removal** when the drag lands, wherever it lands. It is
-  deliberately *not* a `FolderPhase` field: it describes the **drag**, not where the interaction is, and once the app has
-  been carried into a second folder the phase names *that* folder. `FolderOverlay` gains `presenting` — false reduces it
-  to a pointer holder (no back handler, no published delegate, no proxy; already invisible + zone-less post-hand-off).
-  **Two traps if you touch this:** both overlays must be emitted from **one keyed call site** (a second call site is a
-  different composition position, so Compose disposes the folder and kills the drag it was preserving); and the incoming
-  app must be resolved from **placed apps *and* folder contents**, since one arriving from another folder has no
-  placement at all.
-  Extracting the second-last app **auto-dissolves** the folder (last app inherits its cell).
-  The whole open/extract/inject lifecycle lives in `FolderHostState` (`core:designsystem`), not the screen; home
+  outlining the inner zone while dragging.
+- **A folder is a place one drag passes *through*, not a destination it commits to.** This is the whole model, and the
+  rest of the folder rules fall out of it. **Enter**: hold a dragged app on any folder's merge ring (~1s) and it opens
+  mid-drag with the drag carrying on inside, so the app lands at a *chosen* slot. **Leave**: hold outside the card
+  (~1s) and the folder **closes**, with the same drag carrying on over the grids beneath. Both directions are
+  **repeatable, in any order, over any number of folders — including re-entering one already visited**, because
+  *neither half writes anything*: membership is decided **only at the drop**. It is one continuous gesture on a
+  **single shared `DragCoordinator`** (home + dock + folder zones on it, planner/drop dispatch by zone, the folder
+  publishes a `FolderDragDelegate`). The dwells are **equal by design** (`LeaveDwellMs` == `OPEN_FOLDER_DWELL_MS`):
+  opposite halves of one gesture, so a user who learnt one hold has learnt both.
+  - **Leaving must genuinely close the folder, not hide it.** An earlier cut kept a `FolderPhase.Extracting` whose
+    folder was still "open" (faded to alpha 0) and latched an `extracting` flag until the drag ended. That made every
+    folder a one-shot: the folder you left could never be re-opened, and re-presenting it rendered nothing and
+    registered no drop zone. Nothing in the overlay may be scoped to the **drag** when it belongs to a **visit** —
+    the arming flag below is the live example.
+  - **Leaving is armed only after the finger has been over the inner grid, per visit.** A folder that opens mid-drag
+    does so under wherever its cell sat, which near a screen edge is already the outer zone — un-armed, the same held
+    finger that put the app in would instantly eject it (and with a per-*drag* flag, re-entry would eject instantly
+    too). A drag that starts inside is armed on its first frame, so one rule covers arriving, leaving, and returning.
+  - A drag out of a folder can land on a **merge ring** as well as an empty cell (`mergeExtractedApp`) — so a *quick*
+    folder→folder move needs no dwell at all; dropping on the folder it came from is a **no-op** (still a member,
+    nothing written). Every landing shares one `leaveFolderChanges` (remove + auto-dissolve), so the paths can't
+    disagree about what leaving a folder means. Removing the second-last app **auto-dissolves** it (last app inherits
+    its cell).
+  - **Releasing outside the open folder cancels** (close it, write nothing). Leaving is a deliberate dwell, so a
+    release out there reads as "never mind" — and it *cannot* be honoured anyway: an app being carried inside a folder
+    has no grid placement, so "placing" it would leave it in the folder **and** on the grid.
+- **What the drag owes is fixed at lift: `FolderHostState.dragSourceFolderId`.** The folder a drag *started in* (null
+  if it started on a grid), captured at `onDragStart` and held until release, whatever it visits in between. It answers
+  two questions at once, and they are the same folder for the same reason — the gesture began on one of its cells:
+  that overlay must **stay composed** (an in-flight pointer stream **cannot** be handed to another node — see the rule
+  in `launcherItemGestures`; a root-level pointer overlay was tried and rejected because it swallows item events), and
+  it is the one **owed a removal** wherever the app lands. It is deliberately *not* a `FolderPhase` field: the phase
+  names whichever folder is *on screen*, which after one hand-off is no longer the one owed anything.
+  **Capturing it at lift rather than at the first hand-off is what makes re-entry work** — an app carried *in* from a
+  grid and back out owes that folder nothing, so nothing pins it and nothing bars re-opening it. `FolderOverlay`'s
+  `presenting = false` is the pointer-holder role: invisible, no back handler, no delegate, no drop zone, no proxy —
+  and reversible, since a drag can come back.
+  **Three traps if you touch this:** both overlays must be emitted from **one keyed call site** (a second call site is
+  a different composition position, so Compose disposes the folder and kills the drag it was preserving); an app with
+  no placement must be resolved through `HomeState.appInfo` (**placed apps *and* folder contents**) or it is
+  unrenderable — both as a folder's `incoming` and as home's floating **proxy**, which home takes back the moment a
+  folder closes; and the folder drop zone is **one shared `ZoneId`**, so only the *presenting* overlay may register or
+  unregister it (an unguarded `onDispose` on the holder tears the zone out from under the folder on screen).
+  The whole open/leave/enter lifecycle lives in `FolderHostState` (`core:designsystem`), not the screen; home
   supplies only the surface-specific *"which folder does this merge plan target?"* lambda (a **zone + placement**
   match — placement alone matches the other zone's folder at the same cell) and the commit calls. Two guards worth
   knowing: `reconcileFolderOrder` (`FolderOrder.kt`) folds a UI-reported order
@@ -371,8 +386,8 @@ the default `DevRootScreen` screen.
   Everything else is zone-generic rather than duplicated: one `planCoordinateDrop` serves both grids (differing only
   in geometry/config/occupants/page — deliberately **not** L1's `resolveDockDrop`, a drifted near-copy of its home
   resolver), one `handleDrop`, one `HomeItemCell`. The dock takes apps, folders and (later) widgets, merges into
-  folders, and hosts folders that open/reorder/extract/inject like any other — the folder hand-offs are continuous
-  across it (the overlay unregisters its own zone on extract, so the drag lands on whichever grid is beneath).
+  folders, and hosts folders that open, reorder, and hand apps in and out like any other — the folder hand-offs are
+  continuous across it (closing a folder drops its zone, so the drag lands on whichever grid is beneath).
   **The dock starts empty** — an app lives in exactly one place, so seeding it would carve apps out of the main
   area, and *which* apps belong there is a default worth a picker; fill it by dragging.
 - **An item carries its zone; a placement alone is not a location.** Each zone is its own coordinate space, so dock

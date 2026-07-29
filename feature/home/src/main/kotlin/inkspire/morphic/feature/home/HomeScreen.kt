@@ -119,6 +119,12 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * a [FolderOverlay]. A tap on an app launches it (via [HomeViewModel.launch]) through the gesture layer's `onOpen`,
  * so cells carry no click handler of their own.
  *
+ * **Folders are places one drag passes through, not destinations it commits to.** Holding a dragged app on a folder's
+ * merge ring opens that folder and the drag carries on inside it; holding outside the card closes it again and the
+ * drag carries on over the grids — repeatable, in either direction, over any number of folders, because neither half
+ * writes anything. Only the drop does, and [handleDrop] decides what it meant from *where the drag started* rather
+ * than from a trail of hand-offs: a drag out of a folder is placed-and-removed, a drag off a grid is moved.
+ *
  * The dock is a **peer of the main area, not a lesser strip**: it takes apps, folders and (once they exist) widgets,
  * it merges into folders, and a folder living in it opens, reorders, and hands apps in and out exactly as one in the
  * pager does — every one of those paths is zone-generic rather than duplicated per zone.
@@ -227,16 +233,15 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // live inside CoordinateDragPager.
     val session = coordinator.session
 
-    // Folder hosting: which folder is open, plus the two mid-drag hand-offs between home and the open folder
-    // (extract out / inject in) and the dwell that opens a folder to receive a drag. `folderIdAt` is home's answer to
-    // "which folder does this merge plan target?" — a match on **zone + placement**, because home is a coordinate
-    // surface whose zones each have their own coordinate space, so the placement alone would match a folder sitting
-    // at the same cell of the *other* grid.
+    // Folder hosting: which folder is on screen, and what the drag in flight owes the folder it started in.
+    // `folderIdAt` is home's answer to "which folder does this merge plan target?" — a match on **zone + placement**,
+    // because home is a coordinate surface whose zones each have their own coordinate space, so the placement alone
+    // would match a folder sitting at the same cell of the *other* grid.
     //
     // Answering for both zones is what makes the folder hand-offs continuous across the dock: hovering a dock folder
-    // arms the same dwell that opens it mid-drag to receive the app (inject). The outbound half (extract) needs
-    // nothing here — the overlay unregisters its own zone on hand-off, so the drag simply lands on whichever home
-    // grid is underneath, and `handleDrop` already commits to the zone it reports.
+    // arms the same dwell that opens it mid-drag. The outbound half needs nothing here — closing the folder drops its
+    // zone, so the drag simply lands on whichever home grid is underneath, and `handleDrop` commits to the zone it
+    // reports.
     val folderHost = rememberFolderHostState(coordinator) { zoneId, plan ->
         val zone = homeZoneOf(zoneId) ?: return@rememberFolderHostState null
         folders.firstOrNull { it.zone == zone && it.placement == plan.footprint }?.folder?.id
@@ -245,67 +250,69 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // deliberately not on `state.items`: an inject begins with the app still placed on home, and committing it takes
     // it off the grid optimistically — so re-deriving from the items afterwards would resolve to null and the app
     // would vanish from both surfaces until the write came back. Resolve once, at the start, and hold it.
-    //
-    // Searched among placed apps **and folder contents**, because an app can be carried in from either: dragged off a
-    // grid, or pulled out of another folder. In the second case it has no placement at all — a folder's members aren't
-    // on the grid — so looking only at placed items would hand the receiving folder a null and leave the app it is
-    // meant to be showing unrenderable, and so absent from the order the drop reports.
+    // [appInfo] searches folder contents as well as placements, for the app that arrives from another folder.
     val incomingApp = remember(folderHost.incomingComponent) {
-        folderHost.incomingComponent?.let { c ->
-            state.items.filterIsInstance<HomeItem.App>().firstOrNull { it.info.componentKey == c }?.info
-                ?: folders.firstNotNullOfOrNull { f -> f.apps.firstOrNull { it.componentKey == c } }
-        }
+        folderHost.incomingComponent?.let(state::appInfo)
     }
+    // The app under the finger, for home's floating proxy — resolved once per drag and held, for the same reason as
+    // `incomingApp` above: it may be a folder member with no placement, and the commit that lands it optimistically
+    // rewrites the items it would otherwise be re-derived from.
+    val draggedComponent = (session?.item as? GridItem.App)?.component
+    val draggedApp = remember(draggedComponent) { draggedComponent?.let(state::appInfo) }
 
-    // Is a drag in flight that could still land on home? Not one belonging to the open folder — a reorder inside it
-    // is that surface's gesture and must not grow home's pager behind it (an extract, on its way here, does count).
-    // The folder host owns that distinction, since it is the only thing that knows whose drag it is.
-    val homeDragInFlight = coordinator.isDragging && !folderHost.dragBelongsToOpenFolder
+    // Is a drag in flight that could still land on home? Not one inside an open folder — a reorder in there is that
+    // surface's gesture and must not grow home's pager behind it. Once the folder closes (the leave dwell) the same
+    // drag is home's again and the trailing page appears, which is exactly when it can be carried onto a new page.
+    val homeDragInFlight = coordinator.isDragging && folderHost.openFolderId == null
     LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
-    // Every branch below is zone-generic: the outcome names the drop zone, `homeZoneOf` turns it into the zone to
-    // write, and the same commit serves the pager and the dock. That is what makes a home↔dock drag ordinary rather
-    // than a special case — and it is why one coordinator spans both zones.
+    // Where a drag comes to rest. Four landings, in the order they have to be told apart; every one of them is
+    // zone-generic — the outcome names the drop zone, `homeZoneOf` turns it into the zone to write, and the same
+    // commit serves the pager and the dock. That is what makes a home↔dock drag ordinary rather than a special case,
+    // and it is why one coordinator spans both zones. (`coordinator.drop()` already reports a null outcome for a
+    // release over no zone or an INVALID plan, so anything non-null here is a real landing.)
     fun handleDrop() {
-        val extract = folderHost.phase as? FolderPhase.Extracting
+        // Read before dropping: the source is cleared when the drag ends, which the drop is.
+        val sourceFolderId = folderHost.dragSourceFolderId
+        val presentedFolderId = folderHost.openFolderId
         val outcome = coordinator.drop()
-        if (extract != null) { // a drag handed off out of a folder — commit it on home (or leave it in the folder)
-            // The removal is owed to the folder the drag *came from*, which is not always the one the phase names: an
-            // app carried out of A, into B, then out of B again is still A's member. Read before `close()`.
-            val origin = folderHost.dragOriginFolderId ?: extract.folderId
-            folderHost.close()
-            val landing = outcome?.takeIf { it.plan.intent != DropIntent.INVALID }
-            val zone = landing?.let { homeZoneOf(it.zone) }
-            // No valid cell in one of home's grids → nothing was ever removed, so the app stays in its folder.
-            if (landing == null || zone == null) return
-            // A merge is a landing like any other: an app on its way out of a folder can go straight into another
-            // one (or combine with an app to make one). Discarding MERGE here is what used to strand it — it could
-            // only ever come to rest on an empty cell, so it could leave a folder but never move between folders.
-            if (landing.plan.intent == DropIntent.MERGE) {
-                viewModel.mergeExtractedApp(origin, extract.app, landing.plan.footprint, zone)
-            } else {
-                viewModel.dropExtractedApp(origin, extract.app, landing.plan, zone)
-            }
-            return
-        }
-        if (outcome == null) return
-        // Not one of home's grids → the open folder's zone, which commits its own reorder instead of a placement.
-        val zone = homeZoneOf(outcome.zone) ?: run {
+        val zone = outcome?.let { homeZoneOf(it.zone) }
+
+        // 1. Inside the open folder → its own business: a reorder, which is also how an inject commits.
+        if (outcome != null && zone == null) {
             folderDelegate.value?.commitReorder(outcome.item)
             return
         }
+        // 2. Released outside the folder that is on screen. Leaving a folder is a deliberate dwell, so a release out
+        //    here is "never mind": close it and write nothing. It could not be honoured anyway — an app being carried
+        //    inside a folder has no grid placement, so *placing* it would leave it in the folder **and** on the grid.
+        if (presentedFolderId != null) {
+            folderHost.close()
+            return
+        }
+        if (outcome == null || zone == null) return
         val plan = outcome.plan
-        when (plan.intent) {
-            DropIntent.INVALID -> return // no room — leave it where it was
-            DropIntent.MERGE ->
-                viewModel.mergeChanges(outcome.item, plan.footprint, zone)?.let(viewModel::applyChanges)
-            else -> {
-                // The pushed occupants are already in the drop zone, so they move within it; the dragged item may
-                // be arriving from the other zone, and this is the write that re-stamps it.
-                val moves = plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to, zone) } +
-                    LayoutChange.Move(outcome.item, plan.footprint, zone)
-                viewModel.applyChanges(moves)
+        // 3. The drag started inside a folder and has landed out here. The app has no placement to move, so it is
+        //    placed and removed from that folder in one batch — including onto a merge ring, which is how it moves
+        //    straight into another folder (or combines with an app to make one) in a single gesture.
+        if (sourceFolderId != null) {
+            val app = (outcome.item as? GridItem.App)?.component ?: return
+            if (plan.intent == DropIntent.MERGE) {
+                viewModel.mergeExtractedApp(sourceFolderId, app, plan.footprint, zone)
+            } else {
+                viewModel.dropExtractedApp(sourceFolderId, app, plan, zone)
             }
+            return
+        }
+        // 4. An ordinary grid drag.
+        if (plan.intent == DropIntent.MERGE) {
+            viewModel.mergeChanges(outcome.item, plan.footprint, zone)?.let(viewModel::applyChanges)
+        } else {
+            // The pushed occupants are already in the drop zone, so they move within it; the dragged item may be
+            // arriving from the other zone, and this is the write that re-stamps it.
+            val moves = plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to, zone) } +
+                LayoutChange.Move(outcome.item, plan.footprint, zone)
+            viewModel.applyChanges(moves)
         }
     }
 
@@ -330,7 +337,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(
-                        WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Bottom),
+                        WindowInsets.systemBars.union(WindowInsets.displayCutout),
                     ),
             ) {
                 CoordinateDragPager(
@@ -411,13 +418,18 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                // The proxy belongs to whichever surface is *presenting* the drag, and while a folder is open that
-                // is the folder — it draws the dragged app at its own cell size, and keeps drawing it right through
-                // an extract hand-off. So home stands down rather than have both paint an icon under one finger.
-                // Note this is deliberately not gated on the active zone: a home drag can be held somewhere no zone
-                // covers (the system-bar inset below the dock), and its proxy must still follow the finger.
-                val dragged = state.items.firstOrNull { it.gridItem == session.item }
-                if (dragged != null && folderHost.openFolderId == null) {
+                // The proxy belongs to whichever surface is *presenting* the drag: while a folder is on screen that is
+                // the folder, which draws the app at its own cell size; the moment it closes, home takes the icon
+                // back. Exactly one of them paints, so a hand-off never puts two icons under one finger and never
+                // leaves none. Note this is deliberately not gated on the active zone: a home drag can be held
+                // somewhere no zone covers (the system-bar inset below the dock), and its proxy must still follow the
+                // finger.
+                //
+                // The dragged *folder* still resolves by placement, but the dragged *app* cannot: once a drag has left
+                // a folder the app is a member with no cell of its own, so it is looked up through [appInfo], which
+                // searches folder contents too. Without that the icon vanishes the instant the folder closes.
+                val draggedFolder = state.items.firstOrNull { it.gridItem == session.item } as? HomeItem.Folder
+                if ((draggedApp != null || draggedFolder != null) && folderHost.openFolderId == null) {
                     val finger = session.fingerInRoot
                     FloatingDragIcon(
                         rootOffset = IntOffset(
@@ -428,11 +440,12 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     ) {
                         // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target
                         // (the lifted cell still owns the pointer stream).
-                        when (dragged) {
-                            is HomeItem.App -> AppCell(app = dragged.info, modifier = Modifier.fillMaxSize())
-                            is HomeItem.Folder -> FolderCell(
-                                label = dragged.folder.label,
-                                apps = dragged.apps,
+                        if (draggedApp != null) {
+                            AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
+                        } else if (draggedFolder != null) {
+                            FolderCell(
+                                label = draggedFolder.folder.label,
+                                apps = draggedFolder.apps,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -447,11 +460,11 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             val openFolderMembers = openFolder?.folder?.apps
             LaunchedEffect(openFolderMembers) { folderHost.onMembersChanged(openFolderMembers.orEmpty()) }
 
-            // Usually one overlay. But while an app is being carried *out of* one folder and *into* another, the folder
-            // it came from must stay composed even though a different one is on screen — the cell driving the drag is in
-            // its grid, and a pointer stream can't move to another node. It is rendered as a pointer holder
-            // (`presenting = false`): invisible, zone-less, no proxy. See `FolderHostState.dragOriginFolderId`.
-            val holderFolder = folderHost.dragOriginFolderId
+            // Usually one overlay. But a drag that started inside a folder keeps that folder composed for its whole
+            // life, even while a different one — or none — is on screen: the cell driving the drag is in its grid, and
+            // a pointer stream can't move to another node. It is rendered as a pointer holder (`presenting = false`):
+            // invisible, zone-less, no proxy. See `FolderHostState.dragSourceFolderId`.
+            val holderFolder = folderHost.dragSourceFolderId
                 ?.takeIf { it != folderHost.openFolderId }
                 ?.let { id -> folders.firstOrNull { it.folder.id == id } }
             // Holder first so it sits *below* the presented folder. Both come from this **one** call site on purpose:
@@ -477,21 +490,22 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                             // (the app is already a member, even if the store hasn't said so yet).
                             val incoming = (folderHost.phase as? FolderPhase.Injecting)?.app
                             if (incoming != null && order.contains(incoming)) {
-                                // The app landed in this folder at its chosen slot. `from` is the folder it was pulled
-                                // out of, if any — that is the folder-to-folder move, committed as one batch; null when
-                                // it came off a grid instead.
+                                // The app landed in this folder at its chosen slot. `from` is the folder the drag
+                                // started in, if any — that is the folder-to-folder move, committed as one batch; null
+                                // when it came off a grid instead, and this folder itself when the drag left and came
+                                // back, which `addToFolder` recognises as the plain reorder it is.
                                 viewModel.addToFolder(
                                     folderId = folder.folder.id,
                                     reported = order,
                                     incoming = incoming,
-                                    from = folderHost.dragOriginFolderId,
+                                    from = folderHost.dragSourceFolderId,
                                 )
                                 folderHost.injectCommitted()
                             } else {
                                 viewModel.reorderFolder(folder.folder.id, order)
                             }
                         },
-                        onExtractStart = { component -> folderHost.beginExtract(folder.folder.id, component) },
+                        onLeave = folderHost::leaveFolder,
                         onDrop = { handleDrop() },
                         onPublishDelegate = { folderDelegate.value = it },
                         onDismiss = { folderHost.close() },

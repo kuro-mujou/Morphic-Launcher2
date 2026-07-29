@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.home
 
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
@@ -57,3 +58,19 @@ data class HomeState(val items: List<HomeItem>)
 
 /** The items placed in [zone] — one zone's grid contents, in the order the state reports them. */
 fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone == zone }
+
+/**
+ * Resolves [component] to the app info home knows about, whether it is **placed on a grid or inside a folder**.
+ *
+ * Both are needed because a drag detaches an app from neither until it lands: an app dragged out of a folder is still
+ * a member of it and has no placement at all, so anything that looks up "the app under the finger" by placement alone
+ * — the floating proxy, the app a folder is being handed to render — finds nothing and draws nothing. Searching both
+ * is what lets one drag cross grids and folders without the icon blinking out at each boundary.
+ */
+fun HomeState.appInfo(component: ComponentKey): AppInfo? =
+    items.firstNotNullOfOrNull { item ->
+        when (item) {
+            is HomeItem.App -> item.info.takeIf { it.componentKey == component }
+            is HomeItem.Folder -> item.apps.firstOrNull { it.componentKey == component }
+        }
+    }
