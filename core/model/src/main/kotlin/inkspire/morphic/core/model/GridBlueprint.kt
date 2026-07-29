@@ -118,8 +118,11 @@ val DockGrid = GridBlueprint(
     ),
 )
 
-/** App drawer paged grid — fixed rows × cols per page, one icon per cell; rows and columns editable. */
-val DrawerPagerGrid = GridBlueprint(
+/**
+ * APPS paged grid ([AppsLayout.PAGER], and the pages of [AppsLayout.PAGER_WITH_CATEGORY]) — fixed rows × cols
+ * per page, one icon per cell; rows and columns editable.
+ */
+val AppsPagerGrid = GridBlueprint(
     sizing = GridSizing.FIXED_PAGER,
     cellMultiplier = 1,
     freePlacement = false,
@@ -132,8 +135,14 @@ val DrawerPagerGrid = GridBlueprint(
     ),
 )
 
-/** App drawer "Classic" — one vertically-scrolling grid; only the column count is editable. */
-val DrawerClassicGrid = GridBlueprint(
+/**
+ * APPS scrolling grid ([AppsLayout.VERTICAL_GRID]) — one vertically-scrolling grid of every app; only the column
+ * count is editable, because the rows are however many the app count reaches.
+ *
+ * Named for its *sizing*, not its layout value, so it doesn't collide with the composable that renders it
+ * (`AppsVerticalGrid`) — and because "scroll vs paged" is exactly what distinguishes it from [AppsPagerGrid].
+ */
+val AppsScrollGrid = GridBlueprint(
     sizing = GridSizing.SCROLL_GRID,
     cellMultiplier = 1,
     freePlacement = false,
@@ -146,8 +155,22 @@ val DrawerClassicGrid = GridBlueprint(
     ),
 )
 
-/** App drawer "Grouped" — category tabs over scrolling grids; only the column count is editable. */
-val DrawerGroupedGrid = GridBlueprint(
+/**
+ * APPS category-pager grid ([AppsLayout.PAGER_WITH_CATEGORY]) — that layout is a **pager whose every page is one
+ * category**, and this is the grid a page holds: a single vertically-scrolling grid of that category's apps. Only
+ * the column count is editable, since the rows are however many the category reaches.
+ *
+ * **Apps are dragged to reorder, both within a page and across pages** — carrying an app onto another page is how
+ * it changes category, so the drag is the layout's only editing gesture.
+ *
+ * **No folders live here.** That is a property of the layout, not a gap: a category *is* the grouping, so a folder
+ * inside one would be a second, redundant one. It has a direct consequence for the drag partition — with nothing
+ * to merge into, a hovered cell splits into **halves** (gap before / gap after) and there is no centre merge ring,
+ * unlike every coordinate surface. Prototyped in the `CategoryPagerPlayground` harness.
+ *
+ * Not the [AppsLayout.CATEGORY_CARD] grid: those cards are previews rather than full pages, and use [FolderGrid].
+ */
+val AppsCategoryGrid = GridBlueprint(
     sizing = GridSizing.SCROLL_GRID,
     cellMultiplier = 1,
     freePlacement = false,

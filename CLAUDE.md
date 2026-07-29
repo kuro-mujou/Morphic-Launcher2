@@ -31,7 +31,9 @@ This is the part that isn't derivable from the code:
   `GridBlueprint` (centralized scattered grid config; dropped a wrong interface abstraction + dead
   `max` fields); `DeviceConfiguration` (split the pure enum into `core:model`, detection stays in
   `core:designsystem`); `GridPlacement` (merged near-duplicate `GridRect` + `AppPosition` into one
-  type — rejected a `Vector` name because it carries spans, so it's a box, not a vector).
+  type — rejected a `Vector` name because it carries spans, so it's a box, not a vector); the grid blueprints
+  (`Drawer{Classic,Pager,Grouped}Grid` → `Apps{Scroll,Pager,Category}Grid` — "drawer" is vocabulary the surface
+  taxonomy abolished, and `feature:apps` would have re-imported it the moment it consumed one).
 - **KDoc is mandatory.** Every class / interface / enum / top-level gets a KDoc stating what it is
   and what it's for. Document non-obvious members too (params, edge cases, units). Explain *purpose*,
   not line-by-line narration. (This deliberately differs from L1's "docs on request only" rule.)
@@ -115,9 +117,14 @@ folder — and an APPS-hosted folder has nowhere to store its position (folder p
 coordinate `folder_placement` + `zone`). Both stores need to become app-or-folder (the "exactly one of" shape
 `IconContainerItemEntity` already uses), with the folder's slot living in the order store rather than a placement
 table. That's a **B2 schema change + the unbuilt APPS order repository** — decide it before building either APPS
-layout. Note the harness prototype currently asserts the opposite for the category card (`CategoryPagerPlayground`:
-"no folders here", so its cell splits into halves with no merge ring) — reversing that is a deliberate call, not
-an oversight to patch. The UI side is ready: `FolderHostState` is surface-independent and already shared.
+layout. The UI side is ready: `FolderHostState` is surface-independent and already shared.
+
+**Settled, and it narrows that question: the category *pager* (`PAGER_WITH_CATEGORY`) holds no folders.** A
+category *is* the grouping there, so a folder inside one would be a second, redundant one. Its pages are dragged
+between (carrying an app to another page is how it changes category) and its cells split into **halves** with no
+centre merge ring, since there is nothing to merge into — which is what `CategoryPagerPlayground` prototypes. That
+harness is the category *pager*, not the category *card*; its "no folders here" is that layout's intent and says
+nothing either way about the card, which is still open above.
 
 Full rationale: [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md) → "Arrangement persistence model".
 
