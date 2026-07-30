@@ -14,6 +14,9 @@ interface CategoryItemDao {
     @Query("SELECT * FROM category_item")
     fun observeAll(): Flow<List<CategoryItemEntity>>
 
+    @Query("SELECT * FROM category_item")
+    suspend fun getAll(): List<CategoryItemEntity>
+
     @Query("SELECT * FROM category_item WHERE categoryId = :categoryId ORDER BY sortOrder")
     fun observeCategory(categoryId: String): Flow<List<CategoryItemEntity>>
 

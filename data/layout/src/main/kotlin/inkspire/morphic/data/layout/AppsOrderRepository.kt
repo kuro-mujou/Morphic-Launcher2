@@ -14,9 +14,14 @@ import kotlinx.coroutines.flow.Flow
  * would rebuild the god-interface that repository was carved out of — its KDoc records L1's ~30-method original —
  * and would give every HOME caller methods that can only ever return nothing.
  *
- * Today it serves the pager (`AppsLayout.PAGER`); the category store (`category` + `category_item`, shared by the
- * two category layouts) joins it here rather than in a third repository, since it is the same surface's
- * arrangement. Method names are prefixed by store for that reason.
+ * It serves both APPS order stores: the pager (`apps_pager_item`) and the categories (`category` +
+ * `category_item`, shared by the two category layouts). One repository rather than two because they are one
+ * surface's arrangement; method names are prefixed by store for that reason.
+ *
+ * **Only the pager is per-orientation.** Its methods take an [Orientation] because it keeps two saved lists; the
+ * category methods take none, because a category order is a single orientation-independent list (see the
+ * arrangement model). That asymmetry is in the signatures on purpose — it is the difference between the stores, not
+ * an omission.
  *
  * **Folder writes live here too**, not only on [LayoutRepository]. A merge on the pager mints a folder, moves two
  * apps into it and re-slots the result; splitting that across two repositories would make one user action two
@@ -51,4 +56,28 @@ interface AppsOrderRepository {
      * membership rows and a re-slot) resolves against one consistent view of the pages.
      */
     suspend fun applyPager(orientation: Orientation, perPage: Int, changes: List<AppsPagerChange>)
+
+    /**
+     * Every category and the apps filed under it, categories in their stored order.
+     *
+     * Includes categories holding **nothing** — a row survives its last app leaving, so an emptied page stays on
+     * screen and can be dragged back into.
+     */
+    fun categoryContents(): Flow<List<CategoryContents>>
+
+    /**
+     * Reconciles the stored arrangement with what is installed: appends apps that are new, drops ones that are
+     * gone, seeds everything on first run, and creates a category row for any id that needs one.
+     *
+     * **An app already filed keeps its category, whatever [assignments] says.** The classifier runs every launch,
+     * so treating its answer as authoritative would undo the user's drags each time — an assignment is a *first*
+     * answer, for apps that have none yet.
+     *
+     * @param assignments every installed app and the category it would be filed under (from `AppCategorizer`).
+     *   Iteration order decides the order new apps are appended in, so pass a map built in display order.
+     */
+    suspend fun syncCategories(assignments: Map<ComponentKey, String>)
+
+    /** Applies [changes] in order, as one read-modify-write over the whole arrangement. */
+    suspend fun applyCategory(changes: List<AppsCategoryChange>)
 }

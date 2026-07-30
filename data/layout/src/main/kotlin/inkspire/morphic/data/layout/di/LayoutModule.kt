@@ -26,6 +26,6 @@ val layoutModule = module {
     }
     single<LayoutRepository> { LayoutRepositoryImpl(get(), get()) }
 
-    single { AppsOrderDaos(get(), get(), get()) }
+    single { AppsOrderDaos(get(), get(), get(), get(), get()) }
     single<AppsOrderRepository> { AppsOrderRepositoryImpl(get(), get()) }
 }
