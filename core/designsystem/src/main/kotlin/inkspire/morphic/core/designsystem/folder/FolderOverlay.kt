@@ -57,6 +57,10 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.flowItems
+import inkspire.morphic.core.designsystem.ordered.cellFractionX
+import inkspire.morphic.core.designsystem.ordered.flatSlotOf
+import inkspire.morphic.core.designsystem.ordered.movingGap
+import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
@@ -197,9 +201,10 @@ fun FolderOverlay(
                 val dragged = (item as? GridItem.App)?.component ?: return null
                 val g = gridState.value
                 val ps = (g.cols * g.rows).coerceAtLeast(1)
-                // Off the grid → hold the current gap; on a cell → migrate the gap toward it.
+                // Off the grid → hold the current gap; on a cell → migrate the gap toward it. Two-zone: a folder
+                // holds no folders, so a cell splits into halves with no centre merge third to read.
                 val cell = geo.cellAt(fingerInRoot) ?: return FolderReorderPlan
-                val flatSlot = pagerState.currentPage * ps + cell.row * g.cols + cell.col
+                val flatSlot = flatSlotOf(cell.row, cell.col, g.cols, pagerState.currentPage, ps)
                 gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
                 return FolderReorderPlan
             }

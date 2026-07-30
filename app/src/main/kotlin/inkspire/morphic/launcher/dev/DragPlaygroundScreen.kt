@@ -60,6 +60,8 @@ import inkspire.morphic.core.designsystem.grid.Cell
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
+import inkspire.morphic.core.designsystem.ordered.Third
+import inkspire.morphic.core.designsystem.ordered.thirdInCell
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -73,7 +75,6 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.PushDirection
 import kotlin.math.abs
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -661,23 +662,9 @@ private fun canMerge(dragged: GridItem, target: GridItem): Boolean =
 private fun GridPlacement.covers(cell: Cell): Boolean =
     cell.row in row until rowEndExclusive && cell.col in col until colEndExclusive
 
-/** The horizontal third of a cell — the `[left | center | right]` partition of the MovingGap surfaces (§6a). */
-private enum class Third { LEFT, CENTER, RIGHT }
-
 // The pure geometry (GridGeometry + Cell + cellAt/snapTopLeftCell/topLeftInRoot) now lives in
 // core:designsystem/grid. The drag-planning helpers below stay here as private extensions, since they pull in
 // data:layout (PushDirection) and the harness's MovingGap thirds / folder-merge rings.
-
-/** The horizontal third of the hovered cell the finger sits in (MovingGap partition). */
-private fun GridGeometry.thirdInCell(rootPosition: Offset): Third {
-    val lx = rootPosition.x - originInRoot.x
-    val fx = lx / cellW - floor(lx / cellW)
-    return when {
-        fx < 1f / 3f -> Third.LEFT
-        fx > 2f / 3f -> Third.RIGHT
-        else -> Third.CENTER
-    }
-}
 
 /** Merge-ring radius (px) for the item occupying [rect] — scaled by its smaller side. */
 private fun GridGeometry.mergeRadius(rect: GridPlacement): Float =

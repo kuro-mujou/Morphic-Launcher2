@@ -2,10 +2,16 @@ package inkspire.morphic.core.model
 
 /**
  * What a drop would do, once the partition strategy has decided the target cell and (on free grids) which way
- * to push. Drives how the drop shadow reads: PLACE/PUSH/MERGE are all droppable, INVALID paints the error
- * shadow. (PUSH is visually distinct only for debugging; it drops the same as PLACE.)
+ * to push. Drives how the drop shadow reads: PLACE/PUSH/MERGE/REORDER are all droppable, INVALID paints the
+ * error shadow. (PUSH is visually distinct only for debugging; it drops the same as PLACE.)
+ *
+ * [REORDER] is the odd one and the reason it exists: an **ordered** surface previews a drop by reflowing its own
+ * cells around a migrating gap, so there is no target cell for a shadow to name. Without it such a surface has to
+ * return a plan whose footprint is a deliberate lie — a token meaning "handled", which any surface that naively
+ * paints will render as a shadow at cell (0,0). Now "reflow, don't paint" is representable, and the cost is one
+ * paint-nothing branch in `DropFootprint`, which is honest rather than hidden.
  */
-enum class DropIntent { PLACE, PUSH, MERGE, INVALID }
+enum class DropIntent { PLACE, PUSH, MERGE, REORDER, INVALID }
 
 /**
  * The resolved outcome of a drag hovering over a drop zone — the **single value preview and commit both
