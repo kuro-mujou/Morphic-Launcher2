@@ -49,6 +49,7 @@ import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
+import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
@@ -66,8 +67,10 @@ import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
 import kotlinx.coroutines.delay
@@ -347,6 +350,20 @@ fun FolderOverlay(
                                 },
                         ) { pageIndex ->
                             LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
+                                // The drop shadow for the slot the gap has opened, behind the cells (declared
+                                // first) and inside the page grid so it travels with the page. `gap` is an index
+                                // into the *display* order, which is the flat list these pages were chunked from —
+                                // so it names a page as well as a cell, and only the page holding it paints.
+                                if (presenting && session != null && gap >= 0 && gap / pageSize == pageIndex) {
+                                    val slot = gap % pageSize
+                                    Box(
+                                        Modifier.gridPlacement(
+                                            GridPlacement(0, slot / grid.cols, slot % grid.cols),
+                                        ),
+                                    ) {
+                                        DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
+                                    }
+                                }
                                 flowItems(
                                     items = pages.getOrNull(pageIndex).orEmpty(),
                                     itemKey = { it.componentKey.flatten() },

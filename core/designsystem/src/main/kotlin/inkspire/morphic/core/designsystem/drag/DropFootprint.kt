@@ -35,11 +35,17 @@ import inkspire.morphic.core.model.DropIntent
  * - [DropIntent.PUSH] — a debug-only tint (drops the same as PLACE); distinct just so pushes are visible while
  *   developing.
  *
- * **[DropIntent.REORDER] paints nothing and returns.** An ordered surface previews its drop by reflowing its own
- * cells around a migrating gap, so there is no target cell to shadow — the preview *is* the reflow. A
- * paint-nothing branch in a component whose contract is to paint looks wrong, and was avoided while the folder
- * was the only such surface; with the APPS pager it is the honest place for the rule, because the alternative is
- * every caller remembering not to call this.
+ * **[DropIntent.REORDER] paints the slot the item will occupy** — the gap an ordered surface has opened for it.
+ * It reads like [DropIntent.PLACE] on purpose: both promise "it lands here", and the only difference is how the
+ * surface got there (a reflowed gap rather than a chosen cell). They are separate branches so the two can diverge
+ * later without a caller having to lie about its intent to borrow a colour.
+ *
+ * An earlier cut had this return early and paint nothing, on the reasoning that an ordered surface previews by
+ * reflowing its cells so there is no target to shadow. That was true of the reorder and wrong about everything
+ * around it: the reflow is a subtler affordance than a shadow, and it says nothing at all when the drop would
+ * **merge**, so a folder about to be created looked exactly like one about to be reordered past. The caller still
+ * decides *where* to paint — for a reorder that is the gap, which lives in the surface's own state and not in the
+ * plan, whose footprint stays a meaningless token for this intent.
  *
  * State changes animate (colour + the merge expansion) so the shadow morphs rather than jumps as the finger
  * crosses zones.
@@ -50,23 +56,19 @@ fun DropFootprint(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(20.dp),
 ) {
-    if (intent == DropIntent.REORDER) return
-
     val colors = LocalMorphicColors.current
 
     val fill = when (intent) {
-        DropIntent.PLACE -> colors.accent.copy(alpha = 0.12f)
+        DropIntent.PLACE, DropIntent.REORDER -> colors.accent.copy(alpha = 0.12f)
         DropIntent.MERGE -> colors.accent.copy(alpha = 0.22f)
         DropIntent.INVALID -> colors.error.copy(alpha = 0.16f)
         DropIntent.PUSH -> DebugPushTint.copy(alpha = 0.18f)
-        DropIntent.REORDER -> Color.Transparent // unreachable: returned above
     }
     val stroke = when (intent) {
-        DropIntent.PLACE -> colors.accent.copy(alpha = 0.45f)
+        DropIntent.PLACE, DropIntent.REORDER -> colors.accent.copy(alpha = 0.45f)
         DropIntent.MERGE -> colors.accent
         DropIntent.INVALID -> colors.error.copy(alpha = 0.7f)
         DropIntent.PUSH -> DebugPushTint.copy(alpha = 0.7f)
-        DropIntent.REORDER -> Color.Transparent // unreachable: returned above
     }
     // Merge grows the footprint a touch to read as "swallowing" the target; the rest sit at cell size.
     val targetScale = if (intent == DropIntent.MERGE) 1.08f else 1f

@@ -32,6 +32,8 @@ import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.drag.DragSession
+import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
@@ -44,6 +46,7 @@ import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
+import inkspire.morphic.core.designsystem.grid.LauncherGridScope
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.Third
@@ -65,6 +68,7 @@ import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.apps.AppsItem
 import inkspire.morphic.feature.apps.asIconItem
 import inkspire.morphic.feature.apps.gridItem
+import inkspire.morphic.feature.apps.iconItem
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
@@ -132,11 +136,11 @@ fun AppsPager(
     pages: List<List<AppsItem>>,
     onLaunch: (ComponentKey) -> Unit,
     onMove: (item: IconItem, toPage: Int, toSlot: Int) -> Unit,
-    onMerge: (dragged: ComponentKey, targetPage: Int, targetSlot: Int) -> Unit,
+    onMerge: (dragged: ComponentKey, target: IconItem) -> Unit,
     onReorderFolder: (folderId: Long, order: List<ComponentKey>) -> Unit,
     onAddToFolder: (folderId: Long, order: List<ComponentKey>, incoming: ComponentKey, from: Long?) -> Unit,
     onDropExtracted: (from: Long, app: ComponentKey, toPage: Int, toSlot: Int) -> Unit,
-    onMergeExtracted: (from: Long, app: ComponentKey, targetPage: Int, targetSlot: Int) -> Unit,
+    onMergeExtracted: (from: Long, app: ComponentKey, target: IconItem) -> Unit,
     onGridResolved: (GridConfig) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -165,6 +169,12 @@ fun AppsPager(
     var gap by remember { mutableIntStateOf(-1) }
     var gapPage by remember { mutableIntStateOf(-1) }
 
+    // The entry a merge would fold into, resolved by **identity** rather than re-derived from a slot index later.
+    // A slot is not a stable name for an entry here: the page renders the gap-shifted display order, so the same
+    // index means different things to the planner and to the commit. Naming the entry is the same discipline the
+    // store's ops already follow (`CreateFolder` takes the target, not its slot).
+    var mergeTarget by remember { mutableStateOf<AppsItem?>(null) }
+
     // The open folder's drag hooks (null when none is open). It lives above the coordinator because the planner
     // reads it and must be built first, while the folder host is created after — the same construction-order
     // squeeze home documents.
@@ -186,12 +196,26 @@ fun AppsPager(
             // ring: dropping there folds the two together, and dwelling there opens the target to receive the app.
             // Unlike the reorder plan, a merge plan's footprint is *meaningful* — it names the hovered cell, which
             // is how the folder host resolves which folder is being aimed at (`folderIdAt` below).
-            val over = stored.getOrNull(slot)
+            // Resolved against the **display** order, not the stored one: with a gap open the icons have shifted,
+            // and the user aims at what they can see. Reading `stored[slot]` here was the bug behind "the footprint
+            // says merge but the target has moved away" — the planner named one entry and the screen showed another.
+            val displayed = displayOrder(
+                stored = stored,
+                dragged = if (page == gapPage) entryFor(livePages.value, item) else null,
+                gap = gap,
+                perPage = perPage,
+            )
+            val over = displayed.getOrNull(slot)
             if (over != null && over.gridItem != item && geo.thirdInCell(fingerInRoot) == Third.CENTER &&
                 canMergeInto(item, over)
             ) {
+                // The gap is deliberately left where it is. Collapsing it would reflow every icon the instant the
+                // finger crossed into a centre third — including the one being aimed at, which would slide out
+                // from under the footprint that had just appeared on it.
+                mergeTarget = over
                 return@DropPlanner PlacementPlan(GridPlacement(page, cell.row, cell.col), DropIntent.MERGE)
             }
+            mergeTarget = null
             gap = if (page != gapPage) {
                 // Arriving on a page seeds the gap at the slot under the finger; `movingGap` refines from there as
                 // the finger keeps moving. Seeding through `movingGap` instead would start from index 0, because
@@ -208,7 +232,7 @@ fun AppsPager(
     val session = coordinator.session
 
     LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) { gap = -1; gapPage = -1 }
+        if (!coordinator.isDragging) { gap = -1; gapPage = -1; mergeTarget = null }
     }
     DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(PagerZoneId) } }
 
@@ -216,10 +240,11 @@ fun AppsPager(
     // it can't know is which folder a merge plan targets. On a coordinate surface that answer compares placements;
     // here it compares **slots**, which is exactly the split its KDoc anticipated. A merge plan's footprint names
     // the hovered cell, so page + (row, col) resolves to the entry under the finger.
-    val folderHost = rememberFolderHostState(coordinator) { zoneId, plan ->
-        if (zoneId != PagerZoneId) return@rememberFolderHostState null
-        val slot = plan.footprint.row * config.cols + plan.footprint.col
-        (livePages.value.getOrNull(plan.footprint.page)?.getOrNull(slot) as? AppsItem.Folder)?.folder?.id
+    val folderHost = rememberFolderHostState(coordinator) { zoneId, _ ->
+        // Reads the target the planner just resolved rather than re-deriving one from the plan's footprint: the
+        // footprint names a *cell*, and turning a cell back into an entry is the slot-vs-display mismatch above.
+        // The planner runs on the move that produced this plan, so the answer is always the current one.
+        if (zoneId != PagerZoneId) null else (mergeTarget as? AppsItem.Folder)?.folder?.id
     }
 
     // Edge-dwell page flip. Scoped to this surface's own zone, so a drag that belongs elsewhere can't flip
@@ -252,17 +277,15 @@ fun AppsPager(
             return
         }
         if (outcome == null) return
-        val plan = outcome.plan
-        val merging = plan.intent == DropIntent.MERGE
-        val targetPage = plan.footprint.page
-        val targetSlot = plan.footprint.row * config.cols + plan.footprint.col
+        // A merge commits against the entry the planner named, not the cell it painted on.
+        val target = mergeTarget?.takeIf { outcome.plan.intent == DropIntent.MERGE }
 
         // 3. The drag started inside a folder and has landed out here: it is placed and removed from that folder
         //    in one batch — including onto a merge ring, which is how it moves straight into another folder.
         if (sourceFolderId != null) {
             val app = (outcome.item as? GridItem.App)?.component ?: return
-            if (merging) {
-                onMergeExtracted(sourceFolderId, app, targetPage, targetSlot)
+            if (target != null) {
+                onMergeExtracted(sourceFolderId, app, target.iconItem)
             } else {
                 // No gap means the finger never rested on a cell of this pager (a release over the slack below a
                 // short page). Nothing was removed on the way out, so declining here simply leaves the app in its
@@ -273,8 +296,8 @@ fun AppsPager(
             return
         }
         // 4. An ordinary rearrangement.
-        if (merging) {
-            (outcome.item as? GridItem.App)?.let { onMerge(it.component, targetPage, targetSlot) }
+        if (target != null) {
+            (outcome.item as? GridItem.App)?.let { onMerge(it.component, target.iconItem) }
         } else {
             val item = outcome.item.asIconItem() ?: return
             val page = gapPage.takeIf { it >= 0 } ?: return
@@ -337,6 +360,9 @@ fun AppsPager(
                     perPage = perPage,
                 )
                 LauncherGrid(config = config, modifier = Modifier.fillMaxSize()) {
+                    // The drop shadow, declared before the cells so it sits behind them, and inside the page grid
+                    // so it travels with the page rather than hanging in root space during a flip.
+                    dropFootprintCell(session, pageIndex, gap, gapPage, config)
                     flowItems(items = display, itemKey = { it.gridItem }) { item, cellModifier ->
                         LauncherDragCell(
                             coordinator = coordinator,
@@ -461,6 +487,47 @@ private fun AppsPagerCell(item: AppsItem, modifier: Modifier, itemGestures: Modi
             apps = item.apps,
             modifier = modifier,
             itemGestures = itemGestures,
+        )
+    }
+}
+
+/**
+ * Paints this page's drop shadow, if it has one: the **merge ring's cell** when releasing would fold two entries
+ * together, otherwise the **gap** the reorder has opened.
+ *
+ * The two never coexist — the planner returns a merge plan *before* touching the gap, so a merge leaves the gap
+ * where it was, and painting both would show two promises at once. Merge wins for the same reason it short-circuits
+ * there: it is the more specific answer to where the finger is.
+ *
+ * Only the merge target comes from the plan. A reorder's does not, and cannot: the plan's footprint is a token for
+ * that intent (see [PagerReorderPlan]), because the landing is an index in this surface's own state rather than a
+ * cell anyone else could name.
+ */
+@Suppress("ComposableNaming") // an emitter, named for what it paints rather than as a component
+@Composable
+private fun LauncherGridScope.dropFootprintCell(
+    session: DragSession?,
+    pageIndex: Int,
+    gap: Int,
+    gapPage: Int,
+    config: GridConfig,
+) {
+    if (session == null || session.activeZone != PagerZoneId) return
+    val merge = session.plan?.takeIf { it.intent == DropIntent.MERGE }
+    val cell = when {
+        merge != null -> merge.footprint.takeIf { it.page == pageIndex }?.let { it.row to it.col }
+        // A gap past the last cell means the item is being appended to a page that is already full: it will
+        // cascade onto the next page, so this page has no slot to promise and paints nothing. Without the bound
+        // the footprint would be placed off the grid — invisible either way, but silently so.
+        gap in 0 until config.rows * config.cols && gapPage == pageIndex ->
+            gap / config.cols to gap % config.cols
+        else -> null
+    } ?: return
+    val (row, col) = cell
+    Box(Modifier.gridPlacement(GridPlacement(0, row, col))) {
+        DropFootprint(
+            intent = if (merge != null) DropIntent.MERGE else DropIntent.REORDER,
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

@@ -138,19 +138,10 @@ class AppsViewModel(
     /**
      * Merges [dragged] onto whatever sits at [targetSlot] of [targetPage] — the merge-ring drop.
      *
-     * App onto app mints a folder holding both; app onto folder joins it. Returns without writing when the target
-     * is gone or is a combination the surface can't make (folders don't nest), so a stale plan is a no-op rather
-     * than a surprise.
+     * App onto app mints a folder holding both; app onto folder joins it. [target] is the entry the drag layer
+     * resolved under the finger, passed by identity — see [mergeInto].
      */
-    fun mergePagerItem(dragged: ComponentKey, targetPage: Int, targetSlot: Int) {
-        when (val target = state.value.pagerPages.getOrNull(targetPage)?.getOrNull(targetSlot)) {
-            is AppsItem.App -> applyPager(
-                listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, dragged)),
-            )
-            is AppsItem.Folder -> applyPager(joinFolder(target.folder.id, dragged))
-            null -> Unit
-        }
-    }
+    fun mergePagerItem(dragged: ComponentKey, target: IconItem) = applyPager(mergeInto(target, dragged))
 
     /**
      * Reorders folder [folderId] to the arrangement its overlay [reported] on drop.
@@ -193,20 +184,29 @@ class AppsViewModel(
     }
 
     /**
-     * Commits an app dragged out of folder [from] and dropped on the **merge ring** of whatever sits at
-     * [targetSlot] of [targetPage] — folder→folder, or folder→new-folder, in one gesture.
+     * Commits an app dragged out of folder [from] and dropped on [target]'s **merge ring** — folder→folder, or
+     * folder→new-folder, in one gesture.
      *
      * Dropping it back on the folder it came from is a no-op: it is still a member, and nothing was written on the
      * way out, so there is genuinely nothing to do.
      */
-    fun mergeExtractedApp(from: Long, app: ComponentKey, targetPage: Int, targetSlot: Int) {
-        val target = state.value.pagerPages.getOrNull(targetPage)?.getOrNull(targetSlot) ?: return
-        if (target is AppsItem.Folder && target.folder.id == from) return
-        val into = when (target) {
-            is AppsItem.App -> listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, app))
-            is AppsItem.Folder -> joinFolder(target.folder.id, app)
-        }
-        applyPager(into + leaveFolderChanges(from, null, app))
+    fun mergeExtractedApp(from: Long, app: ComponentKey, target: IconItem) {
+        if (target is IconItem.Folder && target.folderId == from) return
+        applyPager(mergeInto(target, app) + leaveFolderChanges(from, null, app))
+    }
+
+    /**
+     * The changes that fold [dragged] into [target]: a new folder when the target is an app, joining it when the
+     * target is already a folder.
+     *
+     * Takes the target by **identity**, so nothing here re-derives it from a position. The caller resolved which
+     * entry the finger was on against what was actually on screen, and a slot index would have thrown that away —
+     * the page renders a gap-shifted order during a drag, so the same index names different entries to the two
+     * sides. It is the same reason `AppsPagerChange.CreateFolder` names a neighbour rather than a slot.
+     */
+    private fun mergeInto(target: IconItem, dragged: ComponentKey): List<AppsPagerChange> = when (target) {
+        is IconItem.App -> listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.component, dragged))
+        is IconItem.Folder -> joinFolder(target.folderId, dragged)
     }
 
     /**
