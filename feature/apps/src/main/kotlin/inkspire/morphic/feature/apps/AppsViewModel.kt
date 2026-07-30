@@ -15,7 +15,7 @@ import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsCategoryChange
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
-import inkspire.morphic.data.layout.reconcileFolderOrder
+import inkspire.morphic.data.layout.reconcileReportedOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -179,13 +179,13 @@ class AppsViewModel(
     /**
      * Reorders folder [folderId] to the arrangement its overlay [reported] on drop.
      *
-     * Reconciled against real membership first ([reconcileFolderOrder]): `ReorderFolder` replaces membership
+     * Reconciled against real membership first ([reconcileReportedOrder]): `ReorderFolder` replaces membership
      * wholesale, and the overlay can only report members it could render, so writing its list verbatim would
      * *delete* anything unresolvable rather than reorder it.
      */
     fun reorderFolder(folderId: Long, reported: List<ComponentKey>) {
         val known = folderById(folderId)?.folder?.apps ?: return
-        applyPager(listOf(AppsPagerChange.ReorderFolder(folderId, reconcileFolderOrder(known, reported))))
+        applyPager(listOf(AppsPagerChange.ReorderFolder(folderId, reconcileReportedOrder(known, reported))))
     }
 
     /**
@@ -198,7 +198,7 @@ class AppsViewModel(
      */
     fun addToFolder(folderId: Long, reported: List<ComponentKey>, incoming: ComponentKey, from: Long?) {
         val known = folderById(folderId)?.folder?.apps ?: return
-        val order = reconcileFolderOrder(known + incoming, reported)
+        val order = reconcileReportedOrder(known + incoming, reported)
         applyPager(
             listOf(
                 AppsPagerChange.ReorderFolder(folderId, order),
@@ -291,6 +291,22 @@ class AppsViewModel(
     fun moveCategoryItem(app: ComponentKey, toCategory: String, toSlot: Int) {
         viewModelScope.launch {
             appsOrderRepository.applyCategory(listOf(AppsCategoryChange.Move(app, toCategory, toSlot)))
+        }
+    }
+
+    /**
+     * Commits a reorder within [categoryId]: [reported] is the order that category's expansion dropped.
+     *
+     * **Unreconciled on purpose**, unlike the folder reorders above — and that asymmetry is the point rather than an
+     * oversight. A folder's membership reaches this holder intact (it is the folder *definition*), so there is a true
+     * list to fold the UI's report onto here; a category's does not — [AppsState.categories] holds only the apps the
+     * app cache could resolve, so reconciling against it would compare a filtered list with itself and guard nothing.
+     * `AppsCategoryChange.Reorder` therefore does it in the store, where the full membership lives, which also makes
+     * the op incapable of changing membership at all.
+     */
+    fun reorderCategory(categoryId: String, reported: List<ComponentKey>) {
+        viewModelScope.launch {
+            appsOrderRepository.applyCategory(listOf(AppsCategoryChange.Reorder(categoryId, reported)))
         }
     }
 

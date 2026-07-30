@@ -13,7 +13,7 @@ import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
-import inkspire.morphic.data.layout.reconcileFolderOrder
+import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.PlacedItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -119,12 +119,12 @@ class HomeViewModel(
      * Reorders folder [folderId] to the arrangement the overlay [reported] on drop.
      *
      * The reported order covers only the members the UI could render, so it is reconciled against the real
-     * membership first ([reconcileFolderOrder]) — `ReorderFolder` replaces membership wholesale, and writing the
+     * membership first ([reconcileReportedOrder]) — `ReorderFolder` replaces membership wholesale, and writing the
      * UI's list verbatim would delete anything it couldn't draw.
      */
     fun reorderFolder(folderId: Long, reported: List<ComponentKey>) {
         val known = folderById(folderId)?.folder?.apps ?: return
-        applyChanges(listOf(LayoutChange.ReorderFolder(folderId, reconcileFolderOrder(known, reported))))
+        applyChanges(listOf(LayoutChange.ReorderFolder(folderId, reconcileReportedOrder(known, reported))))
     }
 
     /**
@@ -143,7 +143,7 @@ class HomeViewModel(
         val leaving = from?.takeIf { it != folderId }?.let(::folderById)
         applyChanges(
             listOf(
-                LayoutChange.ReorderFolder(folderId, reconcileFolderOrder(known + incoming, reported)),
+                LayoutChange.ReorderFolder(folderId, reconcileReportedOrder(known + incoming, reported)),
                 LayoutChange.RemoveFromGrid(GridItem.App(incoming)),
             ) + leaving?.let { leaveFolderChanges(it, incoming) }.orEmpty(),
         )

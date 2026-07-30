@@ -44,6 +44,27 @@ internal fun moveCategoryItem(
 }
 
 /**
+ * Re-sequences [category]'s apps to [order] — a permutation, never a membership change.
+ *
+ * [order] is what a UI reported, so it covers only the apps that surface could render; [reconcileReportedOrder] folds
+ * it back onto the stored membership, which is why nothing can be added or lost here. Doing that *inside* the store
+ * (rather than at the call site, as the folder ops do) is the only option for this store: a category's membership
+ * never reaches the UI intact, so the caller has no true list to reconcile against — see
+ * [AppsCategoryChange.Reorder].
+ *
+ * An unknown [category] is left alone rather than created empty: a reorder names a category the UI was *showing*, so
+ * an id with no bucket means the arrangement moved on underneath the drop.
+ */
+internal fun reorderCategoryItems(
+    items: CategoryItems,
+    category: String,
+    order: List<ComponentKey>,
+): CategoryItems {
+    val known = items[category] ?: return items
+    return items + (category to reconcileReportedOrder(known, order))
+}
+
+/**
  * Reconciles the arrangement with what is installed: appends apps that are new, drops ones that are gone, and
  * leaves everything already filed exactly where it is.
  *
