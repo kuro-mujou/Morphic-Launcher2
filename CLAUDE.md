@@ -119,16 +119,15 @@ as its two holders. There is no `apps_pager_placement` table and should not be: 
 not a coordinate. One difference from `icon_container_item`, and it is silent when wrong — the unique indices are
 scoped **per orientation**, since the pager keeps two saved lists and an app appears once in each.
 
-⚠️ **Still open for the category *card*.** `category_item` is keyed on `component` too, so the same reshape is
-owed there if the card is to hold folders; the pager's version is the worked example. (The category *pager* is
-settled the other way — see below.) The UI side is ready: `FolderHostState` is surface-independent and shared.
-
-**Settled, and it narrows that question: the category *pager* (`PAGER_WITH_CATEGORY`) holds no folders.** A
-category *is* the grouping there, so a folder inside one would be a second, redundant one. Its pages are dragged
-between (carrying an app to another page is how it changes category) and its cells split into **halves** with no
-centre merge ring, since there is nothing to merge into — which is what `CategoryPagerPlayground` prototypes. That
-harness is the category *pager*, not the category *card*; its "no folders here" is that layout's intent and says
-nothing either way about the card, which is still open above.
+**Settled: neither category layout holds folders, so `category_item` stays keyed on `component`.** The reshape the
+pager needed is **not** owed here — no migration. The **pager** (`PAGER_WITH_CATEGORY`) has one reason: a category
+*is* the grouping, so a folder inside one would be a second, redundant one. Its pages are dragged between (carrying
+an app to another page is how it changes category) and its cells split into **halves** with no centre merge ring,
+since there is nothing to merge into — which is what `CategoryPagerPlayground` prototypes. The **card**
+(`CATEGORY_CARD`) has that reason *plus* one of its own: a card is already a folder in everything but name — a
+titled tile previewing a collection, which opens into a bounded grid — so a folder on a card nests a grouping inside
+something that looks identical to it, and its 2×2 preview tile would have to render inside one of four preview slots
+that are themselves 2×2, at ~20dp a side. Two independent reasons, either sufficient.
 
 Full rationale: [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md) → "Arrangement persistence model".
 
@@ -312,7 +311,8 @@ and the extracted `GridGeometry` seam. Only grid **G6** (full-harness regression
 done-on-device. **Built for the home since:** the shared **coordinate drag surfaces** — `CoordinateDragGrid`
 (single zone) + `CoordinateDragPager` (paged, viewport zone + edge-flip) + the shared `LauncherDragCell`
 (per-item drag wiring), all reused by the harness `GridSurface`; the `AppCell`/`FolderCell` launcher cells (via
-`IconLabelCell` + `cellLabelHeight`); and the full **folder subsystem** — `FolderOverlay`, `folderInnerSize`
+`IconLabelCell` + `cellLabelHeight`, with `FolderCell`'s 2×2 tile extracted as `IconPreviewPlate` once the APPS
+category card needed the same tile for its overflow cluster); and the full **folder subsystem** — `FolderOverlay`, `folderInnerSize`
 (a `@Composable` facade over pure sizing arithmetic), `FolderReorder` MovingGap, `FolderDragDelegate`, and
 **`FolderHostState`/`FolderPhase`** (the open/leave/enter lifecycle any folder-hosting surface reuses; 20 unit
 tests). Item gestures are scoped to the icon+label group, not the cell — see the design-system rules above.
@@ -390,7 +390,7 @@ the default `DevRootScreen` screen.
   The whole open/leave/enter lifecycle lives in `FolderHostState` (`core:designsystem`), not the screen; home
   supplies only the surface-specific *"which folder does this merge plan target?"* lambda (a **zone + placement**
   match — placement alone matches the other zone's folder at the same cell) and the commit calls. Two guards worth
-  knowing: `reconcileFolderOrder` (`FolderOrder.kt`) folds a UI-reported order
+  knowing: `reconcileReportedOrder` (`ReportedOrder.kt`) folds a UI-reported order
   back onto real membership, because `ReorderFolder` replaces membership wholesale and the UI can only report
   members it could render — writing its list verbatim **deleted** anything unresolvable (an uninstalled app,
   B6 pruning still deferred); and `FolderOverlay` is wrapped in `key(folderId)` so switching folders doesn't
@@ -482,8 +482,8 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
 - The pager's op set composes rather than special-cases: `RemoveFromFolder` takes an app out of membership and
   *nothing else*, so a landing pairs it with a `Move` (onto a page) or an `AddToFolder` (into another folder), and
   one batch commits both. `CreateFolder`/`DissolveFolder` name a **neighbour** instead of a slot — "this takes that
-  thing's place" — because a slot index shifts as the folded apps leave the list. `reconcileFolderOrder` moved to
-  `data:layout`, beside the `ReorderFolder` ops it guards, now that both surfaces owe their writes that guard.
+  thing's place" — because a slot index shifts as the folded apps leave the list. `reconcileReportedOrder` moved to
+  `data:layout`, beside the whole-order ops it guards, now that several surfaces owe their writes that guard.
 - Still to come on the pager: a page indicator, and an optimistic layer (a drop currently waits for the write).
 - **The category pager** (`PAGER_WITH_CATEGORY`, `AppsCategoryPager`) — **one page per category**, each page a
   header plus a vertically-scrolling grid at `AppsCategoryGrid`'s column count. It uses `LauncherGrid`'s
@@ -517,19 +517,48 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   again. Without it a rebalance strands them: the read is driven by the definitions table, so they would render
   nowhere while still occupying a row that `syncCategoryItems` counts as filed. It is the same path a user-deleted
   category will take once `known` grows to include user-created ids (L1's `u1`/`u2` prefix is the pointer).
+- **The category card** (`CATEGORY_CARD`, `AppsCategoryCard`) — **the fifth and last APPS layout**: a lazy 2-column
+  grid of square cards, one per category, each a header plus a 2×2 preview, tapped open to reach the rest. It shares
+  the pager's store, so there is nothing to seed or classify here and switching between the two layouts shows the
+  same categories with the same apps. Lazy (unlike the category *pager*'s `LauncherGrid` pages) because a card
+  composes up to seven baked icons, so the card *count* is small but the icon count is not — the vertical grid's
+  argument, not the pager page's.
+  - **The expansion is a real `FolderOverlay`, not a lookalike.** That type's parameters were already a label and a
+    list of apps with no folder id in them, because what it renders is *an ordered collection of apps opened over a
+    surface* — and the grid it sizes itself from is `FolderGrid`, whose KDoc has always called itself the "folder /
+    category-card grid". Reuse brings the paging, dots, MovingGap reorder and scrim for free. It does leave the type
+    named for one of its two cases; a rename (`IconCollectionOverlay`?) would touch home, the APPS pager and the whole
+    `folder/` package, so it waits for a *third* consumer to say what the honest name is rather than being guessed
+    from two. No `FolderHostState` here: that machine exists for the phases an app passes through while its
+    *membership* changes mid-drag, and a tap-opened expansion changes none.
+  - **`AppsCategoryChange.Reorder` is the second category op, and it changes order only.** The expansion reports a
+    whole list (it is the same overlay a folder uses), which a `Move` can't express without guessing which app the
+    user dragged. Its guard sits **in the store**, not at the call site as `ReorderFolder`'s does — and that
+    asymmetry is the point: a folder's membership reaches the UI intact (it *is* the folder definition), so the
+    caller has something true to reconcile against, while a category's never does (the UI only sees what the app
+    cache resolved). So the op is made incapable of changing membership instead. `reconcileFolderOrder` was renamed
+    `reconcileReportedOrder` for the same reason.
+  - **Two tap targets per card, with no overlap** — the "touch target is its visible extent" rule applied to a
+    container: preview icons launch; the **header row** and the **overflow cluster** open the category. The empty
+    slots and the padding stay free. The header is not a fallback for the cluster — a category of ≤ 4 apps has no
+    cluster, and without it could never be opened. The cluster tile *is* `IconPreviewPlate`, extracted from
+    `FolderCell` when this second consumer arrived so a folder tile and a cluster tile can't drift apart.
+  - Still to come: **dropping an app onto a card** (how a card layout re-files) and the "leave the expansion" half
+    that feeds it — one gesture, and both need the card grid to register a drop zone. Until then `onLeave` is
+    deliberately a no-op: closing the expansion would strand the drag over a surface with nowhere to land.
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
-  helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), category **management** (create/rename/delete/reorder — a
-  `feature:settings` concern), and the **category card** layout, the last one, which shares this store and is where
-  the folders-on-the-card question has to be answered.
+  helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
+  category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
+  carries no menu and cannot be dragged).
 
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
 (which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
-above), home **orientation**, widgets/containers on the grid, or `data:apps` categorization (B6). On APPS: the
-pager's **drag + folders** (the next part — the store, the ordered-flow primitives and the render are all in
-place), the alphabet filter strip, search, or the **category** store (`category` + `category_item`), which
-unblocks the two category layouts and forces the folders-on-the-card question above. Folder follow-ups: rename, add-via-picker, cross-page reorder,
-onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
+above), home **orientation**, or widgets/containers on the grid. On APPS, **all five layouts now render** and the
+remaining work is behaviour: the category card's **drop-onto-a-card** re-file (the next part — the store op, the
+overlay and the "leave" half are all in place), the alphabet filter strip, search, `EjectToHome`, the pager's page
+indicator + optimistic layer, or `data:apps`' `AppEvent` live updates/pruning (B6). Folder follow-ups: rename,
+add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no

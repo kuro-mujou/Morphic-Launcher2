@@ -178,7 +178,8 @@ val AppsScrollGrid = GridBlueprint(
  * to merge into, a hovered cell splits into **halves** (gap before / gap after) and there is no centre merge ring,
  * unlike every coordinate surface. Prototyped in the `CategoryPagerPlayground` harness.
  *
- * Not the [AppsLayout.CATEGORY_CARD] grid: those cards are previews rather than full pages, and use [FolderGrid].
+ * Not the [AppsLayout.CATEGORY_CARD] grid: a card is a small fixed preview of a category rather than a full page of
+ * it, and the view it *opens into* is sized by [FolderGrid] — the same grid, and the same overlay, a folder uses.
  */
 val AppsCategoryGrid = GridBlueprint(
     sizing = GridSizing.SCROLL_GRID,
@@ -193,7 +194,13 @@ val AppsCategoryGrid = GridBlueprint(
     ),
 )
 
-/** Folder / category-card grid — fixed defaults with no editor (sized by icon config only). */
+/**
+ * Folder / category-card grid — fixed defaults with no editor (sized by icon config only).
+ *
+ * One blueprint for both because they are one view: an opened folder and an expanded category card are the same
+ * bounded, paged grid of an ordered app list (the same `FolderOverlay` renders them), differing only in where their
+ * contents come from.
+ */
 val FolderGrid = GridBlueprint(
     sizing = GridSizing.FIXED_PAGER,
     cellMultiplier = 1,

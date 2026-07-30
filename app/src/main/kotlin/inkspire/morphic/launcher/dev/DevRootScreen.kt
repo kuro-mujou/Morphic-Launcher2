@@ -28,6 +28,7 @@ private enum class DevScreen(val label: String) {
     AppsGrid("AppsGrid"),
     AppsPager("AppsPager"),
     AppsCategory("AppsCategory"),
+    AppsCards("AppsCards"),
     Drag("Drag"),
     Pager("Pager"),
     PagerDrag("Pager+Drag"),
@@ -57,6 +58,7 @@ fun DevRootScreen(modifier: Modifier = Modifier) {
             DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
             DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
             DevScreen.AppsCategory -> AppsScreen(layout = AppsLayout.PAGER_WITH_CATEGORY)
+            DevScreen.AppsCards -> AppsScreen(layout = AppsLayout.CATEGORY_CARD)
             DevScreen.Drag -> DragPlaygroundScreen()
             DevScreen.Pager -> PagerPlaygroundScreen()
             DevScreen.PagerDrag -> PagerDragPlaygroundScreen()

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.feature.apps.layout.AppsCategoryCard
 import inkspire.morphic.feature.apps.layout.AppsCategoryPager
 import inkspire.morphic.feature.apps.layout.AppsPager
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
@@ -72,10 +73,14 @@ fun AppsScreen(
                     onLaunch = viewModel::launch,
                     onMove = viewModel::moveCategoryItem,
                 )
-                // The last unbuilt layout. Named rather than given an `else`, on purpose: adding a value to
-                // [AppsLayout] then fails to compile here until it is rendered. It shares the category store this
-                // one uses, and it is where the folders-on-the-card question still has to be answered.
-                AppsLayout.CATEGORY_CARD -> Unit
+                // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
+                // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
+                // is rendered.
+                AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
+                    categories = state.categories,
+                    onLaunch = viewModel::launch,
+                    onReorder = viewModel::reorderCategory,
+                )
             }
         }
     }
