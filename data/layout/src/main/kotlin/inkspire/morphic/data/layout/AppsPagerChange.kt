@@ -43,8 +43,21 @@ sealed interface AppsPagerChange {
      */
     data class CreateFolder(val label: String, val target: ComponentKey, val dragged: ComponentKey) : AppsPagerChange
 
-    /** Drop [app] onto folder [folderId]: it joins the folder's contents at the end and leaves the pager. */
+    /**
+     * Add [app] to folder [folderId]'s contents, at the end. **Membership only** — pair it with [RemoveFromPager]
+     * when the app was loose on a page, the mirror of how [RemoveFromFolder] leaves the landing to its partner.
+     */
     data class AddToFolder(val folderId: Long, val app: ComponentKey) : AppsPagerChange
+
+    /**
+     * Take [item] off the pager. It is not deleted — something else now holds it (a folder), which is why this is
+     * separate from any notion of removing the app itself.
+     *
+     * The analogue of HOME's `LayoutChange.RemoveFromGrid`, and needed for the same reason: an entry joining a
+     * folder has to stop occupying a slot, and "joined a folder" and "left the pager" are two stores. Leaving it
+     * implicit is what let an app sit in a folder *and* on a page at the same time.
+     */
+    data class RemoveFromPager(val item: IconItem) : AppsPagerChange
 
     /**
      * Take [app] out of folder [folderId]'s membership. **Where it goes is a separate op** — pair this with a

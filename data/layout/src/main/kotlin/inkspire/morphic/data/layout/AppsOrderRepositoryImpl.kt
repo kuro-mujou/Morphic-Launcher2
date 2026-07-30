@@ -87,10 +87,14 @@ internal class AppsOrderRepositoryImpl(
         }
 
         is AppsPagerChange.AddToFolder -> {
+            // Membership only, mirroring RemoveFromFolder: the caller pairs it with RemoveFromPager when the app
+            // was loose on a page. Bundling the removal here is what hid the case where it was needed and absent.
             val next = (daos.folderItem.maxSortOrder(change.folderId) ?: -1) + 1
             daos.folderItem.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
-            removePagerItem(pages, IconItem.App(change.app))
+            pages
         }
+
+        is AppsPagerChange.RemoveFromPager -> removePagerItem(pages, change.item)
 
         is AppsPagerChange.RemoveFromFolder -> {
             // Membership only: the app is now in neither place, and the op paired with this one — a Move onto the

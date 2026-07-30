@@ -147,7 +147,7 @@ class AppsViewModel(
             is AppsItem.App -> applyPager(
                 listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, dragged)),
             )
-            is AppsItem.Folder -> applyPager(listOf(AppsPagerChange.AddToFolder(target.folder.id, dragged)))
+            is AppsItem.Folder -> applyPager(joinFolder(target.folder.id, dragged))
             null -> Unit
         }
     }
@@ -175,7 +175,14 @@ class AppsViewModel(
     fun addToFolder(folderId: Long, reported: List<ComponentKey>, incoming: ComponentKey, from: Long?) {
         val known = folderById(folderId)?.folder?.apps ?: return
         val order = reconcileFolderOrder(known + incoming, reported)
-        applyPager(listOf(AppsPagerChange.ReorderFolder(folderId, order)) + leaveFolderChanges(from, folderId, incoming))
+        applyPager(
+            listOf(
+                AppsPagerChange.ReorderFolder(folderId, order),
+                // The app is in the folder now, so it must stop occupying a slot. A no-op when it arrived from
+                // another folder rather than off a page — one shape for both, instead of a condition to get wrong.
+                AppsPagerChange.RemoveFromPager(IconItem.App(incoming)),
+            ) + leaveFolderChanges(from, folderId, incoming),
+        )
     }
 
     /** Commits an app dragged **out** of folder [from] onto the pager at [toSlot] of [toPage]. */
@@ -196,11 +203,21 @@ class AppsViewModel(
         val target = state.value.pagerPages.getOrNull(targetPage)?.getOrNull(targetSlot) ?: return
         if (target is AppsItem.Folder && target.folder.id == from) return
         val into = when (target) {
-            is AppsItem.App -> AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, app)
-            is AppsItem.Folder -> AppsPagerChange.AddToFolder(target.folder.id, app)
+            is AppsItem.App -> listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, app))
+            is AppsItem.Folder -> joinFolder(target.folder.id, app)
         }
-        applyPager(listOf(into) + leaveFolderChanges(from, null, app))
+        applyPager(into + leaveFolderChanges(from, null, app))
     }
+
+    /**
+     * The changes that put [app] into folder [folderId] the quick way — appended at the end, as a merge-ring drop
+     * does. Two ops because they are two stores: it joins the folder's contents, and it stops occupying a pager
+     * slot. The second is a no-op when the app was never on a page.
+     */
+    private fun joinFolder(folderId: Long, app: ComponentKey): List<AppsPagerChange> = listOf(
+        AppsPagerChange.AddToFolder(folderId, app),
+        AppsPagerChange.RemoveFromPager(IconItem.App(app)),
+    )
 
     /**
      * The changes that take [app] out of folder [from] — the half every landing shares, so the paths cannot

@@ -155,6 +155,15 @@ class AppsPagerPagingTest {
         assertEquals(stored, syncPagerPages(stored, installed, perPage = 4))
     }
 
+    @Test
+    fun `removing an entry that was never on a page changes nothing`() {
+        // What lets `RemoveFromPager` be emitted unconditionally when an app joins a folder: it is a no-op for an
+        // app arriving from another folder, which was never on a page. One shape for both landings beats a
+        // condition that has to be got right at three call sites.
+        val stored = pages("ab")
+        assertEquals(stored, removePagerItem(stored, app("z")))
+    }
+
     // ── Locating ──
 
     @Test
