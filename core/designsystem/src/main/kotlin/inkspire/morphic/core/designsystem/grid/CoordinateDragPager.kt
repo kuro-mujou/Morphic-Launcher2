@@ -20,6 +20,7 @@ import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.LauncherPagerState
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
@@ -29,12 +30,6 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
-
-/** How near a viewport edge the dragged item must be held to trigger a page-flip, and the dwell between flips. */
-private val EDGE_FLIP_DP = 44.dp
-private const val EDGE_FLIP_DWELL_MS = 450L
-
-private enum class FlipEdge { LEFT, RIGHT }
 
 /**
  * The **paged** free-placement drag surface: a [LauncherPager] of coordinate grids where a single item drag can
@@ -94,39 +89,15 @@ fun <T> CoordinateDragPager(
         onDispose { coordinator.unregisterZone(zoneId) }
     }
 
-    // Edge-dwell page-flip: which edge (if any) the dragged finger is currently held near. Only while the drag
-    // is actually over *this* pager's zone — on a shared coordinator another surface's drag (e.g. reordering
-    // inside an open folder) must not flip these pages behind it.
+    // Edge-dwell page-flip, shared with every other paged drag surface. Scoped to *this* pager's zone: on a
+    // shared coordinator another surface's drag (reordering inside an open folder) must not flip these pages
+    // behind it, which is what passing a null finger says.
     var viewport by remember { mutableStateOf<Rect?>(null) }
-    val flipEdge: FlipEdge? = run {
-        val active = session?.takeIf { it.activeZone == zoneId } ?: return@run null
-        val vp = viewport ?: return@run null
-        val finger = active.fingerInRoot
-        val edgePx = with(density) { EDGE_FLIP_DP.toPx() }
-        when {
-            finger.x < vp.left + edgePx -> FlipEdge.LEFT
-            finger.x > vp.right - edgePx -> FlipEdge.RIGHT
-            else -> null
-        }
-    }
-    LaunchedEffect(flipEdge) {
-        val active = flipEdge
-        if (active == null) {
-            // **Leaving the edge has to land the pager on a page.** Moving away changes this effect's key, which
-            // cancels the branch below — and cancelling it mid-`animateToPage` stops the animation exactly where
-            // it is, parking the pager between two pages with both half on screen and neither settled. Nothing
-            // else would ever settle it: swipe is gated off during a drag, and the flip loop is gone. Settling
-            // here is a no-op when the pager is already on a boundary, so it costs nothing in the common case.
-            pagerState.settleToNearestPage()
-            return@LaunchedEffect
-        }
-        while (true) {
-            delay(EDGE_FLIP_DWELL_MS.milliseconds)
-            val target = pagerState.currentPage + if (active == FlipEdge.LEFT) -1 else 1
-            if (target < 0 || target >= pagerState.pageCount) break
-            pagerState.animateToPage(target)
-        }
-    }
+    EdgeFlipEffect(
+        pagerState = pagerState,
+        viewport = viewport,
+        fingerInRoot = session?.takeIf { it.activeZone == zoneId }?.fingerInRoot,
+    )
 
     LauncherPager(
         state = pagerState,

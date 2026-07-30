@@ -42,6 +42,7 @@ import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
@@ -126,38 +127,8 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
             placements[outcome.item] = outcome.plan.footprint
         }
 
-        // Edge-dwell page-flip: while the finger is held near a viewport edge during a drag, flip a page each
-        // dwell, stopping at the ends (bounded).
-        val edge: FlipEdge? = run {
-            val session = coordinator.session
-            val vp = viewport
-            val edgePx = with(density) { EDGE_DP.toPx() }
-            if (session == null || vp == null) {
-                null
-            } else {
-                val x = session.fingerInRoot.x
-                when {
-                    x < vp.left + edgePx -> FlipEdge.LEFT
-                    x > vp.right - edgePx -> FlipEdge.RIGHT
-                    else -> null
-                }
-            }
-        }
-        LaunchedEffect(edge) {
-            val active = edge
-            if (active == null) {
-                // Moving off the edge cancels this effect mid-`animateToPage`, which parks the pager between two
-                // pages; nothing else settles it while a drag has page-swipe gated off. No-op when already settled.
-                pagerState.settleToNearestPage()
-                return@LaunchedEffect
-            }
-            while (true) {
-                delay(EDGE_DWELL_MS.milliseconds)
-                val target = pagerState.currentPage + if (active == FlipEdge.LEFT) -1 else 1
-                if (target < 0 || target >= PAGES) break
-                pagerState.animateToPage(target)
-            }
-        }
+        // Edge-dwell page-flip, from core:designsystem/pager — the same effect home and the APPS pager use.
+        EdgeFlipEffect(pagerState = pagerState, viewport = viewport, fingerInRoot = coordinator.session?.fingerInRoot)
 
         Box(modifier.fillMaxSize().background(colors.background)) {
             LauncherPager(
@@ -314,13 +285,9 @@ private class PageGeometry(
 
 private data class PageCell(val row: Int, val col: Int)
 
-private enum class FlipEdge { LEFT, RIGHT }
-
 private const val PAGES = 3
 private const val COLS = 4
 private const val ROWS = 5
-private val EDGE_DP = 44.dp
-private const val EDGE_DWELL_MS = 450L
 private val PagerZoneId = ZoneId("pager-viewport")
 
 private fun toast(context: android.content.Context): (String) -> Unit =
