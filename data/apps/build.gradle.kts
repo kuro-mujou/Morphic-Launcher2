@@ -13,4 +13,6 @@ dependencies {
     implementation(projects.core.icon)
 
     implementation(libs.timber)
+
+    testImplementation(libs.junit)
 }
