@@ -71,7 +71,11 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
         CategoryItemEntity::class,
         HomeListItemEntity::class,
     ],
-    version = 1,
+    // v2: apps_pager_item became app-or-folder (the APPS pager hosts folders, and that row is a folder's slot).
+    // The bump is required even though the builder falls back to a destructive migration — Room validates the
+    // schema hash on open and would throw, not rebuild. Pre-launcher, so the cost of that rebuild is a dev
+    // database, not user data; the first real migration is owed the moment this ships (P9).
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(
