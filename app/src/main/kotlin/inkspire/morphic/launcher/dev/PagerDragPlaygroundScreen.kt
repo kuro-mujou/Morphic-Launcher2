@@ -144,7 +144,13 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
             }
         }
         LaunchedEffect(edge) {
-            val active = edge ?: return@LaunchedEffect
+            val active = edge
+            if (active == null) {
+                // Moving off the edge cancels this effect mid-`animateToPage`, which parks the pager between two
+                // pages; nothing else settles it while a drag has page-swipe gated off. No-op when already settled.
+                pagerState.settleToNearestPage()
+                return@LaunchedEffect
+            }
             while (true) {
                 delay(EDGE_DWELL_MS.milliseconds)
                 val target = pagerState.currentPage + if (active == FlipEdge.LEFT) -1 else 1

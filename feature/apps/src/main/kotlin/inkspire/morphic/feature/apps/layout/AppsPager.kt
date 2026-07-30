@@ -191,7 +191,16 @@ fun AppsPager(
         }
     }
     LaunchedEffect(flipEdge) {
-        val edge = flipEdge ?: return@LaunchedEffect
+        val edge = flipEdge
+        if (edge == null) {
+            // **Leaving the edge has to land the pager on a page.** Moving away changes this effect's key, which
+            // cancels the branch below — and cancelling it mid-`animateToPage` stops the animation exactly where
+            // it is, parking the pager between two pages with both half on screen and neither settled. Nothing
+            // else would ever settle it: swipe is gated off during a drag, and the flip loop is gone. Settling
+            // here is a no-op when the pager is already on a boundary, so it costs nothing in the common case.
+            pagerState.settleToNearestPage()
+            return@LaunchedEffect
+        }
         while (true) {
             delay(EdgeFlipDwellMs.milliseconds)
             val target = pagerState.currentPage + if (edge == FlipEdge.LEFT) -1 else 1
