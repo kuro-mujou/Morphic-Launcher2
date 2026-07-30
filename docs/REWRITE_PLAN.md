@@ -102,9 +102,12 @@ Large; port per-component as feature screens need them, not up front. Groups:
 
 ### B6 — `data:apps` — installed-app source + categorisation (depends on model, common)
 - `AppRepository`(+`Impl`), `LauncherAppsWrapper`, `AppShortcut`, `mapper/AppInfoMappers`, `applist/AppListPipeline`.
-- category 🔧: `AppCategorizer`, `CategoryHeuristics`, `CategoryMapping`, `AssetCategoryMapping` — Launcher 1's
-  `POST_FIX_CLEANUP_PLAN` already targeted this area; bake those fixes in from the start (VM/business logic out
-  of UI, dedupe mappings).
+- category ✅: `AppCategorizer`, `CategoryHeuristics`, `CategoryMapping`, `AssetCategoryMapping` (+ the curated
+  `assets/app_categories.json`, 188 packages) — done, with the two fixes L1's `POST_FIX_CLEANUP_PLAN` targeted
+  baked in: the classifier is **one app in, one category id out** (L1's `categorize` also did grouping, ordering
+  and display resolution, which here belong to the category store), and the curated table is an **injected**
+  `CategoryMapping` rather than a `Context` read inside the classifier — which is what makes the priority chain
+  unit-testable without Android (11 tests).
 
 ### B7 — `data:settings` — preferences + presets (depends on model, common)
 - `SettingsRepository`(+`internal/SettingsRepositoryImpl`), `LauncherSettings`, `internal/Preferences`,

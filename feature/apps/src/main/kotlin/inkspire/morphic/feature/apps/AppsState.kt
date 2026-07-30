@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.apps
 
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.Category
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconItem
@@ -33,6 +34,18 @@ sealed interface AppsItem {
 }
 
 /**
+ * One category and the apps filed under it, resolved for rendering — a page of the category pager, or a card of the
+ * category card layout.
+ *
+ * The UI-side twin of `data:layout`'s `CategoryContents`, which speaks in components; this carries the [AppInfo]s a
+ * cell needs. Named for the contents rather than for either look, for the same reason that type is.
+ *
+ * @property apps in the user's order. Can be **empty**: a category the user emptied keeps its definition, so its
+ *   page stays on screen and can be dragged back into.
+ */
+data class AppsCategory(val category: Category, val apps: List<AppInfo>)
+
+/**
  * The APPS surface's render state.
  *
  * **One state for every layout, not one per layout** — switching layout must not reload anything, so both shapes
@@ -45,10 +58,13 @@ sealed interface AppsItem {
  * @property pagerPages the APPS pager's arrangement: pages in order, each dense from its first slot. Empty until
  *   the surface has told the ViewModel its page capacity (see [AppsViewModel.setPagerGrid]), since how many items
  *   fit a page is a property of the device and the grid, not of the store.
+ * @property categories the category arrangement, in category order. Needs no capacity to arrive — a category is one
+ *   scrolling list, so unlike [pagerPages] it is populated from the first emission.
  */
 data class AppsState(
     val apps: List<AppInfo> = emptyList(),
     val pagerPages: List<List<AppsItem>> = emptyList(),
+    val categories: List<AppsCategory> = emptyList(),
 )
 
 /**

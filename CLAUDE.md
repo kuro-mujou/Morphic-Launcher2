@@ -297,7 +297,10 @@ launch onto the repository; we don't.)
 Foundations: **P0 done; P1 Core done** — `core:model` (B0), `core:common` (B1), `core:database` (B2). **B3
 `core:icon` done** (parse → layer model → render/bake → `IconRenderManager` → `LauncherIcon`; per-layer effects
 + live editor deferred). **B6 `data:apps` partial** (LauncherApps wrapper, `AppRepository` + Room cache,
-`RawIconSource`; categorization + `AppEvent` live updates/pruning deferred).
+`RawIconSource`, and **categorization** — `AppCategorizer` folds a curated asset → platform
+`ApplicationInfo.category` → keyword heuristics into a `CategoryGroup` id, ported from L1 but narrowed to *one app
+in, one id out*: ordering and overrides are the category store's job, not the classifier's. `AppEvent` live
+updates/pruning still deferred).
 
 **B4 `core:designsystem` — well along.** Theme + `Morphic*` components, plus the interaction primitives, all
 validated in the `app/dev` harness (`DevRootScreen`): the drag toolkit (`DragCoordinator`, `FreeGridPlanner`,
@@ -482,9 +485,42 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   thing's place" — because a slot index shifts as the folded apps leave the list. `reconcileFolderOrder` moved to
   `data:layout`, beside the `ReorderFolder` ops it guards, now that both surfaces owe their writes that guard.
 - Still to come on the pager: a page indicator, and an optimistic layer (a drop currently waits for the write).
+- **The category pager** (`PAGER_WITH_CATEGORY`, `AppsCategoryPager`) — **one page per category**, each page a
+  header plus a vertically-scrolling grid at `AppsCategoryGrid`'s column count. It uses `LauncherGrid`'s
+  **SCROLL_GRID** mode where the vertical grid deliberately uses `LazyVerticalGrid`: same *right tool per surface*
+  rule, opposite answer, because a category page is tens of apps and the vertical grid is all of them. It asks the
+  VM for **nothing** — no capacity to report, since a category is one list — which is the difference between the two
+  stores showing up in a signature. Empty categories keep their page, so one emptied by dragging can be refilled.
+  Classification comes from `data:apps`' `AppCategorizer` (curated asset → platform category → keyword heuristics),
+  run in the VM off the main thread and handed to `syncCategories` as `component → category id`.
+- **Dragging on the category pager re-files by page.** Reorder within a page and move to another are one `Move` op:
+  a page *is* a category, so the destination id carries the difference and there is no separate "change category"
+  path. Cells split into **halves** (no merge ring — nothing to merge into). Two things differ from the APPS pager's
+  drag and both come from the page scrolling: **geometry is published per page from its grid**, not once from the
+  viewport, because the grid slides under the viewport and a finger→cell read against viewport bounds would name the
+  cell that *used* to be at that height; and **the page's scroll is gated off mid-drag** the way page-swipe already
+  is, since two vertical gestures otherwise fight over one finger. Content past the fold is reached by holding the
+  dragged app near the top or bottom edge, which scrolls it — `DragAutoScrollEffect` (`core:designsystem/drag`), the
+  vertical counterpart of `EdgeFlipEffect`, with speed ramping by how deep into the band the finger is so the
+  boundary doesn't feel like a trapdoor.
+- **The rule the category store lives by: a filed app keeps its category even when the classifier disagrees.**
+  Classification runs on every launch, so treating it as authoritative would silently undo every drag at startup —
+  an assignment is only ever a *first* answer, for apps with no answer yet. That also makes a user override free: it
+  is simply the row already being there. Pages are the `CategoryGroup`s; the fine `AppCategory` taxonomy is how
+  classification *reasons*, not what is displayed — which is what lets a new fine category be added without adding a
+  page. **Rebalanced from 6 groups to 12** after the 6 proved lopsided on a real device (`INTERNET` and `UTILITIES`
+  each absorbed 9 fine categories, so two pages held most apps and "Internet" was where you looked for your bank).
+  The widest is now `UTILITIES` at 5, deliberately: it and `SYSTEM` are where the unclassifiable goes, and a user
+  expects those to be broad.
+- **A category that no longer exists cannot hold apps** — the bound on the rule above. `dropUnknownCategories`
+  unfiles anything under an unrecognised id and deletes its definition row, so the classifier can place those apps
+  again. Without it a rebalance strands them: the read is driven by the definitions table, so they would render
+  nowhere while still occupying a row that `syncCategoryItems` counts as filed. It is the same path a user-deleted
+  category will take once `known` grows to include user-created ids (L1's `u1`/`u2` prefix is the pointer).
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
-  helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
-  the two **category** layouts, which need the `category` + `category_item` store.
+  helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), category **management** (create/rename/delete/reorder — a
+  `feature:settings` concern), and the **category card** layout, the last one, which shares this store and is where
+  the folders-on-the-card question has to be answered.
 
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**

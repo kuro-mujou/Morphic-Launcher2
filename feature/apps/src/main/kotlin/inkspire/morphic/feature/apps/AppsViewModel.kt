@@ -2,6 +2,7 @@ package inkspire.morphic.feature.apps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridConfig
@@ -9,7 +10,9 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.apps.category.AppCategorizer
 import inkspire.morphic.data.layout.AppsOrderRepository
+import inkspire.morphic.data.layout.AppsCategoryChange
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileFolderOrder
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.Collator
 
 /**
@@ -46,6 +50,8 @@ class AppsViewModel(
     private val appsOrderRepository: AppsOrderRepository,
     layoutRepository: LayoutRepository,
     private val appLauncher: AppLauncher,
+    private val categorizer: AppCategorizer,
+    private val dispatchers: AppDispatchers,
 ) : ViewModel() {
 
     /**
@@ -73,7 +79,12 @@ class AppsViewModel(
         }
 
     val state: StateFlow<AppsState> =
-        combine(sortedApps, pagerItems, layoutRepository.folders()) { apps, pages, folders ->
+        combine(
+            sortedApps,
+            pagerItems,
+            layoutRepository.folders(),
+            appsOrderRepository.categoryContents(),
+        ) { apps, pages, folders, categories ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             AppsState(
@@ -89,6 +100,11 @@ class AppsViewModel(
                             }
                         }
                     }
+                },
+                categories = categories.map { contents ->
+                    // An app the cache can't resolve is dropped rather than drawn blank, as on the pager; the store
+                    // keeps it until `syncCategories` hears it is gone.
+                    AppsCategory(contents.category, contents.apps.mapNotNull(infoByComponent::get))
                 },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
@@ -112,6 +128,23 @@ class AppsViewModel(
                         appsOrderRepository.syncPager(ORIENTATION, perPage, apps.map { it.componentKey })
                     }
                 }
+        }
+
+        // Keep the category arrangement in step with what is installed. Separate from the pager's collector because
+        // it needs no capacity — a category is one scrolling list — so it can run from the first app-list emission
+        // rather than waiting for the surface to measure a grid.
+        //
+        // Classification is hopped off the main thread: it is a few hundred string operations per app, which is
+        // nothing once but is pointless jank on the frame an install lands. `syncCategories` writes nothing when
+        // nothing changed, so a normal launch costs one read.
+        viewModelScope.launch {
+            sortedApps.collect { apps ->
+                val assignments = withContext(dispatchers.default) {
+                    // A LinkedHashMap over the A–Z list, because the repository appends new apps in iteration order.
+                    apps.associate { it.componentKey to categorizer.categoryIdOf(it) }
+                }
+                appsOrderRepository.syncCategories(assignments)
+            }
         }
     }
 
@@ -248,6 +281,18 @@ class AppsViewModel(
         state.value.pagerPages.firstNotNullOfOrNull { page ->
             page.filterIsInstance<AppsItem.Folder>().firstOrNull { it.folder.id == folderId }
         }
+
+    /**
+     * Commits a category-pager drop: [app] lands at [toSlot] of [toCategory].
+     *
+     * One method for both reorder and re-file, because on that surface they are one thing — a page *is* a category,
+     * so the destination id carries the difference and there is nothing else to decide here.
+     */
+    fun moveCategoryItem(app: ComponentKey, toCategory: String, toSlot: Int) {
+        viewModelScope.launch {
+            appsOrderRepository.applyCategory(listOf(AppsCategoryChange.Move(app, toCategory, toSlot)))
+        }
+    }
 
     private fun applyPager(changes: List<AppsPagerChange>) {
         if (changes.isEmpty()) return

@@ -27,6 +27,7 @@ private enum class DevScreen(val label: String) {
     Apps("Apps"),
     AppsGrid("AppsGrid"),
     AppsPager("AppsPager"),
+    AppsCategory("AppsCategory"),
     Drag("Drag"),
     Pager("Pager"),
     PagerDrag("Pager+Drag"),
@@ -55,6 +56,7 @@ fun DevRootScreen(modifier: Modifier = Modifier) {
             // per entry, which is also the cheapest way to eyeball two layouts side by side.
             DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
             DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
+            DevScreen.AppsCategory -> AppsScreen(layout = AppsLayout.PAGER_WITH_CATEGORY)
             DevScreen.Drag -> DragPlaygroundScreen()
             DevScreen.Pager -> PagerPlaygroundScreen()
             DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
