@@ -12,6 +12,7 @@ import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.layout.reconcileFolderOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,26 +127,121 @@ class AppsViewModel(
     fun launch(component: ComponentKey) = appLauncher.launch(component)
 
     /**
-     * Commits a pager drop: [item] lands at [toSlot] of [toPage].
+     * Commits a plain pager drop: [item] lands at [toSlot] of [toPage].
      *
-     * One method rather than a general `apply(changes)` because there is exactly one write the pager can make so
-     * far. The repository owns what a move *means* — compacting the source page, cascading overflow forward — so
-     * this is a message, not a computation, and the UI never has to duplicate those rules to preview them.
+     * The repository owns what a move *means* — compacting the source page, cascading overflow forward — so this
+     * is a message, not a computation, and the UI never has to duplicate those rules in order to preview them.
      */
-    fun movePagerItem(item: IconItem, toPage: Int, toSlot: Int) {
-        val perPage = pagerCapacity.value ?: return
-        viewModelScope.launch {
-            appsOrderRepository.applyPager(
-                ORIENTATION,
-                perPage,
-                listOf(AppsPagerChange.Move(item, toPage, toSlot)),
+    fun movePagerItem(item: IconItem, toPage: Int, toSlot: Int) =
+        applyPager(listOf(AppsPagerChange.Move(item, toPage, toSlot)))
+
+    /**
+     * Merges [dragged] onto whatever sits at [targetSlot] of [targetPage] — the merge-ring drop.
+     *
+     * App onto app mints a folder holding both; app onto folder joins it. Returns without writing when the target
+     * is gone or is a combination the surface can't make (folders don't nest), so a stale plan is a no-op rather
+     * than a surprise.
+     */
+    fun mergePagerItem(dragged: ComponentKey, targetPage: Int, targetSlot: Int) {
+        when (val target = state.value.pagerPages.getOrNull(targetPage)?.getOrNull(targetSlot)) {
+            is AppsItem.App -> applyPager(
+                listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, dragged)),
+            )
+            is AppsItem.Folder -> applyPager(listOf(AppsPagerChange.AddToFolder(target.folder.id, dragged)))
+            null -> Unit
+        }
+    }
+
+    /**
+     * Reorders folder [folderId] to the arrangement its overlay [reported] on drop.
+     *
+     * Reconciled against real membership first ([reconcileFolderOrder]): `ReorderFolder` replaces membership
+     * wholesale, and the overlay can only report members it could render, so writing its list verbatim would
+     * *delete* anything unresolvable rather than reorder it.
+     */
+    fun reorderFolder(folderId: Long, reported: List<ComponentKey>) {
+        val known = folderById(folderId)?.folder?.apps ?: return
+        applyPager(listOf(AppsPagerChange.ReorderFolder(folderId, reconcileFolderOrder(known, reported))))
+    }
+
+    /**
+     * Commits an app dropped **into** folder [folderId] at a chosen slot: [reported] is the order the overlay
+     * dropped (its members plus [incoming]), and [from] is the folder the drag started in, if any.
+     *
+     * [incoming] joins the known membership before reconciling, since it is a member as of this drop — otherwise
+     * the very app being added would be reconciled away as a non-member. When [from] is another folder the whole
+     * folder-to-folder move is one batch, so the app is never briefly in both or neither.
+     */
+    fun addToFolder(folderId: Long, reported: List<ComponentKey>, incoming: ComponentKey, from: Long?) {
+        val known = folderById(folderId)?.folder?.apps ?: return
+        val order = reconcileFolderOrder(known + incoming, reported)
+        applyPager(listOf(AppsPagerChange.ReorderFolder(folderId, order)) + leaveFolderChanges(from, folderId, incoming))
+    }
+
+    /** Commits an app dragged **out** of folder [from] onto the pager at [toSlot] of [toPage]. */
+    fun dropExtractedApp(from: Long, app: ComponentKey, toPage: Int, toSlot: Int) {
+        applyPager(
+            listOf(AppsPagerChange.Move(IconItem.App(app), toPage, toSlot)) + leaveFolderChanges(from, null, app),
+        )
+    }
+
+    /**
+     * Commits an app dragged out of folder [from] and dropped on the **merge ring** of whatever sits at
+     * [targetSlot] of [targetPage] — folder→folder, or folder→new-folder, in one gesture.
+     *
+     * Dropping it back on the folder it came from is a no-op: it is still a member, and nothing was written on the
+     * way out, so there is genuinely nothing to do.
+     */
+    fun mergeExtractedApp(from: Long, app: ComponentKey, targetPage: Int, targetSlot: Int) {
+        val target = state.value.pagerPages.getOrNull(targetPage)?.getOrNull(targetSlot) ?: return
+        if (target is AppsItem.Folder && target.folder.id == from) return
+        val into = when (target) {
+            is AppsItem.App -> AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.info.componentKey, app)
+            is AppsItem.Folder -> AppsPagerChange.AddToFolder(target.folder.id, app)
+        }
+        applyPager(listOf(into) + leaveFolderChanges(from, null, app))
+    }
+
+    /**
+     * The changes that take [app] out of folder [from] — the half every landing shares, so the paths cannot
+     * disagree about what leaving a folder means. Empty when the app didn't come from a folder, or when it is
+     * going back into the same one (a re-entry is a reorder, not a move).
+     *
+     * **Auto-dissolve:** a folder holds ≥ 2 apps, so removing the second-last would leave a folder of one. Instead
+     * the folder is dissolved and the survivor takes over its slot on the pager — the ordered-surface equivalent of
+     * home's "the last app inherits its cell".
+     */
+    private fun leaveFolderChanges(from: Long?, into: Long?, app: ComponentKey): List<AppsPagerChange> {
+        if (from == null || from == into) return emptyList()
+        val folder = folderById(from) ?: return emptyList()
+        if (app !in folder.folder.apps) return emptyList()
+        val remaining = folder.folder.apps.filter { it != app }
+        return if (remaining.size > 1) {
+            listOf(AppsPagerChange.RemoveFromFolder(from, app))
+        } else {
+            listOf(
+                AppsPagerChange.RemoveFromFolder(from, app),
+                AppsPagerChange.DissolveFolder(from, remaining.singleOrNull()),
             )
         }
+    }
+
+    /** The placed folder [folderId], or null when it is gone (dissolved, or not resolved yet). */
+    private fun folderById(folderId: Long): AppsItem.Folder? =
+        state.value.pagerPages.firstNotNullOfOrNull { page ->
+            page.filterIsInstance<AppsItem.Folder>().firstOrNull { it.folder.id == folderId }
+        }
+
+    private fun applyPager(changes: List<AppsPagerChange>) {
+        if (changes.isEmpty()) return
+        val perPage = pagerCapacity.value ?: return
+        viewModelScope.launch { appsOrderRepository.applyPager(ORIENTATION, perPage, changes) }
     }
 
     companion object {
         val ORIENTATION = Orientation.PORTRAIT
         private const val STOP_TIMEOUT_MS = 5_000L
+        private const val DEFAULT_FOLDER_LABEL = "Folder"
 
         /**
          * A–Z by label, **locale-aware**, then by component as a tie-break.

@@ -93,8 +93,11 @@ internal class AppsOrderRepositoryImpl(
         }
 
         is AppsPagerChange.RemoveFromFolder -> {
+            // Membership only: the app is now in neither place, and the op paired with this one — a Move onto the
+            // pager, or an AddToFolder into another folder — decides where it lands. Both are in the same batch,
+            // so the gap never reaches the store.
             daos.folderItem.remove(change.folderId, change.app)
-            insertPagerItem(pages, IconItem.App(change.app), change.toPage, change.toSlot, perPage)
+            pages
         }
 
         is AppsPagerChange.ReorderFolder -> {

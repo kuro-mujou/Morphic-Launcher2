@@ -1,4 +1,4 @@
-package inkspire.morphic.feature.home
+package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.model.ComponentKey
 import org.junit.Assert.assertEquals

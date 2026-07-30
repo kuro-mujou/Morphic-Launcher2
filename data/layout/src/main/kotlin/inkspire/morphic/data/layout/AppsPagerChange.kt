@@ -46,13 +46,15 @@ sealed interface AppsPagerChange {
     /** Drop [app] onto folder [folderId]: it joins the folder's contents at the end and leaves the pager. */
     data class AddToFolder(val folderId: Long, val app: ComponentKey) : AppsPagerChange
 
-    /** Drag [app] out of folder [folderId] and onto the pager at [toSlot] of [toPage]. */
-    data class RemoveFromFolder(
-        val folderId: Long,
-        val app: ComponentKey,
-        val toPage: Int,
-        val toSlot: Int,
-    ) : AppsPagerChange
+    /**
+     * Take [app] out of folder [folderId]'s membership. **Where it goes is a separate op** — pair this with a
+     * [Move] to land it on the pager, or with an [AddToFolder] to send it straight into another folder.
+     *
+     * Deliberately not "remove and place at page/slot": that shape can only express one of the two landings, and
+     * a folder→folder drag would have had to invent a placement it then immediately undoes. Two small ops compose
+     * into both, and a batch is applied against one view of the pages, so they still commit together.
+     */
+    data class RemoveFromFolder(val folderId: Long, val app: ComponentKey) : AppsPagerChange
 
     /** Set folder [folderId]'s contents to exactly [apps], in that order (the in-folder reorder). */
     data class ReorderFolder(val folderId: Long, val apps: List<ComponentKey>) : AppsPagerChange

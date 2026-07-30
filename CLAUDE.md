@@ -468,8 +468,20 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   worth knowing: the gap is an index **within one page** (pages are hard boundaries, so arriving on a page seeds a
   fresh gap rather than continuing the old), and the dragged cell **stays composed on its source page** even after
   the finger carries it elsewhere — both copies are invisible, the far one only reserving the gap, because
-  disposing the near one would kill the drag. Still to come: folders (the merge ring, `FolderOverlay` hosting,
-  extract, dissolve) and a page indicator.
+  disposing the near one would kill the drag.
+- **Folders on the pager work exactly as they do on home**, because the lifecycle is the same `FolderHostState`:
+  tap to open, dwell on a merge ring to enter mid-drag, dwell outside the card to leave, drag an app back out onto
+  a page or straight into another folder, auto-dissolve at the second-last app. The surface supplies only the one
+  answer the host can't know — *"which folder does this merge plan target?"* — as a **slot** match, which is the
+  ordered half of the split that lambda was built for. A merge plan's footprint is meaningful (it names the hovered
+  cell) where a reorder plan's is not, which is what makes the slot resolvable. Cells are **three zones** here
+  (outer thirds insert, centre merges), unlike the folder's and the category pager's halves.
+- The pager's op set composes rather than special-cases: `RemoveFromFolder` takes an app out of membership and
+  *nothing else*, so a landing pairs it with a `Move` (onto a page) or an `AddToFolder` (into another folder), and
+  one batch commits both. `CreateFolder`/`DissolveFolder` name a **neighbour** instead of a slot — "this takes that
+  thing's place" — because a slot index shifts as the folded apps leave the list. `reconcileFolderOrder` moved to
+  `data:layout`, beside the `ReorderFolder` ops it guards, now that both surfaces owe their writes that guard.
+- Still to come on the pager: a page indicator, and an optimistic layer (a drop currently waits for the write).
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
   helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
   the two **category** layouts, which need the `category` + `category_item` store.

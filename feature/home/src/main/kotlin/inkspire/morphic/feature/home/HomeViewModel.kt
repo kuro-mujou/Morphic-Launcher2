@@ -13,6 +13,7 @@ import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.layout.reconcileFolderOrder
 import inkspire.morphic.data.layout.PlacedItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

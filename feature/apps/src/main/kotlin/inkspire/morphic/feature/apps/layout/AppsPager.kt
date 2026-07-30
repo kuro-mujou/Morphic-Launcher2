@@ -12,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,12 +37,18 @@ import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
+import inkspire.morphic.core.designsystem.folder.FolderOverlay
+import inkspire.morphic.core.designsystem.folder.FolderPhase
+import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
+import inkspire.morphic.core.designsystem.ordered.Third
 import inkspire.morphic.core.designsystem.ordered.movingGap
+import inkspire.morphic.core.designsystem.ordered.thirdInCell
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
@@ -96,16 +103,27 @@ private val PagerIconMetrics = IconMetrics(iconPercent = 0.75f)
  * page + slot means, and why this uses `LauncherGrid` where the vertical grid deliberately does not.
  *
  * **Dragging is MovingGap, not push.** A coordinate surface shoves occupants aside; an ordered one migrates a gap
- * through the list and lets the flow densify (see `core:designsystem/ordered`). Two zones per cell here rather
- * than three: with no merge yet, a centre third would be dead space where the user's aim does nothing. Folders —
- * and with them the merge ring — are the next part.
+ * through the list and lets the flow densify (see `core:designsystem/ordered`). Three zones per cell, because this
+ * surface holds folders: the outer thirds insert the gap before or after the hovered entry, and the centre third is
+ * a merge ring — drop to fold the two together, or dwell to open the target and place the app at a chosen slot.
+ * (The category pager, which holds no folders, reads halves instead: with nothing to merge into, a centre third
+ * would be dead space where the user's aim does nothing.)
+ *
+ * **Folders behave exactly as they do on home**, because the lifecycle is the same `FolderHostState`: tap to open,
+ * dwell on a ring to enter mid-drag, dwell outside the card to leave, drag an app back out onto any page or
+ * straight into another folder, and auto-dissolve when the second-last app leaves. The one surface-specific answer
+ * this file supplies is *"which folder does this merge plan target?"* — a **slot** match here, where home compares
+ * placements.
  *
  * **Crossing pages** works the way home's does: one drop zone is the whole viewport, page-swipe is gated off while
  * an item is in flight so the two gestures never fight, holding near an edge flips a page on a dwell, and
  * `keepAllPagesPlaced` keeps the source page composed so the lifted cell keeps its pointer stream across the flip.
  *
  * @param pages the arrangement to draw: pages in order, each dense from its first slot.
- * @param onMove commits a drop — the item, and the page and slot it landed at.
+ * @param onMove commits a plain drop — the item, and the page and slot it landed at.
+ * @param onMerge commits a merge-ring drop onto an app (making a folder) or a folder (joining it).
+ * @param onDropExtracted commits an app dragged out of a folder onto a page; [onMergeExtracted] is the same drag
+ *   landing on another entry's merge ring, which is how an app moves folder→folder in one gesture.
  * @param onGridResolved reports the resolved page grid up to the ViewModel, which needs the capacity to page the
  *   store. The device is a `@Composable` read, so the UI is the only place that can resolve it.
  */
@@ -114,6 +132,11 @@ fun AppsPager(
     pages: List<List<AppsItem>>,
     onLaunch: (ComponentKey) -> Unit,
     onMove: (item: IconItem, toPage: Int, toSlot: Int) -> Unit,
+    onMerge: (dragged: ComponentKey, targetPage: Int, targetSlot: Int) -> Unit,
+    onReorderFolder: (folderId: Long, order: List<ComponentKey>) -> Unit,
+    onAddToFolder: (folderId: Long, order: List<ComponentKey>, incoming: ComponentKey, from: Long?) -> Unit,
+    onDropExtracted: (from: Long, app: ComponentKey, toPage: Int, toSlot: Int) -> Unit,
+    onMergeExtracted: (from: Long, app: ComponentKey, targetPage: Int, targetSlot: Int) -> Unit,
     onGridResolved: (GridConfig) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -142,9 +165,15 @@ fun AppsPager(
     var gap by remember { mutableIntStateOf(-1) }
     var gapPage by remember { mutableIntStateOf(-1) }
 
+    // The open folder's drag hooks (null when none is open). It lives above the coordinator because the planner
+    // reads it and must be built first, while the folder host is created after — the same construction-order
+    // squeeze home documents.
+    val folderDelegate = remember { mutableStateOf<FolderDragDelegate?>(null) }
+
     val planner = remember(config) {
         DropPlanner { zone, item, fingerInRoot ->
-            if (zone.id != PagerZoneId) return@DropPlanner null
+            // Anything that isn't this pager's zone is the open folder's, which plans its own reorder.
+            if (zone.id != PagerZoneId) return@DropPlanner folderDelegate.value?.onHover(item, fingerInRoot)
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             val stored = livePages.value.getOrNull(page).orEmpty()
@@ -153,6 +182,16 @@ fun AppsPager(
             // is between targets, and moving the preview there would strobe.
             val cell = geo.cellAt(fingerInRoot) ?: return@DropPlanner PagerReorderPlan
             val slot = cell.row * config.cols + cell.col
+            // **Three zones, because this surface holds folders.** The centre third of an occupied cell is a merge
+            // ring: dropping there folds the two together, and dwelling there opens the target to receive the app.
+            // Unlike the reorder plan, a merge plan's footprint is *meaningful* — it names the hovered cell, which
+            // is how the folder host resolves which folder is being aimed at (`folderIdAt` below).
+            val over = stored.getOrNull(slot)
+            if (over != null && over.gridItem != item && geo.thirdInCell(fingerInRoot) == Third.CENTER &&
+                canMergeInto(item, over)
+            ) {
+                return@DropPlanner PlacementPlan(GridPlacement(page, cell.row, cell.col), DropIntent.MERGE)
+            }
             gap = if (page != gapPage) {
                 // Arriving on a page seeds the gap at the slot under the finger; `movingGap` refines from there as
                 // the finger keeps moving. Seeding through `movingGap` instead would start from index 0, because
@@ -173,6 +212,16 @@ fun AppsPager(
     }
     DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(PagerZoneId) } }
 
+    // Folder hosting, the same lifecycle home uses — `FolderHostState` is surface-independent, and the one thing
+    // it can't know is which folder a merge plan targets. On a coordinate surface that answer compares placements;
+    // here it compares **slots**, which is exactly the split its KDoc anticipated. A merge plan's footprint names
+    // the hovered cell, so page + (row, col) resolves to the entry under the finger.
+    val folderHost = rememberFolderHostState(coordinator) { zoneId, plan ->
+        if (zoneId != PagerZoneId) return@rememberFolderHostState null
+        val slot = plan.footprint.row * config.cols + plan.footprint.col
+        (livePages.value.getOrNull(plan.footprint.page)?.getOrNull(slot) as? AppsItem.Folder)?.folder?.id
+    }
+
     // Edge-dwell page flip. Scoped to this surface's own zone, so a drag that belongs elsewhere can't flip
     // these pages behind it.
     EdgeFlipEffect(
@@ -181,19 +230,79 @@ fun AppsPager(
         fingerInRoot = session?.takeIf { it.activeZone == PagerZoneId }?.fingerInRoot,
     )
 
+    // Where a drag comes to rest — the same four landings home resolves, in the same order, because the question
+    // is the surface-independent one: is this the open folder's drop, a release outside it, an app leaving a
+    // folder, or an ordinary rearrangement?
     fun handleDrop() {
-        val outcome = coordinator.drop() ?: return
-        val item = outcome.item.asIconItem() ?: return
-        val page = gapPage.takeIf { it >= 0 } ?: return
-        onMove(item, page, gap.coerceAtLeast(0))
+        // Read before dropping: the source is cleared when the drag ends, which the drop is.
+        val sourceFolderId = folderHost.dragSourceFolderId
+        val presentedFolderId = folderHost.openFolderId
+        val outcome = coordinator.drop()
+
+        // 1. Inside the open folder → its own business: a reorder, which is also how an inject commits.
+        if (outcome != null && outcome.zone != PagerZoneId) {
+            folderDelegate.value?.commitReorder(outcome.item)
+            return
+        }
+        // 2. Released outside the folder that is on screen. Leaving is a deliberate dwell, so a release out here
+        //    is "never mind" — and it could not be honoured anyway: an app carried inside a folder has no slot, so
+        //    placing it would leave it in the folder *and* on a page.
+        if (presentedFolderId != null) {
+            folderHost.close()
+            return
+        }
+        if (outcome == null) return
+        val plan = outcome.plan
+        val merging = plan.intent == DropIntent.MERGE
+        val targetPage = plan.footprint.page
+        val targetSlot = plan.footprint.row * config.cols + plan.footprint.col
+
+        // 3. The drag started inside a folder and has landed out here: it is placed and removed from that folder
+        //    in one batch — including onto a merge ring, which is how it moves straight into another folder.
+        if (sourceFolderId != null) {
+            val app = (outcome.item as? GridItem.App)?.component ?: return
+            if (merging) {
+                onMergeExtracted(sourceFolderId, app, targetPage, targetSlot)
+            } else {
+                // No gap means the finger never rested on a cell of this pager (a release over the slack below a
+                // short page). Nothing was removed on the way out, so declining here simply leaves the app in its
+                // folder — the same "no valid landing" outcome home reaches.
+                val page = gapPage.takeIf { it >= 0 } ?: return
+                onDropExtracted(sourceFolderId, app, page, gap.coerceAtLeast(0))
+            }
+            return
+        }
+        // 4. An ordinary rearrangement.
+        if (merging) {
+            (outcome.item as? GridItem.App)?.let { onMerge(it.component, targetPage, targetSlot) }
+        } else {
+            val item = outcome.item.asIconItem() ?: return
+            val page = gapPage.takeIf { it >= 0 } ?: return
+            onMove(item, page, gap.coerceAtLeast(0))
+        }
+    }
+
+    // The app being carried into the open folder, resolved once and held. Keyed on the component alone,
+    // deliberately not on `pages`: committing takes it off the page optimistically, so re-deriving afterwards
+    // would resolve to null and the app would vanish from both surfaces until the write came back. Searched among
+    // the pages *and* folder contents, since it may be arriving from another folder and so be on no page at all.
+    val incomingApp = remember(folderHost.incomingComponent) {
+        folderHost.incomingComponent?.let { component ->
+            pages.firstNotNullOfOrNull { page ->
+                page.firstNotNullOfOrNull { entry ->
+                    when (entry) {
+                        is AppsItem.App -> entry.info.takeIf { it.componentKey == component }
+                        is AppsItem.Folder -> entry.apps.firstOrNull { it.componentKey == component }
+                    }
+                }
+            }
+        }
     }
 
     val draggedItem = session?.item
     // Resolved once per frame rather than per page: a drag recomposes this on every finger move, and searching
     // every page for the dragged entry inside each page's own content would be that search N times over.
-    val draggedEntry = remember(pages, draggedItem) {
-        draggedItem?.let { id -> pages.firstNotNullOfOrNull { page -> page.firstOrNull { it.gridItem == id } } }
-    }
+    val draggedEntry = remember(pages, draggedItem) { draggedItem?.let { entryFor(pages, it) } }
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
     CompositionLocalProvider(LocalIconMetrics provides PagerIconMetrics) {
@@ -235,7 +344,12 @@ fun AppsPager(
                             gestureConfig = gestureConfig,
                             onDrop = { handleDrop() },
                             modifier = cellModifier,
-                            onOpen = { (item as? AppsItem.App)?.let { onLaunch(it.info.componentKey) } },
+                            onOpen = {
+                                when (item) {
+                                    is AppsItem.App -> onLaunch(item.info.componentKey)
+                                    is AppsItem.Folder -> folderHost.open(item.folder.id)
+                                }
+                            },
                         ) { itemGestures ->
                             AppsPagerCell(item = item, modifier = Modifier.fillMaxSize(), itemGestures = itemGestures)
                         }
@@ -246,7 +360,9 @@ fun AppsPager(
             // The floating proxy: the icon under the finger, at one cell's size. The lifted cell itself is drawn
             // invisible by `LauncherDragCell`, so this is the only thing the user sees moving.
             val geo = geometry
-            if (session != null && geo != null && draggedEntry != null) {
+            // The proxy belongs to whichever surface is presenting the drag: while a folder is on screen that is
+            // the folder, drawing the app at its own cell size. Exactly one of them paints.
+            if (session != null && geo != null && draggedEntry != null && folderHost.openFolderId == null) {
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
@@ -257,6 +373,52 @@ fun AppsPager(
                 ) {
                     // No `itemGestures`: the proxy follows the finger, it is not a touch target.
                     AppsPagerCell(item = draggedEntry, modifier = Modifier.fillMaxSize(), itemGestures = Modifier)
+                }
+            }
+
+            // Folder overlays, above the pages. Usually one; a drag that started inside a folder keeps that folder
+            // composed for its whole life even once another is on screen, because the cell driving the drag is in
+            // its grid and a pointer stream cannot move to another node. That one is the **pointer holder**
+            // (`presenting = false`): invisible, zone-less, no proxy.
+            val openFolder = folderHost.openFolderId?.let { id -> folderAt(pages, id) }
+            val holderFolder = folderHost.dragSourceFolderId
+                ?.takeIf { it != folderHost.openFolderId }
+                ?.let { id -> folderAt(pages, id) }
+
+            // Report the presented folder's persisted membership back, so the host knows a just-injected app landed.
+            val openMembers = openFolder?.folder?.apps
+            LaunchedEffect(openMembers) { folderHost.onMembersChanged(openMembers.orEmpty()) }
+
+            // Holder first so it sits *below* the presented folder, and both from this **one** keyed call site: a
+            // folder moving between the two roles must keep its composition, and a second call site is a different
+            // composition position, which disposes it and kills the drag it exists to preserve.
+            val overlays = listOfNotNull(holderFolder?.let { it to false }, openFolder?.let { it to true })
+            overlays.forEach { (folder, presenting) ->
+                key(folder.folder.id) {
+                    FolderOverlay(
+                        label = folder.folder.label,
+                        apps = folder.apps,
+                        coordinator = coordinator,
+                        gestureConfig = gestureConfig,
+                        incoming = if (presenting) incomingApp else null,
+                        presenting = presenting,
+                        onLaunch = { component -> onLaunch(component); folderHost.close() },
+                        onReorder = { order ->
+                            // Only an inject still in flight adds membership; once committed this is a plain
+                            // reorder, because the app is already a member even if the store hasn't said so yet.
+                            val incoming = (folderHost.phase as? FolderPhase.Injecting)?.app
+                            if (incoming != null && order.contains(incoming)) {
+                                onAddToFolder(folder.folder.id, order, incoming, folderHost.dragSourceFolderId)
+                                folderHost.injectCommitted()
+                            } else {
+                                onReorderFolder(folder.folder.id, order)
+                            }
+                        },
+                        onLeave = folderHost::leaveFolder,
+                        onDrop = { handleDrop() },
+                        onPublishDelegate = { folderDelegate.value = it },
+                        onDismiss = { folderHost.close() },
+                    )
                 }
             }
         }
@@ -301,4 +463,37 @@ private fun AppsPagerCell(item: AppsItem, modifier: Modifier, itemGestures: Modi
             itemGestures = itemGestures,
         )
     }
+}
+
+/** The folder entry with [folderId], wherever it sits. */
+private fun folderAt(pages: List<List<AppsItem>>, folderId: Long): AppsItem.Folder? =
+    pages.firstNotNullOfOrNull { page ->
+        page.filterIsInstance<AppsItem.Folder>().firstOrNull { it.folder.id == folderId }
+    }
+
+/**
+ * Whether [dragged] can be folded into [target].
+ *
+ * Apps combine with apps (making a folder) and drop into folders; a **folder cannot go into a folder**, because
+ * folders don't nest — the model says so in [inkspire.morphic.core.model.Folder], whose contents are apps.
+ */
+private fun canMergeInto(dragged: GridItem, target: AppsItem): Boolean =
+    dragged is GridItem.App && (target is AppsItem.App || target is AppsItem.Folder)
+
+/**
+ * The entry a drag is carrying: an item sitting on a page, **or an app inside a folder**.
+ *
+ * The second half is what an extract needs. An app dragged out of a folder is on no page at all — it is still a
+ * member, since nothing is written until the drop — so a page-only lookup would find nothing, and both the
+ * floating proxy and the reorder preview would have no icon to draw.
+ */
+private fun entryFor(pages: List<List<AppsItem>>, dragged: GridItem): AppsItem? {
+    pages.forEach { page -> page.firstOrNull { it.gridItem == dragged }?.let { return it } }
+    val component = (dragged as? GridItem.App)?.component ?: return null
+    pages.forEach { page ->
+        page.filterIsInstance<AppsItem.Folder>().forEach { folder ->
+            folder.apps.firstOrNull { it.componentKey == component }?.let { return AppsItem.App(it) }
+        }
+    }
+    return null
 }

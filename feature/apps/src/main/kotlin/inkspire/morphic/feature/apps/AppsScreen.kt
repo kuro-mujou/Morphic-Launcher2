@@ -59,6 +59,11 @@ fun AppsScreen(
                     pages = state.pagerPages,
                     onLaunch = viewModel::launch,
                     onMove = viewModel::movePagerItem,
+                    onMerge = viewModel::mergePagerItem,
+                    onReorderFolder = viewModel::reorderFolder,
+                    onAddToFolder = viewModel::addToFolder,
+                    onDropExtracted = viewModel::dropExtractedApp,
+                    onMergeExtracted = viewModel::mergeExtractedApp,
                     onGridResolved = viewModel::setPagerGrid,
                 )
                 // Not built. Grouped rather than given an `else`, on purpose: adding a value to [AppsLayout] then
