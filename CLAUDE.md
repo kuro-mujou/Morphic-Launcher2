@@ -460,8 +460,16 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   re-derived. Page capacity is a UI read (device → blueprint), pushed to the VM via `setPagerGrid`, exactly as
   home pushes its `GridConfig`. `AppsState` gained `pagerPages: List<List<AppsItem>>` alongside `apps`: both
   shapes are always maintained so switching layout reloads nothing, and one collector keeps the store in step
-  with what is installed (first run, install/uninstall and a capacity change are all the same sync). **Renders
-  and launches only so far** — drag, folders and the page indicator are the next part.
+  with what is installed (first run, install/uninstall and a capacity change are all the same sync).
+- **The pager drags by MovingGap, not push** — an ordered surface migrates a gap and lets the flow densify, where
+  a coordinate one shoves occupants aside. Crossing pages reuses home's shape exactly: one drop zone is the whole
+  viewport, page-swipe is gated off while an item is in flight, an edge dwell flips the page, and
+  `keepAllPagesPlaced` keeps the source page composed so the lifted cell keeps its pointer stream. Two consequences
+  worth knowing: the gap is an index **within one page** (pages are hard boundaries, so arriving on a page seeds a
+  fresh gap rather than continuing the old), and the dragged cell **stays composed on its source page** even after
+  the finger carries it elsewhere — both copies are invisible, the far one only reserving the gap, because
+  disposing the near one would kill the drag. Still to come: folders (the merge ring, `FolderOverlay` hosting,
+  extract, dissolve) and a page indicator.
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
   helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
   the two **category** layouts, which need the `category` + `category_item` store.

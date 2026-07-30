@@ -10,6 +10,7 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.AppsOrderRepository
+import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -123,6 +124,24 @@ class AppsViewModel(
 
     /** Opens the app for [component] (a tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
     fun launch(component: ComponentKey) = appLauncher.launch(component)
+
+    /**
+     * Commits a pager drop: [item] lands at [toSlot] of [toPage].
+     *
+     * One method rather than a general `apply(changes)` because there is exactly one write the pager can make so
+     * far. The repository owns what a move *means* — compacting the source page, cascading overflow forward — so
+     * this is a message, not a computation, and the UI never has to duplicate those rules to preview them.
+     */
+    fun movePagerItem(item: IconItem, toPage: Int, toSlot: Int) {
+        val perPage = pagerCapacity.value ?: return
+        viewModelScope.launch {
+            appsOrderRepository.applyPager(
+                ORIENTATION,
+                perPage,
+                listOf(AppsPagerChange.Move(item, toPage, toSlot)),
+            )
+        }
+    }
 
     companion object {
         val ORIENTATION = Orientation.PORTRAIT

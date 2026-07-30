@@ -2,6 +2,8 @@ package inkspire.morphic.feature.apps
 
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**
@@ -48,6 +50,38 @@ data class AppsState(
     val apps: List<AppInfo> = emptyList(),
     val pagerPages: List<List<AppsItem>> = emptyList(),
 )
+
+/**
+ * This entry's **drag identity** — what the drag coordinator carries and a drop reports back.
+ *
+ * `GridItem` is the toolkit's currency (it spans widgets and containers too), while the APPS store speaks
+ * [inkspire.morphic.core.model.IconItem], which is exactly {app, folder}. The two conversions below are the seam
+ * between them, kept as one-liners here rather than spread across the drag wiring.
+ */
+val AppsItem.gridItem: GridItem
+    get() = when (this) {
+        is AppsItem.App -> GridItem.App(info.componentKey)
+        is AppsItem.Folder -> GridItem.Folder(folder.id)
+    }
+
+/** This entry as the store's item type. */
+val AppsItem.iconItem: IconItem
+    get() = when (this) {
+        is AppsItem.App -> IconItem.App(info.componentKey)
+        is AppsItem.Folder -> IconItem.Folder(folder.id)
+    }
+
+/**
+ * The dragged [GridItem] as an APPS store item, or null for a kind this surface cannot hold.
+ *
+ * Null is reachable in principle (a widget dragged from somewhere else) and should stay a null rather than a
+ * throw: the APPS pager simply declines items it has nowhere to put, which is what its zone's `accepts` says too.
+ */
+fun GridItem.asIconItem(): IconItem? = when (this) {
+    is GridItem.App -> IconItem.App(component)
+    is GridItem.Folder -> IconItem.Folder(folderId)
+    else -> null
+}
 
 /**
  * Resolves [component] to the app info this surface knows about, whether it is loose on a page or inside a folder.

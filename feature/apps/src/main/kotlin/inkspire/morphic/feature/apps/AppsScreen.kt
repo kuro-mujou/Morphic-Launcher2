@@ -58,6 +58,7 @@ fun AppsScreen(
                 AppsLayout.PAGER -> AppsPager(
                     pages = state.pagerPages,
                     onLaunch = viewModel::launch,
+                    onMove = viewModel::movePagerItem,
                     onGridResolved = viewModel::setPagerGrid,
                 )
                 // Not built. Grouped rather than given an `else`, on purpose: adding a value to [AppsLayout] then

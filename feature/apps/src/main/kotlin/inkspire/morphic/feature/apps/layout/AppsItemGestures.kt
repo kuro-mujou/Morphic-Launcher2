@@ -9,8 +9,9 @@ import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 
 /**
- * The gesture wiring shared by every APPS layout: the launcher's one item-gesture contract, with only the tap
- * connected.
+ * The gesture wiring for the APPS layouts that **don't** drag: the launcher's one item-gesture contract, with only
+ * the tap connected. The pager wires the same contract through `LauncherDragCell` instead, since it needs the drag
+ * callbacks this one deliberately leaves empty.
  *
  * **Why go through the contract for what is, today, a tap.** A `clickable` would be one line — and would give
  * this surface its own recogniser with its own long-press timing and slop, drifting from the rest of the
