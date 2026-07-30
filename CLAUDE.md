@@ -111,13 +111,17 @@ Key rules:
 - L1's conflated `surface` column became `zone`; L1 `Surface{HOME,DOCK,WIDGET_AREA}` split into L2
   `Surface{HOME,APPS}` + `HomeZone`.
 
-⚠️ **Open: folders on APPS aren't representable yet.** Folders are wanted on the **APPS pager** *and* the
-**category card**, but `apps_pager_item` and `category_item` are keyed on `component`, so neither row can hold a
-folder — and an APPS-hosted folder has nowhere to store its position (folder position exists only as the
-coordinate `folder_placement` + `zone`). Both stores need to become app-or-folder (the "exactly one of" shape
-`IconContainerItemEntity` already uses), with the folder's slot living in the order store rather than a placement
-table. That's a **B2 schema change + the unbuilt APPS order repository** — decide it before building either APPS
-layout. The UI side is ready: `FolderHostState` is surface-independent and already shared.
+**Settled for the APPS pager: it holds folders, and a folder's slot *is* its row.** `apps_pager_item` was keyed on
+`component`, so it could only hold an app, and an APPS-hosted folder had nowhere to store its position. Both were
+answered by one reshape (DB v2): the row became **exactly one of** app-or-folder — `IconContainerItemEntity`'s
+shape, which `IconItem`'s KDoc had already predicted by naming "the `Surface.APPS` pager and an `IconContainer`"
+as its two holders. There is no `apps_pager_placement` table and should not be: an ordered surface stores a slot,
+not a coordinate. One difference from `icon_container_item`, and it is silent when wrong — the unique indices are
+scoped **per orientation**, since the pager keeps two saved lists and an app appears once in each.
+
+⚠️ **Still open for the category *card*.** `category_item` is keyed on `component` too, so the same reshape is
+owed there if the card is to hold folders; the pager's version is the worked example. (The category *pager* is
+settled the other way — see below.) The UI side is ready: `FolderHostState` is surface-independent and shared.
 
 **Settled, and it narrows that question: the category *pager* (`PAGER_WITH_CATEGORY`) holds no folders.** A
 category *is* the grouping there, so a folder inside one would be a second, redundant one. Its pages are dragged
@@ -451,16 +455,24 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   land. **A row's touch target is the whole row** — the same "visible extent" rule as a grid cell, not an
   exception: a row's visible extent *is* the full-width strip. Consequence: a list leaves no slack for a surface
   long-press.
+- **The pager is the first layout that stores an arrangement** (`AppsLayout.PAGER`, `AppsPager`) — pages of
+  `LauncherGrid` in FIXED_PAGER mode at `AppsPagerGrid`'s size, drawn from `AppsOrderRepository` rather than
+  re-derived. Page capacity is a UI read (device → blueprint), pushed to the VM via `setPagerGrid`, exactly as
+  home pushes its `GridConfig`. `AppsState` gained `pagerPages: List<List<AppsItem>>` alongside `apps`: both
+  shapes are always maintained so switching layout reloads nothing, and one collector keeps the store in step
+  with what is installed (first run, install/uninstall and a capacity change are all the same sync). **Renders
+  and launches only so far** — drag, folders and the page indicator are the next part.
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
   helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
-  the three **ordered** layouts (pager, pager-with-category, category card), which need the order repository.
+  the two **category** layouts, which need the `category` + `category_item` store.
 
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
 (which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
 above), home **orientation**, widgets/containers on the grid, or `data:apps` categorization (B6). On APPS: the
-alphabet filter strip, search, or the APPS **order** repository — which unblocks all three remaining layouts at
-once and forces the folders-on-APPS decision above. Folder follow-ups: rename, add-via-picker, cross-page reorder,
+pager's **drag + folders** (the next part — the store, the ordered-flow primitives and the render are all in
+place), the alphabet filter strip, search, or the **category** store (`category` + `category_item`), which
+unblocks the two category layouts and forces the folders-on-the-card question above. Folder follow-ups: rename, add-via-picker, cross-page reorder,
 onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw

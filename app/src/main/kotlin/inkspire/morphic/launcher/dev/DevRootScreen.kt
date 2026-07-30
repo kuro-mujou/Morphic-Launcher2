@@ -26,6 +26,7 @@ private enum class DevScreen(val label: String) {
     Home("Home"),
     Apps("Apps"),
     AppsGrid("AppsGrid"),
+    AppsPager("AppsPager"),
     Drag("Drag"),
     Pager("Pager"),
     PagerDrag("Pager+Drag"),
@@ -53,6 +54,7 @@ fun DevRootScreen(modifier: Modifier = Modifier) {
             // The layout is normally a user setting (data:settings); until then the harness picks it
             // per entry, which is also the cheapest way to eyeball two layouts side by side.
             DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
+            DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
             DevScreen.Drag -> DragPlaygroundScreen()
             DevScreen.Pager -> PagerPlaygroundScreen()
             DevScreen.PagerDrag -> PagerDragPlaygroundScreen()

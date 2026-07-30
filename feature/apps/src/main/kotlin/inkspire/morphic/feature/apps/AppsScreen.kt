@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.feature.apps.layout.AppsPager
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
 import org.koin.androidx.compose.koinViewModel
@@ -54,11 +55,15 @@ fun AppsScreen(
                     apps = state.apps,
                     onLaunch = viewModel::launch,
                 )
+                AppsLayout.PAGER -> AppsPager(
+                    pages = state.pagerPages,
+                    onLaunch = viewModel::launch,
+                    onGridResolved = viewModel::setPagerGrid,
+                )
                 // Not built. Grouped rather than given an `else`, on purpose: adding a value to [AppsLayout] then
                 // fails to compile here until it is rendered, instead of silently falling through to a default.
-                // Each arrives as its own file beside these two — and all three remaining ones are *ordered*
-                // layouts, so they need the APPS order repository first (with the folders-on-APPS question).
-                AppsLayout.PAGER,
+                // Both remaining ones are the *category* layouts, which need the `category` + `category_item`
+                // store — the other half of the APPS arrangement model, and not yet built.
                 AppsLayout.PAGER_WITH_CATEGORY,
                 AppsLayout.CATEGORY_CARD,
                 -> Unit
