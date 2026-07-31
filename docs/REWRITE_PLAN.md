@@ -1,7 +1,7 @@
 # Morphic Launcher 2 — Rewrite Plan (learning + cleanup build)
 
 **Goal:** rebuild Morphic Launcher from scratch, bottom-up, as a clean **refactor** (not a re-type) of the
-original at `../Morphic-Launcher` — the reference / answer key, never deleted.
+original at `../launcher` — the reference / answer key, never deleted.
 
 > Working model, refactor mandate, docs/KDoc convention, and the domain concepts (surface taxonomy, layout
 > persistence) live in [CLAUDE.md](../CLAUDE.md). This file holds **only the plan**: phases, the build map,

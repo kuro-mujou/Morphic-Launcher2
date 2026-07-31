@@ -23,7 +23,7 @@ This is the part that isn't derivable from the code:
   reached via review rather than by typing. So: explain the *why* of each change (in KDoc and in the
   summary), call out the design decisions you made and any alternatives you rejected, and prefer several
   small reviewable commits over one large drop.
-- **Never port Launcher 1 verbatim.** The original at `../Morphic-Launcher` (aka "L1") is the
+- **Never port Launcher 1 verbatim.** The original at `../launcher` (aka "L1", root Gradle project `Launcher`) is the
   **reference / answer key**: it runs, but it's fragile and smell-ridden (duplication, poor
   separation, logic in the wrong layer). Never delete it; compare against it, then do it *better*.
   For each piece: understand what L1 does and *why* → question the design (duplicated? honest name?
