@@ -1,19 +1,12 @@
-package inkspire.morphic.feature.apps.layout
+package inkspire.morphic.feature.apps.layout.categorypager
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -26,62 +19,41 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
-import inkspire.morphic.core.designsystem.drag.DragAutoScrollEffect
-import inkspire.morphic.core.designsystem.drag.DragCoordinator
-import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
-import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
-import inkspire.morphic.core.designsystem.grid.LauncherDragCell
-import inkspire.morphic.core.designsystem.grid.LauncherGrid
-import inkspire.morphic.core.designsystem.grid.LauncherGridScope
-import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsCategoryGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
-import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.feature.apps.AppsCategory
+import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import kotlin.math.roundToInt
 
 /** This surface's drop zone — the pager viewport, as on the other paged surfaces. */
 private val CategoryZoneId = ZoneId("apps-category-pager")
-
-/**
- * Provisional cell height and header spacing — **placeholders, not design choices**, for the reason the other
- * layouts' are: these are surface metrics bound for the settings layer, and a flat constant says so where derived
- * arithmetic would look like a decision.
- */
-private val CellHeight = 96.dp
-private val HeaderPadding = 16.dp
 
 /** Denser than home's, matching the other APPS grids — the same starting point, replaced by the icon-size setting. */
 private val CategoryIconMetrics = IconMetrics(iconPercent = 0.75f)
@@ -124,6 +96,9 @@ private val CategoryReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropInte
  *
  * Empty categories still get a page: a category the user emptied keeps its definition, and a page that vanished
  * with its last app could never be dragged back into.
+ *
+ * A page itself is [CategoryPage], beside this file — a leaf that takes everything it draws as a parameter. What
+ * stays here is the drag state, the planner that writes it, and the drop that reads it.
  *
  * @param onMove commits a drop — the app, the category it landed in, and its slot within that category.
  */
@@ -223,7 +198,9 @@ fun AppsCategoryPager(
                     .onGloballyPositioned {
                         val bounds = it.boundsInRoot()
                         viewport = bounds
-                        coordinator.registerZone(DropZone(CategoryZoneId, bounds, z = 0) { item -> item is GridItem.App })
+                        coordinator.registerZone(
+                            DropZone(CategoryZoneId, bounds, z = 0) { item -> item is GridItem.App },
+                        )
                     },
                 // Keep off-screen pages placed while dragging, so the lifted cell's pointer stream survives a flip.
                 keepAllPagesPlaced = coordinator.isDragging,
@@ -261,123 +238,5 @@ fun AppsCategoryPager(
                 }
             }
         }
-    }
-}
-
-/** One category's page: its name, then its apps in a scrolling, draggable grid. */
-@Composable
-private fun CategoryPage(
-    category: AppsCategory,
-    cols: Int,
-    coordinator: DragCoordinator,
-    gestures: ItemGestureConfig,
-    dragged: AppInfo?,
-    gap: Int,
-    fingerInRoot: Offset?,
-    onLaunch: (ComponentKey) -> Unit,
-    onDrop: () -> Unit,
-    onGeometry: (GridGeometry) -> Unit,
-) {
-    val colors = LocalMorphicColors.current
-    val cellHeightPx = with(LocalDensity.current) { CellHeight.toPx() }
-    val display = displayOrder(category.apps, dragged, gap)
-    val rows = ((display.size + cols - 1) / cols).coerceAtLeast(1)
-
-    val scrollState = rememberScrollState()
-    var scrollViewport by remember { mutableStateOf<Rect?>(null) }
-    // Reaching apps past the fold while dragging. The manual scroll below is off for the duration, so without this
-    // a long category could only be rearranged as far as one screenful. Programmatic scrolling still works with the
-    // gesture disabled — `enabled` gates pointer input, not the state.
-    DragAutoScrollEffect(scrollState = scrollState, bounds = scrollViewport, fingerInRoot = fingerInRoot)
-
-    Column(Modifier.fillMaxSize()) {
-        Text(
-            text = category.category.name,
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HeaderPadding, vertical = HeaderPadding / 2),
-        )
-        // The scroll host: the grid inside reports its *content* height, which grows past this box and scrolls. Its
-        // own `remember` sits inside the pager's per-page `key`, so each category keeps its own scroll position.
-        // Scrolling is disabled during a drag — otherwise the scroll and the drag fight over the same vertical
-        // finger. Reaching past the fold mid-drag needs a drag-edge auto-scroll, which is deferred.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .onGloballyPositioned { scrollViewport = it.boundsInRoot() }
-                .verticalScroll(scrollState, enabled = !coordinator.isDragging),
-        ) {
-            LauncherGrid(
-                // `rows` is unused in scroll mode (height comes from cellHeight × content) but GridConfig requires a
-                // positive value, so it is set to what the content actually reaches rather than to a lie.
-                config = GridConfig(rows = rows, cols = cols),
-                cellHeight = CellHeight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Published from the *grid*, so it travels with the scroll: cell hit-testing has to name the
-                    // cells actually drawn under the finger, not the ones that were there before scrolling.
-                    .onGloballyPositioned {
-                        val bounds = it.boundsInRoot()
-                        onGeometry(
-                            GridGeometry(
-                                originInRoot = Offset(bounds.left, bounds.top),
-                                cellW = bounds.width / cols,
-                                cellH = cellHeightPx,
-                                cols = cols,
-                                rows = rows,
-                            ),
-                        )
-                    },
-            ) {
-                dropFootprintCell(dragged != null, gap, cols)
-                flowItems(items = display, itemKey = { it.componentKey.flatten() }) { app, cellModifier ->
-                    LauncherDragCell(
-                        coordinator = coordinator,
-                        item = GridItem.App(app.componentKey),
-                        gestureConfig = gestures,
-                        onDrop = onDrop,
-                        modifier = cellModifier,
-                        onOpen = { onLaunch(app.componentKey) },
-                    ) { itemGestures ->
-                        AppCell(app = app, modifier = Modifier.fillMaxSize(), itemGestures = itemGestures)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * What one page draws while a drag is over it: its apps with the dragged one lifted to the gap.
- *
- * **The dragged cell stays composed on its source page even once the finger has carried it to another**, so this
- * can return the same app on two pages at once. Not a glitch to tidy: the cell on the source page owns the
- * gesture's pointer stream, and disposing it mid-drag kills the drag. Both copies are drawn invisible, so the user
- * sees only the floating proxy — the far one exists to occupy the gap so the other icons flow around it.
- *
- * No truncation, unlike the APPS pager's equivalent: a category has no capacity, so nothing can overflow it.
- */
-private fun displayOrder(apps: List<AppInfo>, dragged: AppInfo?, gap: Int): List<AppInfo> {
-    if (dragged == null) return apps
-    val others = apps.filterNot { it.componentKey == dragged.componentKey }
-    val at = gap.coerceIn(0, others.size)
-    return others.take(at) + dragged + others.drop(at)
-}
-
-/**
- * Paints the gap's cell, if this page holds it — the slot the app would land in.
- *
- * Declared before the cells so it sits behind them, and inside the page grid so it scrolls with the content. Only a
- * reorder can happen here, so there is no merge case to prefer over it.
- */
-@Suppress("ComposableNaming") // an emitter, named for what it paints rather than as a component
-@Composable
-private fun LauncherGridScope.dropFootprintCell(draggingHere: Boolean, gap: Int, cols: Int) {
-    if (!draggingHere || gap < 0) return
-    Box(Modifier.gridPlacement(GridPlacement(0, gap / cols, gap % cols))) {
-        DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
     }
 }

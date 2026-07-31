@@ -11,11 +11,11 @@ import androidx.compose.ui.Modifier
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
-import inkspire.morphic.feature.apps.layout.AppsCategoryCard
-import inkspire.morphic.feature.apps.layout.AppsCategoryPager
-import inkspire.morphic.feature.apps.layout.AppsPager
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
+import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
+import inkspire.morphic.feature.apps.layout.categorypager.AppsCategoryPager
+import inkspire.morphic.feature.apps.layout.pager.AppsPager
 import org.koin.androidx.compose.koinViewModel
 
 /**
