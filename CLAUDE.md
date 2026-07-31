@@ -244,6 +244,22 @@ from the baked stack).
   *surface's* menu. Works because `launcherItemGestures` never consumes a down. Consequence: cells (`AppCell`,
   `FolderCell`) carry **no `onClick`** — taps arrive through the one gesture contract. See
   [docs/DRAG_AND_DROP_DESIGN.md](docs/DRAG_AND_DROP_DESIGN.md) §5.
+- **A measured position is not trustworthy once the node is inside a scroller — reconstruct it.**
+  `onGloballyPositioned` does **not** reliably re-fire when scrolling moves a node, because the scroll moves it through
+  its *parent's* placement without re-running the node's own layout. So anything doing finger→cell maths against those
+  bounds silently drifts by the scroll distance. Publish from a **stable anchor plus the scroll offset** instead: the
+  scroll *viewport*'s position genuinely doesn't move (put `onGloballyPositioned` **outside** `verticalScroll` in the
+  chain), and `scrollState.value` is snapshot state, so `viewportTop - scrollState.value` is the content origin and it
+  republishes every frame for free. `CategoryPage` in `feature:apps` is the worked example. Two corollaries:
+  - **The symptom is a *constant* offset, which is how you tell it from a timing bug.** With a stale origin at offset
+    `S0` and a real offset `S`, a finger at `y` resolves to a cell drawn at `y - (S - S0)` — so the drop footprint sits
+    a fixed distance from the finger, tracks it while dragging, and snaps into place the moment the content returns to
+    `S0`. A lagging or jittering offset is something else; a rigid one is staleness.
+  - **A correct geometry that nothing re-reads changes nothing.** `DragCoordinator` resolves a plan only in `moveTo`,
+    i.e. when the *finger* moves — while auto-scroll (`DragAutoScrollEffect`) exists precisely to move content under a
+    finger held still. A surface that auto-scrolls must therefore **re-send the same finger position** after
+    republishing, and in that order (a `snapshotFlow` on the scroll offset fires *before* the recomposition that
+    derives the new geometry, so it stays a step behind — put both in one `SideEffect`).
 - **Don't invent a dimension nothing owns yet.** Launcher surface metrics (dock extent, home padding, icon size, grid
   rows) are **settings-driven by design**. Until `data:settings` exists, use the plainest possible stand-in — a named
   dp constant, or "fill the rest" — and KDoc it as a placeholder naming the setting that replaces it. Do **not** derive
