@@ -1,5 +1,7 @@
 package inkspire.morphic.core.model
 
+import kotlinx.serialization.Serializable
+
 /** An edge of a grid that a row or column can be added to or removed from while editing. */
 enum class GridEditorEdge { TOP, BOTTOM, LEFT, RIGHT }
 
@@ -31,26 +33,94 @@ data class GridDefault(val cols: Int, val rows: Int? = null)
 data class GridEditRange(val minCols: Int, val minRows: Int?)
 
 /**
- * The static, per-surface description of one grid: how it is sized, how its cells subdivide, whether items
- * are free-placed, its default size for each [DeviceConfiguration], and (when editable) its edit limits.
+ * Which grid a blueprint, a stored override, or a resolved metric belongs to — **the launcher's grids, named**.
  *
- * This is the single source of truth for grid configuration across every surface × layout. Runtime maxima
- * (how many rows/cols actually fit) are deliberately NOT stored here — they depend on screen area and icon
- * size, and are computed by the resolver in `core:designsystem`.
+ * There is exactly one value per [GridBlueprint], and that is the point: "surface × layout" is not a pair to be
+ * keyed on, it is a named grid. The home pager and the dock are different grids on the same surface; the APPS pager
+ * and the APPS scrolling grid are different grids for different layouts of one surface. Naming them makes both cases
+ * one axis instead of two, and stops an illegal pair (HOME crossed with an `AppsLayout`) from being expressible.
  *
+ * It lives on the blueprint rather than beside it so the two cannot drift: adding a value here does not compile
+ * until a blueprint claims it, and `GridBlueprints` proves the mapping is total.
+ *
+ * These names are **persisted** — they key the per-grid overrides in `data:settings` — so renaming a value is a
+ * storage migration, not a refactor.
+ */
+enum class GridSlot {
+    /** HOME's paged main area. */
+    HOME_MAIN,
+
+    /** HOME's dock strip. */
+    HOME_DOCK,
+
+    /** The APPS paged grid, and the pages of the category pager. */
+    APPS_PAGER,
+
+    /** The APPS vertically-scrolling grid of every app. */
+    APPS_SCROLL,
+
+    /** One category's page on the APPS category pager. */
+    APPS_CATEGORY,
+
+    /** An opened folder, and an expanded category card — one grid, one overlay. */
+    FOLDER,
+}
+
+/**
+ * How icons are sized in a grid's cells, in **persistable primitives**.
+ *
+ * The model-layer twin of `core:designsystem`'s `IconMetrics`, which holds the same six facts as Compose types
+ * (`Dp`) and cannot live here — `core:model` is a plain JVM library. `IconMetrics.of(...)` already exists to bridge
+ * the two, and its KDoc already said it was "for the settings/layout layer": this is that layer arriving.
+ *
+ * **It belongs on a grid blueprint rather than beside it**, because icon size is not independent of the grid:
+ * [iconPercent] is a fraction *of the cell*, so the same number means a different icon on a 4-column grid than on
+ * an 8-column one. A grid and what it draws in a cell are one description.
+ *
+ * @property iconPercent the icon's edge length as a fraction of the cell's smaller bound — the primary control.
+ * @property labelScale multiplier on the base label text size.
+ * @property showLabel whether a label is drawn under the icon at all.
+ * @property minIconDp lower guardrail in dp; a wide bound, not the primary limit.
+ * @property maxIconDp upper guardrail in dp; likewise.
+ * @property showIcon whether the icon is drawn — meaningful for a text-only list.
+ */
+@Serializable
+data class IconSizing(
+    val iconPercent: Float = 0.88f,
+    val labelScale: Float = 1f,
+    val showLabel: Boolean = true,
+    val minIconDp: Int = 28,
+    val maxIconDp: Int = 72,
+    val showIcon: Boolean = true,
+)
+
+/**
+ * The static, per-surface description of one grid: which grid it *is*, how it is sized, how its cells subdivide,
+ * whether items are free-placed, its default size for each [DeviceConfiguration], how icons fill its cells, and
+ * (when editable) its edit limits.
+ *
+ * This is the single source of truth for grid **and cell** configuration across every surface × layout — which is
+ * what lets `data:settings` store only what a user *changed* and resolve everything else from here, so a default
+ * exists in exactly one place. Runtime maxima (how many rows/cols actually fit) are deliberately NOT stored here —
+ * they depend on screen area and icon size, and are computed by the resolver in `core:designsystem`.
+ *
+ * @property slot which grid this describes; unique across all blueprints (see [GridBlueprints]).
  * @property sizing How the grid is bounded (see [GridSizing]).
  * @property cellMultiplier Logical cells per visual cell — 2 for free-placement surfaces, 1 otherwise; see [GridConfig].
  * @property freePlacement True when items hold explicit positions and edits reflow them (home, dock); false
  *   for auto-flowed app lists.
  * @property editRange The user-editable range, or null when the grid has no editor (e.g. folder grids).
  * @property defaults The default [GridDefault] for each [DeviceConfiguration].
+ * @property icon The default [IconSizing] for this grid's cells, before any user override.
  */
 data class GridBlueprint(
+    val slot: GridSlot,
     val sizing: GridSizing,
     val cellMultiplier: Int,
     val freePlacement: Boolean,
     val editRange: GridEditRange?,
     val defaults: Map<DeviceConfiguration, GridDefault>,
+    val icon: IconSizing = IconSizing(),
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null
@@ -102,6 +172,7 @@ fun GridBlueprint.colsFor(device: DeviceConfiguration): Int = defaults.getValue(
 
 /** Home free-placement pager — sub-cell grid (multiplier 2); rows and columns both editable. */
 val HomePagerGrid = GridBlueprint(
+    slot = GridSlot.HOME_MAIN,
     sizing = GridSizing.FIXED_PAGER,
     cellMultiplier = 2,
     freePlacement = true,
@@ -112,10 +183,14 @@ val HomePagerGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 7),
         tabletLandscape = GridDefault(cols = 8, rows = 6),
     ),
+    // 0.88 — a home cell is a 2x2 visual slot around one icon, so it can afford slack. This is the value home
+    // inherited from `LocalIconMetrics`' own default rather than ever setting.
+    icon = IconSizing(iconPercent = 0.88f),
 )
 
 /** Home dock — a free-placement strip (default single row); rows and columns editable down to 1×1. */
 val DockGrid = GridBlueprint(
+    slot = GridSlot.HOME_DOCK,
     sizing = GridSizing.FIXED_PAGER,
     cellMultiplier = 2,
     freePlacement = true,
@@ -126,6 +201,7 @@ val DockGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 1),
         tabletLandscape = GridDefault(cols = 5, rows = 1),
     ),
+    icon = IconSizing(iconPercent = 0.88f),
 )
 
 /**
@@ -133,6 +209,7 @@ val DockGrid = GridBlueprint(
  * per page, one icon per cell; rows and columns editable.
  */
 val AppsPagerGrid = GridBlueprint(
+    slot = GridSlot.APPS_PAGER,
     sizing = GridSizing.FIXED_PAGER,
     cellMultiplier = 1,
     freePlacement = false,
@@ -143,6 +220,8 @@ val AppsPagerGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 7),
         tabletLandscape = GridDefault(cols = 8, rows = 6),
     ),
+    // Denser than home's: a page packs four to eight columns where a home cell holds one icon with slack.
+    icon = IconSizing(iconPercent = 0.75f),
 )
 
 /**
@@ -153,6 +232,7 @@ val AppsPagerGrid = GridBlueprint(
  * (`AppsVerticalGrid`) — and because "scroll vs paged" is exactly what distinguishes it from [AppsPagerGrid].
  */
 val AppsScrollGrid = GridBlueprint(
+    slot = GridSlot.APPS_SCROLL,
     sizing = GridSizing.SCROLL_GRID,
     cellMultiplier = 1,
     freePlacement = false,
@@ -163,6 +243,7 @@ val AppsScrollGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5),
         tabletLandscape = GridDefault(cols = 8),
     ),
+    icon = IconSizing(iconPercent = 0.75f),
 )
 
 /**
@@ -182,6 +263,7 @@ val AppsScrollGrid = GridBlueprint(
  * it, and the view it *opens into* is sized by [FolderGrid] — the same grid, and the same overlay, a folder uses.
  */
 val AppsCategoryGrid = GridBlueprint(
+    slot = GridSlot.APPS_CATEGORY,
     sizing = GridSizing.SCROLL_GRID,
     cellMultiplier = 1,
     freePlacement = false,
@@ -192,6 +274,7 @@ val AppsCategoryGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5),
         tabletLandscape = GridDefault(cols = 8),
     ),
+    icon = IconSizing(iconPercent = 0.75f),
 )
 
 /**
@@ -202,6 +285,7 @@ val AppsCategoryGrid = GridBlueprint(
  * contents come from.
  */
 val FolderGrid = GridBlueprint(
+    slot = GridSlot.FOLDER,
     sizing = GridSizing.FIXED_PAGER,
     cellMultiplier = 1,
     freePlacement = false,
@@ -212,4 +296,24 @@ val FolderGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 4, rows = 5),
         tabletLandscape = GridDefault(cols = 6, rows = 3),
     ),
+    icon = IconSizing(iconPercent = 0.75f),
 )
+
+/**
+ * Every blueprint, by [GridSlot] — the registry that makes slot → blueprint total.
+ *
+ * `data:settings` resolves a stored override against `GridBlueprints.getValue(slot)`, so a slot with no blueprint
+ * would be a runtime failure the moment someone read a setting for it. That the map covers [GridSlot] exactly once
+ * is checked by a test rather than asserted here, so a mistake fails the build instead of the launcher.
+ */
+val GridBlueprints: Map<GridSlot, GridBlueprint> = listOf(
+    HomePagerGrid,
+    DockGrid,
+    AppsPagerGrid,
+    AppsScrollGrid,
+    AppsCategoryGrid,
+    FolderGrid,
+).associateBy { it.slot }
+
+/** This slot's blueprint — its grid defaults, its cell subdivision, and its default icon sizing. */
+val GridSlot.blueprint: GridBlueprint get() = GridBlueprints.getValue(this)
