@@ -7,11 +7,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
+import inkspire.morphic.data.settings.SurfaceMetrics
 import inkspire.morphic.data.settings.SurfaceRegister
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -34,6 +40,13 @@ private val SurfaceRegisterSlice = SettingsSlice(
     default = SurfaceRegister.Default,
 )
 
+/** The per-grid metric overrides: one key, one blob, sparse inside. */
+private val SurfaceMetricsSlice = SettingsSlice(
+    name = "surface_metrics",
+    serializer = serializer<SurfaceMetrics>(),
+    default = SurfaceMetrics.Default,
+)
+
 /**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
  *
@@ -51,7 +64,7 @@ internal class SettingsRepositoryImpl(
 
     private val dataStore = context.settingsDataStore
 
-    override val surfaceRegister: Flow<SurfaceRegister> = dataStore.read(SurfaceRegisterSlice)
+    override val surfaceRegister: Flow<SurfaceRegister> = dataStore.read(SurfaceRegisterSlice) { it }
 
     override suspend fun setHomeLayout(layout: HomeLayout) =
         update(SurfaceRegisterSlice) { copy(homeLayout = layout) }
@@ -67,17 +80,33 @@ internal class SettingsRepositoryImpl(
     override suspend fun setSurfaceTransition(transition: SurfaceTransition) =
         update(SurfaceRegisterSlice) { copy(transition = transition) }
 
+    // Resolved here rather than by the caller: the blueprint supplies the base, the slice supplies the difference.
+    // `distinctUntilChanged` inside `read` then means a consumer only wakes when *its own* grid's resolved value
+    // changes — editing the dock's icon size does not recompose the app drawer.
+    override fun iconSizing(slot: GridSlot, device: DeviceConfiguration): Flow<IconSizing> =
+        dataStore.read(SurfaceMetricsSlice) { it.iconSizing(slot, device, base = slot.blueprint.icon) }
+
+    override suspend fun updateIcon(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: IconOverride.() -> IconOverride,
+    ) = update(SurfaceMetricsSlice) { withIconOverride(slot, device, transform) }
+
     /**
-     * Streams [slice], decoded, skipping re-emissions of an equal value.
+     * Streams [slice], decoded and projected through [project], skipping re-emissions of an equal *projected*
+     * value.
      *
-     * `distinctUntilChanged` matters more here than it looks: DataStore re-emits the whole `Preferences` when *any*
-     * key changes, so without it every consumer of this slice would wake each time an unrelated slice was written.
+     * **Projecting before `distinctUntilChanged` is what makes a narrow read narrow.** DataStore re-emits the whole
+     * `Preferences` when *any* key changes, so without this every consumer would wake on every unrelated write.
+     * `iconSizing` asks for one grid on one device: a write that changes some other grid's override still decodes
+     * here, but projects to the same value and is dropped instead of waking that consumer.
+     *
      * Both the decode and the comparison run on `io`, since `flowOn` applies to everything upstream of it.
      */
-    private fun <T> DataStore<Preferences>.read(slice: SettingsSlice<T>): Flow<T> {
+    private fun <T, R> DataStore<Preferences>.read(slice: SettingsSlice<T>, project: (T) -> R): Flow<R> {
         val key = stringPreferencesKey(slice.name)
         return data
-            .map { slice.decode(it[key]) }
+            .map { project(slice.decode(it[key])) }
             .distinctUntilChanged()
             .flowOn(dispatchers.io)
     }

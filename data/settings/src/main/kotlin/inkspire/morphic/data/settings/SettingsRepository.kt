@@ -1,7 +1,10 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SurfaceTransition
 import kotlinx.coroutines.flow.Flow
 
@@ -48,4 +51,30 @@ interface SettingsRepository {
 
     /** Sets how HOME and a side surface animate past each other. */
     suspend fun setSurfaceTransition(transition: SurfaceTransition)
+
+    /**
+     * The icon sizing to draw [slot]'s cells with on [device] — **already resolved**: the grid's blueprint default
+     * with any user override applied on top.
+     *
+     * **Consumers never see the keying, and that is the design.** A caller asks for the sizing of the grid it is
+     * drawing and gets a value; the slot × device map, the sparse overrides and the merge all stay inside this
+     * module. That is what makes the combinatorial fan-out a storage detail rather than something every surface has
+     * to understand — L1 pushed it outward instead, and ended up with ~186 machine-generated preference keys and
+     * call sites that clamped values ad hoc because nothing had resolved them.
+     */
+    fun iconSizing(slot: GridSlot, device: DeviceConfiguration): Flow<IconSizing>
+
+    /**
+     * Overrides one or more icon fields for [slot] on [device]. Setting a field to null in [transform] clears it,
+     * after which that field follows the blueprint again — which is how a per-control "reset" works without a
+     * separate operation.
+     *
+     * Scoped to one device configuration on purpose: the user is configuring the posture they are holding. Nothing
+     * writes the other three.
+     */
+    suspend fun updateIcon(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: IconOverride.() -> IconOverride,
+    )
 }
