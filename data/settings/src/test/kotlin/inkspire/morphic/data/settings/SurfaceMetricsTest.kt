@@ -108,13 +108,16 @@ class SurfaceMetricsTest {
     }
 
     @Test
-    fun `every slot resolves against its own blueprint`() {
+    fun `every icon-drawing slot resolves against its own blueprint`() {
         // The registry lookup the repository does for real. If a slot had no blueprint this would throw, which is the
-        // failure `GridBlueprintTest` exists to catch earlier.
-        GridSlot.entries.forEach { slot ->
-            val resolved = SurfaceMetrics.Default.iconSizing(slot, phone, base = slot.blueprint.icon)
+        // failure `GridBlueprintTest` exists to catch earlier. A tile grid (the category card) has no icon sizing at
+        // all, and asking for it is a coding mistake the repository rejects — so it is excluded here rather than
+        // given a stand-in.
+        GridSlot.entries.mapNotNull { slot -> slot.blueprint.icon?.let { slot to it } }
+            .forEach { (slot, base) ->
+                val resolved = SurfaceMetrics.Default.iconSizing(slot, phone, base)
 
-            assertEquals("$slot should resolve to its blueprint default", slot.blueprint.icon, resolved)
-        }
+                assertEquals("$slot should resolve to its blueprint default", base, resolved)
+            }
     }
 }

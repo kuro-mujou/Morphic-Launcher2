@@ -21,7 +21,8 @@ class GridBlueprintTest {
     fun `no two blueprints claim the same slot`() {
         // `associateBy` keeps the last of a duplicate pair, so a collision shows up as a map smaller than the list.
         val declared = listOf(
-            HomePagerGrid, DockGrid, AppsPagerGrid, AppsScrollGrid, AppsCategoryGrid, FolderGrid,
+            HomePagerGrid, DockGrid, AppsPagerGrid, AppsScrollGrid, AppsListGrid,
+            AppsCategoryGrid, AppsCardGrid, FolderGrid,
         )
 
         assertEquals(declared.size, GridBlueprints.size)
@@ -30,6 +31,16 @@ class GridBlueprintTest {
     @Test
     fun `a blueprint is reachable from its own slot`() {
         GridBlueprints.forEach { (slot, blueprint) -> assertEquals(slot, blueprint.slot) }
+    }
+
+    @Test
+    fun `every grid that draws icon cells declares its icon sizing`() {
+        // The 1:1 rule this design rests on: an independent grid config gets an independent icon config. The one
+        // exception is a grid of tiles rather than of icons, which says so with a null instead of carrying a value
+        // nothing reads.
+        val withoutIcon = GridBlueprints.values.filter { it.icon == null }.map { it.slot }
+
+        assertEquals(listOf(GridSlot.APPS_CARD), withoutIcon)
     }
 
     @Test

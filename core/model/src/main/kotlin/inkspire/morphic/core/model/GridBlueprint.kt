@@ -59,8 +59,20 @@ enum class GridSlot {
     /** The APPS vertically-scrolling grid of every app. */
     APPS_SCROLL,
 
+    /**
+     * The APPS vertical *list* of every app.
+     *
+     * A list is a **one-lane scrolling grid**, which is why it belongs in this enum rather than beside it: it draws
+     * icon cells and therefore needs its own icon sizing, and "each grid config gets an independent icon config" is
+     * the rule that makes that automatic. (L1 modelled its list layout the same way — a profile of one column.)
+     */
+    APPS_LIST,
+
     /** One category's page on the APPS category pager. */
     APPS_CATEGORY,
+
+    /** The APPS grid of category **cards** — a grid of tiles, not of icons. */
+    APPS_CARD,
 
     /** An opened folder, and an expanded category card — one grid, one overlay. */
     FOLDER,
@@ -111,7 +123,9 @@ data class IconSizing(
  *   for auto-flowed app lists.
  * @property editRange The user-editable range, or null when the grid has no editor (e.g. folder grids).
  * @property defaults The default [GridDefault] for each [DeviceConfiguration].
- * @property icon The default [IconSizing] for this grid's cells, before any user override.
+ * @property icon The default [IconSizing] for this grid's cells, before any user override — or **null** for a grid
+ *   whose cells are not icons. The card grid draws *tiles*, each containing its own small icon arrangement, so
+ *   there is no "icon per cell" for a user to size; a null says so instead of carrying a value nothing reads.
  */
 data class GridBlueprint(
     val slot: GridSlot,
@@ -120,7 +134,7 @@ data class GridBlueprint(
     val freePlacement: Boolean,
     val editRange: GridEditRange?,
     val defaults: Map<DeviceConfiguration, GridDefault>,
-    val icon: IconSizing = IconSizing(),
+    val icon: IconSizing? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null
@@ -300,6 +314,67 @@ val FolderGrid = GridBlueprint(
 )
 
 /**
+ * APPS vertical list ([AppsLayout.VERTICAL_LIST]) — **one lane, scrolling**, which is all a list is.
+ *
+ * It has a blueprint for one reason: it draws icon cells, so it needs somewhere for its icon sizing to live, and every
+ * grid's icon config hangs off its blueprint. Nothing is editable — a list is one lane by definition, and its row
+ * *height* is a separate metric (S4) rather than a grid dimension.
+ *
+ * The icon fills its row: there is no label *underneath* to leave space for, since `AppRowCell` sets the label beside
+ * the icon rather than below it.
+ */
+val AppsListGrid = GridBlueprint(
+    slot = GridSlot.APPS_LIST,
+    sizing = GridSizing.SCROLL_GRID,
+    cellMultiplier = 1,
+    freePlacement = false,
+    editRange = null,
+    defaults = byDevice(
+        phonePortrait = GridDefault(cols = 1),
+        phoneLandscape = GridDefault(cols = 1),
+        tabletPortrait = GridDefault(cols = 1),
+        tabletLandscape = GridDefault(cols = 1),
+    ),
+    icon = IconSizing(iconPercent = 1f),
+)
+
+/**
+ * APPS category-card grid ([AppsLayout.CATEGORY_CARD]) — a vertically-scrolling grid of **square tiles**, one per
+ * category.
+ *
+ * **Vertical in every orientation, with the lane count carrying the difference.** A card is square, so its size is
+ * `shortEdge / lanes`; in landscape the width *is* the long edge, so keeping cards the same physical size means more
+ * lanes, not a different scroll axis. Checked against iPadOS's App Library, which likewise stays a vertical grid and
+ * only varies its column count. That is why [GridSizing] needs no horizontal variant and `GridDefault.cols` stays
+ * non-null — the simpler model turned out to be the correct one.
+ *
+ * **No icon sizing** ([icon] is null): the cells are tiles, and the icons *inside* a tile are derived rather than
+ * configured. A square card divides into four square preview slots and the icon fills its slot, so there is no
+ * fraction for a user to choose. Making the lane count device-aware is also what retires the note on the card's
+ * preview metrics, which observed that a 72dp icon cap "*will* bind on a tablet, where two columns of cards give a
+ * slot far wider than that" and concluded: fix the columns, not the cap.
+ *
+ * Editable, floored at two lanes — a single lane means one card per row filling the whole width, which reads as a bug
+ * rather than as a choice.
+ */
+val AppsCardGrid = GridBlueprint(
+    slot = GridSlot.APPS_CARD,
+    sizing = GridSizing.SCROLL_GRID,
+    cellMultiplier = 1,
+    freePlacement = false,
+    editRange = GridEditRange(minCols = 2, minRows = null),
+    defaults = byDevice(
+        phonePortrait = GridDefault(cols = 2),
+        // Twice portrait's, because a phone's landscape width is roughly twice its portrait width — which is what
+        // keeps a card the same size on screen rather than doubling it.
+        phoneLandscape = GridDefault(cols = 4),
+        tabletPortrait = GridDefault(cols = 3),
+        // A tablet is nearer square than a phone, so the long edge is not twice the short one; four, not six.
+        tabletLandscape = GridDefault(cols = 4),
+    ),
+)
+
+/**
  * Every blueprint, by [GridSlot] — the registry that makes slot → blueprint total.
  *
  * `data:settings` resolves a stored override against `GridBlueprints.getValue(slot)`, so a slot with no blueprint
@@ -311,7 +386,9 @@ val GridBlueprints: Map<GridSlot, GridBlueprint> = listOf(
     DockGrid,
     AppsPagerGrid,
     AppsScrollGrid,
+    AppsListGrid,
     AppsCategoryGrid,
+    AppsCardGrid,
     FolderGrid,
 ).associateBy { it.slot }
 

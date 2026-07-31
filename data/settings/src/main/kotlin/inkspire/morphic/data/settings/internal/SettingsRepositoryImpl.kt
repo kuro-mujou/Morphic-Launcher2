@@ -83,8 +83,16 @@ internal class SettingsRepositoryImpl(
     // Resolved here rather than by the caller: the blueprint supplies the base, the slice supplies the difference.
     // `distinctUntilChanged` inside `read` then means a consumer only wakes when *its own* grid's resolved value
     // changes — editing the dock's icon size does not recompose the app drawer.
-    override fun iconSizing(slot: GridSlot, device: DeviceConfiguration): Flow<IconSizing> =
-        dataStore.read(SurfaceMetricsSlice) { it.iconSizing(slot, device, base = slot.blueprint.icon) }
+    //
+    // `requireNotNull` rather than a silent fallback: a grid with no `icon` draws tiles, not icon cells (the category
+    // card), so asking it for icon sizing is a coding mistake. Answering with a plausible default would hide it — and
+    // the caller would then be drawing icons at a size nothing configures.
+    override fun iconSizing(slot: GridSlot, device: DeviceConfiguration): Flow<IconSizing> {
+        val base = requireNotNull(slot.blueprint.icon) {
+            "$slot draws tiles rather than icon cells, so it has no icon sizing to resolve"
+        }
+        return dataStore.read(SurfaceMetricsSlice) { it.iconSizing(slot, device, base) }
+    }
 
     override suspend fun updateIcon(
         slot: GridSlot,
