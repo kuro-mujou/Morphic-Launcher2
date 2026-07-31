@@ -1,6 +1,6 @@
 package inkspire.morphic.core.designsystem.drag
 
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +37,9 @@ private enum class ScrollEdge { TOP, BOTTOM }
  * Stops at the ends: when the scroll consumes nothing there is nowhere left to go, so the loop exits rather than
  * spinning a frame callback for the rest of the drag.
  *
+ * @param scrollState any [ScrollableState] — a `verticalScroll`'s `ScrollState` (the category pager's pages) or a lazy
+ *   list/grid state (the category card's grid). Deliberately the interface rather than one concrete state: all this
+ *   needs is `scrollBy`, and the two callers happen to scroll by different mechanisms.
  * @param bounds the scrolling viewport in root coordinates, or null before it is measured.
  * @param fingerInRoot where the dragged finger is, or **null when no drag concerns this scroller** — a page that
  *   isn't the one being dragged over must not scroll itself, so the caller passes null unless the drag is its own.
@@ -44,7 +47,7 @@ private enum class ScrollEdge { TOP, BOTTOM }
  */
 @Composable
 fun DragAutoScrollEffect(
-    scrollState: ScrollState,
+    scrollState: ScrollableState,
     bounds: Rect?,
     fingerInRoot: Offset?,
     edge: Dp = AutoScrollEdge,

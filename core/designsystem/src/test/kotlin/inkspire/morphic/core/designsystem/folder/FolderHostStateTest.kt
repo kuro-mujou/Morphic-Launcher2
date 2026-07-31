@@ -6,12 +6,16 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Behaviour spec for [FolderHostState] — the folder-interaction lifecycle a surface hosts.
+ * Behaviour spec for [FolderHostState] — the collection-interaction lifecycle a surface hosts.
  *
  * The cases below are written from the gesture they belong to, because that is what the state machine is for: one
  * uninterrupted drag can open a folder, leave it, and open another (or the same one again), and the thing that has to
  * stay true across all of it is *which folder the drag started in*. Anything that reshapes this has to keep these
  * green or explain itself.
+ *
+ * Exercised with `Long` ids (folders) because that is the archetype the transitions were written for; the same machine
+ * runs on `String` ids for the APPS category card, and nothing here reads an id beyond comparing it — which is exactly
+ * why it could become a type parameter without any of these cases changing.
  */
 class FolderHostStateTest {
 
@@ -20,7 +24,7 @@ class FolderHostStateTest {
     private val folderId = 7L
     private val otherFolderId = 99L
 
-    private fun host() = FolderHostState()
+    private fun host() = FolderHostState<Long>()
 
     @Test
     fun `starts with nothing open and nothing in flight`() {
@@ -224,5 +228,21 @@ class FolderHostStateTest {
         host.open(folderId)
         host.onDragEnd()
         assertEquals(folderId, host.openFolderId)
+    }
+
+    // ── The same lifecycle, on a collection that isn't a folder ──
+
+    @Test
+    fun `the machine runs unchanged on string ids`() {
+        // The APPS category card hosts categories, identified by a String. This case is what keeps "nothing here reads
+        // an id beyond comparing it" true — the claim that let the id become a type parameter instead of a second copy
+        // of the machine.
+        val host = FolderHostState<String>()
+        host.open("MEDIA")
+        host.onDragStart()
+        host.leaveFolder()
+        host.beginInject("GAMES", app)
+        assertEquals("MEDIA", host.dragSourceFolderId) // still owed to the category it was lifted from
+        assertEquals(FolderPhase.Injecting("GAMES", app), host.phase)
     }
 }
