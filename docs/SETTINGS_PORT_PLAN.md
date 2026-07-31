@@ -114,6 +114,65 @@ L1 has the same numbers in **five** places: data-class defaults, `object GridDef
 path, `profile()` fallbacks, and `Preset` defaults. In L2 the static per-device grid facts are already
 `GridBlueprint`'s job, so: **blueprint = default, settings = optional override**, nothing else holds a number.
 
+### Grid + icon config: how a per-surface knob is keyed *(settled)*
+
+Both need the same identity — **which grid, on which device configuration** — so they share one key and one slice.
+
+**The surface × layout axis already exists as a name, not a key.** There are six blueprints (`HomePagerGrid`,
+`DockGrid`, `AppsPagerGrid`, `AppsScrollGrid`, `AppsCategoryGrid`, `FolderGrid`) and *that* is the axis. So the id
+goes **on the blueprint**, which is what stops the key set and the blueprint set from drifting apart:
+
+```kotlin
+// core:model
+enum class GridSlot { HOME_MAIN, HOME_DOCK, APPS_PAGER, APPS_SCROLL, APPS_CATEGORY, FOLDER }
+data class GridBlueprint(val slot: GridSlot, /* …existing fields… */)
+
+// data:settings — one slice, one DataStore key, the fan-out inside the value
+@Serializable
+data class SurfaceMetrics(
+    val version: Int = 1,
+    val grid: Map<GridSlot, Map<DeviceConfiguration, GridOverride>> = emptyMap(),
+    val icon: Map<GridSlot, Map<DeviceConfiguration, IconOverride>> = emptyMap(),
+)
+
+@Serializable data class GridOverride(val cols: Int? = null, val rows: Int? = null)
+@Serializable data class IconOverride(val iconPercent: Float? = null, val labelScale: Float? = null, /* … */)
+```
+
+**Keyed by `DeviceConfiguration` (4), not `Orientation` (2).** `GridBlueprint.defaults` is already a
+`Map<DeviceConfiguration, GridDefault>` — form factor **crossed with** orientation. An `Orientation`-keyed override
+would therefore be *coarser than the default it replaces*: one value would override both phone-landscape and
+tablet-landscape even though the blueprint gives them different numbers. Matching the blueprint's granularity keeps
+`override ?: default` a like-for-like lookup and gives foldables per-posture config for free. `Orientation` stays what
+it is today — the **arrangement** key (only HOME placements and the APPS pager use it), not a config key.
+
+**Sparse, and nullable per field.** A fresh install stores `{}`, not 265 defaults; touching one slider stores one
+field. This is what keeps the section above literally true — if settings stored *resolved* values, the blueprint's
+number would be copied into storage the moment a user moved anything, and "defaults in five places" would be back.
+It also means changing a default later still reaches every field the user never touched. (No tension with the
+icon-layer decision to "snapshot the default and detach, no field-merge" — that was forced by variable-length **list**
+diffing; merging a fixed-arity record of scalars is a one-liner.)
+
+**Consumers never see the keying.** The repository hands back already-resolved values, so the combinatorial fan-out
+stays inside `data:settings`:
+
+```kotlin
+fun iconMetrics(slot: GridSlot, device: DeviceConfiguration): Flow<IconMetrics>
+fun gridConfig(slot: GridSlot, device: DeviceConfiguration): Flow<GridConfig>   // FIXED_PAGER only
+fun gridCols(slot: GridSlot, device: DeviceConfiguration): Flow<Int>            // SCROLL_GRID only
+```
+
+`AppsVerticalList` asks for its icon metrics and gets an `IconMetrics` — exactly the type `LocalIconMetrics` already
+wants and `IconMetrics.of(...)` already builds. The `gridConfig`/`gridCols` split is not new: it mirrors the existing
+`toGridConfig` vs `colsFor`, because a `GridConfig` requires rows and a scrolling grid has none to give.
+
+**`editRange` is the write-side clamp.** An override is coerced into `GridBlueprint.editRange` when *written*, not
+when read — so storage can never hold a grid the editor wouldn't allow, and L1's ad-hoc `coerceAtMost` at each call
+site disappears. This is the first real consumer for `GridEditRange`, which has sat unused in `core:model`.
+
+**One level of icon config, not two.** L1 stored `iconLayout` at group level (`drawer.iconLayout`) *and* inside every
+`GridDimensions` — two places to set the same thing, and 30 of its ~186 generated keys. One level only.
+
 ### Not `data:settings` at all
 
 - **`WallpaperRepository` (+Impl, ~380 LOC)** — a bitmap/file/`WallpaperManager` service that merely *borrows*
@@ -144,13 +203,14 @@ every phase ends with something visibly working on device, and no slice is writt
       smallest schema, model fully exists, and it retires the two placeholders with the biggest visible payoff —
       binding APPS to an edge is what makes it swipeable at all, and it gives `AppsLayout` a real owner. Also the first
       settings ViewModel, so it sets the pattern.
-- [ ] **S3 — Icon metrics** (6 knobs × surface). `IconLayoutSettings` ≡ `IconMetrics`, and `IconMetrics.of()` was
-      written for this. Retires five per-surface `IconMetrics` placeholders. Decide here how "per surface" is keyed
-      (surface? surface × layout? surface × layout × orientation, as L1 had?) — L1's answer is the reason its key
-      count reached 265, so pick the coarsest key that the UI actually offers.
+- [ ] **S3 — Icon metrics** (6 knobs × slot × device configuration). `IconLayoutSettings` ≡ `IconMetrics`, and
+      `IconMetrics.of()` was written for this. Retires five per-surface `IconMetrics` placeholders. Keying is settled
+      (see "Grid + icon config" above), so the work here is the `GridSlot` id on `GridBlueprint`, the sparse-override
+      merge, and the resolved `iconMetrics(slot, device)` flow — the same three pieces S4 then reuses for grids.
 - [ ] **S4 — Surface geometry** (dock extent, home padding, grid cols/rows, list row height, grid cell heights, card
-      columns). Retires the remaining placeholder constants. Requires the blueprint-override story from S1 to be real,
-      and must respect the dock's stated dependency direction: **extent is the setting, row count derives from it**.
+      columns). Retires the remaining placeholder constants. Reuses S3's override machinery for `GridOverride`, adds the
+      `editRange` write-side clamp (the first consumer for `GridEditRange`), and must respect the dock's stated
+      dependency direction: **extent is the setting, row count derives from it**.
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
@@ -179,12 +239,7 @@ Worth settling before S1, because each changes the shape rather than the amount 
    `Saver`, and a two-pane mode that silently dropped the "close detail" concept. Nav3 makes a key cheap. Keys would
    live in `feature:settings` (not `core:navigation` — that boundary is deliberate and already documented), with `app`
    mapping them; cross-feature deep-links wait until something needs one.
-2. **How is a per-surface knob keyed?** (S3/S4.) L1 went surface × layout × orientation and paid for it with ~186
-   generated keys. Coarser is cheaper and probably enough.
-3. **Blueprint vs override precedence.** Does a user override replace the blueprint value outright, or clamp into
-   `GridEditRange`? `GridEditRange` and `GridEditorEdge` exist unused in `core:model` and were presumably meant for
-   exactly this.
-4. **Where does wallpaper live?** `data:wallpaper` (recommended) vs staying inside `data:settings` as B7 says. This
+2. **Where does wallpaper live?** `data:wallpaper` (recommended) vs staying inside `data:settings` as B7 says. This
    plan assumes the former; it needs a nod because it edits the rewrite plan's module map.
 
 ---
