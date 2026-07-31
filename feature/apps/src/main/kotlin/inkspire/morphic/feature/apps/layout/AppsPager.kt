@@ -240,7 +240,7 @@ fun AppsPager(
     // it can't know is which folder a merge plan targets. On a coordinate surface that answer compares placements;
     // here it compares **slots**, which is exactly the split its KDoc anticipated. A merge plan's footprint names
     // the hovered cell, so page + (row, col) resolves to the entry under the finger.
-    val folderHost = rememberFolderHostState(coordinator) { zoneId, _ ->
+    val folderHost = rememberFolderHostState<Long>(coordinator) { zoneId, _ ->
         // Reads the target the planner just resolved rather than re-deriving one from the plan's footprint: the
         // footprint names a *cell*, and turning a cell back into an entry is the slot-vs-display mismatch above.
         // The planner runs on the move that produced this plan, so the answer is always the current one.
@@ -432,7 +432,7 @@ fun AppsPager(
                         onReorder = { order ->
                             // Only an inject still in flight adds membership; once committed this is a plain
                             // reorder, because the app is already a member even if the store hasn't said so yet.
-                            val incoming = (folderHost.phase as? FolderPhase.Injecting)?.app
+                            val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
                             if (incoming != null && order.contains(incoming)) {
                                 onAddToFolder(folder.folder.id, order, incoming, folderHost.dragSourceFolderId)
                                 folderHost.injectCommitted()

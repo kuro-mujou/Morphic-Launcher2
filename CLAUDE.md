@@ -314,8 +314,9 @@ done-on-device. **Built for the home since:** the shared **coordinate drag surfa
 `IconLabelCell` + `cellLabelHeight`, with `FolderCell`'s 2×2 tile extracted as `IconPreviewPlate` once the APPS
 category card needed the same tile for its overflow cluster); and the full **folder subsystem** — `FolderOverlay`, `folderInnerSize`
 (a `@Composable` facade over pure sizing arithmetic), `FolderReorder` MovingGap, `FolderDragDelegate`, and
-**`FolderHostState`/`FolderPhase`** (the open/leave/enter lifecycle any folder-hosting surface reuses; 20 unit
-tests). Item gestures are scoped to the icon+label group, not the cell — see the design-system rules above.
+**`FolderHostState`/`FolderPhase`** (the open/leave/enter lifecycle any collection-hosting surface reuses — **generic
+in the collection id**, `Long` for a folder and `String` for an APPS category; 21 unit tests). Item gestures are scoped
+to the icon+label group, not the cell — see the design-system rules above.
 
 **B8 `data:layout` — first cut done.** Geometry engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/
 `FreePush`) plus the command + persistence layer: `LayoutChange` (L1's 19 ops → 13), `LayoutRepository` (slim
@@ -543,9 +544,36 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     slots and the padding stay free. The header is not a fallback for the cluster — a category of ≤ 4 apps has no
     cluster, and without it could never be opened. The cluster tile *is* `IconPreviewPlate`, extracted from
     `FolderCell` when this second consumer arrived so a folder tile and a cluster tile can't drift apart.
-  - Still to come: **dropping an app onto a card** (how a card layout re-files) and the "leave the expansion" half
-    that feeds it — one gesture, and both need the card grid to register a drop zone. Until then `onLeave` is
-    deliberately a no-op: closing the expansion would strand the drag over a surface with nowhere to land.
+  - **Dragging between categories is the folder↔home gesture, on cards** — the same `FolderHostState`, so the rules
+    are that machine's and not this layout's: dwell on a card (~1s) to expand it mid-drag and place the app at a
+    *chosen* slot, dwell outside an expansion to close it with the drag carrying on over the cards, drop straight on a
+    card to append with no dwell, repeatable in any order including re-entry, membership decided only at the drop.
+    Reaching a card past the fold is `DragAutoScrollEffect` (widened to `ScrollableState` so a lazy grid can use it);
+    manual scroll is gated off mid-drag as on every other dragging surface.
+    Three things differ from home, all of them properties of the surface rather than choices:
+    - **A drag starts inside an expansion, never on the card grid.** Home has loose apps to pick up; here every app is
+      filed in exactly one category, so nothing sits *on* the surface — expansion→card *is* the whole gesture, the
+      analogue of home's folder→folder. Preview icons stay tap-only (a folder's preview tile isn't draggable per-icon
+      on home either), which is also what lets the grid stay **lazy**: nothing on it owns a live pointer stream, so a
+      card disposed by auto-scrolling can't kill the drag. Making previews draggable would pin the source card in
+      composition, which a lazy grid cannot honour.
+    - **There is no "empty cell" landing.** Off a card there is nowhere for an app to be, so the planner reports *no
+      plan* and a release there is a cancel — which is why `MERGE` is the only intent this surface ever reports.
+    - **Landing owes the source category nothing.** `Move` unfiles the app from every other category as part of filing
+      it, so one op is the whole re-file, where the pager pairs `RemoveFromFolder` with a `Move`. Dropping back on the
+      category the app came from is a no-op, as on home.
+    Hit-testing is a **per-card bounds map**, not a `GridGeometry`: cards are lazy, square and separated by spacing
+    that belongs to no cell, so there is no lattice to compute from. Entries are added as cards lay out and removed as
+    they scroll away.
+  - **`FolderHostState`/`FolderPhase` became generic in the collection id** (`Long` for a folder, `String` for a
+    category) so this surface could *use* the open/leave/enter machine instead of growing a near-copy of it — the L1
+    `resolveDockDrop` mistake this codebase keeps un-making. Nothing in the lifecycle reads an id beyond comparing it,
+    which is what made the parameter free; a unit test pins that with `String` ids. **Naming is now one commit behind
+    the code**: `Folder*` covers folders *and* categories, and the honest vocabulary is a *collection of apps opened
+    over a surface* — a rename reaching `FolderOverlay`, `FolderDragDelegate`, `folderInnerSize`, `FolderReorder` and
+    every call site is worth one mechanical commit of its own, flagged as a TODO rather than mixed into behaviour.
+  - Still to come: an optimistic layer (a drop waits for the write, so a re-file lands a frame or two late — the
+    `Injected` phase is what stops the app blinking out meanwhile).
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
   helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
@@ -554,11 +582,12 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
 **Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
 exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
 (which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
-above), home **orientation**, or widgets/containers on the grid. On APPS, **all five layouts now render** and the
-remaining work is behaviour: the category card's **drop-onto-a-card** re-file (the next part — the store op, the
-overlay and the "leave" half are all in place), the alphabet filter strip, search, `EjectToHome`, the pager's page
-indicator + optimistic layer, or `data:apps`' `AppEvent` live updates/pruning (B6). Folder follow-ups: rename,
-add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
+above), home **orientation**, or widgets/containers on the grid. On APPS, **all five layouts render and all the
+arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
+`EjectToHome`, an optimistic layer for both the pager and the card (a drop waits for the write) + the pager's page
+indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanical** job is queued and deliberately
+unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
+follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no

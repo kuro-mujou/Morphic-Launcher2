@@ -79,6 +79,9 @@ fun AppsScreen(
                 AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
                     categories = state.categories,
                     onLaunch = viewModel::launch,
+                    // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
+                    // op, because the destination id carries the difference.
+                    onMove = viewModel::moveCategoryItem,
                     onReorder = viewModel::reorderCategory,
                 )
             }

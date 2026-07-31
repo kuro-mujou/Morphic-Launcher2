@@ -242,7 +242,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // arms the same dwell that opens it mid-drag. The outbound half needs nothing here — closing the folder drops its
     // zone, so the drag simply lands on whichever home grid is underneath, and `handleDrop` commits to the zone it
     // reports.
-    val folderHost = rememberFolderHostState(coordinator) { zoneId, plan ->
+    val folderHost = rememberFolderHostState<Long>(coordinator) { zoneId, plan ->
         val zone = homeZoneOf(zoneId) ?: return@rememberFolderHostState null
         folders.firstOrNull { it.zone == zone && it.placement == plan.footprint }?.folder?.id
     }
@@ -488,7 +488,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         onReorder = { order ->
                             // Only an inject *still in flight* adds membership; once committed this is a plain reorder
                             // (the app is already a member, even if the store hasn't said so yet).
-                            val incoming = (folderHost.phase as? FolderPhase.Injecting)?.app
+                            val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
                             if (incoming != null && order.contains(incoming)) {
                                 // The app landed in this folder at its chosen slot. `from` is the folder the drag
                                 // started in, if any — that is the folder-to-folder move, committed as one batch; null
