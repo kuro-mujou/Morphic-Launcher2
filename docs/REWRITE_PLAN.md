@@ -22,7 +22,7 @@ original at `../launcher` — the reference / answer key, never deleted.
 - [ ] **P5 — Gestures** to navigate between home ↔ side surfaces.
 - [ ] **P6 — App list** brought into home + surfaces (connect P2 data to P4 UI).
 - [ ] **P7 — Wire gestures** with apps / surfaces (launch, drag, etc.).
-- [ ] **P8 — Settings** screen.
+- [ ] **P8 — Settings** screen — planned in [SETTINGS_PORT_PLAN.md](SETTINGS_PORT_PLAN.md) (with B7).
 - [ ] **P9 — Become a launcher** — add the `HOME` intent category to the manifest (the final flip).
 
 ## Module → convention plugin (reference)
@@ -110,10 +110,25 @@ Large; port per-component as feature screens need them, not up front. Groups:
   unit-testable without Android (11 tests).
 
 ### B7 — `data:settings` — preferences + presets (depends on model, common)
+**Scoped in detail by [SETTINGS_PORT_PLAN.md](SETTINGS_PORT_PLAN.md)** — read that before starting; it supersedes
+this entry, which is only the summary.
 - `SettingsRepository`(+`internal/SettingsRepositoryImpl`), `LauncherSettings`, `internal/Preferences`,
-  `IconStyleMapper`, `WallpaperRepository`(+`Impl`), preset (`Preset`/`PresetRepository`/`PresetTemplates`), `internal/Blur`.
+  `IconStyleMapper`, preset (`Preset`/`PresetRepository`/`PresetTemplates`).
 - 🔧 `LauncherSettings` is a god-object and `GridConfigKind`/per-surface knobs live here — a lot of this is now
   expressed by `GridBlueprint` in `core:model`; move the static grid facts out and slim the settings blob.
+- 🔧 A third of L1's blob is not settings at all: `drawerOrder`/`drawerPages`/`categories`/`categoryAssignments`
+  are **layout content**, which L2 already keeps in Room (B8's `apps_pager_item` / `category` / `category_item`).
+  Do not port them.
+- **`WallpaperRepository`(+`Impl`) and `internal/Blur` moved out of this module — see B7b.** L1 filed them here
+  because they *borrow* settings to persist path pointers; neither is a preference.
+
+### B7b — `data:wallpaper` — wallpaper source, crop, and system apply (depends on model, common, settings)
+- `WallpaperRepository`(+`Impl`) ⚠️ — a bitmap/file/`WallpaperManager` service: decode + crop + scale from a `Uri`,
+  own JPEGs under `filesDir/wallpaper/`, set the system wallpaper on HOME/LOCK/BOTH, load the backdrop blur and the
+  dominant colour. It reads/writes `WallpaperState` through `data:settings`, which is a dependency, not a home.
+- 🔧 L1's `internal/Blur.kt` (raw `IntArray` box-blur + saturation-weighted dominant colour) is image processing, not
+  wallpaper *or* settings — land it beside the graphics/icon code, not in either repository's module.
+- Blocks the launcher's **wallpaper-brightness** theme input, which `feature:shell` currently hardcodes to dark.
 
 ### B8 — `data:layout` — placement engine + layout persistence (depends on model, database) ⚠️ **highest-logic module** — ✅ first cut done
 

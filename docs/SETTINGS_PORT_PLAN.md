@@ -173,16 +173,39 @@ site disappears. This is the first real consumer for `GridEditRange`, which has 
 **One level of icon config, not two.** L1 stored `iconLayout` at group level (`drawer.iconLayout`) *and* inside every
 `GridDimensions` — two places to set the same thing, and 30 of its ~186 generated keys. One level only.
 
-### Not `data:settings` at all
+### Settings UI: every section is its own destination *(settled)*
+
+**One `NavKey` per settings section**, not one `SettingsRoute` carrying a section enum.
+
+L1 made its 11 sections *panes inside* one destination, and paid for it three times over: back had to be two
+mechanisms stitched together by hand (`if (selected != null) closeDetail() else navigator.goBack()`); section state
+survived rotation through a hand-written `Saver<SettingsSection?, String>` instead of through the back stack that
+already does that; and its two-pane tablet mode silently dropped the "close detail" concept entirely
+(`selected ?: SettingsSection.THEME`). All three are symptoms of one cause — the thing the user navigated to was not
+a navigation destination.
+
+Nav3 makes a key cheap, so the back stack does all of it for free. Consequences worth stating:
+
+- **The keys live in `feature:settings`, not `core:navigation`.** That boundary is already deliberate and documented
+  — L1's navigation module exported an 11-value `SettingsSection` to every consumer, which is how `feature:home`
+  ended up importing `SettingsSection.WALLPAPER`. `app` maps the keys, as it already does for the dev harness.
+- **Cross-feature deep links wait for a caller.** L1 had exactly one real one (home long-press → wallpaper). When it
+  comes back it needs a way to name a destination across a feature boundary without re-creating the dumping ground;
+  that is a decision for the commit that needs it, not now.
+- **An adaptive two-pane layout stays possible.** It becomes a scene/list-detail strategy over the same keys rather
+  than a second, parallel notion of "where am I".
+
+### Not `data:settings` at all *(settled)*
 
 - **`WallpaperRepository` (+Impl, ~380 LOC)** — a bitmap/file/`WallpaperManager` service that merely *borrows*
-  settings to persist path pointers. Belongs in its own `data:wallpaper`.
+  settings to persist path pointers. Gets its own **`data:wallpaper`**, depending on `data:settings` rather than
+  living in it.
 - **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-colour extraction. Pure image processing;
-  belongs beside the icon/graphics code.
+  belongs beside the graphics/icon code, in neither repository's module.
 
-Both are listed under B7 in [REWRITE_PLAN.md](REWRITE_PLAN.md) — **that listing is wrong and this plan supersedes
-it.** Wallpaper is also what the shell's `darkTheme` placeholder is waiting on, so it is a real dependency, not a
-tidy-up.
+[REWRITE_PLAN.md](REWRITE_PLAN.md) listed both under B7; it has been corrected — wallpaper is now **B7b**. This is a
+real dependency rather than tidying: wallpaper is what the shell's hardcoded `darkTheme = true` is waiting on, since
+launcher chrome takes its dark/light signal from wallpaper brightness.
 
 ---
 
@@ -229,18 +252,25 @@ every phase ends with something visibly working on device, and no slice is writt
 
 ---
 
-## Open decisions
+## Decisions on record
 
-Worth settling before S1, because each changes the shape rather than the amount of work.
+Nothing is open. Each is argued where it applies rather than restated here; this is the index.
 
-1. **Are settings sections navigation destinations?** *Recommendation: yes, one `NavKey` per section.* L1's sections
-   were *not* back-stack entries, which cost it two incompatible back mechanisms stitched together by hand
-   (`if (selected != null) closeDetail() else navigator.goBack()`), section state preserved through a hand-written
-   `Saver`, and a two-pane mode that silently dropped the "close detail" concept. Nav3 makes a key cheap. Keys would
-   live in `feature:settings` (not `core:navigation` — that boundary is deliberate and already documented), with `app`
-   mapping them; cross-feature deep-links wait until something needs one.
-2. **Where does wallpaper live?** `data:wallpaper` (recommended) vs staying inside `data:settings` as B7 says. This
-   plan assumes the former; it needs a nod because it edits the rewrite plan's module map.
+| decision | settled as | argued in |
+|---|---|---|
+| Storage mechanism | one `@Serializable` blob per slice; Proto DataStore rejected | *Storage* |
+| Read/write surface | per-slice flows, no god flow | *Repository* |
+| Where defaults live | `GridBlueprint` only; settings stores overrides | *Defaults in exactly one place* |
+| Per-surface knob key | `GridSlot` (on the blueprint) × `DeviceConfiguration`, sparse per field | *Grid + icon config* |
+| Override precedence | clamped into `editRange` **on write** | *Grid + icon config* |
+| Settings sections | one `NavKey` each, declared in `feature:settings` | *Settings UI* |
+| Wallpaper + blur | out of `data:settings` → `data:wallpaper` (B7b) | *Not `data:settings` at all* |
+
+The last one edited [REWRITE_PLAN.md](REWRITE_PLAN.md)'s build map; the rest are local to this plan.
+
+**Still genuinely undecided, but not blocking** — deferred because no caller needs them yet, not because they are
+hard: how a cross-feature deep link names a settings section (L1's one case was home long-press → wallpaper), and
+whether the tablet two-pane layout returns as a scene strategy over the section keys.
 
 ---
 
