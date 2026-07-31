@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -54,6 +55,16 @@ import kotlin.math.roundToInt
 
 /** This surface's drop zone — the pager viewport, as on the other paged surfaces. */
 private val CategoryZoneId = ZoneId("apps-category-pager")
+
+/**
+ * Provisional cell height — **a placeholder, not a design choice**, for the reason the other layouts' are: a surface
+ * metric bound for the settings layer, and a flat constant says so where derived arithmetic would look like a decision.
+ *
+ * Lives here rather than beside [CategoryPage] because it has two readers: a page lays its grid out with it, and the
+ * surface sizes the floating drag proxy from it. The proxy deliberately does *not* ask a page how tall its cells came
+ * out — see the proxy's comment below.
+ */
+internal val CategoryCellHeight = 96.dp
 
 /** Denser than home's, matching the other APPS grids — the same starting point, replaced by the icon-size setting. */
 private val CategoryIconMetrics = IconMetrics(iconPercent = 0.75f)
@@ -126,6 +137,12 @@ fun AppsCategoryPager(
     // One geometry per page rather than one for the surface, because each page's grid scrolls independently — see
     // the class KDoc. Only the current page's is ever read, but every page reports, since `keepAllPagesPlaced` keeps
     // them all laid out during a drag.
+    //
+    // A page republishes this on **every scroll frame** (the origin moves — that is the whole point of publishing from
+    // the grid rather than the viewport), so nothing may read it during composition: one composition-time read turns a
+    // scroll into a recomposition per frame of this entire surface. The only reader is the planner, which runs inside a
+    // pointer callback. That is a constraint on the *readers*, not on the map — snapshot writes invalidate nobody when
+    // nobody is subscribed — which is why the proxy below is sized from `viewport` instead.
     val geometries = remember { mutableStateMapOf<Int, GridGeometry>() }
     var viewport by remember { mutableStateOf<Rect?>(null) }
 
@@ -141,9 +158,22 @@ fun AppsCategoryPager(
             val geo = geometries[page] ?: return@DropPlanner null
             val stored = liveCategories.value.getOrNull(page)?.apps.orEmpty().map { GridItem.App(it.componentKey) }
             val others = stored.filterNot { it == item }
-            // Off a cell (the slack below a short page) holds the gap where it is rather than snapping it: the
-            // finger is between targets, and moving the preview there would strobe.
-            val cell = geo.cellAt(fingerInRoot) ?: return@DropPlanner CategoryReorderPlan
+            val cell = geo.cellAt(fingerInRoot)
+            if (cell == null) {
+                // **Below the last row means append, not "no answer".** A page's grid is SCROLL_GRID, so it is only
+                // as tall as its content — a category of three apps in a four-column grid is *one row*, and every
+                // point below that row is off the grid even though it is still squarely inside the page. Treating
+                // that as unanswerable left most of the screen dead for any short category: no gap, no drop shadow,
+                // and a release there silently discarded, because `handleDrop` needs a `gapPage` the planner never
+                // set while still reporting the drop as droppable.
+                if (fingerInRoot.y >= geo.originInRoot.y + geo.rows * geo.cellH) {
+                    gap = others.size
+                    gapPage = page
+                }
+                // Anywhere else off the grid (the header strip above it) holds the gap where it is rather than
+                // snapping: the finger is between targets, and moving the preview there would strobe.
+                return@DropPlanner CategoryReorderPlan
+            }
             val slot = cell.row * cols + cell.col
             gap = if (page != gapPage) {
                 // Arriving on a page seeds the gap at the slot under the finger; `movingGap` refines it from there.
@@ -222,17 +252,26 @@ fun AppsCategoryPager(
                 }
             }
 
-            // The floating proxy, at one cell's size. The lifted cell is drawn invisible by `LauncherDragCell`, so
-            // this is the only thing the user sees moving.
-            val geo = geometries[gapPage] ?: geometries[pagerState.currentPage]
-            if (session != null && geo != null && draggedApp != null) {
+            // The floating proxy — the only thing the user sees moving, since `LauncherDragCell` draws the lifted cell
+            // invisible.
+            //
+            // **Sized from this surface's own measurements, never from a page's published geometry.** A cell is
+            // `viewport.width / cols` wide (a page's grid fills the viewport, and nothing here adds horizontal
+            // padding) and [CategoryCellHeight] tall, both of which this composable already knows. Reading the
+            // geometry map here instead — as this did — makes the proxy depend on a page having reported *up* through
+            // `onGeometry` before it can draw anything, so a drag whose first frame beats that report renders nothing
+            // at all. `viewport` comes from the pager's own `onGloballyPositioned`, a direct child, which is the same
+            // place `AppsPager` gets its geometry and is why that surface never had the problem.
+            val cellW = viewport?.let { it.width / cols }
+            if (session != null && cellW != null && draggedApp != null) {
+                val cellH = with(density) { CategoryCellHeight.toPx() }
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
-                        (finger.x - geo.cellW / 2f).roundToInt(),
-                        (finger.y - geo.cellH / 2f).roundToInt(),
+                        (finger.x - cellW / 2f).roundToInt(),
+                        (finger.y - cellH / 2f).roundToInt(),
                     ),
-                    size = DpSize(with(density) { geo.cellW.toDp() }, with(density) { geo.cellH.toDp() }),
+                    size = DpSize(with(density) { cellW.toDp() }, CategoryCellHeight),
                 ) {
                     AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
                 }

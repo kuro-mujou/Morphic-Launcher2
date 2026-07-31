@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
 import inkspire.morphic.core.designsystem.grid.flowItems
+import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
@@ -42,14 +44,14 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.feature.apps.AppsCategory
 
 /**
- * Provisional cell height and header spacing — **placeholders, not design choices**, for the reason the other
- * layouts' are: these are surface metrics bound for the settings layer, and a flat constant says so where derived
- * arithmetic would look like a decision.
+ * Provisional header spacing — **a placeholder, not a design choice**, for the reason the other layouts' metrics are:
+ * a surface metric bound for the settings layer, and a flat constant says so where derived arithmetic would look like
+ * a decision.
  *
- * They live beside [CategoryPage] rather than with [AppsCategoryPager] because a page is the only thing that reads
- * them; the surface-wide metrics (icon proportion, column count) stay with the surface that provides them.
+ * It lives here rather than with [AppsCategoryPager] because a page is the only thing that reads it. The cell *height*
+ * used to sit here too and no longer can: the surface needs it as well, to size the floating drag proxy without
+ * waiting on a page to report its geometry — so it is [CategoryCellHeight], next door.
  */
-private val CellHeight = 96.dp
 private val HeaderPadding = 16.dp
 
 /**
@@ -57,14 +59,17 @@ private val HeaderPadding = 16.dp
  *
  * Split from [AppsCategoryPager] because it is a leaf — everything it needs arrives as a parameter, and it reads
  * none of the surface's drag state directly. That is also what makes its two odd wirings legible in isolation: the
- * geometry it publishes is the *grid's* (so it travels with the scroll), and the scroll it owns is switched off
- * while a drag is in flight.
+ * scroll it owns is switched off while a drag is in flight, and the geometry it publishes is reconstructed from the
+ * scroll offset rather than measured off the grid (see the derivation in the body — the measured version goes stale
+ * mid-scroll, and silently).
  *
  * @param dragged the app being carried, **only when this page is the one holding the gap** — otherwise null, so a
  *   page the finger has left keeps drawing its stored order.
  * @param fingerInRoot the dragged finger, again only when the drag is this page's business; null keeps the page
- *   still, since a page nobody is dragging over must not auto-scroll itself.
- * @param onGeometry reports this page's grid bounds every time they move, which during a scroll is every frame.
+ *   still, since a page nobody is dragging over must not auto-scroll itself — and it is what tells this page whether
+ *   a re-plan is its business.
+ * @param onGeometry reports where this page's cells currently are, republished on every scroll frame because the
+ *   content moves under the finger while the finger itself may not move at all.
  */
 @Composable
 internal fun CategoryPage(
@@ -80,8 +85,12 @@ internal fun CategoryPage(
     onGeometry: (GridGeometry) -> Unit,
 ) {
     val colors = LocalMorphicColors.current
-    val cellHeightPx = with(LocalDensity.current) { CellHeight.toPx() }
-    val display = displayOrder(category.apps, dragged, gap)
+    val cellHeightPx = with(LocalDensity.current) { CategoryCellHeight.toPx() }
+    // The shared MovingGap render, told to compare apps by component: `AppInfo` carries a label and an icon, and the
+    // question is only *which app is this*. No truncation, unlike the APPS pager's — a category has no capacity, so
+    // nothing can overflow it, and the dragged app may legitimately appear on two pages at once (its source page keeps
+    // the cell that owns the pointer stream; both copies draw invisible).
+    val display = movingGapDisplayOrder(category.apps, dragged, gap) { it.componentKey }
     val rows = ((display.size + cols - 1) / cols).coerceAtLeast(1)
 
     val scrollState = rememberScrollState()
@@ -90,6 +99,50 @@ internal fun CategoryPage(
     // a long category could only be rearranged as far as one screenful. Programmatic scrolling still works with the
     // gesture disabled — `enabled` gates pointer input, not the state.
     DragAutoScrollEffect(scrollState = scrollState, bounds = scrollViewport, fingerInRoot = fingerInRoot)
+
+    // **Geometry comes from the scroll viewport and the scroll offset — never from the grid's own
+    // `onGloballyPositioned`.** Scrolling moves the grid's global position through its *parent's* placement without
+    // re-running the grid's own layout, so that callback does not reliably re-fire and the origin it published goes
+    // stale. The failure is quiet and very recognisable: with a stale origin at offset `S0` and a real offset `S`, a
+    // finger at `y` resolves to a cell that draws at `y - (S - S0)` — so the drop footprint sits a *fixed* distance
+    // from the finger, tracks it row for row while dragging, and snaps into place the moment the content returns
+    // to `S0`.
+    //
+    // The viewport is the honest anchor: `onGloballyPositioned` sits *outside* `verticalScroll` in the chain below, so
+    // `scrollViewport` is the window rather than the content and its position genuinely doesn't move. Subtracting
+    // `scrollState.value` reconstructs the content origin exactly, and because that is snapshot state this composable
+    // recomposes — and so republishes — on every scroll frame.
+    val geometry = scrollViewport?.let { viewport ->
+        GridGeometry(
+            originInRoot = Offset(viewport.left, viewport.top - scrollState.value),
+            cellW = viewport.width / cols,
+            cellH = cellHeightPx,
+            cols = cols,
+            rows = rows,
+        )
+    }
+
+    // Publish it, then **re-plan against what was just published**, as one ordered step.
+    //
+    // The re-plan is the other half of the auto-scroll fix: the coordinator resolves a plan in `moveTo`, i.e. only
+    // when the *finger* moves, while auto-scroll slides rows past a finger held deliberately still at the edge. A
+    // corrected geometry that nothing re-reads changes nothing, so the same position is re-sent to recompute the plan.
+    //
+    // Both live in one `SideEffect` because the order matters and a separate `snapshotFlow` on the scroll offset gets
+    // it wrong: that emits on the snapshot commit, *before* the recomposition that derives the new geometry, so the
+    // re-plan would run against the previous frame's origin and stay one scroll step behind. Here the write precedes
+    // the read by construction. A `SideEffect` also keeps the publish out of composition, where a state write belongs
+    // least.
+    //
+    // This settles rather than looping: `moveTo` only rewrites `session` when the resolved zone or plan actually
+    // differs (an equal `copy` is not a snapshot change), and the gap it may move cannot feed back into the geometry —
+    // `movingGapDisplayOrder` permutes the list without resizing it, so `rows` is the same whatever the gap is.
+    // `moveTo` is a no-op when no drag is in flight, and `fingerInRoot` is null unless this page is the one being
+    // dragged over, so an idle page does nothing at all.
+    SideEffect {
+        geometry?.let(onGeometry)
+        fingerInRoot?.let(coordinator::moveTo)
+    }
 
     Column(Modifier.fillMaxSize()) {
         Text(
@@ -115,23 +168,10 @@ internal fun CategoryPage(
                 // `rows` is unused in scroll mode (height comes from cellHeight × content) but GridConfig requires a
                 // positive value, so it is set to what the content actually reaches rather than to a lie.
                 config = GridConfig(rows = rows, cols = cols),
-                cellHeight = CellHeight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Published from the *grid*, so it travels with the scroll: cell hit-testing has to name the
-                    // cells actually drawn under the finger, not the ones that were there before scrolling.
-                    .onGloballyPositioned {
-                        val bounds = it.boundsInRoot()
-                        onGeometry(
-                            GridGeometry(
-                                originInRoot = Offset(bounds.left, bounds.top),
-                                cellW = bounds.width / cols,
-                                cellH = cellHeightPx,
-                                cols = cols,
-                                rows = rows,
-                            ),
-                        )
-                    },
+                cellHeight = CategoryCellHeight,
+                // No geometry published from here — see the derivation above for why the grid's own position is not a
+                // trustworthy source once it is inside a scroller.
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 dropFootprintCell(dragged != null, gap, cols)
                 flowItems(items = display, itemKey = { it.componentKey.flatten() }) { app, cellModifier ->
@@ -149,29 +189,6 @@ internal fun CategoryPage(
             }
         }
     }
-}
-
-/**
- * What one page draws while a drag is over it: its apps with the dragged one lifted to the gap.
- *
- * **The dragged cell stays composed on its source page even once the finger has carried it to another**, so this
- * can return the same app on two pages at once. Not a glitch to tidy: the cell on the source page owns the
- * gesture's pointer stream, and disposing it mid-drag kills the drag. Both copies are drawn invisible, so the user
- * sees only the floating proxy — the far one exists to occupy the gap so the other icons flow around it.
- *
- * Apps are compared by [inkspire.morphic.core.model.ComponentKey] rather than by value: [AppInfo] carries a label
- * and an icon, and the question here is only *which app is this*.
- *
- * No truncation, unlike the APPS pager's equivalent: a category has no capacity, so nothing can overflow it.
- *
- * `internal` rather than file-private so it is reachable from a unit test, as the store-side arithmetic in
- * `data:layout` is.
- */
-internal fun displayOrder(apps: List<AppInfo>, dragged: AppInfo?, gap: Int): List<AppInfo> {
-    if (dragged == null) return apps
-    val others = apps.filterNot { it.componentKey == dragged.componentKey }
-    val at = gap.coerceIn(0, others.size)
-    return others.take(at) + dragged + others.drop(at)
 }
 
 /**
