@@ -6,8 +6,11 @@ import inkspire.morphic.core.database.di.databaseModule
 import inkspire.morphic.core.icon.di.iconModule
 import inkspire.morphic.data.apps.di.appsModule
 import inkspire.morphic.data.layout.di.layoutModule
+import inkspire.morphic.data.settings.di.settingsModule
 import inkspire.morphic.feature.apps.di.appsSurfaceModule
 import inkspire.morphic.feature.home.di.homeModule
+import inkspire.morphic.feature.settings.di.settingsSurfaceModule
+import inkspire.morphic.feature.shell.di.shellModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -29,8 +32,11 @@ class LauncherApplication : Application() {
                 appsModule,
                 iconModule,
                 layoutModule,
+                settingsModule,
                 homeModule,
                 appsSurfaceModule,
+                settingsSurfaceModule,
+                shellModule,
             )
         }
     }

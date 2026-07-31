@@ -40,7 +40,10 @@ private val RowPadding = 16.dp
  * palette; see the design-system notes. This is also the fix for L1 wrapping one `LauncherTheme` around its entire
  * `NavDisplay`, which left settings and the launcher unable to disagree.
  *
- * **What is deliberately absent.** No sections, no groups, no taxonomy. L1 has 11 `SettingsSection` values, a
+ * **Sections are real destinations, listed here.** One section exists so far (the surface register); the rest arrive
+ * one at a time. Each is its own `NavKey` rather than a pane inside this screen — see `SettingsDestinations`.
+ *
+ * **What is still absent.** L1 has 11 `SettingsSection` values, a
  * list↔detail two-pane host, and four more full-screen destinations (icon studio, wallpaper capture/crop, design
  * gallery) — inventing that structure before any of it is ported would be deciding the shape from the outside. Two
  * things about L1's version are worth knowing *before* porting, since they are what to do differently:
@@ -51,15 +54,16 @@ private val RowPadding = 16.dp
  * - Its two largest section screens are 705 and 559 lines of one flat `Column`. Port by group, not by file.
  *
  * @param onBack leaves the surface. Wired to the navigator by the host, and to system back here so the two agree.
- * @param extraEntries additional rows to show, as label → action. The seam the dev harness arrives through: `app`
- *   owns that destination (it is not a product screen), so it passes the row rather than this module importing a key
- *   it has no business knowing. Empty in any build that has no such screens.
+ * @param sections the section rows, as label → action. Supplied by the host because `app` owns the key → screen
+ *   mapping; this screen only needs to know what to call each one. It is also the seam the dev harness arrives
+ *   through — `app` owns that destination (it is not a product screen), so it passes the row rather than this module
+ *   importing a key it has no business knowing.
  */
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    extraEntries: List<Pair<String, () -> Unit>> = emptyList(),
+    sections: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     BackHandler(onBack = onBack)
 
@@ -81,13 +85,13 @@ fun SettingsScreen(
                 color = colors.content,
             )
             Text(
-                text = "Nothing here yet — the L1 settings port lands one group at a time.",
+                text = "The L1 settings port lands one group at a time.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.contentMuted,
                 modifier = Modifier.padding(top = RowPadding / 2),
             )
 
-            extraEntries.forEach { (label, onClick) ->
+            sections.forEach { (label, onClick) ->
                 // A plain `clickable`, unlike every launcher-surface item: the shared `launcherItemGestures`
                 // contract exists so long-press timing and slop can't drift *between launcher surfaces*, and its
                 // "touch target is its visible extent" rule is about grid cells. Settings is ordinary app chrome

@@ -13,6 +13,9 @@ dependencies {
     implementation(projects.feature.home)
     implementation(projects.feature.apps)
 
+    // The surface register: which surface is bound to which HOME edge, and in which layout.
+    implementation(projects.data.settings)
+
     // `BackHandler`, so back closes an open side surface instead of leaving the launcher.
     implementation(libs.androidx.activity.compose)
 }

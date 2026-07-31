@@ -24,6 +24,8 @@ import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.SettingsRoute
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.settings.SettingsScreen
+import inkspire.morphic.feature.settings.SurfaceRegisterRoute
+import inkspire.morphic.feature.settings.register.SurfaceRegisterScreen
 import inkspire.morphic.feature.shell.LauncherShell
 import inkspire.morphic.launcher.dev.DevRootScreen
 import kotlinx.serialization.Serializable
@@ -71,8 +73,8 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
             onBack = { navigator.goBack() },
             entryProvider = entryProvider {
                 entry<HomeRoute> {
-                    // The launcher. `sideSurfaces` is left empty until `data:settings` (B7) owns per-edge bindings —
-                    // see `LauncherShell`.
+                    // The launcher. Which edges are swipeable now comes from the surface register in
+                    // `data:settings`; nothing is bound until the user binds one — see `LauncherShell`.
                     Box(Modifier.fillMaxSize()) {
                         LauncherShell()
                         // TODO(P7 gestures): a home long-press → options menu is the real way into settings, and the
@@ -85,12 +87,16 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<SettingsRoute> {
                     SettingsScreen(
                         onBack = { navigator.goBack() },
-                        // The dev harness is reachable from settings rather than from the launcher, so the launcher
-                        // carries no dev chrome of its own. Passed as a row instead of imported by `feature:settings`,
-                        // which therefore never learns that a dev destination exists.
-                        extraEntries = listOf("Dev harness →" to { navigator.goTo(DevHarnessRoute) }),
+                        // Section rows. `feature:settings` declares its own section keys but does not map them,
+                        // so the label→action pairing lives here with the rest of the graph. The dev harness rides the
+                        // same seam, which is what keeps `feature:settings` from ever learning it exists.
+                        sections = listOf(
+                            "Surface register →" to { navigator.goTo(SurfaceRegisterRoute) },
+                            "Dev harness →" to { navigator.goTo(DevHarnessRoute) },
+                        ),
                     )
                 }
+                entry<SurfaceRegisterRoute> { SurfaceRegisterScreen(onBack = { navigator.goBack() }) }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },
         )
