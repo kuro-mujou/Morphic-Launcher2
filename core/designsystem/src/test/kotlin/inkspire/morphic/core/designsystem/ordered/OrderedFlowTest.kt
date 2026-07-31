@@ -89,6 +89,32 @@ class OrderedFlowTest {
         assertEquals(order, movingGapDisplayOrder(order, dragged = "c", gap = gap))
     }
 
+    // ── Display order with a key selector: for surfaces whose items are resolved, not identities ──
+
+    /** An item whose identity is [id] but whose equality would also weigh [label] — an `AppInfo` in miniature. */
+    private data class Resolved(val id: String, val label: String)
+
+    @Test
+    fun `items are matched by key, so a different-but-equal-keyed instance is still the dragged one`() {
+        val resolved = listOf(Resolved("a", "A"), Resolved("b", "B"), Resolved("c", "C"))
+        // The same item as far as the surface is concerned, but not `equals` — exactly what happens when a label or a
+        // baked icon is refreshed underneath a drag. Without the selector this instance would not be found in the
+        // list, so it would be *appended* and the surface would briefly draw the app twice.
+        val dragged = Resolved("c", "C (renamed)")
+
+        val display = movingGapDisplayOrder(resolved, dragged, gap = 0) { it.id }
+
+        assertEquals(listOf(dragged, Resolved("a", "A"), Resolved("b", "B")), display)
+    }
+
+    @Test
+    fun `the default key is plain equality, so identity lists are unaffected`() {
+        assertEquals(
+            movingGapDisplayOrder(order, dragged = "c", gap = 1),
+            movingGapDisplayOrder(order, dragged = "c", gap = 1) { it },
+        )
+    }
+
     // ── Partitions ──
 
     @Test

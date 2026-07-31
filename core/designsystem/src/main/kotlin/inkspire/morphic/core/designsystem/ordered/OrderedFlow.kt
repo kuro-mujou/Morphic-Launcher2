@@ -87,10 +87,20 @@ fun <T> movingGap(
  * One function serves both the live preview (the dragged cell drawn invisible in its slot, everything else
  * animating around it) and the committed order on drop — so what the user saw and what gets written cannot
  * disagree. With no drag ([dragged] null) it is just [order].
+ *
+ * @param key how to tell one item from another, defaulting to the item itself (i.e. `equals`, which is what the
+ *   identity lists this was built for want). A surface that renders **resolved** items needs to override it: the
+ *   APPS pager's `AppsItem` and the category pager's `AppInfo` both carry a label and an icon, so structural
+ *   equality would answer "is this the same *content*" where the only question here is "is this the same *item*".
+ *   Both surfaces had grown a private copy of this function for exactly that reason before the parameter existed —
+ *   which is the near-duplicate smell this file's own KDoc warns about, so the selector is the fix rather than a
+ *   third copy. [movingGap] needs no equivalent: it is handed identity lists (`GridItem`, `ComponentKey`) by every
+ *   caller, because a *plan* is computed over what the drag carries, not over what is drawn.
  */
-fun <T> movingGapDisplayOrder(order: List<T>, dragged: T?, gap: Int): List<T> {
+fun <T> movingGapDisplayOrder(order: List<T>, dragged: T?, gap: Int, key: (T) -> Any? = { it }): List<T> {
     if (dragged == null) return order
-    val others = order.filter { it != dragged }
+    val draggedKey = key(dragged)
+    val others = order.filter { key(it) != draggedKey }
     val at = gap.coerceIn(0, others.size)
     return others.take(at) + dragged + others.drop(at)
 }
