@@ -1,14 +1,12 @@
 package inkspire.morphic.feature.apps
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
-import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
@@ -28,8 +26,9 @@ import org.koin.androidx.compose.koinViewModel
  * already collapsed that (`Surface.APPS` + [AppsLayout], "the layout alone decides the look"); this is the code
  * catching up. A new layout is a new file under `layout/` and a new arm below, with nothing else to touch.
  *
- * Everything above the `when` is shared by construction — the ViewModel, the ordering, the theme, the background
- * — so no layout can quietly disagree with another about what the app list *is*.
+ * Everything above the `when` is shared by construction — the ViewModel, the ordering, the background — so no layout
+ * can quietly disagree with another about what the app list *is*. The **theme** is shared from further out still:
+ * `feature:shell` themes the whole launcher zone, so this surface cannot disagree with home either.
  *
  * @param layout which arrangement to render. A parameter with a default rather than a read of user preference,
  *   because nothing owns that preference yet: it belongs to `data:settings` (B7), per-binding, since the same
@@ -43,48 +42,47 @@ fun AppsScreen(
     val viewModel = koinViewModel<AppsViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Themed here for the same reason home is: there is no launcher shell yet to own the boundary. When the shell
-    // lands it themes the whole launcher zone once and this wrapper goes, along with home's.
-    LauncherTheme(darkTheme = isSystemInDarkTheme()) {
-        val colors = LocalMorphicColors.current
-        Box(modifier.fillMaxSize().background(colors.background)) {
-            when (layout) {
-                AppsLayout.VERTICAL_LIST -> AppsVerticalList(
-                    apps = state.apps,
-                    onLaunch = viewModel::launch,
-                )
-                AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
-                    apps = state.apps,
-                    onLaunch = viewModel::launch,
-                )
-                AppsLayout.PAGER -> AppsPager(
-                    pages = state.pagerPages,
-                    onLaunch = viewModel::launch,
-                    onMove = viewModel::movePagerItem,
-                    onMerge = viewModel::mergePagerItem,
-                    onReorderFolder = viewModel::reorderFolder,
-                    onAddToFolder = viewModel::addToFolder,
-                    onDropExtracted = viewModel::dropExtractedApp,
-                    onMergeExtracted = viewModel::mergeExtractedApp,
-                    onGridResolved = viewModel::setPagerGrid,
-                )
-                AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
-                    categories = state.categories,
-                    onLaunch = viewModel::launch,
-                    onMove = viewModel::moveCategoryItem,
-                )
-                // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
-                // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
-                // is rendered.
-                AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
-                    categories = state.categories,
-                    onLaunch = viewModel::launch,
-                    // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
-                    // op, because the destination id carries the difference.
-                    onMove = viewModel::moveCategoryItem,
-                    onReorder = viewModel::reorderCategory,
-                )
-            }
+    // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, as home's
+    // comment here used to promise would happen. Settings keeps its own boundary, so the two can disagree about
+    // dark/light — the launcher follows wallpaper brightness, settings follows the system.
+    val colors = LocalMorphicColors.current
+    Box(modifier.fillMaxSize().background(colors.background)) {
+        when (layout) {
+            AppsLayout.VERTICAL_LIST -> AppsVerticalList(
+                apps = state.apps,
+                onLaunch = viewModel::launch,
+            )
+            AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
+                apps = state.apps,
+                onLaunch = viewModel::launch,
+            )
+            AppsLayout.PAGER -> AppsPager(
+                pages = state.pagerPages,
+                onLaunch = viewModel::launch,
+                onMove = viewModel::movePagerItem,
+                onMerge = viewModel::mergePagerItem,
+                onReorderFolder = viewModel::reorderFolder,
+                onAddToFolder = viewModel::addToFolder,
+                onDropExtracted = viewModel::dropExtractedApp,
+                onMergeExtracted = viewModel::mergeExtractedApp,
+                onGridResolved = viewModel::setPagerGrid,
+            )
+            AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
+                categories = state.categories,
+                onLaunch = viewModel::launch,
+                onMove = viewModel::moveCategoryItem,
+            )
+            // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
+            // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
+            // is rendered.
+            AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
+                categories = state.categories,
+                onLaunch = viewModel::launch,
+                // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
+                // op, because the destination id carries the difference.
+                onMove = viewModel::moveCategoryItem,
+                onReorder = viewModel::reorderCategory,
+            )
         }
     }
 }

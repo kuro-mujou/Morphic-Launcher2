@@ -1,11 +1,9 @@
 package inkspire.morphic.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,7 +46,6 @@ import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
-import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
@@ -324,193 +321,194 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    LauncherTheme(darkTheme = isSystemInDarkTheme()) {
-        val colors = LocalMorphicColors.current
-        Box(modifier.fillMaxSize().background(colors.background)) {
-            // Dock at a fixed [DockHeight], pager taking whatever is left. **No decorative padding on either** —
-            // home's insets are a settings concern (L1 had a configurable horizontal padding), so adding any here
-            // would only be a number to unpick later; the grids run edge to edge until that setting exists.
-            //
-            // The one inset that *is* applied is the bottom system bar, on the whole column, so the dock sits above
-            // the navigation bar rather than under it. That is a system constraint, not styling.
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(
-                        WindowInsets.systemBars.union(WindowInsets.displayCutout),
-                    ),
-            ) {
-                CoordinateDragPager(
-                    items = mainItems,
-                    config = config,
-                    pagerState = pagerState,
-                    coordinator = coordinator,
-                    zoneId = MainZoneId,
-                    gestureConfig = gestureConfig,
-                    dragItem = { it.gridItem },
-                    placement = { it.placement },
-                    onDrop = { handleDrop() },
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    onGeometryChange = { geometry = it },
-                    onOpen = openItem,
-                ) { item, cellModifier, itemGestures ->
-                    HomeItemCell(item, session, cellModifier, itemGestures)
-                }
-
-                // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and
-                // the pager is one gesture with no hand-off. Its height is the fixed [DockHeight] placeholder; the
-                // row count it divides that height into still comes from `DockGrid`'s blueprint default, and both
-                // become settings-driven together.
-                CoordinateDragGrid(
-                    items = dockItems,
-                    config = dockConfig,
-                    coordinator = coordinator,
-                    zoneId = DockZoneId,
-                    gestureConfig = gestureConfig,
-                    dragItem = { it.gridItem },
-                    placement = { it.placement },
-                    onDrop = { handleDrop() },
-                    modifier = Modifier.fillMaxWidth().height(DockHeight),
-                    onGeometryChange = { dockGeometry = it },
-                    onOpen = openItem,
-                ) { item, cellModifier, itemGestures ->
-                    HomeItemCell(item, session, cellModifier, itemGestures)
-                }
+    // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, which is
+    // also the only layer that knows the launcher's real dark/light input (wallpaper brightness, not the system
+    // setting). A screen that themed itself could not be told to disagree with the shell.
+    val colors = LocalMorphicColors.current
+    Box(modifier.fillMaxSize().background(colors.background)) {
+        // Dock at a fixed [DockHeight], pager taking whatever is left. **No decorative padding on either** —
+        // home's insets are a settings concern (L1 had a configurable horizontal padding), so adding any here
+        // would only be a number to unpick later; the grids run edge to edge until that setting exists.
+        //
+        // The one inset that *is* applied is the bottom system bar, on the whole column, so the dock sits above
+        // the navigation bar rather than under it. That is a system constraint, not styling.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.union(WindowInsets.displayCutout),
+                ),
+        ) {
+            CoordinateDragPager(
+                items = mainItems,
+                config = config,
+                pagerState = pagerState,
+                coordinator = coordinator,
+                zoneId = MainZoneId,
+                gestureConfig = gestureConfig,
+                dragItem = { it.gridItem },
+                placement = { it.placement },
+                onDrop = { handleDrop() },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                onGeometryChange = { geometry = it },
+                onOpen = openItem,
+            ) { item, cellModifier, itemGestures ->
+                HomeItemCell(item, session, cellModifier, itemGestures)
             }
 
-            // Drag overlay (root space): the drop shadow in the grid + the floating proxy on the finger. The two
-            // are gated separately, because they answer different questions — "is there a cell of *this* grid to
-            // shadow?" and "whose job is it to draw the icon under the finger?".
-            val geo = geometry
-            if (session != null && geo != null) {
-                // The proxy spans `cellSpan` logical cells per axis (one visual cell) of the *pager's* grid, and
-                // deliberately keeps that size across the whole drag: the icon under the finger must not resize as
-                // the drag crosses into the dock, whose cells are a different height.
-                val footprintW = geo.cellW * cellSpan
-                val footprintH = geo.cellH * cellSpan
-                // The shadow, unlike the proxy, belongs to the zone being hovered, so it is drawn from *that*
-                // zone's geometry and cell span — the two grids have different origins and cell sizes, and a
-                // footprint is only meaningful in the grid that produced it.
-                //
-                // Anything that isn't one of home's grids paints nothing. On the shared coordinator the open
-                // folder previews a reorder by reflowing its own cells and returns a token plan whose footprint is
-                // meaningless, which would otherwise paint a shadow at cell (0,0) behind the folder (invisible
-                // today only because that backdrop is opaque black — it won't be once the frosted backdrop lands).
-                // Extract is unaffected: its active zone really is a home grid, which is exactly when the landing
-                // cell should show.
-                val shadow = when (session.activeZone) {
-                    MainZoneId -> geo to cellSpan
-                    DockZoneId -> dockGeometry?.let { it to dockCellSpan }
-                    else -> null
+            // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and
+            // the pager is one gesture with no hand-off. Its height is the fixed [DockHeight] placeholder; the
+            // row count it divides that height into still comes from `DockGrid`'s blueprint default, and both
+            // become settings-driven together.
+            CoordinateDragGrid(
+                items = dockItems,
+                config = dockConfig,
+                coordinator = coordinator,
+                zoneId = DockZoneId,
+                gestureConfig = gestureConfig,
+                dragItem = { it.gridItem },
+                placement = { it.placement },
+                onDrop = { handleDrop() },
+                modifier = Modifier.fillMaxWidth().height(DockHeight),
+                onGeometryChange = { dockGeometry = it },
+                onOpen = openItem,
+            ) { item, cellModifier, itemGestures ->
+                HomeItemCell(item, session, cellModifier, itemGestures)
+            }
+        }
+
+        // Drag overlay (root space): the drop shadow in the grid + the floating proxy on the finger. The two
+        // are gated separately, because they answer different questions — "is there a cell of *this* grid to
+        // shadow?" and "whose job is it to draw the icon under the finger?".
+        val geo = geometry
+        if (session != null && geo != null) {
+            // The proxy spans `cellSpan` logical cells per axis (one visual cell) of the *pager's* grid, and
+            // deliberately keeps that size across the whole drag: the icon under the finger must not resize as
+            // the drag crosses into the dock, whose cells are a different height.
+            val footprintW = geo.cellW * cellSpan
+            val footprintH = geo.cellH * cellSpan
+            // The shadow, unlike the proxy, belongs to the zone being hovered, so it is drawn from *that*
+            // zone's geometry and cell span — the two grids have different origins and cell sizes, and a
+            // footprint is only meaningful in the grid that produced it.
+            //
+            // Anything that isn't one of home's grids paints nothing. On the shared coordinator the open
+            // folder previews a reorder by reflowing its own cells and returns a token plan whose footprint is
+            // meaningless, which would otherwise paint a shadow at cell (0,0) behind the folder (invisible
+            // today only because that backdrop is opaque black — it won't be once the frosted backdrop lands).
+            // Extract is unaffected: its active zone really is a home grid, which is exactly when the landing
+            // cell should show.
+            val shadow = when (session.activeZone) {
+                MainZoneId -> geo to cellSpan
+                DockZoneId -> dockGeometry?.let { it to dockCellSpan }
+                else -> null
+            }
+            if (shadow != null) {
+                val (shadowGeo, shadowSpan) = shadow
+                session.plan?.let { plan ->
+                    val topLeft = shadowGeo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
+                    DropFootprint(
+                        intent = plan.intent,
+                        modifier = Modifier
+                            .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
+                            .size(
+                                with(density) { (shadowGeo.cellW * shadowSpan).toDp() },
+                                with(density) { (shadowGeo.cellH * shadowSpan).toDp() },
+                            ),
+                    )
                 }
-                if (shadow != null) {
-                    val (shadowGeo, shadowSpan) = shadow
-                    session.plan?.let { plan ->
-                        val topLeft = shadowGeo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
-                        DropFootprint(
-                            intent = plan.intent,
-                            modifier = Modifier
-                                .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
-                                .size(
-                                    with(density) { (shadowGeo.cellW * shadowSpan).toDp() },
-                                    with(density) { (shadowGeo.cellH * shadowSpan).toDp() },
-                                ),
+            }
+            // The proxy belongs to whichever surface is *presenting* the drag: while a folder is on screen that is
+            // the folder, which draws the app at its own cell size; the moment it closes, home takes the icon
+            // back. Exactly one of them paints, so a hand-off never puts two icons under one finger and never
+            // leaves none. Note this is deliberately not gated on the active zone: a home drag can be held
+            // somewhere no zone covers (the system-bar inset below the dock), and its proxy must still follow the
+            // finger.
+            //
+            // The dragged *folder* still resolves by placement, but the dragged *app* cannot: once a drag has left
+            // a folder the app is a member with no cell of its own, so it is looked up through [appInfo], which
+            // searches folder contents too. Without that the icon vanishes the instant the folder closes.
+            val draggedFolder = state.items.firstOrNull { it.gridItem == session.item } as? HomeItem.Folder
+            if ((draggedApp != null || draggedFolder != null) && folderHost.openFolderId == null) {
+                val finger = session.fingerInRoot
+                FloatingDragIcon(
+                    rootOffset = IntOffset(
+                        (finger.x - footprintW / 2f).roundToInt(),
+                        (finger.y - footprintH / 2f).roundToInt(),
+                    ),
+                    size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
+                ) {
+                    // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target
+                    // (the lifted cell still owns the pointer stream).
+                    if (draggedApp != null) {
+                        AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
+                    } else if (draggedFolder != null) {
+                        FolderCell(
+                            label = draggedFolder.folder.label,
+                            apps = draggedFolder.apps,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
-                // The proxy belongs to whichever surface is *presenting* the drag: while a folder is on screen that is
-                // the folder, which draws the app at its own cell size; the moment it closes, home takes the icon
-                // back. Exactly one of them paints, so a hand-off never puts two icons under one finger and never
-                // leaves none. Note this is deliberately not gated on the active zone: a home drag can be held
-                // somewhere no zone covers (the system-bar inset below the dock), and its proxy must still follow the
-                // finger.
-                //
-                // The dragged *folder* still resolves by placement, but the dragged *app* cannot: once a drag has left
-                // a folder the app is a member with no cell of its own, so it is looked up through [appInfo], which
-                // searches folder contents too. Without that the icon vanishes the instant the folder closes.
-                val draggedFolder = state.items.firstOrNull { it.gridItem == session.item } as? HomeItem.Folder
-                if ((draggedApp != null || draggedFolder != null) && folderHost.openFolderId == null) {
-                    val finger = session.fingerInRoot
-                    FloatingDragIcon(
-                        rootOffset = IntOffset(
-                            (finger.x - footprintW / 2f).roundToInt(),
-                            (finger.y - footprintH / 2f).roundToInt(),
-                        ),
-                        size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
-                    ) {
-                        // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target
-                        // (the lifted cell still owns the pointer stream).
-                        if (draggedApp != null) {
-                            AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
-                        } else if (draggedFolder != null) {
-                            FolderCell(
-                                label = draggedFolder.folder.label,
-                                apps = draggedFolder.apps,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                }
             }
+        }
 
-            // Folder overlays, drawn above the grids. Resolved live from state so their contents track edits.
-            val openFolder = folderHost.openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
-            // Report the folder's persisted membership back: it is what tells the host that a just-injected app has
-            // landed, so it can stop being carried separately.
-            val openFolderMembers = openFolder?.folder?.apps
-            LaunchedEffect(openFolderMembers) { folderHost.onMembersChanged(openFolderMembers.orEmpty()) }
+        // Folder overlays, drawn above the grids. Resolved live from state so their contents track edits.
+        val openFolder = folderHost.openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
+        // Report the folder's persisted membership back: it is what tells the host that a just-injected app has
+        // landed, so it can stop being carried separately.
+        val openFolderMembers = openFolder?.folder?.apps
+        LaunchedEffect(openFolderMembers) { folderHost.onMembersChanged(openFolderMembers.orEmpty()) }
 
-            // Usually one overlay. But a drag that started inside a folder keeps that folder composed for its whole
-            // life, even while a different one — or none — is on screen: the cell driving the drag is in its grid, and
-            // a pointer stream can't move to another node. It is rendered as a pointer holder (`presenting = false`):
-            // invisible, zone-less, no proxy. See `FolderHostState.dragSourceFolderId`.
-            val holderFolder = folderHost.dragSourceFolderId
-                ?.takeIf { it != folderHost.openFolderId }
-                ?.let { id -> folders.firstOrNull { it.folder.id == id } }
-            // Holder first so it sits *below* the presented folder. Both come from this **one** call site on purpose:
-            // when a folder stops being the presented one and becomes the holder, a second call site would be a
-            // different composition position and Compose would dispose it — killing the very drag this preserves.
-            // Keyed by folder id so each folder still gets its own instance and none inherits another's remembered
-            // state (reorder gap, optimistic order, measured geometry, and — most visibly — pager position, which
-            // would otherwise render a 1-page folder scrolled past its end).
-            val overlays = listOfNotNull(holderFolder?.let { it to false }, openFolder?.let { it to true })
-            overlays.forEach { (folder, presenting) ->
-                key(folder.folder.id) {
-                    FolderOverlay(
-                        label = folder.folder.label,
-                        apps = folder.apps,
-                        coordinator = coordinator,
-                        gestureConfig = gestureConfig,
-                        // Only the presented folder carries the app being brought in; to the holder it is still a member.
-                        incoming = if (presenting) incomingApp else null,
-                        presenting = presenting,
-                        onLaunch = { component -> viewModel.launch(component); folderHost.close() },
-                        onReorder = { order ->
-                            // Only an inject *still in flight* adds membership; once committed this is a plain reorder
-                            // (the app is already a member, even if the store hasn't said so yet).
-                            val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
-                            if (incoming != null && order.contains(incoming)) {
-                                // The app landed in this folder at its chosen slot. `from` is the folder the drag
-                                // started in, if any — that is the folder-to-folder move, committed as one batch; null
-                                // when it came off a grid instead, and this folder itself when the drag left and came
-                                // back, which `addToFolder` recognises as the plain reorder it is.
-                                viewModel.addToFolder(
-                                    folderId = folder.folder.id,
-                                    reported = order,
-                                    incoming = incoming,
-                                    from = folderHost.dragSourceFolderId,
-                                )
-                                folderHost.injectCommitted()
-                            } else {
-                                viewModel.reorderFolder(folder.folder.id, order)
-                            }
-                        },
-                        onLeave = folderHost::leaveFolder,
-                        onDrop = { handleDrop() },
-                        onPublishDelegate = { folderDelegate.value = it },
-                        onDismiss = { folderHost.close() },
-                    )
-                }
+        // Usually one overlay. But a drag that started inside a folder keeps that folder composed for its whole
+        // life, even while a different one — or none — is on screen: the cell driving the drag is in its grid, and
+        // a pointer stream can't move to another node. It is rendered as a pointer holder (`presenting = false`):
+        // invisible, zone-less, no proxy. See `FolderHostState.dragSourceFolderId`.
+        val holderFolder = folderHost.dragSourceFolderId
+            ?.takeIf { it != folderHost.openFolderId }
+            ?.let { id -> folders.firstOrNull { it.folder.id == id } }
+        // Holder first so it sits *below* the presented folder. Both come from this **one** call site on purpose:
+        // when a folder stops being the presented one and becomes the holder, a second call site would be a
+        // different composition position and Compose would dispose it — killing the very drag this preserves.
+        // Keyed by folder id so each folder still gets its own instance and none inherits another's remembered
+        // state (reorder gap, optimistic order, measured geometry, and — most visibly — pager position, which
+        // would otherwise render a 1-page folder scrolled past its end).
+        val overlays = listOfNotNull(holderFolder?.let { it to false }, openFolder?.let { it to true })
+        overlays.forEach { (folder, presenting) ->
+            key(folder.folder.id) {
+                FolderOverlay(
+                    label = folder.folder.label,
+                    apps = folder.apps,
+                    coordinator = coordinator,
+                    gestureConfig = gestureConfig,
+                    // Only the presented folder carries the app being brought in; to the holder it is still a member.
+                    incoming = if (presenting) incomingApp else null,
+                    presenting = presenting,
+                    onLaunch = { component -> viewModel.launch(component); folderHost.close() },
+                    onReorder = { order ->
+                        // Only an inject *still in flight* adds membership; once committed this is a plain reorder
+                        // (the app is already a member, even if the store hasn't said so yet).
+                        val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
+                        if (incoming != null && order.contains(incoming)) {
+                            // The app landed in this folder at its chosen slot. `from` is the folder the drag
+                            // started in, if any — that is the folder-to-folder move, committed as one batch; null
+                            // when it came off a grid instead, and this folder itself when the drag left and came
+                            // back, which `addToFolder` recognises as the plain reorder it is.
+                            viewModel.addToFolder(
+                                folderId = folder.folder.id,
+                                reported = order,
+                                incoming = incoming,
+                                from = folderHost.dragSourceFolderId,
+                            )
+                            folderHost.injectCommitted()
+                        } else {
+                            viewModel.reorderFolder(folder.folder.id, order)
+                        }
+                    },
+                    onLeave = folderHost::leaveFolder,
+                    onDrop = { handleDrop() },
+                    onPublishDelegate = { folderDelegate.value = it },
+                    onDismiss = { folderHost.close() },
+                )
             }
         }
     }
