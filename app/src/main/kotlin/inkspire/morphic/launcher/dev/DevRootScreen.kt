@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.home.HomeScreen
@@ -43,42 +44,54 @@ private enum class DevScreen(val label: String) {
 }
 
 /**
- * Dev entry point: shows one harness screen full-screen with a floating chip (top-end) to switch. Keeps both
- * the drag harness and the pager test reachable without editing code.
+ * Dev entry point: shows one harness screen full-screen with a floating chip (top-end) to switch. Keeps every
+ * interaction harness reachable without editing code.
+ *
+ * Reached from a row in settings rather than from the launcher, so no dev chrome ships on the real surfaces. It is
+ * still a peer destination in the nav graph — the playgrounds are the regression harness for the drag toolkit, the
+ * grid and the surface pager, and `DevGalleryScreen` is the component reference the design-system rules require be
+ * kept current, so none of it is scaffolding to be thrown away with the shell landing.
+ *
+ * **It supplies its own [LauncherTheme].** `HomeScreen` and `AppsScreen` used to theme themselves; now that
+ * `feature:shell` owns the launcher's theme boundary, anything hosting those screens *outside* the shell has to
+ * provide one — this harness is the only such caller. Fixed dark rather than following the system, matching what the
+ * shell does, so a harness screen looks like the launcher it is standing in for.
  */
 @Composable
 fun DevRootScreen(modifier: Modifier = Modifier) {
     var screen by remember { mutableStateOf(DevScreen.Home) }
-    Box(modifier.fillMaxSize()) {
-        when (screen) {
-            DevScreen.Home -> HomeScreen()
-            DevScreen.Apps -> AppsScreen()
-            // The layout is normally a user setting (data:settings); until then the harness picks it
-            // per entry, which is also the cheapest way to eyeball two layouts side by side.
-            DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
-            DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
-            DevScreen.AppsCategory -> AppsScreen(layout = AppsLayout.PAGER_WITH_CATEGORY)
-            DevScreen.AppsCards -> AppsScreen(layout = AppsLayout.CATEGORY_CARD)
-            DevScreen.Drag -> DragPlaygroundScreen()
-            DevScreen.Pager -> PagerPlaygroundScreen()
-            DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
-            DevScreen.Surface -> SurfacePagerPlaygroundScreen()
-            DevScreen.Grid -> GridPlaygroundScreen()
-            DevScreen.Reflow -> ReflowPlaygroundScreen()
-            DevScreen.ScrollGrid -> ScrollGridPlaygroundScreen()
-            DevScreen.CategoryPager -> CategoryPagerPlaygroundScreen()
+    LauncherTheme(darkTheme = true) {
+        Box(modifier.fillMaxSize()) {
+            when (screen) {
+                DevScreen.Home -> HomeScreen()
+                DevScreen.Apps -> AppsScreen()
+                // The layout is normally a user setting (data:settings); until then the harness picks it
+                // per entry, which is also the cheapest way to eyeball two layouts side by side.
+                DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
+                DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
+                DevScreen.AppsCategory -> AppsScreen(layout = AppsLayout.PAGER_WITH_CATEGORY)
+                DevScreen.AppsCards -> AppsScreen(layout = AppsLayout.CATEGORY_CARD)
+                DevScreen.Drag -> DragPlaygroundScreen()
+                DevScreen.Pager -> PagerPlaygroundScreen()
+                DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
+                DevScreen.Surface -> SurfacePagerPlaygroundScreen()
+                DevScreen.Grid -> GridPlaygroundScreen()
+                DevScreen.Reflow -> ReflowPlaygroundScreen()
+                DevScreen.ScrollGrid -> ScrollGridPlaygroundScreen()
+                DevScreen.CategoryPager -> CategoryPagerPlaygroundScreen()
+            }
+            // Theme-independent chip so it reads over either screen; label shows what tapping switches TO.
+            Text(
+                text = "→ ${screen.next().label}",
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x66000000))
+                    .clickable { screen = screen.next() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
         }
-        // Theme-independent chip so it reads over either screen; label shows what tapping switches TO.
-        Text(
-            text = "→ ${screen.next().label}",
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0x66000000))
-                .clickable { screen = screen.next() }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
     }
 }
