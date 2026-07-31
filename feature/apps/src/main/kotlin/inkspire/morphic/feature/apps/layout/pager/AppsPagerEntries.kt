@@ -1,5 +1,8 @@
 package inkspire.morphic.feature.apps.layout.pager
 
+import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
+import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.feature.apps.AppsItem
 import inkspire.morphic.feature.apps.gridItem
@@ -16,29 +19,27 @@ import inkspire.morphic.feature.apps.gridItem
 /**
  * What one page draws while a drag is in flight: its stored entries, with the dragged item lifted to the gap.
  *
+ * The shared MovingGap render ([movingGapDisplayOrder]) plus the one rule that is this surface's own — the page
+ * **capacity**. Entries are told apart by [gridItem] rather than by value, since [AppsItem] wraps an `AppInfo` and
+ * the question is only *which item is this*.
+ *
  * **The dragged item stays composed on its source page even after the finger has carried it to another**, which is
  * why this can return it twice across two pages. That is not a glitch to tidy up: the cell on the source page owns
  * the gesture's pointer stream, and disposing it mid-drag kills the drag (the drag toolkit's standing rule). Both
  * copies are drawn invisible by `LauncherDragCell`, so the user sees only the floating proxy — the far copy exists
  * purely to occupy the gap so the other icons flow around it.
  *
- * Entries are compared by [gridItem] rather than by value: [AppsItem] wraps an `AppInfo`, so structural equality
- * would also compare the label and the icon, and the question here is only *which item is this*.
- *
  * Truncated to [perPage] because the destination page may not have room: the surplus is what the repository will
- * cascade onto the next page, so previewing it here would promise a layout the commit won't produce.
+ * cascade onto the next page, so previewing it here would promise a layout the commit won't produce. That truncation
+ * is the whole reason this stays a named function instead of an inlined call — a page is the one ordered surface with
+ * a hard capacity, and both call sites (the planner and the page itself) must apply it identically.
  */
-internal fun displayOrder(
+internal fun pageDisplayOrder(
     stored: List<AppsItem>,
     dragged: AppsItem?,
     gap: Int,
     perPage: Int,
-): List<AppsItem> {
-    if (dragged == null) return stored
-    val others = stored.filterNot { it.gridItem == dragged.gridItem }
-    val at = gap.coerceIn(0, others.size)
-    return (others.take(at) + dragged + others.drop(at)).take(perPage)
-}
+): List<AppsItem> = movingGapDisplayOrder(stored, dragged, gap) { it.gridItem }.take(perPage)
 
 /** The folder entry with [folderId], wherever it sits. */
 internal fun folderAt(pages: List<List<AppsItem>>, folderId: Long): AppsItem.Folder? =
@@ -65,10 +66,27 @@ internal fun canMergeInto(dragged: GridItem, target: AppsItem): Boolean =
 internal fun entryFor(pages: List<List<AppsItem>>, dragged: GridItem): AppsItem? {
     pages.forEach { page -> page.firstOrNull { it.gridItem == dragged }?.let { return it } }
     val component = (dragged as? GridItem.App)?.component ?: return null
-    pages.forEach { page ->
-        page.filterIsInstance<AppsItem.Folder>().forEach { folder ->
-            folder.apps.firstOrNull { it.componentKey == component }?.let { return AppsItem.App(it) }
+    return appInPages(pages, component)?.let(AppsItem::App)
+}
+
+/**
+ * The app for [component] wherever it sits — **loose on a page, or inside a folder**.
+ *
+ * Both halves are needed for the reason [entryFor]'s second half is: a drag detaches an app from nothing until it
+ * lands, so an app on its way out of a folder is still a member and appears on no page. Anything resolving "the app
+ * under the finger" from page contents alone would find nothing and draw nothing — the floating proxy and a folder's
+ * `incoming` cell both go through here.
+ *
+ * The pager's twin of the category card's `appInCategories`: one lookup per surface, over the shape that surface is
+ * actually handed. A single `AppsState`-level helper was tried and was dead on arrival — a layout receives a *slice*
+ * (`pages`, `categories`), never the whole state, so it could not be called from either place that needs it.
+ */
+internal fun appInPages(pages: List<List<AppsItem>>, component: ComponentKey): AppInfo? =
+    pages.firstNotNullOfOrNull { page ->
+        page.firstNotNullOfOrNull { entry ->
+            when (entry) {
+                is AppsItem.App -> entry.info.takeIf { it.componentKey == component }
+                is AppsItem.Folder -> entry.apps.firstOrNull { it.componentKey == component }
+            }
         }
     }
-    return null
-}

@@ -24,7 +24,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,8 +64,23 @@ class AppsViewModel(
      */
     private val pagerCapacity = MutableStateFlow<Int?>(null)
 
+    /**
+     * Every installed app in display order — **one subscription, shared by all three readers**.
+     *
+     * Three things collect this: [state], the pager sync, and the category sync. Without [shareIn] each would open
+     * its own Room query and re-run the whole pipeline, so a single install would map the table and sort it three
+     * times over; the sort is also [flowOn]'d because a locale-aware [Collator] over a few hundred labels has no
+     * business on the frame an install lands — the same reason the classifier below is hopped off the main thread.
+     *
+     * `WhileSubscribed` rather than `Eagerly` so the query closes with the last reader, and `replay = 1` so a reader
+     * that arrives late (the pager's collector waits for a capacity) gets the current list instead of waiting for the
+     * next database change.
+     */
     private val sortedApps: Flow<List<AppInfo>> =
-        appRepository.observeApps().map { apps -> apps.sortedWith(LabelOrder) }
+        appRepository.observeApps()
+            .map { apps -> apps.sortedWith(LabelOrder) }
+            .flowOn(dispatchers.default)
+            .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), replay = 1)
 
     /**
      * The stored pager arrangement, re-subscribed whenever the capacity changes.

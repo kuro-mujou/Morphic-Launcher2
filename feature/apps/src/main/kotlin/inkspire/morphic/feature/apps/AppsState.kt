@@ -2,7 +2,6 @@ package inkspire.morphic.feature.apps
 
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.Category
-import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.Folder as FolderModel
@@ -99,19 +98,8 @@ fun GridItem.asIconItem(): IconItem? = when (this) {
     else -> null
 }
 
-/**
- * Resolves [component] to the app info this surface knows about, whether it is loose on a page or inside a folder.
- *
- * Both are needed for the same reason home needs its equivalent: a drag detaches an app from neither until it
- * lands, so an app being carried out of a folder is still a member and appears nowhere else. Anything that looks
- * up "the app under the finger" by position alone would find nothing and draw nothing.
- */
-fun AppsState.appInfo(component: ComponentKey): AppInfo? =
-    pagerPages.firstNotNullOfOrNull { page ->
-        page.firstNotNullOfOrNull { item ->
-            when (item) {
-                is AppsItem.App -> item.info.takeIf { it.componentKey == component }
-                is AppsItem.Folder -> item.apps.firstOrNull { it.componentKey == component }
-            }
-        }
-    } ?: apps.firstOrNull { it.componentKey == component }
+// There is deliberately no `AppsState.appInfo(component)` here, though home has the equivalent on `HomeState`. It was
+// written and was dead on arrival: a layout is handed a *slice* of this state (`pagerPages`, `categories`), never the
+// whole of it, so neither place that resolves "the app under the finger" could reach a state-level helper. Each
+// arranging layout owns that lookup over the shape it actually receives instead — `appInPages` in `layout/pager`,
+// `appInCategories` in `layout/categorycard`.

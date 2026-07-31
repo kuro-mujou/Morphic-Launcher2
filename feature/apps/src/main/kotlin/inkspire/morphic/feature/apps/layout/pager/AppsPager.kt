@@ -122,10 +122,9 @@ private val PagerIconMetrics = IconMetrics(iconPercent = 0.75f)
  * an item is in flight so the two gestures never fight, holding near an edge flips a page on a dwell, and
  * `keepAllPagesPlaced` keeps the source page composed so the lifted cell keeps its pointer stream across the flip.
  *
- * **What lives elsewhere in this package.** The leaves it draws are in [AppsPagerCells] ([AppsPagerCell] and
- * [dropFootprintCell]) and the pure list maths in [AppsPagerEntries] ([displayOrder], [entryFor], [folderAt],
- * [canMergeInto]). What stays here is the part that is genuinely one machine: the drag state, the planner that
- * writes it, and the drop that reads it.
+ * **What lives elsewhere in this package.** The leaves it draws — [AppsPagerCell] and [dropFootprintCell] — and the
+ * pure maths — [pageDisplayOrder], [entryFor], [appInPages], [folderAt], [canMergeInto]. What stays here is the part
+ * that is genuinely one machine: the drag state, the planner that writes it, and the drop that reads it.
  *
  * @param pages the arrangement to draw: pages in order, each dense from its first slot.
  * @param onMove commits a plain drop — the item, and the page and slot it landed at.
@@ -203,7 +202,7 @@ fun AppsPager(
             // Resolved against the **display** order, not the stored one: with a gap open the icons have shifted,
             // and the user aims at what they can see. Reading `stored[slot]` here was the bug behind "the footprint
             // says merge but the target has moved away" — the planner named one entry and the screen showed another.
-            val displayed = displayOrder(
+            val displayed = pageDisplayOrder(
                 stored = stored,
                 dragged = if (page == gapPage) entryFor(livePages.value, item) else null,
                 gap = gap,
@@ -314,16 +313,7 @@ fun AppsPager(
     // would resolve to null and the app would vanish from both surfaces until the write came back. Searched among
     // the pages *and* folder contents, since it may be arriving from another folder and so be on no page at all.
     val incomingApp = remember(folderHost.incomingComponent) {
-        folderHost.incomingComponent?.let { component ->
-            pages.firstNotNullOfOrNull { page ->
-                page.firstNotNullOfOrNull { entry ->
-                    when (entry) {
-                        is AppsItem.App -> entry.info.takeIf { it.componentKey == component }
-                        is AppsItem.Folder -> entry.apps.firstOrNull { it.componentKey == component }
-                    }
-                }
-            }
-        }
+        folderHost.incomingComponent?.let { component -> appInPages(pages, component) }
     }
 
     val draggedItem = session?.item
@@ -359,7 +349,7 @@ fun AppsPager(
                 // Keep off-screen pages placed while dragging, so the lifted cell's pointer stream survives a flip.
                 keepAllPagesPlaced = coordinator.isDragging,
             ) { pageIndex ->
-                val display = displayOrder(
+                val display = pageDisplayOrder(
                     stored = pages.getOrNull(pageIndex).orEmpty(),
                     dragged = if (pageIndex == gapPage) draggedEntry else null,
                     gap = gap,
