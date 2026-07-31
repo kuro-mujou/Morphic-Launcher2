@@ -31,6 +31,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
+import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.drag.DragSession
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropPlanner
@@ -50,6 +53,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.toGridConfig
@@ -141,7 +145,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val device = currentDeviceConfiguration()
     val config = remember(device) { HomePagerGrid.toGridConfig(device) }
     val cellSpan = config.cellMultiplier
-    LaunchedEffect(config) { viewModel.setGridConfig(config) }
+    LaunchedEffect(device) { viewModel.setDevice(device) }
 
     // The dock's own blueprint: a single non-paged strip (one visual row on a phone), same sub-cell resolution as
     // the pager so an app is one visual cell in either. The ViewModel isn't told about it — it only needs a config
@@ -353,7 +357,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 onGeometryChange = { geometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->
-                HomeItemCell(item, session, cellModifier, itemGestures)
+                HomeItemCell(item, session, cellModifier, itemGestures, state.metricsFor(GridSlot.HOME_MAIN))
             }
 
             // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and
@@ -373,7 +377,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 onGeometryChange = { dockGeometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->
-                HomeItemCell(item, session, cellModifier, itemGestures)
+                HomeItemCell(item, session, cellModifier, itemGestures, state.metricsFor(GridSlot.HOME_DOCK))
             }
         }
 
@@ -530,9 +534,11 @@ private fun HomeItemCell(
     session: DragSession?,
     cellModifier: Modifier,
     itemGestures: Modifier,
+    metrics: IconMetrics,
 ) {
     when (item) {
-        is HomeItem.App -> AppCell(app = item.info, modifier = cellModifier, itemGestures = itemGestures)
+        is HomeItem.App ->
+            AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
         is HomeItem.Folder -> {
             // Hide the app currently being dragged (e.g. extracted out of this folder) from the tile preview, so it
             // isn't shown in the folder icon and under the finger at the same time. The real folder removal commits
@@ -543,9 +549,21 @@ private fun HomeItemCell(
             FolderCell(
                 label = item.folder.label,
                 apps = preview,
+                metrics = metrics,
                 modifier = cellModifier,
                 itemGestures = itemGestures,
             )
         }
     }
 }
+
+/**
+ * The resolved [IconMetrics] for [slot], or the ambient default before the store has answered.
+ *
+ * The two zones resolve independently — `HOME_MAIN` and `HOME_DOCK` are separate grids with separate blueprints — which
+ * is what makes the dock's icon size configurable apart from the pager's. Until this landed both inherited
+ * `LocalIconMetrics`' default, which is also why that default is the honest fallback here rather than a constant.
+ */
+@Composable
+private fun HomeState.metricsFor(slot: GridSlot): IconMetrics =
+    iconSizing[slot]?.toIconMetrics() ?: LocalIconMetrics.current

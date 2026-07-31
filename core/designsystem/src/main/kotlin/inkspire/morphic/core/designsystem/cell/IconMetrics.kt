@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.cell
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.model.IconSizing
 
 /**
  * Per-surface icon + label sizing. [iconPercent] is the primary control — the icon's edge length is that
@@ -42,3 +43,19 @@ fun IconMetrics.resolveIconSize(availWidth: Dp, availHeight: Dp): Dp =
 
 /** The current surface's [IconMetrics]; defaults to a sensible grid metric. */
 val LocalIconMetrics = staticCompositionLocalOf { IconMetrics() }
+
+/**
+ * This persisted sizing as Compose-facing [IconMetrics].
+ *
+ * The bridge `IconMetrics.of` was written for, and the reason `core:model`'s [IconSizing] can hold the same six facts
+ * without depending on Compose: it keeps guardrails as raw dp `Int`s because a plain JVM module has no `Dp`. One
+ * conversion, here, so no surface invents its own.
+ */
+fun IconSizing.toIconMetrics(): IconMetrics = IconMetrics.of(
+    iconPercent = iconPercent,
+    labelScale = labelScale,
+    showLabel = showLabel,
+    minIconDp = minIconDp,
+    maxIconDp = maxIconDp,
+    showIcon = showIcon,
+)

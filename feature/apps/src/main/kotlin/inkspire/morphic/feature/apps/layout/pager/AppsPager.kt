@@ -53,7 +53,6 @@ import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.model.AppsPagerGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
-import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.IconItem
@@ -63,7 +62,6 @@ import inkspire.morphic.feature.apps.AppsItem
 import inkspire.morphic.feature.apps.asIconItem
 import inkspire.morphic.feature.apps.gridItem
 import inkspire.morphic.feature.apps.iconItem
-import inkspire.morphic.feature.apps.layout.appsItemGestures
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import kotlin.math.roundToInt
 
@@ -83,15 +81,6 @@ internal val PagerZoneId = ZoneId("apps-pager")
  * the footprint below goes unread.
  */
 internal val PagerReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.REORDER)
-
-/**
- * The pager's own icon proportion.
- *
- * Denser than home's 0.88 for the same reason the vertical grid's is — a page packs four to eight columns where a
- * home cell is a 2×2 slot around one icon — and a placeholder in the same sense: the value is a starting point,
- * the *mechanism* (a per-surface [IconMetrics] through [LocalIconMetrics]) is the answer.
- */
-private val PagerIconMetrics = IconMetrics(iconPercent = 0.75f)
 
 /**
  * The **pager** layout of the APPS surface ([inkspire.morphic.core.model.AppsLayout.PAGER]): the app collection
@@ -131,8 +120,10 @@ private val PagerIconMetrics = IconMetrics(iconPercent = 0.75f)
  * @param onMerge commits a merge-ring drop onto an app (making a folder) or a folder (joining it).
  * @param onDropExtracted commits an app dragged out of a folder onto a page; [onMergeExtracted] is the same drag
  *   landing on another entry's merge ring, which is how an app moves folder→folder in one gesture.
- * @param onGridResolved reports the resolved page grid up to the ViewModel, which needs the capacity to page the
- *   store. The device is a `@Composable` read, so the UI is the only place that can resolve it.
+ * @param metrics a page's icon sizing, resolved from `GridSlot.APPS_PAGER`'s blueprint and the user's overrides.
+ * @param folderMetrics an *open folder's* icon sizing (`GridSlot.FOLDER`). A separate value on purpose: a folder is
+ *   its own grid with its own configuration, so it must not inherit the page's — which is exactly what it would do if
+ *   this surface published one ambient `LocalIconMetrics` for everything inside it.
  */
 @Composable
 fun AppsPager(
@@ -144,19 +135,19 @@ fun AppsPager(
     onAddToFolder: (folderId: Long, order: List<ComponentKey>, incoming: ComponentKey, from: Long?) -> Unit,
     onDropExtracted: (from: Long, app: ComponentKey, toPage: Int, toSlot: Int) -> Unit,
     onMergeExtracted: (from: Long, app: ComponentKey, target: IconItem) -> Unit,
-    onGridResolved: (GridConfig) -> Unit,
+    metrics: IconMetrics,
+    folderMetrics: IconMetrics,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val device = currentDeviceConfiguration()
     val config = remember(device) { AppsPagerGrid.toGridConfig(device) }
     val perPage = config.rows * config.cols
-    LaunchedEffect(config) { onGridResolved(config) }
 
     val gestureConfig = rememberAppsGestureConfig()
     // Held in a state so the count lambda reads the *current* pages: `rememberLauncherPagerState` remembers the
     // lambda once, so capturing the parameter directly would freeze the pager at however many pages existed on the
-    // first composition — which is none, since the store isn't paged until `onGridResolved` lands.
+    // first composition — which is none, since the store isn't paged until the surface reports its device.
     val livePages = rememberUpdatedState(pages)
     val pagerState = rememberLauncherPagerState(
         pageCount = { livePages.value.size.coerceAtLeast(1) },
@@ -322,7 +313,7 @@ fun AppsPager(
     val draggedEntry = remember(pages, draggedItem) { draggedItem?.let { entryFor(pages, it) } }
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
-    CompositionLocalProvider(LocalIconMetrics provides PagerIconMetrics) {
+    CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
             LauncherPager(
                 state = pagerState,
@@ -422,6 +413,8 @@ fun AppsPager(
                         apps = folder.apps,
                         coordinator = coordinator,
                         gestureConfig = gestureConfig,
+                        // Its own grid, so its own sizing — not the page's, which is what the ambient local holds.
+                        metrics = folderMetrics,
                         incoming = if (presenting) incomingApp else null,
                         presenting = presenting,
                         onLaunch = { component -> onLaunch(component); folderHost.close() },

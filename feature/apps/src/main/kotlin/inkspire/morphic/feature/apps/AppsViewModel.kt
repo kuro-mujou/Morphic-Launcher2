@@ -4,10 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppsPagerGrid
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.GridConfig
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
@@ -16,6 +20,7 @@ import inkspire.morphic.data.layout.AppsCategoryChange
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
+import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,16 +58,19 @@ class AppsViewModel(
     layoutRepository: LayoutRepository,
     private val appLauncher: AppLauncher,
     private val categorizer: AppCategorizer,
+    settingsRepository: SettingsRepository,
     private val dispatchers: AppDispatchers,
 ) : ViewModel() {
 
     /**
-     * How many entries fit one pager page, or null until the surface has measured its grid.
+     * The device configuration the surface is drawn on, or null until it reports one.
      *
-     * The capacity belongs to the UI: it comes from `AppsPagerGrid` resolved against the detected device, which is
-     * a `@Composable` read — the same reason `HomeViewModel` is told its `GridConfig` rather than guessing one.
+     * **The one thing the UI knows and this holder cannot**: `currentDeviceConfiguration()` is a `@Composable` read of
+     * the window. Everything device-dependent is derived from it here through `core:model` — the pager's page capacity
+     * and each grid's icon sizing — which is why this *replaced* a narrower `setPagerGrid(config)` rather than joining
+     * it. Pushing the input down beats pushing a derivative of it: the next thing that needs the device costs nothing.
      */
-    private val pagerCapacity = MutableStateFlow<Int?>(null)
+    private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
     /**
      * Every installed app in display order — **one subscription, shared by all three readers**.
@@ -83,16 +91,39 @@ class AppsViewModel(
             .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), replay = 1)
 
     /**
-     * The stored pager arrangement, re-subscribed whenever the capacity changes.
+     * The stored pager arrangement, re-subscribed whenever the device — and so the page capacity — changes.
      *
-     * Emits empty (rather than nothing) before a capacity is known, so the derived layouts still render on the
-     * first frame — a `combine` waits for *every* source, and a list that never appeared because the pager had not
-     * been measured would be a blank screen for a layout that doesn't use it.
+     * Emits empty (rather than nothing) before a device is known, so the derived layouts still render on the first
+     * frame: a `combine` waits for *every* source, and a list that never appeared because the surface had not yet
+     * reported its device would be a blank screen for a layout that does not use the pager at all.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val pagerItems: Flow<List<List<IconItem>>> =
-        pagerCapacity.flatMapLatest { perPage ->
-            if (perPage == null) flowOf(emptyList()) else appsOrderRepository.pagerPages(ORIENTATION, perPage)
+        device.flatMapLatest { current ->
+            if (current == null) flowOf(emptyList())
+            else appsOrderRepository.pagerPages(ORIENTATION, perPageOn(current))
+        }
+
+    /**
+     * The resolved icon sizing for every grid this surface draws icons in, by slot.
+     *
+     * Resolved in the repository — blueprint default with any user override merged on top — and merely collected here,
+     * so no layout has to know that overrides are sparse or keyed per device configuration. Re-subscribed on a device
+     * change, because the resolution is per configuration.
+     *
+     * Empty before a device is reported, in which case a layout falls back to `LocalIconMetrics`' own default for that
+     * frame rather than rendering nothing.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val iconSizings: Flow<Map<GridSlot, IconSizing>> =
+        device.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(emptyMap())
+            } else {
+                combine(
+                    IconSlots.map { slot -> settingsRepository.iconSizing(slot, current).map { slot to it } },
+                ) { pairs -> pairs.toMap() }
+            }
         }
 
     val state: StateFlow<AppsState> =
@@ -101,7 +132,8 @@ class AppsViewModel(
             pagerItems,
             layoutRepository.folders(),
             appsOrderRepository.categoryContents(),
-        ) { apps, pages, folders, categories ->
+            iconSizings,
+        ) { apps, pages, folders, categories, iconSizing ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             AppsState(
@@ -123,6 +155,7 @@ class AppsViewModel(
                     // keeps it until `syncCategories` hears it is gone.
                     AppsCategory(contents.category, contents.apps.mapNotNull(infoByComponent::get))
                 },
+                iconSizing = iconSizing,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 
@@ -139,10 +172,10 @@ class AppsViewModel(
         // is why there is no separate seed step to drift out of sync with this one. `syncPager` writes nothing when
         // nothing changed, so the common launch costs a read.
         viewModelScope.launch {
-            combine(sortedApps, pagerCapacity) { apps, perPage -> apps to perPage }
-                .collect { (apps, perPage) ->
-                    if (perPage != null) {
-                        appsOrderRepository.syncPager(ORIENTATION, perPage, apps.map { it.componentKey })
+            combine(sortedApps, device) { apps, current -> apps to current }
+                .collect { (apps, current) ->
+                    if (current != null) {
+                        appsOrderRepository.syncPager(ORIENTATION, perPageOn(current), apps.map { it.componentKey })
                     }
                 }
         }
@@ -166,11 +199,14 @@ class AppsViewModel(
     }
 
     /**
-     * Supplies the pager's resolved grid (from the blueprint, for the detected device). Idempotent per capacity:
-     * only the number of entries per page matters here, so a config that resolves to the same product is ignored.
+     * Supplies the device configuration the surface is drawn on — the UI's one job in this direction.
+     *
+     * It replaced `setPagerGrid(config)`, in which the UI resolved a blueprint and handed down the product. Reporting
+     * the *input* instead means everything else derives here: the page capacity, and every grid's icon sizing.
+     * Idempotent, since setting an equal value on a `MutableStateFlow` emits nothing.
      */
-    fun setPagerGrid(config: GridConfig) {
-        pagerCapacity.value = config.rows * config.cols
+    fun setDevice(configuration: DeviceConfiguration) {
+        device.value = configuration
     }
 
     /** Opens the app for [component] (a tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
@@ -329,12 +365,36 @@ class AppsViewModel(
 
     private fun applyPager(changes: List<AppsPagerChange>) {
         if (changes.isEmpty()) return
-        val perPage = pagerCapacity.value ?: return
+        val perPage = device.value?.let(::perPageOn) ?: return
         viewModelScope.launch { appsOrderRepository.applyPager(ORIENTATION, perPage, changes) }
     }
 
+    /**
+     * How many entries fit one pager page on [configuration] — its blueprint, resolved.
+     *
+     * Derived rather than reported, because it is a pure function of the device and a `core:model` blueprint, both of
+     * which this holder can see.
+     */
+    private fun perPageOn(configuration: DeviceConfiguration): Int =
+        AppsPagerGrid.toGridConfig(configuration).let { it.rows * it.cols }
+
     companion object {
         val ORIENTATION = Orientation.PORTRAIT
+
+        /**
+         * The grids this surface draws icons in — the APPS grids plus [GridSlot.FOLDER], which renders both a pager
+         * folder and an expanded category card.
+         *
+         * [GridSlot.APPS_CARD] is deliberately absent: a card is a *tile*, not an icon cell, so its blueprint declares
+         * no icon sizing and asking for one is rejected rather than defaulted.
+         */
+        private val IconSlots = listOf(
+            GridSlot.APPS_LIST,
+            GridSlot.APPS_SCROLL,
+            GridSlot.APPS_PAGER,
+            GridSlot.APPS_CATEGORY,
+            GridSlot.FOLDER,
+        )
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val DEFAULT_FOLDER_LABEL = "Folder"
 

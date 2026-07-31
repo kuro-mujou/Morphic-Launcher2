@@ -28,22 +28,13 @@ import inkspire.morphic.core.model.colsFor
  * Provisional cell height — **a placeholder, not a design choice.**
  *
  * A grid cell's height is a **user-configurable** surface metric (it is the vertical half of icon density, the
- * column count being the horizontal half), and the icon follows it through [GridIconMetrics]. Deliberately *not*
+ * column count being the horizontal half). The icon in the cell is already settings-driven (S3); this is the half
+ * still waiting on S4. Deliberately *not*
  * derived from the measured cell width to look principled: a square cell would be arithmetic standing in for a
  * decision nobody has made, and it would hide that the value is still unowned. A flat constant says so, and is
  * the single line that changes when the setting lands.
  */
 private val CellHeight = 96.dp
-
-/**
- * The grid's own icon proportion, denser than the home default.
- *
- * Home's 0.88 is tuned for a 2×2 home cell with generous slack around one icon; an app grid packs four to eight
- * columns of them, where the same fraction leaves the icons nearly touching. Like [CellHeight], a placeholder for
- * the icon-size setting — the value is a starting point, the *mechanism* (a per-surface [IconMetrics] through
- * [LocalIconMetrics]) is the real answer.
- */
-private val GridIconMetrics = IconMetrics(iconPercent = 0.75f)
 
 /**
  * The **vertical grid** layout of the APPS surface: every app A–Z, icon over label, in a scrolling grid.
@@ -62,11 +53,16 @@ private val GridIconMetrics = IconMetrics(iconPercent = 0.75f)
  * published geometry. (A drag *out* to home is `EjectToHome`, which reads the finger, not the grid.)
  *
  * Not built here, the same list as the vertical list's: the alphabet filter strip, search, and drag-out-to-home.
+ *
+ * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
+ *   Denser than home's by default, for the reason the column count differs: a home cell is a 2×2 slot around one icon,
+ *   an app grid packs four to eight columns of them.
  */
 @Composable
 fun AppsVerticalGrid(
     apps: List<AppInfo>,
     onLaunch: (ComponentKey) -> Unit,
+    metrics: IconMetrics,
     modifier: Modifier = Modifier,
 ) {
     val device = currentDeviceConfiguration()
@@ -76,7 +72,7 @@ fun AppsVerticalGrid(
     // the same system-constraint-only inset the list applies.
     val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
 
-    CompositionLocalProvider(LocalIconMetrics provides GridIconMetrics) {
+    CompositionLocalProvider(LocalIconMetrics provides metrics) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(cols),
             modifier = modifier.fillMaxSize(),

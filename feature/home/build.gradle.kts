@@ -11,6 +11,8 @@ dependencies {
     // koin-compose, coroutines, and the Compose artifacts. Home additionally reads/writes through the data layer:
     implementation(projects.data.apps)   // AppRepository (apps) + AppLauncher (launch on tap)
     implementation(projects.data.layout) // LayoutRepository + FreeGridPlanner (coordinate placement engine)
+    // Resolved per-zone icon sizing: the pager's and the dock's blueprints, with the user's overrides merged in.
+    implementation(projects.data.settings)
 
     testImplementation(libs.junit)
 }

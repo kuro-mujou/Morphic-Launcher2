@@ -3,6 +3,8 @@ package inkspire.morphic.feature.home
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.Folder as FolderModel
@@ -53,8 +55,16 @@ sealed interface HomeItem {
  * One flat list rather than a field per zone: the zones share every rule that matters (one item is in one zone,
  * one drag crosses between them), so splitting them here would only mean re-joining them at each use. The surface
  * filters with [inZone] to fill each grid.
+ *
+ * @property iconSizing each zone's **resolved** icon sizing, by slot — the blueprint's default with any user
+ *   override merged in. The two zones are separate entries because they are separate grids: `HOME_MAIN` and
+ *   `HOME_DOCK` have their own blueprints and so their own independent icon config. Empty until the surface
+ *   reports its device, since resolution is per configuration.
  */
-data class HomeState(val items: List<HomeItem>)
+data class HomeState(
+    val items: List<HomeItem>,
+    val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
+)
 
 /** The items placed in [zone] — one zone's grid contents, in the order the state reports them. */
 fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone == zone }

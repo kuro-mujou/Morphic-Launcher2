@@ -13,6 +13,8 @@ dependencies {
     // Added with the pager, the first layout that stores an arrangement: AppsOrderRepository is the pager's
     // order store, and LayoutRepository supplies the folder definitions it shares with home.
     implementation(projects.data.layout)
+    // Resolved per-grid icon sizing: a blueprint's default with the user's overrides merged in.
+    implementation(projects.data.settings)
 
     testImplementation(libs.junit)
 }

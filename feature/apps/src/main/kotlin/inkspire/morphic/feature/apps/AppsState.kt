@@ -3,7 +3,9 @@ package inkspire.morphic.feature.apps
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.Category
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**
@@ -55,15 +57,19 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  * @property apps every installed app in A–Z display order — what the vertical list and grid render, and the order
  *   new apps are appended to the pager in.
  * @property pagerPages the APPS pager's arrangement: pages in order, each dense from its first slot. Empty until
- *   the surface has told the ViewModel its page capacity (see [AppsViewModel.setPagerGrid]), since how many items
- *   fit a page is a property of the device and the grid, not of the store.
+ *   the surface has reported its device (see [AppsViewModel.setDevice]), since how many items fit a page is a
+ *   property of the device and the grid, not of the store.
  * @property categories the category arrangement, in category order. Needs no capacity to arrive — a category is one
  *   scrolling list, so unlike [pagerPages] it is populated from the first emission.
+ * @property iconSizing each grid's **resolved** icon sizing, by slot: the blueprint's default with any user override
+ *   already merged in. Empty until the surface reports its device configuration, since resolution is per
+ *   configuration — a layout reading a missing slot falls back to `LocalIconMetrics`' own default for that frame.
  */
 data class AppsState(
     val apps: List<AppInfo> = emptyList(),
     val pagerPages: List<List<AppsItem>> = emptyList(),
     val categories: List<AppsCategory> = emptyList(),
+    val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
 )
 
 /**

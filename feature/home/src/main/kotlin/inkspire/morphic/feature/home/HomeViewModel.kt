@@ -3,18 +3,29 @@ package inkspire.morphic.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.PlacedItem
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,20 +51,49 @@ import kotlinx.coroutines.launch
  * write just makes it durable. App metadata, by contrast, streams live from [AppRepository.observeApps] (installs
  * and removals should show through).
  *
- * **Grid comes from the UI.** The concrete [GridConfig] is resolved from the home blueprint against the detected
- * device (a `@Composable` read), so the surface pushes it in via [setGridConfig] rather than this holder guessing
- * dimensions. That first call also refreshes the app cache and, if nothing is placed, seeds the first apps so an
- * empty database still shows a populated home. Orientation is fixed to [Orientation.PORTRAIT] for now.
+ * **The device comes from the UI.** `currentDeviceConfiguration()` is a `@Composable` read of the window, so the
+ * surface reports it via [setDevice] and everything device-dependent is derived here: the grid resolved from the
+ * home blueprint, and each zone's icon sizing. That first report also refreshes the app cache and, if nothing is
+ * placed, seeds the first apps so an empty database still shows a populated home. Orientation is fixed to
+ * [Orientation.PORTRAIT] for now.
  */
 class HomeViewModel(
     private val layoutRepository: LayoutRepository,
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
+    settingsRepository: SettingsRepository,
 ) : ViewModel() {
     private val placements = MutableStateFlow<Map<GridItem, PlacedItem>>(emptyMap())
 
+    /** The device the surface reports, or null until it does. Null keeps [iconSizings] empty rather than guessing. */
+    private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
+    /**
+     * Each zone's resolved icon sizing, by slot.
+     *
+     * Two entries, because the pager and the dock are two grids with two blueprints — which is what makes their
+     * icon config independent. Before this landed they shared one value only because nothing provided any and both
+     * inherited `LocalIconMetrics`' default.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val iconSizings: Flow<Map<GridSlot, IconSizing>> =
+        device.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(emptyMap())
+            } else {
+                combine(
+                    ZoneSlots.map { slot -> settingsRepository.iconSizing(slot, current).map { slot to it } },
+                ) { pairs -> pairs.toMap() }
+            }
+        }
+
     val state: StateFlow<HomeState> =
-        combine(placements, appRepository.observeApps(), layoutRepository.folders()) { placed, apps, folders ->
+        combine(
+            placements,
+            appRepository.observeApps(),
+            layoutRepository.folders(),
+            iconSizings,
+        ) { placed, apps, folders, iconSizing ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             HomeState(
@@ -72,18 +112,22 @@ class HomeViewModel(
                         else -> null // widgets / containers get their cells later
                     }
                 },
+                iconSizing = iconSizing,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
     private var configuredFor: GridConfig? = null
 
     /**
-     * Supplies the [config] resolved for the current device (detected in the UI). Idempotent per config value:
-     * the first call refreshes the app cache and seeds a first-run layout, then loads placements; a later call
-     * with a *different* config just reloads. Seeding is guarded on an empty store, so it never clobbers an
-     * arranged layout.
+     * Supplies the device configuration the surface is drawn on — the UI's one job in this direction.
+     *
+     * It replaced `setGridConfig(config)`, in which the UI resolved the home blueprint and handed down the product.
+     * Reporting the *input* means the grid **and** each zone's icon sizing derive here, so the next device-dependent
+     * thing costs nothing. Idempotent per resolved grid: two devices that resolve to the same dimensions do not reseed.
      */
-    fun setGridConfig(config: GridConfig) {
+    fun setDevice(configuration: DeviceConfiguration) {
+        device.value = configuration
+        val config = HomePagerGrid.toGridConfig(configuration)
         if (config == configuredFor) return
         val firstConfig = configuredFor == null
         configuredFor = config
@@ -287,6 +331,9 @@ class HomeViewModel(
     }
 
     companion object {
+        /** The two grids home draws icons in — its paged main area and its dock, each with its own blueprint. */
+        private val ZoneSlots = listOf(GridSlot.HOME_MAIN, GridSlot.HOME_DOCK)
+
         val ORIENTATION = Orientation.PORTRAIT
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val DEFAULT_FOLDER_LABEL = "Folder"

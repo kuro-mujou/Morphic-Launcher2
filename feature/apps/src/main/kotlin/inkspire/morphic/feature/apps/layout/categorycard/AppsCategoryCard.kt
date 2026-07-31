@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -45,38 +46,29 @@ import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import kotlin.math.roundToInt
 
 /**
- * How many columns of cards, and the spacing and inset of the grid holding them — **placeholders, not design
- * choices**, in the same sense as the other APPS layouts' cell heights: these are surface metrics bound for the
- * settings layer, and a flat constant says so where derived arithmetic would read as a decision. (A card's *own*
- * inset, corner and slot spacing live beside [CategoryCard], which is the only thing that reads them.)
+ * The spacing and inset of the grid holding the cards — **placeholders**, in the same sense as the other APPS layouts'
+ * cell heights: surface metrics bound for the settings layer. (A card's *own* inset, corner and slot spacing live
+ * beside [CategoryCard], which is the only thing that reads them.)
  *
- * Two columns of square cards is the App-Library idiom this layout borrows, and it is the largest count at which a
- * four-slot preview stays legible on a phone — but it is still a value nothing owns yet, so it is deliberately *not* a
- * [inkspire.morphic.core.model.GridBlueprint]: that would claim it is per-device and user-editable, and neither is
- * decided. The visible consequence is a tablet, where two columns make each card huge — see the note on
- * `PreviewIconMetrics` in [CategoryCard].
+ * The **lane count** is no longer here: it is `AppsCardGrid`'s, resolved per device configuration. A card is square,
+ * so its size is `shortEdge / lanes` — which makes the count genuinely per-device rather than a constant, and is what
+ * retires the note on `PreviewIconMetrics` in [CategoryCard] observing that a 72dp icon cap would bind on a tablet
+ * given two columns. Fix the columns, not the cap.
  */
-private const val CardColumns = 2
 private val CardSpacing = 12.dp
 private val CardPadding = 16.dp
-
-/**
- * The expanded category's metrics — labels on, matching the other APPS layouts' density.
- *
- * Provided as the surface's [LocalIconMetrics] (rather than passed to the overlay) because it is what this surface
- * means by "an app cell": the card previews are the exception and say so at each call site.
- */
-private val ExpandedIconMetrics = IconMetrics(iconPercent = 0.75f)
 
 /** This surface's drop zone — the whole card grid, as each paged surface registers its viewport. */
 private val CardGridZoneId = ZoneId("apps-category-cards")
@@ -162,6 +154,9 @@ private val DragProxySize = 72.dp
  * @param onReorder commits a reorder inside an expansion, when the app was already filed there: the category, and the
  *   order its overlay reported. That report covers only the apps the cache could resolve, and is reconciled against
  *   real membership **in the store** rather than here — see `AppsCategoryChange.Reorder`.
+ * @param metrics an *expansion's* icon sizing (`GridSlot.FOLDER`, since an expansion is that same overlay and grid).
+ *   The card previews are the exception and pass their own at each call site, because a preview icon is derived from
+ *   the card's square rather than configured.
  */
 @Composable
 fun AppsCategoryCard(
@@ -169,10 +164,14 @@ fun AppsCategoryCard(
     onLaunch: (ComponentKey) -> Unit,
     onMove: (app: ComponentKey, toCategory: String, toSlot: Int) -> Unit,
     onReorder: (category: String, order: List<ComponentKey>) -> Unit,
+    metrics: IconMetrics,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
+    // Lanes per device: 2 on a phone, 3 on a tablet portrait. Square cards mean the count *is* the card size.
+    val device = currentDeviceConfiguration()
+    val cardColumns = remember(device) { AppsCardGrid.colsFor(device) }
 
     val gridState = rememberLazyGridState()
     var gridBounds by remember { mutableStateOf<Rect?>(null) }
@@ -286,7 +285,7 @@ fun AppsCategoryCard(
 
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
-    CompositionLocalProvider(LocalIconMetrics provides ExpandedIconMetrics) {
+    CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
             // Lazy, unlike the category *pager*'s pages, which use `LauncherGrid` in SCROLL_GRID mode. The card count
             // is small, but each card composes up to seven baked icons, so a screenful is already ~30 and the whole
@@ -295,7 +294,7 @@ fun AppsCategoryCard(
             // being disposed as the drag auto-scrolls past it can't kill the gesture.
             LazyVerticalGrid(
                 state = gridState,
-                columns = GridCells.Fixed(CardColumns),
+                columns = GridCells.Fixed(cardColumns),
                 userScrollEnabled = !coordinator.isDragging,
                 modifier = Modifier
                     .fillMaxSize()

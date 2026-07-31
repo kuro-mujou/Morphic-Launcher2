@@ -66,9 +66,6 @@ private val CategoryZoneId = ZoneId("apps-category-pager")
  */
 internal val CategoryCellHeight = 96.dp
 
-/** Denser than home's, matching the other APPS grids — the same starting point, replaced by the icon-size setting. */
-private val CategoryIconMetrics = IconMetrics(iconPercent = 0.75f)
-
 /**
  * The plan this surface reports for every hover it accepts: droppable, painting the gap and nothing else.
  *
@@ -112,12 +109,14 @@ private val CategoryReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropInte
  * stays here is the drag state, the planner that writes it, and the drop that reads it.
  *
  * @param onMove commits a drop — the app, the category it landed in, and its slot within that category.
+ * @param metrics a page's icon sizing, resolved from `GridSlot.APPS_CATEGORY`'s blueprint and the user's overrides.
  */
 @Composable
 fun AppsCategoryPager(
     categories: List<AppsCategory>,
     onLaunch: (ComponentKey) -> Unit,
     onMove: (app: ComponentKey, toCategory: String, toSlot: Int) -> Unit,
+    metrics: IconMetrics,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -217,7 +216,7 @@ fun AppsCategoryPager(
     }
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
-    CompositionLocalProvider(LocalIconMetrics provides CategoryIconMetrics) {
+    CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
             LauncherPager(
                 state = pagerState,

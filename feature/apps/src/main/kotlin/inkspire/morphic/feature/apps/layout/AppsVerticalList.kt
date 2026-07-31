@@ -23,20 +23,11 @@ import inkspire.morphic.core.model.ComponentKey
 /**
  * Provisional row height — **a placeholder, not a design choice.**
  *
- * Row height is a **user-configurable** surface metric (it is how a list trades density for reach), and the icon
- * follows it through [ListIconMetrics] rather than being sized independently. Both need the settings layer, which
- * isn't built, so a flat constant stands in and is the single line that changes when the setting lands.
+ * Row height is a **user-configurable** surface metric (it is how a list trades density for reach). The icon that
+ * sits in the row is already settings-driven (S3); this is the half still waiting on S4, so a flat constant stands in
+ * and is the single line that changes when that lands.
  */
 private val RowHeight = 56.dp
-
-/**
- * The list's own icon proportion — the icon fills the row's inner height.
- *
- * Each surface supplies its own [IconMetrics] (that is what [LocalIconMetrics] is for), and a list's needs differ
- * from a grid's: there is no label *underneath* to leave room for, so the icon can take the whole inner height
- * instead of the grid default's fraction of the cell. The guardrails are inherited unchanged.
- */
-private val ListIconMetrics = IconMetrics(iconPercent = 1f)
 
 /**
  * The **vertical list** layout of the APPS surface: every app A–Z in one scrolling column, one row each.
@@ -49,6 +40,11 @@ private val ListIconMetrics = IconMetrics(iconPercent = 1f)
  * **Rows use the shared gesture contract**, not a `clickable` — see [appsItemGestures] for why, and for what the
  * unwired half of that contract is waiting on.
  *
+ * @param metrics this list's icon sizing, resolved from `GridSlot.APPS_LIST`'s blueprint and the user's overrides.
+ *   Passed rather than read ambiently because the surface resolves every grid's sizing in one place; the default the
+ *   blueprint carries is `iconPercent = 1f`, since a row's label sits *beside* the icon rather than under it and so
+ *   leaves no height to reserve.
+ *
  * Deliberately **not** here yet, all of it L1 behaviour worth rebuilding rather than porting: the alphabet filter
  * strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing helpers into the same file as
  * the list — three concerns in one composable), search, and drag-out-to-home.
@@ -57,6 +53,7 @@ private val ListIconMetrics = IconMetrics(iconPercent = 1f)
 fun AppsVerticalList(
     apps: List<AppInfo>,
     onLaunch: (ComponentKey) -> Unit,
+    metrics: IconMetrics,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
@@ -65,7 +62,7 @@ fun AppsVerticalList(
     // them. A system constraint, not styling — the surface adds no decorative padding until a setting owns it.
     val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
 
-    CompositionLocalProvider(LocalIconMetrics provides ListIconMetrics) {
+    CompositionLocalProvider(LocalIconMetrics provides metrics) {
         LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = barInsets) {
             items(items = apps, key = { it.componentKey.flatten() }) { app ->
                 AppRowCell(
