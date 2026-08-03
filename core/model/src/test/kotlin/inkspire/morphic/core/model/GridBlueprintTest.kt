@@ -1,6 +1,7 @@
 package inkspire.morphic.core.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 /**
@@ -41,6 +42,28 @@ class GridBlueprintTest {
         val withoutIcon = GridBlueprints.values.filter { it.icon == null }.map { it.slot }
 
         assertEquals(listOf(GridSlot.APPS_CARD), withoutIcon)
+    }
+
+    @Test
+    fun `only the dock is sized by its extent`() {
+        // Every other grid takes the space its parent gives it, so it has no height of its own to declare. Pinned
+        // because the settings layer reads this to decide the dock's whole geometry, and a second grid quietly
+        // gaining a height would be claiming to be a fixed-extent strip too.
+        val withHeight = GridBlueprints.values.filter { it.heightDp != null }.map { it.slot }
+
+        assertEquals(listOf(GridSlot.HOME_DOCK), withHeight)
+    }
+
+    @Test
+    fun `a grid with a height of its own still edits both axes`() {
+        // The height *bounds* the row count rather than replacing it — a cell is `height ÷ rows`, so both remain the
+        // user's and the editor offers both. (Only the cap moves with the height, which is a runtime question and so
+        // not checkable here.)
+        GridBlueprints.values.filter { it.heightDp != null }.forEach { blueprint ->
+            val range = blueprint.editRange
+            assertNotNull("${blueprint.slot} has a height to divide, so it must have an editor", range)
+            assertNotNull("${blueprint.slot} divides its height into rows, so rows are editable", range!!.minRows)
+        }
     }
 
     @Test

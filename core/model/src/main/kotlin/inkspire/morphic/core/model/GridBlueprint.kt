@@ -149,11 +149,22 @@ object IconSizingRanges {
  * @property cellMultiplier Logical cells per visual cell — 2 for free-placement surfaces, 1 otherwise; see [GridConfig].
  * @property freePlacement True when items hold explicit positions and edits reflow them (home, dock); false
  *   for auto-flowed app lists.
- * @property editRange The user-editable range, or null when the grid has no editor (e.g. folder grids).
+ * @property editRange The user-editable range, or null when the grid has no editor (e.g. folder grids). A null
+ *   `minRows` inside one means the *row* axis alone is not the user's to set — a scrolling grid's case, whose rows
+ *   are however many its content reaches.
  * @property defaults The default [GridDefault] for each [DeviceConfiguration].
  * @property icon The default [IconSizing] for this grid's cells, before any user override — or **null** for a grid
  *   whose cells are not icons. The card grid draws *tiles*, each containing its own small icon arrangement, so
  *   there is no "icon per cell" for a user to size; a null says so instead of carrying a value nothing reads.
+ * @property heightDp The height in **dp** this grid occupies when it is a fixed-extent strip, or **null** for one
+ *   that takes whatever space its parent gives it — every grid but the dock. `Int` rather than `Dp` because
+ *   `core:model` is a plain JVM library, the same reason [IconSizing] stores dp as whole numbers. A grid that
+ *   declares one **bounds its row count by it** — a cell being `height ÷ rows`, there is a point past which another
+ *   row leaves cells too short to draw an icon in.
+ *
+ *   One value rather than a per-[DeviceConfiguration] map, matching [icon]: the height that fits an icon and its
+ *   label is a physical size, and does not vary by posture the way a *count* of rows does. A user who wants a
+ *   different dock in landscape overrides it there, since overrides are keyed per configuration.
  */
 data class GridBlueprint(
     val slot: GridSlot,
@@ -163,6 +174,7 @@ data class GridBlueprint(
     val editRange: GridEditRange?,
     val defaults: Map<DeviceConfiguration, GridDefault>,
     val icon: IconSizing? = null,
+    val heightDp: Int? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null
@@ -238,7 +250,22 @@ val HomePagerGrid = GridBlueprint(
     icon = IconSizing(iconPercent = 0.88f),
 )
 
-/** Home dock — a free-placement strip (default single row); rows and columns editable down to 1×1. */
+/**
+ * Home dock — a free-placement strip with **a height of its own**, divided into rows and columns within it.
+ *
+ * The one grid whose *extent* is a setting ([heightDp]) as well as its counts — and the two are not two ways of
+ * saying one thing. The height decides how much screen the strip takes; the row count divides that height into
+ * cells. So the height **bounds** the rows rather than replacing them: a cell is `height ÷ rows`, and rows may only
+ * go as high as keeps that at least the smallest usable cell (`CellFit` in `core:designsystem`). Both axes are the
+ * user's, which is why [editRange] gives each a minimum.
+ *
+ * **A height change can invalidate a row count, and shrinking the strip reduces the rows to what it can now hold** —
+ * a real write, so what is stored is always a grid the dock can actually draw. Columns are untouched by height and
+ * get the opposite treatment: their cap moves only with the icon size, so a count too large for today's icons is
+ * clamped on read and comes back when the icons shrink.
+ *
+ * [defaults] start both counts, and stand in for a frame that has no measurement yet.
+ */
 val DockGrid = GridBlueprint(
     slot = GridSlot.HOME_DOCK,
     sizing = GridSizing.FIXED_PAGER,
@@ -252,6 +279,8 @@ val DockGrid = GridBlueprint(
         tabletLandscape = GridDefault(cols = 5, rows = 1),
     ),
     icon = IconSizing(iconPercent = 0.88f),
+    // The `DockHeight` placeholder `feature:home` has carried since the dock was built, now owned by something.
+    heightDp = 96,
 )
 
 /**
