@@ -131,13 +131,20 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
 
-    // Resolve the home grid from its blueprint for the detected device (portrait only for now); an app occupies
-    // one whole visual cell, i.e. a cellMultiplier × cellMultiplier logical footprint. The ViewModel needs the
-    // config to seed the first-run layout, so push it down whenever it changes.
+    // The device is the one thing this surface knows and the ViewModel cannot (it is a `@Composable` window read);
+    // everything sized per device — both grids, both zones' icon sizing — is resolved *there*, from the settings
+    // store, and arrives in the state. An app occupies one whole visual cell, i.e. a cellMultiplier × cellMultiplier
+    // logical footprint.
+    //
+    // **The blueprint is a fallback for the first frame, not the source.** This screen used to resolve
+    // `HomePagerGrid.toGridConfig(device)` and draw that, so the home grid section wrote a size nothing read — and
+    // moved the placements to match a grid nothing was drawing. The store answers a frame or two later; until it
+    // does, the blueprint's default is the same number it would resolve to for a user who has changed nothing.
     val device = currentDeviceConfiguration()
-    val config = remember(device) { HomePagerGrid.toGridConfig(device) }
-    val cellSpan = config.cellMultiplier
     LaunchedEffect(device) { viewModel.setDevice(device) }
+    val blueprintConfig = remember(device) { HomePagerGrid.toGridConfig(device) }
+    val config = state.main ?: blueprintConfig
+    val cellSpan = config.cellMultiplier
 
     // The width the grids are actually given: the window minus the insets the column below pads by. **One value
     // feeds both**, which is the point — L1 derived its home area from settings in one place (`homeGridArea`) and
@@ -160,8 +167,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val dockMetrics = state.metricsFor(GridSlot.HOME_DOCK)
     val dockSizing = state.dock
     val dockHeight = (dockSizing?.heightDp ?: checkNotNull(DockGrid.heightDp)).dp
+    val dockBlueprintConfig = remember(device) { DockGrid.toGridConfig(device) }
     val dockConfig = if (dockSizing == null) {
-        remember(device) { DockGrid.toGridConfig(device) }
+        dockBlueprintConfig
     } else {
         DockGrid.fitGridConfig(
             area = GridArea(widthDp = contentWidthDp, heightDp = dockSizing.heightDp.toFloat()),

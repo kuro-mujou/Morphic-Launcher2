@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home
 
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
@@ -75,12 +76,16 @@ data class DockSizing(val heightDp: Int, val cols: Int, val rows: Int)
  *   override merged in. The two zones are separate entries because they are separate grids: `HOME_MAIN` and
  *   `HOME_DOCK` have their own blueprints and so their own independent icon config. Empty until the surface
  *   reports its device, since resolution is per configuration.
+ * @property main the main area's grid — its **configured** size, not its blueprint's. Null until the surface reports
+ *   its device, for the same reason [dock] is: it is resolved per device configuration, so there is nothing honest to
+ *   say before then and the blueprint stands in for the frame or two until the store answers.
  * @property dock the dock's stored size, or null until the surface reports its device — resolution is per
  *   configuration, so there is no honest value before then and the blueprint stands in meanwhile.
  */
 data class HomeState(
     val items: List<HomeItem>,
     val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
+    val main: GridConfig? = null,
     val dock: DockSizing? = null,
 )
 

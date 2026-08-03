@@ -8,10 +8,8 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
-import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
-import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.apps.AppLauncher
@@ -31,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,18 +44,26 @@ import kotlinx.coroutines.launch
  * configuration changes (rotation) and its [viewModelScope] coroutines are cancelled automatically when the
  * screen is finally gone — the reason to use the framework type rather than a hand-rolled singleton.
  *
- * **Optimistic placements.** The durable store is Room via [LayoutRepository], but the UI reads from an
- * in-memory [placements] flow: seeded once from the database on start, then updated **immediately** on every
- * [applyChanges] before the write is dispatched. Because this holder is the *sole* writer of home placements,
- * the database always converges to what's shown — so a drop lands instantly with no round-trip flicker, and the
- * write just makes it durable. App metadata, by contrast, streams live from [AppRepository.observeApps] (installs
- * and removals should show through).
+ * **Optimistic placements, over a store that is followed rather than sampled.** The durable store is Room via
+ * [LayoutRepository], but the UI reads from an in-memory [placements] flow, updated **immediately** on every
+ * [applyChanges] before the write is dispatched — so a drop lands with no round-trip flicker and the write just makes
+ * it durable. It is a *lead* on the database rather than a fork of it: the store is collected continuously, and its
+ * emissions are taken whenever none of our own writes is in flight. That last part is what stopped being optional —
+ * this holder was the sole writer of home placements until the settings grid editor arrived, which writes the
+ * displaced `Move`s itself because only the button press knows which edge moved. App metadata streams live from
+ * [AppRepository.observeApps] as it always has.
  *
  * **The device comes from the UI.** `currentDeviceConfiguration()` is a `@Composable` read of the window, so the
- * surface reports it via [setDevice] and everything device-dependent is derived here: the grid resolved from the
- * home blueprint, and each zone's icon sizing. That first report also refreshes the app cache and, if nothing is
- * placed, seeds the first apps so an empty database still shows a populated home. Orientation is fixed to
- * [Orientation.PORTRAIT] for now.
+ * surface reports it via [setDevice] and everything device-dependent is derived here: **both** grids and both zones'
+ * icon sizing, each resolved by `data:settings` from its blueprint plus whatever the user changed. Orientation is
+ * fixed to [Orientation.PORTRAIT] for now.
+ *
+ * **Every configured number arrives as a flow, including the main grid — which is what makes the settings screen
+ * reach this surface at all.** An earlier cut resolved `HomePagerGrid.toGridConfig(device)` here and again in
+ * `HomeScreen`, so home drew its *blueprint* size however the user had resized it: the grid section wrote a size the
+ * launcher never read, and (worse) moved the placements to match a grid nothing was drawing, which could leave an app
+ * in a column off the edge of the visible lattice. The dock was already resolved this way; the main area now is too,
+ * so neither zone has a second idea of its own size.
  */
 class HomeViewModel(
     private val layoutRepository: LayoutRepository,
@@ -89,6 +96,20 @@ class HomeViewModel(
         }
 
     /**
+     * The main area's grid for the reported device — **the user's size**, resolved from `HOME_MAIN`'s blueprint with
+     * any override applied, exactly as the dock's is.
+     *
+     * A `StateFlow` rather than a plain flow because two things besides the UI read it: the first-run seed needs a
+     * grid to lay apps out in, and [fitDockTo] needs one to spill onto. `Eagerly` so both can await it without a
+     * subscriber having arrived.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val mainConfig: StateFlow<GridConfig?> =
+        device.flatMapLatest { current ->
+            if (current == null) flowOf(null) else settingsRepository.gridConfig(GridSlot.HOME_MAIN, current)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
      * The dock's stored size for the reported device — its height, and the counts it divides that height into.
      *
      * Two flows rather than one because the extent and the dimensions are two settings with two stores, joined here
@@ -108,14 +129,22 @@ class HomeViewModel(
             }
         }
 
+    /**
+     * Everything the settings layer decides about how home is drawn, in one value.
+     *
+     * Folded together because `combine` takes five flows and the state needs six: three sources of *configuration*
+     * behind one, leaving the three sources of *content* (placements, apps, folders) at the top level. It is also the
+     * honest grouping — these three change together when the user edits a section, and none of them is content.
+     */
+    private val sizing: Flow<HomeSizing> = combine(iconSizings, mainConfig, dockSizing, ::HomeSizing)
+
     val state: StateFlow<HomeState> =
         combine(
             placements,
             appRepository.observeApps(),
             layoutRepository.folders(),
-            iconSizings,
-            dockSizing,
-        ) { placed, apps, folders, iconSizing, dock ->
+            sizing,
+        ) { placed, apps, folders, configured ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             HomeState(
@@ -134,31 +163,58 @@ class HomeViewModel(
                         else -> null // widgets / containers get their cells later
                     }
                 },
-                iconSizing = iconSizing,
-                dock = dock,
+                iconSizing = configured.icon,
+                main = configured.main,
+                dock = configured.dock,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
-    private var configuredFor: GridConfig? = null
+    /** Layout writes dispatched but not yet seen land — see the store collector in [init]. */
+    private var writesInFlight = 0
+
+    init {
+        // Seeding, keyed on the **configured** grid rather than on the device report: the device changes once, the
+        // grid changes every time the settings screen writes one, and a seed needs to know how big a page is.
+        // `StateFlow` conflates equal values, so this runs on a real change and not on a re-report of the same size.
+        // The app cache is refreshed once, before the first seed, since a seed with an empty cache places nothing.
+        viewModelScope.launch {
+            var refreshed = false
+            mainConfig.filterNotNull().collect { config ->
+                if (!refreshed) {
+                    appRepository.refresh()
+                    refreshed = true
+                }
+                seedIfEmpty(config)
+            }
+        }
+        // **The store is followed, not read once — because this holder stopped being its only writer.** [placements]
+        // is a *lead* on the database, not a fork of it, and it was seeded once at startup on the assumption that
+        // nothing else wrote home placements. The grid editor broke that assumption: resizing writes the count **and**
+        // the `Move`s it displaces, because only the button press knows which edge moved. A home that read once would
+        // keep drawing the old arrangement — and re-reading on the size change would not fix it either, since for a
+        // *grown* grid the size is deliberately written first, so that no observer ever sees a grid too small for its
+        // contents.
+        //
+        // Emissions are ignored while one of our own writes is in flight, which is what preserves the optimism: a drop
+        // updates the map immediately, and the echo of an *earlier* write must not roll it back for a frame. Anything
+        // skipped is either what is already shown or is superseded by the emission after the last write lands.
+        viewModelScope.launch {
+            layoutRepository.placements(ORIENTATION).collect { stored ->
+                if (writesInFlight == 0) placements.value = stored
+            }
+        }
+    }
 
     /**
      * Supplies the device configuration the surface is drawn on — the UI's one job in this direction.
      *
      * It replaced `setGridConfig(config)`, in which the UI resolved the home blueprint and handed down the product.
-     * Reporting the *input* means the grid **and** each zone's icon sizing derive here, so the next device-dependent
-     * thing costs nothing. Idempotent per resolved grid: two devices that resolve to the same dimensions do not reseed.
+     * Reporting the *input* means both grids **and** each zone's icon sizing derive here, so the next device-dependent
+     * thing costs nothing — and, more importantly, they derive from the *store* rather than from the blueprint the UI
+     * happened to have to hand.
      */
     fun setDevice(configuration: DeviceConfiguration) {
         device.value = configuration
-        val config = HomePagerGrid.toGridConfig(configuration)
-        if (config == configuredFor) return
-        val firstConfig = configuredFor == null
-        configuredFor = config
-        viewModelScope.launch {
-            if (firstConfig) appRepository.refresh()
-            seedIfEmpty(config)
-            placements.value = layoutRepository.placements(ORIENTATION).first()
-        }
     }
 
     /** Opens the app for [component] (a home tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
@@ -186,18 +242,22 @@ class HomeViewModel(
      * write is an ordinary [applyChanges] like any other.
      */
     fun fitDockTo(dockConfig: GridConfig) {
-        // Nothing is written until the main grid is known: an eviction with nowhere to go would otherwise take an
-        // item off the dock and leave it placed nowhere, which is worse than waiting for the next config.
-        val mainConfig = configuredFor ?: return
-        val current = placements.value
-        applyChanges(
-            settleDock(
-                dock = current.filterValues { it.zone == HomeZone.DOCK }.mapValues { it.value.placement },
-                main = current.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement },
-                dockConfig = dockConfig,
-                mainConfig = mainConfig,
-            ),
-        )
+        viewModelScope.launch {
+            // Nothing is written until the main grid is known — an eviction with nowhere to go would take an item off
+            // the dock and leave it placed nowhere. **Awaited rather than skipped**: the two configs resolve from the
+            // same store at roughly the same moment, so a `?: return` here would drop the very first fit whenever the
+            // dock's answer arrived first, and nothing would call again until something else changed.
+            val main = mainConfig.filterNotNull().first()
+            val current = placements.value
+            applyChanges(
+                settleDock(
+                    dock = current.filterValues { it.zone == HomeZone.DOCK }.mapValues { it.value.placement },
+                    main = current.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement },
+                    dockConfig = dockConfig,
+                    mainConfig = main,
+                ),
+            )
+        }
     }
 
     /**
@@ -206,14 +266,23 @@ class HomeViewModel(
      * Pure `Move`/`RemoveFromGrid` stay fully optimistic — no round-trip, no drop flicker. Structural ops
      * (e.g. `CreateFolder`) mint ids we can't predict, so once they've persisted the placement map is resynced
      * from the store to pick up the new item and drop the ones folded into it.
+     *
+     * [writesInFlight] brackets the write so the store collector holds off until it lands: between the optimistic
+     * update and the database catching up, the truth is here rather than there. Decremented in a `finally`, so a
+     * failed write cannot leave the surface permanently deaf to the store.
      */
     fun applyChanges(changes: List<LayoutChange>) {
         if (changes.isEmpty()) return
         placements.value = placements.value.withApplied(changes)
+        writesInFlight++
         viewModelScope.launch {
-            layoutRepository.apply(ORIENTATION, changes)
-            if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
-                placements.value = layoutRepository.placements(ORIENTATION).first()
+            try {
+                layoutRepository.apply(ORIENTATION, changes)
+                if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
+                    placements.value = layoutRepository.placements(ORIENTATION).first()
+                }
+            } finally {
+                writesInFlight--
             }
         }
     }
@@ -398,6 +467,18 @@ class HomeViewModel(
         private const val DEFAULT_FOLDER_LABEL = "Folder"
     }
 }
+
+/**
+ * The settings-resolved half of [HomeState], assembled before it joins the content half.
+ *
+ * Exists because `combine` stops at five flows and home needs six; it is not a second state object. Every field is
+ * "not yet" until the surface reports its device, since all three are resolved per device configuration.
+ */
+private data class HomeSizing(
+    val icon: Map<GridSlot, IconSizing>,
+    val main: GridConfig?,
+    val dock: DockSizing?,
+)
 
 /**
  * Folds coordinate [changes] into a placement map — the in-memory mirror of what the repository persists.
