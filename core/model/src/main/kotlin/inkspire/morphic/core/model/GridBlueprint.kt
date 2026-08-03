@@ -107,6 +107,31 @@ data class IconSizing(
 )
 
 /**
+ * The bounds a user may move each [IconSizing] field within.
+ *
+ * Here rather than in the settings UI for the reason [GridEditRange] is here: a range is a fact about the value, so
+ * the store can eventually clamp a write against it — the same write-side clamp the grid dimensions will use. Until
+ * then its consumer is the sliders, which is why it exists at all rather than being invented ahead of one.
+ *
+ * The dp bounds are `IntRange` because [IconSizing] stores dp as whole numbers; a slider derives its step count from
+ * the range rather than repeating it as a magic number.
+ */
+object IconSizingRanges {
+
+    /** Fraction of a cell the icon fills. Floored well above zero — an invisible icon is `showIcon = false`, not 0%. */
+    val IconPercent: ClosedFloatingPointRange<Float> = 0.3f..1f
+
+    /** Multiplier on the base label size. */
+    val LabelScale: ClosedFloatingPointRange<Float> = 0.7f..1.5f
+
+    /** Lower guardrail, in dp. */
+    val MinIconDp: IntRange = 16..64
+
+    /** Upper guardrail, in dp. */
+    val MaxIconDp: IntRange = 48..140
+}
+
+/**
  * The static, per-surface description of one grid: which grid it *is*, how it is sized, how its cells subdivide,
  * whether items are free-placed, its default size for each [DeviceConfiguration], how icons fill its cells, and
  * (when editable) its edit limits.

@@ -24,7 +24,9 @@ import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.SettingsRoute
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.settings.SettingsScreen
+import inkspire.morphic.feature.settings.IconSizingRoute
 import inkspire.morphic.feature.settings.SurfaceRegisterRoute
+import inkspire.morphic.feature.settings.icons.IconSizingScreen
 import inkspire.morphic.feature.settings.register.SurfaceRegisterScreen
 import inkspire.morphic.feature.shell.LauncherShell
 import inkspire.morphic.launcher.dev.DevRootScreen
@@ -92,11 +94,13 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         // same seam, which is what keeps `feature:settings` from ever learning it exists.
                         sections = listOf(
                             "Surface register →" to { navigator.goTo(SurfaceRegisterRoute) },
+                            "Icon sizing →" to { navigator.goTo(IconSizingRoute) },
                             "Dev harness →" to { navigator.goTo(DevHarnessRoute) },
                         ),
                     )
                 }
                 entry<SurfaceRegisterRoute> { SurfaceRegisterScreen(onBack = { navigator.goBack() }) }
+                entry<IconSizingRoute> { IconSizingScreen(onBack = { navigator.goBack() }) }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },
         )

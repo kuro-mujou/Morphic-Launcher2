@@ -2,7 +2,6 @@ package inkspire.morphic.feature.settings.register
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,14 +14,12 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -30,14 +27,13 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.data.settings.SideBinding
+import inkspire.morphic.feature.settings.component.SettingsChip
 import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders until the settings port brings real row and chip components with it. */
 private val ScreenPadding = 20.dp
 private val GroupGap = 24.dp
 private val ChipGap = 8.dp
-private val ChipPaddingH = 12.dp
-private val ChipPaddingV = 8.dp
 
 /**
  * The **surface register**: for each edge of HOME, which surface it opens and in which layout.
@@ -55,9 +51,10 @@ private val ChipPaddingV = 8.dp
  * **Its own theme boundary**, feeding [isSystemInDarkTheme] — settings is our own surface and follows the system,
  * where the launcher shell follows wallpaper brightness. One palette, two "is-dark" inputs.
  *
- * The chips are hand-rolled rather than a design-system component on purpose: a **segmented control** is named in the
- * design-system plan as one of the few controls to build fully custom, but nothing has needed one yet, and inventing it
- * from a single call site would be guessing at its API. Second consumer decides its shape.
+ * **Chips rather than the segmented control**, which does exist (`MorphicSegmentedButtons`, so far used only by the dev
+ * gallery). It lays its options out in one `Row` with `weight(1f)` each and cannot wrap, which suits two to four
+ * options; an edge here offers six. Chips in a `FlowRow` wrap, so they are the right tool for this count — not a
+ * stand-in for a missing component.
  *
  * @param onBack leaves the section. Wired to the navigator by the host, and to system back here so the two agree.
  */
@@ -108,13 +105,13 @@ fun SurfaceRegisterScreen(
                         // "None" is a peer of the layouts rather than a separate toggle: an edge is bound to exactly
                         // one thing or nothing, so one row of mutually exclusive choices says it without a second
                         // control that could disagree with the first.
-                        Chip(
+                        SettingsChip(
                             label = "None",
                             selected = bound == null,
                             onClick = { viewModel.bindApps(edge, layout = null) },
                         )
                         AppsLayout.entries.forEach { layout ->
-                            Chip(
+                            SettingsChip(
                                 label = layout.label,
                                 selected = (bound as? SideBinding.Apps)?.layout == layout,
                                 onClick = { viewModel.bindApps(edge, layout) },
@@ -125,22 +122,6 @@ fun SurfaceRegisterScreen(
             }
         }
     }
-}
-
-/** One mutually-exclusive choice. Selection reads by contrast, not hue — the palette is greyscale by design. */
-@Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalMorphicColors.current
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = if (selected) colors.onAccent else colors.content,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) colors.accent else colors.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = ChipPaddingH, vertical = ChipPaddingV),
-    )
 }
 
 /**

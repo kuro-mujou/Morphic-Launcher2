@@ -29,3 +29,12 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data object SurfaceRegisterRoute : NavKey
+
+/**
+ * **Icon sizing**: how big icons and labels are in each of the launcher's grids.
+ *
+ * The port of L1's per-surface icon controls. One section rather than five, because L2 has no per-surface sections yet;
+ * the controls themselves stay a reusable group so those sections embed them rather than copying them.
+ */
+@Serializable
+data object IconSizingRoute : NavKey
