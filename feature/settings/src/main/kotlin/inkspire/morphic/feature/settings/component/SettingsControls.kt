@@ -19,8 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSlider
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import kotlin.math.roundToInt
 
 /** Provisional spacing — placeholders, like every other surface metric, until the settings layer owns its own. */
 private val RowGapV = 12.dp
@@ -88,6 +90,10 @@ internal fun SettingsSwitchRow(
  * asynchronous, so rather than clearing the local value immediately (and briefly showing the old stored one), it is
  * held until the new value arrives and re-keys this `remember`.
  *
+ * **No `steps`.** The M3 track these sit on draws a tick per step, so a discrete slider over a wide range renders
+ * as a ruler. Where whole numbers are wanted the value is *rounded* instead — see [SettingsCommitRangeSlider] —
+ * which keeps the track clean and still commits an integer.
+ *
  * @param valueLabel renders the current value for display — a percentage, a multiplier, a dp count.
  */
 @Composable
@@ -98,7 +104,6 @@ internal fun SettingsCommitSlider(
     valueLabel: (Float) -> String,
     onCommit: (Float) -> Unit,
     subtitle: String? = null,
-    steps: Int = 0,
 ) {
     val colors = LocalMorphicColors.current
     var dragged by remember(value) { mutableStateOf<Float?>(null) }
@@ -118,7 +123,53 @@ internal fun SettingsCommitSlider(
             value = shown,
             onValueChange = { dragged = it },
             valueRange = valueRange,
-            steps = steps,
+            onValueChangeFinished = { dragged?.let(onCommit) },
+        )
+    }
+}
+
+/**
+ * A two-thumb slider over a **whole-number** range, previewing while dragging and writing on release.
+ *
+ * For a pair of bounds that must not cross — the icon-size guardrails are the case it was built for, and
+ * `MorphicRangeSlider`'s own KDoc names that as its intended consumer. Using it makes "min not above max" structural:
+ * the thumbs cannot pass each other, so nothing downstream has to re-check it.
+ *
+ * **Rounded rather than stepped.** A discrete slider would draw an M3 tick per step, which over ~120 dp reads as a
+ * ruler; instead the track stays continuous and each thumb's value is rounded to whole dp as it moves. The thumb
+ * settles on integers without the track advertising them.
+ *
+ * Commit-on-release and the `remember(value)` key work as in [SettingsCommitSlider], and for the same reasons.
+ */
+@Composable
+internal fun SettingsCommitRangeSlider(
+    title: String,
+    value: IntRange,
+    bounds: IntRange,
+    valueLabel: (IntRange) -> String,
+    onCommit: (IntRange) -> Unit,
+    subtitle: String? = null,
+) {
+    val colors = LocalMorphicColors.current
+    var dragged by remember(value) { mutableStateOf<IntRange?>(null) }
+    val shown = dragged ?: value
+
+    Column(Modifier.fillMaxWidth().padding(vertical = RowGapV / 2)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxWidth(FILL_BESIDE_CONTROL)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = colors.content)
+                if (subtitle != null) {
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.contentMuted)
+                }
+            }
+            Text(valueLabel(shown), style = MaterialTheme.typography.labelLarge, color = colors.accent)
+        }
+        MorphicRangeSlider(
+            value = shown.first.toFloat()..shown.last.toFloat(),
+            onValueChange = { range ->
+                dragged = range.start.roundToInt()..range.endInclusive.roundToInt()
+            },
+            valueRange = bounds.first.toFloat()..bounds.last.toFloat(),
             onValueChangeFinished = { dragged?.let(onCommit) },
         )
     }

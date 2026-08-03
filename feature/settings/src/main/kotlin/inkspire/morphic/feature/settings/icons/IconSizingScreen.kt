@@ -115,6 +115,7 @@ fun IconSizingScreen(
                     sizing = sizing,
                     onChange = viewModel::change,
                     onToggle = { label, icon -> viewModel.toggle(label, icon) },
+                    onDpRange = viewModel::changeIconDp,
                 )
                 MorphicButton(
                     onClick = viewModel::reset,

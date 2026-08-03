@@ -124,11 +124,14 @@ object IconSizingRanges {
     /** Multiplier on the base label size. */
     val LabelScale: ClosedFloatingPointRange<Float> = 0.7f..1.5f
 
-    /** Lower guardrail, in dp. */
-    val MinIconDp: IntRange = 16..64
-
-    /** Upper guardrail, in dp. */
-    val MaxIconDp: IntRange = 48..140
+    /**
+      * The dp window both guardrails live in — one bound, because one two-thumb control sets both.
+      *
+      * L1 gave them separate ranges (min 16..64, max 48..140), which two independent sliders needed to stop them
+      * crossing. A range slider cannot cross its own thumbs, so the invariant is structural and the split caps were
+      * only ever a consequence of the control choice.
+      */
+    val IconDp: IntRange = 16..140
 }
 
 /**

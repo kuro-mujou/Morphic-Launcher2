@@ -43,9 +43,10 @@ internal val EditableSlots: List<GridSlot> = GridSlot.entries.filter { it.bluepr
 /**
  * Screen-level state holder for the icon-sizing section: reads one grid's resolved sizing, writes sparse overrides.
  *
- * **The clamps live here, not in the controls.** `min ≤ max` has to be enforced against the *resolved* values, and only
- * this holder sees both those and the sparse override. L1 wrote the same clamp inline at each of its two slider call
- * sites, where the pair could disagree.
+ * **No `min`/`max` clamp anywhere.** L1 needed one, written inline at each of its two slider call sites where the pair
+ * could disagree; here the guardrails are one range slider whose thumbs cannot cross, so their ordering is a property of
+ * the control rather than a rule this holder enforces. Choosing the right control removed the invariant instead of
+ * moving it.
  */
 class IconSizingViewModel(
     private val settingsRepository: SettingsRepository,
@@ -78,32 +79,28 @@ class IconSizingViewModel(
     /**
      * Commits a numeric field.
      *
-     * The dp guardrails are clamped against each other so they cannot cross: raising the minimum past the maximum
-     * pushes the maximum up with it, and vice versa. Clamped against the **resolved** values, because a sparse override
-     * may hold `null` for the other half — in which case it is the blueprint's number that has to be respected.
-     *
      * `internal`, like [IconSizingField]: this is the vocabulary the section's own controls speak, not API for anyone
      * outside the feature.
      */
     internal fun change(field: IconSizingField, value: Float) {
-        val resolved = state.value.sizing ?: return
-        val dp = value.toInt()
         edit {
             when (field) {
                 IconSizingField.IconPercent -> copy(iconPercent = value)
                 IconSizingField.LabelScale -> copy(labelScale = value)
-                // Push the other guardrail only where they would cross. Leaving it alone otherwise matters: it may
-                // currently be `null` (still following the blueprint), and writing a value would silently pin it.
-                IconSizingField.MinIconDp -> copy(
-                    minIconDp = dp,
-                    maxIconDp = if (dp > resolved.maxIconDp) dp else maxIconDp,
-                )
-                IconSizingField.MaxIconDp -> copy(
-                    maxIconDp = dp,
-                    minIconDp = if (dp < resolved.minIconDp) dp else minIconDp,
-                )
             }
         }
+    }
+
+    /**
+     * Commits both icon-size guardrails together, in whole dp.
+     *
+     * **No clamp here, and that is the point of using a range slider.** The two bounds used to be independent sliders,
+     * which meant this had to stop them crossing — against the *resolved* values, since a sparse override may hold null
+     * for the other half — and had to avoid pinning a field that was still following the blueprint. A two-thumb control
+     * cannot produce a crossed pair at all, so the whole clamp and its subtlety are gone rather than relocated.
+     */
+    fun changeIconDp(range: IntRange) {
+        edit { copy(minIconDp = range.first, maxIconDp = range.last) }
     }
 
     /**

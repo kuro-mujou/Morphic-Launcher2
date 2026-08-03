@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.IconSizingRanges
+import inkspire.morphic.feature.settings.component.SettingsCommitRangeSlider
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
@@ -11,11 +12,13 @@ import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 /**
  * Which icon field a control writes.
  *
- * Named fields rather than the `IconLayoutSettings.() -> IconLayoutSettings` transforms L1 passed around, because the
- * two clamps (`min ≤ max`) need the **resolved** values to be correct, and only the ViewModel has both those and the
- * sparse override. L1 repeated its clamp inline at each of the two call sites; here it lives in one place.
+ * Named fields rather than the `IconLayoutSettings.() -> IconLayoutSettings` transforms L1 passed around, so the
+ * ViewModel — not a composable — decides how a field is stored.
+ *
+ * Only the two continuous scales are here. The guardrails are set together by a range slider and commit as a pair,
+ * because one two-thumb control is the honest shape for two bounds that must not cross.
  */
-internal enum class IconSizingField { IconPercent, LabelScale, MinIconDp, MaxIconDp }
+internal enum class IconSizingField { IconPercent, LabelScale }
 
 /**
  * Icon + label sizing controls for **one grid**, shared by every surface that edits its own.
@@ -29,7 +32,9 @@ internal enum class IconSizingField { IconPercent, LabelScale, MinIconDp, MaxIco
  * the grid rather than of the call site — so a caller cannot get it wrong, and a new grid answers for itself.
  *
  * L1 also dropped the dp guardrails entirely for a list. They are kept here because in L2 they genuinely apply: every
- * cell resolves its icon through `IconMetrics.resolveIconSize`, which clamps to them whatever the surface.
+ * cell resolves its icon through `IconMetrics.resolveIconSize`, which clamps to them whatever the surface — and they
+ * are **one range slider** rather than L1's two independent ones, which makes their ordering structural instead of a
+ * clamp anyone could forget.
  *
  * **Every control writes a *sparse* override**, so nothing is stored for a field left alone and a later change to a
  * blueprint default still reaches it. That is also what makes "reset" a plain write of nulls rather than a special op.
@@ -38,6 +43,7 @@ internal enum class IconSizingField { IconPercent, LabelScale, MinIconDp, MaxIco
  *   should show, because it is what the user sees on screen.
  * @param onChange commits a numeric field. Fires on slider **release**, not per frame.
  * @param onToggle commits a boolean field.
+ * @param onDpRange commits both icon-size guardrails at once, in whole dp.
  */
 @Composable
 internal fun IconSizingControls(
@@ -45,6 +51,7 @@ internal fun IconSizingControls(
     sizing: IconSizing,
     onChange: (IconSizingField, Float) -> Unit,
     onToggle: (showLabel: Boolean?, showIcon: Boolean?) -> Unit,
+    onDpRange: (IntRange) -> Unit,
 ) {
     SettingsSectionHeader("Icon & text")
 
@@ -88,33 +95,12 @@ internal fun IconSizingControls(
     }
 
     SettingsSectionHeader("Icon size limits")
-    SettingsCommitSlider(
-        title = "Minimum",
-        subtitle = "Guardrail on dense grids",
-        value = sizing.minIconDp.toFloat(),
-        valueRange = IconSizingRanges.MinIconDp.asSliderRange(),
-        steps = IconSizingRanges.MinIconDp.sliderSteps(),
-        valueLabel = { "${it.toInt()} dp" },
-        onCommit = { onChange(IconSizingField.MinIconDp, it) },
-    )
-    SettingsCommitSlider(
-        title = "Maximum",
-        subtitle = "Guardrail on sparse grids",
-        value = sizing.maxIconDp.toFloat(),
-        valueRange = IconSizingRanges.MaxIconDp.asSliderRange(),
-        steps = IconSizingRanges.MaxIconDp.sliderSteps(),
-        valueLabel = { "${it.toInt()} dp" },
-        onCommit = { onChange(IconSizingField.MaxIconDp, it) },
+    SettingsCommitRangeSlider(
+        title = "Icon size range",
+        subtitle = "Guardrails on dense and sparse grids",
+        value = sizing.minIconDp..sizing.maxIconDp,
+        bounds = IconSizingRanges.IconDp,
+        valueLabel = { "${it.first}–${it.last} dp" },
+        onCommit = onDpRange,
     )
 }
-
-/** A whole-number range as a slider's float bounds. */
-private fun IntRange.asSliderRange(): ClosedFloatingPointRange<Float> = first.toFloat()..last.toFloat()
-
-/**
- * How many discrete stops a slider needs to land on every whole value in this range.
- *
- * Compose counts the steps *between* the endpoints, so it is one fewer than the interior values — derived here rather
- * than written as the literal `47`/`91` L1 kept beside its ranges, where the two could drift apart.
- */
-private fun IntRange.sliderSteps(): Int = (last - first - 1).coerceAtLeast(0)
