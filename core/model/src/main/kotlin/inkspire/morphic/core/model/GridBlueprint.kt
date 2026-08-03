@@ -190,14 +190,22 @@ private fun byDevice(
  * [GridSizing.FIXED_PAGER] grids (home, dock, drawer paged, folders); a [GridSizing.SCROLL_GRID] blueprint is
  * column-only and derives its rows at runtime, so it has nothing to resolve here.
  */
-fun GridBlueprint.toGridConfig(device: DeviceConfiguration): GridConfig {
-    val default = defaults.getValue(device)
-    val visualRows = requireNotNull(default.rows) {
+fun GridBlueprint.toGridConfig(device: DeviceConfiguration): GridConfig = toGridConfig(defaults.getValue(device))
+
+/**
+ * The same resolution from an explicit [size] rather than from this blueprint's own defaults.
+ *
+ * The overload `data:settings` needs: it resolves a user's sparse override against the blueprint default, then asks for
+ * the config of the *result*. Without it that layer would have to re-do the multiplier arithmetic and could drift from
+ * this one.
+ */
+fun GridBlueprint.toGridConfig(size: GridDefault): GridConfig {
+    val visualRows = requireNotNull(size.rows) {
         "toGridConfig needs a fixed row count; $sizing grids resolve rows at runtime"
     }
     return GridConfig(
         rows = visualRows * cellMultiplier,
-        cols = default.cols * cellMultiplier,
+        cols = size.cols * cellMultiplier,
         cellMultiplier = cellMultiplier,
     )
 }

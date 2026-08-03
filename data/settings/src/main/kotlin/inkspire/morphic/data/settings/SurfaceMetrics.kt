@@ -1,6 +1,7 @@
 package inkspire.morphic.data.settings
 
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import kotlinx.serialization.Serializable
@@ -44,13 +45,43 @@ data class IconOverride(
     )
 }
 
+
+/**
+ * A user's change to one grid's **dimensions** — nullable per axis, meaning "not overridden".
+ *
+ * Sparse for the same reason [IconOverride] is: a stored value would copy the blueprint's number into storage the first
+ * time a user touched the other axis, and a later change to that default would then stop reaching them.
+ *
+ * **A row override is ignored on a scrolling grid**, whatever is stored. Rows there are however many the content
+ * reaches, so a fixed count is not a preference the surface could honour — see [resolveAgainst], which keeps that
+ * decision in one place rather than trusting every reader to check the blueprint's sizing.
+ */
+@Serializable
+data class GridOverride(
+    val cols: Int? = null,
+    val rows: Int? = null,
+) {
+    /** True when nothing is overridden — the state in which this entry may as well not be stored. */
+    val isEmpty: Boolean get() = cols == null && rows == null
+
+    /**
+     * [base] with each overridden axis replaced.
+     *
+     * A null `base.rows` marks a scrolling grid, and stays null however many rows are stored: the blueprint decides
+     * whether an axis *exists*, and only the size of one that does is the user's to change.
+     */
+    fun resolveAgainst(base: GridDefault): GridDefault = GridDefault(
+        cols = cols ?: base.cols,
+        rows = if (base.rows == null) null else rows ?: base.rows,
+    )
+}
+
 /**
  * **Per-grid metric overrides** — what the user changed about a grid, for one device configuration.
  *
- * The second settings slice, and the one that retires the per-surface icon constants scattered through the feature
- * modules. Only icon sizing is here so far; grid dimensions (S4) key the same way and join as a second map rather
- * than a second slice, because the two are edited on one screen and every consumer of one needs the other — a cell's
- * icon size is a fraction of a cell whose size comes from the grid.
+ * The second settings slice, and the one that retired the per-surface icon constants scattered through the feature
+ * modules. Icon sizing and grid dimensions are two maps in **one** slice rather than two slices, because every
+ * consumer of one needs the other: a cell's icon size is a fraction of a cell whose size comes from the grid.
  *
  * **Keyed by [GridSlot] × [DeviceConfiguration], and the second half matters.** `GridBlueprint.defaults` is already
  * per-[DeviceConfiguration] — form factor *crossed with* orientation, four values — so keying an override by mere
@@ -68,6 +99,7 @@ data class IconOverride(
 @Serializable
 data class SurfaceMetrics(
     val icon: Map<GridSlot, Map<DeviceConfiguration, IconOverride>> = emptyMap(),
+    val grid: Map<GridSlot, Map<DeviceConfiguration, GridOverride>> = emptyMap(),
 ) {
     /**
      * The icon sizing to draw with for [slot] on [device]: the blueprint's default with any override applied.
@@ -94,6 +126,33 @@ data class SurfaceMetrics(
         val updated = forSlot.getOrElse(device) { IconOverride() }.transform()
         val nextForSlot = if (updated.isEmpty) forSlot - device else forSlot + (device to updated)
         return copy(icon = if (nextForSlot.isEmpty()) icon - slot else icon + (slot to nextForSlot))
+    }
+
+
+    /**
+     * The dimensions to lay [slot] out with on [device]: the blueprint's default with any override applied.
+     *
+     * As with icon sizing, consumers never see this — they ask [SettingsRepository] for a resolved `GridConfig` (or a
+     * column count, for a scrolling grid) and the keying stays in this module.
+     */
+    fun gridSize(slot: GridSlot, device: DeviceConfiguration, base: GridDefault): GridDefault =
+        grid[slot]?.get(device)?.resolveAgainst(base) ?: base
+
+    /**
+     * A copy with [transform] applied to [slot]'s grid override for [device].
+     *
+     * Empty overrides are removed at both levels, exactly as [withIconOverride] does — the two are deliberately the
+     * same shape, since the sparseness rule is the slice's rather than either map's.
+     */
+    fun withGridOverride(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: GridOverride.() -> GridOverride,
+    ): SurfaceMetrics {
+        val forSlot = grid[slot].orEmpty()
+        val updated = forSlot.getOrElse(device) { GridOverride() }.transform()
+        val nextForSlot = if (updated.isEmpty) forSlot - device else forSlot + (device to updated)
+        return copy(grid = if (nextForSlot.isEmpty()) grid - slot else grid + (slot to nextForSlot))
     }
 
     companion object {

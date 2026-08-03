@@ -1,6 +1,7 @@
 package inkspire.morphic.data.settings
 
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
@@ -76,5 +77,35 @@ interface SettingsRepository {
         slot: GridSlot,
         device: DeviceConfiguration,
         transform: IconOverride.() -> IconOverride,
+    )
+
+    /**
+     * The dimensions to lay [slot] out with on [device] — **already resolved** from its blueprint and any override.
+     *
+     * Only meaningful for a grid with a fixed row count (`GridSizing.FIXED_PAGER`); a scrolling grid derives its rows
+     * from content and has no `GridConfig` to give, which is why [gridCols] exists beside this rather than one method
+     * returning something nullable. The split mirrors `toGridConfig` / `colsFor` in `core:model`, for the same reason.
+     */
+    fun gridConfig(slot: GridSlot, device: DeviceConfiguration): Flow<GridConfig>
+
+    /** The **visual** column count for [slot] on [device] — the whole of a scrolling grid's size. */
+    fun gridCols(slot: GridSlot, device: DeviceConfiguration): Flow<Int>
+
+    /**
+     * Overrides [slot]'s dimensions for [device]. Null in the transform clears an axis, which then follows the
+     * blueprint again.
+     *
+     * **Clamped to the blueprint's `editRange` on write**, so storage can never hold a grid the editor would refuse —
+     * L1 instead let call sites `coerceAtMost` ad hoc, in at least two places that could disagree. Only the *minima*
+     * are enforced: how many rows or columns actually *fit* depends on screen area and icon size, which is a runtime
+     * question `core:model` deliberately does not answer.
+     *
+     * A grid with no `editRange` is not user-editable at all (a folder's, a list's) and writing to one is a coding
+     * mistake rather than a no-op, so it throws.
+     */
+    suspend fun updateGrid(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: GridOverride.() -> GridOverride,
     )
 }

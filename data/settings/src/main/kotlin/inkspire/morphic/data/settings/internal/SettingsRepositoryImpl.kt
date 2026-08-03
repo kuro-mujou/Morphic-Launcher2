@@ -8,12 +8,15 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
@@ -99,6 +102,41 @@ internal class SettingsRepositoryImpl(
         device: DeviceConfiguration,
         transform: IconOverride.() -> IconOverride,
     ) = update(SurfaceMetricsSlice) { withIconOverride(slot, device, transform) }
+
+    override fun gridConfig(slot: GridSlot, device: DeviceConfiguration): Flow<GridConfig> {
+        val blueprint = slot.blueprint
+        return dataStore.read(SurfaceMetricsSlice) { metrics ->
+            blueprint.toGridConfig(metrics.gridSize(slot, device, blueprint.defaults.getValue(device)))
+        }
+    }
+
+    override fun gridCols(slot: GridSlot, device: DeviceConfiguration): Flow<Int> {
+        val blueprint = slot.blueprint
+        return dataStore.read(SurfaceMetricsSlice) { metrics ->
+            metrics.gridSize(slot, device, blueprint.defaults.getValue(device)).cols
+        }
+    }
+
+    override suspend fun updateGrid(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: GridOverride.() -> GridOverride,
+    ) {
+        // Not a no-op but a throw: the editor only offers editable grids, so reaching a fixed one means a caller has
+        // gone wrong, and silently dropping the write would hide it.
+        val range = requireNotNull(slot.blueprint.editRange) { "$slot has no editor, so its size cannot be overridden" }
+        update(SurfaceMetricsSlice) {
+            withGridOverride(slot, device) {
+                val edited = transform()
+                // Floors only. A maximum depends on measured area and icon size — a runtime question, and the reason
+                // `GridEditRange` carries no maxima at all.
+                GridOverride(
+                    cols = edited.cols?.coerceAtLeast(range.minCols),
+                    rows = range.minRows?.let { min -> edited.rows?.coerceAtLeast(min) },
+                )
+            }
+        }
+    }
 
     /**
      * Streams [slice], decoded and projected through [project], skipping re-emissions of an equal *projected*
