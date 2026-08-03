@@ -18,6 +18,7 @@ import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.layout.settleDock
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.PlacedItem
@@ -61,7 +62,7 @@ class HomeViewModel(
     private val layoutRepository: LayoutRepository,
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     private val placements = MutableStateFlow<Map<GridItem, PlacedItem>>(emptyMap())
 
@@ -87,13 +88,34 @@ class HomeViewModel(
             }
         }
 
+    /**
+     * The dock's stored size for the reported device — its height, and the counts it divides that height into.
+     *
+     * Two flows rather than one because the extent and the dimensions are two settings with two stores, joined here
+     * because a `StateFlow` of one state object is what the surface reads. Null until a device is reported, exactly
+     * as [iconSizings] is empty until then.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val dockSizing: Flow<DockSizing?> =
+        device.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(null)
+            } else {
+                combine(
+                    settingsRepository.dockHeight(current),
+                    settingsRepository.gridConfig(GridSlot.HOME_DOCK, current),
+                ) { heightDp, grid -> DockSizing(heightDp, grid.visualCols, grid.visualRows) }
+            }
+        }
+
     val state: StateFlow<HomeState> =
         combine(
             placements,
             appRepository.observeApps(),
             layoutRepository.folders(),
             iconSizings,
-        ) { placed, apps, folders, iconSizing ->
+            dockSizing,
+        ) { placed, apps, folders, iconSizing, dock ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             HomeState(
@@ -113,6 +135,7 @@ class HomeViewModel(
                     }
                 },
                 iconSizing = iconSizing,
+                dock = dock,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
@@ -140,6 +163,42 @@ class HomeViewModel(
 
     /** Opens the app for [component] (a home tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
     fun launch(component: ComponentKey) = appLauncher.launch(component)
+
+    /**
+     * Re-homes anything the dock can no longer hold, now that its grid is [dockConfig] — **the settings write and
+     * the placement store meeting**.
+     *
+     * Shrinking the dock (or raising its icon size, which shrinks how many cells fit) swallows cells that may hold
+     * items. The strip is a *single page*, so unlike home there is no next page to push them onto: whatever will not
+     * fit is evicted and lands on **home's main area** instead, where a page can always be appended.
+     *
+     * **A command rather than a setter**, and reported by the surface rather than derived here, which is the one
+     * exception to "report the input, not the product" ([setDevice]'s rule). The two inputs a dock grid needs — the
+     * measured width, and the type scale the label row's height comes from — exist only in the UI, so the surface
+     * is the only layer that can answer. It reports the answer; the write stays here.
+     *
+     * **Idempotent, so the caller does not have to know whether the dock shrank**: a config everything already fits
+     * reports no change and writes nothing, which is why this can simply be called whenever the grid changes.
+     *
+     * Deliberately **not** where L1 put it. L1 reflowed inside the `combine` that assembles its home state and
+     * launched the persist *from within that transform* — so the write ran as a side effect of reading state, on
+     * every emission that happened to find a stray, racing itself. Here the trigger is the config changing, and the
+     * write is an ordinary [applyChanges] like any other.
+     */
+    fun fitDockTo(dockConfig: GridConfig) {
+        // Nothing is written until the main grid is known: an eviction with nowhere to go would otherwise take an
+        // item off the dock and leave it placed nowhere, which is worse than waiting for the next config.
+        val mainConfig = configuredFor ?: return
+        val current = placements.value
+        applyChanges(
+            settleDock(
+                dock = current.filterValues { it.zone == HomeZone.DOCK }.mapValues { it.value.placement },
+                main = current.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement },
+                dockConfig = dockConfig,
+                mainConfig = mainConfig,
+            ),
+        )
+    }
 
     /**
      * Applies layout [changes] optimistically to [placements] (so the UI updates now), then persists them.

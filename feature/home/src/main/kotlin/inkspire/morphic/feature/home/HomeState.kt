@@ -49,6 +49,21 @@ sealed interface HomeItem {
 }
 
 /**
+ * The dock's **stored** size — everything about it a user has an opinion about.
+ *
+ * The one number that is *not* here is its width, which is simply the screen's. Turning these three into a grid is
+ * `CellFit.fitGridConfig`, in the surface, because that needs the measured width and the current type scale.
+ *
+ * @property heightDp how tall the strip is, in dp. It also **bounds** [rows]: a cell is `height ÷ rows`, so past a
+ *   point another row would leave cells too short to draw an icon in.
+ * @property cols how many columns across. Clamped to what fits when the grid is built and never written back, so a
+ *   count too large for today's icon size comes back when the icons shrink.
+ * @property rows how many rows down. Clamped on read the same way — but unlike columns it is also *reduced in
+ *   storage* when the height it divides no longer supports it, which the dock's settings screen does on commit.
+ */
+data class DockSizing(val heightDp: Int, val cols: Int, val rows: Int)
+
+/**
  * The home surface's render state for the current orientation — the placed [items] (apps and folders) across
  * *all* zones, exactly as the repository streams them. Widgets and containers join this once their cells exist.
  *
@@ -60,10 +75,13 @@ sealed interface HomeItem {
  *   override merged in. The two zones are separate entries because they are separate grids: `HOME_MAIN` and
  *   `HOME_DOCK` have their own blueprints and so their own independent icon config. Empty until the surface
  *   reports its device, since resolution is per configuration.
+ * @property dock the dock's stored size, or null until the surface reports its device — resolution is per
+ *   configuration, so there is no honest value before then and the blueprint stands in meanwhile.
  */
 data class HomeState(
     val items: List<HomeItem>,
     val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
+    val dock: DockSizing? = null,
 )
 
 /** The items placed in [zone] — one zone's grid contents, in the order the state reports them. */
