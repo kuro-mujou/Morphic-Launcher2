@@ -63,6 +63,31 @@ class GridOccupancy(
     fun findFreeRect(page: Int, row: Int, col: Int, rowSpan: Int, colSpan: Int): GridPlacement? {
         if (rowSpan > config.rows || colSpan > config.cols) return null
 
+        findFreeRectOnPage(page, row, col, rowSpan, colSpan)?.let { return it }
+
+        // Later pages get no positional hint: the item's own row/col described where it sat on *its* page, which
+        // says nothing about a page it has never been on, so those are scanned from the top-left.
+        var p = page + 1
+        while (p <= maxPage + 1) {
+            scanPage(p, rowSpan, colSpan)?.let { return it }
+            p++
+        }
+        return null
+    }
+
+    /**
+     * [findFreeRect] confined to one page — for a grid that **has** only one.
+     *
+     * The dock is the case: it is a single non-paged strip, so an item it cannot fit has not overflowed onto a
+     * page 1 that would simply never be drawn; it has nowhere to go on this grid at all, and saying so is the
+     * caller's cue to re-home it elsewhere. Returning null rather than inventing a page is what makes that
+     * difference visible instead of silently hiding items.
+     *
+     * @return the free placement, or `null` when this page has no room (or the item is larger than the grid).
+     */
+    fun findFreeRectOnPage(page: Int, row: Int, col: Int, rowSpan: Int, colSpan: Int): GridPlacement? {
+        if (rowSpan > config.rows || colSpan > config.cols) return null
+
         val preferred = GridPlacement(
             page = page,
             row = row.coerceIn(0, config.rows - rowSpan),
@@ -71,16 +96,16 @@ class GridOccupancy(
             colSpan = colSpan,
         )
         if (isFree(preferred)) return preferred
+        return scanPage(page, rowSpan, colSpan)
+    }
 
-        var p = page
-        while (p <= maxPage + 1) {
-            for (r in 0..config.rows - rowSpan) {
-                for (c in 0..config.cols - colSpan) {
-                    val rect = GridPlacement(p, r, c, rowSpan, colSpan)
-                    if (isFree(rect)) return rect
-                }
+    /** The first free rectangle of this size on [page], scanning row-major from the top-left. */
+    private fun scanPage(page: Int, rowSpan: Int, colSpan: Int): GridPlacement? {
+        for (r in 0..config.rows - rowSpan) {
+            for (c in 0..config.cols - colSpan) {
+                val rect = GridPlacement(page, r, c, rowSpan, colSpan)
+                if (isFree(rect)) return rect
             }
-            p++
         }
         return null
     }
