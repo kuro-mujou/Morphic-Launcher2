@@ -1,5 +1,7 @@
 package inkspire.morphic.feature.settings.di
 
+import inkspire.morphic.feature.settings.dock.DockViewModel
+import inkspire.morphic.feature.settings.grid.GridSizeViewModel
 import inkspire.morphic.feature.settings.icons.IconSizingViewModel
 import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
 import org.koin.core.module.dsl.viewModel
@@ -16,4 +18,6 @@ import org.koin.dsl.module
 val settingsSurfaceModule = module {
     viewModel { SurfaceRegisterViewModel(get()) }
     viewModel { IconSizingViewModel(get()) }
+    viewModel { DockViewModel(get(), get()) }
+    viewModel { GridSizeViewModel(get(), get()) }
 }

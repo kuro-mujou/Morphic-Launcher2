@@ -44,15 +44,15 @@ private val ChipPaddingV = 8.dp
  * motion. A fully custom one is reserved for controls M3 lacks.
  */
 
-/** A group heading inside a settings screen. */
+/** A group heading inside a settings screen, or above a run of rows in the section list. */
 @Composable
-internal fun SettingsSectionHeader(title: String) {
+internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier) {
     val colors = LocalMorphicColors.current
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,
         color = colors.contentMuted,
-        modifier = Modifier.padding(top = HeaderGapTop, bottom = RowGapV / 2),
+        modifier = modifier.padding(top = HeaderGapTop, bottom = RowGapV / 2),
     )
 }
 

@@ -24,10 +24,6 @@ import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.SettingsRoute
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.settings.SettingsScreen
-import inkspire.morphic.feature.settings.IconSizingRoute
-import inkspire.morphic.feature.settings.SurfaceRegisterRoute
-import inkspire.morphic.feature.settings.icons.IconSizingScreen
-import inkspire.morphic.feature.settings.register.SurfaceRegisterScreen
 import inkspire.morphic.feature.shell.LauncherShell
 import inkspire.morphic.launcher.dev.DevRootScreen
 import kotlinx.serialization.Serializable
@@ -89,18 +85,13 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<SettingsRoute> {
                     SettingsScreen(
                         onBack = { navigator.goBack() },
-                        // Section rows. `feature:settings` declares its own section keys but does not map them,
-                        // so the label→action pairing lives here with the rest of the graph. The dev harness rides the
-                        // same seam, which is what keeps `feature:settings` from ever learning it exists.
-                        sections = listOf(
-                            "Surface register →" to { navigator.goTo(SurfaceRegisterRoute) },
-                            "Icon sizing →" to { navigator.goTo(IconSizingRoute) },
-                            "Dev harness →" to { navigator.goTo(DevHarnessRoute) },
-                        ),
+                        // Settings is **one** destination: its sections are panes, two of which share the screen on a
+                        // tablet, so which one is showing is that screen's own state. The dev harness is the only
+                        // thing it needs from out here, and it is passed as an action — which keeps
+                        // `feature:settings` from ever learning that destination exists.
+                        onOpenDevHarness = { navigator.goTo(DevHarnessRoute) },
                     )
                 }
-                entry<SurfaceRegisterRoute> { SurfaceRegisterScreen(onBack = { navigator.goBack() }) }
-                entry<IconSizingRoute> { IconSizingScreen(onBack = { navigator.goBack() }) }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },
         )

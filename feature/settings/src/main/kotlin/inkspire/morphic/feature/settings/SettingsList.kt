@@ -1,0 +1,123 @@
+package inkspire.morphic.feature.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.feature.settings.component.SettingsSectionHeader
+
+/** Provisional spacing — placeholders, as everywhere else in this module. */
+private val RowInsetH = 12.dp
+private val RowInsetV = 4.dp
+private val RowPadding = 12.dp
+private val IconGap = 16.dp
+
+/**
+ * The settings index: grouped rows of section → title, subtitle and glyph.
+ *
+ * **One list for both panes**, differing only in how it marks position: a two-pane layout *highlights* the section
+ * showing beside it, a single-pane one shows a chevron because tapping goes somewhere. L1 had the same two flags for
+ * the same reason, and they are worth keeping — a highlight in single-pane would mark a row the user has already left,
+ * and a chevron in two-pane would promise a journey that does not happen.
+ *
+ * @param selected the section being shown, or null when the list is the whole screen.
+ * @param highlightSelected true in two-pane, where [selected] is on screen beside this.
+ * @param showChevron true in single-pane, where a tap opens a new pane.
+ */
+@Composable
+internal fun SettingsList(
+    selected: SettingsSection?,
+    onSelect: (SettingsSection) -> Unit,
+    highlightSelected: Boolean,
+    showChevron: Boolean,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(vertical = RowPadding),
+) {
+    LazyColumn(modifier = modifier, contentPadding = contentPadding) {
+        settingsGroups.forEach { group ->
+            if (group.header != null) {
+                item(key = "header-${group.header}") {
+                    SettingsSectionHeader(group.header, Modifier.padding(horizontal = RowInsetH + RowPadding))
+                }
+            }
+            items(group.sections, key = { it.name }) { section ->
+                SettingsNavRow(
+                    section = section,
+                    selected = highlightSelected && section == selected,
+                    showChevron = showChevron,
+                    onClick = { onSelect(section) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One row.
+ *
+ * Selection reads by **contrast rather than hue** — the palette is greyscale by design, so a selected row takes the
+ * accent as its background where L1 used `secondaryContainer`. A plain `clickable`, as everywhere in settings: the
+ * shared `launcherItemGestures` contract exists so *launcher surfaces* cannot drift on long-press timing, and settings
+ * is ordinary app chrome that should behave like the platform.
+ */
+@Composable
+private fun SettingsNavRow(
+    section: SettingsSection,
+    selected: Boolean,
+    showChevron: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalMorphicColors.current
+    val meta = section.meta
+    val content = if (selected) colors.onAccent else colors.content
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = RowInsetH, vertical = RowInsetV)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) colors.accent else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(RowPadding),
+    ) {
+        Icon(imageVector = meta.icon, contentDescription = null, tint = content)
+        Spacer(Modifier.width(IconGap))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(meta.title, style = MaterialTheme.typography.bodyLarge, color = content)
+            Text(
+                text = meta.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) content else colors.contentMuted,
+            )
+        }
+        if (showChevron) {
+            Spacer(Modifier.width(RowPadding))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = colors.contentMuted,
+            )
+        }
+    }
+}

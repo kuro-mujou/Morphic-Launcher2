@@ -32,13 +32,24 @@ data class IconSizingState(
 )
 
 /**
- * Every grid whose icons a user can size — each [GridSlot] whose blueprint declares icon sizing.
+ * Grids whose icon sizing has **moved into their surface's own section**, and so no longer appears here.
+ *
+ * The list shrinks this one as sections arrive — the direction L1 already pointed: its home, drawer, dock and folder
+ * details each embedded `IconLayoutControls`, and it had no separate icons section at all for grid sizing. This
+ * screen is the waiting room for grids whose surface has no section yet, not a second place to edit the ones that do.
+ */
+private val Relocated = setOf(GridSlot.HOME_MAIN, GridSlot.HOME_DOCK)
+
+/**
+ * Every grid whose icons this screen still sizes — each [GridSlot] whose blueprint declares icon sizing, less those
+ * that have moved out.
  *
  * Derived from the registry rather than listed by hand, which has a useful consequence: adding a grid that draws icons
  * makes it editable here with no change to this screen, and adding one that draws *tiles* (the category card, whose
  * blueprint declares no icon sizing) correctly does not.
  */
-internal val EditableSlots: List<GridSlot> = GridSlot.entries.filter { it.blueprint.icon != null }
+internal val EditableSlots: List<GridSlot> =
+    GridSlot.entries.filter { it.blueprint.icon != null && it !in Relocated }
 
 /**
  * Screen-level state holder for the icon-sizing section: reads one grid's resolved sizing, writes sparse overrides.
@@ -77,58 +88,17 @@ class IconSizingViewModel(
     }
 
     /**
-     * Commits a numeric field.
+     * The controls' commands, shared with every section that embeds the same controls.
      *
-     * `internal`, like [IconSizingField]: this is the vocabulary the section's own controls speak, not API for anyone
-     * outside the feature.
+     * Exposed as an object rather than re-declared as methods here: this screen and the per-surface sections issue
+     * *identical* writes differing only in which grid they name, and the grid is already a parameter.
      */
-    internal fun change(field: IconSizingField, value: Float) {
-        edit {
-            when (field) {
-                IconSizingField.IconPercent -> copy(iconPercent = value)
-                IconSizingField.LabelScale -> copy(labelScale = value)
-            }
-        }
-    }
-
-    /**
-     * Commits both icon-size guardrails together, in whole dp.
-     *
-     * **No clamp here, and that is the point of using a range slider.** The two bounds used to be independent sliders,
-     * which meant this had to stop them crossing — against the *resolved* values, since a sparse override may hold null
-     * for the other half — and had to avoid pinning a field that was still following the blueprint. A two-thumb control
-     * cannot produce a crossed pair at all, so the whole clamp and its subtlety are gone rather than relocated.
-     */
-    fun changeIconDp(range: IntRange) {
-        edit { copy(minIconDp = range.first, maxIconDp = range.last) }
-    }
-
-    /**
-     * Commits a boolean field; pass null for the one not being changed.
-     *
-     * Parameters are named for the thing rather than the field (`label`, not `showLabel`) so the receiver's own
-     * properties are readable inside the transform without `this.` disambiguation.
-     */
-    fun toggle(label: Boolean? = null, icon: Boolean? = null) {
-        edit { copy(showLabel = label ?: showLabel, showIcon = icon ?: showIcon) }
-    }
-
-    /**
-     * Clears every override for this grid on this device, returning it to its blueprint's defaults.
-     *
-     * A plain write of an empty override rather than a dedicated operation — and the store then *removes* the entry
-     * instead of storing an empty one, so resetting leaves storage exactly as it started. That is the payoff of sparse
-     * overrides: "back to default" needs no separate concept, and no default is copied into storage to express it.
-     */
-    fun reset() {
-        edit { IconOverride() }
-    }
-
-    private fun edit(transform: IconOverride.() -> IconOverride) {
-        val configuration = device.value ?: return
-        val current = slot.value
-        viewModelScope.launch { settingsRepository.updateIcon(current, configuration, transform) }
-    }
+    internal val icons = IconSizingEdits(
+        settings = settingsRepository,
+        scope = viewModelScope,
+        slot = { slot.value },
+        device = { device.value },
+    )
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

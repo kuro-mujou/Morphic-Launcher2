@@ -23,9 +23,10 @@ internal enum class IconSizingField { IconPercent, LabelScale }
 /**
  * Icon + label sizing controls for **one grid**, shared by every surface that edits its own.
  *
- * The port of L1's `IconLayoutControls`, which its five surface details each embedded. It stays a reusable group for
- * the same reason: when per-surface settings sections arrive (Home, Apps, Dock, Folder), each embeds this instead of
- * growing its own copy — that duplication is part of why L1 ended up with two 700-line detail screens.
+ * The port of L1's `IconLayoutControls`, which its five surface details each embedded — and now the same here: the
+ * Home and Dock sections embed this group under their layout controls, exactly as L1 did, with the icon-sizing
+ * section holding the grids whose surface has no section yet. Sharing one group is what stopped L1's five details
+ * drifting apart, and [IconSizingEdits] shares the *commands* for the same reason.
  *
  * **What the port changed.** L1 took a `listMode: Boolean` every caller had to remember to pass, which decided whether
  * icons could be hidden and how the size slider was worded. Here it is read off the [slot], because it is a property of
