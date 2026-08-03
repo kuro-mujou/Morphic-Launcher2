@@ -605,11 +605,38 @@ indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanica
 unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
+**Settings — `data:settings` (B7) is real and two sections are live.** Storage is **one `@Serializable` JSON blob per
+slice** under one DataStore key (`SettingsSlice`, pure and unit-tested), not L1's ~265 flat keys behind a 693-line codec;
+per-slice flows, not one god flow; and a slice carries no version because `ignoreUnknownKeys` + fully-defaulted fields
+make additive change safe both ways, with the **key name** as the seam for a semantic break. Two slices exist:
+`SurfaceRegister` (HOME's layout, per-edge `SideBinding`, transition) and `SurfaceMetrics` (per-grid **icon** and **grid**
+overrides). Overrides are **sparse and doubly so** — keyed `GridSlot` × `DeviceConfiguration`, nullable per field, and an
+emptied entry is *removed*, which is what keeps "a default lives in exactly one place" literally true (the blueprint) and
+makes "reset" a plain write of nulls. Reads are **resolved in the repository** (`iconSizing`/`gridConfig`/`gridCols`), so
+no surface sees the keying. `GridSlot` names the launcher's eight grids and lives **on** `GridBlueprint` so the two
+cannot drift; `GridBlueprints` proves the mapping total. `feature:settings` hosts one section per `NavKey` (surface
+register, icon sizing) — *not* L1's panes-inside-one-route, which cost it two incompatible back mechanisms.
+`core:designsystem/grid/CellFit.kt` answers "how large can this grid be" (`resolveBounds`) for the unbuilt rows/cols
+editor. **Every surface now reports its `DeviceConfiguration` to its ViewModel** (`setDevice`), which *replaced* the
+narrower `setGridConfig`/`setPagerGrid`: pushing the input down means page capacity and icon sizing both derive there.
+Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](docs/SETTINGS_PORT_PLAN.md).
+
+**Navigation + shell (B5) done.** `core:navigation` holds type-safe Nav3 `NavKey` destinations and a two-method
+`Navigator`; feature vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer). `app`
+declares its own dev-harness key, since `entryProvider` is a mapping and not a registry. `feature:shell`'s
+`LauncherShell` is the launcher — `SurfacePager` with `HomeScreen` centre and side surfaces from the register — and it
+owns the **launcher theme boundary**, which is why `HomeScreen`/`AppsScreen` no longer theme themselves. The launcher
+boots into it; the dev harness (all playgrounds + the component gallery) is kept as a peer destination reached from a
+row in settings, so no dev chrome ships on a real surface. A gear chip over HOME is the admitted scaffolding standing in
+for the P7 long-press menu.
+
 **Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no
 ktlint/spotless/detekt), so style drift isn't caught. The Gradle **wrapper is missing** from the repo
 (`gradle/wrapper/gradle-wrapper.properties` is tracked but `gradlew`/`gradlew.bat`/`gradle-wrapper.jar` are not),
-so there is no CLI build from a fresh clone — Android Studio only.
+so there is no CLI build from a fresh clone — **but a Gradle 9.6.1 distribution is already cached**, so
+`~/.gradle/wrapper/dists/gradle-9.6.1-bin/*/gradle-9.6.1/bin/gradle :app:assembleDebug` builds and tests from the
+CLI today. `feature:settings` and `feature:apps` declare junit but have **no tests**.
 
 ## Conventions summary
 

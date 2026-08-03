@@ -60,20 +60,21 @@ the port doing its job rather than as scope creep.
 ## What L2 is waiting for (the consumers that drive the order)
 
 The port is ordered by "no model in a vacuum": build the slice some already-written placeholder is waiting on.
+**Status column added as each was retired** — the remaining `todo` rows are what S4/S5 still owe.
 
-| waiting consumer | file | what it needs |
-|---|---|---|
-| `LauncherShell(sideSurfaces = emptyMap())` | `feature/shell/LauncherShell.kt` | per-edge binding → **no edge is swipeable today** |
-| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal |
-| `AppsScreen(layout = VERTICAL_LIST)` | `feature/apps/AppsScreen.kt` | which APPS layout, per binding |
-| `DockHeight = 96.dp` | `feature/home/HomeScreen.kt` | dock extent (rows derive **from** it, not the reverse) |
-| home padding | — (deliberately absent) | horizontal padding, added *with* the setting |
-| `RowHeight = 56.dp` | `AppsVerticalList.kt` | list row height |
-| `CellHeight = 96.dp` ×2 | `AppsVerticalGrid.kt`, `AppsCategoryPager.kt` | grid cell height |
-| `CardColumns = 2` + spacing/padding | `AppsCategoryCard.kt` | card grid geometry (device-blind today) |
-| 5 × per-surface `IconMetrics` | apps list/grid/pager/category/card, home | icon size, label scale, show label/icon |
-| one-finger swipe policies | `LauncherShell.bindingFor` | derived from HOME's + the surface's layout |
-| home orientation | not built | landscape support |
+| waiting consumer | file | what it needs | |
+|---|---|---|---|
+| `LauncherShell(sideSurfaces = emptyMap())` | `feature/shell/LauncherShell.kt` | per-edge binding → **no edge is swipeable today** | ✅ S2 |
+| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal | todo S5 |
+| `AppsScreen(layout = VERTICAL_LIST)` | `feature/apps/AppsScreen.kt` | which APPS layout, per binding | ✅ S2 |
+| `DockHeight = 96.dp` | `feature/home/HomeScreen.kt` | dock extent (rows derive **from** it, not the reverse) | todo S4c |
+| home padding | — (deliberately absent) | horizontal padding, added *with* the setting | todo S4f |
+| `RowHeight = 56.dp` | `AppsVerticalList.kt` | list row height | todo S4e |
+| `CellHeight = 96.dp` ×2 | `AppsVerticalGrid.kt`, `AppsCategoryPager.kt` | grid cell height | todo S4e |
+| `CardColumns = 2` + spacing/padding | `AppsCategoryCard.kt` | card grid geometry (device-blind today) | ✅ S3 (`AppsCardGrid`) |
+| 5 × per-surface `IconMetrics` | apps list/grid/pager/category/card, home | icon size, label scale, show label/icon | ✅ S3 |
+| one-finger swipe policies | `LauncherShell.bindingFor` | derived from HOME's + the surface's layout | todo |
+| home orientation | not built | landscape support | todo |
 
 ---
 
@@ -214,26 +215,37 @@ launcher chrome takes its dark/light signal from wallpaper brightness.
 Each slice is a full vertical: storage → repository → ViewModel → screen → the placeholder it retires. That way
 every phase ends with something visibly working on device, and no slice is written before it has a consumer.
 
-- [ ] **S0 — Subtract.** Decide-and-record what does *not* come across: layout content (already Room), `setupComplete`,
+- [x] **S0 — Subtract.** Decide-and-record what does *not* come across: layout content (already Room), `setupComplete`,
       `GridConfigKind`/`gridConfigKind()`/`GridDefaults`, the legacy flat twins (`DockSettings.visualCols/visualRows/heightDp`,
       `WidgetAreaSettings.*`, `DrawerSettings.columns`, `GridSettings.horizontalPaddingDp`), and the two empty sections
       (THEME and GESTURE are 12-LOC "Coming soon" placeholders occupying enum values and list slots — don't port empty
       destinations). No code; this is the shopping list the rest of the plan is scoped against.
-- [ ] **S1 — `data:settings` foundation.** DataStore + slice-blob codec + `SettingsRepository` with per-slice flows +
+- [x] **S1 — `data:settings` foundation.** DataStore + slice-blob codec + `SettingsRepository` with per-slice flows +
       defaults-from-blueprint. Built *with* S2's slice as its first consumer, not before it. Unit-testable without
       Android, like `AppCategorizer` and the `data:layout` arithmetic.
-- [ ] **S2 — Surface register** (7 knobs: `HomeLayout`, per-edge `Surface`, `SurfaceTransition`). **Lead with this**:
+- [x] **S2 — Surface register** (7 knobs: `HomeLayout`, per-edge `Surface`, `SurfaceTransition`). **Lead with this**:
       smallest schema, model fully exists, and it retires the two placeholders with the biggest visible payoff —
       binding APPS to an edge is what makes it swipeable at all, and it gives `AppsLayout` a real owner. Also the first
       settings ViewModel, so it sets the pattern.
-- [ ] **S3 — Icon metrics** (6 knobs × slot × device configuration). `IconLayoutSettings` ≡ `IconMetrics`, and
+- [x] **S3 — Icon metrics** (6 knobs × slot × device configuration). `IconLayoutSettings` ≡ `IconMetrics`, and
       `IconMetrics.of()` was written for this. Retires five per-surface `IconMetrics` placeholders. Keying is settled
       (see "Grid + icon config" above), so the work here is the `GridSlot` id on `GridBlueprint`, the sparse-override
       merge, and the resolved `iconMetrics(slot, device)` flow — the same three pieces S4 then reuses for grids.
-- [ ] **S4 — Surface geometry** (dock extent, home padding, grid cols/rows, list row height, grid cell heights, card
-      columns). Retires the remaining placeholder constants. Reuses S3's override machinery for `GridOverride`, adds the
-      `editRange` write-side clamp (the first consumer for `GridEditRange`), and must respect the dock's stated
-      dependency direction: **extent is the setting, row count derives from it**.
+- [ ] **S4 — Surface geometry** — *in progress.* Sub-steps, because they turned out to have different shapes:
+  - [x] **S4a — grid dimension store.** `GridOverride` (sparse per axis, scrolling grids ignore a stored row count) and
+        the `editRange` **write-side clamp** — the first consumer of `GridEditRange`. Minima only: maxima are a runtime
+        question. 8 tests.
+  - [x] **S4b — `resolveBounds`.** `core:designsystem/grid/CellFit.kt`, ported from L1's `CellFit`, which had *two*
+        definitions of "smallest usable cell" (one wrong) and its own copy of the cell padding. Now one formula, reading
+        `IconLabelCell`'s real constants. 13 tests.
+  - [ ] **S4c — the dock.** Fully specified below; nothing built.
+  - [ ] **S4d — the rows/cols editor.** Unblocked by S4b *except* for one input: what **area** a settings screen
+        measures against. It is not the surface, so it cannot measure home directly — L1 derived it
+        (`homeGridArea(window, insets, dockVisible, dockThickness)`), and that derivation needs the dock extent, hence
+        S4c first. For the APPS grids the window minus insets is already exact.
+  - [ ] **S4e — cell and row heights** (`RowHeight`, the two `CellHeight`s). Needs a new blueprint field; `core:model`
+        is a JVM library, so `Int` dp rather than `Dp`.
+  - [ ] **S4f — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
@@ -265,6 +277,8 @@ Nothing is open. Each is argued where it applies rather than restated here; this
 | Override precedence | clamped into `editRange` **on write** | *Grid + icon config* |
 | Settings sections | one `NavKey` each, declared in `feature:settings` | *Settings UI* |
 | Wallpaper + blur | out of `data:settings` → `data:wallpaper` (B7b) | *Not `data:settings` at all* |
+| Dock rows/cols | **derived** from extent and cell size, never stored | *The dock (S4c)* |
+| Dock height cap | a fraction of the current screen height, so it changes with orientation | *The dock (S4c)* |
 
 The last one edited [REWRITE_PLAN.md](REWRITE_PLAN.md)'s build map; the rest are local to this plan.
 
@@ -273,6 +287,33 @@ hard: how a cross-feature deep link names a settings section (L1's one case was 
 whether the tablet two-pane layout returns as a scene strategy over the section keys.
 
 ---
+
+---
+
+## The dock (S4c) — settled, not yet built
+
+The dock is the one surface whose geometry is **entirely derived**, and it is where S4 stopped. Recorded here in full
+because it resolves the contradiction the earlier plan left open: `CLAUDE.md` said the dock's row count derives from its
+extent, while `DockGrid`'s blueprint declares `rows = 1` per device. **The derivation wins; the blueprint's rows become a
+fallback, not a setting.**
+
+1. **Height is the setting, and it is adjustable** — the dock can be shrunk or expanded. Capped at a fraction of the
+   *current* screen height (a third or a quarter, to be picked), so the cap **changes with orientation** rather than
+   being one dp constant.
+2. **Cell size is calculated from the icon and the text**, so the icon/text min-max rail (S3's `IconSizing`) feeds the
+   dock's cell size directly. This is the same inverse `resolveBounds` already implements — `minCellWidthDp` /
+   `minCellHeightDp` in `core:designsystem/grid/CellFit.kt`.
+3. **Rows and columns are both derived** — dock width ÷ minimum cell width, dock height ÷ minimum cell height. Neither
+   is a stored number, which is why `updateGrid` should never be offered for `GridSlot.HOME_DOCK`.
+4. **Shrinking swallows the bottom row.** When a new height no longer fits the current row count, the dock drops its
+   bottom row and the remaining rows grow to fill the new extent — rather than squashing every cell. Expanding is the
+   same rule in reverse.
+5. Horizontal padding for every layout is a **separate, later** decision (it is also home's missing `padding`
+   placeholder). Deliberately not folded in here.
+
+**Consequence worth planning for:** rule 4 removes cells that may hold items. A swallowed row's occupants need somewhere
+to go, which is `data:layout`'s reflow (`GridReflow`) rather than a settings concern — but it is the settings write that
+triggers it, so the two have to meet. That is the first piece of S4c to design, not the slider.
 
 ## Smells not to reproduce
 
