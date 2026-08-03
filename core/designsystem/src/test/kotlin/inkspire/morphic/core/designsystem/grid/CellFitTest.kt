@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.grid
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.model.AppsScrollGrid
+import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
@@ -128,6 +129,67 @@ class CellFitTest {
 
         assertNotNull(range)
         assertNull("a scrolling grid's rows are not the user's to set", range!!.rows)
+    }
+
+    @Test
+    fun `a stored size that fits passes through, in logical units`() {
+        // A 56dp minimum cell (24dp icon at 50%, plus 4dp padding a side): six columns fit 360dp and one row fits
+        // 96dp, so a stored 4 × 1 is untouched.
+        val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
+
+        assertEquals(1, config.visualRows)
+        assertEquals(4, config.visualCols)
+        // Scaled by the dock's multiplier of 2, exactly as `toGridConfig` scales a chosen size — so an app is one
+        // visual cell here just as it is on the pager.
+        assertEquals(2, config.rows)
+        assertEquals(8, config.cols)
+    }
+
+    @Test
+    fun `a height too short for the stored rows shows fewer of them`() {
+        // The dock's rule: a cell is `height ÷ rows`, so 96dp cannot carry two 56dp rows however many are stored.
+        // The *write* that makes this permanent is the dock screen's on commit; this is the read that keeps the
+        // drawn grid honest in the meantime.
+        val short = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
+        val tall = DockGrid.fitGridConfig(GridArea(360f, 140f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
+
+        assertEquals(1, short.visualRows)
+        assertEquals(2, tall.visualRows)
+    }
+
+    @Test
+    fun `a column count past what fits is clamped, and a wider area gives it back`() {
+        // The property that lets the column clamp stay a *read*: nothing is written, so the count the user chose
+        // returns the moment there is room for it. L1 wrote every clamp back, and the preference was gone for good.
+        val narrow = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
+        val wide = DockGrid.fitGridConfig(GridArea(720f, 96f), cols = 9, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
+
+        assertEquals("360dp fits six 56dp cells, not nine", 6, narrow.visualCols)
+        assertEquals(9, wide.visualCols)
+    }
+
+    @Test
+    fun `a dock too short for a full cell still has one row`() {
+        // `maxCells` floors at one: a strip the user has shrunk past a usable cell is still a dock, and reporting zero
+        // rows would fail `GridConfig`'s own invariant rather than degrade.
+        val config = DockGrid.fitGridConfig(GridArea(360f, 8f), 4, 1, metrics, labelHeight)
+
+        assertEquals(1, config.visualRows)
+    }
+
+    @Test
+    fun `a count below the blueprint's floor is raised to it`() {
+        val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 0, rows = 0, metrics = metrics, labelHeightDp = labelHeight)
+
+        assertEquals(DockGrid.editRange!!.minCols, config.visualCols)
+        assertEquals(DockGrid.editRange!!.minRows, config.visualRows)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `a scrolling grid has no fixed size to resolve`() {
+        // Its rows are however many its content reaches, so there is no config to fit — the same precondition
+        // `toGridConfig` states, raised here rather than silently inventing a row count.
+        AppsScrollGrid.fitGridConfig(GridArea(360f, 800f), 4, 4, metrics, labelHeight)
     }
 
     @Test

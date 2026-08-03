@@ -8,6 +8,7 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LabelGap
 import inkspire.morphic.core.designsystem.cell.cellLabelHeight
 import inkspire.morphic.core.model.GridBlueprint
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSizing
 import kotlin.math.floor
 
@@ -28,6 +29,10 @@ import kotlin.math.floor
  * **The padding comes from the cell, not from a copy of it.** L1 declared `CELL_PADDING_DP = 8f` beside the fitting
  * maths, free to drift from what `IconLabelCell` actually inset. These read `CellPadH`/`CellPadV`/`LabelGap` directly,
  * so the inverse cannot disagree with the layout it is inverting.
+ *
+ * **The same answer serves two questions.** [editableRangeIn] bounds what a settings screen may *offer*;
+ * [fitGridConfig] applies the identical bound to a value that was stored earlier, under conditions that may since
+ * have changed. One formula, so a grid can never be offered a size it would not then be drawn at.
  *
  * Pure arithmetic over `Float` dp, with a `@Composable` facade for the one input that needs a type scale (the label
  * row's height) — the same split `folderInnerSize` uses, and for the same reason: the interesting behaviour should be
@@ -131,6 +136,51 @@ fun GridBlueprint.editableRangeIn(
 data class GridEditableRange(val cols: IntRange, val rows: IntRange?)
 
 /**
+ * **The grid a stored size actually produces in [area]** — both counts clamped to what fits.
+ *
+ * A settings screen bounds what a user can *choose*, but the choice outlives the conditions it was made under: the
+ * icon size grows, the dock is shortened, the window changes. This is the read that keeps what is drawn honest, and
+ * it is the same [editableRangeIn] the editor offers, applied to a value instead of to a control.
+ *
+ * **Clamped here, not written back** — with one exception the caller owns. A count too large for today's icons is
+ * *displayed* smaller and returns when the icons shrink, because nothing overwrote it. L1 had no read-side clamp at
+ * all, so it had to reconcile the other way: a `LaunchedEffect` in its settings screen wrote clamped counts into
+ * storage, which destroyed the preference **and** only ran while that screen happened to be open. The exception is
+ * the dock's rows against its own height, where the reduction *is* written — see `DockGrid`, and note that it is a
+ * deliberate write by that screen rather than something this function does behind a caller's back.
+ *
+ * Throws for a [GridSizing.SCROLL_GRID], whose rows are however many its content reaches: a config needs a row count
+ * and a scrolling grid has none, the same precondition `toGridConfig` states in `core:model`.
+ *
+ * @param area the space the grid occupies — for the dock, its measured width and its height *setting*.
+ * @param cols the stored visual column count.
+ * @param rows the stored visual row count.
+ * @param metrics the resolved icon sizing of the cells it will draw; bigger icons mean fewer, larger cells.
+ */
+fun GridBlueprint.fitGridConfig(
+    area: GridArea,
+    cols: Int,
+    rows: Int,
+    metrics: IconMetrics,
+    labelHeightDp: Float,
+): GridConfig {
+    require(sizing == GridSizing.FIXED_PAGER) {
+        "$slot scrolls, so its rows come from its content rather than from the area it is given"
+    }
+    // Null only for a grid with no editor at all, whose stored counts are the blueprint's own and already legal.
+    val range = editableRangeIn(area, metrics, labelHeightDp)
+    val visualCols = range?.cols?.let(cols::coerceIn) ?: cols
+    val visualRows = range?.rows?.let(rows::coerceIn) ?: rows
+    // Visual counts scaled into logical ones, exactly as `toGridConfig` does — which is also what keeps both axes
+    // divisible by the multiplier, the invariant `GridConfig` requires.
+    return GridConfig(
+        rows = visualRows * cellMultiplier,
+        cols = visualCols * cellMultiplier,
+        cellMultiplier = cellMultiplier,
+    )
+}
+
+/**
  * [boundsIn], with the label row's height read from the current type scale.
  *
  * The `@Composable` facade over the pure arithmetic above: `cellLabelHeight` needs a `MaterialTheme` and a `Density`,
@@ -142,11 +192,33 @@ fun GridBlueprint.boundsIn(area: GridArea, metrics: IconMetrics): GridBounds {
     return remember(this, area, metrics, labelHeightDp) { boundsIn(area, metrics, labelHeightDp) }
 }
 
+/**
+ * [minCellHeightDp], with the label row's height read from the current type scale.
+ *
+ * The floor an **extent** control needs: a dock shorter than one usable cell has nothing to show. Exposed as a facade
+ * rather than by publishing `cellLabelHeight`, which stays internal to the cell package — a caller wanting a bound
+ * should ask this file for it, not assemble one out of the cell's own parts.
+ */
+@Composable
+fun minCellHeightDp(metrics: IconMetrics): Float {
+    val labelHeightDp = cellLabelHeight(metrics).value
+    return remember(metrics, labelHeightDp) { minCellHeightDp(metrics, labelHeightDp) }
+}
+
 /** [editableRangeIn], with the label row's height read from the current type scale. */
 @Composable
 fun GridBlueprint.editableRangeIn(area: GridArea, metrics: IconMetrics): GridEditableRange? {
     val labelHeightDp = cellLabelHeight(metrics).value
     return remember(this, area, metrics, labelHeightDp) { editableRangeIn(area, metrics, labelHeightDp) }
+}
+
+/** [fitGridConfig], with the label row's height read from the current type scale. */
+@Composable
+fun GridBlueprint.fitGridConfig(area: GridArea, cols: Int, rows: Int, metrics: IconMetrics): GridConfig {
+    val labelHeightDp = cellLabelHeight(metrics).value
+    return remember(this, area, cols, rows, metrics, labelHeightDp) {
+        fitGridConfig(area, cols, rows, metrics, labelHeightDp)
+    }
 }
 
 /**
