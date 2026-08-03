@@ -37,12 +37,16 @@ import kotlinx.coroutines.launch
  * @property rows likewise, except that a height commit which invalidates it *is* written down (see [setHeight]).
  * @property icon the dock's **resolved** icon sizing — both shown, since these controls now live in this section, and
  *   used: the smallest usable cell it implies is what the height divides into rows and the width into columns.
+ * @property homeIcon HOME's main-area icon sizing. Nothing here edits it and nothing here shows it; it is needed
+ *   because this height decides how much screen home is left with, and how many rows *that* carries depends on home's
+ *   own smallest usable cell. See [setHeight].
  */
 data class DockState(
     val heightDp: Int? = null,
     val cols: Int? = null,
     val rows: Int? = null,
     val icon: IconSizing? = null,
+    val homeIcon: IconSizing? = null,
 )
 
 /**
@@ -75,7 +79,10 @@ class DockViewModel(
                     settingsRepository.dockHeight(configuration),
                     settingsRepository.gridConfig(SLOT, configuration),
                     settingsRepository.iconSizing(SLOT, configuration),
-                ) { heightDp, grid, icon -> DockState(heightDp, grid.visualCols, grid.visualRows, icon) }
+                    settingsRepository.iconSizing(GridSlot.HOME_MAIN, configuration),
+                ) { heightDp, grid, icon, homeIcon ->
+                    DockState(heightDp, grid.visualCols, grid.visualRows, icon, homeIcon)
+                }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), DockState())
@@ -113,16 +120,33 @@ class DockViewModel(
      * Where the swallowed row's occupants go is not settled here: the height reaches the home surface, which re-fits
      * the dock and spills what no longer fits onto the pager ([settleDock] via `HomeViewModel.fitDockTo`).
      *
+     * **The same reduction is applied to HOME's main grid, for the same reason one step out.** This strip's height is
+     * subtracted from what the pager gets, so a taller dock can leave home's stored row count describing cells too
+     * short to draw an icon in — the identical invalidation, one grid over. L1 did this too, but from the *home
+     * surface* (a `LaunchedEffect` on its measured pager bounds, whose comment names "the dock is turned back on" as
+     * the case): correct in effect, and it wrote the clamp on every cause, including an icon-size change that was
+     * never about home's rows. Here the write belongs to the **deliberate** change that caused it, which is this
+     * commit — the same asymmetry that governs this dock's own rows against its columns.
+     *
+     * Home's displaced items are not moved here. The home surface re-fits itself against whatever it reads
+     * (`HomeViewModel.fitMainTo`), so the items follow the count without this screen reaching into another surface's
+     * placements — unlike [edit], where the *edge* is knowledge only this press has.
+     *
      * @param maxRows how many rows the new height can hold, from the screen — the fit needs a measured window and the
      *   current type scale, neither of which a state holder has.
+     * @param homeMaxRows how many rows the space *left over* can hold, from the same screen and for the same reason.
      */
-    fun setHeight(dp: Int, maxRows: Int) {
+    fun setHeight(dp: Int, maxRows: Int, homeMaxRows: Int) {
         val configuration = device.value ?: return
         val rows = state.value.rows
         viewModelScope.launch {
             settingsRepository.setDockHeight(configuration, dp)
             if (rows != null && rows > maxRows) {
                 settingsRepository.updateGrid(SLOT, configuration) { copy(rows = maxRows) }
+            }
+            val homeRows = settingsRepository.gridConfig(GridSlot.HOME_MAIN, configuration).first().visualRows
+            if (homeRows > homeMaxRows) {
+                settingsRepository.updateGrid(GridSlot.HOME_MAIN, configuration) { copy(rows = homeMaxRows) }
             }
         }
     }

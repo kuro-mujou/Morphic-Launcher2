@@ -143,19 +143,21 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
     val blueprintConfig = remember(device) { HomePagerGrid.toGridConfig(device) }
-    val config = state.main ?: blueprintConfig
-    val cellSpan = config.cellMultiplier
 
-    // The width the grids are actually given: the window minus the insets the column below pads by. **One value
-    // feeds both**, which is the point — L1 derived its home area from settings in one place (`homeGridArea`) and
+    // The area the grids are actually given: the window minus the insets the column below pads by. **One value feeds
+    // every use**, which is the point — L1 derived its home area from settings in one place (`homeGridArea`) and
     // measured it in another (`pagerBoundsInWindow`), so the size it fitted the grid to and the size it drew into
-    // could disagree. Here they cannot: `safeInsets` is the same expression in both.
+    // could disagree. Here they cannot: `safeInsets` is the same expression throughout.
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     val layoutDirection = LocalLayoutDirection.current
-    val windowWidthPx = LocalWindowInfo.current.containerSize.width
+    val windowSize = LocalWindowInfo.current.containerSize
     val contentWidthDp = with(density) {
         val insetPx = safeInsets.getLeft(density, layoutDirection) + safeInsets.getRight(density, layoutDirection)
-        (windowWidthPx - insetPx).coerceAtLeast(0).toDp().value
+        (windowSize.width - insetPx).coerceAtLeast(0).toDp().value
+    }
+    val contentHeightDp = with(density) {
+        val insetPx = safeInsets.getTop(density) + safeInsets.getBottom(density)
+        (windowSize.height - insetPx).coerceAtLeast(0).toDp().value
     }
 
     // The dock is the one grid with a height of its own: the user sets how tall the strip is *and* how many rows and
@@ -180,9 +182,46 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     }
     val dockCellSpan = dockConfig.cellMultiplier
 
-    // Shrinking the strip swallows cells that may hold items, so the store is re-fitted whenever the grid changes.
-    // Idempotent — a grid everything already fits writes nothing — which is why this needs no "did it shrink?" test.
-    LaunchedEffect(dockConfig) { viewModel.fitDockTo(dockConfig) }
+    // **The pager is fitted to what the dock leaves it**, through the same `fitGridConfig` the dock reads its own
+    // counts with — which is the half that was missing. The main area is the only grid that was drawn at its stored
+    // size regardless of the space available, so raising the dock's height simply squeezed home's rows into whatever
+    // was left instead of reducing them, and past a point the cells were shorter than the icon they hold.
+    //
+    // The area is the window minus the dock, and it is deliberately the same expression the Home settings section
+    // computes its bounds from: the section says how many rows may be *chosen*, this says how many are *drawn*, and
+    // one formula is what keeps those two answers the same.
+    //
+    // **Clamped on read, never written back**, exactly as the dock's columns are: the count the user chose survives,
+    // so shortening the dock again brings the rows straight back. Only the *items* the smaller grid cannot hold are
+    // written, by `fitMainTo` below — and they go to a further page rather than being dropped, since home always has
+    // one (the dock, a single strip, has to evict to home instead).
+    val mainMetrics = state.metricsFor(GridSlot.HOME_MAIN)
+    val storedMain = state.main
+    val config = if (storedMain == null) {
+        blueprintConfig
+    } else {
+        HomePagerGrid.fitGridConfig(
+            area = GridArea(
+                widthDp = contentWidthDp,
+                heightDp = (contentHeightDp - dockHeight.value).coerceAtLeast(1f),
+            ),
+            cols = storedMain.visualCols,
+            rows = storedMain.visualRows,
+            metrics = mainMetrics,
+        )
+    }
+    val cellSpan = config.cellMultiplier
+
+    // Both zones re-settle whenever their grid changes, and for the same reason: a smaller grid has cells that may
+    // hold items. Idempotent — a grid everything already fits writes nothing — which is why neither needs a "did it
+    // shrink?" test, and why a dock-height change can simply flow through both.
+    //
+    // **Neither runs until the store has answered for that zone**, and the guard is load-bearing rather than tidy: a
+    // blueprint fallback is a *smaller* grid than a user who has grown theirs, so settling against it on the frame
+    // before the first emission would re-home items to fit a size nobody chose — and the write would outlive the
+    // frame that caused it.
+    if (storedMain != null) LaunchedEffect(config) { viewModel.fitMainTo(config) }
+    if (dockSizing != null) LaunchedEffect(dockConfig) { viewModel.fitDockTo(dockConfig) }
 
     val gestureConfig = remember {
         ItemGestureConfig(touchSlopPx = with(density) { 20.dp.toPx() }, longPressTimeoutMillis = 400L)
@@ -387,7 +426,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 onGeometryChange = { geometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->
-                HomeItemCell(item, session, cellModifier, itemGestures, state.metricsFor(GridSlot.HOME_MAIN))
+                HomeItemCell(item, session, cellModifier, itemGestures, mainMetrics)
             }
 
             // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and

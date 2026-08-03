@@ -465,6 +465,21 @@ the default `DevRootScreen` screen.
   It is a **command on the ViewModel, called when the config changes**, and idempotent, so no caller needs a "did it
   shrink?" test; L1 instead reflowed *inside the `combine` that assembles its home state* and launched the persist
   from within that transform, so the write was a side effect of reading state and raced itself.
+- **The dock's height is subtracted from home, so growing it can invalidate home's rows too** — the same invalidation
+  one grid over, and it is answered in the two halves this codebase already splits such things into. The **surface**
+  fits the pager to what is left (`CellFit.fitGridConfig` over window − insets − dock height, the same expression the
+  Home settings section computes its bounds from) and re-homes the displaced items to a further page
+  (`HomeViewModel.fitMainTo`, the pager's `fitDockTo`); the **row count itself is written down** only by the dock
+  section's height commit, which is the deliberate change that caused it. That is the dock's own asymmetry applied
+  outward: a count invalidated by a committed extent is written, one invalidated by an icon-size change is clamped on
+  read and returns. L1 did the clamp from the home *surface* (`LaunchedEffect` on its measured pager bounds — its
+  comment names "the dock is turned back on") and wrote it on **every** cause, so an icon tweak permanently destroyed
+  a row count that had nothing to do with it. L1 also measured home's area two ways (`pagerBoundsInWindow` on the
+  surface, `homeGridArea` in settings) which could disagree; L2 has one expression. Note it takes a *large* dock or
+  *large* icons to bite at all: home's smallest usable cell is ≈60dp at the default guardrails, so even a 320dp dock
+  leaves room for eight rows against the five it stores. **Neither zone settles until the store has answered for it** —
+  a blueprint fallback is a smaller grid than one the user has grown, and settling against it would make a transient
+  first frame a permanent write.
 
 **APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
 (`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were

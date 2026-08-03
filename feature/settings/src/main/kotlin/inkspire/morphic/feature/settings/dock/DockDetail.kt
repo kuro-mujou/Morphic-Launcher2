@@ -104,7 +104,8 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
         val cols = state.cols
         val rows = state.rows
         val icon = state.icon
-        if (heightDp != null && cols != null && rows != null && icon != null) {
+        val homeIcon = state.homeIcon
+        if (heightDp != null && cols != null && rows != null && icon != null && homeIcon != null) {
             val metrics = icon.toIconMetrics()
 
             // The same window the launcher measures, minus the same insets home applies — so the bounds offered
@@ -114,6 +115,10 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
             // The smallest cell this dock's icons need, which is what a height has to divide into whole rows.
             // Not a bound on the slider — [HeightRange] is — but the number the row cap is computed from below.
             val minCellHeight = minCellHeightDp(metrics)
+            // And home's, because this height decides how much is left for the pager. A dock is subtracted from the
+            // screen, so growing it can invalidate *home's* row count exactly as it invalidates this one — the same
+            // arithmetic on the other side of the subtraction.
+            val homeMinCellHeight = minCellHeightDp(homeIcon.toIconMetrics())
 
             // The dock at this height, resolved by the **same function the surface uses** — so the preview cannot
             // claim a shape the real dock will not have.
@@ -132,7 +137,13 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 valueLabel = { "${it.roundToInt()} dp" },
                 onCommit = { committed ->
                     val dp = committed.roundToInt()
-                    viewModel.setHeight(dp, maxCells(dp.toFloat(), minCellHeight))
+                    viewModel.setHeight(
+                        dp = dp,
+                        maxRows = maxCells(dp.toFloat(), minCellHeight),
+                        // What the pager is left with, measured the same way the Home section measures it — so the
+                        // two sections cannot disagree about how many rows home can hold.
+                        homeMaxRows = maxCells(usable.heightDp - dp, homeMinCellHeight),
+                    )
                 },
             )
 

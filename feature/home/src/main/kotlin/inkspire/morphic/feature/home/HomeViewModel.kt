@@ -14,6 +14,7 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.settleDock
@@ -241,6 +242,34 @@ class HomeViewModel(
      * every emission that happened to find a stray, racing itself. Here the trigger is the config changing, and the
      * write is an ordinary [applyChanges] like any other.
      */
+    /**
+     * Re-homes anything the **main area** can no longer hold, now that its grid is [config] — the pager's half of the
+     * rule [fitDockTo] states for the dock.
+     *
+     * The trigger is usually the dock: its height is the setting, the pager takes what is left, and past a point what
+     * is left carries fewer rows than the user's count. It is also reached by an icon-size change, which raises the
+     * smallest usable cell and so lowers how many fit — the same clamp from the other side.
+     *
+     * **Where the strays go is the one difference from the dock, and it follows from the surface rather than being a
+     * choice.** Home is paged and can always append one, so `GridReflow`'s default overflow carries them forward;
+     * the dock is a single strip with no next page, which is why it evicts to home instead. Nothing is deleted on
+     * either path.
+     *
+     * The row *count* is not written down here. It is clamped where it is read (`CellFit.fitGridConfig` in the
+     * surface), so shortening the dock again gives the rows straight back — where writing the reduction would make a
+     * temporary shortage permanent. Only the placements move, and only when the reflow reports it needed to.
+     */
+    fun fitMainTo(config: GridConfig) {
+        val main = placements.value.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement }
+        val settled = GridReflow.reflow(main, config)
+        if (!settled.changed) return
+        applyChanges(
+            settled.placements
+                .filterNot { (item, at) -> main[item] == at }
+                .map { (item, at) -> LayoutChange.Move(item, at, HomeZone.MAIN) },
+        )
+    }
+
     fun fitDockTo(dockConfig: GridConfig) {
         viewModelScope.launch {
             // Nothing is written until the main grid is known — an eviction with nowhere to go would take an item off
