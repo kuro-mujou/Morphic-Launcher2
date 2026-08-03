@@ -265,8 +265,9 @@ from the baked stack).
   dp constant, or "fill the rest" — and KDoc it as a placeholder naming the setting that replaces it. Do **not** derive
   it from something else to make it look principled: derived-looking arithmetic reads as a decision when it is really
   a guess, and it hides that the value is still unowned (worse, it can invert the real dependency — the dock's row
-  count comes *from* its height, so sizing its height from a row count is backwards). `DockHeight` in `HomeScreen` is
-  the worked example.
+  count comes *from* its height, so sizing its height from a row count is backwards). `RowHeight` in
+  `AppsVerticalList` and the two `CellHeight`s are the live examples; `DockHeight` in `HomeScreen` was the worked one
+  until S4c gave it an owner, and the placeholder deleted cleanly precisely because nothing had been derived from it.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
   colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
@@ -432,12 +433,29 @@ the default `DevRootScreen` screen.
   items alone. Two bugs came from getting this wrong, both worth not repeating: matching a merge target on placement
   alone resolved a folder in the wrong zone, and scoping the *open-folder* lookup to MAIN left a tapped dock folder
   with its id set on the host and nothing to render (opening is zone-independent; merge *targets* are per-zone).
-- **Layout: fixed-height dock, pager takes the rest, and no padding anywhere.** `DockHeight` is a flat placeholder
-  constant — the dock's extent is meant to come from a **dock setting**, with its **row count derived from that
-  extent and the icon size**, so any row-count-driven sizing inverts the real dependency. Home carries **no
-  decorative padding** either (L1 had a configurable horizontal padding; L2 adds it *with* the setting, not before).
-  The one applied inset is the bottom of `systemBars ∪ displayCutout`, so the dock clears the navigation bar — a
-  system constraint, not styling. See the sizing rule in the design-system section.
+- **Layout: the dock has a height of its own, the pager takes the rest, and there is no padding anywhere.** The dock's
+  height is a **setting** (`SurfaceMetrics.dockHeightDp`, defaulting to `DockGrid.heightDp`) *and* its rows and
+  columns are stored counts — the height does not replace the rows, it **bounds** them, since a cell is
+  `height ÷ rows`. `CellFit.fitGridConfig` resolves a stored size against what an area can actually hold, from the two
+  inputs only the surface knows (the measured width, and the type scale behind a label row). Deriving the counts from
+  the extent was specified and abandoned on both axes: rows read as an editor missing half its buttons, and at the
+  default icon guardrail a derived phone dock is nine columns wide against the four it has today. **A column clamp is
+  applied on read and never written back** (shrink the icons again and the count returns); **a row reduction *is*
+  written**, at the moment a height commit invalidates it — the asymmetry is that the height was a deliberate change,
+  where an icon-size change is not about the dock at all. L1 wrote every clamp back from a `LaunchedEffect` *inside
+  its dock settings screen*, which destroyed the preference and only ran while that screen was open. Home carries
+  **no decorative padding** (L1 had a configurable horizontal one; L2 adds it *with* the setting, S4f). The applied
+  inset is `systemBars ∪ displayCutout`, hoisted into one `safeInsets` value that feeds both the padding and the width
+  the dock is fitted against — L1 kept two derivations of that area (`homeGridArea` from settings,
+  `pagerBoundsInWindow` measured) and they could disagree.
+- **A dock shrink spills onto home; it does not delete.** Fewer rows means cells that may hold items, and the strip is
+  a *single page*, so there is no next page to push them to. `HomeViewModel.fitDockTo(config)` runs
+  `GridReflow.reflow(…, Overflow.EVICT)` — which reports what a single-page grid cannot keep instead of inventing a
+  page 1 nothing draws — and hands the evictions to `GridReflow.admit(…)`, which finds each a cell on the pager.
+  L1's `DockGridEdit` **dropped** them (`droppedApps`/`droppedFolders`/`droppedWidgets`, deleted by the caller).
+  It is a **command on the ViewModel, called when the config changes**, and idempotent, so no caller needs a "did it
+  shrink?" test; L1 instead reflowed *inside the `combine` that assembles its home state* and launched the persist
+  from within that transform, so the write was a side effect of reading state and raced itself.
 
 **APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
 (`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were
@@ -614,10 +632,32 @@ overrides). Overrides are **sparse and doubly so** — keyed `GridSlot` × `Devi
 emptied entry is *removed*, which is what keeps "a default lives in exactly one place" literally true (the blueprint) and
 makes "reset" a plain write of nulls. Reads are **resolved in the repository** (`iconSizing`/`gridConfig`/`gridCols`), so
 no surface sees the keying. `GridSlot` names the launcher's eight grids and lives **on** `GridBlueprint` so the two
-cannot drift; `GridBlueprints` proves the mapping total. `feature:settings` hosts one section per `NavKey` (surface
-register, icon sizing) — *not* L1's panes-inside-one-route, which cost it two incompatible back mechanisms.
-`core:designsystem/grid/CellFit.kt` answers "how large can this grid be" (`resolveBounds`) for the unbuilt rows/cols
-editor. **Every surface now reports its `DeviceConfiguration` to its ViewModel** (`setDevice`), which *replaced* the
+cannot drift; `GridBlueprints` proves the mapping total. `feature:settings` is **one destination whose sections are panes**, ported from L1's shell: a section list beside a
+detail on a tablet, sliding between the two on a phone, with `SettingsSection` as ordinary state inside
+`SettingsScreen`. An earlier cut gave each section its own `NavKey`; that was reversed because a pane which shares the
+screen with another is not a destination. L1's *actual* mistake is still avoided — it declared that enum in the
+**navigation module**, so `feature:home` could import `SettingsSection.WALLPAPER`; ours never leaves the feature.
+**A section belongs to a surface and holds everything about it**, layout controls *and* icon sizing, exactly as each
+of L1's five details embedded `IconLayoutControls` under its layout section. Home and Dock have theirs; the
+standalone icon-sizing screen keeps only the grids whose surface has no section yet, and stays because the **icon
+studio** (B9, per-app) will live there. `IconSizingControls` shares the UI and `IconSizingEdits` the write commands,
+so a third section costs neither. Still missing beside L1: the live icon **preview** between the two groups, which
+punches through to the wallpaper and so waits on `data:wallpaper`.
+**Resizing a grid names an edge, not a count**, because that is what decides where the items go — removing the *left*
+column shifts everything left, removing the right one drops what sat there. So a press is **two writes**: the count
+(`updateGrid`) and the placements it displaces (`GridReflow.edit` → `LayoutRepository.apply`), ordered grow-first for
+an add and place-first for a remove so no observer sees a grid too small for its contents. That is why
+`feature:settings` depends on `data:layout` at all: only the button press knows the edge, and a surface re-reading the
+new size later cannot recover it. **The dock's version spills onto home** (`settleDock`, shared with
+`HomeViewModel.fitDockTo` so the two triggers cannot disagree), never deleting as L1 did. One `GridEditor` composable
+serves both grids — a screen-shaped preview with a − / + pair **on each edge it affects**, the companion zone drawn at
+its real proportion; L1 had two ~220-line near-copies and told add from remove by green vs red, which this palette
+(greyscale, red reserved for `error`) cannot do, so the buttons sit where they act instead.
+`core:designsystem/grid/CellFit.kt` answers "how large can this grid be": `boundsIn`/`editableRangeIn` as a **ceiling**
+for a grid whose counts a user picks, and `fitGridConfig` reading the same maximum as a **value** for the dock's rows.
+The **dock section** (S4c, done) is the first consumer of both and the pattern the rows/cols editor follows — its
+bounds are computed where the window is measured (one usable cell up to a third of the screen) rather than stored,
+because a store cannot check either without measuring. **Every surface now reports its `DeviceConfiguration` to its ViewModel** (`setDevice`), which *replaced* the
 narrower `setGridConfig`/`setPagerGrid`: pushing the input down means page capacity and icon sizing both derive there.
 Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](docs/SETTINGS_PORT_PLAN.md).
 
