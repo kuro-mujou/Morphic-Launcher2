@@ -14,7 +14,13 @@ import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.AppsPagerGrid
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.colsFor
+import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
 import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
@@ -55,8 +61,9 @@ fun AppsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // The one thing the UI knows and the ViewModel cannot: which window configuration this is. Everything
-    // device-dependent — the pager's page capacity, every grid's icon sizing — derives from it down there rather than
-    // being resolved up here and pushed down piecemeal, which is what `setPagerGrid` used to do.
+    // device-dependent — every grid's size, every grid's icon sizing — is resolved from it down there, against the
+    // settings store, rather than being worked out up here and pushed down piecemeal (which is what `setPagerGrid`
+    // used to do, and what left home drawing its blueprint whatever the user had chosen).
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
@@ -75,6 +82,7 @@ fun AppsScreen(
                 apps = state.apps,
                 onLaunch = viewModel::launch,
                 metrics = state.metricsFor(GridSlot.APPS_SCROLL),
+                cols = state.colsFor(GridSlot.APPS_SCROLL, device),
             )
             AppsLayout.PAGER -> AppsPager(
                 pages = state.pagerPages,
@@ -89,12 +97,16 @@ fun AppsScreen(
                 // A folder opened over the pager is a different grid, so it takes its own sizing rather than
                 // inheriting the page's.
                 folderMetrics = state.metricsFor(GridSlot.FOLDER),
+                // The same grid the ViewModel paginates the store against — passed down rather than re-resolved, so
+                // the page drawn and the page stored cannot be different sizes.
+                config = state.pagerConfigFor(device),
             )
             AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
                 categories = state.categories,
                 onLaunch = viewModel::launch,
                 onMove = viewModel::moveCategoryItem,
                 metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
+                cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
             )
             // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
             // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
@@ -109,6 +121,7 @@ fun AppsScreen(
                 // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing. A card's
                 // previews are derived from its own square instead, and pass their own.
                 metrics = state.metricsFor(GridSlot.FOLDER),
+                cardColumns = state.colsFor(GridSlot.APPS_CARD, device),
             )
         }
     }
@@ -124,3 +137,18 @@ fun AppsScreen(
 @Composable
 private fun AppsState.metricsFor(slot: GridSlot): IconMetrics =
     iconSizing[slot]?.toIconMetrics() ?: LocalIconMetrics.current
+
+/**
+ * The resolved visual column count for scrolling grid [slot], or its blueprint's default until the store answers.
+ *
+ * The fallback is the blueprint rather than a constant for the reason [metricsFor]'s is `LocalIconMetrics`: it is the
+ * same number the store itself would resolve for a user who has changed nothing, so the frame before the first
+ * emission cannot show a size nothing owns. Reached through the slot's own blueprint, so a new scrolling grid needs no
+ * change here.
+ */
+private fun AppsState.colsFor(slot: GridSlot, device: DeviceConfiguration): Int =
+    gridCols[slot] ?: slot.blueprint.colsFor(device)
+
+/** The pager's resolved grid, or its blueprint's until the store answers — [colsFor] for the one grid with rows. */
+private fun AppsState.pagerConfigFor(device: DeviceConfiguration): GridConfig =
+    pagerConfig ?: AppsPagerGrid.toGridConfig(device)

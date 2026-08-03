@@ -2,6 +2,7 @@ package inkspire.morphic.feature.apps
 
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.Category
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
@@ -64,12 +65,20 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  * @property iconSizing each grid's **resolved** icon sizing, by slot: the blueprint's default with any user override
  *   already merged in. Empty until the surface reports its device configuration, since resolution is per
  *   configuration — a layout reading a missing slot falls back to `LocalIconMetrics`' own default for that frame.
+ * @property gridCols each **scrolling** grid's resolved visual column count, by slot — the whole of such a grid's
+ *   size, since its rows are however many its content reaches. Empty until the device is reported, with the
+ *   blueprint standing in meanwhile, exactly as [iconSizing] does.
+ * @property pagerConfig the APPS pager's resolved grid — the one APPS grid with a row count, and so the only one
+ *   with a `GridConfig` to give. Null until the device is reported. It is also the surface's page **capacity**: the
+ *   store paginates against this same number, so nothing else may decide it.
  */
 data class AppsState(
     val apps: List<AppInfo> = emptyList(),
     val pagerPages: List<List<AppsItem>> = emptyList(),
     val categories: List<AppsCategory> = emptyList(),
     val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
+    val gridCols: Map<GridSlot, Int> = emptyMap(),
+    val pagerConfig: GridConfig? = null,
 )
 
 /**

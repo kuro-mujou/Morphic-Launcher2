@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
-import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.drag.DropPlanner
@@ -50,14 +49,13 @@ import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
-import inkspire.morphic.core.model.AppsPagerGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.PlacementPlan
-import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.apps.AppsItem
 import inkspire.morphic.feature.apps.asIconItem
 import inkspire.morphic.feature.apps.gridItem
@@ -90,8 +88,8 @@ internal val PagerReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent
  * cache — so they take a flat list and own nothing. This one takes [pages] already arranged, because the
  * arrangement is data (`apps_pager_item`, via `AppsOrderRepository`).
  *
- * **Fixed pages, not a scrolling grid.** Each page is a [LauncherGrid] in FIXED_PAGER mode at [AppsPagerGrid]'s
- * size, so a page holds exactly `rows × cols` and a page boundary is a real boundary — which is what the store's
+ * **Fixed pages, not a scrolling grid.** Each page is a [LauncherGrid] in FIXED_PAGER mode at the size [config]
+ * gives, so a page holds exactly `rows × cols` and a page boundary is a real boundary — which is what the store's
  * page + slot means, and why this uses `LauncherGrid` where the vertical grid deliberately does not.
  *
  * **Dragging is MovingGap, not push.** A coordinate surface shoves occupants aside; an ordered one migrates a gap
@@ -124,6 +122,10 @@ internal val PagerReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent
  * @param folderMetrics an *open folder's* icon sizing (`GridSlot.FOLDER`). A separate value on purpose: a folder is
  *   its own grid with its own configuration, so it must not inherit the page's — which is exactly what it would do if
  *   this surface published one ambient `LocalIconMetrics` for everything inside it.
+ * @param config the page's grid, resolved from `GridSlot.APPS_PAGER`'s blueprint and the user's overrides. Passed
+ *   rather than resolved here because **the same number paginates the store**: `rows × cols` is a page's capacity, so
+ *   a page drawn at one size while the arrangement was paginated at another would put entries on pages that do not
+ *   exist. One resolution, one owner.
  */
 @Composable
 fun AppsPager(
@@ -137,11 +139,10 @@ fun AppsPager(
     onMergeExtracted: (from: Long, app: ComponentKey, target: IconItem) -> Unit,
     metrics: IconMetrics,
     folderMetrics: IconMetrics,
+    config: GridConfig,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val device = currentDeviceConfiguration()
-    val config = remember(device) { AppsPagerGrid.toGridConfig(device) }
     val perPage = config.rows * config.cols
 
     val gestureConfig = rememberAppsGestureConfig()

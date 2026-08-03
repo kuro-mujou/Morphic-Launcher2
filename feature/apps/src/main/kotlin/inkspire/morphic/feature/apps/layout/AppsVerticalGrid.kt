@@ -15,18 +15,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
-import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.grid.cellHeight
 import inkspire.morphic.core.model.AppInfo
-import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.colsFor
 
 /**
  * The **vertical grid** layout of the APPS surface: every app A–Z, icon over label, in a scrolling grid.
@@ -35,9 +31,9 @@ import inkspire.morphic.core.model.colsFor
  * and re-renders straight from [apps], so it needs neither the APPS order repository nor any new schema. Between
  * them the two derived layouts cover the whole surface end to end, and everything left is blocked on that store.
  *
- * **Columns come from the blueprint, the layout engine does not.** [AppsScrollGrid] gives the per-device column
- * count (`colsFor` — a `SCROLL_GRID` blueprint has no rows to resolve, so it cannot go through `toGridConfig`),
- * but the cells are laid out by a `LazyVerticalGrid` rather than by `LauncherGrid`'s SCROLL_GRID mode. That mode
+ * **Columns are given, the layout engine is not.** The count is resolved from settings by the surface (a
+ * `SCROLL_GRID` has no rows to resolve, so it is a column count rather than a `GridConfig`), but the cells are laid
+ * out by a `LazyVerticalGrid` rather than by `LauncherGrid`'s SCROLL_GRID mode. That mode
  * composes every child at once, which is right for the bounded per-category page it was built for and wrong here:
  * a full app collection is hundreds of items, each baking an icon bitmap. This is the grid plan's "right tool per
  * surface" rule — a custom `Layout` for coordinate grids, a lazy one for pure scrolling surfaces — and it costs
@@ -56,16 +52,18 @@ import inkspire.morphic.core.model.colsFor
  * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
  *   Denser than home's by default, for the reason the column count differs: a home cell is a 2×2 slot around one icon,
  *   an app grid packs four to eight columns of them.
+ * @param cols how many columns across — resolved from the same slot's blueprint and overrides, and passed rather than
+ *   read here for the reason [metrics] is: this surface resolves every grid's configuration in one place, so a layout
+ *   cannot end up drawing a size nobody configured.
  */
 @Composable
 fun AppsVerticalGrid(
     apps: List<AppInfo>,
     onLaunch: (ComponentKey) -> Unit,
     metrics: IconMetrics,
+    cols: Int,
     modifier: Modifier = Modifier,
 ) {
-    val device = currentDeviceConfiguration()
-    val cols = remember(device) { AppsScrollGrid.colsFor(device) }
     val gestureConfig = rememberAppsGestureConfig()
     // Content padding, not layout padding, so rows scroll under the bars rather than stopping short of them —
     // the same system-constraint-only inset the list applies.

@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -43,13 +42,11 @@ import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
-import inkspire.morphic.core.model.AppsCategoryGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
-import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import kotlin.math.roundToInt
@@ -101,6 +98,8 @@ private val CategoryReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropInte
  *
  * @param onMove commits a drop — the app, the category it landed in, and its slot within that category.
  * @param metrics a page's icon sizing, resolved from `GridSlot.APPS_CATEGORY`'s blueprint and the user's overrides.
+ * @param cols how many columns a page is across, resolved from the same slot — passed rather than read here for the
+ *   reason [metrics] is: the surface resolves every grid's configuration in one place.
  */
 @Composable
 fun AppsCategoryPager(
@@ -108,11 +107,10 @@ fun AppsCategoryPager(
     onLaunch: (ComponentKey) -> Unit,
     onMove: (app: ComponentKey, toCategory: String, toSlot: Int) -> Unit,
     metrics: IconMetrics,
+    cols: Int,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val device = currentDeviceConfiguration()
-    val cols = remember(device) { AppsCategoryGrid.colsFor(device) }
     val gestureConfig = rememberAppsGestureConfig()
 
     // Held in a state so the count lambda reads the current list: `rememberLauncherPagerState` remembers the lambda

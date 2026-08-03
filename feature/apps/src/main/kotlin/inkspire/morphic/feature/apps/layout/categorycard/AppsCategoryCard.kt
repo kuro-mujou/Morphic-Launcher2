@@ -31,7 +31,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -46,13 +45,11 @@ import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.model.AppInfo
-import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
-import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import kotlin.math.roundToInt
@@ -157,6 +154,9 @@ private val DragProxySize = 72.dp
  * @param metrics an *expansion's* icon sizing (`GridSlot.FOLDER`, since an expansion is that same overlay and grid).
  *   The card previews are the exception and pass their own at each call site, because a preview icon is derived from
  *   the card's square rather than configured.
+ * @param cardColumns how many lanes of cards across, resolved from `GridSlot.APPS_CARD`'s blueprint and the user's
+ *   overrides. **The one dimension this layout has**, and it decides everything else: a card is square, so the lane
+ *   count *is* the card size, and the preview icons inside are derived from that square.
  */
 @Composable
 fun AppsCategoryCard(
@@ -165,13 +165,11 @@ fun AppsCategoryCard(
     onMove: (app: ComponentKey, toCategory: String, toSlot: Int) -> Unit,
     onReorder: (category: String, order: List<ComponentKey>) -> Unit,
     metrics: IconMetrics,
+    cardColumns: Int,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
-    // Lanes per device: 2 on a phone, 3 on a tablet portrait. Square cards mean the count *is* the card size.
-    val device = currentDeviceConfiguration()
-    val cardColumns = remember(device) { AppsCardGrid.colsFor(device) }
 
     val gridState = rememberLazyGridState()
     var gridBounds by remember { mutableStateOf<Rect?>(null) }
