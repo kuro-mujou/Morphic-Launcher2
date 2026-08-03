@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.apps.layout.categorypager
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
+import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.drag.DragAutoScrollEffect
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropFootprint
@@ -32,6 +34,7 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
+import inkspire.morphic.core.designsystem.grid.cellHeight
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -49,8 +52,8 @@ import inkspire.morphic.feature.apps.AppsCategory
  * a decision.
  *
  * It lives here rather than with [AppsCategoryPager] because a page is the only thing that reads it. The cell *height*
- * used to sit here too and no longer can: the surface needs it as well, to size the floating drag proxy without
- * waiting on a page to report its geometry — so it is [CategoryCellHeight], next door.
+ * is no longer a constant at all: it is derived from the cell width by `cellHeight`, and the surface derives its own
+ * from the same rule rather than waiting on a page to report geometry.
  */
 private val HeaderPadding = 16.dp
 
@@ -68,6 +71,9 @@ private val HeaderPadding = 16.dp
  * @param fingerInRoot the dragged finger, again only when the drag is this page's business; null keeps the page
  *   still, since a page nobody is dragging over must not auto-scroll itself — and it is what tells this page whether
  *   a re-plan is its business.
+ * @param metrics this page's icon sizing, which is also what decides how tall its cells come out — passed rather than
+ *   read from [inkspire.morphic.core.designsystem.cell.LocalIconMetrics] because a height is arithmetic on it, and
+ *   arithmetic on an ambient value is where a surface stops being able to say what it drew.
  * @param onGeometry reports where this page's cells currently are, republished on every scroll frame because the
  *   content moves under the finger while the finger itself may not move at all.
  */
@@ -80,12 +86,18 @@ internal fun CategoryPage(
     dragged: AppInfo?,
     gap: Int,
     fingerInRoot: Offset?,
+    metrics: IconMetrics,
     onLaunch: (ComponentKey) -> Unit,
     onDrop: () -> Unit,
     onGeometry: (GridGeometry) -> Unit,
-) {
+) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val colors = LocalMorphicColors.current
-    val cellHeightPx = with(LocalDensity.current) { CategoryCellHeight.toPx() }
+    // **The cell height is derived here, from the page's own width.** A page is a SCROLL_GRID: the columns fix the
+    // cell width and nothing fixes its height, so the height is whatever the icon and label need — `cellHeight`, the
+    // inverse of the arithmetic `IconLabelCell` lays a cell out by. Measured rather than read from the published
+    // geometry, so the very first frame draws at the right height instead of correcting itself once a viewport lands.
+    val cellHeight = cellHeight(cellWidth = maxWidth / cols, metrics = metrics)
+    val cellHeightPx = with(LocalDensity.current) { cellHeight.toPx() }
     // The shared MovingGap render, told to compare apps by component: `AppInfo` carries a label and an icon, and the
     // question is only *which app is this*. No truncation, unlike the APPS pager's — a category has no capacity, so
     // nothing can overflow it, and the dragged app may legitimately appear on two pages at once (its source page keeps
@@ -168,7 +180,7 @@ internal fun CategoryPage(
                 // `rows` is unused in scroll mode (height comes from cellHeight × content) but GridConfig requires a
                 // positive value, so it is set to what the content actually reaches rather than to a lie.
                 config = GridConfig(rows = rows, cols = cols),
-                cellHeight = CategoryCellHeight,
+                cellHeight = cellHeight,
                 // No geometry published from here — see the derivation above for why the grid's own position is not a
                 // trustworthy source once it is inside a scroller.
                 modifier = Modifier.fillMaxWidth(),

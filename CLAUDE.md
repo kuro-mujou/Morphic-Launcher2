@@ -266,8 +266,17 @@ from the baked stack).
   it from something else to make it look principled: derived-looking arithmetic reads as a decision when it is really
   a guess, and it hides that the value is still unowned (worse, it can invert the real dependency — the dock's row
   count comes *from* its height, so sizing its height from a row count is backwards). `RowHeight` in
-  `AppsVerticalList` and the two `CellHeight`s are the live examples; `DockHeight` in `HomeScreen` was the worked one
-  until S4c gave it an owner, and the placeholder deleted cleanly precisely because nothing had been derived from it.
+  `AppsVerticalList` is the live example; `DockHeight` in `HomeScreen` was the worked one until S4c gave it an owner,
+  and the placeholder deleted cleanly precisely because nothing had been derived from it.
+- **But a dimension that is a *consequence* of one the user owns must be derived, not stored** — the other half of the
+  rule above, and the two are told apart by whether a formula exists. A scrolling grid's cell **height** is the case:
+  its columns fix the cell width, and what is left is exactly what the icon and its label need, which is
+  `IconLabelCell`'s own arithmetic run forwards (`cellHeight` in `core:designsystem/grid/CellFit.kt`, ported from L1's
+  `gridCellHeightDp`). Storing it *as well* would let two settings disagree — enlarge the icons and get bigger icons in
+  cells that stayed the same height — where deriving it makes S3's icon sliders visibly move the grid, as they do in
+  L1. The list's row height is the opposite case and the reason the distinction is worth stating: a list has no cell
+  width to derive from, so nothing determines the row and it is genuinely the user's to set, with the icon a fraction
+  of *it*.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
   colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.

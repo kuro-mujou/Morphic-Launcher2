@@ -36,6 +36,7 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.grid.cellHeight
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
@@ -55,16 +56,6 @@ import kotlin.math.roundToInt
 
 /** This surface's drop zone — the pager viewport, as on the other paged surfaces. */
 private val CategoryZoneId = ZoneId("apps-category-pager")
-
-/**
- * Provisional cell height — **a placeholder, not a design choice**, for the reason the other layouts' are: a surface
- * metric bound for the settings layer, and a flat constant says so where derived arithmetic would look like a decision.
- *
- * Lives here rather than beside [CategoryPage] because it has two readers: a page lays its grid out with it, and the
- * surface sizes the floating drag proxy from it. The proxy deliberately does *not* ask a page how tall its cells came
- * out — see the proxy's comment below.
- */
-internal val CategoryCellHeight = 96.dp
 
 /**
  * The plan this surface reports for every hover it accepts: droppable, painting the gap and nothing else.
@@ -244,6 +235,7 @@ fun AppsCategoryPager(
                         gap = gap,
                         // Only the page being dragged over scrolls itself; the others must sit still.
                         fingerInRoot = if (pageIndex == gapPage) session?.fingerInRoot else null,
+                        metrics = metrics,
                         onLaunch = onLaunch,
                         onDrop = ::handleDrop,
                         onGeometry = { geometries[pageIndex] = it },
@@ -256,21 +248,25 @@ fun AppsCategoryPager(
             //
             // **Sized from this surface's own measurements, never from a page's published geometry.** A cell is
             // `viewport.width / cols` wide (a page's grid fills the viewport, and nothing here adds horizontal
-            // padding) and [CategoryCellHeight] tall, both of which this composable already knows. Reading the
-            // geometry map here instead — as this did — makes the proxy depend on a page having reported *up* through
-            // `onGeometry` before it can draw anything, so a drag whose first frame beats that report renders nothing
-            // at all. `viewport` comes from the pager's own `onGloballyPositioned`, a direct child, which is the same
-            // place `AppsPager` gets its geometry and is why that surface never had the problem.
-            val cellW = viewport?.let { it.width / cols }
-            if (session != null && cellW != null && draggedApp != null) {
-                val cellH = with(density) { CategoryCellHeight.toPx() }
+            // padding), and its height follows from that width — the same `cellHeight` derivation a page lays its
+            // grid out with, applied to the same width, so the proxy and the cell it lifted cannot come out different
+            // sizes. Reading the geometry map here instead — as this did — makes the proxy depend on a page having
+            // reported *up* through `onGeometry` before it can draw anything, so a drag whose first frame beats that
+            // report renders nothing at all. `viewport` comes from the pager's own `onGloballyPositioned`, a direct
+            // child, which is the same place `AppsPager` gets its geometry and is why that surface never had the
+            // problem.
+            val cellWidth = viewport?.let { with(density) { (it.width / cols).toDp() } }
+            val cellHeight = cellHeight(cellWidth = cellWidth ?: 0.dp, metrics = metrics)
+            if (session != null && cellWidth != null && draggedApp != null) {
+                val cellW = with(density) { cellWidth.toPx() }
+                val cellH = with(density) { cellHeight.toPx() }
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
                         (finger.x - cellW / 2f).roundToInt(),
                         (finger.y - cellH / 2f).roundToInt(),
                     ),
-                    size = DpSize(with(density) { cellW.toDp() }, CategoryCellHeight),
+                    size = DpSize(cellWidth, cellHeight),
                 ) {
                     AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
                 }

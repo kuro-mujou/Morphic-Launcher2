@@ -1,7 +1,10 @@
 package inkspire.morphic.feature.apps.layout
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -14,27 +17,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.grid.cellHeight
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.colsFor
-
-/**
- * Provisional cell height — **a placeholder, not a design choice.**
- *
- * A grid cell's height is a **user-configurable** surface metric (it is the vertical half of icon density, the
- * column count being the horizontal half). The icon in the cell is already settings-driven (S3); this is the half
- * still waiting on S4. Deliberately *not*
- * derived from the measured cell width to look principled: a square cell would be arithmetic standing in for a
- * decision nobody has made, and it would hide that the value is still unowned. A flat constant says so, and is
- * the single line that changes when the setting lands.
- */
-private val CellHeight = 96.dp
 
 /**
  * The **vertical grid** layout of the APPS surface: every app A–Z, icon over label, in a scrolling grid.
@@ -53,6 +45,13 @@ private val CellHeight = 96.dp
  * published geometry. (A drag *out* to home is `EjectToHome`, which reads the finger, not the grid.)
  *
  * Not built here, the same list as the vertical list's: the alphabet filter strip, search, and drag-out-to-home.
+ *
+ * **The row height is derived from the column width, not stored.** A scrolling grid fixes its cell *width* (the
+ * usable width over the column count) and has no fixed height to divide, so what remains is what the icon and its
+ * label need — which is `cellHeight`, the same arithmetic `IconLabelCell` lays a cell out by. That makes it a
+ * consequence of the icon sizing the user already chose in S3 rather than a second setting able to disagree with it:
+ * enlarge the icons and the rows grow to hold them. L1 derived it the same way (`gridCellHeightDp`), which is why its
+ * grids track their icon sliders.
  *
  * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
  *   Denser than home's by default, for the reason the column count differs: a home cell is a 2×2 slot around one icon,
@@ -73,19 +72,29 @@ fun AppsVerticalGrid(
     val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(cols),
-            modifier = modifier.fillMaxSize(),
-            contentPadding = barInsets,
-        ) {
-            items(items = apps, key = { it.componentKey.flatten() }) { app ->
-                // Only the height is set: the width is the column's, and `AppCell` sizes the icon from the cell
-                // it is given (via `IconLabelCell`), so the two metrics meet without either being computed here.
-                AppCell(
-                    app = app,
-                    modifier = Modifier.height(CellHeight),
-                    itemGestures = Modifier.appsItemGestures(gestureConfig) { onLaunch(app.componentKey) },
-                )
+        // Measured here rather than inside the item, because a cell's height comes from its *width* and only the
+        // grid knows that: `GridCells.Fixed` divides whatever is left after the content padding, so the same
+        // subtraction has to happen here to name one column's width.
+        BoxWithConstraints(modifier.fillMaxSize()) {
+            val direction = LocalLayoutDirection.current
+            val usableWidth = maxWidth -
+                barInsets.calculateStartPadding(direction) - barInsets.calculateEndPadding(direction)
+            val cellHeight = cellHeight(cellWidth = usableWidth / cols, metrics = metrics)
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(cols),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = barInsets,
+            ) {
+                items(items = apps, key = { it.componentKey.flatten() }) { app ->
+                    // Only the height is set: the width is the column's, and `AppCell` sizes the icon from the cell
+                    // it is given (via `IconLabelCell`), so the two metrics meet without either being computed here.
+                    AppCell(
+                        app = app,
+                        modifier = Modifier.height(cellHeight),
+                        itemGestures = Modifier.appsItemGestures(gestureConfig) { onLaunch(app.componentKey) },
+                    )
+                }
             }
         }
     }

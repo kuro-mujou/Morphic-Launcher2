@@ -277,9 +277,23 @@ every phase ends with something visibly working on device, and no slice is writt
         of the preview holds the lattice. `usableWindowArea` is settings' single measurement of the screen, replacing
         L1's `homeGridArea(window, insets, dockVisible, dockThickness)`: subtracting the dock is one caller's
         arithmetic on the result, not part of measuring a window.
-  - [ ] **S4e — cell and row heights** (`RowHeight`, the two `CellHeight`s). Needs a new blueprint field; `core:model`
-        is a JVM library, so `Int` dp rather than `Dp`.
-  - [ ] **S4f — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
+  - [x] **S4e — the two derived cell heights** (`AppsVerticalGrid`'s and the category pager's `CellHeight`). **No
+        setting, and that is the finding**: a scrolling grid's columns fix its cell *width*, so the height that is left
+        is exactly what the icon and label need — `IconLabelCell`'s arithmetic run forwards. `cellHeight` in `CellFit`,
+        the forward twin of `minCellHeightDp` and a port of L1's `gridCellHeightDp` (same formula, reading the cell's
+        own padding constants instead of a copy). Storing a height *as well* would let two settings disagree; deriving
+        it is what makes S3's icon sliders move the grid, as they do in L1. 3 tests.
+  - [ ] **S4f — the list's row height** (`RowHeight`) — the one of the three that genuinely *is* stored, for the reason
+        the other two are not: a list has no cell width to derive from, and `AppsListGrid` already says its icon *fills
+        its row*, so the row is the primary quantity and the icon a fraction of it. L1 hardcodes both (56dp row, 40dp
+        icon, its list ignoring its own icon settings entirely); L2 has the icon half already, so the row is what makes
+        it work — **today the list's icon controls are inert past 40dp**, since the 56dp row clamps them. Needs a
+        blueprint field (`Int` dp — `core:model` is a plain JVM library), a `SurfaceMetrics` entry keyed like the
+        dock's height (per configuration, not per slot — only a list has one), and a home for the control, which is
+        the **APPS surface section** that does not exist yet. That section is the natural next slice: it is where the
+        list's row height, the apps grids' column counts and their icon sizing all belong, and each one it takes moves
+        another slot out of the `ICONS` waiting room.
+  - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search

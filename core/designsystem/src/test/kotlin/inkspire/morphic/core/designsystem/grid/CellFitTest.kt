@@ -51,6 +51,35 @@ class CellFitTest {
     }
 
     @Test
+    fun `a cell's height is its width-driven icon plus the padding, and the label when shown`() {
+        // 120dp wide → 112dp inner → 56dp icon at 50%, plus CellPadV on both sides (4+4).
+        assertEquals(64f, cellHeightDp(cellWidthDp = 120f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+        // With labels on, the gap (4dp) and the 16dp label row.
+        assertEquals(
+            84f,
+            cellHeightDp(cellWidthDp = 120f, metrics = metrics.copy(showLabel = true), labelHeightDp = labelHeight),
+            0.01f,
+        )
+    }
+
+    @Test
+    fun `a cell's height follows the icon guardrails at both ends`() {
+        // The point of deriving it at all: the height tracks what the icon settings resolve to. A very wide cell is
+        // capped by maxIconDp (72 + 8), a very narrow one floored by minIconDp (24 + 8) rather than collapsing.
+        assertEquals(80f, cellHeightDp(cellWidthDp = 400f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+        assertEquals(32f, cellHeightDp(cellWidthDp = 8f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+        assertEquals(32f, cellHeightDp(cellWidthDp = 0f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+    }
+
+    @Test
+    fun `bigger icons mean taller cells`() {
+        val small = cellHeightDp(100f, metrics.copy(iconPercent = 0.4f), labelHeight)
+        val large = cellHeightDp(100f, metrics.copy(iconPercent = 0.8f), labelHeight)
+
+        assertTrue("a larger icon fraction must not give a shorter cell ($large vs $small)", large > small)
+    }
+
+    @Test
     fun `cells divide the area and never report zero`() {
         assertEquals(4, maxCells(availableDp = 240f, minCellDp = 56f))
         assertEquals(1, maxCells(availableDp = 10f, minCellDp = 56f))

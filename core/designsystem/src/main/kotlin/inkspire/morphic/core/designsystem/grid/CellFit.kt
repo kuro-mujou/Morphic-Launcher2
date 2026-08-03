@@ -2,6 +2,8 @@ package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.CellPadV
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -33,6 +35,10 @@ import kotlin.math.floor
  * **The same answer serves two questions.** [editableRangeIn] bounds what a settings screen may *offer*;
  * [fitGridConfig] applies the identical bound to a value that was stored earlier, under conditions that may since
  * have changed. One formula, so a grid can never be offered a size it would not then be drawn at.
+ *
+ * **Both directions of the same cell.** [minCellHeightDp] bounds a *count* (how many rows an area can hold);
+ * [cellHeightDp] sizes a *cell* (how tall one of a known width must be). A grid whose rows are fixed needs the first,
+ * a grid whose rows flow needs the second, and sharing one file is what keeps them describing the same cell.
  *
  * Pure arithmetic over `Float` dp, with a `@Composable` facade for the one input that needs a type scale (the label
  * row's height) — the same split `folderInnerSize` uses, and for the same reason: the interesting behaviour should be
@@ -78,6 +84,34 @@ fun minCellHeightDp(metrics: IconMetrics, labelHeightDp: Float): Float {
     val minIcon = minOf(metrics.minIconDp.value, metrics.maxIconDp.value)
     val label = if (metrics.showLabel) labelHeightDp + LabelGap.value else 0f
     return minIcon / percent + CellPadV.value * 2 + label
+}
+
+/**
+ * **How tall a cell of width [cellWidthDp] needs to be**, in dp — the forward direction of [minCellHeightDp].
+ *
+ * The two are the same layout read from opposite ends. [minCellHeightDp] asks how short a cell may get before its icon
+ * stops rendering at full size; this asks what height a *given* width implies, which is the question a scrolling grid
+ * has: its columns fix the cell width, and the height is then whatever the icon and the label need. It is the exact
+ * inverse arithmetic of `IconLabelCell` — vertical padding, the width-driven icon (`iconPercent` of the inner width,
+ * clamped to the guardrails), and, when labels show, the gap and the label row.
+ *
+ * **Derived rather than stored, which is L1's answer and the right one.** A cell height is not an independent
+ * preference: it is what the icon size the user *did* choose implies. Storing it as well would make two settings able
+ * to disagree — and a user who enlarges the icons would get bigger icons in cells that stayed the same height. L1
+ * derived it (`gridCellHeightDp`) and its grids track their icon sliders because of it; the only thing changed in the
+ * port is that the padding is read from the cell rather than copied beside the maths.
+ *
+ * @param cellWidthDp one cell's width — the grid's usable width divided by its column count.
+ * @param labelHeightDp the label row's height, or ignored entirely when [IconMetrics.showLabel] is false. From
+ *   `cellLabelHeight`, as in [minCellHeightDp].
+ */
+fun cellHeightDp(cellWidthDp: Float, metrics: IconMetrics, labelHeightDp: Float): Float {
+    val innerWidth = (cellWidthDp - CellPadH.value * 2).coerceAtLeast(0f)
+    val minIcon = minOf(metrics.minIconDp.value, metrics.maxIconDp.value)
+    val maxIcon = maxOf(metrics.minIconDp.value, metrics.maxIconDp.value)
+    val iconDp = (innerWidth * metrics.iconPercent).coerceIn(minIcon, maxIcon)
+    val label = if (metrics.showLabel) LabelGap.value + labelHeightDp else 0f
+    return CellPadV.value * 2 + iconDp + label
 }
 
 /** The most whole cells of [minCellDp] that fit in [availableDp]. Always ≥ 1 — a grid with no cells is not a grid. */
@@ -203,6 +237,21 @@ fun GridBlueprint.boundsIn(area: GridArea, metrics: IconMetrics): GridBounds {
 fun minCellHeightDp(metrics: IconMetrics): Float {
     val labelHeightDp = cellLabelHeight(metrics).value
     return remember(metrics, labelHeightDp) { minCellHeightDp(metrics, labelHeightDp) }
+}
+
+/**
+ * [cellHeightDp], with the label row's height read from the current type scale — **the one a surface calls**.
+ *
+ * Named apart from the pure function rather than overloading it, because it answers in the type its callers lay out
+ * with: a `Dp` for `Modifier.height`, `LauncherGrid`'s `cellHeight`, and the floating drag proxy's size. The pure
+ * arithmetic stays in `Float` dp so it can be tested without a `MaterialTheme`, as everything else in this file is.
+ *
+ * @param cellWidth one cell's width — for a lazy grid, the usable width divided by the column count.
+ */
+@Composable
+fun cellHeight(cellWidth: Dp, metrics: IconMetrics): Dp {
+    val labelHeightDp = cellLabelHeight(metrics).value
+    return remember(cellWidth, metrics, labelHeightDp) { cellHeightDp(cellWidth.value, metrics, labelHeightDp).dp }
 }
 
 /** [editableRangeIn], with the label row's height read from the current type scale. */
