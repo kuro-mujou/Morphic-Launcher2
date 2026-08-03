@@ -83,7 +83,8 @@ data class GridOverride(
  * modules. Icon sizing and grid dimensions are two maps in **one** slice rather than two slices, because every
  * consumer of one needs the other: a cell's icon size is a fraction of a cell whose size comes from the grid. The
  * dock's height is a third, and belongs here for the same reason twice over — it is what its cell counts are
- * divided out of, and those counts are what its icons are sized against.
+ * divided out of, and those counts are what its icons are sized against. The list's row height is a fourth, and the
+ * same dependency runs the other way there: the row is what its icon is a fraction *of*.
  *
  * **Keyed by [GridSlot] × [DeviceConfiguration], and the second half matters.** `GridBlueprint.defaults` is already
  * per-[DeviceConfiguration] — form factor *crossed with* orientation, four values — so keying an override by mere
@@ -103,6 +104,7 @@ data class SurfaceMetrics(
     val icon: Map<GridSlot, Map<DeviceConfiguration, IconOverride>> = emptyMap(),
     val grid: Map<GridSlot, Map<DeviceConfiguration, GridOverride>> = emptyMap(),
     val dockHeightDp: Map<DeviceConfiguration, Int> = emptyMap(),
+    val listRowHeightDp: Map<DeviceConfiguration, Int> = emptyMap(),
 ) {
     /**
      * The icon sizing to draw with for [slot] on [device]: the blueprint's default with any override applied.
@@ -180,6 +182,28 @@ data class SurfaceMetrics(
      */
     fun withDockHeight(device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
         copy(dockHeightDp = if (dp == null) dockHeightDp - device else dockHeightDp + (device to dp))
+
+    /**
+     * How tall one row of the APPS vertical list is on [device] in dp: [base] — its blueprint's — unless the user has
+     * set one here.
+     *
+     * **A fourth map rather than a `slot → extent` one, for the reason [dockHeightDp] is not slot-keyed either**, and
+     * the two are not the same measurement wearing different names: a dock's height is a whole strip's extent, which
+     * its rows then divide; a list's is one row of a grid that has no total height at all, because it scrolls. Naming
+     * each of the two grids that declares a height keeps the six that declare none unable to be asked.
+     */
+    fun listRowHeight(device: DeviceConfiguration, base: Int): Int = listRowHeightDp[device] ?: base
+
+    /**
+     * A copy with the list's row height on [device] set to [dp], or **cleared** when it is null — after which the list
+     * follows its blueprint again.
+     *
+     * No clamp, as [withDockHeight] has none: a row's floor is whatever still renders an icon at the *current* icon
+     * sizing, which this layer cannot know, and its ceiling is a matter of taste rather than of fit — a list scrolls,
+     * so a tall row costs nothing but density.
+     */
+    fun withListRowHeight(device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
+        copy(listRowHeightDp = if (dp == null) listRowHeightDp - device else listRowHeightDp + (device to dp))
 
     companion object {
         /** Nothing overridden: every grid draws at its blueprint's defaults. */

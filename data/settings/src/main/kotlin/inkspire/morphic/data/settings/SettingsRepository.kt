@@ -144,4 +144,27 @@ interface SettingsRepository {
      * (`GridReflow`), triggered by whoever makes this write — this call persists a number and nothing else.
      */
     suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?)
+
+    /**
+     * How tall one row of the APPS vertical list is on [device], in dp — its blueprint's height with any override.
+     *
+     * **The second and last stored extent**, beside [dockHeight], and for the opposite reason. A dock's height is a
+     * strip's, which its row count then divides; a list's row height is what nothing else can determine — one lane
+     * means no cell width to derive a height from and no extent to divide, so it is the user's outright, and the
+     * icon in the row is a fraction of *it*. Every other grid's cell height falls out of a number already chosen
+     * (`CellFit.cellHeight`, or the dock's height ÷ rows), which is why there are two of these and not eight.
+     */
+    fun listRowHeight(device: DeviceConfiguration): Flow<Int>
+
+    /**
+     * Sets the list's row height on [device] to [dp], or clears it (back to the blueprint) when null.
+     *
+     * **The caller owns the bounds**, as with [setDockHeight]: what a row must be at least depends on the current
+     * icon sizing, and what it may be at most is taste rather than fit — a list scrolls, so a tall row costs density
+     * and nothing else. Only "positive" is enforced here, which is an invariant rather than a preference.
+     *
+     * Nothing is displaced by this write, unlike the dock's: rows flow, so a taller one shows fewer apps per screen
+     * rather than leaving any without a place.
+     */
+    suspend fun setListRowHeight(device: DeviceConfiguration, dp: Int?)
 }

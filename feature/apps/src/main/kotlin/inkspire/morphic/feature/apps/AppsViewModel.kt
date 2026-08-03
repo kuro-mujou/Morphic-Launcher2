@@ -46,6 +46,7 @@ private data class AppsSizing(
     val icon: Map<GridSlot, IconSizing>,
     val cols: Map<GridSlot, Int>,
     val pager: GridConfig?,
+    val listRowHeightDp: Int?,
 )
 
 /**
@@ -187,13 +188,23 @@ class AppsViewModel(
         }
 
     /**
+     * The APPS list's row height for the reported device, in dp — the one grid whose cell height nothing else can
+     * decide, so the user does (see `AppsListGrid`). Null until a device is reported, as everything here is.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val listRowHeight: Flow<Int?> =
+        device.flatMapLatest { current ->
+            if (current == null) flowOf(null) else settingsRepository.listRowHeight(current)
+        }
+
+    /**
      * Everything the settings layer decides about how this surface is drawn, in one value.
      *
      * Folded together for the reason home's `HomeSizing` is: `combine` stops at five flows and the state needs more.
-     * It also groups honestly — these three change together when a settings section is edited, and none of them is
-     * content.
+     * It also groups honestly — these change together when a settings section is edited, and none of them is content.
      */
-    private val sizing: Flow<AppsSizing> = combine(iconSizings, gridCols, pagerConfig, ::AppsSizing)
+    private val sizing: Flow<AppsSizing> =
+        combine(iconSizings, gridCols, pagerConfig, listRowHeight, ::AppsSizing)
 
     val state: StateFlow<AppsState> =
         combine(
@@ -227,6 +238,7 @@ class AppsViewModel(
                 iconSizing = configured.icon,
                 gridCols = configured.cols,
                 pagerConfig = configured.pager,
+                listRowHeightDp = configured.listRowHeightDp,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 

@@ -13,21 +13,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
-
-/**
- * Provisional row height — **a placeholder, not a design choice.**
- *
- * Row height is a **user-configurable** surface metric (it is how a list trades density for reach). The icon that
- * sits in the row is already settings-driven (S3); this is the half still waiting on S4, so a flat constant stands in
- * and is the single line that changes when that lands.
- */
-private val RowHeight = 56.dp
 
 /**
  * The **vertical list** layout of the APPS surface: every app A–Z in one scrolling column, one row each.
@@ -40,10 +31,18 @@ private val RowHeight = 56.dp
  * **Rows use the shared gesture contract**, not a `clickable` — see [appsItemGestures] for why, and for what the
  * unwired half of that contract is waiting on.
  *
+ * **The row height is the setting here, and the icon follows it** — the reverse of every grid on the surface, where
+ * the icon size is chosen and the cell's height falls out of it. A list is one lane: there is no cell width to derive
+ * a height from and no extent to divide, so nothing determines the row but the user. `AppRowCell` then sizes the icon
+ * as `iconPercent` of what it is given, which at the blueprint's `1f` fills the row.
+ *
  * @param metrics this list's icon sizing, resolved from `GridSlot.APPS_LIST`'s blueprint and the user's overrides.
  *   Passed rather than read ambiently because the surface resolves every grid's sizing in one place; the default the
  *   blueprint carries is `iconPercent = 1f`, since a row's label sits *beside* the icon rather than under it and so
  *   leaves no height to reserve.
+ * @param rowHeight how tall each row is — resolved from the same blueprint and the same overrides, and the reason the
+ *   icon controls above it do anything at all: until it was stored, a 56dp row clamped every icon to 40dp whatever
+ *   the guardrails said.
  *
  * Deliberately **not** here yet, all of it L1 behaviour worth rebuilding rather than porting: the alphabet filter
  * strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing helpers into the same file as
@@ -54,6 +53,7 @@ fun AppsVerticalList(
     apps: List<AppInfo>,
     onLaunch: (ComponentKey) -> Unit,
     metrics: IconMetrics,
+    rowHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
@@ -67,7 +67,7 @@ fun AppsVerticalList(
             items(items = apps, key = { it.componentKey.flatten() }) { app ->
                 AppRowCell(
                     app = app,
-                    modifier = Modifier.fillMaxWidth().height(RowHeight),
+                    modifier = Modifier.fillMaxWidth().height(rowHeight),
                     itemGestures = Modifier.appsItemGestures(gestureConfig) { onLaunch(app.componentKey) },
                 )
             }

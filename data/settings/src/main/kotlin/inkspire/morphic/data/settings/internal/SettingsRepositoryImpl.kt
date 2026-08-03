@@ -152,6 +152,21 @@ internal class SettingsRepositoryImpl(
         return dataStore.read(SurfaceMetricsSlice) { it.dockHeight(device, base) }
     }
 
+    // Same `requireNotNull` as the dock's, and the same meaning: a grid with no row height in its blueprint takes its
+    // rows' height from something already chosen — an extent divided, or a width derived — so there is nothing here
+    // to answer with and a default would be a number nobody configured.
+    override fun listRowHeight(device: DeviceConfiguration): Flow<Int> {
+        val base = requireNotNull(GridSlot.APPS_LIST.blueprint.rowHeightDp) {
+            "the list must declare a default row height; being one lane, it can derive none"
+        }
+        return dataStore.read(SurfaceMetricsSlice) { it.listRowHeight(device, base) }
+    }
+
+    override suspend fun setListRowHeight(device: DeviceConfiguration, dp: Int?) {
+        require(dp == null || dp > 0) { "a $dp dp row could not hold an icon" }
+        update(SurfaceMetricsSlice) { withListRowHeight(device, dp) }
+    }
+
     override suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?) {
         // The one bound this layer can state without measuring anything. Everything else about a dock's height —
         // whether a row of icons fits it, whether it swallows the screen — needs the current icon sizing and the

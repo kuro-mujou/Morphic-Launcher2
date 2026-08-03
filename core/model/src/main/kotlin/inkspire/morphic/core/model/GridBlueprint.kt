@@ -165,6 +165,18 @@ object IconSizingRanges {
  *   One value rather than a per-[DeviceConfiguration] map, matching [icon]: the height that fits an icon and its
  *   label is a physical size, and does not vary by posture the way a *count* of rows does. A user who wants a
  *   different dock in landscape overrides it there, since overrides are keyed per configuration.
+ * @property rowHeightDp How tall one **row** of this grid is, in dp — or **null** for a grid whose rows take their
+ *   height from somewhere else, which is every grid but the list. There are exactly three ways a cell gets a height,
+ *   and a blueprint says which by what it declares:
+ *   1. **divided out of an extent** — the dock, where a cell is [heightDp] ÷ rows;
+ *   2. **derived from its width** — every scrolling grid, whose columns fix the cell width, leaving the icon and
+ *      label to decide the height (`cellHeight` in `core:designsystem`);
+ *   3. **declared**, here — the vertical list, and only it. A list is one lane, so it has no cell width to derive
+ *      from and no extent to divide: nothing determines the row, which makes it genuinely the user's to set, with
+ *      the icon then a fraction of *it* (hence this grid's `iconPercent = 1f`).
+ *
+ *   Not folded into [heightDp]: that is a whole grid's extent and this is one row of one, and a list has no total
+ *   height at all — it scrolls. `Int` dp for the reason [heightDp] is, [IconSizing] included.
  */
 data class GridBlueprint(
     val slot: GridSlot,
@@ -175,6 +187,7 @@ data class GridBlueprint(
     val defaults: Map<DeviceConfiguration, GridDefault>,
     val icon: IconSizing? = null,
     val heightDp: Int? = null,
+    val rowHeightDp: Int? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null
@@ -381,12 +394,18 @@ val FolderGrid = GridBlueprint(
 /**
  * APPS vertical list ([AppsLayout.VERTICAL_LIST]) — **one lane, scrolling**, which is all a list is.
  *
- * It has a blueprint for one reason: it draws icon cells, so it needs somewhere for its icon sizing to live, and every
- * grid's icon config hangs off its blueprint. Nothing is editable — a list is one lane by definition, and its row
- * *height* is a separate metric (S4) rather than a grid dimension.
+ * It has a blueprint for two reasons, and they are the two things a list still has to be told. It draws icon cells, so
+ * it needs somewhere for its icon sizing to live; and it is **the one grid that declares its own row height**
+ * ([rowHeightDp]), because being one lane leaves it nothing to derive one from. Its *columns* are not editable — a
+ * list is one lane by definition — which is why [editRange] stays null even though a row height is very much the
+ * user's to set: that range bounds counts, not extents, exactly as the dock's height sits outside it too.
  *
  * The icon fills its row: there is no label *underneath* to leave space for, since `AppRowCell` sets the label beside
- * the icon rather than below it.
+ * the icon rather than below it. So the row is the primary quantity and the icon a fraction of it — the reverse of a
+ * grid cell, where the icon size is chosen and the cell follows.
+ *
+ * 56dp is L1's row, and its icon inside came out at 40dp; both are reproduced by this pair rather than by two
+ * constants, since L1 hardcoded the icon as well and its list ignored its own icon settings entirely.
  */
 val AppsListGrid = GridBlueprint(
     slot = GridSlot.APPS_LIST,
@@ -401,6 +420,7 @@ val AppsListGrid = GridBlueprint(
         tabletLandscape = GridDefault(cols = 1),
     ),
     icon = IconSizing(iconPercent = 1f),
+    rowHeightDp = 56,
 )
 
 /**

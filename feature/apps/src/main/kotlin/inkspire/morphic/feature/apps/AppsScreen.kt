@@ -8,12 +8,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.AppsListGrid
 import inkspire.morphic.core.model.AppsPagerGrid
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
@@ -77,6 +80,7 @@ fun AppsScreen(
                 apps = state.apps,
                 onLaunch = viewModel::launch,
                 metrics = state.metricsFor(GridSlot.APPS_LIST),
+                rowHeight = state.rowHeight,
             )
             AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
                 apps = state.apps,
@@ -152,3 +156,12 @@ private fun AppsState.colsFor(slot: GridSlot, device: DeviceConfiguration): Int 
 /** The pager's resolved grid, or its blueprint's until the store answers — [colsFor] for the one grid with rows. */
 private fun AppsState.pagerConfigFor(device: DeviceConfiguration): GridConfig =
     pagerConfig ?: AppsPagerGrid.toGridConfig(device)
+
+/**
+ * The list's resolved row height, or its blueprint's until the store answers.
+ *
+ * Needs no device, unlike its neighbours: a row height is a physical size rather than a count, so the blueprint
+ * declares one value and an override may differ it per configuration — the same shape the dock's height has.
+ */
+private val AppsState.rowHeight: Dp
+    get() = (listRowHeightDp ?: checkNotNull(AppsListGrid.rowHeightDp)).dp

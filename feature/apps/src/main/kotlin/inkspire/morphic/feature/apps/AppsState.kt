@@ -71,6 +71,9 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  * @property pagerConfig the APPS pager's resolved grid — the one APPS grid with a row count, and so the only one
  *   with a `GridConfig` to give. Null until the device is reported. It is also the surface's page **capacity**: the
  *   store paginates against this same number, so nothing else may decide it.
+ * @property listRowHeightDp how tall one row of the vertical list is, resolved. Null until the device is reported.
+ *   The one *cell* dimension on this surface that is stored rather than derived, because a one-lane grid has no cell
+ *   width to derive from — see `AppsListGrid`.
  */
 data class AppsState(
     val apps: List<AppInfo> = emptyList(),
@@ -79,6 +82,7 @@ data class AppsState(
     val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
     val gridCols: Map<GridSlot, Int> = emptyMap(),
     val pagerConfig: GridConfig? = null,
+    val listRowHeightDp: Int? = null,
 )
 
 /**
