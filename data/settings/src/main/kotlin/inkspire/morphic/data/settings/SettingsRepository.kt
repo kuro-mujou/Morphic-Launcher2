@@ -88,7 +88,14 @@ interface SettingsRepository {
      */
     fun gridConfig(slot: GridSlot, device: DeviceConfiguration): Flow<GridConfig>
 
-    /** The **visual** column count for [slot] on [device] — the whole of a scrolling grid's size. */
+    /**
+     * The **visual** column count for [slot] on [device] — the whole of a scrolling grid's size, and half the
+     * dock's (whose rows come from [dockHeight] instead).
+     *
+     * Not clamped to what actually fits: that needs a measured area, so a surface that cares does it where it
+     * measures. Reading a column count the screen has outgrown is far better than storing the clamp, since the
+     * user's choice survives whatever shrank the fit.
+     */
     fun gridCols(slot: GridSlot, device: DeviceConfiguration): Flow<Int>
 
     /**
@@ -102,10 +109,39 @@ interface SettingsRepository {
      *
      * A grid with no `editRange` is not user-editable at all (a folder's, a list's) and writing to one is a coding
      * mistake rather than a no-op, so it throws.
+     *
+     * **A grid can be editable on one axis only, and the clamp is what enforces it**: a null `minRows` drops a row
+     * override rather than storing one. Two grids rely on that for two different reasons — a scrolling grid's rows
+     * come from its content, and the **dock's come from [dockHeight]** (see `DockGrid`). Neither can be given a row
+     * count by writing one here.
      */
     suspend fun updateGrid(
         slot: GridSlot,
         device: DeviceConfiguration,
         transform: GridOverride.() -> GridOverride,
     )
+
+    /**
+     * How tall the dock is on [device], in dp — its blueprint's height with any user override applied.
+     *
+     * **The dock's one stored number, and the only surface metric named after a single grid.** Every other grid is
+     * configured by counts and takes the space it is given; the dock is a strip whose extent the user sets and whose
+     * rows and columns are then divided out of it. A generic `extent(slot, device)` would offer that question for
+     * seven grids that cannot answer it.
+     */
+    fun dockHeight(device: DeviceConfiguration): Flow<Int>
+
+    /**
+     * Sets the dock's height on [device] to [dp], or clears it (back to the blueprint) when null.
+     *
+     * **The caller owns the bounds**, unlike [updateGrid], which floors what it is given. Both of a height's bounds
+     * are runtime facts a store cannot check: the floor is the smallest cell that still renders an icon at the
+     * *current* icon sizing, and the cap is a fraction of the *current* screen — so the cap changes when the device
+     * rotates, which no stored constant would. What is enforced here is only that a height is positive, which is an
+     * invariant rather than a preference.
+     *
+     * **A shrink can leave items with nowhere to sit**, since fewer rows fit. Re-homing them is `data:layout`'s
+     * (`GridReflow`), triggered by whoever makes this write — this call persists a number and nothing else.
+     */
+    suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?)
 }

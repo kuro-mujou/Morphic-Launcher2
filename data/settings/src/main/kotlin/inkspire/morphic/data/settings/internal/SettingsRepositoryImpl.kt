@@ -130,12 +130,34 @@ internal class SettingsRepositoryImpl(
                 val edited = transform()
                 // Floors only. A maximum depends on measured area and icon size — a runtime question, and the reason
                 // `GridEditRange` carries no maxima at all.
+                //
+                // A null `minRows` drops the row axis entirely rather than flooring it, which is how "this grid has
+                // no row count of its own" is enforced for both grids that claim it: a scrolling one takes its rows
+                // from its content, the dock from its height.
                 GridOverride(
                     cols = edited.cols?.coerceAtLeast(range.minCols),
                     rows = range.minRows?.let { min -> edited.rows?.coerceAtLeast(min) },
                 )
             }
         }
+    }
+
+    // `requireNotNull` for the same reason `iconSizing` uses one: a grid with no height in its blueprint is not a
+    // fixed-extent strip at all, so asking how tall it is has no honest answer, and inventing one would let a caller
+    // size a grid by a number nobody configured.
+    override fun dockHeight(device: DeviceConfiguration): Flow<Int> {
+        val base = requireNotNull(GridSlot.HOME_DOCK.blueprint.heightDp) {
+            "the dock must declare a default height; its rows and columns are divided out of it"
+        }
+        return dataStore.read(SurfaceMetricsSlice) { it.dockHeight(device, base) }
+    }
+
+    override suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?) {
+        // The one bound this layer can state without measuring anything. Everything else about a dock's height —
+        // whether a row of icons fits it, whether it swallows the screen — needs the current icon sizing and the
+        // current window, so it is checked where those are known rather than guessed at here.
+        require(dp == null || dp > 0) { "a dock $dp dp tall could not hold a cell" }
+        update(SurfaceMetricsSlice) { withDockHeight(device, dp) }
     }
 
     /**

@@ -81,7 +81,9 @@ data class GridOverride(
  *
  * The second settings slice, and the one that retired the per-surface icon constants scattered through the feature
  * modules. Icon sizing and grid dimensions are two maps in **one** slice rather than two slices, because every
- * consumer of one needs the other: a cell's icon size is a fraction of a cell whose size comes from the grid.
+ * consumer of one needs the other: a cell's icon size is a fraction of a cell whose size comes from the grid. The
+ * dock's height is a third, and belongs here for the same reason twice over — it is what its cell counts are
+ * divided out of, and those counts are what its icons are sized against.
  *
  * **Keyed by [GridSlot] × [DeviceConfiguration], and the second half matters.** `GridBlueprint.defaults` is already
  * per-[DeviceConfiguration] — form factor *crossed with* orientation, four values — so keying an override by mere
@@ -100,6 +102,7 @@ data class GridOverride(
 data class SurfaceMetrics(
     val icon: Map<GridSlot, Map<DeviceConfiguration, IconOverride>> = emptyMap(),
     val grid: Map<GridSlot, Map<DeviceConfiguration, GridOverride>> = emptyMap(),
+    val dockHeightDp: Map<DeviceConfiguration, Int> = emptyMap(),
 ) {
     /**
      * The icon sizing to draw with for [slot] on [device]: the blueprint's default with any override applied.
@@ -154,6 +157,29 @@ data class SurfaceMetrics(
         val nextForSlot = if (updated.isEmpty) forSlot - device else forSlot + (device to updated)
         return copy(grid = if (nextForSlot.isEmpty()) grid - slot else grid + (slot to nextForSlot))
     }
+
+    /**
+     * The dock's height on [device] in dp: [base] — its blueprint's — unless the user has set one here.
+     *
+     * **Not keyed by [GridSlot], unlike its two neighbours.** A slot-keyed map would make seven of the eight keys
+     * meaningless: every other grid either fills the space its parent gives it or scrolls, so "how tall is the APPS
+     * pager" has no answer to store. Naming the one grid that *has* an extent keeps the unrepresentable
+     * unrepresentable, which is worth more here than a third map that looks like the other two.
+     */
+    fun dockHeight(device: DeviceConfiguration, base: Int): Int = dockHeightDp[device] ?: base
+
+    /**
+     * A copy with the dock's height on [device] set to [dp], or **cleared** when it is null — after which the dock
+     * follows its blueprint again, exactly as a nulled field does in the two override maps.
+     *
+     * No clamp here, and none in the store either. The grid dimensions could be floored on write because
+     * `GridEditRange` states a minimum as a static *count*; a height's bounds are both runtime — its floor is one
+     * row's smallest usable cell (which needs the resolved icon sizing) and its ceiling is a fraction of the
+     * measured screen. Those belong to whatever measured the screen, so the only rule this layer can honestly
+     * enforce is that a height is positive, which `SettingsRepository.setDockHeight` requires.
+     */
+    fun withDockHeight(device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
+        copy(dockHeightDp = if (dp == null) dockHeightDp - device else dockHeightDp + (device to dp))
 
     companion object {
         /** Nothing overridden: every grid draws at its blueprint's defaults. */
