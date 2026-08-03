@@ -80,11 +80,16 @@ internal fun IconSizingControls(
         )
     }
 
-    SettingsSwitchRow(
-        title = "Show labels",
-        checked = sizing.showLabel,
-        onCheckedChange = { on -> onToggle(on, null) },
-    )
+    // Not offered for a list, and that is the mirror of the switch above rather than an inconsistency: a row *is* its
+    // label, so hiding it would leave nothing, where hiding the icon leaves the pure-text list the other switch
+    // promises. `AppRowCell` says the same from its side, which is why neither has to be told.
+    if (slot != GridSlot.APPS_LIST) {
+        SettingsSwitchRow(
+            title = "Show labels",
+            checked = sizing.showLabel,
+            onCheckedChange = { on -> onToggle(on, null) },
+        )
+    }
     if (sizing.showLabel) {
         SettingsCommitSlider(
             title = "Text size",

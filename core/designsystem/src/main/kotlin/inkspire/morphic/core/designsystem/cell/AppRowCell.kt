@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
@@ -23,6 +24,37 @@ import inkspire.morphic.core.model.AppInfo
 private val RowPadH = 24.dp
 private val RowPadV = 8.dp
 private val IconLabelGap = 16.dp
+
+/**
+ * **The span of row heights over which the height still changes the icon**, in dp — the inverse of [AppRowCell]'s own
+ * sizing, and what a row-height control offers.
+ *
+ * A row's height is the one cell dimension a user sets outright (a list is one lane, so nothing derives it), and
+ * `AppRowCell` then resolves the icon as `iconPercent` of the row's inner height, clamped to the guardrails. Read
+ * backwards, that gives both ends: below `minIcon / iconPercent` the icon is clamped *up* and would overflow the row,
+ * and above `maxIcon / iconPercent` it has stopped growing and the extra height is whitespace. So the interesting
+ * range is exactly between them.
+ *
+ * **Derived rather than a stated range**, which is why it lives here beside the padding it has to add back rather than
+ * as two numbers in a settings screen: a range picked by hand would drift from the cell, and — more to the point — it
+ * would not move when the user changes the guardrails it is a function of. The dock's height slider states its bounds
+ * (L1's `80f..320f`) because a strip's extent genuinely is a matter of screen share; a row's is not.
+ *
+ * The upper bound is forced above the lower, so equal guardrails still give a usable control rather than an empty one.
+ */
+fun rowHeightRangeDp(metrics: IconMetrics): ClosedFloatingPointRange<Float> {
+    val percent = metrics.iconPercent.coerceAtLeast(MIN_ROW_ICON_PERCENT)
+    val padding = RowPadV.value * 2
+    val floor = minOf(metrics.minIconDp.value, metrics.maxIconDp.value) / percent + padding
+    val ceiling = maxOf(metrics.minIconDp.value, metrics.maxIconDp.value) / percent + padding
+    return floor..maxOf(ceiling, floor + 1f)
+}
+
+/** Guards the division in [rowHeightRangeDp] only; `IconSizingRanges.IconPercent` floors what a user can choose. */
+private const val MIN_ROW_ICON_PERCENT = 0.05f
+
+/** Fallback line height for a type style that declares none, matching what `CellLabel` assumes for a grid label. */
+private const val DEFAULT_LINE_HEIGHT_RATIO = 1.2f
 
 /**
  * The **list row** for one app: icon at the start, label beside it, filling the width. The horizontal sibling of
@@ -40,9 +72,12 @@ private val IconLabelGap = 16.dp
  * consequence is real and intended: a list leaves no slack for a surface-level long-press, because in a list
  * every pixel belongs to a row.
  *
- * **[metrics] is read for sizing only.** `showIcon`/`showLabel` are grid-cell switches and are deliberately
- * ignored: a row *is* its label, and an icon-only row is no longer a list. If an icon-less variant is ever wanted
- * it should be its own cell, not a row rendering half of itself.
+ * **[metrics] is honoured except for `showLabel`, and the exception is structural rather than an omission.** A row
+ * *is* its label — the icon is an adornment beside it — so a row with no label would not be a row at all, and the
+ * settings section correspondingly does not offer that switch for a list. `showIcon` is honoured, because dropping
+ * the icon leaves exactly the pure-text list it promises (L1 offered the same toggle, gated on its `listMode` flag).
+ * `labelScale` is honoured too: it multiplies the row's text as it multiplies a grid cell's, which is what makes the
+ * text-size control mean the same thing wherever it appears.
  */
 @Composable
 fun AppRowCell(
@@ -60,6 +95,7 @@ fun AppRowCell(
         val iconSize = metrics
             .resolveIconSize(availWidth = maxWidth - RowPadH * 2, availHeight = innerHeight)
             .coerceAtMost(innerHeight)
+        val baseStyle = MaterialTheme.typography.bodyLarge
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -67,16 +103,27 @@ fun AppRowCell(
                 .padding(horizontal = RowPadH, vertical = RowPadV),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LauncherIcon(
-                component = app.componentKey,
-                contentDescription = app.label,
-                sizePx = with(LocalDensity.current) { iconSize.roundToPx() },
-                modifier = Modifier.size(iconSize),
-            )
-            Spacer(Modifier.width(IconLabelGap))
+            // A pure-text list drops the icon *and* the gap after it, so the label starts at the row's own inset
+            // rather than where the icon used to end.
+            if (metrics.showIcon) {
+                LauncherIcon(
+                    component = app.componentKey,
+                    contentDescription = app.label,
+                    sizePx = with(LocalDensity.current) { iconSize.roundToPx() },
+                    modifier = Modifier.size(iconSize),
+                )
+                Spacer(Modifier.width(IconLabelGap))
+            }
             Text(
                 text = app.label,
-                style = MaterialTheme.typography.bodyLarge,
+                style = baseStyle.copy(
+                    fontSize = baseStyle.fontSize * metrics.labelScale,
+                    lineHeight = if (baseStyle.lineHeight.isSpecified) {
+                        baseStyle.lineHeight * metrics.labelScale
+                    } else {
+                        baseStyle.fontSize * metrics.labelScale * DEFAULT_LINE_HEIGHT_RATIO
+                    },
+                ),
                 // The theme's content colour, not the grid label's white-on-wallpaper: a list is read against
                 // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
                 color = colors.content,

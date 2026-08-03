@@ -38,7 +38,14 @@ data class IconSizingState(
  * details each embedded `IconLayoutControls`, and it had no separate icons section at all for grid sizing. This
  * screen is the waiting room for grids whose surface has no section yet, not a second place to edit the ones that do.
  */
-private val Relocated = setOf(GridSlot.HOME_MAIN, GridSlot.HOME_DOCK)
+private val Relocated = setOf(
+    GridSlot.HOME_MAIN,
+    GridSlot.HOME_DOCK,
+    GridSlot.APPS_LIST,
+    GridSlot.APPS_SCROLL,
+    GridSlot.APPS_PAGER,
+    GridSlot.APPS_CATEGORY,
+)
 
 /**
  * Every grid whose icons this screen still sizes — each [GridSlot] whose blueprint declares icon sizing, less those

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.icons.IconSizingDetail
@@ -233,6 +234,7 @@ private fun SettingsDetail(section: SettingsSection) {
         SettingsSection.ICONS -> IconSizingDetail()
         SettingsSection.HOME_GRID -> GridSizeDetail()
         SettingsSection.DOCK -> DockDetail()
+        SettingsSection.APPS -> AppsDetail()
     }
 }
 

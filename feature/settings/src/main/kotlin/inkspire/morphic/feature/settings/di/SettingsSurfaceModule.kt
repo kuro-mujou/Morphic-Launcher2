@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.di
 
+import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
 import inkspire.morphic.feature.settings.icons.IconSizingViewModel
@@ -20,4 +21,5 @@ val settingsSurfaceModule = module {
     viewModel { IconSizingViewModel(get()) }
     viewModel { DockViewModel(get(), get()) }
     viewModel { GridSizeViewModel(get(), get()) }
+    viewModel { AppsSectionViewModel(get()) }
 }

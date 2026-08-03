@@ -283,16 +283,27 @@ every phase ends with something visibly working on device, and no slice is writt
         the forward twin of `minCellHeightDp` and a port of L1's `gridCellHeightDp` (same formula, reading the cell's
         own padding constants instead of a copy). Storing a height *as well* would let two settings disagree; deriving
         it is what makes S3's icon sliders move the grid, as they do in L1. 3 tests.
-  - [ ] **S4f — the list's row height** (`RowHeight`) — the one of the three that genuinely *is* stored, for the reason
-        the other two are not: a list has no cell width to derive from, and `AppsListGrid` already says its icon *fills
-        its row*, so the row is the primary quantity and the icon a fraction of it. L1 hardcodes both (56dp row, 40dp
-        icon, its list ignoring its own icon settings entirely); L2 has the icon half already, so the row is what makes
-        it work — **today the list's icon controls are inert past 40dp**, since the 56dp row clamps them. Needs a
-        blueprint field (`Int` dp — `core:model` is a plain JVM library), a `SurfaceMetrics` entry keyed like the
-        dock's height (per configuration, not per slot — only a list has one), and a home for the control, which is
-        the **APPS surface section** that does not exist yet. That section is the natural next slice: it is where the
-        list's row height, the apps grids' column counts and their icon sizing all belong, and each one it takes moves
-        another slot out of the `ICONS` waiting room.
+  - [x] **S4f — the list's row height, and the APPS section it needed.** The one of the three heights that genuinely
+        *is* stored, for the reason the other two are not: a list has no cell width to derive from, and `AppsListGrid`
+        already said its icon *fills its row*, so the row is the primary quantity and the icon a fraction of it. L1
+        hardcodes both (56dp row, 40dp icon, its list ignoring its own icon settings entirely). Built in three parts:
+    - **The APPS surface reads its grids from the store** — all five layouts resolved their own size from a blueprint,
+      so an override would have gone unread. Fixed *before* a section could write one, which is the bug home had just
+      paid for. The pager's is load-bearing: `rows × cols` is the page capacity the store paginates against.
+    - **The store** — `GridBlueprint.rowHeightDp` (the third way a cell gets a height: divided out of an extent,
+      derived from a width, or declared), `SurfaceMetrics.listRowHeightDp` keyed per configuration like the dock's
+      height, `listRowHeight`/`setListRowHeight`. 5 tests.
+    - **The section** — one `SettingsSection.APPS` with a chip per configurable layout, editing that layout's grid
+      (or, for the list, its row height) plus its icon sizing. A resize here is **one write**, unlike home's two: every
+      APPS grid is ordered or derived, so the flow re-densifies and there is nothing to displace. The row-height
+      slider's range is derived from the icon guardrails (`rowHeightRangeDp`) rather than stated, since outside it the
+      height stops changing the icon. Four APPS slots left the `ICONS` waiting room, which now holds only the folder
+      grid. `AppRowCell` also gained the two metrics it had been ignoring (`showIcon`, `labelScale`), since the section
+      offers both.
+    - **Left open: the category card's lane count.** Its blueprint declares an `editRange`, but a card is a *tile* —
+      how narrow one may get is not an icon guardrail, and its blueprint declares no icon sizing at all. Nothing yet
+      answers it, and a bound picked by hand is what this port keeps refusing. L1 gave its library layout no grid
+      knobs either.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.

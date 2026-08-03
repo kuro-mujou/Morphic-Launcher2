@@ -75,8 +75,12 @@ private data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val n
  * pair centred on each edge needs no legend — the buttons are *at* the thing they change, and the glyph says which
  * way. The same reason the flash below is greyscale rather than red/green.
  *
- * @param rowBounds null when the row axis is not the user's to set, which hides the top and bottom pairs entirely —
- *   the dock's case, where rows are divided out of its height.
+ * @param rows how many rows to draw. Normally the stored count; for a **scrolling** grid it is how many happen to fit,
+ *   since there is no stored count at all — the caption below tells the two apart rather than asserting a number the
+ *   user did not choose.
+ * @param rowBounds null when the row axis is not the user's to set, which hides the top and bottom pairs entirely.
+ *   Two grids reach that for opposite reasons: a scrolling one has no rows to bound, and the dock's are divided out
+ *   of its height.
  * @param aspectRatio the screen's width ÷ height, so the preview is the shape of the device rather than a square.
  */
 @Composable
@@ -100,11 +104,13 @@ internal fun GridEditor(
     }
 
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Both counts, always — a derived row count is still a fact about the grid, and hiding it was worse than
-        // useless: the dock looked like an editor missing half its buttons rather than one whose rows follow its
-        // height. Only the *buttons* are conditional.
+        // Both counts wherever there are two — a derived row count is still a fact about the grid, and hiding the
+        // dock's made it look like an editor missing half its buttons rather than one whose rows follow its height.
+        // A **scrolling** grid is the one case with genuinely nothing to say there: its rows are however many its
+        // content reaches, so the number drawn is what fits rather than what was chosen, and claiming it as a count
+        // would be the one thing a caption must not do.
         Text(
-            text = "$cols columns × $rows rows",
+            text = if (rowBounds == null) "$cols columns" else "$cols columns × $rows rows",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.contentMuted,
             modifier = Modifier.padding(bottom = ButtonGap * 2),
@@ -339,7 +345,7 @@ private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .size(ButtonSize)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (enabled) colors.surface else colors.surface.copy(alpha = 0.4f))
+            .background(if (enabled) colors.content else colors.content.copy(alpha = 0.4f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -351,7 +357,7 @@ private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
         Text(
             text = glyph,
             style = MaterialTheme.typography.titleMedium,
-            color = if (enabled) colors.content else colors.contentMuted,
+            color = colors.surface,
         )
     }
 }

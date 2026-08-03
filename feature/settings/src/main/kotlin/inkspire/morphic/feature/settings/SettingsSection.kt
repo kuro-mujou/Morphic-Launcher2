@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.settings
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Home
@@ -35,6 +36,9 @@ enum class SettingsSection {
 
     /** The dock: its height, the grid inside it, and its icon sizing. */
     DOCK,
+
+    /** The APPS surface: each arrangement's grid — or the list's row height — and its icon sizing. */
+    APPS,
 }
 
 /** A section's row in the list: what it is called, what it covers, and the glyph that marks it. */
@@ -58,6 +62,9 @@ internal val SettingsSection.meta: SettingsSectionMeta
         SettingsSection.DOCK -> SettingsSectionMeta(
             "Dock", "Height, grid and icons", Icons.Outlined.Dock,
         )
+        SettingsSection.APPS -> SettingsSectionMeta(
+            "Apps", "Arrangements, grids and icons", Icons.Outlined.Apps,
+        )
     }
 
 /** A titled run of sections in the list. A null [header] is a run with no heading above it. */
@@ -72,6 +79,7 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
             SettingsSection.SURFACE_REGISTER,
             SettingsSection.HOME_GRID,
             SettingsSection.DOCK,
+            SettingsSection.APPS,
         ),
     ),
 )

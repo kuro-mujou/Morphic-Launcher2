@@ -647,11 +647,23 @@ detail on a tablet, sliding between the two on a phone, with `SettingsSection` a
 screen with another is not a destination. L1's *actual* mistake is still avoided — it declared that enum in the
 **navigation module**, so `feature:home` could import `SettingsSection.WALLPAPER`; ours never leaves the feature.
 **A section belongs to a surface and holds everything about it**, layout controls *and* icon sizing, exactly as each
-of L1's five details embedded `IconLayoutControls` under its layout section. Home and Dock have theirs; the
-standalone icon-sizing screen keeps only the grids whose surface has no section yet, and stays because the **icon
-studio** (B9, per-app) will live there. `IconSizingControls` shares the UI and `IconSizingEdits` the write commands,
-so a third section costs neither. Still missing beside L1: the live icon **preview** between the two groups, which
-punches through to the wallpaper and so waits on `data:wallpaper`.
+of L1's five details embedded `IconLayoutControls` under its layout section. Home, Dock and Apps have theirs; the
+standalone icon-sizing screen is down to the **folder grid alone** and stays because the **icon studio** (B9, per-app)
+will live there. `IconSizingControls` shares the UI and `IconSizingEdits` the write commands, so a fourth section costs
+neither. Still missing beside L1: the live icon **preview** between the two groups, which punches through to the
+wallpaper and so waits on `data:wallpaper`.
+**The APPS section is one section with a chip per layout** — the settings mirror of one `feature:apps` for five
+layouts, and the same argument: they differ only in arrangement, so what a user configures is "the paged one" or "the
+list". Selecting a chip writes nothing (which layout you *get* is per home edge, in the register). Its resize is **one
+write** where home's is two, and that is the ordered/coordinate split reaching settings: every APPS grid is ordered or
+derived, so the flow re-densifies and there is nothing to displace — the pager's store even re-paginates itself, since
+a capacity change is the sync it already runs for installs. Only the edge's *axis* is read, as in L1's drawer editor.
+The **list** is the odd one: one lane, so it has no grid to edit and its size *is* its row height
+(`AppsListGrid.rowHeightDp`, the third way a cell gets a height — see the derive-vs-store rule in the design-system
+notes). Its slider's range is derived from the icon guardrails (`rowHeightRangeDp`), because outside that span the
+height stops changing the icon. **Left open: the category card's lane count** — a card is a *tile*, so how narrow one
+may get is not an icon guardrail and its blueprint declares no icon sizing; L1 gave its library layout no grid knobs
+either.
 **Resizing a grid names an edge, not a count**, because that is what decides where the items go — removing the *left*
 column shifts everything left, removing the right one drops what sat there. So a press is **two writes**: the count
 (`updateGrid`) and the placements it displaces (`GridReflow.edit` → `LayoutRepository.apply`), ordered grow-first for
