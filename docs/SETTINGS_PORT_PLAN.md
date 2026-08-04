@@ -261,8 +261,17 @@ every phase ends with something visibly working on device, and no slice is writt
         the `editRange` **write-side clamp** — the first consumer of `GridEditRange`. Minima only: maxima are a runtime
         question. 8 tests.
   - [x] **S4b — `resolveBounds`.** `core:designsystem/grid/CellFit.kt`, ported from L1's `CellFit`, which had *two*
-        definitions of "smallest usable cell" (one wrong) and its own copy of the cell padding. Now one formula, reading
+        definitions of "smallest usable cell" and its own copy of the cell padding. Now one formula, reading
         `IconLabelCell`'s real constants. 13 tests.
+    - **Corrected in S4h: neither of L1's two was right, and the port had adopted the worse one.** The floor is
+      `minIconDp + cellPadding` — `resolveIconSize` clamps the percent-derived size **up** to the guardrail, so an icon
+      is never drawn smaller than it and a cell overflows exactly when the guardrail exceeds its inner width.
+      `iconPercent` scales *within* the guardrails and cannot make a cell unusable, so it has no business in the floor.
+      L1's `scrollingMaxColumns` divided by it (which is a different question — "how wide must a cell be for the percent
+      to be honoured un-clamped" — and answers this one backwards: at 30% a 28dp guardrail demands a 101dp column, so
+      *shrinking* the icons reports fewer columns); L1's `gridMaxima`, the one behind its home editor, left the percent
+      out correctly but used the raw guardrail as the whole cell, forgetting the inset. L2 is now L1's home formula plus
+      the padding it was missing, with a test pinning that the fraction moves no bound.
   - [x] **S4c — the dock.** Specified below and built, in five parts: `GridReflow.Overflow.EVICT` + `admit` (the two
         halves of a shrink, 6 tests); the extent store (`GridBlueprint.heightDp`, `SurfaceMetrics.dockHeightDp`,
         `dockHeight`/`setDockHeight`, 6 tests); `CellFit.fitGridConfig` (rows from the extent, columns clamped,
@@ -296,14 +305,36 @@ every phase ends with something visibly working on device, and no slice is writt
     - **The section** — one `SettingsSection.APPS` with a chip per configurable layout, editing that layout's grid
       (or, for the list, its row height) plus its icon sizing. A resize here is **one write**, unlike home's two: every
       APPS grid is ordered or derived, so the flow re-densifies and there is nothing to displace. The row-height
-      slider's range is derived from the icon guardrails (`rowHeightRangeDp`) rather than stated, since outside it the
-      height stops changing the icon. Four APPS slots left the `ICONS` waiting room, which now holds only the folder
+      slider's range is derived from the icon guardrails (`rowHeightRangeDp`) rather than stated: **its bounds are the
+      guardrail range shifted by the row's own inset**, so the icon range slider governs it — a row shorter than
+      `minIconDp` + padding cannot honour the smallest icon allowed, and one taller than `maxIconDp` + padding is height
+      the largest cannot fill. `iconPercent` is out of it for the reason S4h took it out of the grid formulas (dividing
+      by it inverted the control), and a stored height outside the range is clamped on read (`fitRowHeightDp`, in the
+      list and in the slider alike) rather than written down. 6 tests. Four APPS slots left the `ICONS` waiting room, which now holds only the folder
       grid. `AppRowCell` also gained the two metrics it had been ignoring (`showIcon`, `labelScale`), since the section
       offers both.
     - **Left open: the category card's lane count.** Its blueprint declares an `editRange`, but a card is a *tile* —
       how narrow one may get is not an icon guardrail, and its blueprint declares no icon sizing at all. Nothing yet
       answers it, and a bound picked by hand is what this port keeps refusing. L1 gave its library layout no grid
       knobs either.
+  - [x] **S4h — an editor edits the grid that is *drawn*.** The bug S3 and S4 left between them: every section computed
+        its **bounds** from the live icon sizing (so raising the minimum icon dp narrowed the range) but drew and counted
+        from the **stored** number, which the surface had already clamped past. So home's editor claimed 4×5 while home
+        drew 4×4, `−` wrote 4 instead of 3, and the icon group underneath appeared to do nothing. Fixed by passing the
+        *fitted* size to `GridEditor` and to the edit command — `CellFit.fitGridConfig` for home and the dock, and a new
+        **`fitCols`** (the scrolling twin: one axis, no label height, 5 tests) for the APPS grids. Three consequences
+        worth knowing:
+    - **Still clamp-on-read, not L1's write-back.** L1 reconciled this from a `LaunchedEffect` inside its home detail
+      that wrote the clamped counts into storage, so an icon tweak destroyed a row count permanently — and only while
+      that screen was open. Here the count returns when the icons shrink; only a **press** writes. The one stored
+      reduction stays the dock's height commit, for the reason it always was: that height was itself a deliberate change.
+    - **The APPS *scrolling* grids needed the same clamp in the surface**, which they never had (`AppsVerticalGrid`,
+      `CategoryPage`, and the category pager's drag proxy, all through `fitCols` on their own measured width) — otherwise
+      the section would have shown a column count the grid was ignoring, with the icons overflowing their cells.
+    - **The APPS *pager* is deliberately excluded.** Its rows × cols is the page **capacity** `AppsViewModel` paginates
+      the store against, so a count clamped in the UI alone would describe pages the store never made. Fitting it means
+      that ViewModel learning a runtime bound (a measured area, as `DockViewModel.setHeight` is told its row cap) — a
+      slice of its own, and the only grid still drawn at a size the area may not carry.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
@@ -341,6 +372,7 @@ Nothing is open. Each is argued where it applies rather than restated here; this
 | Dock columns | **stored**, with the fit as a ceiling and the clamp applied on *read* | *The dock (S4c)* |
 | Dock height cap | a fraction of the current screen height, so it changes with orientation | *The dock (S4c)* |
 | Grid resizing | names an **edge**, not a count — and commits the count *and* the placements it displaces | *S4d* |
+| What an editor shows | the **fitted** count (what the surface draws), and a press counts from that — never the stored one | *S4h* |
 
 The last one edited [REWRITE_PLAN.md](REWRITE_PLAN.md)'s build map; the rest are local to this plan.
 

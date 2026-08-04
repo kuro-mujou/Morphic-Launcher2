@@ -675,8 +675,14 @@ derived, so the flow re-densifies and there is nothing to displace — the pager
 a capacity change is the sync it already runs for installs. Only the edge's *axis* is read, as in L1's drawer editor.
 The **list** is the odd one: one lane, so it has no grid to edit and its size *is* its row height
 (`AppsListGrid.rowHeightDp`, the third way a cell gets a height — see the derive-vs-store rule in the design-system
-notes). Its slider's range is derived from the icon guardrails (`rowHeightRangeDp`), because outside that span the
-height stops changing the icon. **Left open: the category card's lane count** — a card is a *tile*, so how narrow one
+notes). **Its slider's bounds are the icon guardrails plus the row's own inset** (`rowHeightRangeDp`), so the icon range
+slider *governs* the row-height slider: a row shorter than `minIconDp` + padding cannot honour the smallest icon
+allowed, and one taller than `maxIconDp` + padding is height the largest cannot fill. So the way to ask for a taller row
+is to raise the upper guardrail. `iconPercent` is deliberately not in it — the same rule as the grid, and for the same
+reason: dividing by it inverted the control, so asking for *smaller* icons pushed the row **taller** (a 56dp row clamped
+up to 72dp at 50%). A stored height outside the range is clamped on read by `fitRowHeightDp` — in the list *and* in the
+slider, so the control never sits at a height the surface isn't using — and never written back, so the user's number
+returns when the guardrails widen. **Left open: the category card's lane count** — a card is a *tile*, so how narrow one
 may get is not an icon guardrail and its blueprint declares no icon sizing; L1 gave its library layout no grid knobs
 either.
 **Resizing a grid names an edge, not a count**, because that is what decides where the items go — removing the *left*
@@ -689,6 +695,24 @@ new size later cannot recover it. **The dock's version spills onto home** (`sett
 serves both grids — a screen-shaped preview with a − / + pair **on each edge it affects**, the companion zone drawn at
 its real proportion; L1 had two ~220-line near-copies and told add from remove by green vs red, which this palette
 (greyscale, red reserved for `error`) cannot do, so the buttons sit where they act instead.
+**A grid editor shows the grid that is *drawn*, not the one in storage** — and that is what makes the icon controls under
+it move it. Both halves come out of one formula: the icon **guardrails** set the smallest usable cell, and dividing the
+area by it gives both the *bounds* the buttons offer and the *counts* the preview draws (`fitGridConfig` for home and the
+dock, `fitCols` for the APPS scrolling grids, whose surfaces apply the same clamp to their own measured width).
+**Only the guardrails, plus the label controls on the row axis — never `iconPercent`.** A cell's floor is
+`minIconDp + cellPadding`, because `resolveIconSize` clamps *up* to the guardrail and so a cell overflows exactly when
+the guardrail exceeds its inner width; the fraction scales the icon *within* those bounds and cannot make a cell
+unusable. Dividing the guardrail by the fraction (L1's `scrollingMaxColumns`, adopted by the first port) answers a
+different question and inverts this one — at 30% a 28dp guardrail demands a 101dp column, so shrinking the icons reports
+*fewer* columns. L1's home editor used `gridMaxima`, which leaves the fraction out and is the right shape; it just used
+the bare guardrail as the whole cell and forgot the inset. A press
+then counts from the drawn number, so `−` on a four-row home writes three instead of writing four because storage still
+remembers five. The clamp is still **never written back** — shrink the icons and the row returns; only a press writes,
+the dock's height commit staying the one deliberate exception. L1 reconciled it the other way, from a `LaunchedEffect`
+inside its home detail that wrote clamped counts into storage on *every* cause, so an icon tweak destroyed a row count
+for good and only while that screen was open. **The APPS pager is the one grid excluded**: its rows × cols is the page
+*capacity* `AppsViewModel` paginates the store against, so clamping it in the UI alone would describe pages the store
+never made — that fit has to reach the ViewModel first.
 `core:designsystem/grid/CellFit.kt` answers "how large can this grid be": `boundsIn`/`editableRangeIn` as a **ceiling**
 for a grid whose counts a user picks, and `fitGridConfig` reading the same maximum as a **value** for the dock's rows.
 The **dock section** (S4c, done) is the first consumer of both and the pattern the rows/cols editor follows — its
