@@ -16,8 +16,9 @@ import kotlinx.coroutines.launch
  * near-identical siblings. Sharing the controls without sharing their commands is half a job, so this is the other
  * half: one place that knows an icon edit is a sparse override on (grid, device).
  *
- * **[slot] and [device] are suppliers, not values.** The icon-sizing section switches grids from a chip row, and every
- * section resolves its device a frame after composing, so both move underneath this object.
+ * **[slot] and [device] are suppliers, not values.** The APPS section switches grids from its chip row — one section for
+ * five layouts — and every section resolves its device a frame after composing, so both move underneath this object. A
+ * section with one fixed grid (the folder's) simply supplies a constant.
  *
  * Kept as a plain class a ViewModel holds rather than a base class it extends: the sections have nothing else in
  * common, and inheritance for three methods is how a hierarchy starts.

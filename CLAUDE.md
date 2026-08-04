@@ -671,11 +671,18 @@ detail on a tablet, sliding between the two on a phone, with `SettingsSection` a
 screen with another is not a destination. L1's *actual* mistake is still avoided — it declared that enum in the
 **navigation module**, so `feature:home` could import `SettingsSection.WALLPAPER`; ours never leaves the feature.
 **A section belongs to a surface and holds everything about it**, layout controls *and* icon sizing, exactly as each
-of L1's five details embedded `IconLayoutControls` under its layout section. Home, Dock and Apps have theirs; the
-standalone icon-sizing screen is down to the **folder grid alone** and stays because the **icon studio** (B9, per-app)
-will live there. `IconSizingControls` shares the UI and `IconSizingEdits` the write commands, so a fourth section costs
-neither. Still missing beside L1: the live icon **preview** between the two groups, which punches through to the
-wallpaper and so waits on `data:wallpaper`.
+of L1's five details embedded `IconLayoutControls` under its layout section. **All five surfaces now have theirs** —
+Home, Dock, Apps and Folders — and the standalone icon-sizing screen is **gone**, because the folder section took the
+last grid out of it and a heading with nothing under it is not a section. `IconSizingControls` shares the UI and
+`IconSizingEdits` the write commands, so a section costs neither; a section with one fixed grid supplies a constant slot
+where APPS supplies its chip's.
+The **folder section** is the smallest and is L1's shape exactly: its `FolderSettingsDetail` has an *empty* layout group
+and its icon controls are the whole screen, because `FolderGrid` declares no `editRange` — a folder's card is sized to
+the screen, so its rows and columns follow rather than being picked. It states the resolved page size as a fact instead,
+and states that it also governs the **category card's expansion**, which is the same `FolderOverlay` on the same grid.
+**The name `Icons` returns with the icon studio** (B9, per-app: shape, background, layers), which is what L1's `Icons`
+section actually is — not grid sizing, which L1 never kept there either. Still missing beside L1: the live icon
+**preview** between the two groups, which punches through to the wallpaper and so waits on `data:wallpaper`.
 **The APPS section is one section with a chip per layout** — the settings mirror of one `feature:apps` for five
 layouts, and the same argument: they differ only in arrangement, so what a user configures is "the paged one" or "the
 list". Selecting a chip writes nothing (which layout you *get* is per home edge, in the register). Its resize is **one

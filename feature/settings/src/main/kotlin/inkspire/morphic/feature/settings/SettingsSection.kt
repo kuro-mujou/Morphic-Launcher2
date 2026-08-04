@@ -4,8 +4,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -23,14 +23,6 @@ enum class SettingsSection {
     /** Which surface each HOME edge opens, in which layout. L1 called this "Layout". */
     SURFACE_REGISTER,
 
-    /**
-     * Icon sizing for the grids whose surface has no section of its own yet — and, once B9 lands, the icon studio.
-     *
-     * Shrinking by design: a grid's icon size belongs beside its grid, so each new surface section takes its slot
-     * with it. Home and the dock already have.
-     */
-    ICONS,
-
     /** HOME's main grid: its rows and columns, and its icon sizing. */
     HOME_GRID,
 
@@ -39,6 +31,15 @@ enum class SettingsSection {
 
     /** The APPS surface: each arrangement's grid — or the list's row height — and its icon sizing. */
     APPS,
+
+    /**
+     * An opened folder — and an expanded category card, which is the same overlay on the same grid: its icon sizing.
+     *
+     * The last section the icon-sizing waiting room was holding a grid for, which is why that room is gone: with the
+     * folder grid housed, it had nothing left to show. L1's own `Icons` section is a different concern — shape,
+     * background and layers, the **icon studio** — and will take the name back when B9 lands.
+     */
+    FOLDER,
 }
 
 /** A section's row in the list: what it is called, what it covers, and the glyph that marks it. */
@@ -53,9 +54,6 @@ internal val SettingsSection.meta: SettingsSectionMeta
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
             "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
-        SettingsSection.ICONS -> SettingsSectionMeta(
-            "Icons", "Sizing for the remaining grids", Icons.Outlined.Widgets,
-        )
         SettingsSection.HOME_GRID -> SettingsSectionMeta(
             "Home", "Grid and icons", Icons.Outlined.Home,
         )
@@ -65,21 +63,35 @@ internal val SettingsSection.meta: SettingsSectionMeta
         SettingsSection.APPS -> SettingsSectionMeta(
             "Apps", "Arrangements, grids and icons", Icons.Outlined.Apps,
         )
+        // L1's wording for this row, kept: "Icon and text size" is exactly what a folder has to configure.
+        SettingsSection.FOLDER -> SettingsSectionMeta(
+            "Folders", "Icon and text size", Icons.Outlined.Folder,
+        )
     }
 
 /** A titled run of sections in the list. A null [header] is a run with no heading above it. */
 internal data class SettingsGroup(val header: String?, val sections: List<SettingsSection>)
 
-/** The list's order and grouping — L1's shape, with the sections that exist. */
+/**
+ * The list's order and grouping — L1's shape, with the sections that exist.
+ *
+ * One group for now, and that is the shape of the port rather than a simplification: every section here belongs to a
+ * *surface*, which is L1's "Layout" group, and its "Personalization" group holds the things L2 has not built (theme,
+ * wallpaper, effects, and the icon studio). The header comes back when the first of them does; a group with one row
+ * under it is a heading doing no work.
+ *
+ * Order follows L1's: the register first (it decides what the others are *for*), then a section per surface, with
+ * folders last — a folder is drawn over a surface rather than being one.
+ */
 internal val settingsGroups: List<SettingsGroup> = listOf(
-    SettingsGroup("Personalization", listOf(SettingsSection.ICONS)),
     SettingsGroup(
-        "Layout",
+        null,
         listOf(
             SettingsSection.SURFACE_REGISTER,
             SettingsSection.HOME_GRID,
             SettingsSection.DOCK,
             SettingsSection.APPS,
+            SettingsSection.FOLDER,
         ),
     ),
 )

@@ -181,10 +181,11 @@ between list and detail on a phone (`SettingsScreen` → `SettingsList` + one `S
 icon, a title and a subtitle, grouped under headers.
 
 **A section belongs to a *surface*, and holds everything about it** — its layout controls *and* its icon sizing,
-which is how L1 had it: every one of its five details embedded `IconLayoutControls` under its layout section. L2 is
-moving the same way one section at a time; **Home and Dock have their icon sizing**, and the standalone icon-sizing
-screen now holds only the grids whose surface has no section yet. That screen's `Icons` section stays because it is
-where the **icon studio** will live (B9), which is a per-app concern rather than a per-grid one.
+which is how L1 had it: every one of its five details embedded `IconLayoutControls` under its layout section. L2 moved
+the same way one section at a time and is now **there**: Home, Dock, Apps and Folders each own their icon sizing, and the
+standalone icon-sizing screen has been **deleted** (S4k) — it was a waiting room, and it is empty. The name `Icons`
+returns with the **icon studio** (B9), which is what L1's `Icons` section actually holds: shape, background and layers, a
+per-app concern rather than a per-grid one.
 
 Not yet ported from L1's details: the live **icon preview** between the layout and icon groups, which renders over the
 wallpaper through a `BlendMode.Src` punch and so waits on `data:wallpaper` (S5/B7b).
@@ -314,8 +315,8 @@ every phase ends with something visibly working on device, and no slice is writt
       list and in the slider alike) rather than written down. **With `showIcon = false` neither guardrail applies**, so
       the floor becomes the label's own height (`rowLabelHeight`) and the ceiling opens up to `IconSizingRanges.IconDp`'s
       — bounding a pure-text row by an absent icon forbade a compact list to anyone who had set chunky icons first. 9
-      tests. Four APPS slots left the `ICONS` waiting room, which now holds only the folder
-      grid. `AppRowCell` also gained the two metrics it had been ignoring (`showIcon`, `labelScale`), since the section
+      tests. Four APPS slots left the `ICONS` waiting room, which then held only the folder grid (S4k empties it).
+      `AppRowCell` also gained the two metrics it had been ignoring (`showIcon`, `labelScale`), since the section
       offers both.
     - **Left open: the category card's lane count.** Its blueprint declares an `editRange`, but a card is a *tile* —
       how narrow one may get is not an icon guardrail, and its blueprint declares no icon sizing at all. Nothing yet
@@ -361,6 +362,21 @@ every phase ends with something visibly working on device, and no slice is writt
         what may be chosen, a ViewModel being told a capacity) cannot disagree about how big the phone is. That was L1's
         real bug here (`homeGridArea` in settings vs `pagerBoundsInWindow` on the surface), and it had been a third of the
         way back.
+  - [x] **S4k — the folder section, and the end of the icon-sizing screen.** The last grid in the waiting room gets its
+        own section, so every surface now holds its own icon sizing and the room is deleted rather than left as a heading
+        with nothing under it. **It is L1's shape exactly**: `FolderSettingsDetail`'s layout group is literally `{}` and
+        its `IconLayoutControls` are the whole screen, because `FolderGrid` declares no `editRange` — a folder's card is
+        sized to the screen, so its rows and columns follow rather than being chosen. Three things the section does with
+        that:
+    - **States the page size instead of offering it** (`FolderGrid.defaults` for the current configuration), which
+      pre-empts "where are the − / + buttons?" without inventing an answer to it.
+    - **Says it also governs the category card's expansion**, since that is the same `FolderOverlay` on the same grid —
+      a user who changed one and saw the other move would otherwise read it as a bug.
+    - **Takes L1's row wording** ("Folders" / "Icon and text size" / `Icons.Outlined.Folder`) and L1's position: last in
+      the surface group, a folder being drawn *over* a surface rather than being one.
+    The `Personalization` header went with the screen — every section left belongs to a surface, and a heading over one
+    row does no work. **The name `Icons` returns with the icon studio** (B9), which is what L1's `Icons` section actually
+    holds: shape, background and layers, never grid sizing.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
