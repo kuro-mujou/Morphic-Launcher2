@@ -29,11 +29,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.AppRowCell
+import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.cellIconLayout
-import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
-import inkspire.morphic.core.model.IconSizing
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -76,7 +75,10 @@ private val DotPattern = floatArrayOf(2f, 6f)
  *
  * @param app the sample to draw, or null while the app cache is still loading — the preview then shows its outlines
  *   alone, which is still the useful half (the sizes are what is being edited).
- * @param sizing the sizing to draw at: the **dragged** value while a slider is held, so this tracks live.
+ * @param metrics the sizing to draw at, as the cells' own type: the **dragged** value while a slider is held, so this
+ *   tracks live. `IconMetrics` rather than `IconSizing` because a **derived-height** grid must be previewed with the
+ *   metrics its cell is really drawn with — `CellFit.derivedCell` has already spent `iconPercent` on the height there,
+ *   and a preview that spent it twice would show the same wrong icon the surfaces used to draw.
  * @param cellWidth the real width of one cell in the grid being configured — the section computes it, since only the
  *   section knows its own area and column count.
  * @param cellHeight likewise; for the vertical list this is the row height and [asRow] is set instead.
@@ -86,7 +88,7 @@ private val DotPattern = floatArrayOf(2f, 6f)
 @Composable
 internal fun IconSizingPreview(
     app: AppInfo?,
-    sizing: IconSizing,
+    metrics: IconMetrics,
     cellWidth: Dp,
     cellHeight: Dp,
     onReroll: () -> Unit,
@@ -94,7 +96,6 @@ internal fun IconSizingPreview(
     asRow: Boolean = false,
 ) {
     val colors = LocalMorphicColors.current
-    val metrics = sizing.toIconMetrics()
 
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -123,9 +124,9 @@ internal fun IconSizingPreview(
             contentAlignment = Alignment.Center,
         ) {
             if (asRow) {
-                RowPreview(app, sizing, cellHeight)
+                RowPreview(app, metrics, cellHeight)
             } else {
-                CellPreview(app, sizing, cellWidth, cellHeight)
+                CellPreview(app, metrics, cellWidth, cellHeight)
             }
         }
 
@@ -141,7 +142,7 @@ internal fun IconSizingPreview(
                     append("Cell ${cellWidth.value.roundToInt()} × ${cellHeight.value.roundToInt()} dp")
                     append(" · icon ${layout.iconSize.value.roundToInt()} dp")
                 }
-                append(" · limits ${sizing.minIconDp}–${sizing.maxIconDp} dp")
+                append(" · limits ${metrics.minIconDp.value.roundToInt()}–${metrics.maxIconDp.value.roundToInt()} dp")
                 if (!asRow) append("\nSolid outline: the cell · dashed: upper limit · dotted: lower limit")
             },
             style = MaterialTheme.typography.bodySmall,
@@ -157,9 +158,8 @@ internal fun IconSizingPreview(
  * tablet's) still has to be shown somehow.
  */
 @Composable
-private fun CellPreview(app: AppInfo?, sizing: IconSizing, cellWidth: Dp, cellHeight: Dp) {
+private fun CellPreview(app: AppInfo?, metrics: IconMetrics, cellWidth: Dp, cellHeight: Dp) {
     val colors = LocalMorphicColors.current
-    val metrics = sizing.toIconMetrics()
     val layout = cellIconLayout(cellWidth, cellHeight, metrics)
 
     BoxWithConstraints(contentAlignment = Alignment.Center) {
@@ -197,8 +197,8 @@ private fun CellPreview(app: AppInfo?, sizing: IconSizing, cellWidth: Dp, cellHe
                 // Clamped to the cell, as L1 clamped them: a guardrail wider than the cell is drawn at the cell's
                 // edge rather than off the canvas, which is what makes "my minimum no longer fits" visible.
                 val bound = minOf(cellWidth - CellGuideInset, cellHeight - CellGuideInset)
-                square(minOf(maxOf(sizing.minIconDp, sizing.maxIconDp).dp, bound), PathEffect.dashPathEffect(DashPattern))
-                square(minOf(minOf(sizing.minIconDp, sizing.maxIconDp).dp, bound), PathEffect.dashPathEffect(DotPattern))
+                square(minOf(maxOf(metrics.minIconDp, metrics.maxIconDp), bound), PathEffect.dashPathEffect(DashPattern))
+                square(minOf(minOf(metrics.minIconDp, metrics.maxIconDp), bound), PathEffect.dashPathEffect(DotPattern))
             }
         }
     }
@@ -206,11 +206,11 @@ private fun CellPreview(app: AppInfo?, sizing: IconSizing, cellWidth: Dp, cellHe
 
 /** The list's row, at its real height and the full width it really has. */
 @Composable
-private fun RowPreview(app: AppInfo?, sizing: IconSizing, rowHeight: Dp) {
+private fun RowPreview(app: AppInfo?, metrics: IconMetrics, rowHeight: Dp) {
     val colors = LocalMorphicColors.current
     Box(Modifier.fillMaxWidth().height(rowHeight)) {
         if (app != null) {
-            AppRowCell(app = app, modifier = Modifier.fillMaxSize(), metrics = sizing.toIconMetrics())
+            AppRowCell(app = app, modifier = Modifier.fillMaxSize(), metrics = metrics)
         }
         Canvas(Modifier.fillMaxSize()) {
             drawRect(color = colors.content, style = Stroke(width = GuideStrokeDp.toPx()))

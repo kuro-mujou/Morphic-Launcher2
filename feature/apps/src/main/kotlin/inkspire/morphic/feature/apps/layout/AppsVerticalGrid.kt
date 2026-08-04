@@ -20,7 +20,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
-import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsScrollGrid
@@ -46,14 +46,14 @@ import inkspire.morphic.core.model.ComponentKey
  *
  * **The row height is derived from the column width, not stored.** A scrolling grid fixes its cell *width* (the
  * usable width over the column count) and has no fixed height to divide, so what remains is what the icon and its
- * label need — which is `cellHeight`, the same arithmetic `IconLabelCell` lays a cell out by. That makes it a
+ * label need — which is `derivedCell`, the same arithmetic `IconLabelCell` lays a cell out by. That makes it a
  * consequence of the icon sizing the user already chose in S3 rather than a second setting able to disagree with it:
  * enlarge the icons and the rows grow to hold them. L1 derived it the same way (`gridCellHeightDp`), which is why its
  * grids track their icon sliders.
  *
  * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
- *   Denser than home's by default, for the reason the column count differs: a home cell is a 2×2 slot around one icon,
- *   an app grid packs four to eight columns of them.
+ *   Its `iconPercent` is spent on the cell **height** here, so the cell itself is drawn with the metrics `derivedCell`
+ *   hands back rather than with these.
  * @param cols how many columns across — resolved from the same slot's blueprint and overrides, and passed rather than
  *   read here for the reason [metrics] is: this surface resolves every grid's configuration in one place, so a layout
  *   cannot end up drawing a size nobody configured. It is the count the user *chose*, so it is clamped below to what
@@ -88,7 +88,11 @@ fun AppsVerticalGrid(
             // the settings editor offers a ceiling the grid was ignoring. Clamped, never written back, so shrinking the
             // icons again brings the column straight back.
             val drawnCols = AppsScrollGrid.fitCols(usableWidth.value, cols, metrics)
-            val cellHeight = cellHeight(cellWidth = usableWidth / drawnCols, metrics = metrics)
+            // **The cell, and the metrics it must be drawn with.** A scrolling grid's height is derived by spending
+            // `iconPercent` on it, so the cell has to be handed a fraction of 1 — otherwise it applies the fraction a
+            // second time and draws `iconPercent²` of the width, landing on the lower guardrail inside a row built for
+            // something bigger. `derivedCell` returns the pair so the two cannot be separated.
+            val cell = derivedCell(cellWidth = usableWidth / drawnCols, metrics = metrics)
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(drawnCols),
@@ -100,7 +104,8 @@ fun AppsVerticalGrid(
                     // it is given (via `IconLabelCell`), so the two metrics meet without either being computed here.
                     AppCell(
                         app = app,
-                        modifier = Modifier.height(cellHeight),
+                        metrics = cell.metrics,
+                        modifier = Modifier.height(cell.height),
                         itemGestures = Modifier.appsItemGestures(gestureConfig) { onLaunch(app.componentKey) },
                     )
                 }

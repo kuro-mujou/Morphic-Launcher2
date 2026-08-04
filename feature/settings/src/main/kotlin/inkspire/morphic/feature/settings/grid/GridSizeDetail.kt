@@ -169,7 +169,9 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             // you get in *this* cell, so the cell is drawn at its real size with the guardrails outlined on it.
             IconSizingPreview(
                 app = sampleApp,
-                sizing = shownIcon,
+                // A home cell's size comes from dividing an area, so the fraction is the cell's to apply and these
+                // metrics go straight through — unlike the two APPS grids whose height is derived from it.
+                metrics = shownIcon.toIconMetrics(),
                 cellWidth = (homeArea.widthDp / fitted.visualCols).dp,
                 cellHeight = (homeArea.heightDp / fitted.visualRows).dp,
                 onReroll = viewModel.sample::reroll,

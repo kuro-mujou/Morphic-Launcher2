@@ -34,7 +34,7 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
-import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
@@ -54,7 +54,7 @@ import inkspire.morphic.feature.apps.AppsCategory
  * a decision.
  *
  * It lives here rather than with [AppsCategoryPager] because a page is the only thing that reads it. The cell *height*
- * is no longer a constant at all: it is derived from the cell width by `cellHeight`, and the surface derives its own
+ * is no longer a constant at all: it is derived from the cell width by `derivedCell`, and the surface derives its own
  * from the same rule rather than waiting on a page to report geometry.
  */
 private val HeaderPadding = 16.dp
@@ -104,10 +104,14 @@ internal fun CategoryPage(
     // is written and the column returns when the icons shrink.
     val drawnCols = AppsCategoryGrid.fitCols(maxWidth.value, cols, metrics)
     // **The cell height is derived here, from the page's own width.** A page is a SCROLL_GRID: the columns fix the
-    // cell width and nothing fixes its height, so the height is whatever the icon and label need — `cellHeight`, the
-    // inverse of the arithmetic `IconLabelCell` lays a cell out by. Measured rather than read from the published
-    // geometry, so the very first frame draws at the right height instead of correcting itself once a viewport lands.
-    val cellHeight = cellHeight(cellWidth = maxWidth / drawnCols, metrics = metrics)
+    // cell width and nothing fixes its height, so the height is whatever the icon and label need — the inverse of the
+    // arithmetic `IconLabelCell` lays a cell out by. Measured rather than read from the published geometry, so the very
+    // first frame draws at the right height instead of correcting itself once a viewport lands.
+    //
+    // `derivedCell` answers with the metrics to draw it with as well, and they must be used: the height was derived by
+    // spending `iconPercent`, so a cell handed the original metrics would apply the fraction twice.
+    val cell = derivedCell(cellWidth = maxWidth / drawnCols, metrics = metrics)
+    val cellHeight = cell.height
     val cellHeightPx = with(LocalDensity.current) { cellHeight.toPx() }
     // The shared MovingGap render, told to compare apps by component: `AppInfo` carries a label and an icon, and the
     // question is only *which app is this*. No truncation, unlike the APPS pager's — a category has no capacity, so
@@ -206,7 +210,14 @@ internal fun CategoryPage(
                         modifier = cellModifier,
                         onOpen = { onLaunch(app.componentKey) },
                     ) { itemGestures ->
-                        AppCell(app = app, modifier = Modifier.fillMaxSize(), itemGestures = itemGestures)
+                        // `cell.metrics`, not the ambient `LocalIconMetrics` the pager provides: this page's height was
+                        // derived by spending `iconPercent`, so the cell must not spend it again.
+                        AppCell(
+                            app = app,
+                            metrics = cell.metrics,
+                            modifier = Modifier.fillMaxSize(),
+                            itemGestures = itemGestures,
+                        )
                     }
                 }
             }

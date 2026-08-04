@@ -196,7 +196,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
             // seeing the icon in it while dragging the height slider is worth more here than anywhere.
             IconSizingPreview(
                 app = sampleApp,
-                sizing = shownIcon,
+                metrics = shownIcon.toIconMetrics(),
                 cellWidth = (usable.widthDp / dockConfig.visualCols).dp,
                 cellHeight = (heightDp.toFloat() / dockConfig.visualRows).dp,
                 onReroll = viewModel.sample::reroll,

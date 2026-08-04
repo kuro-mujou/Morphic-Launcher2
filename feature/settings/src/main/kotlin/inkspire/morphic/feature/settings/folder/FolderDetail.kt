@@ -116,7 +116,7 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
         )
         IconSizingPreview(
             app = sampleApp,
-            sizing = shownIcon,
+            metrics = shownIcon.toIconMetrics(),
             cellWidth = inner.width / grid.visualCols,
             cellHeight = inner.height / grid.visualRows,
             onReroll = viewModel.sample::reroll,

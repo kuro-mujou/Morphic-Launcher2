@@ -35,7 +35,7 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
-import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.movingGap
@@ -261,7 +261,10 @@ fun AppsCategoryPager(
             val cellWidth = viewport?.let {
                 with(density) { (it.width / AppsCategoryGrid.fitCols(it.width.toDp().value, cols, metrics)).toDp() }
             }
-            val cellHeight = cellHeight(cellWidth = cellWidth ?: 0.dp, metrics = metrics)
+            // The same pair a page lays its grid out with, so the proxy cannot be a different size *or* draw a
+            // different icon from the cell it lifted.
+            val cell = derivedCell(cellWidth = cellWidth ?: 0.dp, metrics = metrics)
+            val cellHeight = cell.height
             if (session != null && cellWidth != null && draggedApp != null) {
                 val cellW = with(density) { cellWidth.toPx() }
                 val cellH = with(density) { cellHeight.toPx() }
@@ -273,7 +276,7 @@ fun AppsCategoryPager(
                     ),
                     size = DpSize(cellWidth, cellHeight),
                 ) {
-                    AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
+                    AppCell(app = draggedApp, metrics = cell.metrics, modifier = Modifier.fillMaxSize())
                 }
             }
         }

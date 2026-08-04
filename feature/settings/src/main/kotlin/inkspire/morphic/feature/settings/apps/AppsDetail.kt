@@ -28,7 +28,7 @@ import inkspire.morphic.core.designsystem.cell.rowHeightRange
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
-import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
@@ -149,7 +149,11 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
         // implies (the same derivation the surface lays out with) divided into the screen. That is what makes adding a
         // column visibly gain rows as the cells narrow — the actual consequence of the press, which a fixed preview
         // number would hide.
-        val cellHeight = cellHeight(cellWidth = window.widthDp.dp / drawn.cols, metrics = metrics)
+        // **The cell, and the metrics its cell is really drawn with.** A scrolling grid's height is derived by spending
+        // `iconPercent` on it, so the surface hands the cell a fraction of 1 — and the preview has to do the same, or it
+        // would show an icon those surfaces do not draw. Meaningless for the pager and the list (neither derives a
+        // height), which is why the preview below picks per layout rather than using this unconditionally.
+        val derived = derivedCell(cellWidth = window.widthDp.dp / drawn.cols, metrics = metrics)
 
         if (state.layout == AppsLayout.VERTICAL_LIST) {
             // A list is one lane, so it has no grid to edit — its size *is* the row height. **Its bounds are the icon
@@ -185,7 +189,7 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             if (range != null) {
                 GridEditor(
                     cols = drawn.cols,
-                    rows = drawn.rows ?: maxCells(window.heightDp, cellHeight.value),
+                    rows = drawn.rows ?: maxCells(window.heightDp, derived.height.value),
                     colBounds = range.cols,
                     // Null for a scrolling grid, which hides the top and bottom pairs — its rows are however many its
                     // content reaches, so there is nothing there to offer.
@@ -210,15 +214,23 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
         // list gets a real row at its row height, every other layout a real cell at the size the fit above produced —
         // which is what makes "the icons are 48dp" answerable as "in a cell this size, that is what you get".
         val asRow = state.layout == AppsLayout.VERTICAL_LIST
+        // A grid whose rows are *stored* (the pager) divides the screen and applies the fraction in its own cell; one
+        // whose rows flow spends the fraction on the height instead, and is drawn with what `derivedCell` hands back.
+        val derivesHeight = !asRow && drawn.rows == null
+        val previewShown = if (derivesHeight) {
+            derivedCell(cellWidth = window.widthDp.dp / drawn.cols, metrics = shownIcon.toIconMetrics())
+        } else {
+            null
+        }
         IconSizingPreview(
             app = sampleApp,
-            sizing = shownIcon,
+            metrics = previewShown?.metrics ?: shownIcon.toIconMetrics(),
             cellWidth = if (asRow) window.widthDp.dp else window.widthDp.dp / drawn.cols,
             cellHeight = if (asRow) {
                 fitRowHeight(rowHeightDp.dp, metrics)
             } else {
                 // A paged grid divides the screen; a scrolling one derives its height from its width.
-                drawn.rows?.let { rows -> window.heightDp.dp / rows } ?: cellHeight
+                drawn.rows?.let { rows -> window.heightDp.dp / rows } ?: previewShown!!.height
             },
             onReroll = viewModel.sample::reroll,
             asRow = asRow,
