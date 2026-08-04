@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.grid
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.cell.cellIconLayout
 import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.FolderGrid
@@ -106,6 +107,33 @@ class CellFitTest {
         assertEquals(56f, cellHeightDp(cellWidthDp = 400f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
         assertEquals(32f, cellHeightDp(cellWidthDp = 8f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
         assertEquals(32f, cellHeightDp(cellWidthDp = 0f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+    }
+
+    @Test
+    fun `a derived cell draws exactly the icon its height was derived for`() {
+        // **The fixed point the derived height has to satisfy**, and the regression guard for a bug that shipped: the
+        // height is `chrome + iconPercent × innerWidth`, so a cell handed the *original* metrics applies the fraction
+        // again (`iconPercent × min(innerWidth, iconArea)`, and `iconArea` is already multiplied) and draws
+        // `iconPercent²` of the width — 24dp inside a row built for 41dp at 50%. `derivedCell` spends the fraction once
+        // and hands the cell `iconPercent = 1f`; this asserts the two then agree at every fraction.
+        val cellWidth = 90f
+        listOf(0.3f, 0.5f, 0.75f, 1f).forEach { percent ->
+            val chosen = metrics.copy(iconPercent = percent, showLabel = true)
+            val height = cellHeightDp(cellWidth, chosen, labelHeight)
+            // What the height was derived for: the fraction of the inner width, inside the guardrails.
+            val intended = (cellWidth - CellPadH.value * 2) * percent
+            val expected = intended.coerceIn(chosen.minIconDp.value, chosen.maxIconDp.value)
+
+            // What the cell actually draws, given the metrics `derivedCell` hands it.
+            val drawn = cellIconLayout(
+                cellWidth = cellWidth.dp,
+                cellHeight = height.dp,
+                metrics = chosen.copy(iconPercent = 1f),
+                labelHeight = labelHeight.dp,
+            ).iconSize
+
+            assertEquals("at $percent the cell must draw the icon its height was sized for", expected, drawn.value, 0.01f)
+        }
     }
 
     @Test

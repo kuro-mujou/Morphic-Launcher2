@@ -285,18 +285,44 @@ fun minCellHeightDp(metrics: IconMetrics): Float {
 }
 
 /**
+ * **A cell whose height was derived from its width** — how tall it is, and the metrics to draw it with.
+ *
+ * The two travel together because using one without the other is the bug this type exists to prevent. See
+ * [derivedCell].
+ *
+ * @property height what `Modifier.height` (or `LauncherGrid`'s `cellHeight`) is given.
+ * @property metrics what the `AppCell` inside it is given — **not** the metrics passed in.
+ */
+data class DerivedCell(val height: Dp, val metrics: IconMetrics)
+
+/**
  * [cellHeightDp], with the label row's height read from the current type scale — **the one a surface calls**.
  *
- * Named apart from the pure function rather than overloading it, because it answers in the type its callers lay out
- * with: a `Dp` for `Modifier.height`, `LauncherGrid`'s `cellHeight`, and the floating drag proxy's size. The pure
- * arithmetic stays in `Float` dp so it can be tested without a `MaterialTheme`, as everything else in this file is.
+ * **It returns the metrics too, and that is the whole point.** The height is derived by spending
+ * [IconMetrics.iconPercent] on it: the icon is `iconPercent` of the inner width, and the height is that plus the
+ * chrome. A cell handed the *original* metrics then applies the fraction a **second** time — `IconLabelCell` resolves
+ * the icon as `iconPercent × min(innerWidth, iconArea)`, and `iconArea` is already the multiplied value — so the icon
+ * comes out `iconPercent²` of the width and lands on its lower guardrail, inside a row that was sized for something
+ * larger. At 50% on a 4-column phone grid that was a 24dp icon in a row built for 41dp.
+ *
+ * So the fraction is spent once, here, and the cell is given `iconPercent = 1f`: **the icon fills exactly the area the
+ * height bought it**. What the user's fraction now does on such a grid is choose the cell height — which is the
+ * derive-vs-store rule working as written, and is why the two values must be taken as a pair.
+ *
+ * L1 had the same double-application (`gridCellHeightDp` × `resolveIconSize`) and the port inherited it; nothing showed
+ * until the defaults moved to 100%, where the two agree.
  *
  * @param cellWidth one cell's width — for a lazy grid, the usable width divided by the column count.
  */
 @Composable
-fun cellHeight(cellWidth: Dp, metrics: IconMetrics): Dp {
+fun derivedCell(cellWidth: Dp, metrics: IconMetrics): DerivedCell {
     val labelHeightDp = cellLabelHeight(metrics).value
-    return remember(cellWidth, metrics, labelHeightDp) { cellHeightDp(cellWidth.value, metrics, labelHeightDp).dp }
+    return remember(cellWidth, metrics, labelHeightDp) {
+        DerivedCell(
+            height = cellHeightDp(cellWidth.value, metrics, labelHeightDp).dp,
+            metrics = metrics.copy(iconPercent = 1f),
+        )
+    }
 }
 
 /** [editableRangeIn], with the label row's height read from the current type scale. */
