@@ -35,10 +35,12 @@ import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
 import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppsCategoryGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
@@ -66,6 +68,9 @@ private val HeaderPadding = 16.dp
  * scroll offset rather than measured off the grid (see the derivation in the body — the measured version goes stale
  * mid-scroll, and silently).
  *
+ * @param cols the configured column count. Clamped in the body to what this page's measured width can hold at the
+ *   current icon size — a stored count outlives the icon settings it was chosen under, and only a laid-out page knows
+ *   how wide it is.
  * @param dragged the app being carried, **only when this page is the one holding the gap** — otherwise null, so a
  *   page the finger has left keeps drawing its stored order.
  * @param fingerInRoot the dragged finger, again only when the drag is this page's business; null keeps the page
@@ -92,18 +97,24 @@ internal fun CategoryPage(
     onGeometry: (GridGeometry) -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val colors = LocalMorphicColors.current
+    // **The stored column count, clamped to what this page's width can draw at this icon size** — and everything below
+    // reads the clamped one, because a lattice, a cell height and a published geometry that disagreed about how many
+    // columns there are would put the drop footprint in a different place from the icons. The clamp needs the measured
+    // width, which is why it is here rather than where the count is resolved (`AppsScreen`); it is a read, so nothing
+    // is written and the column returns when the icons shrink.
+    val drawnCols = AppsCategoryGrid.fitCols(maxWidth.value, cols, metrics)
     // **The cell height is derived here, from the page's own width.** A page is a SCROLL_GRID: the columns fix the
     // cell width and nothing fixes its height, so the height is whatever the icon and label need — `cellHeight`, the
     // inverse of the arithmetic `IconLabelCell` lays a cell out by. Measured rather than read from the published
     // geometry, so the very first frame draws at the right height instead of correcting itself once a viewport lands.
-    val cellHeight = cellHeight(cellWidth = maxWidth / cols, metrics = metrics)
+    val cellHeight = cellHeight(cellWidth = maxWidth / drawnCols, metrics = metrics)
     val cellHeightPx = with(LocalDensity.current) { cellHeight.toPx() }
     // The shared MovingGap render, told to compare apps by component: `AppInfo` carries a label and an icon, and the
     // question is only *which app is this*. No truncation, unlike the APPS pager's — a category has no capacity, so
     // nothing can overflow it, and the dragged app may legitimately appear on two pages at once (its source page keeps
     // the cell that owns the pointer stream; both copies draw invisible).
     val display = movingGapDisplayOrder(category.apps, dragged, gap) { it.componentKey }
-    val rows = ((display.size + cols - 1) / cols).coerceAtLeast(1)
+    val rows = ((display.size + drawnCols - 1) / drawnCols).coerceAtLeast(1)
 
     val scrollState = rememberScrollState()
     var scrollViewport by remember { mutableStateOf<Rect?>(null) }
@@ -127,9 +138,9 @@ internal fun CategoryPage(
     val geometry = scrollViewport?.let { viewport ->
         GridGeometry(
             originInRoot = Offset(viewport.left, viewport.top - scrollState.value),
-            cellW = viewport.width / cols,
+            cellW = viewport.width / drawnCols,
             cellH = cellHeightPx,
-            cols = cols,
+            cols = drawnCols,
             rows = rows,
         )
     }
@@ -179,13 +190,13 @@ internal fun CategoryPage(
             LauncherGrid(
                 // `rows` is unused in scroll mode (height comes from cellHeight × content) but GridConfig requires a
                 // positive value, so it is set to what the content actually reaches rather than to a lie.
-                config = GridConfig(rows = rows, cols = cols),
+                config = GridConfig(rows = rows, cols = drawnCols),
                 cellHeight = cellHeight,
                 // No geometry published from here — see the derivation above for why the grid's own position is not a
                 // trustworthy source once it is inside a scroller.
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                dropFootprintCell(dragged != null, gap, cols)
+                dropFootprintCell(dragged != null, gap, drawnCols)
                 flowItems(items = display, itemKey = { it.componentKey.flatten() }) { app, cellModifier ->
                     LauncherDragCell(
                         coordinator = coordinator,

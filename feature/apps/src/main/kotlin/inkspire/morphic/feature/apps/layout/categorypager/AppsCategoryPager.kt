@@ -36,12 +36,14 @@ import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.model.AppsCategoryGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -253,7 +255,12 @@ fun AppsCategoryPager(
             // report renders nothing at all. `viewport` comes from the pager's own `onGloballyPositioned`, a direct
             // child, which is the same place `AppsPager` gets its geometry and is why that surface never had the
             // problem.
-            val cellWidth = viewport?.let { with(density) { (it.width / cols).toDp() } }
+            // The column count is clamped here too, by the same `fitCols` a page applies to the same width — a page's
+            // grid fills the viewport, so the two divisions are identical and the proxy cannot come out a different
+            // size from the cell it lifted just because the icons outgrew the stored count.
+            val cellWidth = viewport?.let {
+                with(density) { (it.width / AppsCategoryGrid.fitCols(it.width.toDp().value, cols, metrics)).toDp() }
+            }
             val cellHeight = cellHeight(cellWidth = cellWidth ?: 0.dp, metrics = metrics)
             if (session != null && cellWidth != null && draggedApp != null) {
                 val cellW = with(density) { cellWidth.toPx() }

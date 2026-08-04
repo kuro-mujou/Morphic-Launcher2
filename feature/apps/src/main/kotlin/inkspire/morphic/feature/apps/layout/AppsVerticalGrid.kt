@@ -21,7 +21,9 @@ import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.grid.cellHeight
+import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.ComponentKey
 
 /**
@@ -54,7 +56,9 @@ import inkspire.morphic.core.model.ComponentKey
  *   an app grid packs four to eight columns of them.
  * @param cols how many columns across — resolved from the same slot's blueprint and overrides, and passed rather than
  *   read here for the reason [metrics] is: this surface resolves every grid's configuration in one place, so a layout
- *   cannot end up drawing a size nobody configured.
+ *   cannot end up drawing a size nobody configured. It is the count the user *chose*, so it is clamped below to what
+ *   the measured width can hold at this icon size — the one part of resolving a grid that cannot happen before the
+ *   measurement, which is why it happens here and not in `AppsScreen`.
  */
 @Composable
 fun AppsVerticalGrid(
@@ -77,10 +81,17 @@ fun AppsVerticalGrid(
             val direction = LocalLayoutDirection.current
             val usableWidth = maxWidth -
                 barInsets.calculateStartPadding(direction) - barInsets.calculateEndPadding(direction)
-            val cellHeight = cellHeight(cellWidth = usableWidth / cols, metrics = metrics)
+            // **The stored count, clamped to what this width can actually draw** — the scrolling twin of the
+            // `fitGridConfig` read home's pager does, and the only piece of grid resolution that belongs here rather
+            // than in `AppsScreen`: it needs the measured width, which only this layout has. Without it, raising the
+            // minimum icon size leaves the columns as they were and the icons clamp up and overflow their cells, while
+            // the settings editor offers a ceiling the grid was ignoring. Clamped, never written back, so shrinking the
+            // icons again brings the column straight back.
+            val drawnCols = AppsScrollGrid.fitCols(usableWidth.value, cols, metrics)
+            val cellHeight = cellHeight(cellWidth = usableWidth / drawnCols, metrics = metrics)
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(cols),
+                columns = GridCells.Fixed(drawnCols),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = barInsets,
             ) {
