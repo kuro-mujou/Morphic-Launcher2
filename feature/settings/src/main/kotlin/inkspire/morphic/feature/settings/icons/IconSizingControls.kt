@@ -79,13 +79,7 @@ internal fun IconSizingControls(
             title = "Icon size",
             // A list row is a full-width strip whose icon is sized against its height, so the same number reads as a
             // scale rather than a portion of a cell. The only wording L1's `listMode` still buys.
-            // Over 100% the fraction asks for more than the cell holds, which the upper guardrail then caps — so the
-            // wording says "of each cell" rather than "portion", and the size limits below are where that ceiling is set.
-            subtitle = if (slot == GridSlot.APPS_LIST) {
-                "Scale of the default size"
-            } else {
-                "How much of each cell the icon fills — over 100% it spills past it"
-            },
+            subtitle = if (slot == GridSlot.APPS_LIST) "Scale of the default size" else "Portion of each cell the icon fills",
             value = sizing.iconPercent,
             valueRange = IconSizingRanges.IconPercent,
             valueLabel = { "${(it * 100).toInt()}%" },
