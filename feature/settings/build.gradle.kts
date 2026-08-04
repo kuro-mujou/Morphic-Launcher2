@@ -27,6 +27,10 @@ dependencies {
     // L1's detail screens injected their `AppRepository` for the same preview.
     implementation(projects.data.apps)
 
+    // The wallpaper section is a vertical over this service: it decodes, writes a file and calls `WallpaperManager`,
+    // none of which is a preference — which is why it is its own module rather than a slice of `data:settings`.
+    implementation(projects.data.wallpaper)
+
     // `NavKey`, for this module's own section destinations. Added now that sections *are* destinations — the previous
     // note here said to add it only when a settings screen genuinely needs to name one, which is now the case. `app`
     // still maps keys to screens; this module only declares them.

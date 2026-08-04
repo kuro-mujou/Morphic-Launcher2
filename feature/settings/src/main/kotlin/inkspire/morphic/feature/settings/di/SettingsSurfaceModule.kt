@@ -5,6 +5,7 @@ import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
 import inkspire.morphic.feature.settings.folder.FolderViewModel
 import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
+import inkspire.morphic.feature.settings.wallpaper.WallpaperViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -18,6 +19,7 @@ import org.koin.dsl.module
  */
 val settingsSurfaceModule = module {
     viewModel { SurfaceRegisterViewModel(get()) }
+    viewModel { WallpaperViewModel(get()) }
     viewModel { DockViewModel(get(), get(), get()) }
     viewModel { GridSizeViewModel(get(), get(), get()) }
     viewModel { AppsSectionViewModel(get(), get()) }

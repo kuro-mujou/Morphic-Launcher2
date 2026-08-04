@@ -6,6 +6,7 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -20,6 +21,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * placeholders — an empty destination is not worth a row.
  */
 enum class SettingsSection {
+    /** The wallpaper the launcher owns: choose an image, and apply it to the home screen, the lock screen or both. */
+    WALLPAPER,
+
     /** Which surface each HOME edge opens, in which layout. L1 called this "Layout". */
     SURFACE_REGISTER,
 
@@ -51,6 +55,9 @@ internal data class SettingsSectionMeta(
 
 internal val SettingsSection.meta: SettingsSectionMeta
     get() = when (this) {
+        SettingsSection.WALLPAPER -> SettingsSectionMeta(
+            "Wallpaper", "Image, and where to apply it", Icons.Outlined.Wallpaper,
+        )
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
             "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
@@ -75,17 +82,18 @@ internal data class SettingsGroup(val header: String?, val sections: List<Settin
 /**
  * The list's order and grouping — L1's shape, with the sections that exist.
  *
- * One group for now, and that is the shape of the port rather than a simplification: every section here belongs to a
- * *surface*, which is L1's "Layout" group, and its "Personalization" group holds the things L2 has not built (theme,
- * wallpaper, effects, and the icon studio). The header comes back when the first of them does; a group with one row
- * under it is a heading doing no work.
+ * **Two groups now that the wallpaper has landed**, which is what the note here promised: the sections that describe a
+ * *surface* are L1's "Layout" group, and "Personalization" is the one holding what a launcher looks like rather than
+ * how it is arranged. It has one row today and the rest of L1's — theme, effects, and the icon studio — join it as they
+ * are built. The headers appear together because a single unlabelled run needed none.
  *
  * Order follows L1's: the register first (it decides what the others are *for*), then a section per surface, with
  * folders last — a folder is drawn over a surface rather than being one.
  */
 internal val settingsGroups: List<SettingsGroup> = listOf(
+    SettingsGroup("Personalization", listOf(SettingsSection.WALLPAPER)),
     SettingsGroup(
-        null,
+        "Layout",
         listOf(
             SettingsSection.SURFACE_REGISTER,
             SettingsSection.HOME_GRID,

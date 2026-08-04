@@ -249,7 +249,7 @@ from the baked stack).
     luminance analysis anywhere and themes from the system's dark mode. So it has to be *designed*, and it waits on the
     dominant-colour half of L1's `Blur.kt` (S5d); `data:wallpaper` now stores the image it will read.
 
-**Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it.** Its own module rather than a slice of
+**Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it, and a section that drives it.** Its own module rather than a slice of
 `data:settings`, because it decodes bitmaps, writes files and calls `WallpaperManager` — a *service*, where settings is a
 store. **It keeps its own one-key DataStore too**, which is a correction to the plan's original line ("borrowing settings
 to persist path pointers"): a path to a file we wrote and the id the system gave the wallpaper we set is bookkeeping, and
@@ -671,8 +671,8 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** the **wallpaper section** (S5b — the picker and Apply over the `data:wallpaper` that now exists),
-then its **crop screen** and the **effects** that unblock both the folder's frosted backdrop (solid black today) and the
+**Next likely:** the wallpaper **crop screen** (S5c — L1's pan/zoom, passing a rectangle so `setImage` stops
+centre-cropping), then the **effects** (S5d) that unblock both the folder's frosted backdrop (solid black today) and the
 shell's hardcoded `darkTheme`. Also open: a **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render and all the
@@ -682,7 +682,7 @@ indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanica
 unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
-**Settings — `data:settings` (B7) is real and two sections are live.** Storage is **one `@Serializable` JSON blob per
+**Settings — `data:settings` (B7) is real, and six sections are live.** Storage is **one `@Serializable` JSON blob per
 slice** under one DataStore key (`SettingsSlice`, pure and unit-tested), not L1's ~265 flat keys behind a 693-line codec;
 per-slice flows, not one god flow; and a slice carries no version because `ignoreUnknownKeys` + fully-defaulted fields
 make additive change safe both ways, with the **key name** as the seam for a semantic break. Two slices exist:
@@ -708,6 +708,14 @@ the screen, so its rows and columns follow rather than being picked. It states t
 and states that it also governs the **category card's expansion**, which is the same `FolderOverlay` on the same grid.
 **The name `Icons` returns with the icon studio** (B9, per-app: shape, background, layers), which is what L1's `Icons`
 section actually is — not grid sizing, which L1 never kept there either.
+**The wallpaper section is the sixth, and the first that is not about a surface** — which is why the list is now two
+named groups, Personalization and Layout, as L1 had it. It is a thin vertical over `data:wallpaper`: a screen-shaped
+preview (the stored file is already cropped to the screen, so any other ratio would show a crop the device never
+displays — and it measures the **whole** window, insets included, since a wallpaper sits under the bars), "Choose
+image" via `PickVisualMedia`, and one button opening L1's home/lock/both menu. **One button where L1 drew a
+`SplitButtonLayout`**: both halves of that ran `expanded = true`, so the split was decoration over a single action —
+applying always asks *where*. The `busy` flag is L2's own rather than a port, because L1's picker went to its crop
+screen and the work happened behind that.
 **Every section has L1's live icon preview**, between its layout group and its icon group: a real `AppCell` (or
 `AppRowCell`) at the **real cell size** that section computed, with the cell and both icon guardrails outlined over it,
 tracking the sliders per frame (`onPreview`) rather than on release. It is what makes the icon controls legible — a

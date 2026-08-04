@@ -43,6 +43,7 @@ import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
+import inkspire.morphic.feature.settings.wallpaper.WallpaperDetail
 
 /** The list pane's width beside a detail, on a screen wide enough for both. */
 private val ListPaneWidth = 360.dp
@@ -230,6 +231,7 @@ private fun SettingsTwoPane(
 @Composable
 private fun SettingsDetail(section: SettingsSection) {
     when (section) {
+        SettingsSection.WALLPAPER -> WallpaperDetail()
         SettingsSection.SURFACE_REGISTER -> SurfaceRegisterDetail()
         SettingsSection.HOME_GRID -> GridSizeDetail()
         SettingsSection.DOCK -> DockDetail()

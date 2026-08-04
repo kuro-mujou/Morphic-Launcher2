@@ -466,8 +466,25 @@ every phase ends with something visibly working on device, and no slice is writt
       id is also how a wallpaper set *outside* the launcher gets spotted, which is what L1 stored it for.
     - **One structural fix**: L1's repository did its read-modify-write **outside** any transaction (the lost-update
       race this plan's smell list already named). `updateState` does it inside `edit`.
-  - [ ] **S5b — the wallpaper section.** Preview, "Choose image" (`PickVisualMedia`), and Apply / Re-apply with L1's
-        home/lock/both menu. The vertical that makes S5a visible.
+  - [x] **S5b — the wallpaper section.** Preview, "Choose image" (`PickVisualMedia`), and Apply / Re-apply with L1's
+        home/lock/both menu — the vertical that makes S5a visible, and the first row of the **Personalization** group,
+        which is why that heading is back and the sections now sit in two named groups. Four things worth keeping
+        straight:
+    - **The preview is screen-shaped**, because the stored file already is: `setImage` crops and scales to this screen,
+      so a preview at any other ratio would show a crop the device will never display. Same argument `GridEditor`'s
+      preview makes for taking the window's ratio rather than a square. It measures the **whole** window, insets
+      included — every other section measures the *usable* area, and the difference is that those size things a user
+      reaches while this sizes something they only look at.
+    - **One button and a menu, where L1 drew a `SplitButtonLayout`.** Both halves of L1's ran `expanded = true`, so the
+      split was decoration over a single action: applying always asks *where*, and there is no plain apply to run
+      without the menu.
+    - **A `busy` flag is L2's own**, not a port. L1 never needed one because its picker went to the crop screen and the
+      work happened behind that; here the picker returns straight to the section, so a decode-and-scale of a large
+      photo would otherwise be a second of nothing happening.
+    - **`decodePreview` stays unused until S5c.** It exists to show a picked image *before* anything is written, which
+      is the crop screen's job; with no crop screen a pick writes immediately and the preview comes from `loadImage`.
+      L1's three browse rows ("My wallpapers", "Backdrops (By Unsplash)", installed live wallpapers) are also absent —
+      the first two are empty-state hints for a source that does not exist, and the third is S5f.
   - [ ] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
         stops centre-cropping. Separate because L1 keeps it a separate screen too.
   - [ ] **S5d — effects, and the two things waiting on them.** `BackdropEffect` + params as a **settings** slice,
