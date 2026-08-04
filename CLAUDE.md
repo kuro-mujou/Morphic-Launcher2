@@ -221,11 +221,20 @@ from the baked stack).
   `RangeSlider` (custom thumbs, M3 track); a **vertical slider** (custom Canvas — M3 has none) is deferred
   until a consumer needs it.
 - **Modern state APIs behind convenient facades.** Components sit on the **state-hoisted** M3 APIs internally
-  (`rememberSliderState`/`rememberRangeSliderState`) — not the value-based overloads (deprecation path). But
+  (`Slider(state = …)`/`RangeSlider(state = …)`) — not the value-based overloads (deprecation path). But
   they expose a plain `value`/`onValueChange` API and create + bridge the state *inside* (`LaunchedEffect(value)`
   in, `snapshotFlow { … }.drop(1)` out), so call sites need no `remember*State`. **Exception — the text field
   keeps a hoisted `TextFieldState`** (`rememberTextFieldState()` at the call site): its config-change survival
   needs the caller to own the state, so hiding it would throw that benefit away.
+  - **The sliders do *not* use `rememberSliderState`/`rememberRangeSliderState`, and must not be "fixed" back to
+    them.** Those factories are `rememberSaveable(saver = …) { State(…) }` — an init block that never re-runs — so
+    they freeze three arguments at first composition. Two of them matter here: `onValueChangeFinished` (a `var` the
+    factory never re-assigns, so a facade hands the state the *first* composition's closure forever — which is what
+    made `SettingsCommitSlider` commit its first drag and then re-commit that same value on every later one), and
+    `valueRange`/`steps` (`val`s, so a slider whose range legitimately moves — the APPS row height is bounded by the
+    icon guardrails — keeps mapping the finger through the range it was born with). So the state is a `remember` keyed
+    on `steps`/`valueRange`, with the callback pushed in by `SideEffect`. What is given up is restore across a
+    configuration change, and it is not load-bearing: `value` is the caller's, so the state is re-seeded from it.
 - **The text field wraps `BasicTextField` (foundation primitive) + a `decorator`, not M3's `TextField`.** M3's
   styled field is too opinionated about focus/label/indicator; the primitive gives full focus control — our
   own `onFocusChanged` state, the focus ring, placeholder-behind-field, and clearing focus when the IME is

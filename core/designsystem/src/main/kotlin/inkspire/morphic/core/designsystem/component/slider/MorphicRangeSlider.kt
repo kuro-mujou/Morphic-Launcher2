@@ -3,10 +3,11 @@ package inkspire.morphic.core.designsystem.component.slider
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.RangeSliderState
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.rememberRangeSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -23,6 +24,12 @@ import kotlinx.coroutines.flow.drop
  *
  * Intended consumer: the per-layout **icon-size rail** — [value] is the min..max icon size a layout scales
  * between (`IconMetrics.minIconDp`/`maxIconDp`).
+ *
+ * The state is `remember`ed here rather than by `rememberRangeSliderState` for the two reasons spelled out on
+ * [MorphicSlider]: that factory's `rememberSaveable` init block never re-runs, so it would freeze
+ * [onValueChangeFinished] at first composition (one working commit, then every later drag re-committing the first one)
+ * and freeze [valueRange]/[steps] as the `val`s they are. Same bug, same shape, same fix — kept in step deliberately,
+ * since two sliders that disagree about when they commit is worse than either being wrong.
  */
 @Composable
 fun MorphicRangeSlider(
@@ -37,13 +44,16 @@ fun MorphicRangeSlider(
     val colors = LocalMorphicColors.current
     val startSource = remember { MutableInteractionSource() }
     val endSource = remember { MutableInteractionSource() }
-    val state = rememberRangeSliderState(
-        activeRangeStart = value.start,
-        activeRangeEnd = value.endInclusive,
-        steps = steps,
-        valueRange = valueRange,
-        onValueChangeFinished = onValueChangeFinished,
-    )
+    val state = remember(steps, valueRange) {
+        RangeSliderState(
+            activeRangeStart = value.start,
+            activeRangeEnd = value.endInclusive,
+            steps = steps,
+            valueRange = valueRange,
+        )
+    }
+    // The one field M3 lets us keep current, kept current — see [MorphicSlider].
+    SideEffect { state.onValueChangeFinished = onValueChangeFinished }
 
     LaunchedEffect(value) {
         if (value.start != state.activeRangeStart || value.endInclusive != state.activeRangeEnd) {
