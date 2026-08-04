@@ -23,11 +23,16 @@ import androidx.compose.ui.unit.dp
  *   the cell's whenever a label is shown.
  *
  * @property iconSize the edge length [IconLabelCell] will draw the icon at.
+ * @property iconBound the largest icon this cell could hold **without overflowing** — its inner box: the width less the
+ *   horizontal padding, the height less the vertical padding and the label block, whichever is smaller. Not the same as
+ *   [iconSize], and the gap between them is meaningful: an icon whose lower guardrail exceeds this is drawn *over* the
+ *   cell's padding, which is a state a caller may want to show rather than hide.
  * @property labelHeight the label row's height, or zero when labels are off.
  * @property iconCenterY the icon's centre, measured from the cell's **top** edge.
  */
 data class CellIconLayout(
     val iconSize: Dp,
+    val iconBound: Dp,
     val labelHeight: Dp,
     val iconCenterY: Dp,
 )
@@ -50,9 +55,15 @@ fun cellIconLayout(
     val availWidth = (cellWidth - CellPadH * 2).coerceAtLeast(0.dp)
 
     if (!metrics.showLabel) {
+        val iconArea = (cellHeight - CellPadV * 2).coerceAtLeast(0.dp)
         // No clamp to the area, mirroring the cell's own no-label branch — see the note above.
-        val iconSize = metrics.resolveIconSize(availWidth, cellHeight - CellPadV * 2)
-        return CellIconLayout(iconSize = iconSize, labelHeight = 0.dp, iconCenterY = cellHeight / 2)
+        val iconSize = metrics.resolveIconSize(availWidth, iconArea)
+        return CellIconLayout(
+            iconSize = iconSize,
+            iconBound = minOf(availWidth, iconArea),
+            labelHeight = 0.dp,
+            iconCenterY = cellHeight / 2,
+        )
     }
 
     val iconArea = (cellHeight - CellPadV * 2 - LabelGap - labelHeight).coerceAtLeast(0.dp)
@@ -63,6 +74,7 @@ fun cellIconLayout(
     val iconTop = CellPadV + (contentHeight - groupHeight) / 2
     return CellIconLayout(
         iconSize = iconSize,
+        iconBound = minOf(availWidth, iconArea),
         labelHeight = labelHeight,
         iconCenterY = iconTop + iconSize / 2,
     )

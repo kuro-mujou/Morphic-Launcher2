@@ -194,9 +194,12 @@ private fun CellPreview(app: AppInfo?, metrics: IconMetrics, cellWidth: Dp, cell
                     color = colors.content,
                     style = Stroke(width = GuideStrokeDp.toPx()),
                 )
-                // Clamped to the cell, as L1 clamped them: a guardrail wider than the cell is drawn at the cell's
-                // edge rather than off the canvas, which is what makes "my minimum no longer fits" visible.
-                val bound = minOf(cellWidth - CellGuideInset, cellHeight - CellGuideInset)
+                // **Clamped to the cell's *inner* box, not to the cell** — `layout.iconBound` is the width less its
+                // horizontal padding and the height less its vertical padding and label row, which is the largest icon
+                // the cell can actually hold. Clamping to the cell instead (as this first did) drew a too-large guardrail
+                // flush against the outer ring, hiding the 4dp the cell insets its icon by and implying an icon could
+                // fill the cell edge to edge. It is also what L1 clamped to (`minOf(availWdp, iconAreaDp)`).
+                val bound = layout.iconBound
                 square(minOf(maxOf(metrics.minIconDp, metrics.maxIconDp), bound), PathEffect.dashPathEffect(DashPattern))
                 square(minOf(minOf(metrics.minIconDp, metrics.maxIconDp), bound), PathEffect.dashPathEffect(DotPattern))
             }
@@ -230,5 +233,3 @@ private fun previewBoxHeight(cellHeight: Dp): Dp = cellHeight.coerceIn(96.dp, 22
 /** Stroke width for every outline. Thin enough not to swamp a small cell, thick enough to read over an icon. */
 private val GuideStrokeDp = 1.5.dp
 
-/** Keeps a clamped guardrail square just inside the cell outline rather than exactly on it. */
-private val CellGuideInset = 2.dp

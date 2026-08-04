@@ -695,7 +695,9 @@ section actually is — not grid sizing, which L1 never kept there either.
 tracking the sliders per frame (`onPreview`) rather than on release. It is what makes the icon controls legible — a
 fraction and two dp bounds say nothing about *this* cell, and which of the three is binding is the whole question while
 dragging. The geometry is **asked for, not copied** (`cellIconLayout` in `core:designsystem/cell`, so a guide cannot
-drift from the cell it is drawn over — L1 restated the cell's padding under a "keep in sync" comment); each section
+drift from the cell it is drawn over — L1 restated the cell's padding under a "keep in sync" comment, and it publishes
+the cell's **inner box** as well, since a guardrail larger than the cell must stop where the icon really can, not on the
+outer ring); each section
 supplies its own cell size, which is the part that cannot be shared (home divides its area, the dock divides its height
 setting, APPS branches on layout, the folder asks `folderInnerSize`); and the guardrails are **greyscale by stroke**
 (solid = cell, dashed = upper, dotted = lower) because L1's green/red cannot survive a palette that reserves red for

@@ -56,6 +56,31 @@ class CellIconLayoutTest {
     }
 
     @Test
+    fun `the icon bound is the cell's inner box, not the cell`() {
+        // What a caller drawing *over* a cell has to clamp to, and the reason it is published: the cell insets its icon
+        // by `CellPadH`/`CellPadV` and reserves the label row, so the largest icon it can hold is smaller than the cell
+        // on both axes. The settings preview clamped its guardrail outlines to the *cell* at first, which drew a
+        // too-large limit flush against the outer ring and hid the 4dp inset entirely.
+        val layout = cellIconLayout(cellWidth = 90.dp, cellHeight = 140.dp, metrics = metrics, labelHeight = labelHeight)
+
+        // Height-bound here: 140 − 8 padding − 4 gap − 16 label = 112, against 82 of inner width.
+        assertEquals(82.dp, layout.iconBound)
+        assertTrue("the bound must sit inside the cell on both axes", layout.iconBound < 90.dp)
+    }
+
+    @Test
+    fun `with no label the bound gives the label row's space back`() {
+        val bare = metrics.copy(showLabel = false)
+
+        // A short cell, so the height is what binds: 40 − 8 = 32, with no label block to subtract.
+        val labelled = cellIconLayout(90.dp, 40.dp, metrics, labelHeight).iconBound
+        val bareBound = cellIconLayout(90.dp, 40.dp, bare, labelHeight).iconBound
+
+        assertEquals(12.dp, labelled)
+        assertEquals(32.dp, bareBound)
+    }
+
+    @Test
     fun `a guardrail larger than the cell overflows a labelled cell's icon area but not its clamp`() {
         // The labelled branch clamps to the icon area, so a 48dp floor in a tiny cell reports the area, not the floor.
         val floor = metrics.copy(minIconDp = 48.dp, maxIconDp = 48.dp)
