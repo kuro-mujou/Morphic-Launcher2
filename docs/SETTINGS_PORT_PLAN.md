@@ -377,6 +377,26 @@ every phase ends with something visibly working on device, and no slice is writt
     The `Personalization` header went with the screen — every section left belongs to a surface, and a heading over one
     row does no work. **The name `Icons` returns with the icon studio** (B9), which is what L1's `Icons` section actually
     holds: shape, background and layers, never grid sizing.
+  - [x] **S4l — one set of icon defaults, and a floor that is really a cell floor.** Every blueprint declared its own
+        `iconPercent` (home 88%, the app grids 75%, the list 100%) and inherited `28..72dp` guardrails from
+        `IconSizing`. All of it collapses to **one** default — `iconPercent = 1f`, `24..48dp` — which every blueprint
+        now takes unmodified (`icon = IconSizing()`), so "a default lives in exactly one place" is literally true of
+        icon sizing too. Three reasons, in the order they matter:
+    - **At 100%, `maxIconDp` *is* the icon size** on any cell bigger than it, so "how large are my icons" becomes one
+      number in dp instead of a percentage of a cell size the user has to picture. The per-grid fractions were the
+      *fraction* doing the upper guardrail's job — and double-counting density at that, since a narrower cell already
+      yields a smaller icon at 100% (the fraction is *of the cell*). The fraction keeps the job it is good at:
+      shrinking an icon inside a cell that is already small.
+    - **The lower guardrail is a cell floor**, because `CellFit` inverts it. At the old bound of 16dp that meant a 24dp
+      cell — thirteen rows in a 320dp dock, fifteen columns across a phone — legal arithmetic nothing could be tapped
+      in. `IconSizingRanges.IconDp` now starts at **24**, which is the number L1 wrote down for exactly this
+      (`MIN_CELL_DP`, "press-area floor") and then never used.
+    - **The ceiling is 120dp and is a judgement**, stated as one on `IconDp`: far enough for a tablet cell to be filled
+      at the default fraction, near enough to keep 24–48 legible on the track, and low enough that even the *lower*
+      thumb at maximum leaves a 360dp phone two columns rather than none.
+    Visible consequence to expect on device: home icons were drawing at 72dp (88% of an 82dp inner bound, capped by the
+    old 72dp guardrail) and now draw at 48dp. `IconMetrics`' Compose-side defaults moved in step — they are the same
+    record and a difference between them would show as a change at the moment the store answered.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
@@ -445,8 +465,8 @@ fallback, not a setting.**
    `height ÷ rows`, so the height caps how many rows are usable rather than replacing them. `DockGrid.editRange`
    gives both axes a minimum, the editor offers both, and **+ a row is enabled only while another row would still
    leave cells at least the smallest usable height**. Deriving rows read as an editor missing half its buttons;
-   deriving *columns* was worse, since at the default icon guardrail (`minIconDp = 28` at 88%) a 360dp phone dock
-   derives **nine** columns against the four it has today — and the dock's width is the screen's rather than anything
+   deriving *columns* was worse, since at the default icon guardrail (`minIconDp = 24`) a 360dp phone dock
+   derives **eleven** columns against the four it has today — and the dock's width is the screen's rather than anything
    a user chose. This is L1's model, and it is the right one.
 4. **The height commits on release, then reduces the rows if they no longer fit.** Dragging the slider previews only
    (`SettingsCommitSlider`), so one gesture is one transaction; on release the height is written, and if the stored

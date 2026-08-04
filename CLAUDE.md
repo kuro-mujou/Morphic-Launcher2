@@ -457,7 +457,7 @@ the default `DevRootScreen` screen.
   `height ÷ rows`. `CellFit.fitGridConfig` resolves a stored size against what an area can actually hold, from the two
   inputs only the surface knows (the measured width, and the type scale behind a label row). Deriving the counts from
   the extent was specified and abandoned on both axes: rows read as an editor missing half its buttons, and at the
-  default icon guardrail a derived phone dock is nine columns wide against the four it has today. **A column clamp is
+  default icon guardrail a derived phone dock is eleven columns wide against the four it has today. **A column clamp is
   applied on read and never written back** (shrink the icons again and the count returns); **a row reduction *is*
   written**, at the moment a height commit invalidates it — the asymmetry is that the height was a deliberate change,
   where an icon-size change is not about the dock at all. L1 wrote every clamp back from a `LaunchedEffect` *inside
@@ -485,8 +485,8 @@ the default `DevRootScreen` screen.
   comment names "the dock is turned back on") and wrote it on **every** cause, so an icon tweak permanently destroyed
   a row count that had nothing to do with it. L1 also measured home's area two ways (`pagerBoundsInWindow` on the
   surface, `homeGridArea` in settings) which could disagree; L2 has one expression. Note it takes a *large* dock or
-  *large* icons to bite at all: home's smallest usable cell is ≈60dp at the default guardrails, so even a 320dp dock
-  leaves room for eight rows against the five it stores. **Neither zone settles until the store has answered for it** —
+  *large* icons to bite at all: home's smallest usable cell is ≈52dp at the default guardrails, so even a 320dp dock
+  leaves room for more rows than the five it stores. **Neither zone settles until the store has answered for it** —
   a blueprint fallback is a smaller grid than one the user has grown, and settling against it would make a transient
   first frame a permanent write.
 
@@ -511,10 +511,10 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   remaining layout is blocked on.
   - **`AppsVerticalList`** — a `LazyColumn` of `AppRowCell` (`core:designsystem/cell`, the horizontal sibling of
     `AppCell`); **row height a flat placeholder**, icon sized from the list's own `IconMetrics`
-    (`iconPercent = 1f` — no label underneath to leave room for).
+    (which fills the row — a list's label sits *beside* the icon, so there is no label row to leave height for).
   - **`AppsVerticalGrid`** — a `LazyVerticalGrid` of `AppCell`; **columns from the `AppsScrollGrid` blueprint**
     (`colsFor(device)`, since a `SCROLL_GRID` blueprint has no rows and so can't go through `toGridConfig`), cell
-    height a flat placeholder, denser `IconMetrics` than home's. It is **not** `LauncherGrid`'s SCROLL_GRID mode:
+    height a flat placeholder. It is **not** `LauncherGrid`'s SCROLL_GRID mode:
     that composes every child at once, which is right for the bounded per-category page it was built for and wrong
     for hundreds of icon-baking cells. This is the grid plan's *right tool per surface* rule, and it costs nothing
     because a derived layout is never dragged **within** itself — so it needs no shared lattice and no published
@@ -739,6 +739,15 @@ apply. So the fit is *reported* instead — `AppsScreen` measures, fits the stor
 safe: the report is **gated on the store having answered** (paginating against a blueprint placeholder would write pages
 nobody chose and then rewrite them — pagination *writes*), and it is a **runtime bound** rather than the removed
 `setPagerGrid`'s blueprint-derived default, which is the distinction that keeps `setDevice` the input it was made.
+**One set of icon defaults, taken by every grid** (`IconSizing()` unmodified everywhere): the icon **fills its cell**,
+capped at **48dp**, never below **24dp**, with `IconSizingRanges.IconDp = 24..120`. At 100% the *upper guardrail is the
+icon size* on any cell bigger than it, so icon size is one number in dp rather than a fraction of a cell the user has to
+picture — the per-grid fractions this replaced (home 88%, app grids 75%) were the fraction doing that job, and
+double-counting density while at it, since a narrower cell already gives a smaller icon at 100%. The **lower** guardrail
+is a *cell* floor (`CellFit` inverts it), which is why its bound is 24 and not lower: at 16 the arithmetic offered a 24dp
+cell — thirteen rows in a 320dp dock — that nothing could be tapped in. 24 is also L1's own unused `MIN_CELL_DP`
+("press-area floor"). `IconMetrics`' Compose-side defaults mirror `IconSizing`'s and **must keep doing so** — same record,
+two type systems, so a difference would surface as a jump the moment the store answered.
 `core:designsystem/grid/CellFit.kt` answers "how large can this grid be": `boundsIn`/`editableRangeIn` as a **ceiling**
 for a grid whose counts a user picks, and `fitGridConfig` reading the same maximum as a **value** for the dock's rows.
 Beside it, `usableWindowArea` is the **one place the launcher measures the screen** — home, the APPS surface and every

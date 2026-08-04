@@ -89,20 +89,30 @@ enum class GridSlot {
  * [iconPercent] is a fraction *of the cell*, so the same number means a different icon on a 4-column grid than on
  * an 8-column one. A grid and what it draws in a cell are one description.
  *
- * @property iconPercent the icon's edge length as a fraction of the cell's smaller bound — the primary control.
+ * **These defaults are the launcher's, and every blueprint takes them.** No grid states its own any more: an icon fills
+ * its cell (`iconPercent = 1f`) up to a 48dp cap, and never draws below 24dp. Earlier cuts gave home 88% and the app
+ * grids 75%, reasoning about how much slack each cell could afford — which was the fraction doing a job the **upper
+ * guardrail** does better. At 100%, [maxIconDp] *is* the icon size on any cell bigger than it, so "how large are my
+ * icons" is one number in dp rather than a percentage of a cell size the user has to picture. The fraction stays for
+ * what it is good at: shrinking an icon *within* its cell, on a grid whose cells are already small.
+ *
+ * @property iconPercent the icon's edge length as a fraction of the cell's smaller bound. 1f fills the cell, which is
+ *   the default; the guardrails then decide what "filled" means in dp.
  * @property labelScale multiplier on the base label text size.
  * @property showLabel whether a label is drawn under the icon at all.
- * @property minIconDp lower guardrail in dp; a wide bound, not the primary limit.
- * @property maxIconDp upper guardrail in dp; likewise.
+ * @property minIconDp lower guardrail in dp — and the floor on a *cell*, since `CellFit` inverts it, so raising it
+ *   takes columns and rows away.
+ * @property maxIconDp upper guardrail in dp, and at the default fraction the effective icon size on any cell that
+ *   can hold more.
  * @property showIcon whether the icon is drawn — meaningful for a text-only list.
  */
 @Serializable
 data class IconSizing(
-    val iconPercent: Float = 0.88f,
+    val iconPercent: Float = 1f,
     val labelScale: Float = 1f,
     val showLabel: Boolean = true,
-    val minIconDp: Int = 28,
-    val maxIconDp: Int = 72,
+    val minIconDp: Int = 24,
+    val maxIconDp: Int = 48,
     val showIcon: Boolean = true,
 )
 
@@ -130,8 +140,19 @@ object IconSizingRanges {
       * L1 gave them separate ranges (min 16..64, max 48..140), which two independent sliders needed to stop them
       * crossing. A range slider cannot cross its own thumbs, so the invariant is structural and the split caps were
       * only ever a consequence of the control choice.
+      *
+      * **The floor is 24dp because the floor is really a *cell* floor.** `CellFit` inverts [IconSizing.minIconDp] into
+      * the smallest usable cell, so a bound of 16 offered a 24dp cell — thirteen rows in a 320dp dock, fifteen columns
+      * across a phone — legal arithmetic that nothing could be tapped in. 24 is also the number L1 wrote down for this
+      * (`MIN_CELL_DP`, "minimum comfortable grid cell size (press-area floor)") and then never used anywhere.
+      *
+      * **The ceiling is 120dp, which is a judgement rather than a derivation**, so here is the reasoning: at the default
+      * fraction the upper guardrail *is* the icon size, so it has to reach far enough for a tablet cell to be filled
+      * (~150dp inner at eight columns) while keeping the 24–48 default legible on the track. 120 also stays clear of the
+      * one place a bound can misbehave — the *lower* thumb drives the cell floor, and 120 + a cell's padding still
+      * leaves a 360dp phone two columns rather than none.
       */
-    val IconDp: IntRange = 16..140
+    val IconDp: IntRange = 24..120
 }
 
 /**
@@ -258,9 +279,10 @@ val HomePagerGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 7),
         tabletLandscape = GridDefault(cols = 8, rows = 6),
     ),
-    // 0.88 — a home cell is a 2x2 visual slot around one icon, so it can afford slack. This is the value home
-    // inherited from `LocalIconMetrics`' own default rather than ever setting.
-    icon = IconSizing(iconPercent = 0.88f),
+    // The launcher's defaults, unmodified — as every blueprint now takes them. Home used to ask for 88%, reasoning
+    // that a 2×2 visual slot can afford slack; at 100% the same slack is expressed by the 48dp cap instead, in the
+    // units a user reads.
+    icon = IconSizing(),
 )
 
 /**
@@ -291,7 +313,7 @@ val DockGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 1),
         tabletLandscape = GridDefault(cols = 5, rows = 1),
     ),
-    icon = IconSizing(iconPercent = 0.88f),
+    icon = IconSizing(),
     // The `DockHeight` placeholder `feature:home` has carried since the dock was built, now owned by something.
     heightDp = 96,
 )
@@ -312,8 +334,10 @@ val AppsPagerGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 7),
         tabletLandscape = GridDefault(cols = 8, rows = 6),
     ),
-    // Denser than home's: a page packs four to eight columns where a home cell holds one icon with slack.
-    icon = IconSizing(iconPercent = 0.75f),
+    // The same defaults as every other grid. This used to ask for 75% on the grounds that a page packs more columns
+    // than home — but a narrower cell already produces a smaller icon at 100%, since the fraction is *of the cell*, so
+    // the extra reduction was double-counting the density.
+    icon = IconSizing(),
 )
 
 /**
@@ -335,7 +359,7 @@ val AppsScrollGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5),
         tabletLandscape = GridDefault(cols = 8),
     ),
-    icon = IconSizing(iconPercent = 0.75f),
+    icon = IconSizing(),
 )
 
 /**
@@ -366,7 +390,7 @@ val AppsCategoryGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5),
         tabletLandscape = GridDefault(cols = 8),
     ),
-    icon = IconSizing(iconPercent = 0.75f),
+    icon = IconSizing(),
 )
 
 /**
@@ -388,7 +412,7 @@ val FolderGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 4, rows = 5),
         tabletLandscape = GridDefault(cols = 6, rows = 3),
     ),
-    icon = IconSizing(iconPercent = 0.75f),
+    icon = IconSizing(),
 )
 
 /**
@@ -419,7 +443,7 @@ val AppsListGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 1),
         tabletLandscape = GridDefault(cols = 1),
     ),
-    icon = IconSizing(iconPercent = 1f),
+    icon = IconSizing(),
     rowHeightDp = 56,
 )
 

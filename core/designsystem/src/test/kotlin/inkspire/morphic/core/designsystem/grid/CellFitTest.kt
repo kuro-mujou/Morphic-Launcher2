@@ -21,7 +21,7 @@ import org.junit.Test
  */
 class CellFitTest {
 
-    private val metrics = IconMetrics(iconPercent = 0.5f, minIconDp = 24.dp, maxIconDp = 72.dp, showLabel = false)
+    private val metrics = IconMetrics(iconPercent = 0.5f, minIconDp = 24.dp, maxIconDp = 48.dp, showLabel = false)
     private val labelHeight = 16f
 
     /**
@@ -35,7 +35,7 @@ class CellFitTest {
      * `minIconDp` pushed past the inherited `maxIconDp` would quietly be ignored — which is what the first draft of this
      * fixture did.
      */
-    private val chunky = metrics.copy(minIconDp = 88.dp, maxIconDp = 140.dp)
+    private val chunky = metrics.copy(minIconDp = 88.dp, maxIconDp = 120.dp)
 
     @Test
     fun `the smallest cell is the icon's floor plus the cell's own padding`() {
@@ -80,19 +80,21 @@ class CellFitTest {
     @Test
     fun `the guardrails are read order-safe, matching resolveIconSize`() {
         // `resolveIconSize` coerces with minOf/maxOf, so a crossed pair must not make the cell requirement explode.
-        val crossed = metrics.copy(minIconDp = 72.dp, maxIconDp = 24.dp)
+        val crossed = metrics.copy(minIconDp = 48.dp, maxIconDp = 24.dp)
 
         assertEquals(minCellWidthDp(metrics), minCellWidthDp(crossed), 0.01f)
     }
 
     @Test
     fun `a cell's height is its width-driven icon plus the padding, and the label when shown`() {
-        // 120dp wide → 112dp inner → 56dp icon at 50%, plus CellPadV on both sides (4+4).
-        assertEquals(64f, cellHeightDp(cellWidthDp = 120f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+        // 80dp wide → 72dp inner → 36dp icon at 50%, plus CellPadV on both sides (4+4). Deliberately a width whose
+        // fraction lands *inside* the guardrails, since this test is about the width driving the height; the clamped
+        // cases are the next test's.
+        assertEquals(44f, cellHeightDp(cellWidthDp = 80f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
         // With labels on, the gap (4dp) and the 16dp label row.
         assertEquals(
-            84f,
-            cellHeightDp(cellWidthDp = 120f, metrics = metrics.copy(showLabel = true), labelHeightDp = labelHeight),
+            64f,
+            cellHeightDp(cellWidthDp = 80f, metrics = metrics.copy(showLabel = true), labelHeightDp = labelHeight),
             0.01f,
         )
     }
@@ -100,8 +102,8 @@ class CellFitTest {
     @Test
     fun `a cell's height follows the icon guardrails at both ends`() {
         // The point of deriving it at all: the height tracks what the icon settings resolve to. A very wide cell is
-        // capped by maxIconDp (72 + 8), a very narrow one floored by minIconDp (24 + 8) rather than collapsing.
-        assertEquals(80f, cellHeightDp(cellWidthDp = 400f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
+        // capped by maxIconDp (48 + 8), a very narrow one floored by minIconDp (24 + 8) rather than collapsing.
+        assertEquals(56f, cellHeightDp(cellWidthDp = 400f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
         assertEquals(32f, cellHeightDp(cellWidthDp = 8f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
         assertEquals(32f, cellHeightDp(cellWidthDp = 0f, metrics = metrics, labelHeightDp = labelHeight), 0.01f)
     }

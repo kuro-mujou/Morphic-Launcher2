@@ -6,18 +6,24 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.IconSizing
 
 /**
- * Per-surface icon + label sizing. [iconPercent] is the primary control — the icon's edge length is that
- * fraction of the cell's *smaller* available bound (see [IconLabelCell]); [minIconDp]/[maxIconDp] are wide
- * guardrails, not the primary limit. [labelScale] multiplies the base label text size.
+ * Per-surface icon + label sizing. [iconPercent] is the icon's edge length as a fraction of the cell's *smaller*
+ * available bound (see [IconLabelCell]), and [minIconDp]/[maxIconDp] clamp the result. [labelScale] multiplies the base
+ * label text size.
+ *
+ * **The defaults mirror [IconSizing]'s exactly, and must keep doing so** — this is the Compose-typed twin of that
+ * persistable record, resolved through `IconMetrics.of`, so a difference between the two would mean a surface drew one
+ * thing before the store answered and another after. They are: fill the cell, capped at 48dp, never below 24dp. With the
+ * fraction at 1f, [maxIconDp] is what actually decides the drawn size on any cell larger than it — the guardrail is the
+ * size control, and the fraction is for shrinking an icon inside a cell that is already small.
  *
  * Each surface (home pager, dock, drawer, …) provides its own [IconMetrics] via [LocalIconMetrics].
  */
 data class IconMetrics(
-    val iconPercent: Float = 0.88f,
+    val iconPercent: Float = 1f,
     val labelScale: Float = 1f,
     val showLabel: Boolean = true,
-    val minIconDp: Dp = 28.dp,
-    val maxIconDp: Dp = 72.dp,
+    val minIconDp: Dp = 24.dp,
+    val maxIconDp: Dp = 48.dp,
     val showIcon: Boolean = true,
 ) {
     companion object {

@@ -69,10 +69,12 @@ private const val PreviewSlots = PreviewCols * PreviewCols
  * would eat the space the icons need to be recognisable. Recognising an icon *is* the preview's whole job, so the
  * label goes and [IconMetrics.iconPercent] goes to 1: the slot is already sized to be an icon.
  *
- * [IconMetrics.maxIconDp]'s default (72dp) is left alone even though it *will* bind on a tablet, where two columns of
- * cards give a slot far wider than that and the icon then floats in it. Raising it here would paper over the real
- * cause — [AppsCategoryCard]'s device-blind column count — with a number nothing owns either. Fix the columns, not
- * this.
+ * [IconMetrics.maxIconDp]'s default (48dp) is left alone even though it binds on a tablet, where two columns of cards
+ * give a slot wider than that and the icon then floats in it. Raising it here would paper over the real cause —
+ * [AppsCategoryCard]'s device-blind column count — with a number nothing owns either. Fix the columns, not this.
+ *
+ * `iconPercent = 1f` is now the default rather than an override, and is kept written out because *this* cell means it
+ * literally: the slot is sized to be an icon, so filling it is the intent rather than a value inherited.
  */
 private val PreviewIconMetrics = IconMetrics(iconPercent = 1f, showLabel = false)
 

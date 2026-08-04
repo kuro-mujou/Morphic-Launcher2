@@ -15,7 +15,7 @@ import org.junit.Test
  */
 class RowHeightTest {
 
-    private val metrics = IconMetrics(iconPercent = 1f, minIconDp = 28.dp, maxIconDp = 72.dp)
+    private val metrics = IconMetrics(iconPercent = 1f, minIconDp = 24.dp, maxIconDp = 48.dp)
 
     /** `RowPadV * 2` — the row's vertical inset, added to both ends of the guardrail range. */
     private val padding = 16f
@@ -27,8 +27,8 @@ class RowHeightTest {
     fun `the range is the guardrail range shifted by the row's own inset`() {
         val range = rowHeightRangeDp(metrics, labelHeight)
 
-        assertEquals(28f + padding, range.start, 0.01f)
-        assertEquals(72f + padding, range.endInclusive, 0.01f)
+        assertEquals(24f + padding, range.start, 0.01f)
+        assertEquals(48f + padding, range.endInclusive, 0.01f)
     }
 
     @Test
@@ -48,11 +48,11 @@ class RowHeightTest {
     @Test
     fun `widening the guardrails widens the range, and narrowing narrows it`() {
         // The coupling the settings section relies on: the icon range slider is the authority, and this follows it.
-        val wide = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 16.dp, maxIconDp = 140.dp))
+        val wide = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 24.dp, maxIconDp = 120.dp))
         val narrow = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 40.dp, maxIconDp = 48.dp))
 
-        assertEquals(16f + padding, wide.start, 0.01f)
-        assertEquals(140f + padding, wide.endInclusive, 0.01f)
+        assertEquals(24f + padding, wide.start, 0.01f)
+        assertEquals(120f + padding, wide.endInclusive, 0.01f)
         assertEquals(40f + padding, narrow.start, 0.01f)
         assertEquals(48f + padding, narrow.endInclusive, 0.01f)
     }
@@ -61,7 +61,7 @@ class RowHeightTest {
     fun `crossed guardrails are read order-safe, and equal ones still give a usable control`() {
         // `resolveIconSize` coerces with minOf/maxOf, so a crossed pair must describe the same range rather than an
         // empty one — and equal guardrails must still leave a slider something to travel.
-        val crossed = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 72.dp, maxIconDp = 28.dp))
+        val crossed = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 48.dp, maxIconDp = 24.dp))
         assertEquals(rowHeightRangeDp(metrics, labelHeight).start, crossed.start, 0.01f)
         assertEquals(rowHeightRangeDp(metrics, labelHeight).endInclusive, crossed.endInclusive, 0.01f)
 
@@ -78,7 +78,7 @@ class RowHeightTest {
         assertEquals(96f, fitRowHeightDp(56f, tallIcons, labelHeight), 0.01f)
         assertEquals(56f, fitRowHeightDp(56f, metrics, labelHeight), 0.01f)
         // And the other end: a height above what the largest allowed icon can fill comes down to it.
-        assertEquals(88f, fitRowHeightDp(200f, metrics, labelHeight), 0.01f)
+        assertEquals(64f, fitRowHeightDp(200f, metrics, labelHeight), 0.01f)
     }
 
     @Test
@@ -86,7 +86,7 @@ class RowHeightTest {
         // A pure-text row draws no icon, so neither guardrail bounds it. Bounding it by one is not merely odd, it is
         // wrong in the direction that hurts: chunky guardrails set *before* the icons were switched off would forbid a
         // compact text list (72–140dp icons → no row under 88dp of plain text).
-        val chunky = metrics.copy(minIconDp = 72.dp, maxIconDp = 140.dp)
+        val chunky = metrics.copy(minIconDp = 72.dp, maxIconDp = 120.dp)
 
         val withIcons = rowHeightRangeDp(chunky, labelHeight)
         val textOnly = rowHeightRangeDp(chunky.copy(showIcon = false), labelHeight)
@@ -95,7 +95,7 @@ class RowHeightTest {
         assertEquals(labelHeight + padding, textOnly.start, 0.01f)
         // "Opens up": the widest row the launcher offers at all (`IconSizingRanges.IconDp`'s ceiling), not a
         // text-derived cap — with no icon there is nothing to say a spacious row is wrong.
-        assertEquals(140f + padding, textOnly.endInclusive, 0.01f)
+        assertEquals(120f + padding, textOnly.endInclusive, 0.01f)
         assertTrue("the text-only range must not be narrower", textOnly.start < withIcons.start)
     }
 
@@ -104,7 +104,7 @@ class RowHeightTest {
         // They describe an icon that isn't there, so neither end may follow them — the same reasoning that keeps
         // `iconPercent` out of the range while icons are on.
         val narrow = rowHeightRangeDp(metrics.copy(showIcon = false, minIconDp = 40.dp, maxIconDp = 48.dp), labelHeight)
-        val wide = rowHeightRangeDp(metrics.copy(showIcon = false, minIconDp = 16.dp, maxIconDp = 140.dp), labelHeight)
+        val wide = rowHeightRangeDp(metrics.copy(showIcon = false, minIconDp = 24.dp, maxIconDp = 120.dp), labelHeight)
 
         assertEquals(narrow.start, wide.start, 0.01f)
         assertEquals(narrow.endInclusive, wide.endInclusive, 0.01f)
@@ -119,7 +119,7 @@ class RowHeightTest {
     fun `turning icons off widens the range rather than moving the stored height`() {
         // The clamp is on read, so the switch must not silently rewrite anything: a height legal with icons on stays
         // legal with them off, and one the guardrails had clamped *up* is released rather than pinned.
-        val chunky = metrics.copy(minIconDp = 72.dp, maxIconDp = 140.dp)
+        val chunky = metrics.copy(minIconDp = 72.dp, maxIconDp = 120.dp)
 
         assertEquals(88f, fitRowHeightDp(56f, chunky, labelHeight), 0.01f)
         assertEquals(56f, fitRowHeightDp(56f, chunky.copy(showIcon = false), labelHeight), 0.01f)
@@ -131,7 +131,7 @@ class RowHeightTest {
         // own `IconSizing` implies, or the first frame would show a height nobody chose.
         val range = rowHeightRangeDp(metrics, labelHeight)
 
-        assertTrue("56dp must be offerable at 28–72dp icons", 56f in range)
+        assertTrue("56dp must be offerable at 24–48dp icons", 56f in range)
         assertEquals(56f, fitRowHeightDp(56f, metrics, labelHeight), 0.01f)
     }
 }
