@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -68,10 +69,11 @@ private val DotPattern = floatArrayOf(2f, 6f)
  *   monochrome and reserves red for `error`, so the cell is a **solid** outline, the upper guardrail **dashed** and the
  *   lower **dotted**, with the caption naming them. The same rule that made the grid editor's add/remove buttons sit on
  *   the edge they affect rather than being told apart by colour.
- * - **No wallpaper behind it.** L1's preview punched through to the live wallpaper (`BlendMode.Src` over a transparent
- *   window, with the whole pane composited into an offscreen layer, overscroll disabled because a stretch re-composites
- *   and breaks the punch). That needs `data:wallpaper`, which does not exist yet — so this draws on the settings surface,
- *   and the punch comes back with S5. It is the one piece of L1's preview genuinely blocked rather than reshaped.
+ * - **The wallpaper behind it is L1's own trick, and it is back.** The cell box composites with `BlendMode.Src`, so
+ *   wherever it draws nothing it *clears* the pane instead of covering it; the pane is an offscreen layer over a window
+ *   that shows the wallpaper (`PunchThroughPane` in `SettingsScreen`, and `windowShowWallpaper` in `app`'s theme), so
+ *   what is revealed is the real wallpaper. It is worth the machinery for the reason L1 gave: an icon is judged against
+ *   what it will sit on, and a grey panel is not that.
  *
  * @param app the sample to draw, or null while the app cache is still loading — the preview then shows its outlines
  *   alone, which is still the useful half (the sizes are what is being edited).
@@ -116,10 +118,18 @@ internal fun IconSizingPreview(
             }
         }
 
+        // **The punch.** `BlendMode.Src` makes this layer *replace* the pixels under it rather than blend with them,
+        // so everywhere the cell and its outlines do not draw, the pane's own background is cleared to transparent —
+        // and since the pane is an offscreen layer over a window that shows the wallpaper, what shows through is the
+        // wallpaper. The title row and the caption sit outside this box, so they are unaffected.
+        //
+        // Only the cell is inside it, which is also why the box is the right level: a punch around the whole preview
+        // would clear the label and the legend too.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(if (asRow) cellHeight + PreviewPadding * 2 else previewBoxHeight(cellHeight))
+                .graphicsLayer { blendMode = BlendMode.Src }
                 .padding(vertical = PreviewPadding),
             contentAlignment = Alignment.Center,
         ) {
