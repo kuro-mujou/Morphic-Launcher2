@@ -21,11 +21,12 @@ import kotlin.math.floor
  * on the icon size, neither of which a `core:model` constant can know. This is where that question is answered, which
  * is why it lives here rather than beside the blueprint.
  *
- * Ported from L1's `CellFit`, whose arithmetic is sound. Two things changed:
+ * Ported from L1's `CellFit`. Two things changed:
  *
- * **One definition of "the smallest usable cell", not two.** L1 had `scrollingMaxColumns` compute it as
- * `minIcon / iconPercent + cellPadding` — correct — while `gridMaxima` used the raw `minIconDp` as the whole cell,
- * which treats the cell as if the icon filled it and so over-counts how many columns fit. Both are here as one
+ * **One definition of "the smallest usable cell", not two — and neither of L1's.** L1's `gridMaxima` (behind its home
+ * editor) used the raw `minIconDp` as the whole cell, forgetting that a cell insets its icon; `scrollingMaxColumns`
+ * divided that guardrail by `iconPercent`, which is a different question entirely and answers it backwards — see
+ * [minCellWidthDp], which is L1's home formula with the padding it was missing. Both axes are here as one
  * [minCellWidthDp] / [minCellHeightDp] pair.
  *
  * **The padding comes from the cell, not from a copy of it.** L1 declared `CELL_PADDING_DP = 8f` beside the fitting
@@ -34,7 +35,9 @@ import kotlin.math.floor
  *
  * **The same answer serves two questions.** [editableRangeIn] bounds what a settings screen may *offer*;
  * [fitGridConfig] applies the identical bound to a value that was stored earlier, under conditions that may since
- * have changed. One formula, so a grid can never be offered a size it would not then be drawn at.
+ * have changed ([fitCols] being that clamp for a grid whose rows scroll and so has only the one axis to fit). One
+ * formula, so a grid can never be offered a size it would not then be drawn at — nor drawn at a size its own editor
+ * would refuse.
  *
  * **Both directions of the same cell.** [minCellHeightDp] bounds a *count* (how many rows an area can hold);
  * [cellHeightDp] sizes a *cell* (how tall one of a known width must be). A grid whose rows are fixed needs the first,
@@ -58,32 +61,44 @@ data class GridArea(val widthDp: Float, val heightDp: Float)
 data class GridBounds(val maxCols: Int, val maxRows: Int?)
 
 /**
- * The narrowest cell that still renders its icon at full size, in dp.
+ * The narrowest cell whose icon still **fits**, in dp — the icon's own floor, plus the cell's horizontal padding.
  *
- * The inverse of `IconLabelCell` + `IconMetrics.resolveIconSize`: the icon is [IconMetrics.iconPercent] of the smaller
- * *inner* bound, so a cell narrower than `minIcon / iconPercent` plus its horizontal padding would have the icon
- * clamped up to its minimum and overflow. `minOf` on the guardrails mirrors `resolveIconSize`, which is order-safe.
+ * The inverse of `IconLabelCell` + `IconMetrics.resolveIconSize`, and the whole of it is which clamp actually binds:
+ * `resolveIconSize` coerces the percent-derived size **up** to [IconMetrics.minIconDp], so an icon is never drawn
+ * smaller than that guardrail whatever the percent says. A cell therefore overflows exactly when `minIconDp` exceeds
+ * its inner width, which makes `minIconDp + padding` the floor. `minOf` on the guardrails mirrors `resolveIconSize`,
+ * which is order-safe.
+ *
+ * **[IconMetrics.iconPercent] is deliberately absent, and that is the correction.** The percent scales the icon
+ * *within* the guardrails; it cannot make a cell unusable. An earlier cut divided by it — asking instead "how wide must
+ * a cell be for the percent to be honoured un-clamped" — which coupled the two the wrong way round: at 30% a 28dp
+ * guardrail demanded a 101dp column, so *shrinking* the icons reported that **fewer** columns fit. Nothing was
+ * overflowing there; the icon was simply clamped up to its floor and drew at a larger fraction of the cell than asked.
+ *
+ * **L1 had both formulas and neither was right**, which is why the port picked wrongly the first time.
+ * `scrollingMaxColumns` divided by the percent as above; `gridMaxima` — the one behind its *home* editor, and the closer
+ * of the two — used the raw `minIconDp` as the entire cell, correctly ignoring the percent but forgetting that a cell
+ * insets its icon. This is the honest version of L1's home formula: its guardrail, plus the padding the cell really
+ * applies.
  */
-fun minCellWidthDp(metrics: IconMetrics): Float {
-    val percent = metrics.iconPercent.coerceAtLeast(MIN_ICON_PERCENT)
-    val minIcon = minOf(metrics.minIconDp.value, metrics.maxIconDp.value)
-    return minIcon / percent + CellPadH.value * 2
-}
+fun minCellWidthDp(metrics: IconMetrics): Float =
+    minOf(metrics.minIconDp.value, metrics.maxIconDp.value) + CellPadH.value * 2
 
 /**
- * The shortest cell that still renders its icon at full size, in dp.
+ * The shortest cell whose icon still fits, in dp.
  *
  * Same inverse on the other axis, plus the label row when one is shown — `IconLabelCell` sizes the icon against the
- * cell *minus* the label and the gap above it, so both must be added back here.
+ * cell *minus* the label and the gap above it, so both must be added back here. So the row axis is moved by the label
+ * controls (shown at all, and at what scale) as well as by the guardrail, which is L1's home formula again
+ * (`iconDp + labelRowDp * labelScale`).
  *
  * @param labelHeightDp the label row's height, or 0 when [IconMetrics.showLabel] is false. From `cellLabelHeight`,
  *   which needs a type scale — hence the parameter rather than a second constant.
  */
 fun minCellHeightDp(metrics: IconMetrics, labelHeightDp: Float): Float {
-    val percent = metrics.iconPercent.coerceAtLeast(MIN_ICON_PERCENT)
     val minIcon = minOf(metrics.minIconDp.value, metrics.maxIconDp.value)
     val label = if (metrics.showLabel) labelHeightDp + LabelGap.value else 0f
-    return minIcon / percent + CellPadV.value * 2 + label
+    return minIcon + CellPadV.value * 2 + label
 }
 
 /**
@@ -156,10 +171,40 @@ fun GridBlueprint.editableRangeIn(
     val range = editRange ?: return null
     val bounds = boundsIn(area, metrics, labelHeightDp)
     return GridEditableRange(
-        cols = range.minCols..maxOf(bounds.maxCols, range.minCols),
+        cols = colRangeIn(area.widthDp, metrics),
         rows = range.minRows?.let { min -> bounds.maxRows?.let { max -> min..maxOf(max, min) } },
     )
 }
+
+/**
+ * The column counts this grid may legally have in an area [areaWidthDp] wide — its blueprint's floor, up to what fits.
+ *
+ * Private because it is not a second answer, it is the *one* answer both public column questions are asked through:
+ * [editableRangeIn] offers it to an editor and [fitCols] coerces a stored value into it. Keeping "the ceiling is never
+ * below the floor" in one place is the whole reason it exists — that clamp read the same in two functions is one
+ * refactor away from reading differently.
+ *
+ * A blueprint with no editor has no stated minimum, so the floor is one column: a grid with no cells is not a grid.
+ */
+private fun GridBlueprint.colRangeIn(areaWidthDp: Float, metrics: IconMetrics): IntRange {
+    val minCols = editRange?.minCols ?: 1
+    return minCols..maxOf(maxCells(areaWidthDp, minCellWidthDp(metrics)), minCols)
+}
+
+/**
+ * **The column count a stored size actually produces across [areaWidthDp]** — [fitGridConfig] for a grid that scrolls.
+ *
+ * The same read-side clamp, on the one axis a [GridSizing.SCROLL_GRID] has: its rows are however many its content
+ * reaches, so there is nothing to bound there, and a `GridConfig` (which requires a row count) is the wrong shape to
+ * answer in. Hence a bare `Int` and, unlike its sibling, **no label height** — a label sits under an icon and so cannot
+ * change how many columns fit. That absence is also why this needs no `@Composable` facade.
+ *
+ * **Clamped, never written back**, exactly as [fitGridConfig] is: a count too wide for today's icons draws narrower and
+ * returns when the icons shrink. The consumers are a scrolling surface deciding what to draw and the settings section
+ * showing what it drew — one formula, so the editor cannot claim a column the grid does not have.
+ */
+fun GridBlueprint.fitCols(areaWidthDp: Float, cols: Int, metrics: IconMetrics): Int =
+    cols.coerceIn(colRangeIn(areaWidthDp, metrics))
 
 /**
  * What an editor may offer per axis.
@@ -269,11 +314,3 @@ fun GridBlueprint.fitGridConfig(area: GridArea, cols: Int, rows: Int, metrics: I
         fitGridConfig(area, cols, rows, metrics, labelHeightDp)
     }
 }
-
-/**
- * Floor on the icon fraction used when inverting a cell.
- *
- * Guards the division only. `IconSizingRanges.IconPercent` already floors what a user can choose well above this; this
- * is for a value arriving from anywhere else, where dividing by zero would report an unbounded grid.
- */
-private const val MIN_ICON_PERCENT = 0.05f

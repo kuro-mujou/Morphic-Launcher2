@@ -1,6 +1,7 @@
 package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.DockGrid
@@ -23,10 +24,44 @@ class CellFitTest {
     private val metrics = IconMetrics(iconPercent = 0.5f, minIconDp = 24.dp, maxIconDp = 72.dp, showLabel = false)
     private val labelHeight = 16f
 
+    /**
+     * The same fixture with a guardrail big enough that a phone width genuinely runs out of columns — 96dp cells
+     * against [metrics]' 32dp ones.
+     *
+     * The clamping cases need it because only the **guardrail** narrows a grid: raising `iconPercent` cannot, which is
+     * the point of `the icon fraction does not change how many cells fit`.
+     *
+     * Both bounds are raised, not just the lower one: the floor is read `minOf(min, max)` to stay order-safe, so a
+     * `minIconDp` pushed past the inherited `maxIconDp` would quietly be ignored — which is what the first draft of this
+     * fixture did.
+     */
+    private val chunky = metrics.copy(minIconDp = 88.dp, maxIconDp = 140.dp)
+
     @Test
-    fun `a cell is the icon divided by its fraction, plus the cell's own padding`() {
-        // The inverse of `IconLabelCell`: 24dp icon at 50% needs 48dp of inner width, plus CellPadH on both sides (4+4).
-        assertEquals(56f, minCellWidthDp(metrics), 0.01f)
+    fun `the smallest cell is the icon's floor plus the cell's own padding`() {
+        // `resolveIconSize` clamps *up* to minIconDp, so a 24dp guardrail needs 24dp of inner width — plus CellPadH on
+        // both sides (4+4). Nothing else can make the icon smaller, so nothing else belongs in the floor.
+        assertEquals(32f, minCellWidthDp(metrics), 0.01f)
+        // Which is to say: the smallest cell's inner width is exactly the guardrail, so an icon clamped to its floor
+        // fits it exactly rather than overflowing.
+        assertEquals(metrics.minIconDp.value, minCellWidthDp(metrics) - CellPadH.value * 2, 0.01f)
+    }
+
+    @Test
+    fun `the icon fraction does not change how many cells fit`() {
+        // **The property the whole file turns on.** `iconPercent` scales the icon *within* the guardrails — an icon
+        // asked for 30% of a cell too small to honour that is drawn at minIconDp, which fits by construction. So the
+        // percent cannot make a cell unusable, and it must not move a grid's bounds.
+        //
+        // Getting this wrong is not academic: the earlier `minIcon / percent` floor made a 28dp guardrail at 30% demand
+        // a 101dp column, so *shrinking* the icons reported fewer columns and the icon controls appeared to resize the
+        // grid. L1's own home formula (`gridMaxima`) left the percent out for this reason.
+        val area = GridArea(360f, 800f)
+        listOf(0.3f, 0.5f, 0.88f, 1f).forEach { percent ->
+            val bounds = HomePagerGrid.boundsIn(area, metrics.copy(iconPercent = percent), labelHeight)
+            assertEquals("$percent changed the column cap", 11, bounds.maxCols)
+            assertEquals("$percent changed the row cap", 25, bounds.maxRows)
+        }
     }
 
     @Test
@@ -91,7 +126,7 @@ class CellFitTest {
     fun `a scrolling grid is bounded across but not down`() {
         val bounds = AppsScrollGrid.boundsIn(GridArea(360f, 800f), metrics, labelHeight)
 
-        assertEquals(6, bounds.maxCols)
+        assertEquals(11, bounds.maxCols)
         assertNull("rows scroll, so the area cannot bound them", bounds.maxRows)
     }
 
@@ -99,8 +134,9 @@ class CellFitTest {
     fun `a paged grid is bounded on both axes`() {
         val bounds = HomePagerGrid.boundsIn(GridArea(360f, 800f), metrics, labelHeight)
 
-        assertEquals(6, bounds.maxCols)
-        assertEquals(14, bounds.maxRows)
+        // 32dp cells (a 24dp guardrail plus 4dp padding a side), and no label row to add on this fixture.
+        assertEquals(11, bounds.maxCols)
+        assertEquals(25, bounds.maxRows)
     }
 
     @Test
@@ -136,7 +172,7 @@ class CellFitTest {
 
         assertNotNull(range)
         assertEquals(HomePagerGrid.editRange!!.minCols, range!!.cols.first)
-        assertEquals(6, range.cols.last)
+        assertEquals(11, range.cols.last)
         assertEquals(HomePagerGrid.editRange!!.minRows, range.rows!!.first)
     }
 
@@ -162,7 +198,7 @@ class CellFitTest {
 
     @Test
     fun `a stored size that fits passes through, in logical units`() {
-        // A 56dp minimum cell (24dp icon at 50%, plus 4dp padding a side): six columns fit 360dp and one row fits
+        // A 32dp minimum cell (a 24dp guardrail plus 4dp padding a side): eleven columns fit 360dp and three rows fit
         // 96dp, so a stored 4 × 1 is untouched.
         val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
 
@@ -176,11 +212,11 @@ class CellFitTest {
 
     @Test
     fun `a height too short for the stored rows shows fewer of them`() {
-        // The dock's rule: a cell is `height ÷ rows`, so 96dp cannot carry two 56dp rows however many are stored.
+        // The dock's rule: a cell is `height ÷ rows`, so 40dp cannot carry two 32dp rows however many are stored.
         // The *write* that makes this permanent is the dock screen's on commit; this is the read that keeps the
         // drawn grid honest in the meantime.
-        val short = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
-        val tall = DockGrid.fitGridConfig(GridArea(360f, 140f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
+        val short = DockGrid.fitGridConfig(GridArea(360f, 40f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
+        val tall = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
 
         assertEquals(1, short.visualRows)
         assertEquals(2, tall.visualRows)
@@ -190,10 +226,10 @@ class CellFitTest {
     fun `a column count past what fits is clamped, and a wider area gives it back`() {
         // The property that lets the column clamp stay a *read*: nothing is written, so the count the user chose
         // returns the moment there is room for it. L1 wrote every clamp back, and the preference was gone for good.
-        val narrow = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
-        val wide = DockGrid.fitGridConfig(GridArea(720f, 96f), cols = 9, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
+        val narrow = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
+        val wide = DockGrid.fitGridConfig(GridArea(1080f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
 
-        assertEquals("360dp fits six 56dp cells, not nine", 6, narrow.visualCols)
+        assertEquals("360dp fits three 96dp cells, not nine", 3, narrow.visualCols)
         assertEquals(9, wide.visualCols)
     }
 
@@ -212,6 +248,49 @@ class CellFitTest {
 
         assertEquals(DockGrid.editRange!!.minCols, config.visualCols)
         assertEquals(DockGrid.editRange!!.minRows, config.visualRows)
+    }
+
+    @Test
+    fun `a scrolling grid's columns are fitted on their own, with no rows to answer for`() {
+        // The axis a SCROLL_GRID does have, clamped the same way `fitGridConfig` clamps its sibling's: 360dp carries
+        // three 96dp cells, so a stored three passes through and a stored nine draws three.
+        assertEquals(3, AppsScrollGrid.fitCols(areaWidthDp = 360f, cols = 3, metrics = chunky))
+        assertEquals(3, AppsScrollGrid.fitCols(areaWidthDp = 360f, cols = 9, metrics = chunky))
+        // And nothing is written, so the count returns the moment there is room — the same property that lets the
+        // clamp stay a read.
+        assertEquals(9, AppsScrollGrid.fitCols(areaWidthDp = 1080f, cols = 9, metrics = chunky))
+    }
+
+    @Test
+    fun `a scrolling grid's column fit respects its floor and never reports zero`() {
+        // Its blueprint's minimum wins on an area too narrow to honour it, exactly as the editable range's floor does —
+        // and a grid with no editor at all still gets one column rather than none.
+        assertEquals(AppsScrollGrid.editRange!!.minCols, AppsScrollGrid.fitCols(30f, cols = 4, metrics = metrics))
+        assertEquals(AppsScrollGrid.editRange!!.minCols, AppsScrollGrid.fitCols(360f, cols = 0, metrics = metrics))
+        assertEquals(1, FolderGrid.fitCols(0f, cols = 0, metrics = metrics))
+    }
+
+    @Test
+    fun `the column fit and the editable range agree, because they are one formula`() {
+        // The invariant worth a test rather than a comment: an editor must never offer a column the grid would then
+        // clamp away, and a grid must never draw one the editor would refuse.
+        listOf(120f, 360f, 480f, 1024f).forEach { width ->
+            val range = AppsScrollGrid.editableRangeIn(GridArea(width, 800f), metrics, labelHeight)!!.cols
+            assertEquals(range.last, AppsScrollGrid.fitCols(width, cols = 99, metrics = metrics))
+            assertEquals(range.first, AppsScrollGrid.fitCols(width, cols = 0, metrics = metrics))
+        }
+    }
+
+    @Test
+    fun `bigger icons mean fewer columns drawn, not just fewer offered`() {
+        // The user-visible half of "bigger icons mean fewer columns": raising the **guardrail** has to move what a
+        // stored count resolves to, or a settings screen showing the stored number would contradict the surface. It is
+        // the guardrail rather than the fraction, which is the distinction the fixture above exists for.
+        val small = AppsScrollGrid.fitCols(360f, cols = 9, metrics = metrics.copy(minIconDp = 24.dp))
+        val large = AppsScrollGrid.fitCols(360f, cols = 9, metrics = metrics.copy(minIconDp = 48.dp))
+
+        assertEquals(9, small)
+        assertTrue("48dp icons should draw fewer than the nine stored columns (got $large)", large < small)
     }
 
     @Test(expected = IllegalArgumentException::class)
