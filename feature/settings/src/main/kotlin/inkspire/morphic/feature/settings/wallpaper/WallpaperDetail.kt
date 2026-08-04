@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.data.wallpaper.WallpaperTarget
 import org.koin.androidx.compose.koinViewModel
 
@@ -60,11 +61,14 @@ private val PreviewCorner = 16.dp
  * decoration over a single action. One `MorphicButton` opening the same three-item menu is what it actually did, and it
  * keeps the section on the design system's own button rather than on an M3 control that would need its own restyle.
  *
- * **What is deliberately absent**, each waiting on its own slice rather than missing: the **crop screen** (S5c — until
- * it lands, picking centre-crops, which is what the repository says it does), **capture** (S5e) and the **rotating
- * live wallpaper** (S5f). L1's tab also carried three browse rows — "My wallpapers", "Backdrops (By Unsplash)" and
- * installed live wallpapers — of which the first two are empty-state hints for a source that does not exist. An empty
- * shelf is not a feature; they arrive when something fills them.
+ * **Choosing an image opens [WallpaperCropScreen]**, which is where the writing happens — so this section reads the
+ * store and issues one command (apply), and the picked-but-unsaved image never touches it. L1's picker pushed its crop
+ * screen the same way.
+ *
+ * **What is deliberately absent**, each waiting on its own slice rather than missing: **capture** (S5e) and the
+ * **rotating live wallpaper** (S5f). L1's tab also carried three browse rows — "My wallpapers", "Backdrops (By
+ * Unsplash)" and installed live wallpapers — of which the first two are empty-state hints for a source that does not
+ * exist. An empty shelf is not a feature; they arrive when something fills them.
  */
 @Composable
 internal fun WallpaperDetail(modifier: Modifier = Modifier) {
@@ -72,9 +76,9 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = LocalMorphicColors.current
 
-    // The **whole** window, insets included: a wallpaper sits under the system bars, so the image has to cover them.
-    // Every other section measures the *usable* area instead, and the difference is exactly that — those size things
-    // the user reaches, this sizes something they only look at.
+    // The **whole** window, insets included: a wallpaper sits under the system bars, so the preview is the shape of
+    // what will actually be covered. Every other section measures the *usable* area instead, and the difference is
+    // exactly that — those size things the user reaches, this sizes something they only look at.
     val windowSize = LocalWindowInfo.current.containerSize
     val screenRatio = if (windowSize.height > 0) {
         windowSize.width.toFloat() / windowSize.height.toFloat()
@@ -82,8 +86,12 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
         DEFAULT_SCREEN_RATIO
     }
 
+    // A pick opens the **crop screen** rather than writing: the user frames the image there, and that screen saves.
+    // L1's picker did the same, and it is why nothing here passes a size — the viewport the user frames against is
+    // what gets stored.
+    val navigator = LocalNavigator.current
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) viewModel.chooseImage(uri, windowSize.width, windowSize.height)
+        if (uri != null) navigator.goTo(WallpaperCropRoute(uri.toString()))
     }
     // Photo Picker rather than a document-open intent: it needs no storage permission and it is what L1 moved to.
     val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }

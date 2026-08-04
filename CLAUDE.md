@@ -256,11 +256,12 @@ to persist path pointers"): a path to a file we wrote and the id the system gave
 S0 had already refused that on the way in. The **effect params** (`BackdropEffect`) are the genuinely preference-shaped
 half and stay in `data:settings`. State is **two fields where L1 had six** — L1's juggled two image sets and a snapshot
 copy of whichever was applied, both of which exist *for* the frosted backdrop; `appliedSystemId` is an id rather than a
-boolean because it also detects a wallpaper set outside the launcher. Built: pick from a `Uri`, sample-decode,
-centre-crop and scale to the screen, and apply to HOME / LOCK / BOTH. Deliberately absent, each for a reason rather than
-as an omission: the **crop screen** (next), the **capture** source and the **blur/dominant colour** (both are effect
-inputs, so they wait on the effects), and **rotate** with its live-wallpaper service (a feature beside this one, not a
-step in it). One L1 bug not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an
+boolean because it also detects a wallpaper set outside the launcher. Built: pick from a `Uri`, sample-decode, **frame it on the crop
+screen**, scale to the screen and apply to HOME / LOCK / BOTH. Nothing invents a crop any more — `setImage` takes a
+`NormalizedCropRect` and the screen passes the region the user framed, against the viewport it also passes as the size
+to store at, so the rectangle and the result share one coordinate space. Deliberately absent, each for a reason rather
+than as an omission: the **capture** source and the **blur/dominant colour** (both are effect inputs, so they wait on
+the effects), and **rotate** with its live-wallpaper service (a feature beside this one, not a step in it). One L1 bug not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an
 image while an apply was finishing could lose one of them.
 - **An item's touch target is its visible extent, never its cell.** A cell is a *layout* footprint, usually much
   bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon + label). `LauncherDragCell`
@@ -712,7 +713,9 @@ section actually is — not grid sizing, which L1 never kept there either.
 named groups, Personalization and Layout, as L1 had it. It is a thin vertical over `data:wallpaper`: a screen-shaped
 preview (the stored file is already cropped to the screen, so any other ratio would show a crop the device never
 displays — and it measures the **whole** window, insets included, since a wallpaper sits under the bars), "Choose
-image" via `PickVisualMedia`, and one button opening L1's home/lock/both menu. **One button where L1 drew a
+image" via `PickVisualMedia` — which opens the **crop screen**, `feature:settings`' own `NavKey` mapped by `app`
+(a destination rather than a pane, because back out of it means "not that image") — and one button opening L1's
+home/lock/both menu. **One button where L1 drew a
 `SplitButtonLayout`**: both halves of that ran `expanded = true`, so the split was decoration over a single action —
 applying always asks *where*. The `busy` flag is L2's own rather than a port, because L1's picker went to its crop
 screen and the work happened behind that.

@@ -485,8 +485,23 @@ every phase ends with something visibly working on device, and no slice is writt
       is the crop screen's job; with no crop screen a pick writes immediately and the preview comes from `loadImage`.
       L1's three browse rows ("My wallpapers", "Backdrops (By Unsplash)", installed live wallpapers) are also absent —
       the first two are empty-state hints for a source that does not exist, and the third is S5f.
-  - [ ] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
-        stops centre-cropping. Separate because L1 keeps it a separate screen too.
+  - [x] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
+        stops centre-cropping — the stand-in that slice's KDoc called a stand-in is now gone, and nothing in the module
+        invents a rectangle. Separate because L1 keeps it a separate screen too, and it is the **first destination a
+        feature module declares** (`WallpaperCropRoute` in `feature:settings`, mapped by `app`) — the pattern
+        `LauncherRoute`'s KDoc blesses and L1 got wrong by putting every route in its navigation module.
+    - **A destination, where a section is a pane.** Full-screen, transient, and back out of it means "not that image"
+        rather than "close this detail" — which is what a back-stack entry is for, and what the sections are not.
+    - **The viewport is the output.** The screen frames against the whole window (a wallpaper sits under the bars) and
+        passes that same size as the size to store at, so the rectangle and the result share one coordinate space.
+    - L1's arithmetic is kept exactly: the cover scale as both the starting scale and the pinch floor, the
+        centroid-anchored zoom, and the offset clamp. Together they make the image impossible to frame badly — no gap,
+        and no crop outside the picture — which is worth more than any chrome a crop screen could grow.
+    - `decodePreview` is finally read, which is what it was built for; `cropAndScale` replaces `centreCropTo` and
+        clamps each edge against the opposite one, so a rectangle a rounding error out of range yields a small crop
+        rather than an exception out of `Bitmap.createBitmap`.
+    - **Not carried:** L1's `forRotate`/`landscape` pair, which pinned the activity's orientation while framing the
+        second image of a rotating wallpaper. That is S5f's, and it arrives with the feature that needs a second image.
   - [ ] **S5d — effects, and the two things waiting on them.** `BackdropEffect` + params as a **settings** slice,
         `Blur.kt` ported to sit beside the graphics code (per the section below), and then the folder's frosted backdrop
         and the icon preview's wallpaper punch-through. **The shell's `darkTheme` lands here too**, and it is worth

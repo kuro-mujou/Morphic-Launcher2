@@ -27,6 +27,30 @@ data class WallpaperImage(
 enum class WallpaperTarget { HOME, LOCK, BOTH }
 
 /**
+ * The region of a source image to keep, as fractions of it — L1's `NormalizedCropRect`, kept name and all.
+ *
+ * **Fractions rather than pixels, because the crop is decided against a bitmap this module chose the size of.** The
+ * screen shows a *sampled* decode (a 50-megapixel photo is not going on screen at full size), so a rectangle in that
+ * bitmap's pixels would be meaningless against the source — and doubly so if the sampling ever changes. Fractions
+ * survive both: they describe the picture rather than the decode.
+ *
+ * The whole image is `0f..1f` on both axes, which is also what [Full] means and what a caller with nothing to say
+ * should pass.
+ */
+@Serializable
+data class NormalizedCropRect(
+    val left: Float = 0f,
+    val top: Float = 0f,
+    val right: Float = 1f,
+    val bottom: Float = 1f,
+) {
+    companion object {
+        /** Keep everything. The identity crop, for a caller that has not framed one. */
+        val Full = NormalizedCropRect()
+    }
+}
+
+/**
  * What this module knows about the wallpaper — **the chosen image, and whether we are the one that set it**.
  *
  * **Much smaller than L1's `WallpaperState`, and deliberately so.** That one carried six fields (`appliedMode`,
@@ -93,17 +117,25 @@ interface WallpaperRepository {
     suspend fun decodePreview(uri: Uri): Bitmap?
 
     /**
-     * Copies [uri] into this module's own storage as the wallpaper image, **centre-cropped** to
-     * [screenWidth] × [screenHeight] and scaled to it.
+     * Copies [uri] into this module's own storage as the wallpaper image: the [crop] region of it, scaled to
+     * [outWidth] × [outHeight].
      *
-     * Centre-cropped because nothing chooses a region yet: the crop *screen* is the next slice, and it will pass the
-     * rectangle the user dragged rather than have this invent one. Cropping to the screen at all (rather than storing
-     * the original) is what makes the stored file the thing that is displayed — the same reason L1 scaled on the way in.
+     * **The rectangle is the caller's**, which is the change S5c made. This used to centre-crop, as a stand-in for a
+     * chooser that did not exist; now the crop screen passes the region the user framed, and there is nothing left
+     * here that invents one. A caller with genuinely nothing to say passes [NormalizedCropRect.Full] — that is not the
+     * old behaviour under a new name, since keeping the whole image *stretches* it to the output rather than filling
+     * it, which is why nothing does that today.
+     *
+     * Storing a cropped, screen-sized file at all (rather than the original) is what makes the stored file the thing
+     * that is displayed — the same reason L1 scaled on the way in.
      *
      * **Does not touch the system wallpaper**; [apply] does. Choosing and applying are separate because the user may
      * pick an image, look at it, and change their mind — and because applying asks *where* (home, lock, both).
+     *
+     * @param outWidth the size to store at, which the crop screen passes as the **viewport it framed against**. That
+     *   is what makes the result what the user saw: the rectangle and the output share one coordinate space.
      */
-    suspend fun setImage(uri: Uri, screenWidth: Int, screenHeight: Int)
+    suspend fun setImage(uri: Uri, crop: NormalizedCropRect, outWidth: Int, outHeight: Int)
 
     /**
      * Sets the stored image as the system wallpaper on [target], and records the id the system gave it.

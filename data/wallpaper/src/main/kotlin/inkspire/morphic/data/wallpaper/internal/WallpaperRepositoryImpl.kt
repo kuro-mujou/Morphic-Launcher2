@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.WallpaperFiles
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
@@ -26,7 +27,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.File
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -71,13 +71,13 @@ internal class WallpaperRepositoryImpl(
         decodeSampled(uri, PREVIEW_CAP)
     }
 
-    override suspend fun setImage(uri: Uri, screenWidth: Int, screenHeight: Int): Unit =
+    override suspend fun setImage(uri: Uri, crop: NormalizedCropRect, outWidth: Int, outHeight: Int): Unit =
         withContext(dispatchers.io) {
             val source = decodeSampled(uri, SOURCE_CAP) ?: run {
                 Timber.w("Unable to decode wallpaper image from %s", uri)
                 return@withContext
             }
-            val scaled = centreCropTo(source, screenWidth, screenHeight)
+            val scaled = cropAndScale(source, crop, outWidth, outHeight)
             val file = writeImage(scaled)
             updateState {
                 // The id is reset, not kept: this is a different image from the one we applied, so the section must
@@ -137,21 +137,26 @@ internal class WallpaperRepositoryImpl(
     }
 
     /**
-     * The centre of [source], at [outWidth] × [outHeight]'s aspect ratio, scaled to that size.
+     * [crop] of [source], scaled to [outWidth] × [outHeight] — L1's `cropAndScale`, arithmetic and all.
      *
-     * The aspect is taken first and the scale second, so nothing is stretched — the same two steps as L1's
-     * `cropAndScale`, with the rectangle chosen here instead of supplied. When the crop screen lands it supplies one and
-     * this becomes the fallback for "the user did not adjust it".
+     * **Every bound is clamped into the source, and each edge against the opposite one**, so a rectangle that arrived
+     * inverted or out of range yields a small crop rather than an `IllegalArgumentException` out of
+     * `Bitmap.createBitmap`. The fractions come from a gesture over a viewport, so "impossible" values are a rounding
+     * error away rather than a caller bug, and this is a settings screen with nothing useful to do with a throw.
+     *
+     * The scale is applied second, and only when it is needed: a crop that already matches the output — the common
+     * case, since the crop screen frames against the very viewport it passes as the output size — is stored as it is.
      */
-    private fun centreCropTo(source: Bitmap, outWidth: Int, outHeight: Int): Bitmap {
+    private fun cropAndScale(source: Bitmap, crop: NormalizedCropRect, outWidth: Int, outHeight: Int): Bitmap {
         val targetW = outWidth.coerceAtLeast(1)
         val targetH = outHeight.coerceAtLeast(1)
-        val scale = min(source.width.toFloat() / targetW, source.height.toFloat() / targetH)
-        val cropW = (targetW * scale).roundToInt().coerceIn(1, source.width)
-        val cropH = (targetH * scale).roundToInt().coerceIn(1, source.height)
-        val left = ((source.width - cropW) / 2).coerceAtLeast(0)
-        val top = ((source.height - cropH) / 2).coerceAtLeast(0)
-        val cropped = Bitmap.createBitmap(source, left, top, cropW, cropH)
+        val sourceW = source.width
+        val sourceH = source.height
+        val left = (crop.left * sourceW).roundToInt().coerceIn(0, sourceW - 1)
+        val top = (crop.top * sourceH).roundToInt().coerceIn(0, sourceH - 1)
+        val right = (crop.right * sourceW).roundToInt().coerceIn(left + 1, sourceW)
+        val bottom = (crop.bottom * sourceH).roundToInt().coerceIn(top + 1, sourceH)
+        val cropped = Bitmap.createBitmap(source, left, top, right - left, bottom - top)
         return if (cropped.width == targetW && cropped.height == targetH) {
             cropped
         } else {

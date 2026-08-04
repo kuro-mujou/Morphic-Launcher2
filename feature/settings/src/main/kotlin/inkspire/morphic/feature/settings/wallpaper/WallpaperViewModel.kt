@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
 import inkspire.morphic.data.wallpaper.WallpaperTarget
@@ -25,9 +26,10 @@ import kotlinx.coroutines.launch
  * @property applied whether *this launcher* set the current system wallpaper — the difference between "Apply" and
  *   "Re-apply". Read from `WallpaperState.appliedSystemId`, which is an id rather than a boolean because the same
  *   field will later detect a wallpaper set outside the launcher.
- * @property busy a write is in flight. **L2's own, not a port**: L1 never needed it because picking an image took the
- *   user to its crop screen, and the work happened behind that. Here the picker returns straight to this section, so
- *   without it a decode-and-scale of a 50-megapixel photo is a second of nothing happening.
+ * @property busy a write is in flight — read by the **crop** screen, whose Save button it disables and relabels while
+ *   a large photo is decoded and scaled, and by the section, whose buttons it disables while an apply runs. L1 had no
+ *   such flag and did not need one for the crop (its screen had a local `saving`), but it also could not tell you that
+ *   an *apply* was still going.
  */
 data class WallpaperSectionState(
     val image: WallpaperImage? = null,
@@ -71,20 +73,40 @@ class WallpaperViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WallpaperSectionState())
 
     /**
-     * Takes [uri] as the wallpaper image, cropped and scaled to a [screenWidthPx] × [screenHeightPx] screen.
+     * [uri] decoded small enough to show, for the crop screen to frame — the read half of choosing an image.
      *
-     * **The screen size comes from the UI**, as the device configuration does on every other surface: it is a window
-     * read, and it is the *whole* window rather than the usable area — a wallpaper sits under the system bars, so
-     * subtracting insets would store an image too small for what it has to cover.
+     * Suspending and returning rather than pushing into [state], because it belongs to the *crop* screen and not to
+     * the section: two screens share this holder, and a picked-but-unsaved image is one screen's business. Null when
+     * the image cannot be read at all, which that screen shows as an empty frame with nothing to save.
+     */
+    suspend fun preview(uri: Uri): Bitmap? = wallpaperRepository.decodePreview(uri)
+
+    /**
+     * Takes [crop] of [uri] as the wallpaper image, stored at [outWidth] × [outHeight].
+     *
+     * **Every argument comes from the crop screen's viewport**, which is the whole window: a wallpaper sits under the
+     * system bars, so framing (and storing) against the usable area would produce an image too small for what it has
+     * to cover. The rectangle and the output size share that one coordinate space, which is what makes the stored
+     * image the thing the user framed.
      *
      * Sets nothing on the system: [apply] does that, and the user may want to look first.
+     *
+     * @param onSaved runs when the image is stored — the crop screen's cue to leave. A continuation rather than a
+     *   navigator: this holder still cannot navigate, which is the property worth keeping (see `Navigator`'s KDoc).
      */
-    fun chooseImage(uri: Uri, screenWidthPx: Int, screenHeightPx: Int) {
+    fun chooseImage(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        onSaved: () -> Unit = {},
+    ) {
         if (busy.value) return
         busy.value = true
         viewModelScope.launch {
             try {
-                wallpaperRepository.setImage(uri, screenWidthPx, screenHeightPx)
+                wallpaperRepository.setImage(uri, crop, outWidth, outHeight)
+                onSaved()
             } finally {
                 busy.value = false
             }

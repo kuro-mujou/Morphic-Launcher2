@@ -24,6 +24,8 @@ import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.SettingsRoute
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.settings.SettingsScreen
+import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
+import inkspire.morphic.feature.settings.wallpaper.WallpaperCropScreen
 import inkspire.morphic.feature.shell.LauncherShell
 import inkspire.morphic.launcher.dev.DevRootScreen
 import kotlinx.serialization.Serializable
@@ -91,6 +93,12 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         // `feature:settings` from ever learning that destination exists.
                         onOpenDevHarness = { navigator.goTo(DevHarnessRoute) },
                     )
+                }
+                // Declared by `feature:settings`, mapped here — which is the whole point of `entryProvider` being a
+                // mapping rather than a registry: a destination that belongs to one feature stays in it, and `app`
+                // only says where it goes.
+                entry<WallpaperCropRoute> { route ->
+                    WallpaperCropScreen(uri = route.uri, onDone = { navigator.goBack() })
                 }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },
