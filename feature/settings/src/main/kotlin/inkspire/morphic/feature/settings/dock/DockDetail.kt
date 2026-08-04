@@ -25,13 +25,13 @@ import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.maxCells
 import inkspire.morphic.core.designsystem.grid.minCellHeightDp
+import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
-import inkspire.morphic.feature.settings.component.usableWindowArea
 import inkspire.morphic.feature.settings.icons.IconSizingControls
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt

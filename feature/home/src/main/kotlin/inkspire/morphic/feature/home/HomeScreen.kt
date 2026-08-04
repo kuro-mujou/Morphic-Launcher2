@@ -24,8 +24,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -52,6 +50,7 @@ import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
+import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
@@ -147,18 +146,13 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // The area the grids are actually given: the window minus the insets the column below pads by. **One value feeds
     // every use**, which is the point — L1 derived its home area from settings in one place (`homeGridArea`) and
     // measured it in another (`pagerBoundsInWindow`), so the size it fitted the grid to and the size it drew into
-    // could disagree. Here they cannot: `safeInsets` is the same expression throughout.
+    // could disagree. Here they cannot: `safeInsets` is the same expression throughout, and the measurement itself is
+    // now the shared `usableWindowArea` that the settings sections and the APPS surface read — so a bound computed for
+    // this screen somewhere else describes the same screen.
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
-    val layoutDirection = LocalLayoutDirection.current
-    val windowSize = LocalWindowInfo.current.containerSize
-    val contentWidthDp = with(density) {
-        val insetPx = safeInsets.getLeft(density, layoutDirection) + safeInsets.getRight(density, layoutDirection)
-        (windowSize.width - insetPx).coerceAtLeast(0).toDp().value
-    }
-    val contentHeightDp = with(density) {
-        val insetPx = safeInsets.getTop(density) + safeInsets.getBottom(density)
-        (windowSize.height - insetPx).coerceAtLeast(0).toDp().value
-    }
+    val window = usableWindowArea(safeInsets)
+    val contentWidthDp = window.widthDp
+    val contentHeightDp = window.heightDp
 
     // The dock is the one grid with a height of its own: the user sets how tall the strip is *and* how many rows and
     // columns divide it, and `fitGridConfig` clamps those counts to what the height and the icon size actually allow.
