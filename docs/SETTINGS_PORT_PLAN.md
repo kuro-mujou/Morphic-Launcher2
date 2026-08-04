@@ -65,7 +65,7 @@ The port is ordered by "no model in a vacuum": build the slice some already-writ
 | waiting consumer | file | what it needs | |
 |---|---|---|---|
 | `LauncherShell(sideSurfaces = emptyMap())` | `feature/shell/LauncherShell.kt` | per-edge binding → **no edge is swipeable today** | ✅ S2 |
-| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal — **L2's own idea, not a port** | todo S5d |
+| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal — **L2's own idea, not a port** | todo S5f |
 | `AppsScreen(layout = VERTICAL_LIST)` | `feature/apps/AppsScreen.kt` | which APPS layout, per binding | ✅ S2 |
 | `DockHeight = 96.dp` | `feature/home/HomeScreen.kt` | dock extent (rows derive **from** it, not the reverse) | ✅ S4c |
 | home padding | — (deliberately absent) | horizontal padding, added *with* the setting | todo S4g |
@@ -229,7 +229,7 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
     settings blob. They did not: S0 had already ruled that L1's applied-snapshot and dirty flags are bookkeeping rather
     than preferences, and a module that owns the files may as well own the pointers to them — so `data:wallpaper` has its
     own one-key DataStore and no settings dependency at all. The **effect params** are the part that is genuinely a
-    preference, and they stay in `data:settings` (S5d).
+    preference, and they stay in `data:settings` (S5f).
 - **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-colour extraction. Pure image processing;
   belongs beside the graphics/icon code, in neither repository's module.
 
@@ -484,7 +484,7 @@ every phase ends with something visibly working on device, and no slice is writt
     - **`decodePreview` stays unused until S5c.** It exists to show a picked image *before* anything is written, which
       is the crop screen's job; with no crop screen a pick writes immediately and the preview comes from `loadImage`.
       L1's three browse rows ("My wallpapers", "Backdrops (By Unsplash)", installed live wallpapers) are also absent —
-      the first two are empty-state hints for a source that does not exist, and the third is S5f.
+      the first two are empty-state hints for a source that does not exist, and the third is S5e.
   - [x] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
         stops centre-cropping — the stand-in that slice's KDoc called a stand-in is now gone, and nothing in the module
         invents a rectangle. Separate because L1 keeps it a separate screen too, and it is the **first destination a
@@ -501,18 +501,30 @@ every phase ends with something visibly working on device, and no slice is writt
         clamps each edge against the opposite one, so a rectangle a rounding error out of range yields a small crop
         rather than an exception out of `Bitmap.createBitmap`.
     - **Not carried:** L1's `forRotate`/`landscape` pair, which pinned the activity's orientation while framing the
-        second image of a rotating wallpaper. That is S5f's, and it arrives with the feature that needs a second image.
-  - [ ] **S5d — effects, and the two things waiting on them.** `BackdropEffect` + params as a **settings** slice,
+        second image of a rotating wallpaper. That is S5e's, and it arrives with the feature that needs a second image.
+  > **Reordered after S5c: every *source* lands before the effects that read them.** The three slices below were
+  > sequenced effects-first, on the grounds that capture has no other consumer. That reads the dependency the wrong way
+  > round for the work that matters: an effect has to answer "which image do I sample?", and L1 answers it with an
+  > `effectRef` that switches on *which source is applied*. Designing that against one source and then adding two more
+  > means re-answering it twice, in the slice with the most surface area. Sources first means the effect params are
+  > shaped once, against the set they will actually serve.
+  >
+  > The cost is stated rather than hidden: **capture lands before anything reads it**, which is the one place this plan
+  > builds a producer ahead of its consumer. That is a deliberate exception to "no model in a vacuum", taken because
+  > the alternative is worse, and it is bounded — a capture is visible in the section's preview the moment it is taken.
+
+  - [ ] **S5d — capture.** L1's effect-only source: a screenshot taken with the launcher's own UI hidden, which never
+        becomes the system wallpaper. (Was S5e.)
+  - [ ] **S5e — rotate, and the live wallpaper.** L1's per-orientation pair rendered by its own `RotateWallpaperService`
+        (a service, a manifest entry and XML metadata), plus its browser of *installed* live wallpapers. The largest
+        piece, and the one that makes "the wallpaper" stop being a single image — which is exactly why the effects
+        should see it before they are designed. (Was S5f.)
+  - [ ] **S5f — effects, and the three things waiting on them.** `BackdropEffect` + params as a **settings** slice,
         `Blur.kt` ported to sit beside the graphics code (per the section below), and then the folder's frosted backdrop
         and the icon preview's wallpaper punch-through. **The shell's `darkTheme` lands here too**, and it is worth
         knowing that it is *not* a port: L1 has no wallpaper-brightness signal anywhere: the luminance analysis is L2's
         own idea, and it needs the dominant-colour half of `Blur.kt`, which is why it belongs in this slice rather than
-        an earlier one.
-  - [ ] **S5e — capture.** L1's effect-only source: a screenshot taken with the launcher's own UI hidden, which never
-        becomes the system wallpaper. Pointless before S5d, since the effects are the only thing that reads it.
-  - [ ] **S5f — rotate, and the live wallpaper.** L1's per-orientation pair rendered by its own `RotateWallpaperService`
-        (a service, a manifest entry and XML metadata), plus its browser of *installed* live wallpapers. The largest
-        piece and independent of every slice above.
+        an earlier one. Last, now, rather than fourth — see the note above. (Was S5d.)
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
       feature to exist first), presets.
 - [ ] **P8 exit criteria** — every placeholder constant in the table above is either settings-driven or has a written

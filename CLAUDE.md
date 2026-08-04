@@ -247,7 +247,7 @@ from the baked stack).
   surfaces, and `FrostedTextField` are a **deferred launcher-UI subsystem**; settings needs none of it.
   - **That brightness signal is L2's own idea, not a port** — worth knowing before looking for it in L1, which has no
     luminance analysis anywhere and themes from the system's dark mode. So it has to be *designed*, and it waits on the
-    dominant-colour half of L1's `Blur.kt` (S5d); `data:wallpaper` now stores the image it will read.
+    dominant-colour half of L1's `Blur.kt` (S5f); `data:wallpaper` now stores the image it will read.
 
 **Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it, and a section that drives it.** Its own module rather than a slice of
 `data:settings`, because it decodes bitmaps, writes files and calls `WallpaperManager` — a *service*, where settings is a
@@ -672,9 +672,11 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** the wallpaper **crop screen** (S5c — L1's pan/zoom, passing a rectangle so `setImage` stops
-centre-cropping), then the **effects** (S5d) that unblock both the folder's frosted backdrop (solid black today) and the
-shell's hardcoded `darkTheme`. Also open: a **home long-press → options menu** (the free cell space now falls through to
+**Next likely:** the remaining wallpaper **sources** — **capture** (S5d, L1's screenshot-with-the-UI-hidden) and
+**rotate** (S5e, the per-orientation pair and its live-wallpaper service) — and only then the **effects** (S5f), which
+unblock the folder's frosted backdrop (solid black today) and the shell's hardcoded `darkTheme`. The effects moved last
+deliberately: an effect has to answer "which image do I sample?", so designing it before the sources exist means
+re-answering that per source. Also open: a **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render and all the
 arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
