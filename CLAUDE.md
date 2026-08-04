@@ -759,7 +759,11 @@ safe: the report is **gated on the store having answered** (paginating against a
 nobody chose and then rewrite them — pagination *writes*), and it is a **runtime bound** rather than the removed
 `setPagerGrid`'s blueprint-derived default, which is the distinction that keeps `setDevice` the input it was made.
 **One set of icon defaults, taken by every grid** (`IconSizing()` unmodified everywhere): the icon **fills its cell**,
-capped at **48dp**, never below **24dp**, with `IconSizingRanges.IconDp = 24..120`. At 100% the *upper guardrail is the
+capped at **48dp**, never below **24dp**, with `IconSizingRanges.IconDp = 24..120` and `IconPercent = 0.15..1.5`
+— both of the fraction's ends derived from that dp range rather than picked, so the fraction can reach *either* guardrail
+on any cell drawn (24dp binds at ≈0.16 on a tablet's widest cell; 120dp binds at ≈1.46 on a four-column phone). **Over
+100% the icon is asked to exceed its cell**, which the upper guardrail then caps — so overflow takes raising that bound
+too, and cannot happen at the defaults. At 100% the *upper guardrail is the
 icon size* on any cell bigger than it, so icon size is one number in dp rather than a fraction of a cell the user has to
 picture — the per-grid fractions this replaced (home 88%, app grids 75%) were the fraction doing that job, and
 double-counting density while at it, since a narrower cell already gives a smaller icon at 100%. The **lower** guardrail

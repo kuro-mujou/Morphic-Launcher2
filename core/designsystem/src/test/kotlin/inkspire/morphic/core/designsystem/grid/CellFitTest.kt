@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.CellPadH
+import inkspire.morphic.core.designsystem.cell.CellPadV
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.cellIconLayout
 import inkspire.morphic.core.model.AppsScrollGrid
@@ -57,12 +58,38 @@ class CellFitTest {
         // Getting this wrong is not academic: the earlier `minIcon / percent` floor made a 28dp guardrail at 30% demand
         // a 101dp column, so *shrinking* the icons reported fewer columns and the icon controls appeared to resize the
         // grid. L1's own home formula (`gridMaxima`) left the percent out for this reason.
+        //
+        // Swept across the **whole** of `IconSizingRanges.IconPercent`, ends included: the range was widened to
+        // 0.15..1.5 on the strength of this property, since a fraction over 1 only asks the *icon* to exceed its cell
+        // and must still not change how many cells there are.
         val area = GridArea(360f, 800f)
-        listOf(0.3f, 0.5f, 0.88f, 1f).forEach { percent ->
+        listOf(0.15f, 0.3f, 0.5f, 0.88f, 1f, 1.5f).forEach { percent ->
             val bounds = HomePagerGrid.boundsIn(area, metrics.copy(iconPercent = percent), labelHeight)
             assertEquals("$percent changed the column cap", 11, bounds.maxCols)
             assertEquals("$percent changed the row cap", 25, bounds.maxRows)
         }
+    }
+
+    @Test
+    fun `a fraction over 100 percent grows the icon but stops at the upper guardrail`() {
+        // What >100% means, and the reason the default configuration cannot produce an overlapping icon: the fraction is
+        // of the inner width, but the upper guardrail caps the result — so on an 82dp inner cell a 48dp cap is reached
+        // at 59% and nothing above it does anything. Raising the guardrail is the second, deliberate move that lets an
+        // icon exceed its cell.
+        val inner = 82f
+        val cell = inner + CellPadH.value * 2
+
+        val capped = cellHeightDp(cell, metrics.copy(iconPercent = 1.5f), labelHeight)
+        val atOne = cellHeightDp(cell, metrics.copy(iconPercent = 1f), labelHeight)
+        assertEquals("with a 48dp cap, 150% and 100% are the same cell", atOne, capped, 0.01f)
+
+        // With the guardrail opened up, the fraction reaches past the cell's own width — which is the point of offering
+        // it, and is bounded by `IconSizingRanges.IconDp`'s ceiling rather than by the fraction.
+        val roomy = metrics.copy(iconPercent = 1.5f, minIconDp = 24.dp, maxIconDp = 120.dp)
+        // The fixture has labels off, so the whole height above the padding *is* the icon.
+        val icon = cellHeightDp(cell, roomy, labelHeight) - CellPadV.value * 2
+        assertTrue("150% of 82dp should exceed the cell's inner width (got $icon)", icon > inner)
+        assertTrue("and still be capped by the 120dp guardrail (got $icon)", icon <= 120f)
     }
 
     @Test

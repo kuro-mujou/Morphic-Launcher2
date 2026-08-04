@@ -128,8 +128,24 @@ data class IconSizing(
  */
 object IconSizingRanges {
 
-    /** Fraction of a cell the icon fills. Floored well above zero — an invisible icon is `showIcon = false`, not 0%. */
-    val IconPercent: ClosedFloatingPointRange<Float> = 0.3f..1f
+    /**
+     * Fraction of a cell the icon fills.
+     *
+     * **Both ends are derived from [IconDp] rather than picked**: the fraction should be able to reach *either* guardrail
+     * on any cell this launcher draws, since past a guardrail it stops doing anything. The widest cell is a
+     * tablet-landscape home cell (≈152dp of inner width at eight columns), where the 24dp floor binds at `24/152 ≈ 0.16`
+     * — hence **0.15**. The narrowest common one is a four-column phone (≈82dp inner), where the 120dp ceiling binds at
+     * `120/82 ≈ 1.46` — hence **1.5**.
+     *
+     * **Over 100% the icon is asked to exceed its cell**, and that is the point of offering it: the fraction is of the
+     * cell's inner box, so 150% means half again as wide as the box that holds it. It is still capped by [IconDp]'s upper
+     * guardrail, so with the default 48dp cap on any ordinary cell nothing overflows — reaching an icon larger than its
+     * cell takes raising *that* bound too, which is a deliberate pair of moves rather than something a single slider can
+     * do by accident. Where it does happen, neighbouring icons close up and may touch.
+     *
+     * Floored well above zero regardless: an invisible icon is `showIcon = false`, not 0%.
+     */
+    val IconPercent: ClosedFloatingPointRange<Float> = 0.15f..1.5f
 
     /** Multiplier on the base label size. */
     val LabelScale: ClosedFloatingPointRange<Float> = 0.7f..1.5f
