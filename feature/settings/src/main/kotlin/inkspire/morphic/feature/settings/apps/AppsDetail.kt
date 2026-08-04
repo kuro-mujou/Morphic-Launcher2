@@ -20,8 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
-import inkspire.morphic.core.designsystem.cell.fitRowHeightDp
-import inkspire.morphic.core.designsystem.cell.rowHeightRangeDp
+import inkspire.morphic.core.designsystem.cell.fitRowHeight
+import inkspire.morphic.core.designsystem.cell.rowHeightRange
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
@@ -127,12 +127,19 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             // The dependency runs this way round because the icon range is the coarser statement of intent ("icons in
             // this list are 28–72 dp") and a row is the box around one. It is also why a *taller* row is asked for by
             // raising the upper guardrail rather than here: past that, the row is whitespace the icon cannot fill.
-            val range = rowHeightRangeDp(metrics)
+            //
+            // **Unless the icons are off**, in which case no guardrail applies at all: the floor becomes the label's own
+            // height and the ceiling opens up, since a pure-text row can be as spacious as the user likes. The subtitle
+            // says which of the two it is, because a slider whose ends moved for an invisible reason reads as a bug.
+            val range = rowHeightRange(metrics)
             SettingsCommitSlider(
                 title = "Row height",
-                subtitle = "How tall each row is; the icon fills it. " +
-                    "${range.start.roundToInt()}–${range.endInclusive.roundToInt()} dp, from the icon size limits below.",
-                value = fitRowHeightDp(rowHeightDp.toFloat(), metrics),
+                subtitle = buildString {
+                    append(if (icon.showIcon) "How tall each row is; the icon fills it. " else "How tall each row is. ")
+                    append("${range.start.roundToInt()}–${range.endInclusive.roundToInt()} dp, ")
+                    append(if (icon.showIcon) "from the icon size limits below." else "bounded by the label, not by the icon limits.")
+                },
+                value = fitRowHeight(rowHeightDp.dp, metrics).value,
                 valueRange = range,
                 valueLabel = { "${it.roundToInt()} dp" },
                 onCommit = { committed -> viewModel.setRowHeight(committed.roundToInt()) },

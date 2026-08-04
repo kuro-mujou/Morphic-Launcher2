@@ -14,11 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
-import inkspire.morphic.core.designsystem.cell.fitRowHeightDp
+import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 
@@ -64,11 +63,12 @@ fun AppsVerticalList(
     // padding on the list, so the scrolling content still passes under the bars instead of being clipped short of
     // them. A system constraint, not styling — the surface adds no decorative padding until a setting owns it.
     val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
-    // **The stored height, clamped to what the current icon guardrails can honour** — the list's counterpart of the
-    // vertical grid's column fit, and the read half of the coupling the settings section's slider is bounded by. The
-    // guardrails can move after a height was chosen, and a row shorter than the smallest allowed icon would draw that
-    // icon smaller than the user permitted. Nothing is written, so widening the guardrails brings the height back.
-    val drawnRowHeight = fitRowHeightDp(rowHeight.value, metrics).dp
+    // **The stored height, clamped to what this row can honour** — the list's counterpart of the vertical grid's column
+    // fit, and the read half of the coupling the settings section's slider is bounded by. With icons on that means the
+    // guardrails, which can move after a height was chosen: a row shorter than the smallest allowed icon would draw it
+    // smaller than the user permitted. With icons off it means the label, since a row cannot be shorter than its own
+    // text. Nothing is written either way, so widening the bound brings the stored height back.
+    val drawnRowHeight = fitRowHeight(rowHeight, metrics)
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = barInsets) {

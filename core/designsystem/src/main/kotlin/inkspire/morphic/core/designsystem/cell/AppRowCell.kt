@@ -10,15 +10,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.IconSizingRanges
 
 /** Row insets and the icon→label gap. Cell-internal styling, the counterpart of [CellPadH] for a grid cell. */
 private val RowPadH = 24.dp
@@ -57,13 +61,23 @@ private val IconLabelGap = 16.dp
  * `minOf`/`maxOf` on the guardrails mirrors `resolveIconSize`, which is order-safe, and the upper bound is forced above
  * the lower so equal guardrails still give a usable control rather than an empty one.
  *
- * One limit, stated because it is invisible: with `showIcon = false` the row holds only its label, so nothing here
- * applies and the floor is really the label's line height. It is left as is — an icon-derived floor merely stops a
- * text-only list being tighter than ~44dp — and wants a `labelHeightDp` parameter, as `minCellHeightDp` has, when
- * someone asks for a denser text list.
+ * **With `showIcon = false` none of that applies, so the range changes shape.** A pure-text row draws no icon at all,
+ * which means neither guardrail bounds it and a floor derived from one would bound the row against something absent —
+ * a list whose icons were set to 72–140dp before being switched off could not have rows under 88dp of plain text. So
+ * the floor becomes [labelHeightDp] plus the same inset (a row cannot be shorter than the text in it), and the ceiling
+ * **opens up** to the widest row this launcher offers at all, `IconSizingRanges.IconDp`'s own ceiling: with no icon
+ * there is nothing to say a spacious row is wrong, and a text-driven ceiling would forbid one. Both ends then stop
+ * moving when the guardrails move, which is right — they describe an icon that isn't there.
+ *
+ * @param labelHeightDp the height of the row's single-line label, from [rowLabelHeight] — a type-scale read, hence a
+ *   parameter here, exactly as `CellFit.minCellHeightDp` takes the grid label's.
  */
-fun rowHeightRangeDp(metrics: IconMetrics): ClosedFloatingPointRange<Float> {
+fun rowHeightRangeDp(metrics: IconMetrics, labelHeightDp: Float): ClosedFloatingPointRange<Float> {
     val padding = RowPadV.value * 2
+    if (!metrics.showIcon) {
+        val floor = labelHeightDp + padding
+        return floor..maxOf(IconSizingRanges.IconDp.last + padding, floor + 1f)
+    }
     val floor = minOf(metrics.minIconDp.value, metrics.maxIconDp.value) + padding
     val ceiling = maxOf(metrics.minIconDp.value, metrics.maxIconDp.value) + padding
     return floor..maxOf(ceiling, floor + 1f)
@@ -74,13 +88,72 @@ fun rowHeightRangeDp(metrics: IconMetrics): ClosedFloatingPointRange<Float> {
  *
  * The same read-side clamp every other stored dimension gets, and it is what makes the coupling above safe to have: the
  * guardrails can move under a height that was chosen before them, and the list draws the honoured value rather than
- * the stored one. Nothing is written, so widening the guardrails again brings the user's height back.
+ * the stored one. Nothing is written, so widening the guardrails again brings the user's height back — including across
+ * the icon switch, since turning icons off widens the range rather than moving the value.
  *
  * Both callers matter and they must agree: the list clamps what it draws, and the settings slider shows the same
  * clamped value — otherwise the control would sit at a number the surface is not using.
  */
-fun fitRowHeightDp(rowHeightDp: Float, metrics: IconMetrics): Float =
-    rowHeightDp.coerceIn(rowHeightRangeDp(metrics))
+fun fitRowHeightDp(rowHeightDp: Float, metrics: IconMetrics, labelHeightDp: Float): Float =
+    rowHeightDp.coerceIn(rowHeightRangeDp(metrics, labelHeightDp))
+
+/**
+ * The height of a row's single-line label, from the current type scale and [IconMetrics.labelScale] — the row twin of
+ * `cellLabelHeight`.
+ *
+ * Its own function rather than that one reused, because a row's label is not a cell's: [AppRowCell] styles it from
+ * `bodyLarge` (it is the row's content, read at body size) where a grid cell uses `labelSmall` under an icon. Both
+ * scale by `labelScale` and both fall back the same way for a style with no declared line height — that shared
+ * [DEFAULT_LINE_HEIGHT_RATIO] is what keeps the two definitions honest about being the same measurement of different
+ * text.
+ */
+@Composable
+fun rowLabelHeight(metrics: IconMetrics): Dp {
+    val density = LocalDensity.current
+    return with(density) { rowLabelStyle(metrics).lineHeight.toDp() }
+}
+
+/**
+ * The row label's type: `bodyLarge` scaled by [IconMetrics.labelScale], with an explicit line height so its own height
+ * is knowable.
+ *
+ * Shared so [AppRowCell] and [rowLabelHeight] cannot disagree about how tall a row's text is — the bug that shape
+ * prevents being a floor computed from one line height and a row drawn at another.
+ */
+@Composable
+private fun rowLabelStyle(metrics: IconMetrics): TextStyle {
+    val base = MaterialTheme.typography.bodyLarge
+    val fontSize = base.fontSize * metrics.labelScale
+    return base.copy(
+        fontSize = fontSize,
+        lineHeight = if (base.lineHeight.isSpecified) {
+            base.lineHeight * metrics.labelScale
+        } else {
+            fontSize * DEFAULT_LINE_HEIGHT_RATIO
+        },
+    )
+}
+
+/** [rowHeightRangeDp], with the label row's height read from the current type scale. */
+@Composable
+fun rowHeightRange(metrics: IconMetrics): ClosedFloatingPointRange<Float> {
+    val labelHeightDp = rowLabelHeight(metrics).value
+    return remember(metrics, labelHeightDp) { rowHeightRangeDp(metrics, labelHeightDp) }
+}
+
+/**
+ * [fitRowHeightDp], with the label row's height read from the current type scale — **the one a surface calls**.
+ *
+ * Answers in `Dp` because its callers lay out with it (`Modifier.height`), the same split `CellFit.cellHeight` draws
+ * against its own pure twin.
+ */
+@Composable
+fun fitRowHeight(rowHeight: Dp, metrics: IconMetrics): Dp {
+    val labelHeightDp = rowLabelHeight(metrics).value
+    return remember(rowHeight, metrics, labelHeightDp) {
+        fitRowHeightDp(rowHeight.value, metrics, labelHeightDp).dp
+    }
+}
 
 /** Fallback line height for a type style that declares none, matching what `CellLabel` assumes for a grid label. */
 private const val DEFAULT_LINE_HEIGHT_RATIO = 1.2f
@@ -124,7 +197,9 @@ fun AppRowCell(
         val iconSize = metrics
             .resolveIconSize(availWidth = maxWidth - RowPadH * 2, availHeight = innerHeight)
             .coerceAtMost(innerHeight)
-        val baseStyle = MaterialTheme.typography.bodyLarge
+        // The one definition of the row's text, shared with `rowLabelHeight` so the height a row-height *bound* is
+        // computed from is the height this row actually draws.
+        val labelStyle = rowLabelStyle(metrics)
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -145,14 +220,7 @@ fun AppRowCell(
             }
             Text(
                 text = app.label,
-                style = baseStyle.copy(
-                    fontSize = baseStyle.fontSize * metrics.labelScale,
-                    lineHeight = if (baseStyle.lineHeight.isSpecified) {
-                        baseStyle.lineHeight * metrics.labelScale
-                    } else {
-                        baseStyle.fontSize * metrics.labelScale * DEFAULT_LINE_HEIGHT_RATIO
-                    },
-                ),
+                style = labelStyle,
                 // The theme's content colour, not the grid label's white-on-wallpaper: a list is read against
                 // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
                 color = colors.content,
