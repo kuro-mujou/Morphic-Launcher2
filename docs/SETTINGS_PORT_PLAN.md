@@ -283,9 +283,10 @@ every phase ends with something visibly working on device, and no slice is writt
         rule both dock callers share, 5 tests), one `GridEditor` composable — a screen-shaped preview with a − / +
         pair on each editable edge — and the **Home grid** section. The dock moved onto the same editor, so L1's
         `HomeGridEditor` + `DockGridEditor` (two ~220-line near-copies) are one component parameterised by which half
-        of the preview holds the lattice. `usableWindowArea` is settings' single measurement of the screen, replacing
+        of the preview holds the lattice. `usableWindowArea` is the single measurement of the screen, replacing
         L1's `homeGridArea(window, insets, dockVisible, dockThickness)`: subtracting the dock is one caller's
-        arithmetic on the result, not part of measuring a window.
+        arithmetic on the result, not part of measuring a window. (It began as settings-only and moved to
+        `core:designsystem/grid` in S4i, once a surface and a ViewModel needed the same number.)
   - [x] **S4e — the two derived cell heights** (`AppsVerticalGrid`'s and the category pager's `CellHeight`). **No
         setting, and that is the finding**: a scrolling grid's columns fix its cell *width*, so the height that is left
         is exactly what the icon and label need — `IconLabelCell`'s arithmetic run forwards. `cellHeight` in `CellFit`,
@@ -310,7 +311,10 @@ every phase ends with something visibly working on device, and no slice is writt
       `minIconDp` + padding cannot honour the smallest icon allowed, and one taller than `maxIconDp` + padding is height
       the largest cannot fill. `iconPercent` is out of it for the reason S4h took it out of the grid formulas (dividing
       by it inverted the control), and a stored height outside the range is clamped on read (`fitRowHeightDp`, in the
-      list and in the slider alike) rather than written down. 6 tests. Four APPS slots left the `ICONS` waiting room, which now holds only the folder
+      list and in the slider alike) rather than written down. **With `showIcon = false` neither guardrail applies**, so
+      the floor becomes the label's own height (`rowLabelHeight`) and the ceiling opens up to `IconSizingRanges.IconDp`'s
+      — bounding a pure-text row by an absent icon forbade a compact list to anyone who had set chunky icons first. 9
+      tests. Four APPS slots left the `ICONS` waiting room, which now holds only the folder
       grid. `AppRowCell` also gained the two metrics it had been ignoring (`showIcon`, `labelScale`), since the section
       offers both.
     - **Left open: the category card's lane count.** Its blueprint declares an `editRange`, but a card is a *tile* —
@@ -331,10 +335,32 @@ every phase ends with something visibly working on device, and no slice is writt
     - **The APPS *scrolling* grids needed the same clamp in the surface**, which they never had (`AppsVerticalGrid`,
       `CategoryPage`, and the category pager's drag proxy, all through `fitCols` on their own measured width) — otherwise
       the section would have shown a column count the grid was ignoring, with the icons overflowing their cells.
-    - **The APPS *pager* is deliberately excluded.** Its rows × cols is the page **capacity** `AppsViewModel` paginates
-      the store against, so a count clamped in the UI alone would describe pages the store never made. Fitting it means
-      that ViewModel learning a runtime bound (a measured area, as `DockViewModel.setHeight` is told its row cap) — a
-      slice of its own, and the only grid still drawn at a size the area may not carry.
+    - **The APPS *pager* was left out**, as the one grid whose stored count is not a display number — done next, in S4i.
+  - [x] **S4i — the pager's capacity is fitted before the store paginates against it.** The APPS pager's rows × cols is
+        the page **capacity** `AppsViewModel` paginates the store against — `apps_pager_item` rows carry an explicit page
+        and in-page slot — so unlike every other grid it could not be clamped where it is drawn: items past the fitted
+        capacity would sit on pages that do not exist, and a drop would compute its slot against a capacity the store
+        never applied. The clamp therefore goes *upstream* of pagination — `AppsScreen` measures, fits the stored grid,
+        and reports it (`AppsViewModel.setPagerFit`), and that fit is what `pagerPages`, `syncPager` and `applyPager` read.
+        Four things worth knowing:
+    - **The report is gated on the store having answered.** Pagination *writes*, so a capacity guessed from the blueprint
+      for one frame and corrected on the next would write rows twice and visibly reshuffle the pages. Every reader already
+      treated null as "not yet", which is the same guard home states for its own settle effects — so the gate cost
+      nothing to add and is the load-bearing part.
+    - **It is not `setPagerGrid` returning.** That pushed the *blueprint's* size down, which put a default the store owns
+      in the UI. This pushes a runtime **bound** the store cannot know, exactly as `DockViewModel.setHeight` is told its
+      row cap; `setDevice` stays the input it was made, and `AppsState.pagerConfig` is now explicitly the *stored* size
+      (the fit's input) rather than the capacity.
+    - **Reported from `AppsScreen`, not from the pager's arm**, so it does not depend on which layout is showing: the
+      pager's arrangement stays in step with what is installed whatever the user is looking at, which is the invariant
+      that makes switching layout reload nothing.
+    - **The APPS section stopped excluding the pager**, so every grid in that editor now shows what its surface draws.
+  - [x] **S4j — one measurement of the window.** The pager fit needs the screen, and `feature:settings` held the only
+        copy of that arithmetic. `usableWindowArea` moved to `core:designsystem/grid`, beside the `GridArea` it returns,
+        and home's own inline copy went with it — so the three kinds of caller (a surface laying out, a section bounding
+        what may be chosen, a ViewModel being told a capacity) cannot disagree about how big the phone is. That was L1's
+        real bug here (`homeGridArea` in settings vs `pagerBoundsInWindow` on the surface), and it had been a third of the
+        way back.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
@@ -373,6 +399,7 @@ Nothing is open. Each is argued where it applies rather than restated here; this
 | Dock height cap | a fraction of the current screen height, so it changes with orientation | *The dock (S4c)* |
 | Grid resizing | names an **edge**, not a count — and commits the count *and* the placements it displaces | *S4d* |
 | What an editor shows | the **fitted** count (what the surface draws), and a press counts from that — never the stored one | *S4h* |
+| Where a fit is applied | in the surface that draws it — **except** the APPS pager's, which is a store capacity and so is reported to its ViewModel | *S4i* |
 
 The last one edited [REWRITE_PLAN.md](REWRITE_PLAN.md)'s build map; the rest are local to this plan.
 

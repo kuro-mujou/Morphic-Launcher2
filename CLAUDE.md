@@ -682,7 +682,12 @@ is to raise the upper guardrail. `iconPercent` is deliberately not in it — the
 reason: dividing by it inverted the control, so asking for *smaller* icons pushed the row **taller** (a 56dp row clamped
 up to 72dp at 50%). A stored height outside the range is clamped on read by `fitRowHeightDp` — in the list *and* in the
 slider, so the control never sits at a height the surface isn't using — and never written back, so the user's number
-returns when the guardrails widen. **Left open: the category card's lane count** — a card is a *tile*, so how narrow one
+returns when the guardrails widen. **With icons off, no guardrail applies and the range changes shape**: the floor
+becomes the *label's* own height (a row cannot be shorter than its text — `rowLabelHeight`, the row twin of
+`cellLabelHeight`, since a row styles its label from `bodyLarge` where a cell uses `labelSmall`) and the ceiling **opens
+up** to `IconSizingRanges.IconDp`'s own ceiling. Both ends then stop following the guardrails, which is the point: they
+describe an icon that isn't there, and bounding a pure-text row by one forbade a compact list to anyone who had set
+chunky icons before switching them off. **Left open: the category card's lane count** — a card is a *tile*, so how narrow one
 may get is not an icon guardrail and its blueprint declares no icon sizing; L1 gave its library layout no grid knobs
 either.
 **Resizing a grid names an edge, not a count**, because that is what decides where the items go — removing the *left*
@@ -710,11 +715,19 @@ then counts from the drawn number, so `−` on a four-row home writes three inst
 remembers five. The clamp is still **never written back** — shrink the icons and the row returns; only a press writes,
 the dock's height commit staying the one deliberate exception. L1 reconciled it the other way, from a `LaunchedEffect`
 inside its home detail that wrote clamped counts into storage on *every* cause, so an icon tweak destroyed a row count
-for good and only while that screen was open. **The APPS pager is the one grid excluded**: its rows × cols is the page
-*capacity* `AppsViewModel` paginates the store against, so clamping it in the UI alone would describe pages the store
-never made — that fit has to reach the ViewModel first.
+for good and only while that screen was open. **The APPS pager is the one grid whose fit could not stay in a UI**: its
+rows × cols is also the page *capacity* `AppsViewModel` paginates the store against, so a count clamped where it is drawn
+would describe pages the store never made, and a drop would compute its slot against a capacity the store does not
+apply. So the fit is *reported* instead — `AppsScreen` measures, fits the stored grid, and calls
+`AppsViewModel.setPagerFit`, which becomes the capacity everything downstream reads. Two properties of that make it
+safe: the report is **gated on the store having answered** (paginating against a blueprint placeholder would write pages
+nobody chose and then rewrite them — pagination *writes*), and it is a **runtime bound** rather than the removed
+`setPagerGrid`'s blueprint-derived default, which is the distinction that keeps `setDevice` the input it was made.
 `core:designsystem/grid/CellFit.kt` answers "how large can this grid be": `boundsIn`/`editableRangeIn` as a **ceiling**
 for a grid whose counts a user picks, and `fitGridConfig` reading the same maximum as a **value** for the dock's rows.
+Beside it, `usableWindowArea` is the **one place the launcher measures the screen** — home, the APPS surface and every
+settings section read it, because a settings screen cannot measure the surface it configures and so must measure the same
+window the same way (L1 kept `homeGridArea` in settings and `pagerBoundsInWindow` on the surface, which could disagree).
 The **dock section** (S4c, done) is the first consumer of both and the pattern the rows/cols editor follows — its
 bounds are computed where the window is measured (one usable cell up to a third of the screen) rather than stored,
 because a store cannot check either without measuring. **Every surface now reports its `DeviceConfiguration` to its ViewModel** (`setDevice`), which *replaced* the
