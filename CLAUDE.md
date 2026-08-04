@@ -280,12 +280,20 @@ from the baked stack).
 - **But a dimension that is a *consequence* of one the user owns must be derived, not stored** — the other half of the
   rule above, and the two are told apart by whether a formula exists. A scrolling grid's cell **height** is the case:
   its columns fix the cell width, and what is left is exactly what the icon and its label need, which is
-  `IconLabelCell`'s own arithmetic run forwards (`cellHeight` in `core:designsystem/grid/CellFit.kt`, ported from L1's
+  `IconLabelCell`'s own arithmetic run forwards (`derivedCell` in `core:designsystem/grid/CellFit.kt`, ported from L1's
   `gridCellHeightDp`). Storing it *as well* would let two settings disagree — enlarge the icons and get bigger icons in
   cells that stayed the same height — where deriving it makes S3's icon sliders visibly move the grid, as they do in
   L1. The list's row height is the opposite case and the reason the distinction is worth stating: a list has no cell
   width to derive from, so nothing determines the row and it is genuinely the user's to set, with the icon a fraction
   of *it*.
+  - **A fraction spent on a derived height must not be spent again by the cell**, which is why `derivedCell` hands back
+    a height **and** the metrics to draw with (`iconPercent = 1f`) and why its callers must use both. The height *is*
+    `iconPercent` of the inner width plus the chrome, so a cell given the original metrics resolves its icon as
+    `iconPercent × min(innerWidth, iconArea)` where `iconArea` is already that product — `iconPercent²` of the width,
+    which lands on the lower guardrail inside a row built for something larger (at 50% on a 4-column phone: a 24dp icon
+    in a row sized for 41). L1 had the same double-application (`gridCellHeightDp` × `resolveIconSize`) and this port
+    inherited it; nothing showed until the icon defaults reached 100%, where the two agree. So on these grids the user's
+    fraction chooses the **cell height**, and the icon then fills exactly what that height bought — one job each.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
   colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.

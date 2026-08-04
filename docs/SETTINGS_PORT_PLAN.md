@@ -426,6 +426,23 @@ every phase ends with something visibly working on device, and no slice is writt
       piece of the preview genuinely blocked rather than reshaped, and the reason L1's sticky-header scaffolds
       (`IconDetailPortrait`/`Landscape`) are not ported either. The preview sits above the icon group in the section's
       ordinary scrolling column instead.
+  - [x] **S4n — the fraction is spent once.** Found by using the preview S4m just built: dragging *icon size* on the two
+        scrolling APPS grids shrank the cell but stopped moving the icon, which pinned itself to the lower guardrail
+        below ~58%. Cause: `iconPercent` was applied **twice** on any grid whose height is derived — once to derive the
+        height (`chrome + iconPercent × innerWidth`), then again by the cell, whose `iconArea` *is* that product, giving
+        `iconPercent²` of the width. At 50% on a 4-column phone that is a 24dp icon in a row built for 41dp. L1 has the
+        identical pairing (`gridCellHeightDp` × `resolveIconSize`) and the port inherited it; it was invisible until the
+        defaults reached 100%, where both agree.
+    - **`cellHeight` became `derivedCell`**, returning the height *and* the metrics to draw with (`iconPercent = 1f`), so
+      the two cannot be separated — which is the actual fix: the fraction is spent on the height, and the icon then fills
+      exactly what that bought. Its four callers (`AppsVerticalGrid`, `CategoryPage`, the category pager's drag proxy, and
+      the APPS section's preview) all pass those metrics to their `AppCell`.
+    - **The alternative was offered and declined**: dropping `iconPercent` from the derived height instead, which would
+      have made the fraction never resize a cell anywhere — at the cost of up to 24dp of dead space per row, a slider
+      useful only over 50–100%, no densifying, and reversing S4e's own rule.
+    - **Where the preview needed it too**: `IconSizingPreview` takes `IconMetrics` rather than `IconSizing` precisely so a
+      section can hand it the derived cell's metrics; otherwise the preview would draw an icon its surface does not.
+    - A test pins the fixed point at four fractions: *the cell draws the icon its height was derived for*.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
