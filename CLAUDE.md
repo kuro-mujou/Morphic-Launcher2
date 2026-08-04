@@ -245,6 +245,23 @@ from the baked stack).
   Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
   `LauncherTheme` overrides its subtree. The wallpaper-brightness analyzer, transparent/frosted launcher
   surfaces, and `FrostedTextField` are a **deferred launcher-UI subsystem**; settings needs none of it.
+  - **That brightness signal is L2's own idea, not a port** — worth knowing before looking for it in L1, which has no
+    luminance analysis anywhere and themes from the system's dark mode. So it has to be *designed*, and it waits on the
+    dominant-colour half of L1's `Blur.kt` (S5d); `data:wallpaper` now stores the image it will read.
+
+**Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it.** Its own module rather than a slice of
+`data:settings`, because it decodes bitmaps, writes files and calls `WallpaperManager` — a *service*, where settings is a
+store. **It keeps its own one-key DataStore too**, which is a correction to the plan's original line ("borrowing settings
+to persist path pointers"): a path to a file we wrote and the id the system gave the wallpaper we set is bookkeeping, and
+S0 had already refused that on the way in. The **effect params** (`BackdropEffect`) are the genuinely preference-shaped
+half and stay in `data:settings`. State is **two fields where L1 had six** — L1's juggled two image sets and a snapshot
+copy of whichever was applied, both of which exist *for* the frosted backdrop; `appliedSystemId` is an id rather than a
+boolean because it also detects a wallpaper set outside the launcher. Built: pick from a `Uri`, sample-decode,
+centre-crop and scale to the screen, and apply to HOME / LOCK / BOTH. Deliberately absent, each for a reason rather than
+as an omission: the **crop screen** (next), the **capture** source and the **blur/dominant colour** (both are effect
+inputs, so they wait on the effects), and **rotate** with its live-wallpaper service (a feature beside this one, not a
+step in it). One L1 bug not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an
+image while an apply was finishing could lose one of them.
 - **An item's touch target is its visible extent, never its cell.** A cell is a *layout* footprint, usually much
   bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon + label). `LauncherDragCell`
   therefore hands `itemGestures` **down to its content**, which decides what is touchable: `IconLabelCell` puts it
@@ -654,10 +671,11 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** a **home long-press → options menu** (the free cell space now falls through to the surface for
-exactly this, and nothing listens yet), the folder **frosted backdrop** (currently solid black), **`data:settings`**
-(which unblocks the dock's configurable extent + derived row count, and home padding — see the dock layout note
-above), home **orientation**, or widgets/containers on the grid. On APPS, **all five layouts render and all the
+**Next likely:** the **wallpaper section** (S5b — the picker and Apply over the `data:wallpaper` that now exists),
+then its **crop screen** and the **effects** that unblock both the folder's frosted backdrop (solid black today) and the
+shell's hardcoded `darkTheme`. Also open: a **home long-press → options menu** (the free cell space now falls through to
+the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or
+widgets/containers on the grid. On APPS, **all five layouts render and all the
 arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
 `EjectToHome`, an optimistic layer for both the pager and the card (a drop waits for the write) + the pager's page
 indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanical** job is queued and deliberately

@@ -65,12 +65,12 @@ The port is ordered by "no model in a vacuum": build the slice some already-writ
 | waiting consumer | file | what it needs | |
 |---|---|---|---|
 | `LauncherShell(sideSurfaces = emptyMap())` | `feature/shell/LauncherShell.kt` | per-edge binding → **no edge is swipeable today** | ✅ S2 |
-| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal | todo S5 |
+| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal — **L2's own idea, not a port** | todo S5d |
 | `AppsScreen(layout = VERTICAL_LIST)` | `feature/apps/AppsScreen.kt` | which APPS layout, per binding | ✅ S2 |
 | `DockHeight = 96.dp` | `feature/home/HomeScreen.kt` | dock extent (rows derive **from** it, not the reverse) | ✅ S4c |
-| home padding | — (deliberately absent) | horizontal padding, added *with* the setting | todo S4f |
-| `RowHeight = 56.dp` | `AppsVerticalList.kt` | list row height | todo S4e |
-| `CellHeight = 96.dp` ×2 | `AppsVerticalGrid.kt`, `AppsCategoryPager.kt` | grid cell height | todo S4e |
+| home padding | — (deliberately absent) | horizontal padding, added *with* the setting | todo S4g |
+| `RowHeight = 56.dp` | `AppsVerticalList.kt` | list row height | ✅ S4f |
+| `CellHeight = 96.dp` ×2 | `AppsVerticalGrid.kt`, `AppsCategoryPager.kt` | grid cell height | ✅ S4e (derived, not stored) |
 | `CardColumns = 2` + spacing/padding | `AppsCategoryCard.kt` | card grid geometry (device-blind today) | ✅ S3 (`AppsCardGrid`) |
 | 5 × per-surface `IconMetrics` | apps list/grid/pager/category/card, home | icon size, label scale, show label/icon | ✅ S3 |
 | one-finger swipe policies | `LauncherShell.bindingFor` | derived from HOME's + the surface's layout | todo |
@@ -223,8 +223,13 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
 ### Not `data:settings` at all *(settled)*
 
 - **`WallpaperRepository` (+Impl, ~380 LOC)** — a bitmap/file/`WallpaperManager` service that merely *borrows*
-  settings to persist path pointers. Gets its own **`data:wallpaper`**, depending on `data:settings` rather than
-  living in it.
+  settings to persist path pointers. Gets its own **`data:wallpaper`**.
+  - **Revised when built (S5a): it does not depend on `data:settings` either.** The sentence here used to end
+    "depending on `data:settings` rather than living in it", on the assumption that the path pointers would stay in the
+    settings blob. They did not: S0 had already ruled that L1's applied-snapshot and dirty flags are bookkeeping rather
+    than preferences, and a module that owns the files may as well own the pointers to them — so `data:wallpaper` has its
+    own one-key DataStore and no settings dependency at all. The **effect params** are the part that is genuinely a
+    preference, and they stay in `data:settings` (S5d).
 - **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-colour extraction. Pure image processing;
   belongs beside the graphics/icon code, in neither repository's module.
 
@@ -444,8 +449,38 @@ every phase ends with something visibly working on device, and no slice is writt
       section can hand it the derived cell's metrics; otherwise the preview would draw an icon its surface does not.
     - A test pins the fixed point at four fractions: *the cell draws the icon its height was derived for*.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
-- [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
-      Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.
+- [ ] **S5 — `data:wallpaper` + effects** — *in progress.* L1 spends ~1,730 LOC here (a 381-LOC repository, `Blur.kt`, a
+      561-LOC `WallpaperTab`, a crop screen, a capture screen, a live-wallpaper service and an effects tab), which is
+      more than one slice can carry, so it is broken up by **what a user can do when it lands**:
+  - [x] **S5a — the module, and the static image it owns.** `data:wallpaper`: its own DataStore blob, a JPEG under
+        `filesDir/wallpaper`, decode-and-sample from a `Uri`, centre-crop and scale to the screen, and
+        `WallpaperManager.setBitmap` on HOME / LOCK / BOTH. Three decisions worth keeping straight:
+    - **It keeps its own bookkeeping**, rather than "borrowing settings to persist path pointers" as the section below
+      originally said it would. S0 had already ruled that L1's `appliedSingle` / `singleDirty` /
+      `appliedSystemWallpaperId` are *not* preferences, and a module that owns files may as well own the pointers to
+      them; nothing else has to be running for a wallpaper to be read. The **effect params still go to `data:settings`**
+      when they land, because those genuinely are preferences.
+    - **Two state fields where L1 had six.** L1's `WallpaperState` juggled two image sets (`single` + `rotate`) and kept
+      a **snapshot copy** of whichever was applied, so a frosted backdrop could go on sampling the real system
+      wallpaper. Neither exists yet, so this holds the chosen image and `appliedSystemId` — not a boolean, because the
+      id is also how a wallpaper set *outside* the launcher gets spotted, which is what L1 stored it for.
+    - **One structural fix**: L1's repository did its read-modify-write **outside** any transaction (the lost-update
+      race this plan's smell list already named). `updateState` does it inside `edit`.
+  - [ ] **S5b — the wallpaper section.** Preview, "Choose image" (`PickVisualMedia`), and Apply / Re-apply with L1's
+        home/lock/both menu. The vertical that makes S5a visible.
+  - [ ] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
+        stops centre-cropping. Separate because L1 keeps it a separate screen too.
+  - [ ] **S5d — effects, and the two things waiting on them.** `BackdropEffect` + params as a **settings** slice,
+        `Blur.kt` ported to sit beside the graphics code (per the section below), and then the folder's frosted backdrop
+        and the icon preview's wallpaper punch-through. **The shell's `darkTheme` lands here too**, and it is worth
+        knowing that it is *not* a port: L1 has no wallpaper-brightness signal anywhere: the luminance analysis is L2's
+        own idea, and it needs the dominant-colour half of `Blur.kt`, which is why it belongs in this slice rather than
+        an earlier one.
+  - [ ] **S5e — capture.** L1's effect-only source: a screenshot taken with the launcher's own UI hidden, which never
+        becomes the system wallpaper. Pointless before S5d, since the effects are the only thing that reads it.
+  - [ ] **S5f — rotate, and the live wallpaper.** L1's per-orientation pair rendered by its own `RotateWallpaperService`
+        (a service, a manifest entry and XML metadata), plus its browser of *installed* live wallpapers. The largest
+        piece and independent of every slice above.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
       feature to exist first), presets.
 - [ ] **P8 exit criteria** — every placeholder constant in the table above is either settings-driven or has a written
@@ -475,7 +510,7 @@ Nothing is open. Each is argued where it applies rather than restated here; this
 | Override precedence | clamped into `editRange` **on write** | *Grid + icon config* |
 | Settings sections | **panes** inside one `SettingsScreen` (two-pane on tablet), declared in `feature:settings` | *Settings UI* |
 | Where icon sizing lives | in each **surface's** section, beside its layout controls — as L1 has it | *Settings UI* |
-| Wallpaper + blur | out of `data:settings` → `data:wallpaper` (B7b) | *Not `data:settings` at all* |
+| Wallpaper + blur | out of `data:settings` → `data:wallpaper` (B7b), with its **own** store rather than settings' | *Not `data:settings` at all* |
 | Dock rows | **stored**; the height caps them, and a height commit writes them down when they no longer fit | *The dock (S4c)* |
 | Dock columns | **stored**, with the fit as a ceiling and the clamp applied on *read* | *The dock (S4c)* |
 | Dock height cap | a fraction of the current screen height, so it changes with orientation | *The dock (S4c)* |

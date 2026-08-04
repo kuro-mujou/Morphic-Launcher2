@@ -122,13 +122,21 @@ this entry, which is only the summary.
 - **`WallpaperRepository`(+`Impl`) and `internal/Blur` moved out of this module — see B7b.** L1 filed them here
   because they *borrow* settings to persist path pointers; neither is a preference.
 
-### B7b — `data:wallpaper` — wallpaper source, crop, and system apply (depends on model, common, settings)
+### B7b — `data:wallpaper` — wallpaper source, crop, and system apply (depends on model, common) — 🟡 first cut done
 - `WallpaperRepository`(+`Impl`) ⚠️ — a bitmap/file/`WallpaperManager` service: decode + crop + scale from a `Uri`,
   own JPEGs under `filesDir/wallpaper/`, set the system wallpaper on HOME/LOCK/BOTH, load the backdrop blur and the
-  dominant colour. It reads/writes `WallpaperState` through `data:settings`, which is a dependency, not a home.
+  dominant colour.
+- ✅ **The static image is built** (S5a in the settings plan): the module, its own one-key DataStore, decode/sample,
+  centre-crop-and-scale, and the system apply on HOME/LOCK/BOTH. Its *section* is next (S5b), then the crop screen.
+- 🔧 It does **not** depend on `data:settings`, which is a correction to the line this heading used to carry. L1 kept its
+  `WallpaperState` in the settings blob; B7 already refused that as bookkeeping rather than preference, so the module owns
+  its own store. The **effect params** are the genuinely preference-shaped half and stay in `data:settings`.
 - 🔧 L1's `internal/Blur.kt` (raw `IntArray` box-blur + saturation-weighted dominant colour) is image processing, not
-  wallpaper *or* settings — land it beside the graphics/icon code, not in either repository's module.
-- Blocks the launcher's **wallpaper-brightness** theme input, which `feature:shell` currently hardcodes to dark.
+  wallpaper *or* settings — land it beside the graphics/icon code, not in either repository's module. Still to do; it is
+  what the effects, the frosted backdrop and the brightness signal all wait on.
+- Blocks the launcher's **wallpaper-brightness** theme input, which `feature:shell` currently hardcodes to dark — and
+  note that signal is **L2's own invention**: L1 has no luminance analysis anywhere, so there is nothing to port, only to
+  design.
 
 ### B8 — `data:layout` — placement engine + layout persistence (depends on model, database) ⚠️ **highest-logic module** — ✅ first cut done
 
