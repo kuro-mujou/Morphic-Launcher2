@@ -26,32 +26,61 @@ private val RowPadV = 8.dp
 private val IconLabelGap = 16.dp
 
 /**
- * **The span of row heights over which the height still changes the icon**, in dp — the inverse of [AppRowCell]'s own
- * sizing, and what a row-height control offers.
+ * **The row heights the icon guardrails can honour**, in dp — the inverse of [AppRowCell]'s own sizing, and what a
+ * row-height control offers.
  *
  * A row's height is the one cell dimension a user sets outright (a list is one lane, so nothing derives it), and
- * `AppRowCell` then resolves the icon as `iconPercent` of the row's inner height, clamped to the guardrails. Read
- * backwards, that gives both ends: below `minIcon / iconPercent` the icon is clamped *up* and would overflow the row,
- * and above `maxIcon / iconPercent` it has stopped growing and the extra height is whitespace. So the interesting
- * range is exactly between them.
+ * `AppRowCell` then sizes the icon against the row's inner height, clamped to the guardrails and finally to the row
+ * itself. Read backwards, the guardrails give both ends directly: a row shorter than `minIconDp` plus its padding
+ * cannot hold the smallest icon the user allowed (so the row wins and the guardrail is quietly broken), and one taller
+ * than `maxIconDp` plus its padding is height the largest allowed icon cannot fill. **So the range is the guardrail
+ * range, shifted by the row's own inset** — which is the same shape as a grid cell's floor
+ * (`CellFit.minCellWidthDp`), and deliberately so: one rule for how an icon's limits bound the cell around it.
+ *
+ * **`iconPercent` is not in it, and that is what keeps the pair of controls from fighting.** The fraction scales the
+ * icon *within* the guardrails, so it cannot change which heights are honourable. An earlier cut divided both ends by
+ * it — "how tall must the row be for the fraction to be honoured un-clamped" — which inverted the control: asking for
+ * a *smaller* icon (a lower percent) raised the floor and so pushed the row **taller**, clamping a 56dp row up to 72dp.
+ * That is the same inversion `CellFit` had on the grid axes, from the same division.
+ *
+ * **The icon range therefore has priority, and the row height follows it.** Widening the guardrails widens what this
+ * offers; narrowing them narrows it, and a stored height outside the result is clamped on read by [fitRowHeightDp] and
+ * never written back — so the user's number returns when the guardrails widen again, exactly as a grid's column count
+ * does. Consequence worth knowing: the way to get a *taller* row is to raise `maxIconDp`, because a row taller than its
+ * icon's own ceiling is whitespace this range declines to offer.
  *
  * **Derived rather than a stated range**, which is why it lives here beside the padding it has to add back rather than
  * as two numbers in a settings screen: a range picked by hand would drift from the cell, and — more to the point — it
  * would not move when the user changes the guardrails it is a function of. The dock's height slider states its bounds
  * (L1's `80f..320f`) because a strip's extent genuinely is a matter of screen share; a row's is not.
  *
- * The upper bound is forced above the lower, so equal guardrails still give a usable control rather than an empty one.
+ * `minOf`/`maxOf` on the guardrails mirrors `resolveIconSize`, which is order-safe, and the upper bound is forced above
+ * the lower so equal guardrails still give a usable control rather than an empty one.
+ *
+ * One limit, stated because it is invisible: with `showIcon = false` the row holds only its label, so nothing here
+ * applies and the floor is really the label's line height. It is left as is — an icon-derived floor merely stops a
+ * text-only list being tighter than ~44dp — and wants a `labelHeightDp` parameter, as `minCellHeightDp` has, when
+ * someone asks for a denser text list.
  */
 fun rowHeightRangeDp(metrics: IconMetrics): ClosedFloatingPointRange<Float> {
-    val percent = metrics.iconPercent.coerceAtLeast(MIN_ROW_ICON_PERCENT)
     val padding = RowPadV.value * 2
-    val floor = minOf(metrics.minIconDp.value, metrics.maxIconDp.value) / percent + padding
-    val ceiling = maxOf(metrics.minIconDp.value, metrics.maxIconDp.value) / percent + padding
+    val floor = minOf(metrics.minIconDp.value, metrics.maxIconDp.value) + padding
+    val ceiling = maxOf(metrics.minIconDp.value, metrics.maxIconDp.value) + padding
     return floor..maxOf(ceiling, floor + 1f)
 }
 
-/** Guards the division in [rowHeightRangeDp] only; `IconSizingRanges.IconPercent` floors what a user can choose. */
-private const val MIN_ROW_ICON_PERCENT = 0.05f
+/**
+ * **The row height a stored value actually produces** under [metrics] — the list's `CellFit.fitCols`.
+ *
+ * The same read-side clamp every other stored dimension gets, and it is what makes the coupling above safe to have: the
+ * guardrails can move under a height that was chosen before them, and the list draws the honoured value rather than
+ * the stored one. Nothing is written, so widening the guardrails again brings the user's height back.
+ *
+ * Both callers matter and they must agree: the list clamps what it draws, and the settings slider shows the same
+ * clamped value — otherwise the control would sit at a number the surface is not using.
+ */
+fun fitRowHeightDp(rowHeightDp: Float, metrics: IconMetrics): Float =
+    rowHeightDp.coerceIn(rowHeightRangeDp(metrics))
 
 /** Fallback line height for a type style that declares none, matching what `CellLabel` assumes for a grid label. */
 private const val DEFAULT_LINE_HEIGHT_RATIO = 1.2f
