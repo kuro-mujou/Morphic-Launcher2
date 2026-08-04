@@ -14,6 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,9 +31,11 @@ import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
@@ -42,8 +47,8 @@ private val RowGap = 8.dp
  *
  * **Layout group, then icon group**, which is L1's structure for every surface detail and the order the dependency
  * runs in: the icon size sets the smallest usable cell, and that is what this screen's row and column limits are
- * computed from. L1 also put a live icon **preview** between the two; it draws over the wallpaper through a
- * `BlendMode.Src` punch, and that subsystem is deferred, so the controls arrive without it.
+ * computed from. The live icon **preview** sits between the two, as L1 put it — see [IconSizingPreview], including the
+ * one piece of L1's version still missing (it punched through to the live wallpaper, which needs `data:wallpaper`).
  *
  * The counterpart of the dock section, and the difference between them is the whole shape of grid configuration in
  * this launcher: home is sized **by counts** — the user picks rows and columns and the surface divides its space into
@@ -80,6 +85,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
 
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
+    val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
 
 
     val colors = LocalMorphicColors.current
@@ -104,6 +110,12 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
         val icon = state.icon
         val dockHeightDp = state.dockHeightDp
         if (cols != null && rows != null && icon != null && dockHeightDp != null) {
+            // **What the preview draws while a slider is held.** Keyed on the resolved sizing, so a commit clears it and
+            // the preview falls back to what was stored — the same shape `SettingsCommitSlider` uses for its own label,
+            // and the same reason: the write is asynchronous, so dropping the local value on release would flash the old
+            // one. The *controls* still read `icon`, since a slider must show its committed position.
+            var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
+            val shownIcon = previewIcon ?: icon
             val metrics = icon.toIconMetrics()
             val window = usableWindowArea(safeInsets)
 
@@ -152,6 +164,18 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                 Text("Reset grid")
             }
 
+            // The **live preview**, between the layout group and the icon group — L1's position, and it is the reason
+            // the icon controls are legible at all: three numbers (a fraction and two dp bounds) do not tell you what
+            // you get in *this* cell, so the cell is drawn at its real size with the guardrails outlined on it.
+            IconSizingPreview(
+                app = sampleApp,
+                sizing = shownIcon,
+                cellWidth = (homeArea.widthDp / fitted.visualCols).dp,
+                cellHeight = (homeArea.heightDp / fitted.visualRows).dp,
+                onReroll = viewModel.sample::reroll,
+                modifier = Modifier.padding(top = RowGap * 2),
+            )
+
             // The icon group, under the layout group — L1's order in every one of its surface details, and the right
             // one: the icon size is what the grid's limits are computed from, so it reads as the finer adjustment
             // *within* a grid you have already sized.
@@ -161,6 +185,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                 onChange = viewModel.icons::change,
                 onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
                 onDpRange = viewModel.icons::changeDpRange,
+                onPreview = { previewIcon = it },
             )
             MorphicButton(
                 onClick = viewModel.icons::reset,

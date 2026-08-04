@@ -94,7 +94,12 @@ internal fun SettingsSwitchRow(
  * as a ruler. Where whole numbers are wanted the value is *rounded* instead — see [SettingsCommitRangeSlider] —
  * which keeps the track clean and still commits an integer.
  *
+ * **[onPreview] is the same value, live.** The local drag value is already tracked here for the label, so handing it
+ * out costs nothing — and it is what lets a caller show a live preview without a write per frame. L1's controls took the
+ * pair the same way round (`onPreview` for the drag, `onChange` for the release), and its icon preview is why.
+ *
  * @param valueLabel renders the current value for display — a percentage, a multiplier, a dp count.
+ * @param onPreview fires per frame while dragging. Never writes anything — for a preview only.
  */
 @Composable
 internal fun SettingsCommitSlider(
@@ -104,6 +109,7 @@ internal fun SettingsCommitSlider(
     valueLabel: (Float) -> String,
     onCommit: (Float) -> Unit,
     subtitle: String? = null,
+    onPreview: (Float) -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
     var dragged by remember(value) { mutableStateOf<Float?>(null) }
@@ -121,7 +127,10 @@ internal fun SettingsCommitSlider(
         }
         MorphicSlider(
             value = shown,
-            onValueChange = { dragged = it },
+            onValueChange = {
+                dragged = it
+                onPreview(it)
+            },
             valueRange = valueRange,
             onValueChangeFinished = { dragged?.let(onCommit) },
         )
@@ -139,7 +148,8 @@ internal fun SettingsCommitSlider(
  * ruler; instead the track stays continuous and each thumb's value is rounded to whole dp as it moves. The thumb
  * settles on integers without the track advertising them.
  *
- * Commit-on-release and the `remember(value)` key work as in [SettingsCommitSlider], and for the same reasons.
+ * Commit-on-release, the `remember(value)` key and [onPreview] work as in [SettingsCommitSlider], and for the same
+ * reasons.
  */
 @Composable
 internal fun SettingsCommitRangeSlider(
@@ -149,6 +159,7 @@ internal fun SettingsCommitRangeSlider(
     valueLabel: (IntRange) -> String,
     onCommit: (IntRange) -> Unit,
     subtitle: String? = null,
+    onPreview: (IntRange) -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
     var dragged by remember(value) { mutableStateOf<IntRange?>(null) }
@@ -167,7 +178,9 @@ internal fun SettingsCommitRangeSlider(
         MorphicRangeSlider(
             value = shown.first.toFloat()..shown.last.toFloat(),
             onValueChange = { range ->
-                dragged = range.start.roundToInt()..range.endInclusive.roundToInt()
+                val rounded = range.start.roundToInt()..range.endInclusive.roundToInt()
+                dragged = rounded
+                onPreview(rounded)
             },
             valueRange = bounds.first.toFloat()..bounds.last.toFloat(),
             onValueChangeFinished = { dragged?.let(onCommit) },

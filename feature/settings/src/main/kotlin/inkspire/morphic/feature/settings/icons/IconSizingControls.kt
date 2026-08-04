@@ -45,6 +45,12 @@ internal enum class IconSizingField { IconPercent, LabelScale }
  * @param onChange commits a numeric field. Fires on slider **release**, not per frame.
  * @param onToggle commits a boolean field.
  * @param onDpRange commits both icon-size guardrails at once, in whole dp.
+ * @param onPreview the sizing a slider is *currently* dragging towards, per frame, written nowhere — for the live
+ *   preview above these controls. A whole [IconSizing] rather than a field and a value, because that is what a preview
+ *   needs and this group is the one place that can assemble it: it holds the resolved sizing every other field keeps.
+ *   L1 passed a transform for the same purpose (`onPreview: (IconLayoutSettings.() -> IconLayoutSettings) -> Unit`);
+ *   handing over the result instead keeps the caller from having to know how a field is applied, which is the same
+ *   reason [onChange] takes a named field rather than a lambda.
  */
 @Composable
 internal fun IconSizingControls(
@@ -53,6 +59,7 @@ internal fun IconSizingControls(
     onChange: (IconSizingField, Float) -> Unit,
     onToggle: (showLabel: Boolean?, showIcon: Boolean?) -> Unit,
     onDpRange: (IntRange) -> Unit,
+    onPreview: (IconSizing) -> Unit = {},
 ) {
     SettingsSectionHeader("Icon & text")
 
@@ -76,6 +83,7 @@ internal fun IconSizingControls(
             value = sizing.iconPercent,
             valueRange = IconSizingRanges.IconPercent,
             valueLabel = { "${(it * 100).toInt()}%" },
+            onPreview = { onPreview(sizing.copy(iconPercent = it)) },
             onCommit = { onChange(IconSizingField.IconPercent, it) },
         )
     }
@@ -96,6 +104,7 @@ internal fun IconSizingControls(
             value = sizing.labelScale,
             valueRange = IconSizingRanges.LabelScale,
             valueLabel = { "%.2fx".format(it) },
+            onPreview = { onPreview(sizing.copy(labelScale = it)) },
             onCommit = { onChange(IconSizingField.LabelScale, it) },
         )
     }
@@ -107,6 +116,7 @@ internal fun IconSizingControls(
         value = sizing.minIconDp..sizing.maxIconDp,
         bounds = IconSizingRanges.IconDp,
         valueLabel = { "${it.first}–${it.last} dp" },
+        onPreview = { onPreview(sizing.copy(minIconDp = it.first, maxIconDp = it.last)) },
         onCommit = onDpRange,
     )
 }

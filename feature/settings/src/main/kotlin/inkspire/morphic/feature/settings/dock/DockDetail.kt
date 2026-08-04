@@ -14,6 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,10 +32,12 @@ import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
@@ -55,9 +60,9 @@ private val HeightRange = 80f..320f
  *
  * **Layout group, then icon group** — L1's structure for every surface detail, and the dependency runs that way too:
  * the icons decide the smallest usable cell, which is what the height and width above divide into rows and columns.
- * What is missing beside L1's is the live icon **preview** between the two groups; it renders over the wallpaper
- * through a `BlendMode.Src` punch, and that whole subsystem (`data:wallpaper`, transparent launcher surfaces) is
- * deferred. The controls are the half that works without it.
+ * The live icon **preview** sits between the two groups, as it does in L1 — and it earns its place here more than
+ * anywhere, since a dock cell is the height *the user set* divided by the rows, so the icon in it moves as the slider
+ * does. See [IconSizingPreview] for the one piece of L1's version still missing (the wallpaper behind it).
  *
  * The dock is the one grid with a height of its own as well as a row and column count, and the height **bounds** the
  * rows: a cell is `height ÷ rows`, so past a point another row leaves cells too short to draw an icon in. The slider
@@ -80,6 +85,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
 
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
+    val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
 
 
     val colors = LocalMorphicColors.current
@@ -106,6 +112,10 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
         val icon = state.icon
         val homeIcon = state.homeIcon
         if (heightDp != null && cols != null && rows != null && icon != null && homeIcon != null) {
+            // What the preview draws while a slider is held — see the same pair in the Home section for why it is keyed
+            // on the resolved value rather than cleared on release.
+            var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
+            val shownIcon = previewIcon ?: icon
             val metrics = icon.toIconMetrics()
 
             // The same window the launcher measures, minus the same insets home applies — so the bounds offered
@@ -181,6 +191,18 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 Text("Reset height and grid")
             }
 
+            // The **live preview**, between the layout and icon groups as L1 places it. A dock cell is the strip's
+            // height divided by its rows, which is the one cell on the launcher whose size a user sets *directly* — so
+            // seeing the icon in it while dragging the height slider is worth more here than anywhere.
+            IconSizingPreview(
+                app = sampleApp,
+                sizing = shownIcon,
+                cellWidth = (usable.widthDp / dockConfig.visualCols).dp,
+                cellHeight = (heightDp.toFloat() / dockConfig.visualRows).dp,
+                onReroll = viewModel.sample::reroll,
+                modifier = Modifier.padding(top = RowGap * 2),
+            )
+
             // The icon group, under the layout group — L1's order in every surface detail. Here the dependency is
             // especially direct: these controls set the smallest usable cell, which is what the height above divides
             // into rows, so raising the icon size can take a row away.
@@ -190,6 +212,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 onChange = viewModel.icons::change,
                 onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
                 onDpRange = viewModel.icons::changeDpRange,
+                onPreview = { previewIcon = it },
             )
             MorphicButton(
                 onClick = viewModel.icons::reset,

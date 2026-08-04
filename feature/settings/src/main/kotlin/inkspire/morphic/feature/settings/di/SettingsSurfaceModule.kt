@@ -18,8 +18,8 @@ import org.koin.dsl.module
  */
 val settingsSurfaceModule = module {
     viewModel { SurfaceRegisterViewModel(get()) }
-    viewModel { DockViewModel(get(), get()) }
-    viewModel { GridSizeViewModel(get(), get()) }
-    viewModel { AppsSectionViewModel(get()) }
-    viewModel { FolderViewModel(get()) }
+    viewModel { DockViewModel(get(), get(), get()) }
+    viewModel { GridSizeViewModel(get(), get(), get()) }
+    viewModel { AppsSectionViewModel(get(), get()) }
+    viewModel { FolderViewModel(get(), get()) }
 }

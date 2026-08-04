@@ -22,6 +22,11 @@ dependencies {
     // detail did. If a second caller ever needs the pair, they extract into a command of their own.
     implementation(projects.data.layout)
 
+    // One installed app, for the live icon preview to draw. The preview's whole point is a real icon at a real cell
+    // size — a placeholder shape would answer a question nobody asked — so this surface needs the app cache, exactly as
+    // L1's detail screens injected their `AppRepository` for the same preview.
+    implementation(projects.data.apps)
+
     // `NavKey`, for this module's own section destinations. Added now that sections *are* destinations — the previous
     // note here said to add it only when a settings screen genuinely needs to name one, which is now the case. `app`
     // still maps keys to screens; this module only declares them.

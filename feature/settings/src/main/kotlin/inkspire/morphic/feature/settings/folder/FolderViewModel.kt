@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
+import inkspire.morphic.feature.settings.icons.SamplePreviewApp
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,7 +42,11 @@ data class FolderState(val icon: IconSizing? = null)
  */
 class FolderViewModel(
     private val settingsRepository: SettingsRepository,
+    appRepository: AppRepository,
 ) : ViewModel() {
+
+    /** The app the icon preview draws, and the dice that changes it. Shared by every section that has a preview. */
+    internal val sample = SamplePreviewApp(appRepository, viewModelScope)
 
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 

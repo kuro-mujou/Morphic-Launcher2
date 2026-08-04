@@ -1,8 +1,12 @@
 package inkspire.morphic.feature.settings.folder
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -10,16 +14,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.folder.folderInnerSize
+import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
@@ -53,8 +67,10 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
 
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
+    val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
 
     val colors = LocalMorphicColors.current
+    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
     Column(
         modifier = modifier
@@ -83,12 +99,37 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
         // Null only for the frame before the device is reported; there is no honest value to show until then, and a
         // placeholder would be a second source of truth for a number the blueprint owns.
         val icon = state.icon ?: return@Column
+        var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
+        val shownIcon = previewIcon ?: icon
+
+        // **The live preview, on a real folder cell.** This is the one section whose cell size comes from a *sizer*
+        // rather than from a division: `folderInnerSize` is what the overlay itself lays out with, so asking it is the
+        // only way this preview can be the size a folder really draws — and it is why the folder grid needs no editor
+        // (that function decides the card, and the card decides the cells).
+        val grid = FolderGrid.toGridConfig(device)
+        val window = usableWindowArea(safeInsets)
+        val inner = folderInnerSize(
+            window = DpSize(window.widthDp.dp, window.heightDp.dp),
+            device = device,
+            grid = grid,
+            metrics = shownIcon.toIconMetrics(),
+        )
+        IconSizingPreview(
+            app = sampleApp,
+            sizing = shownIcon,
+            cellWidth = inner.width / grid.visualCols,
+            cellHeight = inner.height / grid.visualRows,
+            onReroll = viewModel.sample::reroll,
+            modifier = Modifier.padding(top = RowGap * 2),
+        )
+
         IconSizingControls(
             slot = GridSlot.FOLDER,
             sizing = icon,
             onChange = viewModel.icons::change,
             onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
             onDpRange = viewModel.icons::changeDpRange,
+            onPreview = { previewIcon = it },
         )
         MorphicButton(
             onClick = viewModel.icons::reset,

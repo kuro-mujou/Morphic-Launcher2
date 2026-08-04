@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,11 +37,13 @@ import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.GridDefault
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
@@ -75,6 +80,7 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
 
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
+    val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
 
     val colors = LocalMorphicColors.current
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
@@ -114,8 +120,36 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
         if (size == null || icon == null || rowHeightDp == null) return@Column
         val slot = state.layout.slot
         val metrics = icon.toIconMetrics()
+        // What the preview draws while a slider is held — see the Home section for why it is keyed on the resolved value.
+        var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
+        val shownIcon = previewIcon ?: icon
         // The whole window, unlike home's: the APPS surface takes all of it, with no dock to subtract.
         val window = usableWindowArea(safeInsets)
+
+        // **Every grid here is shown as its surface draws it**, through the same fit that surface applies — which is
+        // what makes the icon group below move both this editor and the preview. Raise the minimum icon dp and a
+        // six-column grid becomes three, because a cell has to stay wide enough for the icon in it. The clamp is a read
+        // on both sides: nothing is written, so the column returns when the icons shrink.
+        //
+        // Which fit depends on what the grid *has*, told apart by whether its stored size carries rows — exactly the two
+        // kinds of grid on this surface. The pager is the fitted one that took work to earn: its rows x cols is also the
+        // page **capacity** `AppsViewModel` paginates the store against, so it could not be clamped in a UI privately,
+        // and `AppsScreen` now reports the fit to that ViewModel before anything is paginated.
+        //
+        // Hoisted above the layout branch because the preview below needs it too, and the list — whose blueprint edits
+        // no axis at all — passes through it harmlessly at its one column.
+        val storedRows = size.rows
+        val drawn = if (storedRows == null) {
+            size.copy(cols = slot.blueprint.fitCols(window.widthDp, size.cols, metrics))
+        } else {
+            val fitted = slot.blueprint.fitGridConfig(window, size.cols, storedRows, metrics)
+            GridDefault(cols = fitted.visualCols, rows = fitted.visualRows)
+        }
+        // A scrolling grid stores no rows, so the preview draws **how many fit**: the cell height this column count
+        // implies (the same derivation the surface lays out with) divided into the screen. That is what makes adding a
+        // column visibly gain rows as the cells narrow — the actual consequence of the press, which a fixed preview
+        // number would hide.
+        val cellHeight = cellHeight(cellWidth = window.widthDp.dp / drawn.cols, metrics = metrics)
 
         if (state.layout == AppsLayout.VERTICAL_LIST) {
             // A list is one lane, so it has no grid to edit — its size *is* the row height. **Its bounds are the icon
@@ -148,27 +182,6 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             // The same editor home and the dock use. No companion zone: an APPS layout fills the screen, so there is
             // no second area to draw at its share of it.
             val range = slot.blueprint.editableRangeIn(window, metrics)
-            // **Every grid here is shown as its surface draws it**, through the same fit that surface applies — which is
-            // what makes the icon group below move this editor. Raise the minimum icon dp and a six-column grid becomes
-            // three, because a cell has to stay wide enough for the icon in it. The clamp is a read on both sides:
-            // nothing is written, so the column returns when the icons shrink.
-            //
-            // Which fit depends on what the grid *has*, told apart by whether its stored size carries rows — exactly the
-            // two kinds of grid on this surface. The pager is the fitted one that took work to earn: its rows × cols is
-            // also the page **capacity** `AppsViewModel` paginates the store against, so it could not be clamped in a UI
-            // privately, and `AppsScreen` now reports the fit to that ViewModel before anything is paginated.
-            val storedRows = size.rows
-            val drawn = if (storedRows == null) {
-                size.copy(cols = slot.blueprint.fitCols(window.widthDp, size.cols, metrics))
-            } else {
-                val fitted = slot.blueprint.fitGridConfig(window, size.cols, storedRows, metrics)
-                GridDefault(cols = fitted.visualCols, rows = fitted.visualRows)
-            }
-            // A scrolling grid stores no rows, so the preview draws **how many fit**: the cell height this column
-            // count implies (the same derivation the surface lays out with) divided into the screen. That is what
-            // makes adding a column visibly gain rows as the cells narrow — the actual consequence of the press,
-            // which a fixed preview number would hide.
-            val cellHeight = cellHeight(cellWidth = window.widthDp.dp / drawn.cols, metrics = metrics)
             if (range != null) {
                 GridEditor(
                     cols = drawn.cols,
@@ -193,12 +206,32 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             Text(if (state.layout == AppsLayout.VERTICAL_LIST) "Reset row height" else "Reset grid")
         }
 
+        // The **live preview**, between the layout and icon groups as L1 places it. Its shape follows the layout: the
+        // list gets a real row at its row height, every other layout a real cell at the size the fit above produced —
+        // which is what makes "the icons are 48dp" answerable as "in a cell this size, that is what you get".
+        val asRow = state.layout == AppsLayout.VERTICAL_LIST
+        IconSizingPreview(
+            app = sampleApp,
+            sizing = shownIcon,
+            cellWidth = if (asRow) window.widthDp.dp else window.widthDp.dp / drawn.cols,
+            cellHeight = if (asRow) {
+                fitRowHeight(rowHeightDp.dp, metrics)
+            } else {
+                // A paged grid divides the screen; a scrolling one derives its height from its width.
+                drawn.rows?.let { rows -> window.heightDp.dp / rows } ?: cellHeight
+            },
+            onReroll = viewModel.sample::reroll,
+            asRow = asRow,
+            modifier = Modifier.padding(top = RowGap * 2),
+        )
+
         IconSizingControls(
             slot = slot,
             sizing = icon,
             onChange = viewModel.icons::change,
             onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
             onDpRange = viewModel.icons::changeDpRange,
+            onPreview = { previewIcon = it },
         )
         MorphicButton(
             onClick = viewModel.icons::reset,

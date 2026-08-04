@@ -9,9 +9,11 @@ import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
+import inkspire.morphic.feature.settings.icons.SamplePreviewApp
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,7 +92,11 @@ data class AppsSectionState(
  */
 class AppsSectionViewModel(
     private val settingsRepository: SettingsRepository,
+    appRepository: AppRepository,
 ) : ViewModel() {
+
+    /** The app the icon preview draws, and the dice that changes it. Shared by every section that has a preview. */
+    internal val sample = SamplePreviewApp(appRepository, viewModelScope)
 
     private val layout = MutableStateFlow(ConfigurableLayouts.first())
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
