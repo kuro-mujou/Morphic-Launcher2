@@ -187,8 +187,8 @@ standalone icon-sizing screen has been **deleted** (S4k) — it was a waiting ro
 returns with the **icon studio** (B9), which is what L1's `Icons` section actually holds: shape, background and layers, a
 per-app concern rather than a per-grid one.
 
-Not yet ported from L1's details: the live **icon preview** between the layout and icon groups, which renders over the
-wallpaper through a `BlendMode.Src` punch and so waits on `data:wallpaper` (S5/B7b).
+The live **icon preview** between the layout and icon groups is ported (S4m). What is *not* is the wallpaper behind
+it — L1 punched through to the live wallpaper with `BlendMode.Src`, which needs `data:wallpaper` (S5/B7b).
 
 #### Why not one `NavKey` per section *(reversed)*
 
@@ -397,6 +397,35 @@ every phase ends with something visibly working on device, and no slice is writt
     Visible consequence to expect on device: home icons were drawing at 72dp (88% of an 82dp inner bound, capped by the
     old 72dp guardrail) and now draw at 48dp. `IconMetrics`' Compose-side defaults moved in step — they are the same
     record and a difference between them would show as a change at the moment the store answered.
+  - [x] **S4m — the live icon preview.** L1's `IconPreviewBox` + `ClassicCellIconPreview`, in every section: a real
+        `AppCell` (or `AppRowCell`) at the **real cell size** the section computed, with the cell and the two icon
+        guardrails outlined over it, tracking the sliders **live** rather than on release. It is what makes the icon
+        controls legible — a fraction and two dp bounds do not tell you what you get in *this* cell, and which of the
+        three is binding is the only question a user has while dragging. Five parts:
+    - **`cellIconLayout`** (`core:designsystem/cell`) — where the icon lands in a cell of a given size, published so the
+      guides can align with the cell without copying its constants. L1 restated the padding and label gap as
+      `PREVIEW_CELL_PAD_DP` / `PREVIEW_LABEL_GAP_DP` under a "keep in sync" comment; this is the same correction `CellFit`
+      made in the other direction. 5 tests, including the asymmetry worth pinning: the no-label branch does **not** clamp
+      the icon to the cell, so an oversized guardrail is reported as the overflow it is rather than hidden.
+    - **`onPreview` on both commit sliders**, forwarded by `IconSizingControls` as a whole previewed `IconSizing`. The
+      dragged value was already tracked for the slider's own label, so handing it out cost nothing — this is L1's
+      `onPreview`/`onChange` pair, with the *result* passed instead of a transform, for the reason `onChange` names a
+      field rather than taking a lambda.
+    - **`SamplePreviewApp`** — one real installed app to draw, plus L1's dice to change it (`data:apps` is a new
+      dependency for this module, and an honest one: the preview's whole point is a real icon at a real size). Indexed
+      rather than `shuffled()` in composition, which is what L1 did — its preview could change app mid-drag.
+    - **Every section supplies its own cell size**, which is the part that could not be shared: home divides its area by
+      the fitted grid, the dock divides its *height setting* by its rows, APPS branches on layout (a row for the list),
+      and the folder asks `folderInnerSize` — the same sizer the overlay lays out with, since a folder's cell comes from
+      a card, not a division.
+    - **Two deliberate departures.** The guardrails are **greyscale** (solid = cell, dashed = upper, dotted = lower, with
+      the caption naming them), because L1 coloured them green and red and this palette reserves red for `error` — the
+      same rule that put the grid editor's buttons on the edge they affect. And there is **no wallpaper behind it**: L1
+      punched through to the live wallpaper (`BlendMode.Src` over a transparent window, the whole pane composited into an
+      offscreen layer, overscroll disabled because a stretch breaks the punch), which needs `data:wallpaper` — the one
+      piece of the preview genuinely blocked rather than reshaped, and the reason L1's sticky-header scaffolds
+      (`IconDetailPortrait`/`Landscape`) are not ported either. The preview sits above the icon group in the section's
+      ordinary scrolling column instead.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
 - [ ] **S5 — `data:wallpaper` + effects.** Wallpaper source/rotate/crop and the `BackdropEffect` params (11 knobs).
       Unblocks the shell's wallpaper-brightness theme input. Blur/dominant-colour move out of settings on the way.

@@ -681,8 +681,19 @@ and its icon controls are the whole screen, because `FolderGrid` declares no `ed
 the screen, so its rows and columns follow rather than being picked. It states the resolved page size as a fact instead,
 and states that it also governs the **category card's expansion**, which is the same `FolderOverlay` on the same grid.
 **The name `Icons` returns with the icon studio** (B9, per-app: shape, background, layers), which is what L1's `Icons`
-section actually is — not grid sizing, which L1 never kept there either. Still missing beside L1: the live icon
-**preview** between the two groups, which punches through to the wallpaper and so waits on `data:wallpaper`.
+section actually is — not grid sizing, which L1 never kept there either.
+**Every section has L1's live icon preview**, between its layout group and its icon group: a real `AppCell` (or
+`AppRowCell`) at the **real cell size** that section computed, with the cell and both icon guardrails outlined over it,
+tracking the sliders per frame (`onPreview`) rather than on release. It is what makes the icon controls legible — a
+fraction and two dp bounds say nothing about *this* cell, and which of the three is binding is the whole question while
+dragging. The geometry is **asked for, not copied** (`cellIconLayout` in `core:designsystem/cell`, so a guide cannot
+drift from the cell it is drawn over — L1 restated the cell's padding under a "keep in sync" comment); each section
+supplies its own cell size, which is the part that cannot be shared (home divides its area, the dock divides its height
+setting, APPS branches on layout, the folder asks `folderInnerSize`); and the guardrails are **greyscale by stroke**
+(solid = cell, dashed = upper, dotted = lower) because L1's green/red cannot survive a palette that reserves red for
+`error`. **Still missing beside L1: the wallpaper behind it** — L1 punched through to the live wallpaper with
+`BlendMode.Src`, which waits on `data:wallpaper`, and with it L1's sticky-header scaffolds that existed to serve that
+punch.
 **The APPS section is one section with a chip per layout** — the settings mirror of one `feature:apps` for five
 layouts, and the same argument: they differ only in arrangement, so what a user configures is "the paged one" or "the
 list". Selecting a chip writes nothing (which layout you *get* is per home edge, in the register). Its resize is **one
