@@ -24,6 +24,8 @@ import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.SettingsRoute
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.settings.SettingsScreen
+import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureRoute
+import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropScreen
 import inkspire.morphic.feature.shell.LauncherShell
@@ -100,6 +102,7 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<WallpaperCropRoute> { route ->
                     WallpaperCropScreen(uri = route.uri, onDone = { navigator.goBack() })
                 }
+                entry<WallpaperCaptureRoute> { WallpaperCaptureScreen(onDone = { navigator.goBack() }) }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },
         )

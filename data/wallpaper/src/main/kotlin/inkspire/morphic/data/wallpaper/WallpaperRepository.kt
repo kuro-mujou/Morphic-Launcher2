@@ -15,13 +15,39 @@ import kotlinx.serialization.Serializable
  * @property path an absolute path under `filesDir/wallpaper`, written by this module.
  * @property width the stored bitmap's width in px, and [height] its height — recorded so a consumer can size a preview
  *   without decoding the file.
+ * @property source where the image came from, which is what decides whether [WallpaperRepository.apply] means
+ *   anything for it.
  */
 @Serializable
 data class WallpaperImage(
     val path: String,
     val width: Int,
     val height: Int,
+    val source: WallpaperSource = WallpaperSource.PICKED,
 )
+
+/**
+ * How the launcher came by its wallpaper image — and, because of that, whether setting it on the system is meaningful.
+ *
+ * L1's `WallpaperSource` narrowed to what exists: its `LIVE_ROTATE` belongs to the rotating pair (S5e) and arrives with
+ * it. The distinction is not bookkeeping — L1's `applySingle` branches on exactly this, and skips `WallpaperManager`
+ * entirely for a capture.
+ */
+enum class WallpaperSource {
+
+    /** Chosen from the photo picker and framed on the crop screen. The only kind that can *become* the wallpaper. */
+    PICKED,
+
+    /**
+     * A screenshot the user took with the launcher's UI hidden — **a picture of the wallpaper, not a wallpaper.**
+     *
+     * Applying one would set a photograph of the current wallpaper as the wallpaper: a no-op at best, and at worst a
+     * slow drift as each capture re-encodes the last. It exists as an *effect input*: it is the only way to sample a
+     * live wallpaper, which cannot be read as a bitmap. So it is stored and previewed like any image, and
+     * [WallpaperRepository.apply] declines it.
+     */
+    CAPTURED,
+}
 
 /** Where a wallpaper is set on the system: the home screen, the lock screen, or both. L1's `WallpaperTarget`. */
 enum class WallpaperTarget { HOME, LOCK, BOTH }
@@ -91,17 +117,16 @@ object WallpaperFiles {
  * `data:settings`: it decodes bitmaps, writes files, and talks to `WallpaperManager`. What it persists is a **pointer**
  * to a file it wrote plus the id of the wallpaper it set — bookkeeping, not preferences, which is the distinction the
  * settings port's S0 drew when it refused to bring L1's `WallpaperState` across into the settings blob. The *effect*
- * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5b.
+ * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5f.
  *
- * **This first cut is the static single image only.** Three of L1's capabilities are deliberately absent, each with a
- * reason rather than an omission:
- * - **`CAPTURE`** — an effect-only source (a screenshot taken with the launcher's own UI hidden) that never becomes the
- *   system wallpaper. It exists *for* the frosted backdrop, so it waits on the effects that read it.
+ * **Two of L1's sources are here — picked and captured — and the rest is deliberately absent**, each with a reason
+ * rather than as an omission:
  * - **`LIVE_ROTATE`** — a per-orientation pair rendered by L1's own `RotateWallpaperService`. That is a live wallpaper
  *   with a service, a manifest entry and its own XML metadata; it is a feature beside this one rather than a step in it.
  * - **the blur and the dominant colour** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
  *   need L1's `Blur.kt` image processing, which the plan already says belongs beside the graphics code rather than in a
- *   repository.
+ *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
+ *   sample?", and answering that once against every source beats re-answering it per source.
  */
 interface WallpaperRepository {
 
@@ -134,18 +159,48 @@ interface WallpaperRepository {
      *
      * @param outWidth the size to store at, which the crop screen passes as the **viewport it framed against**. That
      *   is what makes the result what the user saw: the rectangle and the output share one coordinate space.
+     * @param source how the image was obtained. One write path for both, because they differ in exactly this: a
+     *   capture is already the size and shape of the screen, so it passes [NormalizedCropRect.Full] — which is what
+     *   that value was declared for.
      */
-    suspend fun setImage(uri: Uri, crop: NormalizedCropRect, outWidth: Int, outHeight: Int)
+    suspend fun setImage(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        source: WallpaperSource,
+    )
 
     /**
      * Sets the stored image as the system wallpaper on [target], and records the id the system gave it.
      *
-     * A no-op when nothing has been chosen. Failure to set is logged rather than thrown: `WallpaperManager` can refuse
-     * for reasons the caller cannot fix or predict (a device policy, a provider that vanished), and a settings screen
-     * has nothing useful to do with an exception. L1 swallowed it the same way, with the same `runCatching`.
+     * A no-op when nothing has been chosen, **and when the stored image is a [WallpaperSource.CAPTURED] one** — that
+     * is a picture *of* the wallpaper, so setting it would either change nothing or re-encode the last capture. L1
+     * branched on the same field in `applySingle` for the same reason. The section correspondingly offers no Apply for
+     * a capture, but the rule lives here, where it cannot be worked around.
+     *
+     * Failure to set is logged rather than thrown: `WallpaperManager` can refuse for reasons the caller cannot fix or
+     * predict (a device policy, a provider that vanished), and a settings screen has nothing useful to do with an
+     * exception. L1 swallowed it the same way, with the same `runCatching`.
      */
     suspend fun apply(target: WallpaperTarget)
 
     /** The stored image as a bitmap, for a preview at real size. Null when nothing is stored, or the file is gone. */
     suspend fun loadImage(): Bitmap?
+
+    /**
+     * Emits each image that appears in the device's gallery **after collection starts** — how a capture is noticed.
+     *
+     * There is no API for "take a screenshot", so L1's capture flow is the only one available: hide the launcher's UI,
+     * ask the user to take one, and watch `MediaStore` for what arrives. This is that watch, moved out of the screen it
+     * lived in — a `ContentObserver` and a query are system reads, and a composable is the wrong place to hold either.
+     *
+     * **It cannot tell a screenshot from any other new image**, and neither could L1's: what it reports is the newest
+     * image, whatever produced it. That is why the screen asks for a screenshot *now* and takes the first emission — a
+     * photo arriving from a sync at that exact moment is the known failure, and it is recoverable by capturing again.
+     *
+     * Requires read access to media images; without the permission the query returns nothing and this stays silent
+     * rather than throwing, since the screen has already asked and can do nothing more about it.
+     */
+    fun newGalleryImages(): Flow<Uri>
 }

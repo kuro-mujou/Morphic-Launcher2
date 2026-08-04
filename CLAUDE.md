@@ -256,8 +256,12 @@ to persist path pointers"): a path to a file we wrote and the id the system gave
 S0 had already refused that on the way in. The **effect params** (`BackdropEffect`) are the genuinely preference-shaped
 half and stay in `data:settings`. State is **two fields where L1 had six** — L1's juggled two image sets and a snapshot
 copy of whichever was applied, both of which exist *for* the frosted backdrop; `appliedSystemId` is an id rather than a
-boolean because it also detects a wallpaper set outside the launcher. Built: pick from a `Uri`, sample-decode, **frame it on the crop
-screen**, scale to the screen and apply to HOME / LOCK / BOTH. Nothing invents a crop any more — `setImage` takes a
+boolean because it also detects a wallpaper set outside the launcher. Built: **two sources** — pick from a `Uri` and frame it on the crop
+screen, or **capture** a screenshot of the wallpaper itself — each sample-decoded, scaled to the screen and stored
+through one write path, plus apply to HOME / LOCK / BOTH. `WallpaperSource` is what separates them: a capture is a
+picture *of* the wallpaper, so `apply` declines it and it exists only for the effects to sample (it is the one way to
+read a **live** wallpaper). Capture landed before its consumer on purpose — an effect has to answer "which image do I
+sample?", and answering that once against every source beats re-answering it per source. Nothing invents a crop any more — `setImage` takes a
 `NormalizedCropRect` and the screen passes the region the user framed, against the viewport it also passes as the size
 to store at, so the rectangle and the result share one coordinate space. Deliberately absent, each for a reason rather
 than as an omission: the **capture** source and the **blur/dominant colour** (both are effect inputs, so they wait on
@@ -672,8 +676,8 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** the remaining wallpaper **sources** — **capture** (S5d, L1's screenshot-with-the-UI-hidden) and
-**rotate** (S5e, the per-orientation pair and its live-wallpaper service) — and only then the **effects** (S5f), which
+**Next likely:** the last wallpaper source — **rotate** (S5e, the per-orientation pair and its live-wallpaper
+service) — and only then the **effects** (S5f), which
 unblock the folder's frosted backdrop (solid black today) and the shell's hardcoded `darkTheme`. The effects moved last
 deliberately: an effect has to answer "which image do I sample?", so designing it before the sources exist means
 re-answering that per source. Also open: a **home long-press → options menu** (the free cell space now falls through to

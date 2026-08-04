@@ -65,10 +65,14 @@ private val PreviewCorner = 16.dp
  * store and issues one command (apply), and the picked-but-unsaved image never touches it. L1's picker pushed its crop
  * screen the same way.
  *
- * **What is deliberately absent**, each waiting on its own slice rather than missing: **capture** (S5e) and the
- * **rotating live wallpaper** (S5f). L1's tab also carried three browse rows — "My wallpapers", "Backdrops (By
- * Unsplash)" and installed live wallpapers — of which the first two are empty-state hints for a source that does not
- * exist. An empty shelf is not a feature; they arrive when something fills them.
+ * **Two sources, and they are not peers.** "Choose image" picks one and frames it; "Capture screen" takes a picture
+ * *of* the wallpaper for the effects to sample (see [WallpaperCaptureScreen]). A captured image is previewed like any
+ * other but cannot be applied, so the Apply button is replaced by the reason rather than left dead — the rule itself
+ * lives in the repository, where it cannot be worked around.
+ *
+ * **What is deliberately absent**: the **rotating live wallpaper** (S5e). L1's tab also carried three browse rows —
+ * "My wallpapers", "Backdrops (By Unsplash)" and installed live wallpapers — of which the first two are empty-state
+ * hints for a source that does not exist. An empty shelf is not a feature; they arrive when something fills them.
  */
 @Composable
 internal fun WallpaperDetail(modifier: Modifier = Modifier) {
@@ -149,13 +153,35 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
             ) {
                 Text("Choose image")
             }
+            MorphicButton(
+                onClick = { navigator.goTo(WallpaperCaptureRoute) },
+                style = MorphicButtonStyle.Tonal,
+                enabled = !state.busy,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Capture screen")
+            }
+        }
+
+        // Apply is the *system* action and sits apart from the two that only change what the launcher holds. A capture
+        // has nothing to apply, so it says so where the button would be — a disabled control invites a second tap and
+        // explains nothing.
+        if (state.image != null && !state.applicable) {
+            Text(
+                text = "A capture is a picture of the wallpaper, so it is not applied — it is there for the effects " +
+                    "to sample.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.contentMuted,
+                modifier = Modifier.padding(top = RowGap * 2),
+            )
+        } else {
             ApplyButton(
                 // "Re-apply" once this launcher is the one that set it — L1's wording, off the same stored id.
                 label = if (state.applied) "Re-apply" else "Apply",
                 // Nothing to apply until something is chosen, and nothing to press while a write is in flight.
-                enabled = state.image != null && !state.busy,
+                enabled = state.applicable && !state.busy,
                 onSelect = viewModel::apply,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth().padding(top = RowGap * 2),
             )
         }
 

@@ -1,10 +1,16 @@
 package inkspire.morphic.data.wallpaper.internal
 
 import android.app.WallpaperManager
+import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Context
+import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import androidx.core.graphics.scale
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -16,9 +22,14 @@ import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.WallpaperFiles
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
+import inkspire.morphic.data.wallpaper.WallpaperSource
 import inkspire.morphic.data.wallpaper.WallpaperState
 import inkspire.morphic.data.wallpaper.WallpaperTarget
+import java.io.File
+import kotlin.math.roundToInt
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -26,8 +37,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import timber.log.Timber
-import java.io.File
-import kotlin.math.roundToInt
 
 /**
  * This module's own store — **one file, one key, one blob**, the same shape a settings slice has.
@@ -71,26 +80,39 @@ internal class WallpaperRepositoryImpl(
         decodeSampled(uri, PREVIEW_CAP)
     }
 
-    override suspend fun setImage(uri: Uri, crop: NormalizedCropRect, outWidth: Int, outHeight: Int): Unit =
-        withContext(dispatchers.io) {
-            val source = decodeSampled(uri, SOURCE_CAP) ?: run {
-                Timber.w("Unable to decode wallpaper image from %s", uri)
-                return@withContext
-            }
-            val scaled = cropAndScale(source, crop, outWidth, outHeight)
-            val file = writeImage(scaled)
-            updateState {
-                // The id is reset, not kept: this is a different image from the one we applied, so the section must
-                // offer "Apply" again rather than claiming the new pick is already on the system.
-                WallpaperState(
-                    image = WallpaperImage(file.absolutePath, scaled.width, scaled.height),
-                    appliedSystemId = 0,
-                )
-            }
+    override suspend fun setImage(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        source: WallpaperSource,
+    ): Unit = withContext(dispatchers.io) {
+        val decoded = decodeSampled(uri, SOURCE_CAP) ?: run {
+            Timber.w("Unable to decode wallpaper image from %s", uri)
+            return@withContext
         }
+        val scaled = cropAndScale(decoded, crop, outWidth, outHeight)
+        val file = writeImage(scaled)
+        updateState {
+            // The id is reset, not kept: this is a different image from the one we applied, so the section must
+            // offer "Apply" again rather than claiming the new pick is already on the system. A capture resets it
+            // for a second reason - it can never be applied at all, so any id it inherited would be a claim about
+            // an image that is no longer stored.
+            WallpaperState(
+                image = WallpaperImage(file.absolutePath, scaled.width, scaled.height, source),
+                appliedSystemId = 0,
+            )
+        }
+    }
 
     override suspend fun apply(target: WallpaperTarget): Unit = withContext(dispatchers.io) {
         val image = wallpaper.first().image ?: return@withContext
+        // A capture is a picture *of* the wallpaper. Setting it would at best change nothing and at worst re-encode
+        // the last capture into the next one; L1 skipped `WallpaperManager` on the same field for the same reason.
+        if (image.source == WallpaperSource.CAPTURED) {
+            Timber.w("Refusing to apply a captured image: it is a picture of the wallpaper, not a wallpaper")
+            return@withContext
+        }
         val bitmap = decodeFile(image.path) ?: run {
             Timber.w("Stored wallpaper file is missing: %s", image.path)
             return@withContext
@@ -113,6 +135,55 @@ internal class WallpaperRepositoryImpl(
 
     override suspend fun loadImage(): Bitmap? = withContext(dispatchers.io) {
         wallpaper.first().image?.let { decodeFile(it.path) }
+    }
+
+    /**
+     * A `ContentObserver` on the image collection, turned into a flow - registered on collection and unregistered when
+     * the collector goes away, which is what `callbackFlow`'s `awaitClose` is for.
+     *
+     * **Each change is answered with a query for the newest image**, because an observer says only *that* something
+     * changed. The cutoff is taken a couple of seconds back rather than at exactly now: `DATE_ADDED` has second
+     * resolution, so a screenshot taken in the same second this is collected would otherwise be missed - L1 took the
+     * same two-second slack for the same reason.
+     *
+     * Duplicate emissions are possible (an observer can fire more than once for one insert, and a pending image
+     * becomes non-pending), which is left alone rather than smoothed over: the only collector takes the first
+     * emission, so de-duplication here would be a rule for a caller that does not exist.
+     */
+    override fun newGalleryImages(): Flow<Uri> = callbackFlow {
+        val resolver = appContext.contentResolver
+        val since = System.currentTimeMillis() / MILLIS_PER_SECOND - GALLERY_SLACK_SECONDS
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                newestImageSince(resolver, since)?.let { trySend(it) }
+            }
+        }
+        resolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer)
+        awaitClose { resolver.unregisterContentObserver(observer) }
+    }.flowOn(dispatchers.io)
+
+    /**
+     * The newest non-pending image added at or after [sinceSeconds], or null when there is none.
+     *
+     * `IS_PENDING = 0` matters: a screenshot appears in `MediaStore` before its bytes are written, and importing a
+     * pending row reads a truncated file. L1 guarded it the same way, gated on the API level where the column arrives;
+     * this codebase's `minSdk` is past that, so the branch is gone rather than carried.
+     *
+     * Failure is null rather than a throw: the query can run without the media permission (a user may revoke it
+     * between the ask and the shot), and "no image" is the honest answer to that.
+     */
+    private fun newestImageSince(resolver: ContentResolver, sinceSeconds: Long): Uri? {
+        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(MediaStore.Images.Media._ID)
+        val selection = MediaStore.Images.Media.DATE_ADDED + " >= ? AND " + MediaStore.Images.Media.IS_PENDING + " = 0"
+        val order = MediaStore.Images.Media.DATE_ADDED + " DESC, " + MediaStore.Images.Media._ID + " DESC"
+        return runCatching {
+            resolver.query(collection, projection, selection, arrayOf(sinceSeconds.toString()), order)?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                ContentUris.withAppendedId(collection, id)
+            }
+        }.onFailure { Timber.w(it, "Cannot read the image collection") }.getOrNull()
     }
 
     /** Read-modify-write **inside** the transaction, which is the fix for L1's lost update. */
@@ -205,5 +276,11 @@ internal class WallpaperRepositoryImpl(
 
         /** L1's quality, kept: high enough that a gradient does not band, low enough that the file is a few hundred KB. */
         const val JPEG_QUALITY = 92
+
+        /** `DATE_ADDED` is in seconds. */
+        const val MILLIS_PER_SECOND = 1_000
+
+        /** How far back the gallery watch looks, in seconds - see `newGalleryImages`. */
+        const val GALLERY_SLACK_SECONDS = 2
     }
 }

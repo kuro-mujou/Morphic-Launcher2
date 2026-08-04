@@ -7,11 +7,13 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
+import inkspire.morphic.data.wallpaper.WallpaperSource
 import inkspire.morphic.data.wallpaper.WallpaperTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -26,6 +28,8 @@ import kotlinx.coroutines.launch
  * @property applied whether *this launcher* set the current system wallpaper — the difference between "Apply" and
  *   "Re-apply". Read from `WallpaperState.appliedSystemId`, which is an id rather than a boolean because the same
  *   field will later detect a wallpaper set outside the launcher.
+ * @property applicable whether the stored image can be set on the system at all. False for a capture, which is a
+ *   picture *of* the wallpaper — the repository declines it, and the section shows why instead of a dead button.
  * @property busy a write is in flight — read by the **crop** screen, whose Save button it disables and relabels while
  *   a large photo is decoded and scaled, and by the section, whose buttons it disables while an apply runs. L1 had no
  *   such flag and did not need one for the crop (its screen had a local `saving`), but it also could not tell you that
@@ -36,7 +40,9 @@ data class WallpaperSectionState(
     val preview: Bitmap? = null,
     val applied: Boolean = false,
     val busy: Boolean = false,
-)
+) {
+    val applicable: Boolean get() = image?.source == WallpaperSource.PICKED
+}
 
 /**
  * Screen-level state holder for the **wallpaper section**: the chosen image, and the two things a user can do to it.
@@ -100,12 +106,41 @@ class WallpaperViewModel(
         outWidth: Int,
         outHeight: Int,
         onSaved: () -> Unit = {},
+    ) = store(uri, crop, outWidth, outHeight, WallpaperSource.PICKED, onSaved)
+
+    /**
+     * Waits for the next image to appear in the gallery — the capture screen's cue that a screenshot was taken.
+     *
+     * Suspends until one arrives and returns it, so the caller reads as the sequence it is: hide the launcher, wait,
+     * import. Null only if the flow completes without emitting, which it does not do on its own — a cancelled wait
+     * (the screen left) unwinds as a cancellation instead.
+     */
+    suspend fun awaitCapture(): Uri? = wallpaperRepository.newGalleryImages().firstOrNull()
+
+    /**
+     * Stores [uri] — a screenshot — as the wallpaper image, at [outWidth] × [outHeight].
+     *
+     * **No crop**, because a screenshot is already exactly the screen: it passes `NormalizedCropRect.Full`, which is
+     * the caller that value's KDoc was written for. It is marked [WallpaperSource.CAPTURED], which is what stops it
+     * being applied to the system — see that constant.
+     */
+    fun capture(uri: Uri, outWidth: Int, outHeight: Int, onSaved: () -> Unit = {}) =
+        store(uri, NormalizedCropRect.Full, outWidth, outHeight, WallpaperSource.CAPTURED, onSaved)
+
+    /** The one write path both sources take; they differ in the rectangle and in what they are called. */
+    private fun store(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        source: WallpaperSource,
+        onSaved: () -> Unit,
     ) {
         if (busy.value) return
         busy.value = true
         viewModelScope.launch {
             try {
-                wallpaperRepository.setImage(uri, crop, outWidth, outHeight)
+                wallpaperRepository.setImage(uri, crop, outWidth, outHeight, source)
                 onSaved()
             } finally {
                 busy.value = false
