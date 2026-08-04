@@ -2,7 +2,11 @@ package inkspire.morphic.feature.apps
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,12 +18,13 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.grid.fitGridConfig
+import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
 import inkspire.morphic.core.model.AppsPagerGrid
 import inkspire.morphic.core.model.DeviceConfiguration
-import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.colsFor
@@ -70,6 +75,28 @@ fun AppsScreen(
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
+    // **The pager's page capacity, fitted here and reported down** — the one grid on this surface whose stored size
+    // cannot simply be clamped where it is drawn, because it is also what the *store* is paginated against (see
+    // `AppsViewModel.setPagerFit`). The area is the window minus the insets the pager itself pads its pages by, so the
+    // capacity describes the space a page really has.
+    //
+    // **Reported from here rather than from the pager's arm**, so it does not depend on which layout is showing: the
+    // pager's arrangement is kept in step with what is installed whatever the user is looking at, which is the
+    // invariant that makes switching layout reload nothing.
+    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+    val pagerArea = usableWindowArea(safeInsets)
+    // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —
+    // but the *report* below is gated on the store having answered. Paginating against a placeholder would write pages
+    // nobody chose and then rewrite them, which is the trap home's settle effects are guarded against too.
+    val storedPager = state.pagerConfig ?: AppsPagerGrid.toGridConfig(device)
+    val pagerFit = AppsPagerGrid.fitGridConfig(
+        area = pagerArea,
+        cols = storedPager.visualCols,
+        rows = storedPager.visualRows,
+        metrics = state.metricsFor(GridSlot.APPS_PAGER),
+    )
+    if (state.pagerConfig != null) LaunchedEffect(pagerFit) { viewModel.setPagerFit(pagerFit) }
+
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, as home's
     // comment here used to promise would happen. Settings keeps its own boundary, so the two can disagree about
     // dark/light — the launcher follows wallpaper brightness, settings follows the system.
@@ -101,9 +128,9 @@ fun AppsScreen(
                 // A folder opened over the pager is a different grid, so it takes its own sizing rather than
                 // inheriting the page's.
                 folderMetrics = state.metricsFor(GridSlot.FOLDER),
-                // The same grid the ViewModel paginates the store against — passed down rather than re-resolved, so
-                // the page drawn and the page stored cannot be different sizes.
-                config = state.pagerConfigFor(device),
+                // The same grid the ViewModel paginates the store against — the fitted one computed above, passed down
+                // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
+                config = pagerFit,
             )
             AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
                 categories = state.categories,
@@ -153,9 +180,9 @@ private fun AppsState.metricsFor(slot: GridSlot): IconMetrics =
 private fun AppsState.colsFor(slot: GridSlot, device: DeviceConfiguration): Int =
     gridCols[slot] ?: slot.blueprint.colsFor(device)
 
-/** The pager's resolved grid, or its blueprint's until the store answers — [colsFor] for the one grid with rows. */
-private fun AppsState.pagerConfigFor(device: DeviceConfiguration): GridConfig =
-    pagerConfig ?: AppsPagerGrid.toGridConfig(device)
+// The pager has no `pagerConfigFor` twin of [colsFor] any more: its stored grid needs *fitting* rather than merely
+// resolving, and a fit needs the measured window — so it is computed in the composable above, next to the measurement,
+// and reported to the ViewModel from there.
 
 /**
  * The list's resolved row height, or its blueprint's until the store answers.

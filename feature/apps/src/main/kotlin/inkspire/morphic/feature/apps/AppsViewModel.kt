@@ -112,21 +112,41 @@ class AppsViewModel(
             .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), replay = 1)
 
     /**
-     * The APPS pager's grid for the reported device — **the user's size**, resolved from its blueprint with any
+     * The APPS pager's **stored** grid for the reported device — the user's size, resolved from its blueprint with any
      * override applied.
+     *
+     * Reaches the state so the *screen* can fit it (see [setPagerFit]); it is deliberately **not** the capacity anything
+     * paginates against, because a size chosen at one icon size may no longer be drawable at another.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val pagerConfig: Flow<GridConfig?> =
+        device.flatMapLatest { current ->
+            if (current == null) flowOf(null) else settingsRepository.gridConfig(GridSlot.APPS_PAGER, current)
+        }
+
+    /**
+     * **The page capacity: the stored grid clamped to what the screen can actually draw**, reported by the surface.
      *
      * A `StateFlow` because three things read it and one of them is not a flow at all: the pages come from it, the
      * install sync writes against it, and [applyPager] needs its capacity at the moment of a drop.
      *
-     * It is the surface's page **capacity**, which is why reading it from the store rather than from the blueprint
-     * matters more here than anywhere else: the store paginates against this number, so a pager drawn at one size and
-     * paginated at another would put items on pages that do not exist.
+     * **Why the fit has to arrive here rather than being applied in the UI.** Every other grid's stored size only
+     * decides what is *drawn*, so a surface can clamp it privately. This one is also the number the **store** is
+     * paginated against — `apps_pager_item` rows carry an explicit page and in-page slot — so a pager drawn at one size
+     * and paginated at another would put items on pages that do not exist, and a drop would compute its slot against a
+     * capacity the store does not apply. The clamp therefore has to be upstream of pagination, which means upstream of
+     * here.
+     *
+     * **Null until the surface reports it, and that gate is load-bearing.** Pagination *writes* (`syncPager`), so a
+     * capacity guessed for one frame and corrected on the next would write rows twice and visibly reshuffle the pages.
+     * Every reader below already treats null as "not yet" — the same rule home states for its own settle effects: a
+     * blueprint fallback is not the user's grid, so nothing may act on it.
+     *
+     * The narrow input [setDevice] replaced (`setPagerGrid`) pushed the *blueprint's* size down, which put a decision
+     * the store owns in the UI. This pushes a **runtime bound** the store cannot know instead — the same shape as
+     * `DockViewModel.setHeight` being told its row cap.
      */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val pagerConfig: StateFlow<GridConfig?> =
-        device.flatMapLatest { current ->
-            if (current == null) flowOf(null) else settingsRepository.gridConfig(GridSlot.APPS_PAGER, current)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+    private val pagerFit = MutableStateFlow<GridConfig?>(null)
 
     /**
      * The **visual column count** of each scrolling APPS grid, by slot — resolved, as the icon sizing is.
@@ -151,8 +171,9 @@ class AppsViewModel(
     /**
      * The stored pager arrangement, re-subscribed whenever the page capacity changes.
      *
-     * Keyed on the resolved grid rather than on the device, since it is the grid that decides how many entries fit a
-     * page — and it now changes without the device changing, whenever the user resizes it.
+     * Keyed on the **fitted** grid rather than on the device, since it is the grid that decides how many entries fit a
+     * page — and it now changes without the device changing, whenever the user resizes it *or* grows the icons past
+     * what the stored size can carry.
      *
      * Emits empty (rather than nothing) before that grid is known, so the derived layouts still render on the first
      * frame: a `combine` waits for *every* source, and a list that never appeared because the surface had not yet
@@ -160,7 +181,7 @@ class AppsViewModel(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val pagerItems: Flow<List<List<IconItem>>> =
-        pagerConfig.flatMapLatest { config ->
+        pagerFit.flatMapLatest { config ->
             if (config == null) flowOf(emptyList())
             else appsOrderRepository.pagerPages(ORIENTATION, config.perPage)
         }
@@ -255,7 +276,7 @@ class AppsViewModel(
         // is why there is no separate seed step to drift out of sync with this one. `syncPager` writes nothing when
         // nothing changed, so the common launch costs a read.
         viewModelScope.launch {
-            combine(sortedApps, pagerConfig) { apps, config -> apps to config }
+            combine(sortedApps, pagerFit) { apps, config -> apps to config }
                 .collect { (apps, config) ->
                     if (config != null) {
                         appsOrderRepository.syncPager(ORIENTATION, config.perPage, apps.map { it.componentKey })
@@ -285,11 +306,31 @@ class AppsViewModel(
      * Supplies the device configuration the surface is drawn on — the UI's one job in this direction.
      *
      * It replaced `setPagerGrid(config)`, in which the UI resolved a blueprint and handed down the product. Reporting
-     * the *input* instead means everything else derives here: the page capacity, and every grid's icon sizing.
+     * the *input* instead means everything else derives here: the stored page size, and every grid's icon sizing.
      * Idempotent, since setting an equal value on a `MutableStateFlow` emits nothing.
+     *
+     * The one thing that cannot derive from it is the *fit* of that size, which needs a measured window — see
+     * [setPagerFit]. That is a genuinely different input rather than the old one returning: a bound, not a default.
      */
     fun setDevice(configuration: DeviceConfiguration) {
         device.value = configuration
+    }
+
+    /**
+     * Reports the pager grid the surface can actually draw — [AppsState.pagerConfig] clamped by `CellFit.fitGridConfig`
+     * to the measured window at the current icon sizing.
+     *
+     * **This becomes the page capacity**, so it is the number the store is paginated against and the number a drop's
+     * slot is computed from; see [pagerFit] for why the clamp cannot stay in the UI. The screen owns the call because
+     * the fit needs a measured area and the current type scale, neither of which a state holder has — the same division
+     * of labour as `DockViewModel.setHeight`, and the same one every `CellFit` caller follows.
+     *
+     * **Only ever called with a fit of the *stored* grid**, never of a blueprint fallback: paginating against a
+     * placeholder would write pages nobody chose and then rewrite them. Idempotent, so the surface may report on every
+     * recomposition.
+     */
+    fun setPagerFit(config: GridConfig) {
+        pagerFit.value = config
     }
 
     /** Opens the app for [component] (a tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
@@ -448,7 +489,9 @@ class AppsViewModel(
 
     private fun applyPager(changes: List<AppsPagerChange>) {
         if (changes.isEmpty()) return
-        val perPage = pagerConfig.value?.perPage ?: return
+        // The **fitted** capacity, which is the one the pages the user just dropped onto were paginated at. Reading the
+        // stored size here instead would compact and cascade against a page size nothing drew.
+        val perPage = pagerFit.value?.perPage ?: return
         viewModelScope.launch { appsOrderRepository.applyPager(ORIENTATION, perPage, changes) }
     }
 

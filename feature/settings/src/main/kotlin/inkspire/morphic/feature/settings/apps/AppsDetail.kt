@@ -28,10 +28,12 @@ import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.grid.cellHeight
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitCols
+import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.maxCells
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
@@ -139,19 +141,21 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             // The same editor home and the dock use. No companion zone: an APPS layout fills the screen, so there is
             // no second area to draw at its share of it.
             val range = slot.blueprint.editableRangeIn(window, metrics)
-            // **A scrolling grid's columns are shown as the surface draws them**, through the same `fitCols` those
-            // layouts clamp with — which is what makes the icon group below move this editor. Raise the minimum icon
-            // dp and a six-column grid becomes three, because a cell has to stay wide enough for the icon in it. The
-            // clamp is a read on both sides: nothing is written, so the column returns when the icons shrink.
+            // **Every grid here is shown as its surface draws it**, through the same fit that surface applies — which is
+            // what makes the icon group below move this editor. Raise the minimum icon dp and a six-column grid becomes
+            // three, because a cell has to stay wide enough for the icon in it. The clamp is a read on both sides:
+            // nothing is written, so the column returns when the icons shrink.
             //
-            // **The pager is deliberately left unclamped**, and it is the one grid here that is. Its rows × cols is the
-            // page *capacity* `AppsViewModel` paginates the store against, so a count fitted in the UI alone would
-            // describe pages the store never made — the fit has to reach that ViewModel first, which is a slice of its
-            // own. Told apart by whether the stored size has rows at all, which is exactly the two kinds of grid.
-            val drawn = if (size.rows == null) {
+            // Which fit depends on what the grid *has*, told apart by whether its stored size carries rows — exactly the
+            // two kinds of grid on this surface. The pager is the fitted one that took work to earn: its rows × cols is
+            // also the page **capacity** `AppsViewModel` paginates the store against, so it could not be clamped in a UI
+            // privately, and `AppsScreen` now reports the fit to that ViewModel before anything is paginated.
+            val storedRows = size.rows
+            val drawn = if (storedRows == null) {
                 size.copy(cols = slot.blueprint.fitCols(window.widthDp, size.cols, metrics))
             } else {
-                size
+                val fitted = slot.blueprint.fitGridConfig(window, size.cols, storedRows, metrics)
+                GridDefault(cols = fitted.visualCols, rows = fitted.visualRows)
             }
             // A scrolling grid stores no rows, so the preview draws **how many fit**: the cell height this column
             // count implies (the same derivation the surface lays out with) divided into the screen. That is what

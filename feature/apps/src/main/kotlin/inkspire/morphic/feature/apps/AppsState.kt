@@ -57,9 +57,10 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  *
  * @property apps every installed app in A–Z display order — what the vertical list and grid render, and the order
  *   new apps are appended to the pager in.
- * @property pagerPages the APPS pager's arrangement: pages in order, each dense from its first slot. Empty until
- *   the surface has reported its device (see [AppsViewModel.setDevice]), since how many items fit a page is a
- *   property of the device and the grid, not of the store.
+ * @property pagerPages the APPS pager's arrangement: pages in order, each dense from its first slot. Empty until the
+ *   surface has reported both its device (see [AppsViewModel.setDevice]) *and* the grid it can draw
+ *   ([AppsViewModel.setPagerFit]), since how many items fit a page is a property of the device, the chosen grid and the
+ *   space it has — none of them the store's to know.
  * @property categories the category arrangement, in category order. Needs no capacity to arrive — a category is one
  *   scrolling list, so unlike [pagerPages] it is populated from the first emission.
  * @property iconSizing each grid's **resolved** icon sizing, by slot: the blueprint's default with any user override
@@ -68,9 +69,11 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  * @property gridCols each **scrolling** grid's resolved visual column count, by slot — the whole of such a grid's
  *   size, since its rows are however many its content reaches. Empty until the device is reported, with the
  *   blueprint standing in meanwhile, exactly as [iconSizing] does.
- * @property pagerConfig the APPS pager's resolved grid — the one APPS grid with a row count, and so the only one
- *   with a `GridConfig` to give. Null until the device is reported. It is also the surface's page **capacity**: the
- *   store paginates against this same number, so nothing else may decide it.
+ * @property pagerConfig the APPS pager's resolved **stored** grid — the one APPS grid with a row count, and so the only
+ *   one with a `GridConfig` to give. Null until the device is reported. It is the size the user chose, *not* the page
+ *   capacity: the surface fits it to the measured window and reports the result back
+ *   ([AppsViewModel.setPagerFit]), and that fit is what the store paginates against. Both are needed, and this is the
+ *   input half — a screen cannot fit a size it was never told.
  * @property listRowHeightDp how tall one row of the vertical list is, resolved. Null until the device is reported.
  *   The one *cell* dimension on this surface that is stored rather than derived, because a one-lane grid has no cell
  *   width to derive from — see `AppsListGrid`.
