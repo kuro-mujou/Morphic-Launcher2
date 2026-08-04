@@ -75,9 +75,14 @@ private data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val n
  * pair centred on each edge needs no legend — the buttons are *at* the thing they change, and the glyph says which
  * way. The same reason the flash below is greyscale rather than red/green.
  *
- * @param rows how many rows to draw. Normally the stored count; for a **scrolling** grid it is how many happen to fit,
- *   since there is no stored count at all — the caption below tells the two apart rather than asserting a number the
- *   user did not choose.
+ * @param cols how many columns to draw — **the count the surface will actually draw**, not the one in storage. Every
+ *   caller fits its stored size first (`CellFit`), because a count chosen at one icon size outlives it: enlarge the
+ *   icons and fewer columns fit, and an editor claiming the stored number would contradict the surface *and* count from
+ *   a number nobody can see. The one exception is stated at its call site (the APPS pager, whose count is a store
+ *   capacity).
+ * @param rows how many rows to draw, on the same terms; for a **scrolling** grid it is how many happen to fit, since
+ *   there is no stored count at all — the caption below tells the two apart rather than asserting a number the user did
+ *   not choose.
  * @param rowBounds null when the row axis is not the user's to set, which hides the top and bottom pairs entirely.
  *   Two grids reach that for opposite reasons: a scrolling one has no rows to bound, and the dock's are divided out
  *   of its height.
@@ -220,16 +225,21 @@ private fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, modifier: Modi
     var flashRow by remember { mutableStateOf(false) }
     var flashIndex by remember { mutableIntStateOf(-1) }
     var flashAdd by remember { mutableStateOf(true) }
+    // The last press already animated. **A count can change without a press** — committing a larger minimum icon size
+    // re-fits the grid under the editor — and without this the pending edit would be replayed, flashing the edge of
+    // whichever button was touched last and colouring a removal as an add. One nonce, consumed once.
+    var flashedNonce by remember { mutableIntStateOf(0) }
     val flash = remember { Animatable(0f) }
     val flashSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
 
     LaunchedEffect(cols, rows) {
         val pending = currentEdit
-        if (pending == null || (shownCols == cols && shownRows == rows)) {
+        if (pending == null || pending.nonce == flashedNonce || (shownCols == cols && shownRows == rows)) {
             shownCols = cols
             shownRows = rows
             return@LaunchedEffect
         }
+        flashedNonce = pending.nonce
         val isRow = pending.edge == GridEditorEdge.TOP || pending.edge == GridEditorEdge.BOTTOM
         flashRow = isRow
         flashAdd = pending.add

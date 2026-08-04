@@ -23,6 +23,7 @@ import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
+import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
@@ -53,6 +54,18 @@ private val RowGap = 8.dp
  * this screen's arithmetic rather than part of measuring a window ([usableWindowArea]) — L1 folded it into the
  * measurement (`homeGridArea(..., dockVisible, dockThickness)`), so every caller had to supply dock facts even when
  * sizing something unrelated.
+ *
+ * **The editor shows the grid home will draw, not the one in storage** — so changing the icon size below recalculates
+ * it. The two ends of that dependency are one formula: the icon guardrails set the smallest usable cell, `CellFit`
+ * divides the area by it, and both the *bounds* the buttons offer and the *counts* the preview draws come out of that
+ * same division. Raise the minimum icon dp far enough and a 4×5 home becomes 4×4 in front of you, which is what the
+ * surface has been drawing all along.
+ *
+ * **A count invalidated that way is clamped, never overwritten.** Shrink the icons again and the row comes back,
+ * because nothing wrote the clamp down. L1 did write it — a `LaunchedEffect` right here, firing on every cause — so an
+ * icon tweak permanently destroyed a row count that had nothing to do with icons, and only while this screen happened
+ * to be open. The one write that reduces home's rows belongs to the dock's height commit, which is a deliberate change
+ * to the space home is left with.
  *
  * **Editing names an edge, not a number**, and each press is two writes — the count and the placements it displaces.
  * See [GridSizeViewModel]; the reason is that only the button press knows *which* side changed, and a left column
@@ -102,14 +115,25 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             )
             val range = HomePagerGrid.editableRangeIn(homeArea, metrics)
 
+            // **The grid as home will actually draw it**, through the same `fitGridConfig` the surface reads its own
+            // counts with — which is what makes the icon group below move this editor. A stored count outlives the
+            // conditions it was chosen under: raise the minimum icon size and a 4×5 home is a 4×4 one, because a cell
+            // has to stay tall enough to draw an icon in. Until this was fitted, the editor went on claiming the 5
+            // rows in storage while the surface drew 4, and the buttons counted from the number nobody could see.
+            //
+            // The clamp is **not** written back — shrink the icons again and the fifth row returns. Only a press
+            // writes, which is the same asymmetry the dock applies to its own columns.
+            val fitted = HomePagerGrid.fitGridConfig(homeArea, cols = cols, rows = rows, metrics = metrics)
+
             if (range != null) {
                 GridEditor(
-                    cols = cols,
-                    rows = rows,
+                    cols = fitted.visualCols,
+                    rows = fitted.visualRows,
                     colBounds = range.cols,
                     rowBounds = range.rows,
                     aspectRatio = window.widthDp / window.heightDp.coerceAtLeast(1f),
-                    onEdit = viewModel::edit,
+                    // Counting from the drawn grid rather than the stored one, so − and + mean what the preview shows.
+                    onEdit = { edge, add -> viewModel.edit(edge, add, fitted.visualCols, fitted.visualRows) },
                     // The dock, at its real share of the screen — so shrinking home's rows and growing the dock
                     // read as the same picture from either section.
                     companion = EditorCompanion(

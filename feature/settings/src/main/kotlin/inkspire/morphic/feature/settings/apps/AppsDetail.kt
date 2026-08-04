@@ -20,12 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.cell.fitRowHeightDp
 import inkspire.morphic.core.designsystem.cell.rowHeightRangeDp
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.grid.cellHeight
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
+import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.maxCells
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
@@ -114,13 +116,21 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
         val window = usableWindowArea(safeInsets)
 
         if (state.layout == AppsLayout.VERTICAL_LIST) {
-            // A list is one lane, so it has no grid to edit — its size *is* the row height. The range comes from the
-            // icon guardrails below rather than from stated bounds: outside it the height stops changing the icon.
+            // A list is one lane, so it has no grid to edit — its size *is* the row height. **Its bounds are the icon
+            // guardrails plus the row's own inset**, so the range slider below governs this slider: widen the icon
+            // limits and this gains travel, narrow them and it loses it. The value shown is clamped by the same
+            // `fitRowHeightDp` the list draws with, so the control cannot sit at a height the surface is not using —
+            // and the clamp is never written, so the user's height returns when the guardrails widen again.
+            //
+            // The dependency runs this way round because the icon range is the coarser statement of intent ("icons in
+            // this list are 28–72 dp") and a row is the box around one. It is also why a *taller* row is asked for by
+            // raising the upper guardrail rather than here: past that, the row is whitespace the icon cannot fill.
             val range = rowHeightRangeDp(metrics)
             SettingsCommitSlider(
                 title = "Row height",
-                subtitle = "How tall each row is. The icon fills it.",
-                value = rowHeightDp.toFloat().coerceIn(range),
+                subtitle = "How tall each row is; the icon fills it. " +
+                    "${range.start.roundToInt()}–${range.endInclusive.roundToInt()} dp, from the icon size limits below.",
+                value = fitRowHeightDp(rowHeightDp.toFloat(), metrics),
                 valueRange = range,
                 valueLabel = { "${it.roundToInt()} dp" },
                 onCommit = { committed -> viewModel.setRowHeight(committed.roundToInt()) },
@@ -129,21 +139,36 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             // The same editor home and the dock use. No companion zone: an APPS layout fills the screen, so there is
             // no second area to draw at its share of it.
             val range = slot.blueprint.editableRangeIn(window, metrics)
+            // **A scrolling grid's columns are shown as the surface draws them**, through the same `fitCols` those
+            // layouts clamp with — which is what makes the icon group below move this editor. Raise the minimum icon
+            // dp and a six-column grid becomes three, because a cell has to stay wide enough for the icon in it. The
+            // clamp is a read on both sides: nothing is written, so the column returns when the icons shrink.
+            //
+            // **The pager is deliberately left unclamped**, and it is the one grid here that is. Its rows × cols is the
+            // page *capacity* `AppsViewModel` paginates the store against, so a count fitted in the UI alone would
+            // describe pages the store never made — the fit has to reach that ViewModel first, which is a slice of its
+            // own. Told apart by whether the stored size has rows at all, which is exactly the two kinds of grid.
+            val drawn = if (size.rows == null) {
+                size.copy(cols = slot.blueprint.fitCols(window.widthDp, size.cols, metrics))
+            } else {
+                size
+            }
             // A scrolling grid stores no rows, so the preview draws **how many fit**: the cell height this column
             // count implies (the same derivation the surface lays out with) divided into the screen. That is what
             // makes adding a column visibly gain rows as the cells narrow — the actual consequence of the press,
             // which a fixed preview number would hide.
-            val cellHeight = cellHeight(cellWidth = window.widthDp.dp / size.cols, metrics = metrics)
+            val cellHeight = cellHeight(cellWidth = window.widthDp.dp / drawn.cols, metrics = metrics)
             if (range != null) {
                 GridEditor(
-                    cols = size.cols,
-                    rows = size.rows ?: maxCells(window.heightDp, cellHeight.value),
+                    cols = drawn.cols,
+                    rows = drawn.rows ?: maxCells(window.heightDp, cellHeight.value),
                     colBounds = range.cols,
                     // Null for a scrolling grid, which hides the top and bottom pairs — its rows are however many its
                     // content reaches, so there is nothing there to offer.
                     rowBounds = range.rows,
                     aspectRatio = window.widthDp / window.heightDp.coerceAtLeast(1f),
-                    onEdit = viewModel::edit,
+                    // Counting from the drawn size, so a press moves the number the preview is showing.
+                    onEdit = { edge, add -> viewModel.edit(edge, add, drawn) },
                     modifier = Modifier.padding(top = RowGap * 2),
                 )
             }

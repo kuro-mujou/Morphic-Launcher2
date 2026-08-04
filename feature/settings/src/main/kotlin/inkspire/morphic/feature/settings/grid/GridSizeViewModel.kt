@@ -33,8 +33,12 @@ import kotlinx.coroutines.launch
  * What the home-grid section shows — resolved together or not at all, since each is keyed by the device
  * configuration the screen has yet to report.
  *
- * @property cols the grid's **visual** column count.
- * @property rows its visual row count.
+ * @property cols the **stored** visual column count — a wish rather than a promise, exactly as the dock's is. The
+ *   count that fits today's icons is smaller whenever the icons have grown since, and the screen clamps it with the
+ *   same `CellFit.fitGridConfig` the home surface draws through; nothing writes that clamp back, so shrinking the
+ *   icons again brings the count straight back.
+ * @property rows likewise. The one write that *does* reduce it is the dock's height commit, which is a deliberate
+ *   change to the space home is left with rather than a passing consequence of an icon slider.
  * @property icon the resolved icon sizing, which is what decides how many of either fit.
  * @property dockHeightDp how tall the dock is, so the preview can show the share of the screen home actually gets —
  *   and so the bounds are computed against that area rather than the whole window.
@@ -104,7 +108,7 @@ class GridSizeViewModel(
     }
 
     /**
-     * Adds or removes one visual row/column at [edge].
+     * Adds or removes one visual row/column at [edge], **starting from the grid the surface is actually drawing**.
      *
      * The count is clamped by the caller (the editor disables a button at the limit) and floored again by the store,
      * so what arrives here is already legal; what this adds is the placement half. `GridReflow.edit` shifts items for
@@ -113,17 +117,27 @@ class GridSizeViewModel(
      *
      * A no-op edit (a far-edge growth over an empty grid) reports `changed = false` and writes no placements, which is
      * why the two halves are checked separately rather than assumed to go together.
+     *
+     * **[fromCols]/[fromRows] come from the screen, and are not [GridSizeState]'s stored pair.** A stored count outlives
+     * the conditions it was chosen under — enlarge the icons and fewer rows fit — so the grid on screen is the stored
+     * one *clamped to what fits*, and that clamp needs a measured area and the current type scale, neither of which a
+     * state holder has (the same reason `DockViewModel.setHeight` is told its row cap). Counting from the drawn grid is
+     * what makes the − and + buttons mean what they show: pressing − on a four-row home writes three, rather than
+     * writing four because storage still remembers five. It also means the reflow moves items relative to the grid the
+     * user can see, instead of to one nothing draws.
+     *
+     * The counterpart write is deliberately absent: an icon change that invalidates a count is *not* written down, so
+     * the count returns when the icons shrink. Only a press writes — which is exactly the asymmetry the dock's rows and
+     * columns already live by. L1 reconciled it the other way, from a `LaunchedEffect` in this screen that wrote the
+     * clamped counts into storage, and so destroyed a row count for good the first time anyone touched an icon slider.
      */
-    fun edit(edge: GridEditorEdge, add: Boolean) {
+    fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {
         val configuration = device.value ?: return
-        val current = state.value
-        val cols = current.cols ?: return
-        val rows = current.rows ?: return
 
         val isRow = edge == GridEditorEdge.TOP || edge == GridEditorEdge.BOTTOM
         val delta = if (add) 1 else -1
-        val nextCols = if (isRow) cols else cols + delta
-        val nextRows = if (isRow) rows + delta else rows
+        val nextCols = if (isRow) fromCols else fromCols + delta
+        val nextRows = if (isRow) fromRows + delta else fromRows
         val nextConfig = SLOT.blueprint.toGridConfig(
             SLOT.blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
         )

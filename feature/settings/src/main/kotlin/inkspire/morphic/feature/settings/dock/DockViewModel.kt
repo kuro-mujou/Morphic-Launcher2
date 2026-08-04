@@ -165,17 +165,20 @@ class DockViewModel(
      *
      * Where a displaced app goes is [settleDock]'s to say, not this screen's, and it is the same answer the home
      * surface gets when the strip shrinks under it: onto HOME's main area, never deleted.
+     *
+     * **[fromCols]/[fromRows] are the counts the dock is *drawing*, not [DockState]'s stored pair** — the same
+     * parameters home's editor passes, and for the same reason. A stored count outlives its conditions (grow the icons
+     * and fewer columns fit), the fit needs a measured width and the current type scale, and this screen already
+     * computes it for the preview. Counting from it is what makes a press mean what the preview shows: − on a
+     * four-column dock writes three, rather than writing eight because storage still remembers nine.
      */
-    fun edit(edge: GridEditorEdge, add: Boolean) {
+    fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {
         val configuration = device.value ?: return
-        val current = state.value
-        val cols = current.cols ?: return
-        val rows = current.rows ?: return
 
         val isRow = edge == GridEditorEdge.TOP || edge == GridEditorEdge.BOTTOM
         val delta = if (add) 1 else -1
-        val nextCols = if (isRow) cols else cols + delta
-        val nextRows = if (isRow) rows + delta else rows
+        val nextCols = if (isRow) fromCols else fromCols + delta
+        val nextRows = if (isRow) fromRows + delta else fromRows
 
         viewModelScope.launch {
             val dockConfig = SLOT.blueprint.toGridConfig(

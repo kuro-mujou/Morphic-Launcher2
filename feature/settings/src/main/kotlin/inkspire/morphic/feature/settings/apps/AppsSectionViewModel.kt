@@ -55,8 +55,9 @@ internal val AppsLayout.slot: GridSlot get() = LayoutSlots.getValue(this)
  *
  * @property layout which layout's grid is being edited — a *view* choice, not a stored one. Which layout a user
  *   actually sees is a property of the home edge they swiped from, and lives in the surface register.
- * @property size the selected grid's stored size. `rows` is null for a scrolling grid, which is [GridDefault]'s own
- *   meaning for it rather than a convention invented here.
+ * @property size the selected grid's **stored** size. `rows` is null for a scrolling grid, which is [GridDefault]'s own
+ *   meaning for it rather than a convention invented here — and is also what tells the screen which sizes it must clamp
+ *   before showing them (a scrolling grid's columns are fitted to the measured width; the pager's capacity is not).
  * @property icon its resolved icon sizing.
  * @property rowHeightDp the vertical list's row height. Present whatever the selection, because it is read in the
  *   list's own arm only — carrying it always is cheaper than a second flow that appears and disappears.
@@ -158,18 +159,24 @@ class AppsSectionViewModel(
      *
      * The count is floored by the store against the blueprint's `editRange` and capped by the caller (the editor
      * disables a button at the limit), so what arrives is already legal.
+     *
+     * **[from] is the size the surface is *drawing*, which is not always [AppsSectionState.size].** A stored column
+     * count outlives the icon settings it was chosen under, so a scrolling grid draws it clamped to what its measured
+     * width can hold (`CellFit.fitCols`) — and the screen, which has the measurement, is the only thing that can say
+     * so. Counting from the drawn size is what makes − and + move the number the editor is showing rather than one
+     * only storage remembers. Passed as a parameter for the reason `DockViewModel.setHeight` takes its row cap that
+     * way: a bound that needs a measured area cannot come from a state holder.
      */
-    fun edit(edge: GridEditorEdge, add: Boolean) {
+    fun edit(edge: GridEditorEdge, add: Boolean, from: GridDefault) {
         val configuration = device.value ?: return
-        val current = state.value.size ?: return
         val delta = if (add) 1 else -1
         val resize: GridOverride.() -> GridOverride = if (edge == GridEditorEdge.TOP || edge == GridEditorEdge.BOTTOM) {
             // A scrolling grid has no row axis; its editor draws no row buttons, so reaching here means a caller went
             // wrong rather than a user did — and dropping the write is the honest response to an axis that isn't there.
-            val rows = current.rows ?: return
+            val rows = from.rows ?: return
             { copy(rows = rows + delta) }
         } else {
-            { copy(cols = current.cols + delta) }
+            { copy(cols = from.cols + delta) }
         }
         viewModelScope.launch { settingsRepository.updateGrid(layout.value.slot, configuration, resize) }
     }

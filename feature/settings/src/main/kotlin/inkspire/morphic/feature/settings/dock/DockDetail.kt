@@ -161,7 +161,10 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                     colBounds = range.cols,
                     rowBounds = range.rows,
                     aspectRatio = usable.widthDp / usable.heightDp.coerceAtLeast(1f),
-                    onEdit = viewModel::edit,
+                    // Counting from the fitted grid above rather than from the stored counts, so a press changes the
+                    // number the preview is showing. Storage can legitimately hold more columns than fit — that is the
+                    // clamp-on-read rule — and an edit that ignored the fit would move a count nobody can see.
+                    onEdit = { edge, add -> viewModel.edit(edge, add, dockConfig.visualCols, dockConfig.visualRows) },
                     companion = EditorCompanion(
                         fraction = 1f - (heightDp / usable.heightDp.coerceAtLeast(1f)),
                         atBottom = false,
