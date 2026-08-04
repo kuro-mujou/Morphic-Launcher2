@@ -100,6 +100,13 @@ fun AppsScreen(
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, as home's
     // comment here used to promise would happen. Settings keeps its own boundary, so the two can disagree about
     // dark/light — the launcher follows wallpaper brightness, settings follows the system.
+    //
+    // **Opaque, where home is not, and the difference is legibility rather than inconsistency.** The window shows the
+    // wallpaper now, and home wants that: a screenful of icons with shadowed labels reads over any photograph. This
+    // surface is hundreds of rows of plain text at whatever density the user chose, and a busy wallpaper behind it
+    // makes it unreadable. L1 solved the same problem with a *frosted* backdrop — a blur of the wallpaper, dimmed —
+    // which is S5f; until it exists the honest stand-in is the surface's own background rather than a transparency
+    // nobody could use.
     val colors = LocalMorphicColors.current
     Box(modifier.fillMaxSize().background(colors.background)) {
         when (layout) {

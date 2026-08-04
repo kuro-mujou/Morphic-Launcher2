@@ -4,10 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.graphics.Color as AndroidColor
-import android.graphics.drawable.ColorDrawable
 import android.os.Build
-import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -67,12 +64,10 @@ private enum class CapturePhase {
  * read as a bitmap any other way, which is what the frosted backdrop and the dominant-colour signal will need (S5f).
  * That its only consumer is not built yet is deliberate and recorded in the plan.
  *
- * **This screen makes the window show the wallpaper, and puts it back.** L2's launcher theme is opaque
- * (`Theme.Material.Light.NoActionBar`, no `windowShowWallpaper`), so unlike L1 — whose window already showed it —
- * a screenshot taken here would otherwise be a picture of this app's background. `FLAG_SHOW_WALLPAPER` plus a
- * transparent window background is the smallest change that makes the capture show what it claims to, and both are
- * reverted on dispose: committing the whole launcher to a transparent window is the deferred frosted-surface
- * subsystem's call, not this screen's.
+ * **The window already shows the wallpaper**, so this screen only has to get out of its way: the launcher's theme
+ * carries `windowShowWallpaper` over a transparent background, which is what a launcher's window is. This screen
+ * briefly did that itself with `FLAG_SHOW_WALLPAPER` at runtime, as the smallest change that made a capture show what
+ * it claimed to; the theme replaced it, and hiding the system bars is all that is left.
  *
  * @param onDone leaves the screen — Cancel, a refused permission, and a finished import all mean the same thing.
  */
@@ -98,25 +93,17 @@ fun WallpaperCaptureScreen(onDone: () -> Unit, modifier: Modifier = Modifier) {
         if (granted) phase = CapturePhase.Waiting else onDone()
     }
 
-    // Out of the way, in both senses: no system bars, and a window that shows the wallpaper behind it. Both are undone
-    // by `onDispose`, so leaving this screen — however it is left — restores the launcher's own chrome.
+    // Out of the way: the system bars go, and nothing else is drawn (see the `Waiting` branch). Restored by
+    // `onDispose`, so leaving this screen — however it is left — gives the launcher its chrome back.
     DisposableEffect(phase) {
-        val activity = context.activity
-        val window = activity?.window
-        val bars = window?.let { WindowInsetsControllerCompat(it, view) }
-        val hiding = phase != CapturePhase.Guide
-        if (hiding) {
+        val bars = context.activity?.window?.let { WindowInsetsControllerCompat(it, view) }
+        if (phase != CapturePhase.Guide) {
             bars?.apply {
                 systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 hide(WindowInsetsCompat.Type.systemBars())
             }
-            window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-            window?.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
         }
-        onDispose {
-            bars?.show(WindowInsetsCompat.Type.systemBars())
-            if (hiding) window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-        }
+        onDispose { bars?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
     // The watch runs only while waiting, and takes the **first** image to arrive. Collecting it as an effect keyed on

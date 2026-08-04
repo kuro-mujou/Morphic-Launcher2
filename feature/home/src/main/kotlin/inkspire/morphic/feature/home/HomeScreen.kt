@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.home
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -52,7 +51,6 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -392,8 +390,12 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, which is
     // also the only layer that knows the launcher's real dark/light input (wallpaper brightness, not the system
     // setting). A screen that themed itself could not be told to disagree with the shell.
-    val colors = LocalMorphicColors.current
-    Box(modifier.fillMaxSize().background(colors.background)) {
+    //
+    // **And no background either — home is the wallpaper.** The launcher's window shows it (`windowShowWallpaper` in
+    // `app`'s theme), so painting anything opaque here would hide the thing the user chose. It was opaque only while
+    // the window was: a placeholder for a wallpaper that could not appear yet. What is drawn over it stays legible by
+    // its own means — cell labels carry a shadow, and the folder's scrim is its own.
+    Box(modifier.fillMaxSize()) {
         // Dock at its configured height, pager taking whatever is left. **No decorative padding on either** —
         // home's horizontal padding is a settings concern of its own (S4f), so adding any here would only be a
         // number to unpick later; the grids run edge to edge until that setting exists.

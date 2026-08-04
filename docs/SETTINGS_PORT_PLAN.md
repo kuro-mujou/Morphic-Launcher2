@@ -188,7 +188,8 @@ returns with the **icon studio** (B9), which is what L1's `Icons` section actual
 per-app concern rather than a per-grid one.
 
 The live **icon preview** between the layout and icon groups is ported (S4m). What is *not* is the wallpaper behind
-it — L1 punched through to the live wallpaper with `BlendMode.Src`, which needs `data:wallpaper` (S5/B7b).
+it — L1 punched through to the live wallpaper with `BlendMode.Src`. The window it punches *to* now exists (the launcher
+theme shows the wallpaper); what is left is the punch itself, with the effects (S5f).
 
 #### Why not one `NavKey` per section *(reversed)*
 
@@ -525,13 +526,12 @@ every phase ends with something visibly working on device, and no slice is writt
     - **One write path for both sources.** A capture is already the size and shape of the screen, so it passes
       `NormalizedCropRect.Full` — the caller that value was declared for — and `setImage` takes the source as an
       argument instead of growing a near-duplicate method.
-    - **The window has to show the wallpaper, and L2's did not.** L1's launcher window already did; L2's theme is
-      opaque with no `windowShowWallpaper`, so a screenshot taken here would have been a picture of this app's
-      background. The screen adds `FLAG_SHOW_WALLPAPER` and a transparent window background *while capturing* and
-      reverts both on dispose — committing the whole launcher to a transparent window belongs to the deferred
-      frosted-surface subsystem, not to this slice. **Needs device verification**: if the platform declines to
-      composite the wallpaper behind an otherwise-opaque window, the fix is `android:windowShowWallpaper="true"` on
-      the launcher theme, which that subsystem wants regardless.
+    - **The window has to show the wallpaper, and L2's did not.** L1's launcher window already did; L2's theme was
+      opaque, so a screenshot taken here would have been a picture of this app's own background. The screen first did
+      it at runtime (`FLAG_SHOW_WALLPAPER` + a transparent background, reverted on dispose); **the launcher theme now
+      carries it instead** — the platform's `Theme.Wallpaper` recipe — so the screen only hides the system bars. That
+      is the right place for it: capture was one of three things waiting on a window that shows the wallpaper, the
+      others being the icon preview's `BlendMode.Src` punch-through and the frosted backdrop.
   - [ ] **S5e — rotate, and the live wallpaper.** L1's per-orientation pair rendered by its own `RotateWallpaperService`
         (a service, a manifest entry and XML metadata), plus its browser of *installed* live wallpapers. The largest
         piece, and the one that makes "the wallpaper" stop being a single image — which is exactly why the effects

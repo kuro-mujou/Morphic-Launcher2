@@ -243,8 +243,14 @@ from the baked stack).
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a **wallpaper-brightness**
   signal (chrome must contrast the wallpaper — bright wallpaper → Light scheme/black tint, dark → Dark/white).
   Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
-  `LauncherTheme` overrides its subtree. The wallpaper-brightness analyzer, transparent/frosted launcher
-  surfaces, and `FrostedTextField` are a **deferred launcher-UI subsystem**; settings needs none of it.
+  `LauncherTheme` overrides its subtree. The wallpaper-brightness analyzer, the *frosted*
+  surfaces and `FrostedTextField` remain a **deferred launcher-UI subsystem**; settings needs none of it. **The window
+  half has landed**: `app`'s theme carries the platform's own `Theme.Wallpaper` recipe (`windowShowWallpaper` over a
+  transparent `windowBackground`, `colorBackgroundCacheHint` null), which is what makes this a launcher's window rather
+  than an app's — and what capture, the icon preview's `BlendMode.Src` punch-through and the frosted backdrop were all
+  waiting on. Home paints **no background** as a result (it *is* the wallpaper, and its cell labels already carry a
+  shadow); **APPS stays opaque**, which is legibility rather than inconsistency — hundreds of rows of plain text over a
+  photograph cannot be read, and L1's answer was the frosted backdrop that arrives with the effects.
   - **That brightness signal is L2's own idea, not a port** — worth knowing before looking for it in L1, which has no
     luminance analysis anywhere and themes from the system's dark mode. So it has to be *designed*, and it waits on the
     dominant-colour half of L1's `Blur.kt` (S5f); `data:wallpaper` now stores the image it will read.

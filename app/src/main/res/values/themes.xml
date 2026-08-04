@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MorphicLauncher2" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      The launcher's window **shows the system wallpaper**, which is what makes it a launcher's window rather than an
+      app's that happens to draw a home screen.
+
+      The three items are the platform's own `Theme.Wallpaper` recipe rather than an invention: `windowShowWallpaper`
+      asks the window manager to composite the wallpaper behind this window, and it can only show through if the
+      window's own background is transparent — `colorBackgroundCacheHint` is null for the same reason, since a cached
+      opaque background would defeat both.
+
+      **Three things were waiting on this and none of them could be faked.** Capture (S5d) takes a screenshot of the
+      wallpaper with the launcher hidden, and without this it photographed this app's own background. The live icon
+      preview in every settings section punches through to the wallpaper with `BlendMode.Src`, which needs something
+      behind it to punch to. And the folder's frosted backdrop (S5f) is a blur *of* the wallpaper. L1's launcher window
+      did this from the start; L2 deferred it while there was nothing yet to see.
+
+      Still `Theme.Material.Light.NoActionBar`'s child: nothing about the palette changes here, because every surface
+      themes itself through `LauncherTheme`. This decides only what is *behind* them.
+    -->
+    <style name="Theme.MorphicLauncher2" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+    </style>
+
 </resources>
