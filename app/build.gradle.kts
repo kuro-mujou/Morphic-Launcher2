@@ -23,6 +23,7 @@ dependencies {
     implementation(projects.data.layout)
     implementation(projects.core.navigation)
     implementation(projects.data.settings) // settingsModule, for startKoin
+    implementation(projects.data.wallpaper) // wallpaperModule, likewise
     implementation(projects.feature.shell)
     implementation(projects.feature.settings)
     // Still direct deps despite `feature:shell` composing them: the dev harness hosts both screens itself, and the

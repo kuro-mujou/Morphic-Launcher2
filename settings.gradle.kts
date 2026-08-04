@@ -38,6 +38,7 @@ include(":data:apps")
 include(":data:icons")
 include(":data:layout")
 include(":data:settings")
+include(":data:wallpaper")
 include(":data:widgets")
 
 include(":feature:home")
