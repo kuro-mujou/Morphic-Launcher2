@@ -243,7 +243,7 @@ from the baked stack).
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a **wallpaper-brightness**
   signal (chrome must contrast the wallpaper — bright wallpaper → Light scheme/black tint, dark → Dark/white).
   Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
-  `LauncherTheme` overrides its subtree. The wallpaper-brightness analyzer, the *frosted*
+  `LauncherTheme` overrides its subtree. **The brightness half is built** (see below); the *frosted*
   surfaces and `FrostedTextField` remain a **deferred launcher-UI subsystem**; settings needs none of it. **The window
   half has landed**: `app`'s theme carries the platform's own `Theme.Wallpaper` recipe (`windowShowWallpaper` over a
   transparent `windowBackground`, `colorBackgroundCacheHint` null), which is what makes this a launcher's window rather
@@ -251,9 +251,28 @@ from the baked stack).
   waiting on. Home paints **no background** as a result (it *is* the wallpaper, and its cell labels already carry a
   shadow); **APPS stays opaque**, which is legibility rather than inconsistency — hundreds of rows of plain text over a
   photograph cannot be read, and L1's answer was the frosted backdrop that arrives with the effects.
-  - **That brightness signal is L2's own idea, not a port** — worth knowing before looking for it in L1, which has no
-    luminance analysis anywhere and themes from the system's dark mode. So it has to be *designed*, and it waits on the
-    dominant-colour half of L1's `Blur.kt` (S5f); `data:wallpaper` now stores the image it will read.
+  - **That brightness signal is L2's own idea, not a port, and it is now live** — worth knowing before looking for it
+    in L1, which has no luminance analysis anywhere and themes from the system's dark mode. `LauncherShell` reads
+    `WallpaperRepository.brightness` and the hardcoded `darkTheme = true` is gone.
+  - **It asks the system before it reads anything, and it did not need `Blur.kt`.** The plan had it waiting on the
+    dominant-colour half of L1's `Blur.kt`; both halves of that assumption were wrong.
+    `WallpaperManager.getWallpaperColors` already answers the question over the wallpaper that is *actually displayed*
+    — another app's, or a live one, neither of which we can read as a bitmap — with no permission and no decode, and on
+    API 31+ `HINT_SUPPORTS_DARK_TEXT` is literally the verdict. And `dominantColor` would have been the **wrong
+    statistic** anyway: it weights each pixel by saturation so a vivid accent beats washed-out grey, which is what an
+    *accent* wants and the opposite of what "how bright is this?" wants. So the blur *and* the dominant colour are both
+    still unported, still waiting on the frosted backdrop that is their real consumer.
+  - **Reading our own file is the fallback, and it is gated on proof.** Only when the system says nothing (API 26, or a
+    live wallpaper publishing no colours) *and* `appliedSystemId` still equals the live wallpaper id — i.e. nothing has
+    replaced ours since we set it, which is the second job that field's KDoc reserved it for. Otherwise `DARK`, which
+    is both the old hardcoded value and the safer miss: light chrome over an unexpectedly bright wallpaper is
+    unreadable, dark chrome over a dark one is merely dull. The cut is at relative luminance **0.179**, which is not a
+    taste value — it is where the WCAG contrast ratios against black and white cross.
+  - **`RotatingWallpaperService` now publishes its colours** (`onComputeColors` + `notifyColorsChanged` on each new
+    image). A live wallpaper is the one kind the system cannot analyse for itself, so a service that stays silent
+    leaves *every* consumer of `getWallpaperColors` with nothing — status-bar icon contrast included. Answering means
+    our own rotating pair takes the same path as every other wallpaper instead of needing a special case that reads our
+    files behind the system's back. L1's service published nothing and had no caller that missed it.
 
 **Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it, and a section that drives it.** Its own module rather than a slice of
 `data:settings`, because it decodes bitmaps, writes files and calls `WallpaperManager` — a *service*, where settings is a
@@ -270,9 +289,11 @@ picture *of* the wallpaper, so `apply` declines it and it exists only for the ef
 read a **live** wallpaper). Capture landed before its consumer on purpose — an effect has to answer "which image do I
 sample?", and answering that once against every source beats re-answering it per source. Nothing invents a crop any more — `setImage` takes a
 `NormalizedCropRect` and the screen passes the region the user framed, against the viewport it also passes as the size
-to store at, so the rectangle and the result share one coordinate space. Deliberately absent: the **blur and the
-dominant colour**, which are effect inputs and so wait on the effects that read them. One L1 bug not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an
-image while an apply was finishing could lose one of them.
+to store at, so the rectangle and the result share one coordinate space. The reading half has started with
+**`brightness`** (see the design-system notes above for why it needed no image processing); still deliberately absent
+are the **blur and the dominant colour**, which are effect inputs and so wait on the effects that read them. One L1 bug
+not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an image while an apply
+was finishing could lose one of them.
 **The rotating pair is a *live* wallpaper, and that shapes three things.** Android has no per-orientation static
 wallpaper — `setBitmap` takes one image and the system crops it — so drawing a different picture in landscape means being
 the renderer: `RotatingWallpaperService` lives in `data:wallpaper` beside the files it reads, where L1 put it in its
@@ -281,8 +302,9 @@ platform insists the user confirm in its own preview — so the section opens th
 whether ours ended up active; `WallpaperManager.wallpaperInfo` is the answer, so nothing is latched and there is no
 reconciler, where L1 stored `appliedMode` and needed `reconcileLiveWallpaper` to repair it. And the crop screen frames
 the landscape half **letterboxed** rather than pinning the activity's orientation as L1 did, which it can afford because
-the frame decides the *shape* while the target screen decides the *resolution*. Not carried: L1's browser of *installed*
-live wallpapers, which re-renders a list the system's own chooser already shows.
+the frame decides the *shape* while the target screen decides the *resolution*. And the service **publishes its
+colours**, which L1's did not — see the design-system note above; it is what lets the rotating pair answer the
+brightness question through the same system API as every other wallpaper.
 - **An item's touch target is its visible extent, never its cell.** A cell is a *layout* footprint, usually much
   bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon + label). `LauncherDragCell`
   therefore hands `itemGestures` **down to its content**, which decides what is touchable: `IconLabelCell` puts it
@@ -692,10 +714,19 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** the **effects** (S5f) — now that every source exists, which was the point of taking them first. They
-unblock the folder's frosted backdrop (solid black today) and the shell's hardcoded `darkTheme`. The effects moved last
-deliberately: an effect has to answer "which image do I sample?", so designing it before the sources exist means
-re-answering that per source. Also open: a **home long-press → options menu** (the free cell space now falls through to
+**Next likely:** the rest of the **effects** (S5f), which the wallpaper-brightness signal has now opened. S5f split into
+three when it was costed, because as one slice it is `BackdropEffect` + the params slice + `Blur.kt` + a 350-line
+`Modifier.Node` + an AGSL shader + a settings section + three consumers:
+- **S5f-1 — the brightness signal. Done.** The shell's hardcoded `darkTheme` is gone; see the design-system notes. It
+  turned out to need *neither* `Blur.kt` half, which is why it was worth taking first — it is the one reading of the
+  wallpaper that is a system call rather than image processing.
+- **S5f-2 — `BackdropEffect` params (a `data:settings` slice) + `Blur.kt` + `wallpaperBackdrop` + the folder's frosted
+  backdrop** (solid black today). This is where the blur and the dominant colour finally get their consumer, and where
+  L1's `BackdropState` / `LocalBackdrop` / crop-mapping machinery lands.
+- **S5f-3 — liquid glass and the effects settings section.** L1's AGSL shader (API 33+, with the blur as its fallback)
+  and the ten-parameter tab that tunes it. Genuinely optional relative to the two above.
+
+Also open: a **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render and all the
 arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
@@ -731,15 +762,31 @@ and states that it also governs the **category card's expansion**, which is the 
 **The name `Icons` returns with the icon studio** (B9, per-app: shape, background, layers), which is what L1's `Icons`
 section actually is — not grid sizing, which L1 never kept there either.
 **The wallpaper section is the sixth, and the first that is not about a surface** — which is why the list is now two
-named groups, Personalization and Layout, as L1 had it. It is a thin vertical over `data:wallpaper`: a screen-shaped
-preview (the stored file is already cropped to the screen, so any other ratio would show a crop the device never
-displays — and it measures the **whole** window, insets included, since a wallpaper sits under the bars), "Choose
-image" via `PickVisualMedia` — which opens the **crop screen**, `feature:settings`' own `NavKey` mapped by `app`
-(a destination rather than a pane, because back out of it means "not that image") — and one button opening L1's
-home/lock/both menu. **One button where L1 drew a
-`SplitButtonLayout`**: both halves of that ran `expanded = true`, so the split was decoration over a single action —
-applying always asks *where*. The `busy` flag is L2's own rather than a port, because L1's picker went to its crop
-screen and the work happened behind that.
+named groups, Personalization and Layout, as L1 had it. It is a full port of L1's `WallpaperTab` layout: a **two-page
+pager of *modes*** ("Single wallpaper" / "Wallpaper rotate") over **three browse shelves** ("My wallpapers", "Backdrops
+(By Unsplash)", and a `LazyRow` of installed live wallpapers queried from the package manager). Paging the modes rather
+than stacking them is the part that carries meaning — only one of them is ever the wallpaper, and two headings do not
+say that. One shared `WallpaperModePage` anatomy serves both (title + status line, apply control on the right, a
+preview band, two tonal icon buttons), where L1 hand-wrote its two pages — the same reason one `GridEditor` serves home
+and the dock. Three places it does not copy L1, and one earlier note that is now wrong:
+- **One button and a chevron, not `SplitButtonLayout`** — both halves of L1's ran `expanded = true`, so the split was
+  decoration over a single action (applying always asks *where*). The chevron stays; the seam does not.
+- **Previews keep the screen's ratio inside L1's band.** The stored file is already cropped to this screen, so
+  stretching it across a landscape band would show a crop the device never displays. `fitAspect` picks which axis to
+  fill, which is also what lets the portrait and landscape rotate slots be one composable rather than two identical
+  rectangles.
+- **Our own `RotatingWallpaperService` is filtered out of the live-wallpaper shelf.** It genuinely *is* one, so the
+  query returns it — but the rotate page already owns it, and the card would be the one route with no guard: that
+  page's Apply stays disabled until an orientation exists, where a card would open the chooser for a wallpaper with
+  nothing to draw. Excluded by the component the repository states, not by our package name.
+- **Reversing an earlier call**: this used to say the shelves were absent (empty-state hints for sources that do not
+  exist, plus a duplicate of the system chooser) and that the installed-live-wallpaper browser was not carried. Both
+  are in, at the author's call — the shelves are where the future *sources* go, so they are the shape rather than the
+  filler.
+
+The `busy` flag is L2's own rather than a port, because L1's picker went to its crop screen and the work happened
+behind that. "Choose image" is `PickVisualMedia` and opens the **crop screen** — `feature:settings`' own `NavKey`
+mapped by `app`, a destination rather than a pane, because back out of it means "not that image".
 **Every section has L1's live icon preview**, between its layout group and its icon group: a real `AppCell` (or
 `AppRowCell`) at the **real cell size** that section computed, with the cell and both icon guardrails outlined over it,
 tracking the sliders per frame (`onPreview`) rather than on release. It is what makes the icon controls legible — a
@@ -751,9 +798,10 @@ outer ring); each section
 supplies its own cell size, which is the part that cannot be shared (home divides its area, the dock divides its height
 setting, APPS branches on layout, the folder asks `folderInnerSize`); and the guardrails are **greyscale by stroke**
 (solid = cell, dashed = upper, dotted = lower) because L1's green/red cannot survive a palette that reserves red for
-`error`. **Still missing beside L1: the wallpaper behind it** — L1 punched through to the live wallpaper with
-`BlendMode.Src`, which waits on `data:wallpaper`, and with it L1's sticky-header scaffolds that existed to serve that
-punch.
+`error`. **The wallpaper behind it is L1's trick and it has landed** — the cell box composites with `BlendMode.Src`,
+punching through the pane (`PunchThroughPane` composites the detail offscreen with `withSaveLayer`) to the window,
+which shows the wallpaper because `app`'s theme now carries `Theme.Wallpaper`. Not carried: L1's sticky-header
+scaffolds, which existed only to serve that punch.
 **The APPS section is one section with a chip per layout** — the settings mirror of one `feature:apps` for five
 layouts, and the same argument: they differ only in arrangement, so what a user configures is "the paged one" or "the
 list". Selecting a chip writes nothing (which layout you *get* is per home edge, in the register). Its resize is **one

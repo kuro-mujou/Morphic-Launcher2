@@ -65,7 +65,7 @@ The port is ordered by "no model in a vacuum": build the slice some already-writ
 | waiting consumer | file | what it needs | |
 |---|---|---|---|
 | `LauncherShell(sideSurfaces = emptyMap())` | `feature/shell/LauncherShell.kt` | per-edge binding → **no edge is swipeable today** | ✅ S2 |
-| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal — **L2's own idea, not a port** | todo S5f |
+| `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal — **L2's own idea, not a port** | ✅ S5f-1 |
 | `AppsScreen(layout = VERTICAL_LIST)` | `feature/apps/AppsScreen.kt` | which APPS layout, per binding | ✅ S2 |
 | `DockHeight = 96.dp` | `feature/home/HomeScreen.kt` | dock extent (rows derive **from** it, not the reverse) | ✅ S4c |
 | home padding | — (deliberately absent) | horizontal padding, added *with* the setting | todo S4g |
@@ -233,6 +233,13 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
     preference, and they stay in `data:settings` (S5f).
 - **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-colour extraction. Pure image processing;
   belongs beside the graphics/icon code, in neither repository's module.
+  - **Revised at S5f-1: the brightness signal does not need it, and neither half is ported yet.** The line below said
+    the shell's `darkTheme` was waiting on the dominant-colour half. It was not.
+    `WallpaperManager.getWallpaperColors` answers the question over the wallpaper *actually displayed* — no permission,
+    no decode, and on API 31+ `HINT_SUPPORTS_DARK_TEXT` is the verdict itself — while `dominantColor` is a
+    **saturation-weighted** average, built so a vivid accent beats washed-out grey. That is what an accent wants and
+    the opposite of what brightness wants, so reusing it would have been a wrong answer wearing a reused name. Both
+    halves of `Blur.kt` now wait on their real consumer, the frosted backdrop (S5f-2).
 
 [REWRITE_PLAN.md](REWRITE_PLAN.md) listed both under B7; it has been corrected — wallpaper is now **B7b**. This is a
 real dependency rather than tidying: wallpaper is what the shell's hardcoded `darkTheme = true` is waiting on, since
@@ -486,6 +493,8 @@ every phase ends with something visibly working on device, and no slice is writt
       is the crop screen's job; with no crop screen a pick writes immediately and the preview comes from `loadImage`.
       L1's three browse rows ("My wallpapers", "Backdrops (By Unsplash)", installed live wallpapers) are also absent —
       the first two are empty-state hints for a source that does not exist, and the third is S5e.
+    - **Reversed after S5e, at the author's call: the whole of L1's layout is now ported.** The section is a two-page
+      mode pager over the three shelves, which is what S5b's vertical had flattened. See S5g below.
   - [x] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
         stops centre-cropping — the stand-in that slice's KDoc called a stand-in is now gone, and nothing in the module
         invents a rectangle. Separate because L1 keeps it a separate screen too, and it is the **first destination a
@@ -553,17 +562,49 @@ every phase ends with something visibly working on device, and no slice is writt
       decides the *shape* and the target screen decides the *resolution*, so a landscape image framed on an upright
       phone is still stored full size — which is what makes turning the device unnecessary. `outWidth`/`outHeight` are
       therefore no longer the measured viewport, and S5c's "the viewport is the output" is now "its shape".
-    - **Not carried: L1's browser of *installed* live wallpapers.** It renders a list the platform's own chooser already
-      shows, reached by the same intent this section launches. A duplicate of a system screen is not a feature.
+    - **~~Not carried: L1's browser of *installed* live wallpapers.~~ Reversed in S5g** — it is a duplicate of a system
+      screen, but it is also the shelf the future *sources* will live on, and the author took it. Our own service is
+      filtered out of it, which L1 had no reason to think about.
     - Also improved on the way: the engine keeps **one** decoded bitmap rather than L1's two (only one can be drawn, and
       the wallpaper process is kept alive behind the home screen), and the merge is explicit — setting one half leaves
       the other alone, since a pair is assembled one orientation at a time.
-  - [ ] **S5f — effects, and the three things waiting on them.** `BackdropEffect` + params as a **settings** slice,
-        `Blur.kt` ported to sit beside the graphics code (per the section below), and then the folder's frosted backdrop
-        and the icon preview's wallpaper punch-through. **The shell's `darkTheme` lands here too**, and it is worth
-        knowing that it is *not* a port: L1 has no wallpaper-brightness signal anywhere: the luminance analysis is L2's
-        own idea, and it needs the dominant-colour half of `Blur.kt`, which is why it belongs in this slice rather than
-        an earlier one. Last, now, rather than fourth — see the note above. (Was S5d.)
+  - [x] **S5g — the section takes L1's layout.** Out of order, because it is a rework of S5b rather than new ground:
+        the flat vertical became L1's **two-page mode pager** (Single / Rotate — one shared `WallpaperModePage`
+        anatomy, where L1 hand-wrote both) over the **three browse shelves**, installed live wallpapers included.
+        Paging the modes is the part that carries meaning: only one of them is ever the wallpaper, and two stacked
+        headings do not say that. Three things it still does not copy — the `SplitButtonLayout` (both halves ran
+        `expanded = true`, so one button and a chevron), the band-shaped preview (the stored file is cropped to *this*
+        screen, so the picture keeps the screen's ratio inside L1's band), and **our own rotating service in the
+        live-wallpaper shelf** — it genuinely is one, but the rotate page owns it and a card would be the one route
+        with no "has an orientation yet" guard.
+  > **S5f split into three when it was costed.** As one slice it is `BackdropEffect` + a settings slice + `Blur.kt` + a
+  > 350-line `Modifier.Node` + an AGSL shader + a settings tab + three consumers — well past what one review can carry,
+  > and the three pieces have genuinely different blockers.
+  - [x] **S5f-1 — the brightness signal, and the shell's `darkTheme`.** L1 has none of this: it themes the launcher
+        from the system's dark mode, so the luminance analysis is L2's own idea. `WallpaperRepository.brightness` is a
+        `Flow<WallpaperBrightness>`; `LauncherShell`'s hardcoded `darkTheme = true` is gone.
+    - **It needed neither half of `Blur.kt`, which this plan had assumed it would.** See the revised `Blur.kt` note
+      above: `getWallpaperColors` already answers it over the wallpaper *actually displayed*, and `dominantColor` is a
+      saturation-weighted statistic that would have answered a different question. Taking this piece first is what
+      surfaced that — the alternative was porting 112 LOC of image processing to be used wrongly by its first caller.
+    - **Ask the system; read our own file only with proof.** The fallback (API 26, or a live wallpaper publishing no
+      colours) is gated on `appliedSystemId` still equalling the live wallpaper id — the second job `WallpaperState`
+      reserved that field for, now doing it. Without the gate, "we have an image stored" would be treated as evidence
+      about a wallpaper another app set. Otherwise `DARK`: the old hardcoded value, and the safer miss.
+    - **The cut is at relative luminance 0.179**, where the WCAG contrast ratios against black and white cross — a
+      derivation rather than a taste value.
+    - **`RotatingWallpaperService` publishes its colours** (`onComputeColors` + `notifyColorsChanged`). A live
+      wallpaper is the one kind the system cannot analyse for itself, so a silent service starves every consumer of
+      `getWallpaperColors`, status-bar icon contrast included. Answering it means our own pair takes the same path as
+      every other wallpaper instead of a special case reading our files behind the system's back. L1's published
+      nothing, and had no caller that noticed.
+  - [ ] **S5f-2 — `BackdropEffect`, `Blur.kt`, and the folder's frosted backdrop.** The params as a **settings** slice
+        (they are the genuinely preference-shaped half — see S5a), `Blur.kt` ported to sit beside the graphics code,
+        L1's `BackdropState` / `LocalBackdrop` / `wallpaperBackdrop` node, and the folder's backdrop, which is solid
+        black today. This is where both halves of `Blur.kt` finally get their real consumer.
+  - [ ] **S5f-3 — liquid glass, and the effects section.** L1's `LiquidGlass.kt` AGSL shader (API 33+, falling back to
+        the plain blur) and the ten-parameter tab that tunes it. Optional relative to S5f-2, and last for the same
+        reason it was last in L1: nothing else depends on it.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
       feature to exist first), presets.
 - [ ] **P8 exit criteria** — every placeholder constant in the table above is either settings-driven or has a written
