@@ -294,6 +294,13 @@ from the baked stack).
     expression returns grey. `WallpaperRepository.accentColor` reads it directly — `WallpaperColors.primaryColor` on
     API 27+, and L1's saturation-weighted `dominantColor` over our own file below that. So **both halves of `Blur.kt`
     are now ported** after all, and for L1's own reasons.
+  - **Liquid glass is a real AGSL shader** (`backdrop/LiquidGlass.kt`, API 33+): a rounded-rect SDF whose rim band
+    refracts the backdrop with a circular falloff, plus chromatic dispersion, a sheen highlight and a vibrancy boost.
+    **The refraction maths is adapted from [Kyant's AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)
+    (Apache-2.0) and the attribution must stay in the file.** It samples the *same* crop rectangle the blur path does,
+    so switching effects does not shift the picture; the compiled shader and its bound bitmap live on the node, since
+    a drag re-sends uniforms every frame and only the uniforms change. Below API 33 it degrades to a plain blurred
+    crop with no wash — L1's own fallback, not a stand-in.
   - **The backdrop is provided at the shell**, the same zone boundary the theme is applied at and for the same reason.
     L1 provided it inside its `HomeScreen`, which is why its settings feature needed a second provider of its own.
   - **`LocalLockedBackdrop` is not carried.** L1's second backdrop exists so a popup menu and the widget picker can
@@ -767,10 +774,8 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
   with, `wallpaperBackdrop` + `BackdropState` + `LocalBackdrop` landed in `core:designsystem/backdrop`, and the folder
   overlay's opaque black sheet became the first frosted surface. See the design-system notes above for the four
   departures from L1's version, and the wallpaper notes for how the sampled image is chosen.
-- **S5f-3 — liquid glass and the effects settings section.** The one unrendered variant: L1's AGSL shader (API 33+,
-  degrading to the plain blurred crop it already draws), and the tab that tunes all four. Genuinely optional relative
-  to the two above; nothing depends on it. **The slice's writer lands here too**: `backdropEffect` is read-only today,
-  because a setter with no caller is a model in a vacuum.
+- **S5f-3 — liquid glass and the effects section. Done.** The AGSL shader (see the design-system notes) and the
+  seventh settings section, which is also the slice's first writer. **S5 is now complete.**
 
 Also open: a **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or
@@ -781,7 +786,7 @@ indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanica
 unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
-**Settings — `data:settings` (B7) is real, and six sections are live.** Storage is **one `@Serializable` JSON blob per
+**Settings — `data:settings` (B7) is real, and seven sections are live.** Storage is **one `@Serializable` JSON blob per
 slice** under one DataStore key (`SettingsSlice`, pure and unit-tested), not L1's ~265 flat keys behind a 693-line codec;
 per-slice flows, not one god flow; and a slice carries no version because `ignoreUnknownKeys` + fully-defaulted fields
 make additive change safe both ways, with the **key name** as the seam for a semantic break. Two slices exist:
@@ -829,6 +834,22 @@ and the dock. Three places it does not copy L1, and one earlier note that is now
   exist, plus a duplicate of the system chooser) and that the installed-live-wallpaper browser was not carried. Both
   are in, at the author's call — the shelves are where the future *sources* go, so they are the shape rather than the
   filler.
+
+**The effects section is the seventh, and the second in Personalization** — L1's `EffectsTab`, and structurally the
+same screen: a chooser, then the sliders belonging to whatever is chosen. It is also the first thing to *write*
+`backdropEffect`, which S5f-2 left read-only on purpose. Four things worth knowing:
+- **The sliders come from the sealed variant, not from a ten-field bag.** L1 held every parameter of every effect at
+  once; here the `when` is over `BackdropEffect` itself, so the compiler checks the mapping is total. The bill: a
+  write is a **whole-value** write, and switching *between* variants discards the previous one's parameters. Within a
+  variant nothing is lost — flipping a blur's tone keeps its strength and tint, which is the comparison users make.
+- **`BackdropOption` is the chip vocabulary, and it is not the stored enum coming back.** "Light blur" and "Dark blur"
+  are two things to pick between but one model variant with a `tone`, so the split lives in the section and never
+  reaches storage.
+- **Liquid glass is hidden, not disabled, below API 33**, with L1's sentence explaining why. An effect that silently
+  comes out as a plain blur is worse than one that is not offered.
+- **No live icon preview**, unlike every surface section. Those preview a *cell*, which a pane can draw on its own; an
+  effect previews a frosted surface over the wallpaper, and the settings pane deliberately has no backdrop — that is
+  the shell's, one zone over. Faking one would mean the second provider L1 ended up with. L1 had no preview here.
 
 The `busy` flag is L2's own rather than a port, because L1's picker went to its crop screen and the work happened
 behind that. "Choose image" is `PickVisualMedia` and opens the **crop screen** — `feature:settings`' own `NavKey`

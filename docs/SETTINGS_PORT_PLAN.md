@@ -471,7 +471,7 @@ every phase ends with something visibly working on device, and no slice is writt
       section can hand it the derived cell's metrics; otherwise the preview would draw an icon its surface does not.
     - A test pins the fixed point at four fractions: *the cell draws the icon its height was derived for*.
   - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
-- [ ] **S5 — `data:wallpaper` + effects** — *in progress.* L1 spends ~1,730 LOC here (a 381-LOC repository, `Blur.kt`, a
+- [x] **S5 — `data:wallpaper` + effects** — *done.* L1 spends ~1,730 LOC here (a 381-LOC repository, `Blur.kt`, a
       561-LOC `WallpaperTab`, a crop screen, a capture screen, a live-wallpaper service and an effects tab), which is
       more than one slice can carry, so it is broken up by **what a user can do when it lands**:
   - [x] **S5a — the module, and the static image it owns.** `data:wallpaper`: its own DataStore blob, a JPEG under
@@ -648,12 +648,25 @@ every phase ends with something visibly working on device, and no slice is writt
     - **Provided at the shell**, the theme's own boundary — L1 provided it inside `HomeScreen`, which is why its
       settings feature needed a second provider. `LocalLockedBackdrop` is **not** carried: L1's second backdrop exists
       for a popup menu and a widget picker that L2 does not have.
-  - [ ] **S5f-3 — liquid glass, and the effects section.** L1's `LiquidGlass.kt` AGSL shader (API 33+, falling back to
-        the plain blur, which is what `BackdropEffect.LiquidGlass` renders as today) and the tab that tunes it.
-        Two things land with it beyond the shader: the slice's **writer** (`backdropEffect` is read-only until a
-        section calls one, since a setter with no caller is a model in a vacuum), and the **`MaterialYou` decision** —
-        it cannot stay declared-but-unrenderable once a user can pick it. Optional relative to S5f-2, and last for the
-        same reason it was last in L1: nothing else depends on it.
+  - [x] **S5f-3 — liquid glass, and the effects section.** The AGSL shader and the seventh section, which is also the
+        slice's first writer. Four things worth keeping straight:
+    - **The shader is a port with an attribution that must not be dropped.** Its refraction maths — rounded-rect SDF,
+      analytic gradient, circular rim falloff, chromatic split — is adapted from Kyant's `AndroidLiquidGlass`
+      (Apache-2.0), as L1's own comment records. It samples the same crop rectangle the blur path does, so switching
+      effects does not shift the picture, and the compiled shader plus its bound bitmap live on the draw node because
+      a drag re-sends uniforms every frame while only the uniforms change.
+    - **API 33+, and the chip is hidden rather than disabled below it.** An effect that silently degrades to a plain
+      blur is worse than one not offered; the renderer still checks, because a stored preference outlives the device
+      it was chosen on.
+    - **A write is a whole-value write**, which is the sealed type's bill finally coming due: the parameters that
+      apply depend on the variant, so switching between variants discards the previous one's. Within a variant
+      nothing is lost. Stated on `setBackdropEffect` rather than worked around — an in-memory stash would survive a
+      chip tap and not survive leaving the screen, which is worse than a rule.
+    - **`BackdropOption` is the chooser's vocabulary and never reaches storage.** Light and dark blur are two chips
+      and one variant with a `tone`; putting that split in the section is what keeps B0's enum-plus-bag collapse from
+      being quietly undone by a chip list.
+    - **No live preview**, unlike every surface section: an effect previews a frosted surface over the wallpaper, and
+      the settings pane has no backdrop by design. L1 had none here either.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
       feature to exist first), presets.
 - [ ] **P8 exit criteria** — every placeholder constant in the table above is either settings-driven or has a written
