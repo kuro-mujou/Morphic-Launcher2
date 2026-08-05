@@ -262,17 +262,27 @@ to persist path pointers"): a path to a file we wrote and the id the system gave
 S0 had already refused that on the way in. The **effect params** (`BackdropEffect`) are the genuinely preference-shaped
 half and stay in `data:settings`. State is **two fields where L1 had six** — L1's juggled two image sets and a snapshot
 copy of whichever was applied, both of which exist *for* the frosted backdrop; `appliedSystemId` is an id rather than a
-boolean because it also detects a wallpaper set outside the launcher. Built: **two sources** — pick from a `Uri` and frame it on the crop
-screen, or **capture** a screenshot of the wallpaper itself — each sample-decoded, scaled to the screen and stored
-through one write path, plus apply to HOME / LOCK / BOTH. `WallpaperSource` is what separates them: a capture is a
+boolean because it also detects a wallpaper set outside the launcher. Built: **all three sources** — pick from a `Uri`
+and frame it on the crop screen, **capture** a screenshot of the wallpaper itself, or set the **rotating pair**, one
+image per orientation — each sample-decoded, scaled to the screen and stored through one write path, plus apply to
+HOME / LOCK / BOTH. `WallpaperSource` is what separates them: a capture is a
 picture *of* the wallpaper, so `apply` declines it and it exists only for the effects to sample (it is the one way to
 read a **live** wallpaper). Capture landed before its consumer on purpose — an effect has to answer "which image do I
 sample?", and answering that once against every source beats re-answering it per source. Nothing invents a crop any more — `setImage` takes a
 `NormalizedCropRect` and the screen passes the region the user framed, against the viewport it also passes as the size
-to store at, so the rectangle and the result share one coordinate space. Deliberately absent, each for a reason rather
-than as an omission: the **capture** source and the **blur/dominant colour** (both are effect inputs, so they wait on
-the effects), and **rotate** with its live-wallpaper service (a feature beside this one, not a step in it). One L1 bug not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an
+to store at, so the rectangle and the result share one coordinate space. Deliberately absent: the **blur and the
+dominant colour**, which are effect inputs and so wait on the effects that read them. One L1 bug not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an
 image while an apply was finishing could lose one of them.
+**The rotating pair is a *live* wallpaper, and that shapes three things.** Android has no per-orientation static
+wallpaper — `setBitmap` takes one image and the system crops it — so drawing a different picture in landscape means being
+the renderer: `RotatingWallpaperService` lives in `data:wallpaper` beside the files it reads, where L1 put it in its
+settings feature and left its data layer unable to name its own service. It cannot be applied silently either — the
+platform insists the user confirm in its own preview — so the section opens that chooser and then **asks on resume**
+whether ours ended up active; `WallpaperManager.wallpaperInfo` is the answer, so nothing is latched and there is no
+reconciler, where L1 stored `appliedMode` and needed `reconcileLiveWallpaper` to repair it. And the crop screen frames
+the landscape half **letterboxed** rather than pinning the activity's orientation as L1 did, which it can afford because
+the frame decides the *shape* while the target screen decides the *resolution*. Not carried: L1's browser of *installed*
+live wallpapers, which re-renders a list the system's own chooser already shows.
 - **An item's touch target is its visible extent, never its cell.** A cell is a *layout* footprint, usually much
   bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon + label). `LauncherDragCell`
   therefore hands `itemGestures` **down to its content**, which decides what is touchable: `IconLabelCell` puts it
@@ -682,8 +692,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** the last wallpaper source — **rotate** (S5e, the per-orientation pair and its live-wallpaper
-service) — and only then the **effects** (S5f), which
+**Next likely:** the **effects** (S5f) — now that every source exists, which was the point of taking them first. They
 unblock the folder's frosted backdrop (solid black today) and the shell's hardcoded `darkTheme`. The effects moved last
 deliberately: an effect has to answer "which image do I sample?", so designing it before the sources exist means
 re-answering that per source. Also open: a **home long-press → options menu** (the free cell space now falls through to

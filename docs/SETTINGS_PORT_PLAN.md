@@ -532,10 +532,32 @@ every phase ends with something visibly working on device, and no slice is writt
       carries it instead** — the platform's `Theme.Wallpaper` recipe — so the screen only hides the system bars. That
       is the right place for it: capture was one of three things waiting on a window that shows the wallpaper, the
       others being the icon preview's `BlendMode.Src` punch-through and the frosted backdrop.
-  - [ ] **S5e — rotate, and the live wallpaper.** L1's per-orientation pair rendered by its own `RotateWallpaperService`
-        (a service, a manifest entry and XML metadata), plus its browser of *installed* live wallpapers. The largest
-        piece, and the one that makes "the wallpaper" stop being a single image — which is exactly why the effects
-        should see it before they are designed. (Was S5f.)
+  - [x] **S5e — rotate, and the live wallpaper.** L1's per-orientation pair, rendered by the launcher's own
+        `RotatingWallpaperService`, and the one that makes "the wallpaper" stop being a single image — which is why the
+        effects wanted it first. Five things worth keeping straight:
+    - **A service is the only way.** Android has no per-orientation static wallpaper: `setBitmap` takes one image and
+      the system crops it whichever way the phone is held, so showing a different picture in landscape means being the
+      thing that draws. L1 reached the same conclusion and wrote the same engine.
+    - **It lives in `data:wallpaper`, not the settings feature.** L1 put it in `feature:settings`, which left its data
+      layer unable to name its own service — `applyRotateWallpaper` built the `ComponentName` in the UI. The module that
+      owns the files owns the renderer; the section only launches the system chooser at it.
+    - **Which wallpaper is active is asked, never stored.** L1 latched it (`appliedMode` via `markRotateApplied`) and
+      then needed `reconcileLiveWallpaper` on every resume to repair the latch. `WallpaperManager.wallpaperInfo` answers
+      it directly, so `isRotatingActive()` reads it: no cache, no latch, no reconciler — smell 7 ("derived state
+      persisted") declined rather than ported. The section still refreshes on resume, because the confirmation happens
+      while it is stopped, but it refreshes a *read*.
+    - **`CropTarget` replaces L1's `forRotate` + `landscape` booleans**, which between them could express a state that
+      does not exist. One value names the three slots and answers what the crop screen cannot otherwise know: the shape
+      to frame against, and the size to store at.
+    - **The landscape half is framed letterboxed, not by pinning the activity** (the piece S5c deferred here). The frame
+      decides the *shape* and the target screen decides the *resolution*, so a landscape image framed on an upright
+      phone is still stored full size — which is what makes turning the device unnecessary. `outWidth`/`outHeight` are
+      therefore no longer the measured viewport, and S5c's "the viewport is the output" is now "its shape".
+    - **Not carried: L1's browser of *installed* live wallpapers.** It renders a list the platform's own chooser already
+      shows, reached by the same intent this section launches. A duplicate of a system screen is not a feature.
+    - Also improved on the way: the engine keeps **one** decoded bitmap rather than L1's two (only one can be drawn, and
+      the wallpaper process is kept alive behind the home screen), and the merge is explicit — setting one half leaves
+      the other alone, since a pair is assembled one orientation at a time.
   - [ ] **S5f — effects, and the three things waiting on them.** `BackdropEffect` + params as a **settings** slice,
         `Blur.kt` ported to sit beside the graphics code (per the section below), and then the folder's frosted backdrop
         and the icon preview's wallpaper punch-through. **The shell's `darkTheme` lands here too**, and it is worth

@@ -126,8 +126,11 @@ this entry, which is only the summary.
 - `WallpaperRepository`(+`Impl`) ⚠️ — a bitmap/file/`WallpaperManager` service: decode + crop + scale from a `Uri`,
   own JPEGs under `filesDir/wallpaper/`, set the system wallpaper on HOME/LOCK/BOTH, load the backdrop blur and the
   dominant colour.
-- ✅ **The static image is built** (S5a in the settings plan): the module, its own one-key DataStore, decode/sample,
-  centre-crop-and-scale, and the system apply on HOME/LOCK/BOTH. Its *section* is next (S5b), then the crop screen.
+- ✅ **All three sources are built** (S5a–S5e in the settings plan): the module and its own one-key DataStore; the
+  picked image with a crop screen and the system apply on HOME/LOCK/BOTH; the capture (an effect-only source that
+  `apply` declines); and the **rotating pair** with `RotatingWallpaperService`, declared in this module's manifest so the
+  renderer travels with the files it renders. What is left of B7b is the half that *reads* them — the blur and the
+  dominant colour, below.
 - 🔧 It does **not** depend on `data:settings`, which is a correction to the line this heading used to carry. L1 kept its
   `WallpaperState` in the settings blob; B7 already refused that as bookkeeping rather than preference, so the module owns
   its own store. The **effect params** are the genuinely preference-shaped half and stay in `data:settings`.
