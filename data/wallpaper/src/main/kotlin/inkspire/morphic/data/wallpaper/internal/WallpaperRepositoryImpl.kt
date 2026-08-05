@@ -86,19 +86,37 @@ internal class WallpaperRepositoryImpl(
         .flowOn(dispatchers.io)
 
     /**
-     * Resolved on every reason it could have changed, and only then — a system colours callback, or one of our own
-     * writes.
+     * Our stored state, re-emitted on every reason **what is displayed** could have changed.
      *
      * **Two triggers because there are two ways it moves, and neither covers the other.**
      * `addOnColorsChangedListener` catches a wallpaper set by anyone (including us, through [apply], and including the
      * system's live-wallpaper chooser), but it does not exist below API 27; the state flow catches our own writes on
-     * every API, which is what keeps this alive on 26 for the case a launcher can actually control. Deduplicated at the
-     * end, so the overlap between them costs a resolve and nothing downstream.
+     * every API, which is what keeps this alive on 26 for the case a launcher can actually control.
+     *
+     * Shared by both readings below rather than each building its own, because they are answering one question — "what
+     * is behind the chrome right now?" — and two change signals for one question is how they end up disagreeing.
      */
-    override val brightness: Flow<WallpaperBrightness> =
-        combine(wallpaper, systemColorChanges()) { state, _ -> resolveBrightness(state) }
-            .distinctUntilChanged()
-            .flowOn(dispatchers.io)
+    private val displayedWallpaperChanges: Flow<WallpaperState> =
+        combine(wallpaper, systemColorChanges()) { state, _ -> state }
+
+    override val brightness: Flow<WallpaperBrightness> = displayedWallpaperChanges
+        .map { resolveBrightness(it) }
+        .distinctUntilChanged()
+        .flowOn(dispatchers.io)
+
+    override val accentColor: Flow<Int?> = displayedWallpaperChanges
+        .map { resolveAccent(it) }
+        .distinctUntilChanged()
+        .flowOn(dispatchers.io)
+
+    override fun backdrop(strength: Float, orientation: Orientation): Flow<Bitmap?> = displayedWallpaperChanges
+        .map { backdropSourcePath(it, orientation) }
+        // On the *path*, not on the bitmap: re-blurring an unchanged file would hand every frosted surface a new,
+        // equal image and invalidate all of them for nothing. It also means an unrelated state write (a rotating half
+        // being set while a static image is displayed) costs a comparison rather than a decode.
+        .distinctUntilChanged()
+        .map { path -> path?.let { blurBackdrop(it, strength) } }
+        .flowOn(dispatchers.io)
 
     override suspend fun decodePreview(uri: Uri): Bitmap? = withContext(dispatchers.io) {
         decodeSampled(uri, PREVIEW_CAP)
@@ -159,6 +177,51 @@ internal class WallpaperRepositoryImpl(
 
     override suspend fun loadImage(): Bitmap? = withContext(dispatchers.io) {
         wallpaper.first().image?.let { decodeFile(it.path) }
+    }
+
+    /** The file at [path] decoded small and blurred, or null if it has gone missing under us. */
+    private fun blurBackdrop(path: String, strength: Float): Bitmap? {
+        val sharp = decodeFile(path, BACKDROP_SAMPLE_STEP) ?: return null
+        // Radius and passes come from one 0..1 preference so a slider never has to speak in pixels; the ceiling is
+        // L1's, tuned against a bitmap already downscaled by the same factor.
+        val radius = (strength.coerceIn(0f, 1f) * MAX_BLUR_RADIUS).roundToInt()
+        return downscaleAndBlur(sharp, downscale = BACKDROP_DOWNSCALE, radius = radius, passes = BLUR_PASSES)
+    }
+
+    /**
+     * Which stored file a frosted surface may sample, or null if none can honestly be claimed to be on screen.
+     *
+     * The four-way answer `loadBackdrop`'s KDoc sets out, kept in one function because it is *the* rule rather than an
+     * implementation detail of one caller — the icon studio's preview and the panned-surface backdrop will both want
+     * exactly this, and a second copy of it is how L1's `resolveDockDrop` happened.
+     */
+    private suspend fun backdropSourcePath(state: WallpaperState, orientation: Orientation): String? {
+        if (isRotatingActive()) {
+            // The same `?: portrait ?: landscape` fallback the service draws with, so a half-configured pair is
+            // sampled as what is actually on screen rather than reported as nothing.
+            val pair = state.rotating
+            return (pair[orientation] ?: pair.portrait ?: pair.landscape)?.path
+        }
+        val image = state.image ?: return null
+        // A capture is a picture *of* the displayed wallpaper — it can never be applied, so the "did we apply it?"
+        // gate below would reject it always, and sampling it is the one job it has.
+        if (image.source == WallpaperSource.CAPTURED) return image.path
+        return if (ownsSystemWallpaper(state)) image.path else null
+    }
+
+    /**
+     * Whether the image this launcher stored is still the one the system is showing.
+     *
+     * One gate, two readers ([brightness] and [backdropSourcePath]), because "is our file what is behind the chrome?"
+     * is one question and two answers to it could disagree. The id is the evidence: it was taken at the moment we set
+     * the wallpaper, so it still matching means nothing has replaced ours since — including a wallpaper set outside
+     * the launcher, which is the case a stored boolean could never notice.
+     */
+    private fun ownsSystemWallpaper(state: WallpaperState): Boolean {
+        if (state.appliedSystemId == 0) return false
+        val manager = WallpaperManager.getInstance(appContext)
+        val liveId = runCatching { manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) }.getOrDefault(0)
+        return state.appliedSystemId == liveId
     }
 
     override suspend fun setRotatingImage(
@@ -224,14 +287,35 @@ internal class WallpaperRepositoryImpl(
      * replaced ours since. That is the second job `WallpaperState`'s KDoc reserved the field for, now doing it.
      */
     private fun resolveBrightness(state: WallpaperState): WallpaperBrightness {
-        val manager = WallpaperManager.getInstance(appContext)
-        systemBrightness(manager)?.let { return it }
-        if (state.appliedSystemId == 0) return WallpaperBrightness.DARK
-        val liveId = runCatching { manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) }.getOrDefault(0)
-        if (state.appliedSystemId != liveId) return WallpaperBrightness.DARK
+        systemBrightness(WallpaperManager.getInstance(appContext))?.let { return it }
+        if (!ownsSystemWallpaper(state)) return WallpaperBrightness.DARK
         val path = state.image?.path ?: return WallpaperBrightness.DARK
         val bitmap = decodeFile(path, BRIGHTNESS_SAMPLE_STEP) ?: return WallpaperBrightness.DARK
         return brightnessOf(meanLuminance(bitmap))
+    }
+
+    /**
+     * The wallpaper's representative colour: the system's primary if it has one, else our own file's.
+     *
+     * The same two-step [resolveBrightness] takes, and deliberately so — three readings of "what is displayed" that
+     * disagreed about *which image* they were reading would be worse than any one of them being slightly off. The
+     * orientation passed to [backdropSourcePath] is portrait because a colour is not per-orientation in any meaningful
+     * sense; a rotating pair whose two halves have different accents is a wallpaper whose colour is genuinely
+     * ambiguous, and picking one beats flickering between them on every rotation.
+     */
+    private suspend fun resolveAccent(state: WallpaperState): Int? {
+        systemAccent()?.let { return it }
+        val path = backdropSourcePath(state, Orientation.PORTRAIT) ?: return null
+        val bitmap = decodeFile(path, BRIGHTNESS_SAMPLE_STEP) ?: return null
+        return dominantColor(bitmap)
+    }
+
+    /** `WallpaperColors.primaryColor` — the most-represented colour of whatever is on screen. Null below API 27. */
+    private fun systemAccent(): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
+        val manager = WallpaperManager.getInstance(appContext)
+        val colors = runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull() ?: return null
+        return colors.primaryColor.toArgb()
     }
 
     /**
@@ -453,5 +537,21 @@ internal class WallpaperRepositoryImpl(
 
         /** Side of the square the sampled image is reduced to before averaging. L1 uses the same 32 in `Blur.kt`. */
         const val BRIGHTNESS_GRID = 32
+
+        /**
+         * How much smaller the backdrop is than the wallpaper — the decode step and the blur's own downscale.
+         *
+         * Two reductions rather than one because they buy different things: the decode step keeps a screen-sized JPEG
+         * from being fully materialised, and the blur's downscale is what makes the passes cheap. A backdrop is
+         * upscaled at draw time regardless, so the resolution lost here is resolution the blur was about to destroy.
+         */
+        const val BACKDROP_SAMPLE_STEP = 2
+        const val BACKDROP_DOWNSCALE = 4
+
+        /** L1's ceiling: the radius a strength of 1.0 maps to, in pixels of the already-downscaled bitmap. */
+        const val MAX_BLUR_RADIUS = 12
+
+        /** Three box passes approximate a gaussian closely enough that no one can tell. L1's number. */
+        const val BLUR_PASSES = 3
     }
 }

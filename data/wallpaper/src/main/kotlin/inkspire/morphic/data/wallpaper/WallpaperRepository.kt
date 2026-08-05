@@ -231,6 +231,22 @@ interface WallpaperRepository {
     val brightness: Flow<WallpaperBrightness>
 
     /**
+     * The wallpaper's **representative colour** as ARGB, or null when it cannot be read — what
+     * `BackdropEffect.MaterialYou` washes a frosted surface in.
+     *
+     * The third reading of "what is displayed", beside [brightness] and [backdrop], and it takes the same two-step:
+     * `WallpaperColors.getPrimaryColor` first, because the OS computed it over the wallpaper *actually* on screen
+     * (another app's, a live one) with no permission and no decode; `dominantColor` over our own file only below API
+     * 27 or when a live wallpaper publishes nothing, and then only if that file is provably what is displayed.
+     *
+     * **Not `MaterialTheme.colorScheme.primary`, which is how L1 got this above API 31.** L1's launcher ran a normal
+     * M3 dynamic scheme, so its primary *was* a wallpaper-derived hue. L2 feeds MaterialTheme a **monochrome** scheme
+     * bridged from `MorphicColors`, so the same expression here returns grey — the dynamic-colour route is closed by
+     * a decision made long before this, and reading the wallpaper directly is what is left.
+     */
+    val accentColor: Flow<Int?>
+
+    /**
      * A downsampled bitmap of [uri], for showing the user what they picked before anything is written.
      *
      * Sampled rather than decoded whole: a modern camera image is tens of megapixels, and a preview is a few hundred
@@ -284,6 +300,47 @@ interface WallpaperRepository {
 
     /** The stored image as a bitmap, for a preview at real size. Null when nothing is stored, or the file is gone. */
     suspend fun loadImage(): Bitmap?
+
+    /**
+     * The wallpaper a frosted surface should sample, pre-blurred at [strength] and downscaled — or **null when there is
+     * nothing we can honestly claim is behind the chrome**, which every consumer renders as its own flat colour.
+     *
+     * **This is the "which image do I sample?" question the whole slice order was arranged around**, and it is answered
+     * once here against all three sources rather than per effect:
+     * 1. **Our rotating service is the live wallpaper** → the [orientation] half of the pair. No further test is needed:
+     *    the service renders these exact files, so the two cannot disagree. L1 said the same of its `ROTATE` branch.
+     * 2. **The stored image is a [WallpaperSource.CAPTURED] one** → it, unconditionally. A capture *is* a picture of
+     *    whatever is displayed, which is the only reason it exists — gating it on having been applied would reject it
+     *    always, since [apply] refuses a capture by design.
+     * 3. **The stored image is picked, and provably still on the system** (`appliedSystemId` matching the live
+     *    wallpaper id) → it.
+     * 4. Otherwise null.
+     *
+     * **Step 3 is where L1 kept a second copy of the file and this does not.** Its `appliedSingle` was a snapshot
+     * frozen at Apply time so that picking a new image without applying it did not desynchronise the backdrop from the
+     * real wallpaper. The id comparison answers the same question without the copy, and answers one more that the
+     * snapshot could not: a wallpaper set *outside* the launcher makes the ids differ, where L1's snapshot went on
+     * claiming to match. It is the same gate [brightness] uses, deliberately — "is our image what is on screen" should
+     * have one answer, not two.
+     *
+     * Blurred here rather than at the draw call because it is expensive and wants a background thread, and because the
+     * result is reused for every frosted surface on screen. L1's `loadBackdropBlur`, same shape.
+     *
+     * **A flow, where L1's was a one-shot read.** All four answers above can change while the launcher is running, and
+     * two of them change *without us doing anything*: a wallpaper set in the system's own settings makes step 3 stop
+     * holding, and the live-wallpaper chooser makes step 1 start. L1 re-read on recomposition and could show a blur of
+     * a wallpaper that was no longer there. This shares [brightness]' change signal, since "what is displayed" is one
+     * question and both readings of it should notice the same events.
+     *
+     * Re-emits only when the *source* changes, so nothing re-blurs because an unrelated preference moved. A change of
+     * [strength] is a new collection rather than an emission — the caller re-invokes with the new value.
+     *
+     * @param strength `0f..1f`, mapped to a blur radius and pass count internally so callers pass a preference and not
+     *   a pixel count. Zero is a valid strength meaning "sample it sharp", which is not the same as no backdrop.
+     * @param orientation which half of the rotating pair to sample; ignored by the other two sources, whose stored
+     *   image is already this screen's.
+     */
+    fun backdrop(strength: Float, orientation: Orientation): Flow<Bitmap?>
 
     /**
      * Stores the [crop] region of [uri] as the [orientation] half of the rotating pair, at [outWidth] × [outHeight].

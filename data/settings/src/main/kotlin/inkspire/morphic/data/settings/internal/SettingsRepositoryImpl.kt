@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
@@ -51,6 +52,19 @@ private val SurfaceMetricsSlice = SettingsSlice(
 )
 
 /**
+ * How frosted surfaces render over the wallpaper: one key, one polymorphic blob.
+ *
+ * The only slice whose type is a **sealed hierarchy** rather than a data class, which is what puts a `"type"`
+ * discriminator in the blob. `BackdropEffect`'s variants carry `@SerialName`s so that discriminator is a short stable
+ * word rather than a fully-qualified class name a rename would invalidate.
+ */
+private val BackdropEffectSlice = SettingsSlice(
+    name = "backdrop_effect",
+    serializer = serializer<BackdropEffect>(),
+    default = BackdropEffect.Default,
+)
+
+/**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
  *
  * **A read decodes one slice, and a write rewrites one slice.** That is the whole structural difference from L1, whose
@@ -68,6 +82,8 @@ internal class SettingsRepositoryImpl(
     private val dataStore = context.settingsDataStore
 
     override val surfaceRegister: Flow<SurfaceRegister> = dataStore.read(SurfaceRegisterSlice) { it }
+
+    override val backdropEffect: Flow<BackdropEffect> = dataStore.read(BackdropEffectSlice) { it }
 
     override suspend fun setHomeLayout(layout: HomeLayout) =
         update(SurfaceRegisterSlice) { copy(homeLayout = layout) }

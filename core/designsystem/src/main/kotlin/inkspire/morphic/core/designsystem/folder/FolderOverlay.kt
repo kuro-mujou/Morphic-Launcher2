@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -288,16 +289,23 @@ fun FolderOverlay(
     // Root spans the screen; the floating proxy is a sibling of the content so its root-space offset isn't
     // shifted by the content's inset.
     Box(modifier.fillMaxSize()) {
-        // Backdrop (black behind the bars) + card. A pointer holder is faded to nothing but kept composed — so the
-        // dragged cell keeps its pointer stream (the proven "closing surface fades but stays in the tree" rule). The
-        // modifier chain is kept structurally stable across that flip (only `alpha` and the clickable's `enabled`
-        // change), so the drag isn't disturbed; at alpha 0 the black vanishes and home shows through, and
-        // dismiss-on-tap is off.
+        // Backdrop (frosted, full-bleed behind the bars) + card. A pointer holder is faded to nothing but kept
+        // composed — so the dragged cell keeps its pointer stream (the proven "closing surface fades but stays in the
+        // tree" rule). The modifier chain is kept structurally stable across that flip (only `alpha` and the
+        // clickable's `enabled` change), so the drag isn't disturbed; at alpha 0 the backdrop vanishes and home shows
+        // through, and dismiss-on-tap is off.
+        //
+        // **`wallpaperBackdrop` replaces a flat `background(Color.Black)`**, which was always a placeholder: an
+        // opaque black sheet over the wallpaper is the one thing a launcher's own overlay should not be, since it
+        // throws away the only context telling the user they are still on the home screen. `Color.Black` survives as
+        // the scrim, so a device where the launcher has never been given a wallpaper looks exactly as it did — see
+        // `wallpaperBackdrop`'s fallback. Structurally stable too: the modifier is unconditionally in the chain and
+        // only its inputs change, which is the same rule the alpha flip and the inner border below follow.
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = if (presenting) 1f else 0f }
-                .background(Color.Black)
+                .wallpaperBackdrop(scrimColor = Color.Black)
                 .clickable(
                     interactionSource = scrimInteraction,
                     indication = null,

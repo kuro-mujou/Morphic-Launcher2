@@ -1,5 +1,6 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
@@ -37,6 +38,16 @@ interface SettingsRepository {
      * has been stored yet, so a consumer never has to handle "no settings".
      */
     val surfaceRegister: Flow<SurfaceRegister>
+
+    /**
+     * How frosted surfaces render over the wallpaper — the one global choice, and the strengths tuning it.
+     *
+     * **Read-only for now, deliberately.** The writer is a settings section that does not exist yet (S5f-3), and a
+     * setter with no caller is the "model in a vacuum" this codebase keeps refusing. The flow is not: the launcher
+     * shell reads it to build its backdrop, so the slice has a live consumer from the day it lands and the section
+     * later adds UI rather than plumbing.
+     */
+    val backdropEffect: Flow<BackdropEffect>
 
     /** Sets HOME's main-area + side-zone pairing. */
     suspend fun setHomeLayout(layout: HomeLayout)

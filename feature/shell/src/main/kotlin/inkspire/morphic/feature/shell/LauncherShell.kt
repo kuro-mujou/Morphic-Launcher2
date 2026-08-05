@@ -1,17 +1,30 @@
 package inkspire.morphic.feature.shell
 
+import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.backdrop.BackdropState
+import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
+import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
+import inkspire.morphic.core.designsystem.backdrop.screenToBitmapMapping
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
+import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.feature.apps.AppsScreen
@@ -47,6 +60,16 @@ fun LauncherShell(modifier: Modifier = Modifier) {
     val viewModel = koinViewModel<ShellViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // The **whole** window, insets included, because that is what a wallpaper covers — and it is what the backdrop's
+    // screen→bitmap mapping has to be built against, since a frosted surface may sit under the status bar. The same
+    // measurement `WallpaperDetail` makes for its preview, and deliberately *not* `usableWindowArea`, which every
+    // grid uses because a grid must stay out from under the bars.
+    val windowSize = LocalWindowInfo.current.containerSize
+    val orientation = if (windowSize.width > windowSize.height) Orientation.LANDSCAPE else Orientation.PORTRAIT
+    // Pushed down rather than read in the holder, the same way every surface reports its `DeviceConfiguration`: the
+    // rotating wallpaper is two pictures, so "which one" is a question only something holding the window can answer.
+    LaunchedEffect(orientation) { viewModel.setOrientation(orientation) }
+
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
     // half of that rule — its own surface, so its own `isSystemInDarkTheme()`. The two can therefore disagree, and
@@ -59,17 +82,56 @@ fun LauncherShell(modifier: Modifier = Modifier) {
         // the system — on a launcher there is nowhere further to go, and swallowing it would trap the user.
         BackHandler(enabled = pagerState.openEdge != null) { scope.launch { pagerState.close() } }
 
-        // TODO(SurfacePager): `state.register.transition` is read but not applied — only SLIDE is implemented, so the
-        //  other five values are stored and ignored until the transforms land. Deliberately not faked.
-        SurfacePager(
-            state = pagerState,
-            modifier = modifier.fillMaxSize(),
-            sideContent = state.register.sides.mapValues { (_, binding) -> binding.toSurfaceBinding() },
+        // **Provided at the shell, which is the same boundary the theme is applied at, and for the same reason**: a
+        // frosted surface samples *this launcher's* wallpaper, and the settings graph is a different zone with
+        // different rules (its icon preview punches through to the real window instead). L1 provided these inside its
+        // `HomeScreen`, which is exactly why its settings feature needed a second provider of its own.
+        CompositionLocalProvider(
+            LocalBackdrop provides rememberBackdropState(state.backdropImage, state.backdropAccent, windowSize),
+            LocalBackdropEffect provides state.backdropEffect,
         ) {
-            HomeScreen()
+            // TODO(SurfacePager): `state.register.transition` is read but not applied — only SLIDE is implemented, so
+            //  the other five values are stored and ignored until the transforms land. Deliberately not faked.
+            SurfacePager(
+                state = pagerState,
+                modifier = modifier.fillMaxSize(),
+                sideContent = state.register.sides.mapValues { (_, binding) -> binding.toSurfaceBinding() },
+            ) {
+                HomeScreen()
+            }
         }
     }
 }
+
+/**
+ * [image], [accent] and [windowSize] as the [BackdropState] frosted surfaces sample, or null while the image or the
+ * window is missing.
+ *
+ * Split out because it is two conversions that both want caching and neither belongs in the state holder: the
+ * `Bitmap` → `ImageBitmap` wrap, and the screen→bitmap mapping, which is a closure that would otherwise be rebuilt on
+ * every recomposition and hand every frosted surface a new lambda to invalidate against.
+ *
+ * A null [accent] is not a reason to return null — it only makes the washes plain white and black — which is why it is
+ * `Color.Unspecified` here rather than a second early return.
+ */
+@Composable
+private fun rememberBackdropState(image: Bitmap?, accent: Int?, windowSize: IntSize): BackdropState? =
+    remember(image, accent, windowSize) {
+        if (image == null || windowSize.width == 0 || windowSize.height == 0) {
+            null
+        } else {
+            BackdropState(
+                image = image.asImageBitmap(),
+                screenToBitmap = screenToBitmapMapping(
+                    bitmapWidth = image.width,
+                    bitmapHeight = image.height,
+                    screenWidth = windowSize.width,
+                    screenHeight = windowSize.height,
+                ),
+                tintColor = accent?.let { Color(it) } ?: Color.Unspecified,
+            )
+        }
+    }
 
 /**
  * The drag-toolkit [SurfaceBinding] for a stored [SideBinding] — its content, and the one-finger policy each way.
