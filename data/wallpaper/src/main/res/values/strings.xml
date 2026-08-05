@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown in the system's live-wallpaper chooser, which is the only place any of these appear. -->
+    <string name="rotating_wallpaper_label">Morphic rotating wallpaper</string>
+    <string name="rotating_wallpaper_author">Morphic Launcher</string>
+    <string name="rotating_wallpaper_description">Shows a different picture in portrait and in landscape.</string>
+</resources>

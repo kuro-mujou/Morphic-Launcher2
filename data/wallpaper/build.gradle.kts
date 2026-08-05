@@ -9,6 +9,7 @@ android {
 }
 
 dependencies {
+    implementation(projects.core.model) // Orientation, for the rotating pair's two halves
     implementation(projects.core.common) // AppDispatchers + Koin + coroutines (api-exposed)
 
     // `Bitmap.scale`, for the one place a cropped image is resized to the screen. The same dependency `core:icon`

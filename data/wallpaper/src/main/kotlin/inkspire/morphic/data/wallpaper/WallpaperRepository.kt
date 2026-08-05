@@ -1,7 +1,9 @@
 package inkspire.morphic.data.wallpaper
 
+import android.content.ComponentName
 import android.graphics.Bitmap
 import android.net.Uri
+import inkspire.morphic.core.model.Orientation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 
@@ -37,6 +39,16 @@ enum class WallpaperSource {
 
     /** Chosen from the photo picker and framed on the crop screen. The only kind that can *become* the wallpaper. */
     PICKED,
+
+    /**
+     * One half of the **rotating pair** — the portrait or landscape image the launcher's own live wallpaper draws.
+     *
+     * Not applied through `WallpaperManager` either, and for a different reason from a capture: a live wallpaper is set
+     * by the *system's* chooser, which the user has to confirm, so [WallpaperRepository.apply] has nothing to do with
+     * it. What sets it is [RotatingWallpaperService] becoming the active wallpaper; what this source marks is which
+     * file the service will draw.
+     */
+    ROTATING,
 
     /**
      * A screenshot the user took with the launcher's UI hidden — **a picture of the wallpaper, not a wallpaper.**
@@ -77,6 +89,37 @@ data class NormalizedCropRect(
 }
 
 /**
+ * The launcher's **rotating wallpaper**: one image per orientation, drawn by [RotatingWallpaperService].
+ *
+ * A pair rather than a list, because that is what it is — a phone has two orientations, and the service picks between
+ * them by comparing the surface's width and height. Either half may be absent while the user is still setting it up,
+ * and the service falls back to whichever exists, so a half-configured pair still draws something rather than black.
+ *
+ * **This is where "the wallpaper" stops being a single image**, which is the reason this slice lands before the effects:
+ * an effect has to answer "which image do I sample?", and the answer is per-orientation as soon as this exists.
+ */
+@Serializable
+data class RotatingImages(
+    val portrait: WallpaperImage? = null,
+    val landscape: WallpaperImage? = null,
+) {
+    /** The image for [orientation], or null if that half has not been set. */
+    operator fun get(orientation: Orientation): WallpaperImage? = when (orientation) {
+        Orientation.PORTRAIT -> portrait
+        Orientation.LANDSCAPE -> landscape
+    }
+
+    /** [image] as the [orientation] half, leaving the other alone — the merge `setRotatingImage` commits. */
+    fun with(orientation: Orientation, image: WallpaperImage): RotatingImages = when (orientation) {
+        Orientation.PORTRAIT -> copy(portrait = image)
+        Orientation.LANDSCAPE -> copy(landscape = image)
+    }
+
+    /** True when neither half is set — the state in which applying the live wallpaper would draw nothing. */
+    val isEmpty: Boolean get() = portrait == null && landscape == null
+}
+
+/**
  * What this module knows about the wallpaper — **the chosen image, and whether we are the one that set it**.
  *
  * **Much smaller than L1's `WallpaperState`, and deliberately so.** That one carried six fields (`appliedMode`,
@@ -87,14 +130,25 @@ data class NormalizedCropRect(
  * unread ones now would be five things to reason about with nothing checking them.
  *
  * @property image the wallpaper the user chose, or null if they never have.
+ * @property rotating the per-orientation pair the launcher's own live wallpaper draws, empty until the user sets one.
+ *   Beside [image] rather than instead of it, because they are independent: a user may keep a static image *and* a
+ *   rotating pair, and switch by setting one or the other on the system. L1 kept both for the same reason.
  * @property appliedSystemId the `WallpaperManager` wallpaper id at the moment we last applied [image], or 0 if we never
  *   did. Kept for two jobs a boolean could not do: it is what makes the section's button read "Apply" or "Re-apply",
  *   and comparing it against the live id is how a wallpaper set **outside** this launcher will be detected (L1 stored
  *   the same `appliedSystemWallpaperId` and used it exactly that way).
+ *
+ * **What is deliberately *not* here: which wallpaper is currently active.** L1 stored that (`appliedMode`, latched by
+ * `markRotateApplied`) and then needed `reconcileLiveWallpaper` on every resume to repair the cache when the user
+ * changed wallpaper outside the app — a copy of something the system already knows, plus a job to keep the copy honest.
+ * `WallpaperManager.wallpaperInfo` answers it directly, so [WallpaperRepository.isRotatingActive] asks instead of
+ * remembering, and there is no latch, no reconciler, and nothing to go stale. That is smell 7 on this port's own list
+ * ("derived state persisted as settings") declined rather than ported.
  */
 @Serializable
 data class WallpaperState(
     val image: WallpaperImage? = null,
+    val rotating: RotatingImages = RotatingImages(),
     val appliedSystemId: Int = 0,
 ) {
     companion object {
@@ -108,6 +162,10 @@ object WallpaperFiles {
 
     /** The chosen image, cropped and scaled to the screen. L1's `owned.jpg`. */
     const val IMAGE = "single.jpg"
+
+    /** The rotating pair, one per orientation — L1's `owned_portrait.jpg` / `owned_landscape.jpg`. */
+    const val ROTATING_PORTRAIT = "rotating_portrait.jpg"
+    const val ROTATING_LANDSCAPE = "rotating_landscape.jpg"
 }
 
 /**
@@ -119,10 +177,8 @@ object WallpaperFiles {
  * settings port's S0 drew when it refused to bring L1's `WallpaperState` across into the settings blob. The *effect*
  * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5f.
  *
- * **Two of L1's sources are here — picked and captured — and the rest is deliberately absent**, each with a reason
- * rather than as an omission:
- * - **`LIVE_ROTATE`** — a per-orientation pair rendered by L1's own `RotateWallpaperService`. That is a live wallpaper
- *   with a service, a manifest entry and its own XML metadata; it is a feature beside this one rather than a step in it.
+ * **All three of L1's sources are here — picked, captured and the rotating pair** — and what is left out is the half
+ * that reads them:
  * - **the blur and the dominant colour** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
  *   need L1's `Blur.kt` image processing, which the plan already says belongs beside the graphics code rather than in a
  *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
@@ -187,6 +243,53 @@ interface WallpaperRepository {
 
     /** The stored image as a bitmap, for a preview at real size. Null when nothing is stored, or the file is gone. */
     suspend fun loadImage(): Bitmap?
+
+    /**
+     * Stores the [crop] region of [uri] as the [orientation] half of the rotating pair, at [outWidth] × [outHeight].
+     *
+     * **Merges rather than replaces**: setting the landscape half leaves the portrait one alone, because the pair is
+     * built one orientation at a time and losing the other half to each edit would make it impossible to finish. L1's
+     * `setRotateImage` says the same in its own KDoc.
+     *
+     * **Touches nothing on the system.** Unlike [apply], there is nothing this could do: a live wallpaper is set through
+     * the system's own chooser, which the user has to confirm. Writing the file is the whole of this module's part —
+     * [RotatingWallpaperService] reads it the next time it draws, so an image changed while the wallpaper is live
+     * appears on the next redraw without anything being re-applied.
+     *
+     * @param outWidth the size to store at, which is the *target orientation's* screen rather than the current one — a
+     *   landscape half is framed and stored landscape-shaped even while the phone is held upright.
+     */
+    suspend fun setRotatingImage(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        orientation: Orientation,
+    )
+
+    /** The [orientation] half of the rotating pair as a bitmap, for its slot in the section. Null when unset. */
+    suspend fun loadRotatingImage(orientation: Orientation): Bitmap?
+
+    /**
+     * Whether the launcher's own [RotatingWallpaperService] is the wallpaper the system is currently showing.
+     *
+     * **Asked, never remembered** — see [WallpaperState]. `WallpaperManager.wallpaperInfo` is non-null exactly when a
+     * live wallpaper is set and names which, so this is a read rather than a cache: a user who changes wallpaper in the
+     * system's own settings makes the next call return the truth, with nothing to reconcile. L1 latched the answer into
+     * `appliedMode` and needed a resume-time reconciler to repair it.
+     *
+     * Suspending because it is a binder call, not because it is slow.
+     */
+    suspend fun isRotatingActive(): Boolean
+
+    /**
+     * The launcher's live-wallpaper service, for a caller that needs to name it in an intent.
+     *
+     * The component is this module's to know — it declares the service — and starting an activity is the *screen's*, so
+     * the split is: this hands over the name, and `feature:settings` builds `ACTION_CHANGE_LIVE_WALLPAPER` around it.
+     * L1 kept both in its feature module, which meant its data layer could not say what its own service was called.
+     */
+    fun rotatingServiceComponent(): ComponentName
 
     /**
      * Emits each image that appears in the device's gallery **after collection starts** — how a capture is noticed.

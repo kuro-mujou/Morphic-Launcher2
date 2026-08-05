@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The metadata the system's live-wallpaper chooser reads for `RotatingWallpaperService`. A wallpaper service without it
+  is not offered at all, which is why this file exists rather than the service standing alone.
+
+  No `android:settingsActivity`: where the two images are chosen is a *section* inside settings, not a destination the
+  chooser could launch into, and pointing it at the launcher's own entry point would drop the user somewhere they did
+  not ask to be.
+-->
+<wallpaper
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:author="@string/rotating_wallpaper_author"
+    android:description="@string/rotating_wallpaper_description" />

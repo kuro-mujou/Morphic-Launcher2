@@ -1,6 +1,7 @@
 package inkspire.morphic.data.wallpaper.internal
 
 import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
@@ -18,7 +19,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
+import inkspire.morphic.data.wallpaper.RotatingWallpaperService
 import inkspire.morphic.data.wallpaper.WallpaperFiles
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
@@ -137,6 +140,38 @@ internal class WallpaperRepositoryImpl(
         wallpaper.first().image?.let { decodeFile(it.path) }
     }
 
+    override suspend fun setRotatingImage(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        orientation: Orientation,
+    ): Unit = withContext(dispatchers.io) {
+        val decoded = decodeSampled(uri, SOURCE_CAP) ?: run {
+            Timber.w("Unable to decode rotating wallpaper image from %s", uri)
+            return@withContext
+        }
+        val scaled = cropAndScale(decoded, crop, outWidth, outHeight)
+        val file = writeImage(scaled, fileNameFor(orientation))
+        val stored = WallpaperImage(file.absolutePath, scaled.width, scaled.height, WallpaperSource.ROTATING)
+        // `with` rather than a copy of the whole pair: the other orientation is a separate file that this write has
+        // nothing to say about, and losing it to each edit would make a pair impossible to finish assembling.
+        updateState { it.copy(rotating = it.rotating.with(orientation, stored)) }
+    }
+
+    override suspend fun loadRotatingImage(orientation: Orientation): Bitmap? = withContext(dispatchers.io) {
+        wallpaper.first().rotating[orientation]?.let { decodeFile(it.path) }
+    }
+
+    override suspend fun isRotatingActive(): Boolean = withContext(dispatchers.io) {
+        // Asked rather than remembered — see `WallpaperState`. `wallpaperInfo` is non-null exactly when a live
+        // wallpaper is set, and names which, so there is nothing here to fall out of step with the system.
+        WallpaperManager.getInstance(appContext).wallpaperInfo?.component == rotatingServiceComponent()
+    }
+
+    override fun rotatingServiceComponent(): ComponentName =
+        ComponentName(appContext, RotatingWallpaperService::class.java)
+
     /**
      * A `ContentObserver` on the image collection, turned into a flow - registered on collection and unregistered when
      * the collector goes away, which is what `callbackFlow`'s `awaitClose` is for.
@@ -235,9 +270,15 @@ internal class WallpaperRepositoryImpl(
         }
     }
 
-    private fun writeImage(bitmap: Bitmap): File {
+    /** The file each orientation of the rotating pair is written to — the two names the service reads. */
+    private fun fileNameFor(orientation: Orientation): String = when (orientation) {
+        Orientation.PORTRAIT -> WallpaperFiles.ROTATING_PORTRAIT
+        Orientation.LANDSCAPE -> WallpaperFiles.ROTATING_LANDSCAPE
+    }
+
+    private fun writeImage(bitmap: Bitmap, fileName: String = WallpaperFiles.IMAGE): File {
         val dir = File(appContext.filesDir, WallpaperFiles.DIR).apply { mkdirs() }
-        return File(dir, WallpaperFiles.IMAGE).also { file ->
+        return File(dir, fileName).also { file ->
             file.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out) }
         }
     }

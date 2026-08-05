@@ -1,21 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The permissions live with the code that needs them rather than in `app`'s manifest: this module is the only thing that
-  calls `WallpaperManager.setBitmap` and the only thing that queries `MediaStore`, so the capabilities travel with it and
-  the manifest merger hands them to whichever application includes the module. `app` gains nothing by restating them.
+  The permission lives with the code that needs it rather than in `app`'s manifest: this module is the only thing that
+  calls `WallpaperManager.setBitmap`, so the capability travels with it and the manifest merger hands it to whichever
+  application includes the module. `app` gains nothing by restating it.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <!--
-      Reading the image collection is how a capture is noticed: there is no API for "take a screenshot", so the only
-      route is to watch for one arriving. Declared for both eras because the permission was split at API 33 — the older
-      one is capped at 32 so it is not requested where it no longer applies.
+      Declared here for the same reason, and it matters more: a `WallpaperService` is instantiated by the *system*, so
+      the class, its intent filter and its metadata have to be visible in the merged manifest. Keeping the declaration
+      beside the service means a module that includes `data:wallpaper` gets a working live wallpaper, and one that does
+      not cannot end up with a dangling entry naming a class it lacks.
+
+      `BIND_WALLPAPER` is what stops any app but the system binding to it — the platform requires it of every wallpaper
+      service, and without it the chooser refuses to list this one.
     -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <application>
+        <service
+            android:name="inkspire.morphic.data.wallpaper.RotatingWallpaperService"
+            android:exported="true"
+            android:label="@string/rotating_wallpaper_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/rotating_wallpaper" />
+        </service>
+    </application>
 
 </manifest>
