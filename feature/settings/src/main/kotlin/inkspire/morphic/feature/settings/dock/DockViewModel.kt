@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.dock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.DockEdge
 import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeZone
@@ -33,18 +34,20 @@ import kotlinx.coroutines.launch
  * What the dock section shows — all three fields **resolved together or not at all**, since every one of them is keyed
  * by the device configuration the screen has yet to report. Null is "not yet", exactly as `IconSizingState.sizing` is.
  *
- * @property heightDp the strip's height. The dock's one genuine extent setting.
+ * @property extentDp the strip's thickness — its height as a bottom strip, its width as a rail. The dock's one genuine
+ *   extent setting.
  * @property cols the column count the user wants. A wish rather than a promise — the surface clamps it to what fits
  *   and never writes the clamp back, so a count too large for today's icon size returns when the icons shrink.
- * @property rows likewise, except that a height commit which invalidates it *is* written down (see [setHeight]).
+ * @property rows likewise. Whichever of the two the extent divides is *also* written down when an extent commit
+ *   invalidates it (see [setExtent]).
  * @property icon the dock's **resolved** icon sizing — both shown, since these controls now live in this section, and
- *   used: the smallest usable cell it implies is what the height divides into rows and the width into columns.
+ *   used: the smallest usable cell it implies is what the extent divides into cells.
  * @property homeIcon HOME's main-area icon sizing. Nothing here edits it and nothing here shows it; it is needed
- *   because this height decides how much screen home is left with, and how many rows *that* carries depends on home's
- *   own smallest usable cell. See [setHeight].
+ *   because this extent decides how much screen home is left with, and how many cells *that* carries depends on home's
+ *   own smallest usable cell. See [setExtent].
  */
 data class DockState(
-    val heightDp: Int? = null,
+    val extentDp: Int? = null,
     val cols: Int? = null,
     val rows: Int? = null,
     val icon: IconSizing? = null,
@@ -55,15 +58,15 @@ data class DockState(
 /**
  * Screen-level state holder for the dock section: its extent, the grid inside it, and its icons.
  *
- * **Three settings across two stores, which is why they are joined here.** The height is the dock's own extent
- * (`setDockHeight`); the row and column counts are an ordinary grid override (`updateGrid`) like home's; the icon
+ * **Three settings across two stores, which is why they are joined here.** The extent is the dock's own
+ * (`setDockExtent`); the row and column counts are an ordinary grid override (`updateGrid`) like home's; the icon
  * sizing is an icon override, issued through [icons]. They belong on one screen because they constrain each other —
- * the icons set the smallest usable cell, the height divides into rows of at least that, and the width into columns.
+ * the icons set the smallest usable cell, and the extent divides into cells of at least that.
  * L1 grouped them the same way, in a dock detail that held its layout controls and `IconLayoutControls` together.
  *
  * **No bounds in this class.** Every limit depends on the measured window and the current type scale, so they live in
  * the screen that has them; this holder only commits values. The one exception is deliberate and stated at
- * [setHeight]: a height commit reduces a row count it has invalidated.
+ * [setExtent]: an extent commit reduces the count it has invalidated.
  */
 class DockViewModel(
     private val settingsRepository: SettingsRepository,
@@ -83,13 +86,13 @@ class DockViewModel(
                 flowOf(DockState())
             } else {
                 combine(
-                    settingsRepository.dockHeight(configuration),
+                    settingsRepository.dockExtent(configuration),
                     settingsRepository.gridConfig(SLOT, configuration),
                     settingsRepository.iconSizing(SLOT, configuration),
                     settingsRepository.iconSizing(GridSlot.HOME_MAIN, configuration),
                     settingsRepository.horizontalPadding(SLOT, configuration),
-                ) { heightDp, grid, icon, homeIcon, padding ->
-                    DockState(heightDp, grid.visualCols, grid.visualRows, icon, homeIcon, padding)
+                ) { extentDp, grid, icon, homeIcon, padding ->
+                    DockState(extentDp, grid.visualCols, grid.visualRows, icon, homeIcon, padding)
                 }
             }
         }
@@ -99,7 +102,7 @@ class DockViewModel(
      * The dock's own icon sizing, edited from this section rather than from a separate icons screen.
      *
      * Beside its grid because the two decide each other: the icon size sets the smallest usable cell, which is what
-     * the dock's height divides into rows. L1 embedded the same controls in its dock detail for the same reason.
+     * the dock's extent divides into cells. L1 embedded the same controls in its dock detail for the same reason.
      */
     internal val icons = IconSizingEdits(
         settings = settingsRepository,
@@ -111,7 +114,7 @@ class DockViewModel(
     /**
      * Sets the dock's horizontal margin, in dp.
      *
-     * **One write, where [setHeight] is two.** A margin takes no cell away — it makes every cell narrower — so the
+     * **One write, where [setExtent] is two.** A margin takes no cell away — it makes every cell narrower — so the
      * columns that no longer fit are re-reported on read rather than removed, and nothing is displaced for
      * `GridReflow` to re-home. That is the same distinction the repository's own KDoc draws between this and a resize.
      */
@@ -126,47 +129,56 @@ class DockViewModel(
     }
 
     /**
-     * Commits the strip's height in whole dp, **and reduces the row count if the new height cannot carry it**.
+     * Commits the strip's extent in whole dp, **and reduces the count it divides if the new extent cannot carry it**.
      *
-     * A cell is `height ÷ rows`, so shrinking the strip can leave the stored rows describing cells too short to draw
-     * an icon in. Rather than leave storage holding a grid the dock will never draw, the rows come down to
-     * [maxRows] — the last row is given up so the survivors keep their height, which is the dock rule the settings
-     * plan states and the behaviour L1 has.
+     * A cell is `extent ÷ count`, so shrinking the strip can leave the stored count describing cells too small to draw
+     * an icon in. Rather than leave storage holding a grid the dock will never draw, that count comes down to
+     * [maxCells] — the last line is given up so the survivors keep their size, which is the dock rule the settings plan
+     * states and the behaviour L1 has.
      *
-     * **This is the one clamp that is written back rather than applied on read.** Columns get the opposite treatment
-     * (their cap moves with the icon size, so the user's count returns when the icons shrink); rows are reduced
-     * because the height that invalidated them is itself a deliberate, committed change.
+     * **Which count that is, is [edge]'s to say**: a bottom strip's height divides into *rows*, a rail's width into
+     * *columns*. The other axis is untouched, and one step out the same is true of home — a bottom dock takes height
+     * off the pager and a rail takes width.
      *
-     * Where the swallowed row's occupants go is not settled here: the height reaches the home surface, which re-fits
+     * **This is the one clamp that is written back rather than applied on read.** The other axis gets the opposite
+     * treatment (its cap moves with the icon size, so the user's count returns when the icons shrink); this one is
+     * reduced because the extent that invalidated it is itself a deliberate, committed change.
+     *
+     * Where the swallowed line's occupants go is not settled here: the extent reaches the home surface, which re-fits
      * the dock and spills what no longer fits onto the pager ([settleDock] via `HomeViewModel.fitDockTo`).
      *
-     * **The same reduction is applied to HOME's main grid, for the same reason one step out.** This strip's height is
-     * subtracted from what the pager gets, so a taller dock can leave home's stored row count describing cells too
-     * short to draw an icon in — the identical invalidation, one grid over. L1 did this too, but from the *home
-     * surface* (a `LaunchedEffect` on its measured pager bounds, whose comment names "the dock is turned back on" as
-     * the case): correct in effect, and it wrote the clamp on every cause, including an icon-size change that was
-     * never about home's rows. Here the write belongs to the **deliberate** change that caused it, which is this
-     * commit — the same asymmetry that governs this dock's own rows against its columns.
+     * **The same reduction is applied to HOME's main grid, for the same reason one step out.** L1 did this too, but
+     * from the *home surface* (a `LaunchedEffect` on its measured pager bounds, whose comment names "the dock is turned
+     * back on" as the case): correct in effect, and it wrote the clamp on every cause, including an icon-size change
+     * that was never about home's rows. Here the write belongs to the **deliberate** change that caused it, which is
+     * this commit — the same asymmetry that governs this dock's own two axes.
      *
      * Home's displaced items are not moved here. The home surface re-fits itself against whatever it reads
      * (`HomeViewModel.fitMainTo`), so the items follow the count without this screen reaching into another surface's
      * placements — unlike [edit], where the *edge* is knowledge only this press has.
      *
-     * @param maxRows how many rows the new height can hold, from the screen — the fit needs a measured window and the
-     *   current type scale, neither of which a state holder has.
-     * @param homeMaxRows how many rows the space *left over* can hold, from the same screen and for the same reason.
+     * @param edge where the dock sits, which decides whether the numbers below are rows or columns.
+     * @param maxCells how many cells the new extent can hold along the axis it divides, from the screen — the fit needs
+     *   a measured window and the current type scale, neither of which a state holder has.
+     * @param homeMaxCells how many the space *left over* can hold, on the same axis, from the same screen and for the
+     *   same reason.
      */
-    fun setHeight(dp: Int, maxRows: Int, homeMaxRows: Int) {
+    fun setExtent(dp: Int, edge: DockEdge, maxCells: Int, homeMaxCells: Int) {
         val configuration = device.value ?: return
-        val rows = state.value.rows
+        val current = state.value.let { if (edge == DockEdge.BOTTOM) it.rows else it.cols }
         viewModelScope.launch {
-            settingsRepository.setDockHeight(configuration, dp)
-            if (rows != null && rows > maxRows) {
-                settingsRepository.updateGrid(SLOT, configuration) { copy(rows = maxRows) }
+            settingsRepository.setDockExtent(configuration, dp)
+            if (current != null && current > maxCells) {
+                settingsRepository.updateGrid(SLOT, configuration) {
+                    if (edge == DockEdge.BOTTOM) copy(rows = maxCells) else copy(cols = maxCells)
+                }
             }
-            val homeRows = settingsRepository.gridConfig(GridSlot.HOME_MAIN, configuration).first().visualRows
-            if (homeRows > homeMaxRows) {
-                settingsRepository.updateGrid(GridSlot.HOME_MAIN, configuration) { copy(rows = homeMaxRows) }
+            val home = settingsRepository.gridConfig(GridSlot.HOME_MAIN, configuration).first()
+            val homeCurrent = if (edge == DockEdge.BOTTOM) home.visualRows else home.visualCols
+            if (homeCurrent > homeMaxCells) {
+                settingsRepository.updateGrid(GridSlot.HOME_MAIN, configuration) {
+                    if (edge == DockEdge.BOTTOM) copy(rows = homeMaxCells) else copy(cols = homeMaxCells)
+                }
             }
         }
     }
@@ -237,7 +249,7 @@ class DockViewModel(
     fun reset() {
         val configuration = device.value ?: return
         viewModelScope.launch {
-            settingsRepository.setDockHeight(configuration, null)
+            settingsRepository.setDockExtent(configuration, null)
             settingsRepository.updateGrid(SLOT, configuration) { GridOverride() }
         }
     }

@@ -180,14 +180,14 @@ internal class SettingsRepositoryImpl(
         }
     }
 
-    // `requireNotNull` for the same reason `iconSizing` uses one: a grid with no height in its blueprint is not a
-    // fixed-extent strip at all, so asking how tall it is has no honest answer, and inventing one would let a caller
+    // `requireNotNull` for the same reason `iconSizing` uses one: a grid with no extent in its blueprint is not a
+    // fixed-extent strip at all, so asking how thick it is has no honest answer, and inventing one would let a caller
     // size a grid by a number nobody configured.
-    override fun dockHeight(device: DeviceConfiguration): Flow<Int> {
-        val base = requireNotNull(GridSlot.HOME_DOCK.blueprint.heightDp) {
-            "the dock must declare a default height; its rows and columns are divided out of it"
+    override fun dockExtent(device: DeviceConfiguration): Flow<Int> {
+        val base = requireNotNull(GridSlot.HOME_DOCK.blueprint.extentDp) {
+            "the dock must declare a default extent; its rows and columns are divided out of it"
         }
-        return dataStore.read(SurfaceMetricsSlice) { it.dockHeight(device, base) }
+        return dataStore.read(SurfaceMetricsSlice) { it.dockExtent(device, base) }
     }
 
     // Same `requireNotNull` as the dock's, and the same meaning: a grid with no row height in its blueprint takes its
@@ -214,18 +214,18 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?) {
         // Clamped to the declared range rather than left to the caller, which is `updateGrid`'s treatment and not
-        // `setDockHeight`'s. The difference is that both of a padding's bounds are static facts: zero is "no margin",
+        // `setDockExtent`'s. The difference is that both of a padding's bounds are static facts: zero is "no margin",
         // and the ceiling is a judgement about how much of a grid may be given away — neither needs a measured screen.
         val clamped = dp?.coerceIn(HorizontalPaddingRange.first, HorizontalPaddingRange.last)
         update(SurfaceMetricsSlice) { withHorizontalPadding(slot, device, clamped) }
     }
 
-    override suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?) {
-        // The one bound this layer can state without measuring anything. Everything else about a dock's height —
-        // whether a row of icons fits it, whether it swallows the screen — needs the current icon sizing and the
+    override suspend fun setDockExtent(device: DeviceConfiguration, dp: Int?) {
+        // The one bound this layer can state without measuring anything. Everything else about a dock's extent —
+        // whether a line of icons fits it, whether it swallows the screen — needs the current icon sizing and the
         // current window, so it is checked where those are known rather than guessed at here.
-        require(dp == null || dp > 0) { "a dock $dp dp tall could not hold a cell" }
-        update(SurfaceMetricsSlice) { withDockHeight(device, dp) }
+        require(dp == null || dp > 0) { "a dock $dp dp thick could not hold a cell" }
+        update(SurfaceMetricsSlice) { withDockExtent(device, dp) }
     }
 
     /**

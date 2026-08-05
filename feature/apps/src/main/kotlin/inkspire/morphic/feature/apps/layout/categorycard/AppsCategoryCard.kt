@@ -3,11 +3,7 @@ package inkspire.morphic.feature.apps.layout.categorycard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -45,6 +41,7 @@ import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
 import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
@@ -283,7 +280,6 @@ fun AppsCategoryCard(
             ?.fingerInRoot,
     )
 
-    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
@@ -298,7 +294,7 @@ fun AppsCategoryCard(
                 userScrollEnabled = !coordinator.isDragging,
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(safeInsets)
+                    .windowInsetsPadding(uiInsets)
                     .onGloballyPositioned {
                         val bounds = it.boundsInRoot()
                         gridBounds = bounds

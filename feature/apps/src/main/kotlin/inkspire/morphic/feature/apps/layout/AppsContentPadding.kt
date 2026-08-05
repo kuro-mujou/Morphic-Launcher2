@@ -1,16 +1,13 @@
 package inkspire.morphic.feature.apps.layout
 
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
+import inkspire.morphic.core.designsystem.insets.uiInsets
 
 /**
  * The insets a scrolling APPS layout gives its content: the system bars and cutout, plus the grid's own
@@ -29,7 +26,7 @@ import androidx.compose.ui.unit.Dp
  */
 @Composable
 internal fun appsContentPadding(horizontal: Dp): PaddingValues {
-    val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
+    val bars = uiInsets.asPaddingValues()
     val direction = LocalLayoutDirection.current
     return PaddingValues(
         start = bars.calculateStartPadding(direction) + horizontal,

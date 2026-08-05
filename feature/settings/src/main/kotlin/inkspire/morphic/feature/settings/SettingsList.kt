@@ -4,10 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 
@@ -41,9 +46,14 @@ private val IconGap = 16.dp
  * the same reason, and they are worth keeping — a highlight in single-pane would mark a row the user has already left,
  * and a chevron in two-pane would promise a journey that does not happen.
  *
+ * **The bars are content padding, not layout padding**, which is what lets rows scroll *under* the navigation bar
+ * while the pane's background still reaches the window edge behind it. The caller says which edges apply, because only
+ * it knows whether this list has the screen to itself or a detail pane beside it.
+ *
  * @param selected the section being shown, or null when the list is the whole screen.
  * @param highlightSelected true in two-pane, where [selected] is on screen beside this.
  * @param showChevron true in single-pane, where a tap opens a new pane.
+ * @param insetSides the edges whose system bars / cutout this list keeps its rows clear of.
  */
 @Composable
 internal fun SettingsList(
@@ -51,9 +61,13 @@ internal fun SettingsList(
     onSelect: (SettingsSection) -> Unit,
     highlightSelected: Boolean,
     showChevron: Boolean,
+    insetSides: WindowInsetsSides,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(vertical = RowPadding),
 ) {
+    val contentPadding = uiInsets
+        .only(insetSides)
+        .add(WindowInsets(top = RowPadding, bottom = RowPadding))
+        .asPaddingValues()
     LazyColumn(modifier = modifier, contentPadding = contentPadding) {
         settingsGroups.forEach { group ->
             if (group.header != null) {

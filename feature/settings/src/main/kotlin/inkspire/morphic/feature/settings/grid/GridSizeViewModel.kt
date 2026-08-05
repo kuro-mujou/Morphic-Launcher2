@@ -42,14 +42,15 @@ import kotlinx.coroutines.launch
  * @property rows likewise. The one write that *does* reduce it is the dock's height commit, which is a deliberate
  *   change to the space home is left with rather than a passing consequence of an icon slider.
  * @property icon the resolved icon sizing, which is what decides how many of either fit.
- * @property dockHeightDp how tall the dock is, so the preview can show the share of the screen home actually gets —
- *   and so the bounds are computed against that area rather than the whole window.
+ * @property dockExtentDp how thick the dock is (its height, or its width where it is a rail), so the preview can show the
+ *   share of the screen home actually gets — and so the bounds are computed against that area rather than the whole
+ *   window.
  */
 data class GridSizeState(
     val cols: Int? = null,
     val rows: Int? = null,
     val icon: IconSizing? = null,
-    val dockHeightDp: Int? = null,
+    val dockExtentDp: Int? = null,
     val paddingDp: Int? = null,
 )
 
@@ -87,10 +88,10 @@ class GridSizeViewModel(
                 combine(
                     settingsRepository.gridConfig(SLOT, configuration),
                     settingsRepository.iconSizing(SLOT, configuration),
-                    settingsRepository.dockHeight(configuration),
+                    settingsRepository.dockExtent(configuration),
                     settingsRepository.horizontalPadding(SLOT, configuration),
-                ) { config, icon, dockHeightDp, padding ->
-                    GridSizeState(config.visualCols, config.visualRows, icon, dockHeightDp, padding)
+                ) { config, icon, dockExtentDp, padding ->
+                    GridSizeState(config.visualCols, config.visualRows, icon, dockExtentDp, padding)
                 }
             }
         }

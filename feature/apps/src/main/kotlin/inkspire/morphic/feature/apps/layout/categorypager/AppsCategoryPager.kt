@@ -1,12 +1,8 @@
 package inkspire.morphic.feature.apps.layout.categorypager
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -39,6 +35,7 @@ import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
@@ -208,7 +205,6 @@ fun AppsCategoryPager(
             categories.firstNotNullOfOrNull { it.apps.firstOrNull { app -> app.componentKey == component } }
         }
     }
-    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
@@ -216,7 +212,7 @@ fun AppsCategoryPager(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(safeInsets)
+                    .windowInsetsPadding(uiInsets)
                     // **One padding, above everything that measures.** The `viewport` read below becomes the padded
                     // box, and every other number on this surface is divided out of it — the drop zone, the proxy's
                     // cell width, and each page's own `maxWidth` (a page fills this box, so `fitCols` and

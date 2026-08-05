@@ -190,27 +190,32 @@ val HorizontalPaddingRange: IntRange = 0..64
  * @property icon The default [IconSizing] for this grid's cells, before any user override — or **null** for a grid
  *   whose cells are not icons. The card grid draws *tiles*, each containing its own small icon arrangement, so
  *   there is no "icon per cell" for a user to size; a null says so instead of carrying a value nothing reads.
- * @property heightDp The height in **dp** this grid occupies when it is a fixed-extent strip, or **null** for one
+ * @property extentDp The thickness in **dp** this grid occupies when it is a fixed-extent strip, or **null** for one
  *   that takes whatever space its parent gives it — every grid but the dock. `Int` rather than `Dp` because
  *   `core:model` is a plain JVM library, the same reason [IconSizing] stores dp as whole numbers. A grid that
- *   declares one **bounds its row count by it** — a cell being `height ÷ rows`, there is a point past which another
- *   row leaves cells too short to draw an icon in.
+ *   declares one **bounds the count along that axis** — a cell being `extent ÷ count`, there is a point past which
+ *   another line leaves cells too small to draw an icon in.
  *
- *   One value rather than a per-[DeviceConfiguration] map, matching [icon]: the height that fits an icon and its
- *   label is a physical size, and does not vary by posture the way a *count* of rows does. A user who wants a
+ *   **An extent rather than a height, because which dimension it is depends on the posture.** The dock is a bottom
+ *   strip on three configurations and a rail on the fourth ([DockEdge]), so the same stored number is a height there
+ *   and a width here — and it bounds the *rows* in the first case and the *columns* in the second. L1 called this
+ *   `extentDp` for the same reason.
+ *
+ *   One value rather than a per-[DeviceConfiguration] map, matching [icon]: the thickness that fits an icon and its
+ *   label is a physical size, and does not vary by posture the way a *count* of cells does. A user who wants a
  *   different dock in landscape overrides it there, since overrides are keyed per configuration.
  * @property rowHeightDp How tall one **row** of this grid is, in dp — or **null** for a grid whose rows take their
  *   height from somewhere else, which is every grid but the list. There are exactly three ways a cell gets a height,
  *   and a blueprint says which by what it declares:
- *   1. **divided out of an extent** — the dock, where a cell is [heightDp] ÷ rows;
+ *   1. **divided out of an extent** — the dock, where a cell is [extentDp] ÷ rows (or ÷ columns, on a rail);
  *   2. **derived from its width** — every scrolling grid, whose columns fix the cell width, leaving the icon and
  *      label to decide the height (`cellHeight` in `core:designsystem`);
  *   3. **declared**, here — the vertical list, and only it. A list is one lane, so it has no cell width to derive
  *      from and no extent to divide: nothing determines the row, which makes it genuinely the user's to set, with
  *      the icon then a fraction of *it* (hence this grid's `iconPercent = 1f`).
  *
- *   Not folded into [heightDp]: that is a whole grid's extent and this is one row of one, and a list has no total
- *   height at all — it scrolls. `Int` dp for the reason [heightDp] is, [IconSizing] included.
+ *   Not folded into [extentDp]: that is a whole grid's thickness and this is one row of one, and a list has no total
+ *   height at all — it scrolls. `Int` dp for the reason [extentDp] is, [IconSizing] included.
  * @property horizontalPaddingDp Blank margin kept at the grid's left and right edges, in dp — L1's
  *   `GridDimensions.horizontalPaddingDp`, and 0 by default there and here.
  *
@@ -219,7 +224,7 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   *after* computing its columns would draw cells narrower than the ones it sized its icons for. Every consumer
  *   therefore subtracts it before fitting, and `CellFit` sees the reduced area.
  *
- *   One value rather than a per-[DeviceConfiguration] map, matching [heightDp] and [rowHeightDp] and for the same
+ *   One value rather than a per-[DeviceConfiguration] map, matching [extentDp] and [rowHeightDp] and for the same
  *   reason: a margin is a physical size, not a count that should change with posture. A user who wants a wider one in
  *   landscape overrides it there, since overrides are keyed per configuration.
  */
@@ -231,7 +236,7 @@ data class GridBlueprint(
     val editRange: GridEditRange?,
     val defaults: Map<DeviceConfiguration, GridDefault>,
     val icon: IconSizing? = null,
-    val heightDp: Int? = null,
+    val extentDp: Int? = null,
     val rowHeightDp: Int? = null,
     val horizontalPaddingDp: Int = 0,
 ) {
@@ -311,18 +316,22 @@ val HomePagerGrid = GridBlueprint(
 )
 
 /**
- * Home dock — a free-placement strip with **a height of its own**, divided into rows and columns within it.
+ * Home dock — a free-placement strip with **an extent of its own**, divided into rows and columns within it.
  *
- * The one grid whose *extent* is a setting ([heightDp]) as well as its counts — and the two are not two ways of
- * saying one thing. The height decides how much screen the strip takes; the row count divides that height into
- * cells. So the height **bounds** the rows rather than replacing them: a cell is `height ÷ rows`, and rows may only
- * go as high as keeps that at least the smallest usable cell (`CellFit` in `core:designsystem`). Both axes are the
- * user's, which is why [editRange] gives each a minimum.
+ * The one grid whose *extent* is a setting ([extentDp]) as well as its counts — and the two are not two ways of
+ * saying one thing. The extent decides how much screen the strip takes; the counts divide it into cells. So the extent
+ * **bounds** a count rather than replacing it: a cell is `extent ÷ count`, and that count may only go as high as keeps
+ * the cell at least the smallest usable one (`CellFit` in `core:designsystem`). Both axes are the user's, which is why
+ * [editRange] gives each a minimum.
  *
- * **A height change can invalidate a row count, and shrinking the strip reduces the rows to what it can now hold** —
- * a real write, so what is stored is always a grid the dock can actually draw. Columns are untouched by height and
- * get the opposite treatment: their cap moves only with the icon size, so a count too large for today's icons is
- * clamped on read and comes back when the icons shrink.
+ * **Which count the extent bounds depends on where the dock sits** ([DockEdge]): a bottom strip's height bounds its
+ * *rows*, a rail's width bounds its *columns*. That is also why the phone-landscape [defaults] are the transpose of
+ * the others — a column of four down the trailing edge, where the rest have a row of four across the bottom.
+ *
+ * **An extent change can invalidate the count it bounds, and shrinking the strip reduces that count to what it can now
+ * hold** — a real write, so what is stored is always a grid the dock can actually draw. The *other* axis is untouched
+ * by the extent and gets the opposite treatment: its cap moves only with the icon size, so a count too large for
+ * today's icons is clamped on read and comes back when the icons shrink.
  *
  * [defaults] start both counts, and stand in for a frame that has no measurement yet.
  */
@@ -334,13 +343,15 @@ val DockGrid = GridBlueprint(
     editRange = GridEditRange(minCols = 1, minRows = 1),
     defaults = byDevice(
         phonePortrait = GridDefault(cols = 4, rows = 1),
-        phoneLandscape = GridDefault(cols = 4, rows = 1),
+        // The rail: one column wide, four cells down it — the transpose of the strip, because on this posture the
+        // extent below is a width rather than a height.
+        phoneLandscape = GridDefault(cols = 1, rows = 4),
         tabletPortrait = GridDefault(cols = 5, rows = 1),
         tabletLandscape = GridDefault(cols = 5, rows = 1),
     ),
     icon = IconSizing(),
     // The `DockHeight` placeholder `feature:home` has carried since the dock was built, now owned by something.
-    heightDp = 96,
+    extentDp = 96,
 )
 
 /**

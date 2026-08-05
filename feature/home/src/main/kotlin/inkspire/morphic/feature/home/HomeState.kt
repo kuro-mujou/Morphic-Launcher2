@@ -52,17 +52,19 @@ sealed interface HomeItem {
 /**
  * The dock's **stored** size — everything about it a user has an opinion about.
  *
- * The one number that is *not* here is its width, which is simply the screen's. Turning these three into a grid is
- * `CellFit.fitGridConfig`, in the surface, because that needs the measured width and the current type scale.
+ * The one number that is *not* here is the dimension it does not set: the screen's, on the axis it runs along.
+ * Turning these three into a grid is `CellFit.fitGridConfig`, in the surface, because that needs the measured area
+ * and the current type scale.
  *
- * @property heightDp how tall the strip is, in dp. It also **bounds** [rows]: a cell is `height ÷ rows`, so past a
- *   point another row would leave cells too short to draw an icon in.
+ * @property extentDp how thick the strip is, in dp — its **height** as a bottom strip and its **width** as a rail
+ *   (`DockEdge`). It also **bounds the count divided out of it**: a cell is `extent ÷ count`, so past a point another
+ *   line would leave cells too small to draw an icon in — [rows] on a bottom strip, [cols] on a rail.
  * @property cols how many columns across. Clamped to what fits when the grid is built and never written back, so a
  *   count too large for today's icon size comes back when the icons shrink.
- * @property rows how many rows down. Clamped on read the same way — but unlike columns it is also *reduced in
- *   storage* when the height it divides no longer supports it, which the dock's settings screen does on commit.
+ * @property rows how many rows down, on the same terms. Whichever of the two the extent bounds is *also reduced in
+ *   storage* when the extent no longer supports it, which the dock's settings screen does on commit.
  */
-data class DockSizing(val heightDp: Int, val cols: Int, val rows: Int)
+data class DockSizing(val extentDp: Int, val cols: Int, val rows: Int)
 
 /**
  * The home surface's render state for the current orientation — the placed [items] (apps and folders) across

@@ -12,7 +12,7 @@ import org.junit.Test
 /**
  * The APPS list's row height: resolution, per-configuration scope, and shrink-back on reset.
  *
- * The same three properties [DockHeightTest] pins, because it is the same shape of setting — a stored extent rather
+ * The same three properties [DockExtentTest] pins, because it is the same shape of setting — a stored extent rather
  * than a count. What differs is why it exists, and that is worth a test of its own rather than a second case in that
  * file: the dock's height is a strip's, which its rows divide, while this is one row of a grid with no total height
  * at all. Bounds are absent here for the reason they are absent there — a floor needs the current icon sizing, which
@@ -64,11 +64,11 @@ class ListRowHeightTest {
         // Four maps in one slice now, so it stays worth pinning that a write to one does not disturb the rest.
         val metrics = SurfaceMetrics.Default
             .withIconOverride(GridSlot.APPS_LIST, phone) { copy(iconPercent = 0.5f) }
-            .withDockHeight(phone, 140)
+            .withDockExtent(phone, 140)
             .withListRowHeight(phone, 72)
 
         assertEquals(72, metrics.listRowHeight(phone, base))
-        assertEquals(140, metrics.dockHeight(phone, 96))
+        assertEquals(140, metrics.dockExtent(phone, 96))
         assertEquals(0.5f, metrics.icon.getValue(GridSlot.APPS_LIST).getValue(phone).iconPercent!!, 0f)
     }
 }

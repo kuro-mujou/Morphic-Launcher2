@@ -2,8 +2,8 @@ package inkspire.morphic.feature.home
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,8 +11,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,13 +46,16 @@ import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
-import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
+import inkspire.morphic.core.designsystem.grid.splitForDock
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.model.DockEdge
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.dockEdge
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
@@ -145,38 +147,45 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // The area the grids are actually given: the window minus the insets the column below pads by. **One value feeds
     // every use**, which is the point — L1 derived its home area from settings in one place (`homeGridArea`) and
     // measured it in another (`pagerBoundsInWindow`), so the size it fitted the grid to and the size it drew into
-    // could disagree. Here they cannot: `safeInsets` is the same expression throughout, and the measurement itself is
+    // could disagree. Here they cannot: `uiInsets` is the same expression throughout, and the measurement itself is
     // now the shared `usableWindowArea` that the settings sections and the APPS surface read — so a bound computed for
     // this screen somewhere else describes the same screen.
-    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
-    val window = usableWindowArea(safeInsets)
-    val contentWidthDp = window.widthDp
-    val contentHeightDp = window.heightDp
+    val window = usableWindowArea(uiInsets)
+
+    // **Where the dock sits, which decides everything below it.** A bottom strip on three configurations and a rail on
+    // the trailing edge in phone landscape — the one posture with no height to spare. The split is a single expression
+    // the two settings sections read as well, so the area home draws into and the area they bound its rows against
+    // cannot disagree.
+    val dockEdge = device.dockEdge
+    val dockMetrics = state.metricsFor(GridSlot.HOME_DOCK)
+    val dockSizing = state.dock
+    val dockExtent = (dockSizing?.extentDp ?: checkNotNull(DockGrid.extentDp)).dp
+    val split = window.splitForDock(dockExtent.value, dockEdge)
 
     // **Padding is width the grid does not get, so it is subtracted before anything is fitted.** Each zone has its
     // own — a user may inset the pager without touching the dock — and each is taken off *twice*, once per edge. Doing
     // it here rather than at the draw call is the whole point: `fitGridConfig` decides how many columns the icons can
     // occupy, and fitting against the full width would size cells the grid then has no room to draw.
+    //
+    // Horizontal on both zones whichever edge the dock is on: a rail's margin insets *within* its width, which is what
+    // a "side margin" means on a vertical strip too.
     val mainPadding = state.paddingFor(GridSlot.HOME_MAIN).dp
     val dockPadding = state.paddingFor(GridSlot.HOME_DOCK).dp
-    val mainWidthDp = (contentWidthDp - mainPadding.value * 2).coerceAtLeast(1f)
-    val dockWidthDp = (contentWidthDp - dockPadding.value * 2).coerceAtLeast(1f)
+    val mainArea = split.main.copy(widthDp = (split.main.widthDp - mainPadding.value * 2).coerceAtLeast(1f))
+    val dockArea = split.dock.copy(widthDp = (split.dock.widthDp - dockPadding.value * 2).coerceAtLeast(1f))
 
-    // The dock is the one grid with a height of its own: the user sets how tall the strip is *and* how many rows and
-    // columns divide it, and `fitGridConfig` clamps those counts to what the height and the icon size actually allow.
-    // This screen supplies the two inputs only it can know — the measured width, and the type scale behind a cell's
-    // label row.
+    // The dock is the one grid with an extent of its own: the user sets how thick the strip is *and* how many rows and
+    // columns divide it, and `fitGridConfig` clamps those counts to what the extent and the icon size actually allow.
+    // On a rail that bound falls on the columns rather than the rows, which needs no branch here — the extent is in
+    // the area's width, and `CellFit` fits each axis to the dimension it is given.
     //
     // The blueprint stands in until the store answers, which is the fallback role `DockGrid.defaults` exists for.
-    val dockMetrics = state.metricsFor(GridSlot.HOME_DOCK)
-    val dockSizing = state.dock
-    val dockHeight = (dockSizing?.heightDp ?: checkNotNull(DockGrid.heightDp)).dp
     val dockBlueprintConfig = remember(device) { DockGrid.toGridConfig(device) }
     val dockConfig = if (dockSizing == null) {
         dockBlueprintConfig
     } else {
         DockGrid.fitGridConfig(
-            area = GridArea(widthDp = dockWidthDp, heightDp = dockSizing.heightDp.toFloat()),
+            area = dockArea,
             cols = dockSizing.cols,
             rows = dockSizing.rows,
             metrics = dockMetrics,
@@ -203,10 +212,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         blueprintConfig
     } else {
         HomePagerGrid.fitGridConfig(
-            area = GridArea(
-                widthDp = mainWidthDp,
-                heightDp = (contentHeightDp - dockHeight.value).coerceAtLeast(1f),
-            ),
+            area = mainArea,
             cols = storedMain.visualCols,
             rows = storedMain.visualRows,
             metrics = mainMetrics,
@@ -417,13 +423,20 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         // work — but the two would stop being independently configurable, which is the setting's whole point.
         //
         // The insets that *are* applied here are the system bars and cutout, so the dock sits above the navigation bar
-        // rather than under it. A system constraint, not styling — and the same `safeInsets` the widths were fitted
+        // rather than under it. A system constraint, not styling — and the same `uiInsets` the widths were fitted
         // against.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(safeInsets),
-        ) {
+        // **The two zones are stacked along the dock's own axis** — a `Column` under a bottom strip, a `Row` beside a
+        // rail — and the pager takes the remainder either way. Both branches emit the same two composables in the same
+        // order with the same parameters, so nothing about drag, folders or geometry is aware of the arrangement: a
+        // grid publishes its bounds from where it is placed, and one coordinator hit-tests both zones in one space.
+        // Padding inside the extent, not outside it: the dock's thickness is what the user set, and its cells divide
+        // it — insetting along that axis would silently shrink the strip they configured.
+        val dockModifier = when (dockEdge) {
+            DockEdge.BOTTOM -> Modifier.fillMaxWidth().height(dockExtent)
+            DockEdge.END -> Modifier.fillMaxHeight().width(dockExtent)
+        }.padding(horizontal = dockPadding)
+
+        val pager: @Composable (Modifier) -> Unit = { zoneModifier ->
             CoordinateDragPager(
                 items = mainItems,
                 config = config,
@@ -434,16 +447,18 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 dragItem = { it.gridItem },
                 placement = { it.placement },
                 onDrop = { handleDrop() },
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = mainPadding),
+                modifier = zoneModifier,
                 onGeometryChange = { geometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->
                 HomeItemCell(item, session, cellModifier, itemGestures, mainMetrics)
             }
+        }
 
-            // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and
-            // the pager is one gesture with no hand-off. Its height is the user's setting, and the row count it
-            // divides that height into is derived from it rather than stored — see `dockConfig` above.
+        // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and
+        // the pager is one gesture with no hand-off. Its extent is the user's setting, and the count it
+        // divides that extent into is derived from it rather than stored — see `dockConfig` above.
+        val dock: @Composable () -> Unit = {
             CoordinateDragGrid(
                 items = dockItems,
                 config = dockConfig,
@@ -453,13 +468,23 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 dragItem = { it.gridItem },
                 placement = { it.placement },
                 onDrop = { handleDrop() },
-                // Padding inside the height, not outside it: the dock's extent is what the user set, and its rows are
-                // that height divided — insetting vertically would silently shorten the strip they configured.
-                modifier = Modifier.fillMaxWidth().height(dockHeight).padding(horizontal = dockPadding),
+                modifier = dockModifier,
                 onGeometryChange = { dockGeometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->
-                HomeItemCell(item, session, cellModifier, itemGestures, state.metricsFor(GridSlot.HOME_DOCK))
+                HomeItemCell(item, session, cellModifier, itemGestures, dockMetrics)
+            }
+        }
+
+        val zones = Modifier.fillMaxSize().windowInsetsPadding(uiInsets)
+        when (dockEdge) {
+            DockEdge.BOTTOM -> Column(zones) {
+                pager(Modifier.fillMaxWidth().weight(1f).padding(horizontal = mainPadding))
+                dock()
+            }
+            DockEdge.END -> Row(zones) {
+                pager(Modifier.fillMaxHeight().weight(1f).padding(horizontal = mainPadding))
+                dock()
             }
         }
 

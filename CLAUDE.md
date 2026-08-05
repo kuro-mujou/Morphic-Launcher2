@@ -419,6 +419,31 @@ brightness question through the same system API as every other wallpaper.
     in a row sized for 41). L1 had the same double-application (`gridCellHeightDp` × `resolveIconSize`) and this port
     inherited it; nothing showed until the icon defaults reached 100%, where the two agree. So on these grids the user's
     fraction chooses the **cell height**, and the icon then fills exactly what that height bought — one job each.
+- **Insets are one expression, `uiInsets` (`insets/UiInsets.kt`), and a surface paints *through* them.** L1's helper,
+  finally ported: `systemBars ∪ displayCutout` — deliberately not `safeDrawing` (nothing on a launcher surface takes
+  text, so reserving an IME that never appears is a permanent gap) and deliberately not `systemBars` alone (a notch is
+  not a system bar). It had been written out longhand in eleven files, which is how a launcher ends up with home
+  honouring the cutout and its settings screen not. `Modifier.uiInsetsPadding(sides)` is the padding form —
+  `@Composable`, not L1's deprecated `composed { }`.
+  - **The bars are *content* padding, never layout padding, on any surface with a background.** The window is
+    transparent under this launcher's theme (`windowShowWallpaper`), so a container that stops short of the window edge
+    does not leave a blank strip — it leaves a **hole through to the wallpaper**. That is what the settings shell did:
+    `Scaffold`'s default `contentWindowInsets` reserved the navigation bar, and with `containerColor = Transparent`
+    (which the icon preview's `BlendMode.Src` punch requires) the reserved strip showed the wallpaper. So both scaffolds
+    zero `contentWindowInsets`, each pane fills to the window edge and paints itself, and the insets are applied *inside*
+    — `contentPadding` on `SettingsList` (so rows scroll under the bar) and `uiInsetsPadding` inside `PunchThroughPane`.
+    The FAB then pads itself, since the scaffold's reservation is what normally lifts it clear. L1 zeroed the same two
+    fields, on exactly the sections whose detail shows the wallpaper.
+  - **Which sides is the shell's answer, not the pane's** — a pane beside another pane must not inset the edge its
+    neighbour covers, or the gap opens in the middle of the screen. So `insetSides` is a parameter on both `SettingsList`
+    and `PunchThroughPane`: horizontal+bottom on a phone, start+bottom / end+bottom either side of the tablet divider
+    (L1 passed the same two to its two-pane list). The **top** is nobody's: the app bar covers the status bar and
+    `consumeWindowInsets(innerPadding)` says so, which is why the panes below can ask for every side and get nothing
+    back on top.
+  - The **top app bar** takes `uiInsets` too, because M3's default (`systemBars` only) would seat its back button under
+    a landscape notch. `MainActivity` sets both bars scrimless before `super.onCreate` and turns
+    `isNavigationBarContrastEnforced` off on API 29+ — `enableEdgeToEdge` leaves it on, and it lets the system paint a
+    translucent scrim over the wallpaper. L1 did both, in that order, in that place.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
   colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
@@ -584,19 +609,44 @@ the default `DevRootScreen` screen.
   items alone. Two bugs came from getting this wrong, both worth not repeating: matching a merge target on placement
   alone resolved a folder in the wrong zone, and scoping the *open-folder* lookup to MAIN left a tapped dock folder
   with its id set on the host and nothing to render (opening is zone-independent; merge *targets* are per-zone).
-- **Layout: the dock has a height of its own, the pager takes the rest, and there is no padding anywhere.** The dock's
-  height is a **setting** (`SurfaceMetrics.dockHeightDp`, defaulting to `DockGrid.heightDp`) *and* its rows and
-  columns are stored counts — the height does not replace the rows, it **bounds** them, since a cell is
-  `height ÷ rows`. `CellFit.fitGridConfig` resolves a stored size against what an area can actually hold, from the two
-  inputs only the surface knows (the measured width, and the type scale behind a label row). Deriving the counts from
+- **Where the dock sits is `DockEdge`, and it is a rule rather than a setting.** A **bottom strip** on phone portrait,
+  tablet portrait and tablet landscape; a **rail on the trailing edge** on phone landscape — the one posture that is
+  short and wide, where a bottom dock would take a third of the height for one row of icons. `END` rather than `RIGHT`
+  because a `Row` places it last, which is the right side in LTR and the left in RTL. It keys on the whole
+  `DeviceConfiguration` and not on `isLandscape`: a tablet in landscape has the height to spare.
+  One fact with four consequences, which is why it is a type rather than a `landscape` boolean threaded separately
+  through each (L1 passed one to `homeGridArea`, `HomeGridEditor`, `DockGridEditor` and its extent slider, and each
+  re-derived what it meant): home stacks its zones in a `Column` or a `Row`, the dock's extent is a **height** or a
+  **width**, the extent bounds the **rows** or the **columns**, and the grid editor draws its companion zone below or
+  beside. The blueprint's phone-landscape default is the transpose for the same reason — `1 × 4` where the others are
+  `4 × 1`. `GridArea.splitForDock` is the one expression that divides the window, returning **both** halves together
+  (like `DerivedCell`) because three callers depend on them agreeing and cannot check each other: the surface draws
+  them, and both settings sections bound their grids against them.
+  - **Rotation must not re-fit what it is not drawing.** Placements are keyed by `Orientation` and home reads
+    `PORTRAIT` only (home orientation is unbuilt), so `fitMainTo`/`fitDockTo` are gated on
+    `HomeViewModel.drawsStoredPlacements`. Without it, rotating a phone would settle a portrait arrangement against a
+    landscape grid — and against the **rail**, which is the transpose, so nearly every dock item would be evicted to
+    home and would not come back. A grid drawn out of bounds for as long as a rotation lasts is cosmetic and reverses
+    itself; the write does not. The guard becomes vacuous the day placements are stored per posture.
+- **Layout: the dock has an extent of its own, the pager takes the rest, and there is no padding anywhere.** The dock's
+  extent is a **setting** (`SurfaceMetrics.dockExtentDp`, defaulting to `DockGrid.extentDp`) *and* its rows and
+  columns are stored counts — the extent does not replace a count, it **bounds** the one it divides, since a cell is
+  `extent ÷ count`. It is an *extent* and not a height because `DockEdge` decides which dimension it names; one value
+  per device serves both, since a user configuring a phone in landscape is configuring the rail, and the serialized key
+  stays `dockHeightDp` (a Kotlin rename, not a semantic break — renaming it would reset every stored dock).
+  `CellFit.fitGridConfig` resolves a stored size against what an area can actually hold, from the two
+  inputs only the surface knows (the measured width, and the type scale behind a label row) — and it needs **no branch**
+  for the rail, because the extent is simply in the area's width there and each axis is fitted to the dimension it is
+  given. Deriving the counts from
   the extent was specified and abandoned on both axes: rows read as an editor missing half its buttons, and at the
-  default icon guardrail a derived phone dock is eleven columns wide against the four it has today. **A column clamp is
-  applied on read and never written back** (shrink the icons again and the count returns); **a row reduction *is*
-  written**, at the moment a height commit invalidates it — the asymmetry is that the height was a deliberate change,
+  default icon guardrail a derived phone dock is eleven columns wide against the four it has today. **The count on the
+  axis the extent does *not* divide is clamped on read and never written back** (shrink the icons again and it
+  returns); **the one it does divide *is* reduced in storage**, at the moment an extent commit invalidates it — the
+  asymmetry is that the extent was a deliberate change,
   where an icon-size change is not about the dock at all. L1 wrote every clamp back from a `LaunchedEffect` *inside
   its dock settings screen*, which destroyed the preference and only ran while that screen was open. Home carries
   a **horizontal margin per zone** (S4g, defaulting to 0 — so an unconfigured launcher still runs edge to edge). The applied
-  inset is `systemBars ∪ displayCutout`, hoisted into one `safeInsets` value that feeds both the padding and the width
+  inset is `uiInsets` (`systemBars ∪ displayCutout`), one value feeding both the padding and the width
   the dock is fitted against — L1 kept two derivations of that area (`homeGridArea` from settings,
   `pagerBoundsInWindow` measured) and they could disagree.
 - **A dock shrink spills onto home; it does not delete.** Fewer rows means cells that may hold items, and the strip is
@@ -607,12 +657,13 @@ the default `DevRootScreen` screen.
   It is a **command on the ViewModel, called when the config changes**, and idempotent, so no caller needs a "did it
   shrink?" test; L1 instead reflowed *inside the `combine` that assembles its home state* and launched the persist
   from within that transform, so the write was a side effect of reading state and raced itself.
-- **The dock's height is subtracted from home, so growing it can invalidate home's rows too** — the same invalidation
-  one grid over, and it is answered in the two halves this codebase already splits such things into. The **surface**
-  fits the pager to what is left (`CellFit.fitGridConfig` over window − insets − dock height, the same expression the
+- **The dock's extent is subtracted from home, so growing it can invalidate home's counts too** — the same invalidation
+  one grid over, on whichever axis the subtraction happened (a bottom strip takes home's height, a rail takes its
+  width), and it is answered in the two halves this codebase already splits such things into. The **surface**
+  fits the pager to what is left (`CellFit.fitGridConfig` over `splitForDock`'s main half, the same expression the
   Home settings section computes its bounds from) and re-homes the displaced items to a further page
-  (`HomeViewModel.fitMainTo`, the pager's `fitDockTo`); the **row count itself is written down** only by the dock
-  section's height commit, which is the deliberate change that caused it. That is the dock's own asymmetry applied
+  (`HomeViewModel.fitMainTo`, the pager's `fitDockTo`); the **count itself is written down** only by the dock
+  section's extent commit, which is the deliberate change that caused it. That is the dock's own asymmetry applied
   outward: a count invalidated by a committed extent is written, one invalidated by an icon-size change is clamped on
   read and returns. L1 did the clamp from the home *surface* (`LaunchedEffect` on its measured pager bounds — its
   comment names "the dock is turned back on") and wrote it on **every** cause, so an icon tweak permanently destroyed
@@ -883,8 +934,29 @@ setting, APPS branches on layout, the folder asks `folderInnerSize`); and the gu
 (solid = cell, dashed = upper, dotted = lower) because L1's green/red cannot survive a palette that reserves red for
 `error`. **The wallpaper behind it is L1's trick and it has landed** — the cell box composites with `BlendMode.Src`,
 punching through the pane (`PunchThroughPane` composites the detail offscreen with `withSaveLayer`) to the window,
-which shows the wallpaper because `app`'s theme now carries `Theme.Wallpaper`. Not carried: L1's sticky-header
-scaffolds, which existed only to serve that punch.
+which shows the wallpaper because `app`'s theme now carries `Theme.Wallpaper`.
+**The four surface sections share one arrangement, `SurfaceDetail`, and it is L1's** (`IconDetailPortrait` /
+`IconDetailLandscape`, which its five details all went through — an earlier note here said those scaffolds were "not
+carried", and that was reversed). Three things about it are load-bearing rather than decorative:
+- **The grid editor is first, then the sliders that constrain it** — the editor is the picture of the surface, so it is
+  what a user arrives looking for, and the margin / height / row-height sliders under it are adjustments *to* that
+  picture, each previewing live into it. L1 orders all five details this way (editor, then extent, then padding). Where a
+  section chooses *what* it is configuring — the APPS chip row, L1's home-surface cards — that comes above the editor,
+  because it decides which editor you are looking at.
+- **The icon heading and the preview pin together** in a `stickyHeader`, so the preview stays on screen while the
+  controls scroll under it. That is the whole reason these panes are a `LazyColumn` rather than a `Column` +
+  `verticalScroll`, and it is what makes the icon controls legible at all: their three numbers are read *through* the
+  preview. `IconSizingPreview` is the body only and `IconSizingControls` emits no heading — both belong to the pinned
+  block now, so neither states it a scroll apart.
+- **Landscape is a different arrangement, not a narrower one**: the layout group scrolls away, the heading pins, and the
+  icon group fills the viewport as a final full-height item — controls scrolling on the left, preview fixed at a
+  **fixed** 220dp on the right (L1's number, and fixed because the preview draws a cell at true size, so the column has
+  to hold one rather than take a share of the pane). A phone in landscape has room for a cell beside its sliders and none
+  above them.
+What is *not* carried from L1's scaffolds is the machinery they wrapped around the punch — the offscreen layer, the pane
+background, the insets and the disabled overscroll are all `PunchThroughPane`'s here, because L1 had no shared pane and
+so repeated them in both. Overscroll being off is what makes a lazy list safe with the punch at all: a stretch
+re-composites the scrolling content and the punch stops reaching the window for as long as it lasts.
 **The APPS section is one section with a chip per layout** — the settings mirror of one `feature:apps` for five
 layouts, and the same argument: they differ only in arrangement, so what a user configures is "the paged one" or "the
 list". Selecting a chip writes nothing (which layout you *get* is per home edge, in the register). Its resize is **one
@@ -931,7 +1003,12 @@ button sits at the corner it acts on); *columns only* drops the top and bottom r
 + for its own edge** (L1's `showRowControls = false`, and better than hiding the rails, which left the controls
 furthest from the columns they change); *neither* draws the frame alone. `colBounds` is nullable to say the third,
 symmetric with `rowBounds` — both mean "this axis is not the user's to set" — and the caption follows, down to being
-omitted entirely when there is no axis, since a list showing "1 column" would be a count masquerading as a choice. The companion zone is drawn at its real proportion.
+omitted entirely when there is no axis, since a list showing "1 column" would be a count masquerading as a choice. The
+companion zone is drawn at its real proportion **and on the side it really occupies** — `EditorCompanion` carries a
+`CompanionSide`, four values where `DockEdge` has two because each section sees the split from its own end (home's
+companion *is* the dock, bottom or end; the dock's is the pager, top or start), and the mockup splits with a `Column` or
+a `Row` to match. Without that, a phone-landscape dock would draw as a thin strip along the bottom while the surface
+drew a rail.
 L1 had two ~220-line near-copies of this. **The APPS editor takes a `preview` slot**, as L1's drawer editor does, so
 each layout shows the surface it configures: the three scrolling grids draw `ReflectivePreview` — cells at their
 *derived* aspect, filling downward and clipped at the fold, which is the only mockup that makes adding a column

@@ -1,20 +1,14 @@
 package inkspire.morphic.feature.settings.icons
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Casino
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,6 +55,10 @@ private val DotPattern = floatArrayOf(2f, 6f)
  * actual cell size the section computed, and draws the guardrails as squares around the icon — you can see which of
  * the three is binding, which is the whole question a user has while dragging.
  *
+ * **It is the body only.** The heading and L1's dice belong to the section's pinned icon header (`SurfaceDetail`), so
+ * that the two travel together when the controls scroll — which is what L1 does as well, and the reason its preview sits
+ * inside the sticky header rather than under it.
+ *
  * **Three deliberate departures from L1.**
  * - **The geometry is asked for, not copied.** L1 restated the cell's padding and label gap as `PREVIEW_CELL_PAD_DP` /
  *   `PREVIEW_LABEL_GAP_DP` under a "keep in sync" comment; this asks `cellIconLayout` where the icon is, so the guides
@@ -93,31 +91,12 @@ internal fun IconSizingPreview(
     metrics: IconMetrics,
     cellWidth: Dp,
     cellHeight: Dp,
-    onReroll: () -> Unit,
     modifier: Modifier = Modifier,
     asRow: Boolean = false,
 ) {
     val colors = LocalMorphicColors.current
 
     Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Preview",
-                style = MaterialTheme.typography.titleSmall,
-                color = colors.contentMuted,
-                modifier = Modifier.weight(1f),
-            )
-            // L1's dice, and for L1's reason: one app's icon is not representative — a wide logo and a round one sit
-            // differently in the same cell — so the preview can be reshuffled rather than trusted.
-            IconButton(onClick = onReroll) {
-                Icon(
-                    imageVector = Icons.Filled.Casino,
-                    contentDescription = "Show a different app",
-                    tint = colors.contentMuted,
-                )
-            }
-        }
-
         // **The punch.** `BlendMode.Src` makes this layer *replace* the pixels under it rather than blend with them,
         // so everywhere the cell and its outlines do not draw, the pane's own background is cleared to transparent —
         // and since the pane is an offscreen layer over a window that shows the wallpaper, what shows through is the

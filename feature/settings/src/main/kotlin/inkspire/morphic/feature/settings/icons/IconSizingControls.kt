@@ -40,6 +40,9 @@ internal enum class IconSizingField { IconPercent, LabelScale }
  * **Every control writes a *sparse* override**, so nothing is stored for a field left alone and a later change to a
  * blueprint default still reaches it. That is also what makes "reset" a plain write of nulls rather than a special op.
  *
+ * It emits no heading of its own: the group's heading is pinned above the preview by `SurfaceDetail`, so stating it
+ * again here would repeat it a scroll apart.
+ *
  * @param sizing the currently **resolved** sizing — blueprint default with any override merged in. What the controls
  *   should show, because it is what the user sees on screen.
  * @param onChange commits a numeric field. Fires on slider **release**, not per frame.
@@ -61,8 +64,6 @@ internal fun IconSizingControls(
     onDpRange: (IntRange) -> Unit,
     onPreview: (IconSizing) -> Unit = {},
 ) {
-    SettingsSectionHeader("Icon & text")
-
     // A pure-text list is the one arrangement where hiding icons makes sense; on a grid it would leave a page of
     // labels floating in empty cells. L1 gated this on the flag its callers passed; the slot already knows.
     if (slot == GridSlot.APPS_LIST) {

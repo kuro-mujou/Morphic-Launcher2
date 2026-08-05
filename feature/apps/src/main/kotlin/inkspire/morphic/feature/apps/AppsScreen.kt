@@ -2,11 +2,7 @@ package inkspire.morphic.feature.apps
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +17,7 @@ import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
@@ -84,13 +81,12 @@ fun AppsScreen(
     // **Reported from here rather than from the pager's arm**, so it does not depend on which layout is showing: the
     // pager's arrangement is kept in step with what is installed whatever the user is looking at, which is the
     // invariant that makes switching layout reload nothing.
-    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     // **The pager's margin comes off before its capacity is fitted**, which is the one place on this surface where
     // padding is more than a visual inset: `rows × cols` is what the *store* is paginated against, so a capacity
     // computed against the full width would put entries on pages the drawn grid has no room for. Every other layout
     // clamps where it draws; this one reports.
     val pagerPadding = state.paddingFor(GridSlot.APPS_PAGER).dp
-    val pagerArea = usableWindowArea(safeInsets).let {
+    val pagerArea = usableWindowArea(uiInsets).let {
         GridArea(widthDp = (it.widthDp - pagerPadding.value * 2).coerceAtLeast(1f), heightDp = it.heightDp)
     }
     // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —

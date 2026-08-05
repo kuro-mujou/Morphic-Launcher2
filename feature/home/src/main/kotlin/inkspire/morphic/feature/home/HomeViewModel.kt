@@ -11,6 +11,7 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
@@ -124,9 +125,9 @@ class HomeViewModel(
                 flowOf(null)
             } else {
                 combine(
-                    settingsRepository.dockHeight(current),
+                    settingsRepository.dockExtent(current),
                     settingsRepository.gridConfig(GridSlot.HOME_DOCK, current),
-                ) { heightDp, grid -> DockSizing(heightDp, grid.visualCols, grid.visualRows) }
+                ) { extentDp, grid -> DockSizing(extentDp, grid.visualCols, grid.visualRows) }
             }
         }
 
@@ -263,6 +264,22 @@ class HomeViewModel(
      * write is an ordinary [applyChanges] like any other.
      */
     /**
+     * **Is the posture on screen the one whose arrangement this surface reads?**
+     *
+     * The gate on both settles, and it exists because they *write*. Placements are keyed by [Orientation] and this
+     * surface reads [ORIENTATION] only — home orientation is unbuilt — so re-fitting while the device is the other way
+     * up would rewrite a portrait arrangement to fit a screen it is never drawn on, and nothing would undo that on
+     * rotating back. It matters most for the dock, which is a **rail** in phone landscape: the transpose of the strip,
+     * so almost every item in it would be evicted to home permanently.
+     *
+     * A grid drawn out of its bounds for as long as a rotation lasts is cosmetic and reverses itself. The write does
+     * not, which is why this guards the writes rather than the drawing. It stops being a no-op the day placements are
+     * stored per posture, at which point [ORIENTATION] follows the device and this is simply always true.
+     */
+    private val drawsStoredPlacements: Boolean
+        get() = device.value?.orientation == ORIENTATION
+
+    /**
      * Re-homes anything the **main area** can no longer hold, now that its grid is [config] — the pager's half of the
      * rule [fitDockTo] states for the dock.
      *
@@ -280,6 +297,7 @@ class HomeViewModel(
      * temporary shortage permanent. Only the placements move, and only when the reflow reports it needed to.
      */
     fun fitMainTo(config: GridConfig) {
+        if (!drawsStoredPlacements) return
         val main = placements.value.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement }
         val settled = GridReflow.reflow(main, config)
         if (!settled.changed) return
@@ -291,6 +309,7 @@ class HomeViewModel(
     }
 
     fun fitDockTo(dockConfig: GridConfig) {
+        if (!drawsStoredPlacements) return
         viewModelScope.launch {
             // Nothing is written until the main grid is known — an eviction with nowhere to go would take an item off
             // the dock and leave it placed nowhere. **Awaited rather than skipped**: the two configs resolve from the

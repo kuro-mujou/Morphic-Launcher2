@@ -127,7 +127,7 @@ interface SettingsRepository {
 
     /**
      * The **visual** column count for [slot] on [device] — the whole of a scrolling grid's size, and half the
-     * dock's (whose rows come from [dockHeight] instead).
+     * dock's (whose rows come from [dockExtent] instead).
      *
      * Not clamped to what actually fits: that needs a measured area, so a surface that cares does it where it
      * measures. Reading a column count the screen has outgrown is far better than storing the clamp, since the
@@ -149,7 +149,7 @@ interface SettingsRepository {
      *
      * **A grid can be editable on one axis only, and the clamp is what enforces it**: a null `minRows` drops a row
      * override rather than storing one. Two grids rely on that for two different reasons — a scrolling grid's rows
-     * come from its content, and the **dock's come from [dockHeight]** (see `DockGrid`). Neither can be given a row
+     * come from its content, and the **dock's come from [dockExtent]** (see `DockGrid`). Neither can be given a row
      * count by writing one here.
      */
     suspend fun updateGrid(
@@ -159,33 +159,37 @@ interface SettingsRepository {
     )
 
     /**
-     * How tall the dock is on [device], in dp — its blueprint's height with any user override applied.
+     * How thick the dock is on [device], in dp — its blueprint's extent with any user override applied.
+     *
+     * **A height where the dock is a bottom strip and a width where it is a rail** (`DockEdge`), which is why it is an
+     * extent rather than a height: the stored number is the same thickness either way, and the posture decides which
+     * dimension it names and which of the two counts it bounds.
      *
      * **The dock's one stored number, and the only surface metric named after a single grid.** Every other grid is
      * configured by counts and takes the space it is given; the dock is a strip whose extent the user sets and whose
      * rows and columns are then divided out of it. A generic `extent(slot, device)` would offer that question for
      * seven grids that cannot answer it.
      */
-    fun dockHeight(device: DeviceConfiguration): Flow<Int>
+    fun dockExtent(device: DeviceConfiguration): Flow<Int>
 
     /**
-     * Sets the dock's height on [device] to [dp], or clears it (back to the blueprint) when null.
+     * Sets the dock's extent on [device] to [dp], or clears it (back to the blueprint) when null.
      *
-     * **The caller owns the bounds**, unlike [updateGrid], which floors what it is given. Both of a height's bounds
+     * **The caller owns the bounds**, unlike [updateGrid], which floors what it is given. Both of an extent's bounds
      * are runtime facts a store cannot check: the floor is the smallest cell that still renders an icon at the
      * *current* icon sizing, and the cap is a fraction of the *current* screen — so the cap changes when the device
-     * rotates, which no stored constant would. What is enforced here is only that a height is positive, which is an
+     * rotates, which no stored constant would. What is enforced here is only that an extent is positive, which is an
      * invariant rather than a preference.
      *
-     * **A shrink can leave items with nowhere to sit**, since fewer rows fit. Re-homing them is `data:layout`'s
+     * **A shrink can leave items with nowhere to sit**, since fewer cells fit. Re-homing them is `data:layout`'s
      * (`GridReflow`), triggered by whoever makes this write — this call persists a number and nothing else.
      */
-    suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?)
+    suspend fun setDockExtent(device: DeviceConfiguration, dp: Int?)
 
     /**
      * How tall one row of the APPS vertical list is on [device], in dp — its blueprint's height with any override.
      *
-     * **The second and last stored extent**, beside [dockHeight], and for the opposite reason. A dock's height is a
+     * **The second and last stored extent**, beside [dockExtent], and for the opposite reason. A dock's height is a
      * strip's, which its row count then divides; a list's row height is what nothing else can determine — one lane
      * means no cell width to derive a height from and no extent to divide, so it is the user's outright, and the
      * icon in the row is a fraction of *it*. Every other grid's cell height falls out of a number already chosen
@@ -196,7 +200,7 @@ interface SettingsRepository {
     /**
      * Sets the list's row height on [device] to [dp], or clears it (back to the blueprint) when null.
      *
-     * **The caller owns the bounds**, as with [setDockHeight]: what a row must be at least depends on the current
+     * **The caller owns the bounds**, as with [setDockExtent]: what a row must be at least depends on the current
      * icon sizing, and what it may be at most is taste rather than fit — a list scrolls, so a tall row costs density
      * and nothing else. Only "positive" is enforced here, which is an invariant rather than a preference.
      *

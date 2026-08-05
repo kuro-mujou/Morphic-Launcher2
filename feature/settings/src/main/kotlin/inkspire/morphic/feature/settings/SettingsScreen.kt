@@ -14,9 +14,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -46,6 +49,8 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.withSaveLayer
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.feature.settings.apps.AppsDetail
@@ -132,10 +137,8 @@ private fun SettingsSinglePane(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        // **Transparent, so a pane can punch through itself to the wallpaper.** The surface's colour is painted by
-        // each pane instead — the list's directly, the detail's *inside* its punch layer (see [PunchThroughPane]).
-        // A background painted out here would sit under that layer and be what the punch revealed.
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -143,9 +146,8 @@ private fun SettingsSinglePane(
                         Text(section?.meta?.title ?: "Settings")
                     }
                 },
-                // Stated rather than inherited, now that the scaffold behind it is transparent: an app bar over the
-                // wallpaper would be unreadable, and it is chrome rather than content.
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background),
+                windowInsets = uiInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 navigationIcon = {
                     BackButton { if (selected != null) onCloseDetail() else onBack() }
                 },
@@ -174,10 +176,11 @@ private fun SettingsSinglePane(
                     onSelect = onSelect,
                     highlightSelected = false,
                     showChevron = true,
+                    insetSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
                     modifier = Modifier.fillMaxSize().background(colors.background),
                 )
             } else {
-                SettingsDetail(target)
+                SettingsDetail(target, WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
             }
         }
     }
@@ -198,15 +201,13 @@ private fun SettingsTwoPane(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        // Transparent for the reason the single-pane one is: the panes paint themselves.
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background),
-                // No "close detail" step here: a pane is always showing, so back has only one meaning. That single
-                // meaning is what L1's two-pane mode lost — it dropped the concept entirely and fell back to a
-                // hardcoded default section.
+                windowInsets = uiInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 navigationIcon = { BackButton(onBack) },
             )
         },
@@ -223,6 +224,7 @@ private fun SettingsTwoPane(
                 onSelect = onSelect,
                 highlightSelected = true,
                 showChevron = false,
+                insetSides = WindowInsetsSides.Start + WindowInsetsSides.Bottom,
                 modifier = Modifier
                     .width(ListPaneWidth)
                     .fillMaxHeight()
@@ -235,7 +237,7 @@ private fun SettingsTwoPane(
                 transitionSpec = { fadeIn(tween(DETAIL_FADE_MS)) togetherWith fadeOut(tween(DETAIL_FADE_MS)) },
                 label = "settings-detail",
             ) { section ->
-                SettingsDetail(section)
+                SettingsDetail(section, WindowInsetsSides.End + WindowInsetsSides.Bottom)
             }
         }
     }
@@ -246,9 +248,12 @@ private fun SettingsTwoPane(
  *
  * Each arm is a *detail*, not a screen: it owns its content and nothing else. The theme, the background, the app bar
  * and the back affordance belong to the shell, because in two-pane there is one of each for two panes.
+ *
+ * @param insetSides the edges this pane must keep its content clear of, which only the shell knows — the same detail
+ *   owes both sides on a phone and only the end on a tablet, where a list pane covers the other one.
  */
 @Composable
-private fun SettingsDetail(section: SettingsSection) = PunchThroughPane {
+private fun SettingsDetail(section: SettingsSection, insetSides: WindowInsetsSides) = PunchThroughPane(insetSides) {
     when (section) {
         SettingsSection.WALLPAPER -> WallpaperDetail()
         SettingsSection.EFFECTS -> EffectsDetail()
@@ -281,9 +286,18 @@ private fun SettingsDetail(section: SettingsSection) = PunchThroughPane {
  * The port of L1's `IconDetailPortrait` / `IconDetailLandscape` scaffolds, minus their reason for existing: those were
  * *two* screens' worth of sticky-header layout wrapped around the same trick, because L1 rebuilt the arrangement per
  * detail. Here every section is already a plain scrolling column, so the trick is all that was left to share.
+ *
+ * **Separately from the punch: the pane reaches the window edge and insets its own content.** It used to be the other
+ * way round — the scaffold reserved the system bars, so the pane stopped above the navigation bar and the strip it
+ * left showed the wallpaper through the transparent window, which is the one place the punch was never meant to reach.
+ * Nothing but this pane knows what colour that strip should be, so nothing but this pane can paint it. L1 did the same
+ * with `contentPadding` on its `LazyColumn`, which additionally lets content scroll under the bar; that is not
+ * available here, because a pane owns its own scroller and most of them are a plain `Column`.
+ *
+ * @param insetSides which edges to keep content off — see [SettingsDetail].
  */
 @Composable
-private fun PunchThroughPane(content: @Composable () -> Unit) {
+private fun PunchThroughPane(insetSides: WindowInsetsSides, content: @Composable () -> Unit) {
     val colors = LocalMorphicColors.current
     CompositionLocalProvider(LocalOverscrollFactory provides null) {
         Box(
@@ -294,7 +308,8 @@ private fun PunchThroughPane(content: @Composable () -> Unit) {
                         canvas.withSaveLayer(bounds = size.toRect(), paint = Paint()) { drawContent() }
                     }
                 }
-                .background(colors.background),
+                .background(colors.background)
+                .uiInsetsPadding(insetSides),
         ) {
             content()
         }
@@ -308,11 +323,19 @@ private fun BackButton(onClick: () -> Unit) {
     }
 }
 
-/** Dev-only way into the harness, mirroring L1's design-gallery button. Absent when the host offers no harness. */
+/**
+ * Dev-only way into the harness, mirroring L1's design-gallery button. Absent when the host offers no harness.
+ *
+ * It pads itself, because the scaffold's own inset reservation is zeroed — that reservation is what normally lifts a
+ * FAB off the navigation bar, and the button is measured with this padding, so the scaffold places it clear.
+ */
 @Composable
 private fun DevHarnessButton(onClick: (() -> Unit)?) {
     if (onClick == null) return
-    FloatingActionButton(onClick = onClick) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = Modifier.uiInsetsPadding(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
+    ) {
         Icon(imageVector = Icons.Filled.Build, contentDescription = "Dev harness")
     }
 }

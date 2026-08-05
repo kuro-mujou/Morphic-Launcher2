@@ -1,12 +1,8 @@
 package inkspire.morphic.feature.apps.layout.pager
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -43,6 +39,7 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.flowItems
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
 import inkspire.morphic.core.designsystem.ordered.Third
 import inkspire.morphic.core.designsystem.ordered.movingGap
@@ -318,7 +315,6 @@ fun AppsPager(
     // Resolved once per frame rather than per page: a drag recomposes this on every finger move, and searching
     // every page for the dragged entry inside each page's own content would be that search N times over.
     val draggedEntry = remember(pages, draggedItem) { draggedItem?.let { entryFor(pages, it) } }
-    val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
@@ -326,7 +322,7 @@ fun AppsPager(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(safeInsets)
+                    .windowInsetsPadding(uiInsets)
                     // The grid's own margin, and it must sit **before** `onGloballyPositioned` in this chain — which
                     // is what makes drag and drop correct rather than something to fix afterwards. The bounds read
                     // below become the *padded* ones, so the published `GridGeometry` and the registered drop zone

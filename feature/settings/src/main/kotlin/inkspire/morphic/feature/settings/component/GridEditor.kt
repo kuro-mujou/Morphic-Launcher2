@@ -66,8 +66,16 @@ private val CellCorner = 3.dp
 private const val MIN_PREVIEW_RATIO = 0.35f
 private const val MAX_PREVIEW_RATIO = 2.5f
 
-/** How much of the preview's *other* zone shows, and on which side of the edited grid it sits. */
-internal data class EditorCompanion(val fraction: Float, val atBottom: Boolean)
+/**
+ * Which side of the edited grid the companion zone sits on.
+ *
+ * Four values where the dock has two (`DockEdge`), because each section sees the split from its own end: home's
+ * companion *is* the dock (bottom or end), the dock's is the pager (top or start).
+ */
+internal enum class CompanionSide { TOP, BOTTOM, START, END }
+
+/** How much of the preview the *other* zone takes, and on which side of the edited grid it sits. */
+internal data class EditorCompanion(val fraction: Float, val side: CompanionSide)
 
 /** An edit the preview has been asked to animate. The nonce re-triggers it when the same edge is pressed twice. */
 internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val nonce: Int)
@@ -280,6 +288,10 @@ private fun EdgeRail(height: Dp, content: @Composable ColumnScope.() -> Unit) {
  * The split is by **measured proportion**, not decoration: seeing that the dock eats a fifth of the screen is most of
  * what makes a grid editor legible.
  *
+ * **It splits along the companion's own axis** — a `Column` for a zone above or below, a `Row` for one beside. That is
+ * what makes the phone-landscape dock legible: it is a rail, so the mockup has to show a rail, and a horizontal split
+ * at the same fraction would say the opposite of what the surface does.
+ *
  * **[insetFraction] reaches the lattice and never the companion**, because a margin is *this grid's* setting: home's
  * pager and its dock each store their own, so insetting both from one number would show the user a dock narrowing
  * because they moved the pager's slider. L1 draws it the same way — `insetFraction` goes to its `GridPreview` and its
@@ -300,15 +312,29 @@ private fun ScreenPreview(
     }
     val gridWeight = (1f - companion.fraction).coerceIn(MIN_ZONE_WEIGHT, 1f)
     val companionWeight = (1f - gridWeight).coerceAtLeast(MIN_ZONE_WEIGHT)
-    Column(Modifier.fillMaxSize()) {
-        if (!companion.atBottom) {
-            CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
-            Spacer(Modifier.height(PreviewPad))
+    val first = companion.side == CompanionSide.TOP || companion.side == CompanionSide.START
+    when (companion.side) {
+        CompanionSide.TOP, CompanionSide.BOTTOM -> Column(Modifier.fillMaxSize()) {
+            if (first) {
+                CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
+                Spacer(Modifier.height(PreviewPad))
+            }
+            GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxWidth().weight(gridWeight))
+            if (!first) {
+                Spacer(Modifier.height(PreviewPad))
+                CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
+            }
         }
-        GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxWidth().weight(gridWeight))
-        if (companion.atBottom) {
-            Spacer(Modifier.height(PreviewPad))
-            CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
+        CompanionSide.START, CompanionSide.END -> Row(Modifier.fillMaxSize()) {
+            if (first) {
+                CompanionZone(Modifier.fillMaxHeight().weight(companionWeight))
+                Spacer(Modifier.width(PreviewPad))
+            }
+            GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxHeight().weight(gridWeight))
+            if (!first) {
+                Spacer(Modifier.width(PreviewPad))
+                CompanionZone(Modifier.fillMaxHeight().weight(companionWeight))
+            }
         }
     }
 }
