@@ -1,32 +1,57 @@
 package inkspire.morphic.feature.settings.wallpaper
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import android.app.WallpaperInfo
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import android.service.wallpaper.WallpaperService
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Screenshot
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,67 +59,74 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.data.wallpaper.WallpaperTarget
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import java.text.Collator
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
-private val ScreenPadding = 20.dp
+private val ScreenPadding = 16.dp
 private val RowGap = 8.dp
-private val PreviewCorner = 16.dp
+private val PreviewCorner = 20.dp
+private val CardCorner = 16.dp
+
+/** L1's shelf-card size, kept so the three shelves line up with each other. */
+private val CardWidth = 120.dp
+private val CardHeight = 200.dp
+
+/** The band a mode page reserves for its preview, and the chrome above and below it. */
+private val PreviewHeight = 200.dp
+private val PageChromeHeight = 128.dp
 
 /**
  * **Wallpaper**: the image the launcher owns, and where to put it.
  *
- * The vertical that makes S5a visible — a preview of the stored image, "Choose image", and Apply / Re-apply onto the
- * home screen, the lock screen, or both. Ported from the *single-image* half of L1's `WallpaperTab`.
+ * Laid out as **L1's `WallpaperTab`**: a two-page pager of *modes* over three horizontal browse shelves. Each mode page
+ * is one anatomy — a header row carrying the mode's name, its status, and the control that applies it; a preview band;
+ * and a row of the actions that change what that mode holds. Putting the modes side by side rather than stacked is what
+ * makes them read as **alternatives** — only one of them is ever the wallpaper — which a vertical list of two groups
+ * does not say.
  *
- * **The preview is screen-shaped, and that is the honest shape rather than decoration.** The stored file is already
- * cropped and scaled to this screen (`WallpaperRepository.setImage`), so a preview at any other aspect ratio would show
- * a crop the device will never display. It is the same argument `GridEditor`'s preview makes for taking the window's
- * ratio instead of a square.
+ * **The pieces L2 keeps, because they are behaviour rather than look:**
+ * - **A capture cannot be applied.** It is a picture *of* the wallpaper, taken for the effects to sample, so the
+ *   repository declines it and the page says so on its status line instead of offering a dead button.
+ * - **The rotating pair is applied by the *system's* chooser**, never silently — the platform insists the user confirm
+ *   a live wallpaper — so its button opens that chooser and the section re-asks on resume whether ours ended up
+ *   active. That is where L1 ran `reconcileLiveWallpaper`; this refreshes a read rather than repairing a stored copy.
+ * - **Choosing an image opens [WallpaperCropScreen]**, which is what writes. This section reads the store and issues
+ *   one command.
  *
- * **One button and a menu, where L1 drew a split button.** Its `SplitButtonLayout` looks like two controls but both
- * halves ran `expanded = true` — the leading half opened the same menu the trailing chevron did — so the split was
- * decoration over a single action. One `MorphicButton` opening the same three-item menu is what it actually did, and it
- * keeps the section on the design system's own button rather than on an M3 control that would need its own restyle.
- *
- * **Choosing an image opens [WallpaperCropScreen]**, which is where the writing happens — so this section reads the
- * store and issues one command (apply), and the picked-but-unsaved image never touches it. L1's picker pushed its crop
- * screen the same way.
- *
- * **Two sources, and they are not peers.** "Choose image" picks one and frames it; "Capture screen" takes a picture
- * *of* the wallpaper for the effects to sample (see [WallpaperCaptureScreen]). A captured image is previewed like any
- * other but cannot be applied, so the Apply button is replaced by the reason rather than left dead — the rule itself
- * lives in the repository, where it cannot be worked around.
- *
- * **The third source is the rotating pair**, in its own group below: two slots, one per orientation, drawn by the
- * launcher's own live wallpaper. It is applied by the *system's* chooser rather than by this screen, because a live
- * wallpaper can only be set with the user confirming — so its button opens that chooser and the section reports back
- * whether ours ended up active. L1 put the two modes in a pager of two pages; they are two groups here, because a pager
- * hides one of them behind a swipe and there are only two.
- *
- * **What is deliberately absent**: L1's three browse rows — "My wallpapers", "Backdrops (By Unsplash)" and a list of
- * *installed* live wallpapers. The first two are empty-state hints for a source that does not exist; the third is a
- * browser for other apps' wallpapers, which is the system's own chooser rendered a second time. An empty shelf is not a
- * feature, and neither is a duplicate of a screen the platform already provides.
+ * **Two deliberate departures from L1's drawing, both small:**
+ * - **One button and a menu, where L1 drew a `SplitButtonLayout`.** Both halves of that ran `expanded = true` — the
+ *   leading half opened the same menu the trailing chevron did — so the split was decoration over a single action. The
+ *   chevron stays, as the affordance that says "this opens something"; the seam does not.
+ * - **A preview keeps the screen's aspect ratio inside L1's band.** The stored file is already cropped to this screen,
+ *   so stretching it across a landscape band would show a crop the device never displays. The band is L1's — full
+ *   width, [PreviewHeight] tall — and the picture sits in it at the shape it will actually be seen at, which is also
+ *   what makes the rotating page's two tiles legible as *portrait* and *landscape*.
  */
 @Composable
 internal fun WallpaperDetail(modifier: Modifier = Modifier) {
     val viewModel = koinViewModel<WallpaperViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val colors = LocalMorphicColors.current
+    val context = LocalContext.current
+    val navigator = LocalNavigator.current
 
     // The **whole** window, insets included: a wallpaper sits under the system bars, so the preview is the shape of
     // what will actually be covered. Every other section measures the *usable* area instead, and the difference is
@@ -108,272 +140,366 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
 
     // A pick opens the **crop screen** rather than writing: the user frames the image there, and that screen saves.
     // L1's picker did the same, and it is why nothing here passes a size — the viewport the user frames against is
-    // what gets stored.
-    val navigator = LocalNavigator.current
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    // what gets stored. Photo Picker rather than a document-open intent: no storage permission, and it is what L1
+    // moved to.
+    val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
+    val singlePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) navigator.goTo(WallpaperCropRoute(uri.toString()))
     }
-    // Photo Picker rather than a document-open intent: it needs no storage permission and it is what L1 moved to.
-    val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
-
-    // A pick for one half of the rotating pair goes to the same crop screen, told which slot it is filling — which is
-    // what decides the shape it frames against and the size it stores at.
-    var rotatingTarget by remember { mutableStateOf(CropTarget.ROTATING_PORTRAIT) }
-    val rotatingPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) navigator.goTo(WallpaperCropRoute(uri.toString(), rotatingTarget))
+    val portraitPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) navigator.goTo(WallpaperCropRoute(uri.toString(), CropTarget.ROTATING_PORTRAIT))
+    }
+    val landscapePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) navigator.goTo(WallpaperCropRoute(uri.toString(), CropTarget.ROTATING_LANDSCAPE))
     }
 
     // Whether *our* live wallpaper is the active one is a system read, and the only way it changes is the user
-    // confirming in the system's chooser — which happens while this screen is stopped. So it is re-asked on resume,
-    // which is where L1 ran `reconcileLiveWallpaper`; the difference is that this refreshes a read rather than
-    // repairing a stored copy.
-    val context = LocalContext.current
+    // confirming in the system's chooser — which happens while this screen is stopped. So it is re-asked on resume.
     LifecycleResumeEffect(Unit) {
         viewModel.refreshRotatingActive()
         onPauseOrDispose { }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(ScreenPadding),
-    ) {
-        Text("Wallpaper", style = MaterialTheme.typography.headlineSmall, color = colors.content)
-        Text(
-            text = "The launcher keeps its own copy, cropped to this screen.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.contentMuted,
-        )
+    // The shelf of *installed* live wallpapers is a package-manager query with drawable loading in it, so it is read
+    // once, off the main thread. L1 did the same; the sort is the difference — a locale-aware `Collator` rather than
+    // `lowercase()`, which compares raw UTF-16 and files every accented label after `Z`. Our own service is named
+    // rather than found, so the shelf can leave it out (see `loadInstalledLiveWallpapers`).
+    val ownService = remember(viewModel) { viewModel.rotatingServiceComponent() }
+    var liveWallpapers by remember { mutableStateOf<List<LiveWallpaperEntry>>(emptyList()) }
+    LaunchedEffect(ownService) {
+        liveWallpapers = withContext(Dispatchers.IO) { loadInstalledLiveWallpapers(context, exclude = ownService) }
+    }
 
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = ScreenPadding),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        item(key = "modes") {
+            WallpaperModePager(
+                state = state,
+                screenRatio = screenRatio,
+                onApply = viewModel::apply,
+                onApplyRotating = { openLiveWallpaperChooser(context, viewModel.rotatingServiceComponent()) },
+                onChooseImage = { singlePicker.launch(imageRequest) },
+                onCaptureScreen = { navigator.goTo(WallpaperCaptureRoute) },
+                onPickPortrait = { portraitPicker.launch(imageRequest) },
+                onPickLandscape = { landscapePicker.launch(imageRequest) },
+            )
+        }
+
+        wallpaperShelf(title = "My wallpapers") {
+            item { EmptyHint("Your own wallpapers will show here") }
+        }
+
+        wallpaperShelf(title = "Backdrops", trailing = "By Unsplash") {
+            item { EmptyHint("Connect an online source to browse wallpapers") }
+        }
+
+        wallpaperShelf(title = "Live wallpapers") {
+            if (liveWallpapers.isEmpty()) {
+                item { EmptyHint("No live wallpapers installed") }
+            } else {
+                items(liveWallpapers, key = { it.component.flattenToString() }) { entry ->
+                    LiveWallpaperCard(entry = entry, onClick = { openLiveWallpaperChooser(context, entry.component) })
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The two wallpaper **modes**, side by side — the single image, and the rotating pair.
+ *
+ * A pager rather than two stacked groups because the modes are alternatives: whichever one is applied *is* the
+ * wallpaper, and the other is a saved configuration waiting. Swiping between them says that; two headings do not. It
+ * opens on whichever is active, as L1's did.
+ */
+@Composable
+private fun WallpaperModePager(
+    state: WallpaperSectionState,
+    screenRatio: Float,
+    onApply: (WallpaperTarget) -> Unit,
+    onApplyRotating: () -> Unit,
+    onChooseImage: () -> Unit,
+    onCaptureScreen: () -> Unit,
+    onPickPortrait: () -> Unit,
+    onPickLandscape: () -> Unit,
+) {
+    val pagerState = rememberPagerState(initialPage = if (state.rotatingActive) RotatingPage else SinglePage) {
+        PageCount
+    }
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.height(PreviewHeight + PageChromeHeight),
+        contentPadding = PaddingValues(horizontal = ScreenPadding),
+        pageSpacing = 12.dp,
+        verticalAlignment = Alignment.Top,
+    ) { page ->
+        if (page == SinglePage) {
+            WallpaperModePage(
+                title = "Single wallpaper",
+                // A capture explains itself where "Active" would be, rather than under a button that cannot be
+                // pressed — the rule lives in the repository, and this is the sentence for it.
+                status = when {
+                    state.busy -> "Working…"
+                    state.image != null && !state.applicable ->
+                        "A capture isn't applied — it's there for the effects to sample."
+                    state.applied -> "Active"
+                    else -> null
+                },
+                applyControl = {
+                    if (state.image == null || state.applicable) {
+                        ApplyButton(
+                            // "Re-apply" once this launcher is the one that set it — L1's wording, off the same id.
+                            label = if (state.applied) "Re-apply" else "Apply",
+                            enabled = state.applicable && !state.busy,
+                            onSelect = onApply,
+                        )
+                    }
+                },
+                preview = {
+                    PreviewTile(
+                        bitmap = state.preview,
+                        // Two silences to tell apart: nothing chosen, and something chosen whose file went missing.
+                        emptyLabel = if (state.image == null) "No wallpaper set" else "Image unavailable",
+                        ratio = screenRatio,
+                    )
+                },
+                actions = {
+                    PageActionButton(Modifier.weight(1f), Icons.Outlined.PhotoLibrary, "Choose image", !state.busy, onChooseImage)
+                    PageActionButton(Modifier.weight(1f), Icons.Outlined.Screenshot, "Capture screen", !state.busy, onCaptureScreen)
+                },
+            )
+        } else {
+            WallpaperModePage(
+                title = "Wallpaper rotate",
+                status = when {
+                    state.busy -> "Working…"
+                    !state.hasRotating -> "Add at least one orientation to apply it."
+                    state.rotatingActive -> "Active. Changing either picture updates it without re-applying."
+                    else -> "Not active yet — the system asks you to confirm a live wallpaper."
+                },
+                applyControl = {
+                    MorphicButton(
+                        onClick = onApplyRotating,
+                        enabled = state.hasRotating && !state.busy,
+                    ) {
+                        Text(if (state.rotatingActive) "Re-open" else "Apply")
+                    }
+                },
+                preview = {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(RowGap),
+                    ) {
+                        // The screen's own ratio for the portrait slot and its inverse for the landscape one, so the
+                        // two tiles are the shapes they stand for rather than two identical rectangles.
+                        RotateSlot(
+                            bitmap = state.rotatingPortrait,
+                            label = "Portrait",
+                            ratio = minOf(screenRatio, 1f / screenRatio),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onClick = onPickPortrait,
+                        )
+                        RotateSlot(
+                            bitmap = state.rotatingLandscape,
+                            label = "Landscape",
+                            ratio = maxOf(screenRatio, 1f / screenRatio),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onClick = onPickLandscape,
+                        )
+                    }
+                },
+                actions = {
+                    PageActionButton(Modifier.weight(1f), Icons.Filled.Add, "Add portrait", !state.busy, onPickPortrait)
+                    PageActionButton(Modifier.weight(1f), Icons.Filled.Add, "Add landscape", !state.busy, onPickLandscape)
+                },
+            )
+        }
+    }
+}
+
+/**
+ * One mode's page: what it is called and how it stands on the left, what applies it on the right, its preview, and the
+ * actions that change what it holds.
+ *
+ * The anatomy is shared so the two modes cannot drift into looking like different features — which is the same reason
+ * one `GridEditor` serves home and the dock, where L1 kept two near-copies.
+ *
+ * @param status the mode's one line of standing — "Active", why it cannot be applied, or what is missing. Null when
+ *   there is nothing to say, which keeps the header a single line rather than reserving space for silence.
+ */
+@Composable
+private fun WallpaperModePage(
+    title: String,
+    status: String?,
+    applyControl: @Composable () -> Unit,
+    preview: @Composable () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+) {
+    val colors = LocalMorphicColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(RowGap)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = RowGap)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium, color = colors.content)
+                if (status != null) {
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.contentMuted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            applyControl()
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(PreviewHeight)) { preview() }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            content = actions,
+        )
+    }
+}
+
+/**
+ * The single mode's picture, at the screen's shape, centred in the page's preview band.
+ *
+ * [ratio] rather than filling the band is the one place this departs from L1's drawing, and the reason is that the
+ * stored file is *already* cropped to this screen (`WallpaperRepository.setImage`) — so a band-shaped preview would
+ * show a crop the device never displays. Same argument `GridEditor`'s preview makes for taking the window's ratio.
+ */
+@Composable
+private fun PreviewTile(
+    bitmap: Bitmap?,
+    emptyLabel: String,
+    ratio: Float,
+) {
+    val colors = LocalMorphicColors.current
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .padding(top = RowGap * 2)
-                .fillMaxWidth(PREVIEW_WIDTH_FRACTION)
-                .aspectRatio(screenRatio)
+                .fitAspect(ratio)
                 .clip(RoundedCornerShape(PreviewCorner))
-                .background(colors.surface)
-                .align(Alignment.CenterHorizontally),
+                .background(colors.surface),
             contentAlignment = Alignment.Center,
         ) {
-            val preview = state.preview
-            if (preview != null) {
+            if (bitmap != null) {
                 Image(
-                    bitmap = remember(preview) { preview.asImageBitmap() },
+                    bitmap = remember(bitmap) { bitmap.asImageBitmap() },
                     contentDescription = "Current wallpaper",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                // Two silences to tell apart: nothing chosen, and something chosen whose file we could not read.
                 Text(
-                    text = if (state.image == null) "No wallpaper chosen" else "Image unavailable",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = emptyLabel,
+                    style = MaterialTheme.typography.bodySmall,
                     color = colors.contentMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = RowGap),
                 )
             }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = RowGap * 2),
-            horizontalArrangement = Arrangement.spacedBy(RowGap * 1.5f),
-        ) {
-            MorphicButton(
-                onClick = { picker.launch(imageRequest) },
-                style = MorphicButtonStyle.Tonal,
-                enabled = !state.busy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Choose image")
-            }
-            MorphicButton(
-                onClick = { navigator.goTo(WallpaperCaptureRoute) },
-                style = MorphicButtonStyle.Tonal,
-                enabled = !state.busy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Capture screen")
-            }
-        }
-
-        // Apply is the *system* action and sits apart from the two that only change what the launcher holds. A capture
-        // has nothing to apply, so it says so where the button would be — a disabled control invites a second tap and
-        // explains nothing.
-        if (state.image != null && !state.applicable) {
-            Text(
-                text = "A capture is a picture of the wallpaper, so it is not applied — it is there for the effects " +
-                    "to sample.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.contentMuted,
-                modifier = Modifier.padding(top = RowGap * 2),
-            )
-        } else {
-            ApplyButton(
-                // "Re-apply" once this launcher is the one that set it — L1's wording, off the same stored id.
-                label = if (state.applied) "Re-apply" else "Apply",
-                // Nothing to apply until something is chosen, and nothing to press while a write is in flight.
-                enabled = state.applicable && !state.busy,
-                onSelect = viewModel::apply,
-                modifier = Modifier.fillMaxWidth().padding(top = RowGap * 2),
-            )
-        }
-
-        SettingsSectionHeader("Rotating wallpaper")
-        Text(
-            text = "A picture for each orientation, drawn by the launcher's own live wallpaper.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.contentMuted,
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = RowGap * 2),
-            horizontalArrangement = Arrangement.spacedBy(RowGap * 1.5f),
-        ) {
-            RotatingSlot(
-                label = "Portrait",
-                preview = state.rotatingPortrait,
-                // The screen's own ratio for the portrait slot and its inverse for the landscape one, so the two tiles
-                // are the shapes they stand for rather than two identical squares.
-                ratio = minOf(screenRatio, 1f / screenRatio),
-                enabled = !state.busy,
-                onClick = {
-                    rotatingTarget = CropTarget.ROTATING_PORTRAIT
-                    rotatingPicker.launch(imageRequest)
-                },
-                modifier = Modifier.weight(1f),
-            )
-            RotatingSlot(
-                label = "Landscape",
-                preview = state.rotatingLandscape,
-                ratio = maxOf(screenRatio, 1f / screenRatio),
-                enabled = !state.busy,
-                onClick = {
-                    rotatingTarget = CropTarget.ROTATING_LANDSCAPE
-                    rotatingPicker.launch(imageRequest)
-                },
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        // Applying a live wallpaper cannot be done silently — the platform requires the user to confirm in its own
-        // preview — so this opens that chooser rather than pretending to be the action. L1's `applyLiveWallpaper` had
-        // the same two-step fallback, and for the same reason: the direct intent is not supported everywhere.
-        MorphicButton(
-            onClick = { openLiveWallpaperChooser(context, viewModel.rotatingServiceComponent()) },
-            enabled = state.hasRotating && !state.busy,
-            modifier = Modifier.fillMaxWidth().padding(top = RowGap * 2),
-        ) {
-            Text(if (state.rotatingActive) "Re-open in system chooser" else "Apply rotating wallpaper")
-        }
-
-        Text(
-            text = when {
-                !state.hasRotating -> "Add at least one orientation to apply it."
-                state.rotatingActive -> "Active. Changing either picture updates it without re-applying."
-                else -> "Not active yet — the system asks you to confirm a live wallpaper."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.contentMuted,
-            modifier = Modifier.padding(top = RowGap),
-        )
-
-        if (state.busy) {
-            Text(
-                text = "Working…",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.contentMuted,
-                modifier = Modifier.padding(top = RowGap),
-            )
         }
     }
 }
 
 /**
- * One orientation of the rotating pair: its picture if it has one, its name if it does not, and a tap to replace it.
+ * One orientation of the rotating pair: its picture if it has one, a "+" if it does not, and a tap to replace it.
  *
- * Shaped like the orientation it stands for, which is the whole of what tells the two apart at a glance — L1 labelled
- * two equal squares instead. Tapping a filled slot re-picks rather than offering a menu: there are two things one could
- * do to a slot, and "clear" is not worth a menu when choosing another image is the common one and clearing it leaves the
- * pair half-configured anyway.
+ * Shaped like the orientation it stands for — which is what tells the two apart at a glance, where L1 labelled two
+ * equal rectangles. Tapping a filled slot re-picks rather than opening a menu: there are two things one could do to a
+ * slot, and "clear" is not worth a menu when choosing another image is the common one and clearing leaves the pair
+ * half-configured anyway.
  */
 @Composable
-private fun RotatingSlot(
+private fun RotateSlot(
+    bitmap: Bitmap?,
     label: String,
-    preview: Bitmap?,
     ratio: Float,
-    enabled: Boolean,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(ratio)
+                .fitAspect(ratio)
                 .clip(RoundedCornerShape(PreviewCorner))
                 .background(colors.surface)
-                .clickable(enabled = enabled, onClick = onClick),
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            if (preview != null) {
+            if (bitmap != null) {
                 Image(
-                    bitmap = remember(preview) { preview.asImageBitmap() },
-                    contentDescription = "$label wallpaper",
+                    bitmap = remember(bitmap) { bitmap.asImageBitmap() },
+                    contentDescription = label,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Text("Add", style = MaterialTheme.typography.labelLarge, color = colors.contentMuted)
+                Icon(Icons.Filled.Add, contentDescription = "Add $label image", tint = colors.contentMuted)
             }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.content,
+                modifier = Modifier.align(Alignment.TopStart).padding(RowGap),
+            )
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.contentMuted,
-            modifier = Modifier.padding(top = RowGap / 2),
-        )
     }
 }
 
 /**
- * Opens the system's live-wallpaper preview for [component], falling back to its generic chooser.
+ * Sizes a tile to [ratio] inside a bounded box, filling whichever axis leaves it fitting.
  *
- * **A live wallpaper cannot be set silently** — the platform hands the user a preview with its own confirm button — so
- * this is the whole of "apply" for the rotating pair, and the section learns the outcome by asking on resume rather than
- * from a result. The fallback is L1's: the direct intent is optional, and a device without it still has the chooser.
+ * `aspectRatio` alone derives one dimension from the other and will happily overflow the box it is in — a 2.2∶1
+ * landscape tile told to fill a 200dp height asks for 444dp of width. Choosing the axis by which side of square the
+ * ratio falls on is the whole fix, and it is why the portrait and landscape slots can share one composable.
  */
-private fun openLiveWallpaperChooser(context: Context, component: ComponentName): Boolean {
-    val direct = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-        putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
+private fun Modifier.fitAspect(ratio: Float): Modifier =
+    if (ratio > 1f) fillMaxWidth().aspectRatio(ratio) else fillMaxHeight().aspectRatio(ratio)
+
+/** A page's action: an icon and a label, at the tonal emphasis that puts it below the page's apply control. */
+@Composable
+private fun PageActionButton(
+    modifier: Modifier,
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    MorphicButton(onClick = onClick, modifier = modifier, style = MorphicButtonStyle.Tonal, enabled = enabled) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(RowGap))
+        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    if (runCatching { context.startActivity(direct) }.isSuccess) return true
-    val chooser = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
-    return runCatching { context.startActivity(chooser) }.isSuccess
 }
 
 /**
  * Apply, and *where* — the button and the three-item menu it opens.
  *
  * The menu is the whole control rather than a secondary affordance: applying always asks where, so there is no plain
- * "apply" to run without it. That is why the button opens the menu instead of acting, which is also what both halves
- * of L1's split button did.
+ * "apply" to run without it. That is why the button opens the menu instead of acting, which is also what both halves of
+ * L1's `SplitButtonLayout` did — hence one button here, keeping only the chevron that said "this opens something".
  */
 @Composable
 private fun ApplyButton(
     label: String,
     enabled: Boolean,
     onSelect: (WallpaperTarget) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier) {
-        MorphicButton(
-            onClick = { expanded = true },
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+    Box {
+        MorphicButton(onClick = { expanded = true }, enabled = enabled) {
             Text(label)
+            Spacer(Modifier.width(RowGap / 2))
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Apply options", modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             val select = { target: WallpaperTarget ->
@@ -387,8 +513,183 @@ private fun ApplyButton(
     }
 }
 
-/** How much of the pane the preview spans. A picture of the screen, not the screen — so it leaves margin. */
-private const val PREVIEW_WIDTH_FRACTION = 0.55f
+/**
+ * A titled horizontal shelf — L1's browse rows, and the shape any future wallpaper *source* takes.
+ *
+ * A `LazyListScope` extension rather than a composable because the header and the row are two items of the outer list:
+ * a shelf whose row is long must scroll sideways while the page scrolls down, and nesting a `LazyRow` inside a single
+ * tall item would measure every card up front.
+ */
+private fun LazyListScope.wallpaperShelf(
+    title: String,
+    trailing: String? = null,
+    rowContent: LazyListScope.() -> Unit,
+) {
+    item(key = "header-$title") {
+        val colors = LocalMorphicColors.current
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.content,
+                modifier = Modifier.weight(1f),
+            )
+            if (trailing != null) {
+                Text(text = trailing, style = MaterialTheme.typography.labelLarge, color = colors.contentMuted)
+            }
+        }
+    }
+    item(key = "row-$title") {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = ScreenPadding),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            content = rowContent,
+        )
+    }
+}
+
+/** A shelf with nothing in it yet, saying so at the height its cards would occupy so the page does not jump later. */
+@Composable
+private fun LazyItemScope.EmptyHint(text: String) {
+    val colors = LocalMorphicColors.current
+    Box(
+        modifier = Modifier
+            .fillParentMaxWidth()
+            .height(CardHeight)
+            .clip(RoundedCornerShape(CardCorner))
+            .background(colors.surface),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.contentMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+    }
+}
+
+/** One installed live wallpaper, as the system describes it: what to call it, what it looks like, what to start. */
+private data class LiveWallpaperEntry(
+    val label: String,
+    val thumb: ImageBitmap?,
+    val component: ComponentName,
+)
+
+/** A shelf card for an installed live wallpaper. Tapping it opens the system's preview, which is what applies it. */
+@Composable
+private fun LiveWallpaperCard(entry: LiveWallpaperEntry, onClick: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    Column(modifier = Modifier.width(CardWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .width(CardWidth)
+                .height(CardHeight)
+                .clip(RoundedCornerShape(CardCorner))
+                .background(colors.surface)
+                .clickable(onClick = onClick),
+        ) {
+            if (entry.thumb != null) {
+                Image(
+                    bitmap = entry.thumb,
+                    contentDescription = entry.label,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = entry.label.ifEmpty { "Live wallpaper" },
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.contentMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(CardWidth),
+        )
+    }
+}
+
+/**
+ * Opens the system's live-wallpaper preview for [component], falling back to its generic chooser.
+ *
+ * **A live wallpaper cannot be set silently** — the platform hands the user a preview with its own confirm button — so
+ * this is the whole of "apply" for the rotating pair, and the section learns the outcome by asking on resume rather
+ * than from a result. The fallback is L1's: the direct intent is optional, and a device without it still has the
+ * chooser.
+ */
+private fun openLiveWallpaperChooser(context: Context, component: ComponentName): Boolean {
+    val direct = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+        putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
+    }
+    if (runCatching { context.startActivity(direct) }.isSuccess) return true
+    val chooser = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
+    return runCatching { context.startActivity(chooser) }.isSuccess
+}
+
+/**
+ * Every live wallpaper the device has installed **except [exclude]**, as the package manager reports them.
+ *
+ * Blocking — a query plus a drawable load per result — so callers run it off the main thread. Each entry is wrapped in
+ * `runCatching` because `WallpaperInfo` parses another app's metadata, and one malformed service must not empty the
+ * shelf.
+ *
+ * **[exclude] is the launcher's own rotating service, and leaving it in was the bug.** It genuinely *is* an installed
+ * live wallpaper, so the query returns it — but the rotate page above already owns it, and a shelf card beside three
+ * other apps' wallpapers reads as a fourth peer rather than as the thing that page configures. Worse, the card is the
+ * one route with no guard: the page's Apply is disabled until at least one orientation exists, where a card would hand
+ * the user a chooser for a wallpaper with nothing to draw. This shelf is other apps' wallpapers; ours is not one of
+ * them. Named by the caller from `WallpaperRepository.rotatingServiceComponent` rather than matched on our package,
+ * because the component is a fact the data layer states and a package name is a guess that would also swallow any
+ * other service this app ever ships.
+ */
+private fun loadInstalledLiveWallpapers(context: Context, exclude: ComponentName): List<LiveWallpaperEntry> {
+    val pm = context.packageManager
+    val resolved = pm.queryIntentServices(
+        Intent(WallpaperService.SERVICE_INTERFACE),
+        PackageManager.GET_META_DATA,
+    )
+    // A locale-aware collation, not L1's `sortedBy { it.label.lowercase() }` — that compares raw UTF-16, so every
+    // accented label sorts after `Z`. Same correction the APPS surface made to its own ordering.
+    val collator = Collator.getInstance()
+    return resolved.mapNotNull { info ->
+        val component = ComponentName(info.serviceInfo.packageName, info.serviceInfo.name)
+        // Filtered before the `WallpaperInfo` parse and the thumbnail load, not after: there is no point rasterising
+        // a preview for a card that will not be drawn.
+        if (component == exclude) return@mapNotNull null
+        runCatching {
+            val wallpaperInfo = WallpaperInfo(context, info)
+            LiveWallpaperEntry(
+                label = wallpaperInfo.loadLabel(pm)?.toString().orEmpty(),
+                thumb = wallpaperInfo.loadThumbnail(pm)?.toImageBitmap(),
+                component = component,
+            )
+        }.getOrNull()
+    }.sortedWith { a, b -> collator.compare(a.label, b.label) }
+}
+
+/** Rasterises a thumbnail that is not already a bitmap — a vector or shape drawable shipped as the preview. */
+private fun Drawable.toImageBitmap(): ImageBitmap {
+    if (this is BitmapDrawable) {
+        bitmap?.let { return it.asImageBitmap() }
+    }
+    val width = intrinsicWidth.coerceAtLeast(1)
+    val height = intrinsicHeight.coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    setBounds(0, 0, width, height)
+    draw(Canvas(bitmap))
+    return bitmap.asImageBitmap()
+}
+
+/** The two modes, in the order they are paged through. */
+private const val SinglePage = 0
+private const val RotatingPage = 1
+private const val PageCount = 2
 
 /** Stands in for a window that has not reported a size yet; only ever used for one frame. */
 private const val DEFAULT_SCREEN_RATIO = 0.5f
