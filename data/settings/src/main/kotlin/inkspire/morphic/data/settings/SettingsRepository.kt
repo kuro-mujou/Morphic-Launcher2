@@ -39,15 +39,23 @@ interface SettingsRepository {
      */
     val surfaceRegister: Flow<SurfaceRegister>
 
-    /**
-     * How frosted surfaces render over the wallpaper — the one global choice, and the strengths tuning it.
-     *
-     * **Read-only for now, deliberately.** The writer is a settings section that does not exist yet (S5f-3), and a
-     * setter with no caller is the "model in a vacuum" this codebase keeps refusing. The flow is not: the launcher
-     * shell reads it to build its backdrop, so the slice has a live consumer from the day it lands and the section
-     * later adds UI rather than plumbing.
-     */
+    /** How frosted surfaces render over the wallpaper — the one global choice, and the strengths tuning it. */
     val backdropEffect: Flow<BackdropEffect>
+
+    /**
+     * Replaces the backdrop effect outright.
+     *
+     * **A whole-value write, unlike every other setter here**, and the sealed type is why: the parameters that apply
+     * depend on *which* variant is selected, so there is no field to update independently of it. `updateIcon` and
+     * `updateGrid` take a transform because their overrides are sparse records where one field genuinely can move
+     * alone; this one cannot, and pretending otherwise would mean a setter per variant per parameter.
+     *
+     * The consequence is worth knowing: switching variants **discards the previous one's parameters**, because they
+     * are not stored anywhere else. Within a variant nothing is lost — flipping a blur's tone keeps its strength and
+     * tint, which is the comparison a user actually makes. L1 kept all ten parameters alive at once in a flat bag; the
+     * sealed type trades that for making an effect unable to hold another effect's parameters, and this is the bill.
+     */
+    suspend fun setBackdropEffect(effect: BackdropEffect)
 
     /** Sets HOME's main-area + side-zone pairing. */
     suspend fun setHomeLayout(layout: HomeLayout)

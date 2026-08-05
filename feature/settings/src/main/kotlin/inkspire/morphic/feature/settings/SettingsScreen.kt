@@ -53,6 +53,7 @@ import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
+import inkspire.morphic.feature.settings.effects.EffectsDetail
 import inkspire.morphic.feature.settings.wallpaper.WallpaperDetail
 
 /** The list pane's width beside a detail, on a screen wide enough for both. */
@@ -250,6 +251,7 @@ private fun SettingsTwoPane(
 private fun SettingsDetail(section: SettingsSection) = PunchThroughPane {
     when (section) {
         SettingsSection.WALLPAPER -> WallpaperDetail()
+        SettingsSection.EFFECTS -> EffectsDetail()
         SettingsSection.SURFACE_REGISTER -> SurfaceRegisterDetail()
         SettingsSection.HOME_GRID -> GridSizeDetail()
         SettingsSection.DOCK -> DockDetail()

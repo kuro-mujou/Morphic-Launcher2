@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.BackdropBlurTone
 import inkspire.morphic.core.model.BackdropEffect
 import kotlin.math.roundToInt
@@ -237,6 +238,13 @@ private class BackdropNode(
     private var cachedSize: Size = Size.Unspecified
     private var cachedLayoutDirection: LayoutDirection? = null
 
+    /**
+     * Built on first use and kept for the node's life — it holds a compiled shader and a bound bitmap, neither of
+     * which should be rebuilt per frame. Null until the effect is actually liquid glass, so a device that never
+     * selects it never compiles AGSL.
+     */
+    private var liquidGlass: LiquidGlass? = null
+
     fun update(
         shape: Shape,
         effect: BackdropEffect,
@@ -284,8 +292,53 @@ private class BackdropNode(
             return
         }
         val window = Rect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height)
-        drawBlurredCrop(bd.image, bd.screenToBitmap(window))
+        val src = bd.screenToBitmap(window)
+        val glassEffect = effect as? BackdropEffect.LiquidGlass
+        if (glassEffect != null && liquidGlassSupported) {
+            drawGlass(bd.image, src, glassEffect, outline)
+        } else {
+            // Every other effect — and liquid glass below API 33, where L1 falls back to exactly this too.
+            drawBlurredCrop(bd.image, src)
+        }
         drawContent()
+    }
+
+    /**
+     * Fills the shape with the refracting lens instead of a flat crop.
+     *
+     * The corner radius comes from the **outline** rather than from the shape, because that is where it is already
+     * resolved to px; a shape that is not a rounded rect reports zero, which the SDF reads as a plain rectangle — the
+     * correct degradation rather than a special case.
+     *
+     * Both px conversions happen here and not in the model: the parameters are `0f..1f` preferences precisely so a
+     * slider never has to speak in pixels, and the ceilings they map onto are a drawing decision. The depth is capped
+     * at half the smaller side, since a band deeper than that would have the two rims overlap in the middle.
+     */
+    private fun ContentDrawScope.drawGlass(
+        img: ImageBitmap,
+        src: Rect,
+        effect: BackdropEffect.LiquidGlass,
+        outline: Outline,
+    ) {
+        val cornerPx = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f
+        val refractionHeight = (effect.depth * GLASS_MAX_DEPTH_DP.dp.toPx())
+            .coerceAtMost(minOf(size.width, size.height) * 0.5f)
+        val refractionAmount = effect.refraction * GLASS_MAX_REFRACTION_DP.dp.toPx()
+        val glass = liquidGlass ?: LiquidGlass().also { liquidGlass = it }
+        drawPath(
+            outlinePath,
+            glass.brushFor(
+                image = img,
+                size = size,
+                src = src,
+                cornerRadiusPx = cornerPx,
+                refractionHeightPx = refractionHeight,
+                refractionAmountPx = refractionAmount,
+                dispersion = effect.dispersion,
+                vibrancy = effect.vibrancy,
+                sheen = effect.sheen,
+            ),
+        )
     }
 
     /**
@@ -360,3 +413,7 @@ private const val ACCENT_BLEND = 0.3f
  * over a coloured photograph. Material You is the same idea with the dial at 1.
  */
 private const val LIGHT_DARK_TINT_HUE = 0.35f
+
+/** Ceilings the liquid-glass `0f..1f` parameters map onto at 1.0, in dp. L1's, unchanged. */
+private const val GLASS_MAX_DEPTH_DP = 56f
+private const val GLASS_MAX_REFRACTION_DP = 60f

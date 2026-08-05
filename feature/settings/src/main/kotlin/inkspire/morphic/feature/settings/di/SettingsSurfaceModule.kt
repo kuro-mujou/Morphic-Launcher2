@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.di
 
 import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
+import inkspire.morphic.feature.settings.effects.EffectsViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
 import inkspire.morphic.feature.settings.folder.FolderViewModel
 import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
@@ -24,4 +25,5 @@ val settingsSurfaceModule = module {
     viewModel { GridSizeViewModel(get(), get(), get()) }
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
+    viewModel { EffectsViewModel(get()) }
 }

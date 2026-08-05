@@ -85,6 +85,10 @@ internal class SettingsRepositoryImpl(
 
     override val backdropEffect: Flow<BackdropEffect> = dataStore.read(BackdropEffectSlice) { it }
 
+    // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
+    // path: it is what puts the write inside a DataStore transaction.
+    override suspend fun setBackdropEffect(effect: BackdropEffect) = update(BackdropEffectSlice) { effect }
+
     override suspend fun setHomeLayout(layout: HomeLayout) =
         update(SurfaceRegisterSlice) { copy(homeLayout = layout) }
 

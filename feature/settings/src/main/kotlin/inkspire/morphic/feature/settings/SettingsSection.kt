@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
@@ -23,6 +24,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 enum class SettingsSection {
     /** The wallpaper the launcher owns: choose an image, and apply it to the home screen, the lock screen or both. */
     WALLPAPER,
+
+    /** How frosted surfaces render over the wallpaper: the global effect, and the strengths tuning it. */
+    EFFECTS,
 
     /** Which surface each HOME edge opens, in which layout. L1 called this "Layout". */
     SURFACE_REGISTER,
@@ -58,6 +62,9 @@ internal val SettingsSection.meta: SettingsSectionMeta
         SettingsSection.WALLPAPER -> SettingsSectionMeta(
             "Wallpaper", "Image, and where to apply it", Icons.Outlined.Wallpaper,
         )
+        SettingsSection.EFFECTS -> SettingsSectionMeta(
+            "Effects", "Frosted surfaces over the wallpaper", Icons.Outlined.AutoAwesome,
+        )
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
             "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
@@ -91,7 +98,7 @@ internal data class SettingsGroup(val header: String?, val sections: List<Settin
  * folders last — a folder is drawn over a surface rather than being one.
  */
 internal val settingsGroups: List<SettingsGroup> = listOf(
-    SettingsGroup("Personalization", listOf(SettingsSection.WALLPAPER)),
+    SettingsGroup("Personalization", listOf(SettingsSection.WALLPAPER, SettingsSection.EFFECTS)),
     SettingsGroup(
         "Layout",
         listOf(
