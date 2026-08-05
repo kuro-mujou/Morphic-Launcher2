@@ -1,11 +1,14 @@
 package inkspire.morphic.data.wallpaper
 
+import android.app.WallpaperColors
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Rect
+import android.os.Build
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import androidx.annotation.RequiresApi
 import java.io.File
 
 /**
@@ -42,6 +45,9 @@ class RotatingWallpaperService : WallpaperService() {
         private var bitmapLandscape: Boolean? = null
         private var width = 0
         private var height = 0
+
+        /** The image the system was last told about, so turning the device announces the new one exactly once. */
+        private var notifiedBitmap: Bitmap? = null
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
@@ -109,6 +115,30 @@ class RotatingWallpaperService : WallpaperService() {
             } finally {
                 runCatching { surfaceHolder.unlockCanvasAndPost(canvas) }
             }
+            if (image !== notifiedBitmap) {
+                notifiedBitmap = image
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) notifyColorsChanged()
+            }
+        }
+
+        /**
+         * What colours this wallpaper is made of, for anything that has to sit legibly on top of it.
+         *
+         * **A live wallpaper is the only one the system cannot analyse for itself** — there is no bitmap to read, only
+         * a surface being drawn to — so a service that does not answer this leaves every consumer of
+         * `WallpaperManager.getWallpaperColors` with nothing: the status-bar icon contrast, any themed-icon palette,
+         * and (the reason it is here) the launcher's own `WallpaperRepository.brightness`. Answering it means the
+         * rotating pair takes the *same* path as every other wallpaper rather than needing a special case in the
+         * repository that reads our files behind the system's back.
+         *
+         * Null until something has been drawn, which is honest rather than a gap: the system re-asks after
+         * [notifyColorsChanged], and [draw] fires that the first time an image appears and again whenever the device
+         * turns and the other half is decoded. L1's service published nothing and had no caller that missed it.
+         */
+        @RequiresApi(Build.VERSION_CODES.O_MR1)
+        override fun onComputeColors(): WallpaperColors? {
+            val image = bitmap ?: return null
+            return runCatching { WallpaperColors.fromBitmap(image) }.getOrNull()
         }
     }
 }

@@ -1,5 +1,6 @@
 package inkspire.morphic.data.wallpaper.internal
 
+import android.app.WallpaperColors
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.ContentResolver
@@ -9,9 +10,11 @@ import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.scale
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -22,6 +25,7 @@ import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.RotatingWallpaperService
+import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.wallpaper.WallpaperFiles
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
@@ -33,8 +37,10 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -78,6 +84,21 @@ internal class WallpaperRepositoryImpl(
         .map { prefs -> decodeState(prefs[StateKey]) }
         .distinctUntilChanged()
         .flowOn(dispatchers.io)
+
+    /**
+     * Resolved on every reason it could have changed, and only then — a system colours callback, or one of our own
+     * writes.
+     *
+     * **Two triggers because there are two ways it moves, and neither covers the other.**
+     * `addOnColorsChangedListener` catches a wallpaper set by anyone (including us, through [apply], and including the
+     * system's live-wallpaper chooser), but it does not exist below API 27; the state flow catches our own writes on
+     * every API, which is what keeps this alive on 26 for the case a launcher can actually control. Deduplicated at the
+     * end, so the overlap between them costs a resolve and nothing downstream.
+     */
+    override val brightness: Flow<WallpaperBrightness> =
+        combine(wallpaper, systemColorChanges()) { state, _ -> resolveBrightness(state) }
+            .distinctUntilChanged()
+            .flowOn(dispatchers.io)
 
     override suspend fun decodePreview(uri: Uri): Bitmap? = withContext(dispatchers.io) {
         decodeSampled(uri, PREVIEW_CAP)
@@ -171,6 +192,91 @@ internal class WallpaperRepositoryImpl(
 
     override fun rotatingServiceComponent(): ComponentName =
         ComponentName(appContext, RotatingWallpaperService::class.java)
+
+    /**
+     * A tick each time the system's wallpaper colours change, plus one on subscription so the first resolve happens.
+     *
+     * `Unit` rather than the colours themselves: the resolve below re-reads them anyway (it also needs the wallpaper
+     * *id*, which this callback does not carry), and a flow of colours would tempt a caller into using them without
+     * the fallback chain. Below API 27 there is no listener to register, so this is the subscription tick alone and
+     * the state flow beside it carries the updates.
+     */
+    private fun systemColorChanges(): Flow<Unit> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return flowOf(Unit)
+        return callbackFlow {
+            val manager = WallpaperManager.getInstance(appContext)
+            val listener = WallpaperManager.OnColorsChangedListener { _, which ->
+                // FLAG_LOCK changes are none of our business: the launcher's chrome sits over the home wallpaper.
+                if (which and WallpaperManager.FLAG_SYSTEM != 0) trySend(Unit)
+            }
+            manager.addOnColorsChangedListener(listener, Handler(Looper.getMainLooper()))
+            trySend(Unit)
+            awaitClose { manager.removeOnColorsChangedListener(listener) }
+        }
+    }
+
+    /**
+     * Ask the system; if it will not say, read our own file — but only when our file is provably what is on screen.
+     *
+     * **That guard is the whole of the correctness here.** The wallpaper the chrome sits on may have been set by
+     * another app entirely, so "we have an image stored" is not evidence of anything. `appliedSystemId` is: it is the
+     * id the system gave the wallpaper *at the moment we set it*, so it still matching the live id means nothing has
+     * replaced ours since. That is the second job `WallpaperState`'s KDoc reserved the field for, now doing it.
+     */
+    private fun resolveBrightness(state: WallpaperState): WallpaperBrightness {
+        val manager = WallpaperManager.getInstance(appContext)
+        systemBrightness(manager)?.let { return it }
+        if (state.appliedSystemId == 0) return WallpaperBrightness.DARK
+        val liveId = runCatching { manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) }.getOrDefault(0)
+        if (state.appliedSystemId != liveId) return WallpaperBrightness.DARK
+        val path = state.image?.path ?: return WallpaperBrightness.DARK
+        val bitmap = decodeFile(path, BRIGHTNESS_SAMPLE_STEP) ?: return WallpaperBrightness.DARK
+        return brightnessOf(meanLuminance(bitmap))
+    }
+
+    /**
+     * The system's own reading of the live wallpaper, or null if it has none to give.
+     *
+     * **Preferred over anything we could compute**, because it is computed over what is *actually displayed* — another
+     * app's wallpaper, or a live one, neither of which we can read as a bitmap at all. It needs no permission and no
+     * decode. Null below API 27, and null for a live wallpaper whose service publishes no colours (ours does — see
+     * [RotatingWallpaperService]).
+     *
+     * On API 31+ the OS also states its verdict directly: `HINT_SUPPORTS_DARK_TEXT` *is* the question this method
+     * asks, decided with area-weighted analysis rather than a single colour, so it wins where it exists. The getter
+     * arrived in 31 even though the constant dates from 27, which is the only reason for the second branch.
+     */
+    private fun systemBrightness(manager: WallpaperManager): WallpaperBrightness? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
+        val colors = runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull() ?: return null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT != 0
+        ) {
+            return WallpaperBrightness.LIGHT
+        }
+        return brightnessOf(ColorUtils.calculateLuminance(colors.primaryColor.toArgb()))
+    }
+
+    /**
+     * Mean relative luminance over a tiny downscale of [source].
+     *
+     * **Per-pixel luminance averaged, not the luminance of an averaged colour** — the two differ because luminance is
+     * gamma-expanded, and a picture that is half black and half white is a mid-grey by the second reading while the
+     * first correctly reports it as the borderline case it is.
+     *
+     * Deliberately *not* `Blur.kt`'s `dominantColor`, which the port plan expected to be reused here: that one weights
+     * each pixel by saturation so a vivid accent beats washed-out grey, which is exactly right for picking an accent
+     * and exactly wrong for asking how bright something is.
+     */
+    private fun meanLuminance(source: Bitmap): Double {
+        val small = source.scale(BRIGHTNESS_GRID, BRIGHTNESS_GRID)
+        val pixels = IntArray(BRIGHTNESS_GRID * BRIGHTNESS_GRID)
+        small.getPixels(pixels, 0, BRIGHTNESS_GRID, 0, 0, BRIGHTNESS_GRID, BRIGHTNESS_GRID)
+        return pixels.sumOf { ColorUtils.calculateLuminance(it) } / pixels.size
+    }
+
+    private fun brightnessOf(luminance: Double): WallpaperBrightness =
+        if (luminance >= DARK_TEXT_LUMINANCE) WallpaperBrightness.LIGHT else WallpaperBrightness.DARK
 
     /**
      * A `ContentObserver` on the image collection, turned into a flow - registered on collection and unregistered when
@@ -283,9 +389,18 @@ internal class WallpaperRepositoryImpl(
         }
     }
 
-    private fun decodeFile(path: String): Bitmap? {
+    /**
+     * The stored JPEG at [path], optionally decoded [sampleSize]× smaller.
+     *
+     * The sample is for readings rather than for drawing: a brightness average over a screen-sized bitmap is the same
+     * answer as one over a thumbnail, and the thumbnail costs a fraction of the allocation. Callers that need the
+     * pixels (a preview, the bitmap handed to `WallpaperManager`) take the default and get the file as written.
+     */
+    private fun decodeFile(path: String, sampleSize: Int = 1): Bitmap? {
         val file = File(path)
-        return if (!file.exists()) null else BitmapFactory.decodeFile(file.absolutePath)
+        if (!file.exists()) return null
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize.coerceAtLeast(1) }
+        return BitmapFactory.decodeFile(file.absolutePath, options)
     }
 
     /**
@@ -323,5 +438,20 @@ internal class WallpaperRepositoryImpl(
 
         /** How far back the gallery watch looks, in seconds - see `newGalleryImages`. */
         const val GALLERY_SLACK_SECONDS = 2
+
+        /**
+         * The relative luminance at which black text beats white text on a background.
+         *
+         * Not a taste value — it is where the two WCAG contrast ratios cross. Contrast against white is
+         * `1.05 / (L + 0.05)` and against black is `(L + 0.05) / 0.05`; setting them equal gives
+         * `(L + 0.05)² = 0.0525`, so `L ≈ 0.179`. Above it the wallpaper wants dark chrome, below it light.
+         */
+        const val DARK_TEXT_LUMINANCE = 0.179
+
+        /** The stored image is decoded this much smaller for a brightness read — see `decodeFile`. */
+        const val BRIGHTNESS_SAMPLE_STEP = 8
+
+        /** Side of the square the sampled image is reduced to before averaging. L1 uses the same 32 in `Blur.kt`. */
+        const val BRIGHTNESS_GRID = 32
     }
 }

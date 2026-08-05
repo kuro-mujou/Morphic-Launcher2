@@ -65,6 +65,29 @@ enum class WallpaperSource {
 enum class WallpaperTarget { HOME, LOCK, BOTH }
 
 /**
+ * **How bright the wallpaper behind the launcher's chrome is** — the launcher's dark/light input.
+ *
+ * Launcher chrome sits *on* the wallpaper with nothing between, so what it has to contrast is the picture, not the
+ * system's dark-mode switch. That is the whole of the design system's "one theme, two is-dark inputs" rule: settings is
+ * a surface of our own and feeds `isSystemInDarkTheme()`, while the shell feeds this.
+ *
+ * **L2's own idea, not a port.** L1 has no luminance analysis anywhere — it themes the launcher from the system's dark
+ * mode like any app, which is why a bright wallpaper under white chrome is one of the things that reads badly there.
+ *
+ * Two values rather than three, with no `UNKNOWN`: the consumer is a theme, and a theme has to pick. What would be
+ * "unknown" is [DARK], because that is what the shell hardcoded before this existed and it is the safer miss — light
+ * chrome over an unexpectedly bright wallpaper is unreadable, where dark chrome over a dark one is merely dull.
+ */
+enum class WallpaperBrightness {
+
+    /** A bright wallpaper — chrome should be dark-on-light. */
+    LIGHT,
+
+    /** A dark wallpaper, or nothing legible to go on — chrome should be light-on-dark. */
+    DARK,
+}
+
+/**
  * The region of a source image to keep, as fractions of it — L1's `NormalizedCropRect`, kept name and all.
  *
  * **Fractions rather than pixels, because the crop is decided against a bitmap this module chose the size of.** The
@@ -177,8 +200,8 @@ object WallpaperFiles {
  * settings port's S0 drew when it refused to bring L1's `WallpaperState` across into the settings blob. The *effect*
  * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5f.
  *
- * **All three of L1's sources are here — picked, captured and the rotating pair** — and what is left out is the half
- * that reads them:
+ * **All three of L1's sources are here — picked, captured and the rotating pair** — and the half that *reads* them has
+ * started: [brightness] is the first, and it is the one reading that needs no image processing at all. Still absent:
  * - **the blur and the dominant colour** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
  *   need L1's `Blur.kt` image processing, which the plan already says belongs beside the graphics code rather than in a
  *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
@@ -188,6 +211,24 @@ interface WallpaperRepository {
 
     /** The chosen image and whether we set it — see [WallpaperState]. Emits [WallpaperState.Default] before a choice. */
     val wallpaper: Flow<WallpaperState>
+
+    /**
+     * How bright the **currently displayed** wallpaper is — see [WallpaperBrightness]. Re-emits when it changes.
+     *
+     * Note "currently displayed", not "the one we own": a launcher's chrome has to contrast whatever is actually behind
+     * it, which may be a wallpaper another app set or a live wallpaper that is not ours. So this asks the *system*
+     * first, and only falls back to reading our own file when the system says nothing **and** our file is provably what
+     * is on screen (`appliedSystemId` still matching the live id — the second job that field's KDoc reserved it for).
+     *
+     * **It does not need `Blur.kt`'s `dominantColor`, which the port plan assumed it would**, for two reasons worth
+     * writing down. The first is that `WallpaperManager.getWallpaperColors` already answers this: the OS computes it
+     * over the real wallpaper, with no permission and no decode, and `HINT_SUPPORTS_DARK_TEXT` is literally the
+     * question. The second is that `dominantColor` would be the *wrong statistic* even as a fallback — it is a
+     * saturation-weighted average, deliberately biased so a vivid accent beats washed-out grey, which is what an
+     * *accent* wants and the opposite of what "is this bright?" wants. Those are separate readings of one image, and
+     * the blur half of `Blur.kt` still has no consumer until the frosted backdrop lands.
+     */
+    val brightness: Flow<WallpaperBrightness>
 
     /**
      * A downsampled bitmap of [uri], for showing the user what they picked before anything is written.

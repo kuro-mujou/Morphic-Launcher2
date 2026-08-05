@@ -13,6 +13,7 @@ import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.data.settings.SideBinding
+import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.home.HomeScreen
 import kotlinx.coroutines.launch
@@ -46,10 +47,11 @@ fun LauncherShell(modifier: Modifier = Modifier) {
     val viewModel = koinViewModel<ShellViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // TODO(data:wallpaper B7b): the launcher's dark/light input is **wallpaper brightness**, not the system setting —
-    //  chrome has to contrast the wallpaper behind it. Hardcoded dark until the analyzer exists; see the design-system
-    //  note on "one theme, two is-dark inputs".
-    LauncherTheme(darkTheme = true) {
+    // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
+    // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
+    // half of that rule — its own surface, so its own `isSystemInDarkTheme()`. The two can therefore disagree, and
+    // should. `WallpaperBrightness.DARK` before the first read, which is what this line hardcoded until now.
+    LauncherTheme(darkTheme = state.brightness == WallpaperBrightness.DARK) {
         val scope = rememberCoroutineScope()
         val pagerState = rememberSurfacePagerState()
 

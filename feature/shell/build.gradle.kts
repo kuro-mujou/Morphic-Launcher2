@@ -16,6 +16,11 @@ dependencies {
     // The surface register: which surface is bound to which HOME edge, and in which layout.
     implementation(projects.data.settings)
 
+    // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch — chrome sits
+    // directly on the picture and has to contrast it. This module owns the theme boundary for every launcher surface,
+    // so it is the one that has to ask.
+    implementation(projects.data.wallpaper)
+
     // `BackHandler`, so back closes an open side surface instead of leaving the launcher.
     implementation(libs.androidx.activity.compose)
 }
