@@ -105,6 +105,7 @@ data class SurfaceMetrics(
     val grid: Map<GridSlot, Map<DeviceConfiguration, GridOverride>> = emptyMap(),
     val dockHeightDp: Map<DeviceConfiguration, Int> = emptyMap(),
     val listRowHeightDp: Map<DeviceConfiguration, Int> = emptyMap(),
+    val horizontalPaddingDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
 ) {
     /**
      * The icon sizing to draw with for [slot] on [device]: the blueprint's default with any override applied.
@@ -204,6 +205,40 @@ data class SurfaceMetrics(
      */
     fun withListRowHeight(device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
         copy(listRowHeightDp = if (dp == null) listRowHeightDp - device else listRowHeightDp + (device to dp))
+
+    /**
+     * The blank margin at [slot]'s left and right edges on [device], in dp: [base] — its blueprint's — unless
+     * overridden here.
+     *
+     * **Slot-keyed, unlike [dockHeightDp] and [listRowHeightDp], and the difference is how many grids can be asked.**
+     * Those two name one grid each because only one grid *has* the measurement — a strip's extent, a list's row. Every
+     * grid has edges, so this one is keyed like [icon] and [grid] are.
+     */
+    fun horizontalPadding(slot: GridSlot, device: DeviceConfiguration, base: Int): Int =
+        horizontalPaddingDp[slot]?.get(device) ?: base
+
+    /**
+     * A copy with [slot]'s padding on [device] set to [dp], or **cleared** when it is null — after which that grid
+     * follows its blueprint again.
+     *
+     * Removes the empty entry at both levels, as [withIconOverride] does and for the same reason: a settings screen
+     * that has been visited and reset should leave the blob as it found it.
+     *
+     * No clamp against what still fits. That is deliberate and matches the column count: a padding too wide for the
+     * columns stored beside it is resolved *on read* by `CellFit`, which reports fewer columns rather than rewriting
+     * anything, so narrowing the padding again brings them back. L1 wrote its clamps back and destroyed the number.
+     */
+    fun withHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?): SurfaceMetrics {
+        val forSlot = horizontalPaddingDp[slot].orEmpty()
+        val updated = if (dp == null) forSlot - device else forSlot + (device to dp)
+        return copy(
+            horizontalPaddingDp = if (updated.isEmpty()) {
+                horizontalPaddingDp - slot
+            } else {
+                horizontalPaddingDp + (slot to updated)
+            },
+        )
+    }
 
     companion object {
         /** Nothing overridden: every grid draws at its blueprint's defaults. */

@@ -50,6 +50,7 @@ data class GridSizeState(
     val rows: Int? = null,
     val icon: IconSizing? = null,
     val dockHeightDp: Int? = null,
+    val paddingDp: Int? = null,
 )
 
 /**
@@ -87,8 +88,9 @@ class GridSizeViewModel(
                     settingsRepository.gridConfig(SLOT, configuration),
                     settingsRepository.iconSizing(SLOT, configuration),
                     settingsRepository.dockHeight(configuration),
-                ) { config, icon, dockHeightDp ->
-                    GridSizeState(config.visualCols, config.visualRows, icon, dockHeightDp)
+                    settingsRepository.horizontalPadding(SLOT, configuration),
+                ) { config, icon, dockHeightDp, padding ->
+                    GridSizeState(config.visualCols, config.visualRows, icon, dockHeightDp, padding)
                 }
             }
         }
@@ -137,6 +139,17 @@ class GridSizeViewModel(
      * columns already live by. L1 reconciled it the other way, from a `LaunchedEffect` in this screen that wrote the
      * clamped counts into storage, and so destroyed a row count for good the first time anyone touched an icon slider.
      */
+    /**
+     * Sets the main area's horizontal margin, in dp.
+     *
+     * One write, unlike [edit]: a margin removes no cell, so nothing is displaced and there is no placement half. The
+     * columns it costs are re-reported on read and come back when it narrows.
+     */
+    fun setPadding(dp: Int) {
+        val configuration = device.value ?: return
+        viewModelScope.launch { settingsRepository.setHorizontalPadding(SLOT, configuration, dp) }
+    }
+
     fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {
         val configuration = device.value ?: return
 

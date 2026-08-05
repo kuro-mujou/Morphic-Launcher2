@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -24,6 +25,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -122,6 +124,9 @@ internal val PagerReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent
  * @param folderMetrics an *open folder's* icon sizing (`GridSlot.FOLDER`). A separate value on purpose: a folder is
  *   its own grid with its own configuration, so it must not inherit the page's — which is exactly what it would do if
  *   this surface published one ambient `LocalIconMetrics` for everything inside it.
+ * @param horizontalPadding the margin at each page's left and right edge. Applied *above* the geometry publisher, so
+ *   the drop zone and the cell maths follow it without either being adjusted; the caller must subtract the same amount
+ *   before fitting [config], since page capacity is decided by the width the cells actually get.
  * @param config the page's grid, resolved from `GridSlot.APPS_PAGER`'s blueprint and the user's overrides. Passed
  *   rather than resolved here because **the same number paginates the store**: `rows × cols` is a page's capacity, so
  *   a page drawn at one size while the arrangement was paginated at another would put entries on pages that do not
@@ -140,6 +145,7 @@ fun AppsPager(
     metrics: IconMetrics,
     folderMetrics: IconMetrics,
     config: GridConfig,
+    horizontalPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -321,6 +327,12 @@ fun AppsPager(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(safeInsets)
+                    // The grid's own margin, and it must sit **before** `onGloballyPositioned` in this chain — which
+                    // is what makes drag and drop correct rather than something to fix afterwards. The bounds read
+                    // below become the *padded* ones, so the published `GridGeometry` and the registered drop zone
+                    // both describe the box actually drawn; a finger→cell read against the unpadded width would name
+                    // a column up to a whole cell away near the right edge.
+                    .padding(horizontal = horizontalPadding)
                     // Gated during a drag so a page swipe and an item drag never fight; the edge dwell above is
                     // how pages change while carrying something.
                     .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })

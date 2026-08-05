@@ -47,6 +47,7 @@ private data class AppsSizing(
     val cols: Map<GridSlot, Int>,
     val pager: GridConfig?,
     val listRowHeightDp: Int?,
+    val padding: Map<GridSlot, Int>,
 )
 
 /**
@@ -219,13 +220,33 @@ class AppsViewModel(
         }
 
     /**
+     * Each arrangement's horizontal padding, resolved per device — the same shape as [iconSizings] and [gridCols].
+     *
+     * Over [PaddedSlots], which is every APPS grid: unlike the other two lists there is no grid to leave out, because
+     * a margin is the one measurement that applies whether a grid draws icons, tiles or a single lane. That is also
+     * why this is a map rather than one value for "the APPS surface" — five arrangements, five settings, and the
+     * screen picks by slot exactly as it already does for icons.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val paddings: Flow<Map<GridSlot, Int>> =
+        device.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(emptyMap())
+            } else {
+                combine(
+                    PaddedSlots.map { slot -> settingsRepository.horizontalPadding(slot, current).map { slot to it } },
+                ) { pairs -> pairs.toMap() }
+            }
+        }
+
+    /**
      * Everything the settings layer decides about how this surface is drawn, in one value.
      *
      * Folded together for the reason home's `HomeSizing` is: `combine` stops at five flows and the state needs more.
      * It also groups honestly — these change together when a settings section is edited, and none of them is content.
      */
     private val sizing: Flow<AppsSizing> =
-        combine(iconSizings, gridCols, pagerConfig, listRowHeight, ::AppsSizing)
+        combine(iconSizings, gridCols, pagerConfig, listRowHeight, paddings, ::AppsSizing)
 
     val state: StateFlow<AppsState> =
         combine(
@@ -260,6 +281,7 @@ class AppsViewModel(
                 gridCols = configured.cols,
                 pagerConfig = configured.pager,
                 listRowHeightDp = configured.listRowHeightDp,
+                horizontalPaddingDp = configured.padding,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 
@@ -506,6 +528,21 @@ class AppsViewModel(
          * derived from the square that count produces rather than sized by an icon config.
          */
         private val ScrollingSlots = listOf(GridSlot.APPS_SCROLL, GridSlot.APPS_CATEGORY, GridSlot.APPS_CARD)
+
+        /**
+         * Every grid this surface draws — the one list with no exclusions, because every grid has edges.
+         *
+         * The pager is in it and absent from [ScrollingSlots] (its rows are fixed, so it is sized by `gridConfig`);
+         * the card is in it and absent from [IconSlots] (a tile is not an icon cell). Padding cares about neither
+         * distinction, which is why this list is simply all five.
+         */
+        private val PaddedSlots = listOf(
+            GridSlot.APPS_LIST,
+            GridSlot.APPS_SCROLL,
+            GridSlot.APPS_PAGER,
+            GridSlot.APPS_CATEGORY,
+            GridSlot.APPS_CARD,
+        )
 
         /**
          * The grids this surface draws icons in — the APPS grids plus [GridSlot.FOLDER], which renders both a pager

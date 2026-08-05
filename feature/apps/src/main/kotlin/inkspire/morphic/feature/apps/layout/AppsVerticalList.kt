@@ -56,13 +56,14 @@ fun AppsVerticalList(
     onLaunch: (ComponentKey) -> Unit,
     metrics: IconMetrics,
     rowHeight: Dp,
+    horizontalPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
-    // Inset so the first and last rows clear the status and navigation bars. Applied as *content* padding, not as
-    // padding on the list, so the scrolling content still passes under the bars instead of being clipped short of
-    // them. A system constraint, not styling — the surface adds no decorative padding until a setting owns it.
-    val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
+    // The bar inset plus the grid's own margin, as **content** padding so the rows still scroll under the bars
+    // instead of stopping short of them. A row's touch target is the whole row, and it narrows with the margin —
+    // which is right: the visible extent *is* the target, so there is nothing to keep in step by hand.
+    val contentPadding = appsContentPadding(horizontalPadding)
     // **The stored height, clamped to what this row can honour** — the list's counterpart of the vertical grid's column
     // fit, and the read half of the coupling the settings section's slider is bounded by. With icons on that means the
     // guardrails, which can move after a height was chosen: a row shorter than the smallest allowed icon would draw it
@@ -71,7 +72,7 @@ fun AppsVerticalList(
     val drawnRowHeight = fitRowHeight(rowHeight, metrics)
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
-        LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = barInsets) {
+        LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
             items(items = apps, key = { it.componentKey.flatten() }) { app ->
                 AppRowCell(
                     app = app,

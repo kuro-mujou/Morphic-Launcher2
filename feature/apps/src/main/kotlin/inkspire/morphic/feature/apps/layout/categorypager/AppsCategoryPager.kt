@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -25,6 +26,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -110,6 +112,7 @@ fun AppsCategoryPager(
     onMove: (app: ComponentKey, toCategory: String, toSlot: Int) -> Unit,
     metrics: IconMetrics,
     cols: Int,
+    horizontalPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -214,6 +217,12 @@ fun AppsCategoryPager(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(safeInsets)
+                    // **One padding, above everything that measures.** The `viewport` read below becomes the padded
+                    // box, and every other number on this surface is divided out of it — the drop zone, the proxy's
+                    // cell width, and each page's own `maxWidth` (a page fills this box, so `fitCols` and
+                    // `derivedCell` see the reduced width without being told). Applying it per page instead would
+                    // leave the drop zone and the proxy describing a width the cells no longer have.
+                    .padding(horizontal = horizontalPadding)
                     .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
                     .onGloballyPositioned {
                         val bounds = it.boundsInRoot()
@@ -247,8 +256,8 @@ fun AppsCategoryPager(
             // invisible.
             //
             // **Sized from this surface's own measurements, never from a page's published geometry.** A cell is
-            // `viewport.width / cols` wide (a page's grid fills the viewport, and nothing here adds horizontal
-            // padding), and its height follows from that width — the same `cellHeight` derivation a page lays its
+            // `viewport.width / cols` wide — a page's grid fills the viewport, and the grid's margin was applied
+            // *above* the measurement, so it is already out of `viewport.width` — and its height follows from that width — the same `cellHeight` derivation a page lays its
             // grid out with, applied to the same width, so the proxy and the cell it lifted cannot come out different
             // sizes. Reading the geometry map here instead — as this did — makes the proxy depend on a page having
             // reported *up* through `onGeometry` before it can draw anything, so a drag whose first frame beats that

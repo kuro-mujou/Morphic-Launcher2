@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -152,6 +153,15 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     val contentWidthDp = window.widthDp
     val contentHeightDp = window.heightDp
 
+    // **Padding is width the grid does not get, so it is subtracted before anything is fitted.** Each zone has its
+    // own — a user may inset the pager without touching the dock — and each is taken off *twice*, once per edge. Doing
+    // it here rather than at the draw call is the whole point: `fitGridConfig` decides how many columns the icons can
+    // occupy, and fitting against the full width would size cells the grid then has no room to draw.
+    val mainPadding = state.paddingFor(GridSlot.HOME_MAIN).dp
+    val dockPadding = state.paddingFor(GridSlot.HOME_DOCK).dp
+    val mainWidthDp = (contentWidthDp - mainPadding.value * 2).coerceAtLeast(1f)
+    val dockWidthDp = (contentWidthDp - dockPadding.value * 2).coerceAtLeast(1f)
+
     // The dock is the one grid with a height of its own: the user sets how tall the strip is *and* how many rows and
     // columns divide it, and `fitGridConfig` clamps those counts to what the height and the icon size actually allow.
     // This screen supplies the two inputs only it can know — the measured width, and the type scale behind a cell's
@@ -166,7 +176,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         dockBlueprintConfig
     } else {
         DockGrid.fitGridConfig(
-            area = GridArea(widthDp = contentWidthDp, heightDp = dockSizing.heightDp.toFloat()),
+            area = GridArea(widthDp = dockWidthDp, heightDp = dockSizing.heightDp.toFloat()),
             cols = dockSizing.cols,
             rows = dockSizing.rows,
             metrics = dockMetrics,
@@ -194,7 +204,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     } else {
         HomePagerGrid.fitGridConfig(
             area = GridArea(
-                widthDp = contentWidthDp,
+                widthDp = mainWidthDp,
                 heightDp = (contentHeightDp - dockHeight.value).coerceAtLeast(1f),
             ),
             cols = storedMain.visualCols,
@@ -396,13 +406,19 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     // the window was: a placeholder for a wallpaper that could not appear yet. What is drawn over it stays legible by
     // its own means — cell labels carry a shadow, and the folder's scrim is its own.
     Box(modifier.fillMaxSize()) {
-        // Dock at its configured height, pager taking whatever is left. **No decorative padding on either** —
-        // home's horizontal padding is a settings concern of its own (S4f), so adding any here would only be a
-        // number to unpick later; the grids run edge to edge until that setting exists.
+        // Dock at its configured height, pager taking whatever is left, each inset by **its own** horizontal padding
+        // (S4g) — the setting the earlier note here was waiting for, so the grids no longer run edge to edge unless
+        // the user asks them to. The default is still 0, so an unconfigured launcher looks exactly as it did.
         //
-        // The insets that *are* applied are the system bars and cutout, so the dock sits above the navigation bar
-        // rather than under it. A system constraint, not styling — and the same `safeInsets` the dock's width was
-        // fitted against.
+        // **The padding goes on each grid's own modifier, not on this Column**, and that is what keeps drag and drop
+        // correct for free: both drag surfaces publish their geometry from an `onGloballyPositioned` placed *after*
+        // the caller's modifier (`CoordinateDragGrid`'s KDoc says so in as many words), so the bounds they report are
+        // already the padded ones. Padding the Column instead would inset both zones by one shared number *and* still
+        // work — but the two would stop being independently configurable, which is the setting's whole point.
+        //
+        // The insets that *are* applied here are the system bars and cutout, so the dock sits above the navigation bar
+        // rather than under it. A system constraint, not styling — and the same `safeInsets` the widths were fitted
+        // against.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -418,7 +434,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 dragItem = { it.gridItem },
                 placement = { it.placement },
                 onDrop = { handleDrop() },
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = mainPadding),
                 onGeometryChange = { geometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->
@@ -437,7 +453,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 dragItem = { it.gridItem },
                 placement = { it.placement },
                 onDrop = { handleDrop() },
-                modifier = Modifier.fillMaxWidth().height(dockHeight),
+                // Padding inside the height, not outside it: the dock's extent is what the user set, and its rows are
+                // that height divided — insetting vertically would silently shorten the strip they configured.
+                modifier = Modifier.fillMaxWidth().height(dockHeight).padding(horizontal = dockPadding),
                 onGeometryChange = { dockGeometry = it },
                 onOpen = openItem,
             ) { item, cellModifier, itemGestures ->

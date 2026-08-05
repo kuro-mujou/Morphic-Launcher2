@@ -19,6 +19,7 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
+import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
@@ -84,7 +85,14 @@ fun AppsScreen(
     // pager's arrangement is kept in step with what is installed whatever the user is looking at, which is the
     // invariant that makes switching layout reload nothing.
     val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
-    val pagerArea = usableWindowArea(safeInsets)
+    // **The pager's margin comes off before its capacity is fitted**, which is the one place on this surface where
+    // padding is more than a visual inset: `rows × cols` is what the *store* is paginated against, so a capacity
+    // computed against the full width would put entries on pages the drawn grid has no room for. Every other layout
+    // clamps where it draws; this one reports.
+    val pagerPadding = state.paddingFor(GridSlot.APPS_PAGER).dp
+    val pagerArea = usableWindowArea(safeInsets).let {
+        GridArea(widthDp = (it.widthDp - pagerPadding.value * 2).coerceAtLeast(1f), heightDp = it.heightDp)
+    }
     // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —
     // but the *report* below is gated on the store having answered. Paginating against a placeholder would write pages
     // nobody chose and then rewrite them, which is the trap home's settle effects are guarded against too.
@@ -115,12 +123,14 @@ fun AppsScreen(
                 onLaunch = viewModel::launch,
                 metrics = state.metricsFor(GridSlot.APPS_LIST),
                 rowHeight = state.rowHeight,
+                horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
             )
             AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
                 apps = state.apps,
                 onLaunch = viewModel::launch,
                 metrics = state.metricsFor(GridSlot.APPS_SCROLL),
                 cols = state.colsFor(GridSlot.APPS_SCROLL, device),
+                horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
             )
             AppsLayout.PAGER -> AppsPager(
                 pages = state.pagerPages,
@@ -138,6 +148,7 @@ fun AppsScreen(
                 // The same grid the ViewModel paginates the store against — the fitted one computed above, passed down
                 // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
                 config = pagerFit,
+                horizontalPadding = pagerPadding,
             )
             AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
                 categories = state.categories,
@@ -145,6 +156,7 @@ fun AppsScreen(
                 onMove = viewModel::moveCategoryItem,
                 metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
                 cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
+                horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
             )
             // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
             // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
@@ -160,6 +172,7 @@ fun AppsScreen(
                 // previews are derived from its own square instead, and pass their own.
                 metrics = state.metricsFor(GridSlot.FOLDER),
                 cardColumns = state.colsFor(GridSlot.APPS_CARD, device),
+                horizontalPadding = state.paddingFor(GridSlot.APPS_CARD).dp,
             )
         }
     }

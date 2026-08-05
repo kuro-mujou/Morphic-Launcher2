@@ -9,14 +9,17 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -39,25 +42,38 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.model.GridEditorEdge
 import kotlin.math.ceil
 
 /** Provisional spacing — placeholders, as everywhere else in this module. */
-private val ButtonSize = 28.dp
+private val ButtonSize = 24.dp
 private val ButtonGap = 4.dp
+private val ButtonCorner = 6.dp
 private val PreviewPad = 6.dp
 private val CellGap = 3.dp
 private val CellCorner = 3.dp
+
+/**
+ * The shapes the mockup will take, whatever the real screen is.
+ *
+ * A ratio outside these is a window we do not draw well — a freeform split, a very wide foldable — and a preview
+ * stretched to match would be less recognisable as a screen than a clamped one. L1 clamps the same pair.
+ */
+private const val MIN_PREVIEW_RATIO = 0.35f
+private const val MAX_PREVIEW_RATIO = 2.5f
 
 /** How much of the preview's *other* zone shows, and on which side of the edited grid it sits. */
 internal data class EditorCompanion(val fraction: Float, val atBottom: Boolean)
 
 /** An edit the preview has been asked to animate. The nonce re-triggers it when the same edge is pressed twice. */
-private data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val nonce: Int)
+internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val nonce: Int)
 
 /**
- * **The grid editor: a screen-shaped preview with a − / + pair on each editable edge.**
+ * **The grid editor: a screen-shaped mockup ringed by − and + buttons, one per edge per action.**
  *
  * One component for every grid, where L1 had `HomeGridEditor` and `DockGridEditor` — two ~220-line composables that
  * were the same code apart from which half of the preview held the lattice. Here that is [companion]: the part of the
@@ -68,13 +84,24 @@ private data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val n
  * items end up — removing the left column shifts everything left, removing the right one drops what was in it.
  * `GridReflow.edit` is the op underneath, and this is its control surface.
  *
- * **The buttons sit on the edge they affect, which is a departure from L1.** L1 put every *remove* along the top and
- * left and every *add* along the right and bottom, and told them apart by colour — red for remove, green for add.
- * That cannot survive this codebase's monochrome palette (greyscale chrome, with red reserved for `error`), and
- * without the colour the mapping is unreadable: nothing about a button above the grid says it removes a *column*. A
- * pair centred on each edge needs no legend — the buttons are *at* the thing they change, and the glyph says which
- * way. The same reason the flash below is greyscale rather than red/green.
+ * **The arrangement is L1's: removes along the top and left, adds along the right and bottom**, each pair spread to
+ * the preview's own extent so a button sits at the corner it acts on. The top-left − takes the left column and is
+ * directly above it; the right rail's lower + adds a row at the bottom and is beside it.
  *
+ * **An earlier cut here centred a −/+ pair on each edge instead**, on the grounds that L1 tells add from remove by
+ * colour (red / green) and this codebase's palette cannot — greyscale chrome, red reserved for `error`. The premise
+ * was right and the conclusion was wrong: in L1 the *position already encodes the action*, top/left removing and
+ * bottom/right adding, so the colour was reinforcement rather than the signal. Taking the arrangement and dropping
+ * the colour keeps everything the palette forbids and nothing it doesn't, and the glyphs carry what is left. The
+ * flash in the preview stays greyscale for the same reason.
+ *
+ * **The mockup is a fixed size per posture, not a fraction of the pane** — see the four numbers in the body, which
+ * are L1's. A settings pane is half a tablet and the whole of a phone, so a fraction gave a different preview in
+ * each; worse, `aspectRatio` derives *height* from width, so at a tall phone ratio a wide pane bought a preview
+ * taller than the section holding it.
+ *
+ * @param preview the layout's own mockup, or null for the plain lattice (plus [companion] when there is one). Home
+ *   and the dock pass null; each APPS layout passes its own, so the editor shows the chrome that layout really has.
  * @param cols how many columns to draw — **the count the surface will actually draw**, not the one in storage. Every
  *   caller fits its stored size first (`CellFit`), because a count chosen at one icon size outlives it: enlarge the
  *   icons and fewer columns fit, and an editor claiming the stored number would contradict the surface *and* count from
@@ -86,16 +113,25 @@ private data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val n
  * @param rowBounds null when the row axis is not the user's to set, which hides the top and bottom pairs entirely.
  *   Two grids reach that for opposite reasons: a scrolling one has no rows to bound, and the dock's are divided out
  *   of its height.
- * @param aspectRatio the screen's width ÷ height, so the preview is the shape of the device rather than a square.
+ * @param aspectRatio **the whole screen's** width ÷ height, so the preview is the shape of the device rather than a
+ *   square — and deliberately *not* the width the grid is left with after [horizontalInsetFraction]. Narrowing this
+ *   instead of insetting inside it is the bug that made the preview grow taller and taller as the margin widened: the
+ *   box is `fillMaxWidth().aspectRatio(ratio)`, so a smaller ratio buys height.
+ * @param horizontalInsetFraction how much of the preview's width the grid's own margin takes, per side, as a fraction
+ *   of the whole. Drawn as blank space *within* the screen shape, which is what a margin actually looks like. Capped
+ *   below at leaving something to draw, since the slider's ceiling is independent of this device's width. L1 does the
+ *   same, down to computing the fraction from the padding and the measured area.
  */
 @Composable
 internal fun GridEditor(
     cols: Int,
     rows: Int,
-    colBounds: IntRange,
+    colBounds: IntRange?,
     rowBounds: IntRange?,
     aspectRatio: Float,
     onEdit: (GridEditorEdge, Boolean) -> Unit,
+    horizontalInsetFraction: Float = 0f,
+    preview: (@Composable (PreviewEdit?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     companion: EditorCompanion? = null,
 ) {
@@ -108,65 +144,133 @@ internal fun GridEditor(
         onEdit(edge, add)
     }
 
+    // **A fixed mockup size per posture, as L1 sizes its own** — not a fraction of the pane. A settings pane is half
+    // a tablet and all of a phone, so `fillMaxWidth(f).aspectRatio(r)` made the preview a different size in each and,
+    // at a tall phone ratio, very tall indeed: height is width ÷ ratio, so 62% of a wide pane bought a preview taller
+    // than the section it sits in. A mockup of a screen wants a *legible* size, which is a physical decision, and the
+    // width then follows from the shape. L1's four numbers, unchanged.
+    val previewHeight = when (currentDeviceConfiguration()) {
+        DeviceConfiguration.PHONE_PORTRAIT -> 240.dp
+        DeviceConfiguration.PHONE_LANDSCAPE -> 140.dp
+        DeviceConfiguration.TABLET_PORTRAIT -> 360.dp
+        DeviceConfiguration.TABLET_LANDSCAPE -> 280.dp
+    }
+    val previewWidth = previewHeight * aspectRatio.coerceIn(MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
+
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         // Both counts wherever there are two — a derived row count is still a fact about the grid, and hiding the
         // dock's made it look like an editor missing half its buttons rather than one whose rows follow its height.
         // A **scrolling** grid is the one case with genuinely nothing to say there: its rows are however many its
         // content reaches, so the number drawn is what fits rather than what was chosen, and claiming it as a count
         // would be the one thing a caption must not do.
-        Text(
-            text = if (rowBounds == null) "$cols columns" else "$cols columns × $rows rows",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.contentMuted,
-            modifier = Modifier.padding(bottom = ButtonGap * 2),
-        )
-
-        if (rowBounds != null) {
-            EdgePair(
-                canRemove = rows > rowBounds.first,
-                canAdd = rows < rowBounds.last,
-                onRemove = { act(GridEditorEdge.TOP, false) },
-                onAdd = { act(GridEditorEdge.TOP, true) },
+        // Omitted entirely when neither axis is editable — a list is one lane, so "1 column" would be a count
+        // masquerading as a choice. The caller states what it has instead (the list says its row height).
+        if (colBounds != null || rowBounds != null) {
+            Text(
+                text = when {
+                    rowBounds == null -> "$cols columns"
+                    colBounds == null -> "$rows rows"
+                    else -> "$cols columns × $rows rows"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.contentMuted,
+                modifier = Modifier.padding(bottom = ButtonGap * 2),
             )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            EdgePair(
-                canRemove = cols > colBounds.first,
-                canAdd = cols < colBounds.last,
-                onRemove = { act(GridEditorEdge.LEFT, false) },
-                onAdd = { act(GridEditorEdge.LEFT, true) },
-                vertical = true,
-            )
+        // **Three arrangements, and L1 has all three.**
+        //
+        // *Both axes* — the plus-shape: removes along the top and left, adds along the right and bottom, each pair
+        // spread to the preview's extent so a button sits at the corner it acts on. Pressing the top-left − takes the
+        // left column and is directly above it.
+        //
+        // *Columns only* — the top and bottom rows go, and each side rail carries **− above + for its own edge**
+        // instead. That is L1's `showRowControls = false` branch, and it is better than hiding the rails and leaving
+        // the two column rows: with no rows to edit, the plus-shape's top and bottom rows are the only controls left
+        // and they sit furthest from the columns they change.
+        //
+        // *Neither* — the framed preview alone. A list has one lane and a declared row height, so there is no count to
+        // press; what it needs is somewhere to *see* the height its slider sets.
+        //
+        // An earlier cut centred a −/+ pair on each edge, reasoning that a greyscale palette cannot tell add from
+        // remove by colour as L1's red/green does. The premise was right, the conclusion wrong: in L1 the *position*
+        // encodes the action, so the colour was reinforcement. The arrangement is kept and the colour is not.
+        val framedPreview: @Composable () -> Unit = {
             Box(
                 modifier = Modifier
-                    .padding(horizontal = ButtonGap)
-                    .fillMaxWidth(PREVIEW_WIDTH_FRACTION)
-                    .aspectRatio(aspectRatio)
+                    .padding(ButtonGap * 2)
+                    .width(previewWidth)
+                    .height(previewHeight)
                     .clip(RoundedCornerShape(12.dp))
                     .background(colors.surface)
                     .padding(PreviewPad),
             ) {
-                ScreenPreview(cols = cols, rows = rows, edit = edit, companion = companion)
+                if (preview != null) {
+                    preview(edit)
+                } else {
+                    ScreenPreview(
+                        cols = cols,
+                        rows = rows,
+                        edit = edit,
+                        companion = companion,
+                        insetFraction = horizontalInsetFraction,
+                    )
+                }
             }
-            EdgePair(
-                canRemove = cols > colBounds.first,
-                canAdd = cols < colBounds.last,
-                onRemove = { act(GridEditorEdge.RIGHT, false) },
-                onAdd = { act(GridEditorEdge.RIGHT, true) },
-                vertical = true,
-            )
         }
 
-        if (rowBounds != null) {
-            EdgePair(
-                canRemove = rows > rowBounds.first,
-                canAdd = rows < rowBounds.last,
-                onRemove = { act(GridEditorEdge.BOTTOM, false) },
-                onAdd = { act(GridEditorEdge.BOTTOM, true) },
-            )
+        if (colBounds != null && rowBounds != null) {
+            Row(modifier = Modifier.width(previewWidth), horizontalArrangement = Arrangement.SpaceBetween) {
+                EdgeButton("−", cols > colBounds.first) { act(GridEditorEdge.LEFT, false) }
+                EdgeButton("−", cols > colBounds.first) { act(GridEditorEdge.RIGHT, false) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EdgeRail(previewHeight) {
+                    EdgeButton("−", rows > rowBounds.first) { act(GridEditorEdge.TOP, false) }
+                    EdgeButton("−", rows > rowBounds.first) { act(GridEditorEdge.BOTTOM, false) }
+                }
+                framedPreview()
+                EdgeRail(previewHeight) {
+                    EdgeButton("+", rows < rowBounds.last) { act(GridEditorEdge.TOP, true) }
+                    EdgeButton("+", rows < rowBounds.last) { act(GridEditorEdge.BOTTOM, true) }
+                }
+            }
+            Row(modifier = Modifier.width(previewWidth), horizontalArrangement = Arrangement.SpaceBetween) {
+                EdgeButton("+", cols < colBounds.last) { act(GridEditorEdge.LEFT, true) }
+                EdgeButton("+", cols < colBounds.last) { act(GridEditorEdge.RIGHT, true) }
+            }
+        } else if (colBounds != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EdgeRail(previewHeight) {
+                    EdgeButton("−", cols > colBounds.first) { act(GridEditorEdge.LEFT, false) }
+                    EdgeButton("+", cols < colBounds.last) { act(GridEditorEdge.LEFT, true) }
+                }
+                framedPreview()
+                EdgeRail(previewHeight) {
+                    EdgeButton("−", cols > colBounds.first) { act(GridEditorEdge.RIGHT, false) }
+                    EdgeButton("+", cols < colBounds.last) { act(GridEditorEdge.RIGHT, true) }
+                }
+            }
+        } else {
+            framedPreview()
         }
     }
+}
+
+/**
+ * One vertical run of two edge buttons, spread to the preview's height so each lands at the row it addresses.
+ *
+ * What each rail *carries* depends on which axes are editable — two removes when the rows are editable, or a − and a +
+ * for one column edge when they are not. The rail itself only spreads them.
+ */
+@Composable
+private fun EdgeRail(height: Dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier.height(height),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        content = content,
+    )
 }
 
 /**
@@ -175,11 +279,23 @@ internal fun GridEditor(
  *
  * The split is by **measured proportion**, not decoration: seeing that the dock eats a fifth of the screen is most of
  * what makes a grid editor legible.
+ *
+ * **[insetFraction] reaches the lattice and never the companion**, because a margin is *this grid's* setting: home's
+ * pager and its dock each store their own, so insetting both from one number would show the user a dock narrowing
+ * because they moved the pager's slider. L1 draws it the same way — `insetFraction` goes to its `GridPreview` and its
+ * `NonGridPreview` takes none. An earlier cut here wrapped the whole mockup, which shrank the screen rather than the
+ * grid in it.
  */
 @Composable
-private fun ScreenPreview(cols: Int, rows: Int, edit: PreviewEdit?, companion: EditorCompanion?) {
+private fun ScreenPreview(
+    cols: Int,
+    rows: Int,
+    edit: PreviewEdit?,
+    companion: EditorCompanion?,
+    insetFraction: Float,
+) {
     if (companion == null) {
-        GridPreview(cols, rows, edit, Modifier.fillMaxSize())
+        GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxSize())
         return
     }
     val gridWeight = (1f - companion.fraction).coerceIn(MIN_ZONE_WEIGHT, 1f)
@@ -189,7 +305,7 @@ private fun ScreenPreview(cols: Int, rows: Int, edit: PreviewEdit?, companion: E
             CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
             Spacer(Modifier.height(PreviewPad))
         }
-        GridPreview(cols, rows, edit, Modifier.fillMaxWidth().weight(gridWeight))
+        GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxWidth().weight(gridWeight))
         if (companion.atBottom) {
             Spacer(Modifier.height(PreviewPad))
             CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
@@ -217,7 +333,7 @@ private fun CompanionZone(modifier: Modifier) {
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, modifier: Modifier) {
+internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction: Float, modifier: Modifier) {
     val colors = LocalMorphicColors.current
     val currentEdit by rememberUpdatedState(edit)
     var shownCols by remember { mutableIntStateOf(cols) }
@@ -273,73 +389,44 @@ private fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, modifier: Modi
     val mirrorRows = edit?.edge == GridEditorEdge.TOP
     val mirrorCols = edit?.edge == GridEditorEdge.LEFT
 
-    Canvas(modifier.clipToBounds()) {
-        val cw = animCols.coerceAtLeast(1f)
-        val ch = animRows.coerceAtLeast(1f)
-        val gap = CellGap.toPx()
-        val cellW = ((size.width - gap * (cw - 1f)) / cw).coerceAtLeast(1f)
-        val cellH = ((size.height - gap * (ch - 1f)) / ch).coerceAtLeast(1f)
-        val corner = CornerRadius(CellCorner.toPx())
-        for (r in 0 until ceil(ch).toInt()) {
-            for (c in 0 until ceil(cw).toInt()) {
-                val flashed = flashValue > 0f &&
-                    (if (flashRow) r == flashIndex else c == flashIndex)
-                val color = when {
-                    !flashed -> cellColor
-                    flashAdd -> lerp(cellColor, flashColor, flashValue)
-                    else -> lerp(Color.Transparent, cellColor, flashValue)
+    // The margin, taken off the lattice itself. A fraction rather than dp because the mockup is already the screen's
+    // shape, so a fraction of its width is the same fraction of the real one — no dp conversion, and it stays right
+    // when the posture changes the preview's size.
+    val inset = insetFraction.coerceIn(0f, MAX_PREVIEW_INSET)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxWidth(1f - inset * 2).fillMaxHeight().clipToBounds()) {
+            val cw = animCols.coerceAtLeast(1f)
+            val ch = animRows.coerceAtLeast(1f)
+            val gap = CellGap.toPx()
+            val cellW = ((size.width - gap * (cw - 1f)) / cw).coerceAtLeast(1f)
+            val cellH = ((size.height - gap * (ch - 1f)) / ch).coerceAtLeast(1f)
+            val corner = CornerRadius(CellCorner.toPx())
+            for (r in 0 until ceil(ch).toInt()) {
+                for (c in 0 until ceil(cw).toInt()) {
+                    val flashed = flashValue > 0f &&
+                        (if (flashRow) r == flashIndex else c == flashIndex)
+                    val color = when {
+                        !flashed -> cellColor
+                        flashAdd -> lerp(cellColor, flashColor, flashValue)
+                        else -> lerp(Color.Transparent, cellColor, flashValue)
+                    }
+                    val x = c * (cellW + gap)
+                    val y = r * (cellH + gap)
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(
+                            if (mirrorCols) size.width - x - cellW else x,
+                            if (mirrorRows) size.height - y - cellH else y,
+                        ),
+                        size = Size(cellW, cellH),
+                        cornerRadius = corner,
+                    )
                 }
-                val x = c * (cellW + gap)
-                val y = r * (cellH + gap)
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(
-                        if (mirrorCols) size.width - x - cellW else x,
-                        if (mirrorRows) size.height - y - cellH else y,
-                    ),
-                    size = Size(cellW, cellH),
-                    cornerRadius = corner,
-                )
             }
-        }
+            }
     }
 }
 
-/**
- * A − / + pair for one edge, laid out along it ([vertical] for the left and right edges).
- *
- * Disabled rather than clamping at the ends, so the grid's limits are visible instead of being discovered by
- * pressing — the same rule [SettingsStepperRow] follows.
- */
-@Composable
-private fun EdgePair(
-    canRemove: Boolean,
-    canAdd: Boolean,
-    onRemove: () -> Unit,
-    onAdd: () -> Unit,
-    vertical: Boolean = false,
-) {
-    val remove: @Composable () -> Unit = { EdgeButton("−", canRemove, onRemove) }
-    val add: @Composable () -> Unit = { EdgeButton("+", canAdd, onAdd) }
-    if (vertical) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(ButtonGap),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            remove()
-            add()
-        }
-    } else {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(ButtonGap),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(vertical = ButtonGap),
-        ) {
-            remove()
-            add()
-        }
-    }
-}
 
 /**
  * One square edge button.
@@ -352,10 +439,14 @@ private fun EdgePair(
 private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Box(
+        // The inset is L1's, and it is load-bearing now that the buttons sit at the preview's corners rather than
+        // centred on its edges: without it the outermost pair touches the very ends of the row and the group reads as
+        // wider than the screen it is describing.
         modifier = Modifier
+            .padding(ButtonGap)
             .size(ButtonSize)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (enabled) colors.content else colors.content.copy(alpha = 0.4f))
+            .clip(RoundedCornerShape(ButtonCorner))
+            .background(if (enabled) colors.content else colors.content.copy(alpha = 0.25f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -366,14 +457,20 @@ private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = glyph,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.labelLarge,
             color = colors.surface,
         )
     }
 }
 
-/** How much of the row's width the preview takes, leaving the rest for the edge buttons either side. */
-private const val PREVIEW_WIDTH_FRACTION = 0.62f
+/**
+ * The most of the preview's width, per side, the margin may be drawn as.
+ *
+ * A guard rather than a rule about padding: the slider's ceiling is in dp and this device's width is not, so a wide
+ * margin on a narrow screen could otherwise leave the lattice nothing to draw in and the preview would read as broken
+ * rather than as tight. L1 clamps the same fraction at the same kind of value.
+ */
+private const val MAX_PREVIEW_INSET = 0.4f
 
 /** Neither zone of a split preview may collapse to nothing, however extreme the real proportion is. */
 private const val MIN_ZONE_WEIGHT = 0.08f

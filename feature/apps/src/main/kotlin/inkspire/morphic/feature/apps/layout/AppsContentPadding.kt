@@ -1,0 +1,47 @@
+package inkspire.morphic.feature.apps.layout
+
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
+
+/**
+ * The insets a scrolling APPS layout gives its content: the system bars and cutout, plus the grid's own
+ * [horizontal] padding on each side.
+ *
+ * **One helper because the two are added in the same place and must be**, not because they mean the same thing. The
+ * bar inset is a system constraint — content may pass *under* the bars but must not come to rest beneath them — and
+ * the padding is the user's margin. Both end up as **content** padding rather than padding on the list, which is what
+ * keeps the scrolling content running under the bars instead of stopping short of them, and what keeps a fling
+ * gesture usable at the very edge of the screen.
+ *
+ * **The width arithmetic depends on this being one value.** A grid divides "whatever is left after the content
+ * padding" into columns, so a layout that measured against the bar inset alone and then added a margin would size its
+ * cells for a width it does not have. Callers that need that number take it from the returned value's own
+ * start/end — see [horizontalExtent] — rather than re-deriving it.
+ */
+@Composable
+internal fun appsContentPadding(horizontal: Dp): PaddingValues {
+    val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
+    val direction = LocalLayoutDirection.current
+    return PaddingValues(
+        start = bars.calculateStartPadding(direction) + horizontal,
+        top = bars.calculateTopPadding(),
+        end = bars.calculateEndPadding(direction) + horizontal,
+        bottom = bars.calculateBottomPadding(),
+    )
+}
+
+/** How much width these insets consume in total — what a grid must subtract before dividing by its columns. */
+@Composable
+internal fun PaddingValues.horizontalExtent(): Dp {
+    val direction = LocalLayoutDirection.current
+    return calculateStartPadding(direction) + calculateEndPadding(direction)
+}

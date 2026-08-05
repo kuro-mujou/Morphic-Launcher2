@@ -30,11 +30,14 @@ import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
+import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.icons.IconSizingControls
+import kotlin.math.roundToInt
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 
@@ -109,7 +112,8 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
         val rows = state.rows
         val icon = state.icon
         val dockHeightDp = state.dockHeightDp
-        if (cols != null && rows != null && icon != null && dockHeightDp != null) {
+        val paddingDp = state.paddingDp
+        if (cols != null && rows != null && icon != null && dockHeightDp != null && paddingDp != null) {
             // **What the preview draws while a slider is held.** Keyed on the resolved sizing, so a commit clears it and
             // the preview falls back to what was stored — the same shape `SettingsCommitSlider` uses for its own label,
             // and the same reason: the write is asynchronous, so dropping the local value on release would flash the old
@@ -121,8 +125,11 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
 
             // Home gets the window minus the dock, which is why the dock's height belongs in this screen's state
             // even though nothing here edits it: a taller dock genuinely means fewer home rows fit.
+            // Narrowed by the margin on the other axis, for the same reason the dock's height narrows this one: both
+            // are space the grid does not get, and a range offered against space the surface will not give it is a
+            // promise the editor cannot keep.
             val homeArea = GridArea(
-                widthDp = window.widthDp,
+                widthDp = (window.widthDp - paddingDp * 2).coerceAtLeast(1f),
                 heightDp = (window.heightDp - dockHeightDp).coerceAtLeast(1f),
             )
             val range = HomePagerGrid.editableRangeIn(homeArea, metrics)
@@ -137,13 +144,31 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             // writes, which is the same asymmetry the dock applies to its own columns.
             val fitted = HomePagerGrid.fitGridConfig(homeArea, cols = cols, rows = rows, metrics = metrics)
 
+            // Previewed per frame, written on release — the same pair the icon sliders use, so the editor's inset
+            // tracks the drag instead of jumping on release.
+            var previewPadding by remember(paddingDp) { mutableStateOf<Int?>(null) }
+            val shownPadding = previewPadding ?: paddingDp
+            SettingsCommitSlider(
+                title = "Side margin",
+                subtitle = "Blank space at the main area's left and right edges.",
+                value = paddingDp.toFloat(),
+                valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
+                valueLabel = { "${it.roundToInt()} dp" },
+                onPreview = { previewPadding = it.roundToInt() },
+                onCommit = { viewModel.setPadding(it.roundToInt()) },
+            )
+
             if (range != null) {
                 GridEditor(
                     cols = fitted.visualCols,
                     rows = fitted.visualRows,
                     colBounds = range.cols,
                     rowBounds = range.rows,
+                    // The **whole** window's ratio: the preview is the device's shape, and the margin is an inset
+                    // within it rather than a reshaping of it. `homeArea` above is narrowed for the *bounds*, which
+                    // is a different question — how many columns fit — and passing it here stretched the box.
                     aspectRatio = window.widthDp / window.heightDp.coerceAtLeast(1f),
+                    horizontalInsetFraction = shownPadding / window.widthDp,
                     // Counting from the drawn grid rather than the stored one, so − and + mean what the preview shows.
                     onEdit = { edge, add -> viewModel.edit(edge, add, fitted.visualCols, fitted.visualRows) },
                     // The dock, at its real share of the screen — so shrinking home's rows and growing the dock

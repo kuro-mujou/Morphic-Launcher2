@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -66,21 +67,22 @@ fun AppsVerticalGrid(
     onLaunch: (ComponentKey) -> Unit,
     metrics: IconMetrics,
     cols: Int,
+    horizontalPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
-    // Content padding, not layout padding, so rows scroll under the bars rather than stopping short of them —
-    // the same system-constraint-only inset the list applies.
-    val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
+    // Content padding, not layout padding, so rows scroll under the bars rather than stopping short of them — the
+    // same inset the list applies, and now carrying the grid's own margin alongside the system's.
+    val contentPadding = appsContentPadding(horizontalPadding)
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         // Measured here rather than inside the item, because a cell's height comes from its *width* and only the
         // grid knows that: `GridCells.Fixed` divides whatever is left after the content padding, so the same
         // subtraction has to happen here to name one column's width.
         BoxWithConstraints(modifier.fillMaxSize()) {
-            val direction = LocalLayoutDirection.current
-            val usableWidth = maxWidth -
-                barInsets.calculateStartPadding(direction) - barInsets.calculateEndPadding(direction)
+            // Subtracting the *whole* content padding, margin included: `GridCells.Fixed` divides what is left after
+            // it, so a column named against any other width would be a column the grid never draws.
+            val usableWidth = maxWidth - contentPadding.horizontalExtent()
             // **The stored count, clamped to what this width can actually draw** — the scrolling twin of the
             // `fitGridConfig` read home's pager does, and the only piece of grid resolution that belongs here rather
             // than in `AppsScreen`: it needs the measured width, which only this layout has. Without it, raising the
@@ -97,7 +99,7 @@ fun AppsVerticalGrid(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(drawnCols),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = barInsets,
+                contentPadding = contentPadding,
             ) {
                 items(items = apps, key = { it.componentKey.flatten() }) { app ->
                     // Only the height is set: the width is the column's, and `AppCell` sizes the icon from the cell

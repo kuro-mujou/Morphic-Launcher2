@@ -49,6 +49,7 @@ data class DockState(
     val rows: Int? = null,
     val icon: IconSizing? = null,
     val homeIcon: IconSizing? = null,
+    val paddingDp: Int? = null,
 )
 
 /**
@@ -86,8 +87,9 @@ class DockViewModel(
                     settingsRepository.gridConfig(SLOT, configuration),
                     settingsRepository.iconSizing(SLOT, configuration),
                     settingsRepository.iconSizing(GridSlot.HOME_MAIN, configuration),
-                ) { heightDp, grid, icon, homeIcon ->
-                    DockState(heightDp, grid.visualCols, grid.visualRows, icon, homeIcon)
+                    settingsRepository.horizontalPadding(SLOT, configuration),
+                ) { heightDp, grid, icon, homeIcon, padding ->
+                    DockState(heightDp, grid.visualCols, grid.visualRows, icon, homeIcon, padding)
                 }
             }
         }
@@ -105,6 +107,18 @@ class DockViewModel(
         slot = { SLOT },
         device = { device.value },
     )
+
+    /**
+     * Sets the dock's horizontal margin, in dp.
+     *
+     * **One write, where [setHeight] is two.** A margin takes no cell away — it makes every cell narrower — so the
+     * columns that no longer fit are re-reported on read rather than removed, and nothing is displaced for
+     * `GridReflow` to re-home. That is the same distinction the repository's own KDoc draws between this and a resize.
+     */
+    fun setPadding(dp: Int) {
+        val configuration = device.value ?: return
+        viewModelScope.launch { settingsRepository.setHorizontalPadding(SLOT, configuration, dp) }
+    }
 
     /** Reports the device configuration being edited — the UI's one job, as on every other surface. */
     fun setDevice(configuration: DeviceConfiguration) {

@@ -7,9 +7,12 @@ import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.SearchPlacement
+import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
@@ -72,6 +75,8 @@ data class AppsSectionState(
     val size: GridDefault? = null,
     val icon: IconSizing? = null,
     val rowHeightDp: Int? = null,
+    val paddingDp: Int? = null,
+    val chrome: AppsChrome = AppsChrome.Default,
 )
 
 /**
@@ -112,7 +117,11 @@ class AppsSectionViewModel(
                         sizeOf(current.slot, configuration),
                         settingsRepository.iconSizing(current.slot, configuration),
                         settingsRepository.listRowHeight(configuration),
-                    ) { size, icon, rowHeight -> AppsSectionState(current, size, icon, rowHeight) }
+                        settingsRepository.horizontalPadding(current.slot, configuration),
+                        settingsRepository.appsChrome,
+                    ) { size, icon, rowHeight, padding, chrome ->
+                        AppsSectionState(current, size, icon, rowHeight, padding, chrome)
+                    }
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsSectionState())
@@ -201,6 +210,37 @@ class AppsSectionViewModel(
     }
 
     /**
+     * Sets where the search field sits.
+     *
+     * **Not per layout, unlike everything else in this section** — the chrome slice is one value for the surface. Which
+     * *options* are offered does depend on the layout (a standalone layout pins to an edge; the category pager embeds
+     * in its header), but that is `SearchPlacement`'s shape rather than five separate settings, and a user who wants
+     * search at the bottom means it everywhere.
+     */
+    fun setSearch(placement: SearchPlacement) {
+        viewModelScope.launch { settingsRepository.setSearchPlacement(placement) }
+    }
+
+    /** Sets which edge the category pager's tab bar sits on. */
+    fun setTabBarEdge(edge: VerticalEdge) {
+        viewModelScope.launch { settingsRepository.setTabBarEdge(edge) }
+    }
+
+    /**
+     * Sets the **selected layout's** horizontal margin, in dp.
+     *
+     * Per layout rather than per surface, like everything else in this section: the chip decides the slot, and the
+     * five arrangements are configured independently because they are five different shapes on one surface. One write
+     * always — even the pager, whose *resize* is one write here where home's is two, needs no companion, since a
+     * margin displaces nothing.
+     */
+    fun setPadding(dp: Int) {
+        val configuration = device.value ?: return
+        val slot = layout.value.slot
+        viewModelScope.launch { settingsRepository.setHorizontalPadding(slot, configuration, dp) }
+    }
+
+    /**
      * Clears the selected layout's size override — and, for the list, its row height too.
      *
      * Both are "the size of this layout" from the user's side, so one button clears both rather than making them
@@ -212,6 +252,9 @@ class AppsSectionViewModel(
         viewModelScope.launch {
             if (slot.blueprint.editRange != null) settingsRepository.updateGrid(slot, configuration) { GridOverride() }
             if (slot == GridSlot.APPS_LIST) settingsRepository.setListRowHeight(configuration, null)
+            // The margin is part of "the size of this layout" from the user's side, so Reset clears it with the rest
+            // rather than leaving one number behind that no button appears to own.
+            settingsRepository.setHorizontalPadding(slot, configuration, null)
         }
     }
 

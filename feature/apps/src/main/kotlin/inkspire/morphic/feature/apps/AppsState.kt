@@ -86,7 +86,17 @@ data class AppsState(
     val gridCols: Map<GridSlot, Int> = emptyMap(),
     val pagerConfig: GridConfig? = null,
     val listRowHeightDp: Int? = null,
+    val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
 )
+
+/**
+ * The blank margin at [slot]'s left and right edges, in dp — zero until the store answers.
+ *
+ * Zero is also every grid's blueprint default, so the frame before the first emission looks like an unconfigured
+ * launcher rather than one whose grids jump inward. Nothing is ever written from a read, so unlike the pager's
+ * capacity this needs no "has the store answered?" guard.
+ */
+fun AppsState.paddingFor(slot: GridSlot): Int = horizontalPaddingDp[slot] ?: 0
 
 /**
  * This entry's **drag identity** — what the drag coordinator carries and a drop reports back.

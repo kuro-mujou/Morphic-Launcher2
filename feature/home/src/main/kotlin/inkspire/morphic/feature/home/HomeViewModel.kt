@@ -137,7 +137,26 @@ class HomeViewModel(
      * behind one, leaving the three sources of *content* (placements, apps, folders) at the top level. It is also the
      * honest grouping — these three change together when the user edits a section, and none of them is content.
      */
-    private val sizing: Flow<HomeSizing> = combine(iconSizings, mainConfig, dockSizing, ::HomeSizing)
+    /**
+     * Each zone's horizontal padding, resolved per device — the same shape and the same reason as [iconSizings].
+     *
+     * Two grids, two independent values: a user may inset the main area without touching the dock, and the dock is a
+     * strip whose margins read quite differently from a full-height pager's. Built over [ZoneSlots] so adding HOME's
+     * third zone later needs nothing here.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val paddings: Flow<Map<GridSlot, Int>> =
+        device.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(emptyMap())
+            } else {
+                combine(
+                    ZoneSlots.map { slot -> settingsRepository.horizontalPadding(slot, current).map { slot to it } },
+                ) { pairs -> pairs.toMap() }
+            }
+        }
+
+    private val sizing: Flow<HomeSizing> = combine(iconSizings, mainConfig, dockSizing, paddings, ::HomeSizing)
 
     val state: StateFlow<HomeState> =
         combine(
@@ -165,6 +184,7 @@ class HomeViewModel(
                     }
                 },
                 iconSizing = configured.icon,
+                horizontalPaddingDp = configured.padding,
                 main = configured.main,
                 dock = configured.dock,
             )
@@ -507,6 +527,7 @@ private data class HomeSizing(
     val icon: Map<GridSlot, IconSizing>,
     val main: GridConfig?,
     val dock: DockSizing?,
+    val padding: Map<GridSlot, Int>,
 )
 
 /**

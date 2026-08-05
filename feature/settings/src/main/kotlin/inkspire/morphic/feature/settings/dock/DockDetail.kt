@@ -32,6 +32,7 @@ import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
@@ -111,7 +112,10 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
         val rows = state.rows
         val icon = state.icon
         val homeIcon = state.homeIcon
-        if (heightDp != null && cols != null && rows != null && icon != null && homeIcon != null) {
+        val paddingDp = state.paddingDp
+        if (heightDp != null && cols != null && rows != null && icon != null && homeIcon != null &&
+            paddingDp != null
+        ) {
             // What the preview draws while a slider is held — see the same pair in the Home section for why it is keyed
             // on the resolved value rather than cleared on release.
             var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
@@ -120,7 +124,14 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
 
             // The same window the launcher measures, minus the same insets home applies — so the bounds offered
             // here describe the dock the user will actually get rather than a second idea of the screen.
-            val usable = usableWindowArea(safeInsets)
+            // Narrowed by the margin, because everything below divides *this* width: the fitted grid, the editable
+            // column range, and the preview's aspect. A section that offered columns against the full width would
+            // promise a grid the surface cannot draw — which is the same coupling that makes the icon guardrails move
+            // these numbers, applied to the other axis.
+            val fullWidth = usableWindowArea(safeInsets)
+            val usable = fullWidth.copy(
+                widthDp = (fullWidth.widthDp - paddingDp * 2).coerceAtLeast(1f),
+            )
 
             // The smallest cell this dock's icons need, which is what a height has to divide into whole rows.
             // Not a bound on the slider — [HeightRange] is — but the number the row cap is computed from below.
@@ -132,7 +143,18 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
 
             // The dock at this height, resolved by the **same function the surface uses** — so the preview cannot
             // claim a shape the real dock will not have.
-            val dockArea = usable.copy(heightDp = heightDp.toFloat())
+            // **Previewed while the slider is held**, so the editor below re-splits and re-fits under the finger rather
+            // than jumping on release — the same `onPreview`/`onCommit` pair the icon and margin sliders use, and the
+            // reason `SettingsCommitSlider` hands the drag value out at all. Keyed on the committed value so the local
+            // preview clears when the write lands rather than a frame early.
+            //
+            // Everything derived from the height reads the *shown* one: the dock's fitted grid, its editable range, the
+            // companion split, and the caption. A preview that showed the new split but the old row count would be
+            // worse than one that showed neither, because the row count is the thing the height decides.
+            var previewHeight by remember(heightDp) { mutableStateOf<Int?>(null) }
+            val shownHeight = previewHeight ?: heightDp
+
+            val dockArea = usable.copy(heightDp = shownHeight.toFloat())
             val dockConfig = DockGrid.fitGridConfig(dockArea, cols = cols, rows = rows, metrics = metrics)
             val range = DockGrid.editableRangeIn(dockArea, metrics)
 
@@ -141,10 +163,11 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
             // lands may no longer carry the stored rows, and the fit is a runtime question this screen owns.
             SettingsCommitSlider(
                 title = "Height",
-                subtitle = "Rows divide this: at ${heightDp}dp it holds up to ${range?.rows?.last ?: rows}.",
+                subtitle = "Rows divide this: at ${shownHeight}dp it holds up to ${range?.rows?.last ?: rows}.",
                 value = heightDp.toFloat().coerceIn(HeightRange),
                 valueRange = HeightRange,
                 valueLabel = { "${it.roundToInt()} dp" },
+                onPreview = { previewHeight = it.roundToInt() },
                 onCommit = { committed ->
                     val dp = committed.roundToInt()
                     viewModel.setHeight(
@@ -155,6 +178,20 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                         homeMaxRows = maxCells(usable.heightDp - dp, homeMinCellHeight),
                     )
                 },
+            )
+
+            // Previewed per frame and written on release, exactly as the icon sliders are — so the inset in the
+            // editor below tracks the finger. L1 wired its padding slider the same way (`onPaddingPreview`).
+            var previewPadding by remember(paddingDp) { mutableStateOf<Int?>(null) }
+            val shownPadding = previewPadding ?: paddingDp
+            SettingsCommitSlider(
+                title = "Side margin",
+                subtitle = "Blank space at the dock's left and right edges.",
+                value = paddingDp.toFloat(),
+                valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
+                valueLabel = { "${it.roundToInt()} dp" },
+                onPreview = { previewPadding = it.roundToInt() },
+                onCommit = { viewModel.setPadding(it.roundToInt()) },
             )
 
             if (range != null) {
@@ -170,13 +207,17 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                     rows = dockConfig.visualRows,
                     colBounds = range.cols,
                     rowBounds = range.rows,
-                    aspectRatio = usable.widthDp / usable.heightDp.coerceAtLeast(1f),
+                    // **The whole screen's ratio, not the narrowed one.** The preview is a picture of the device; the
+                    // margin is drawn *inside* it below. Feeding the reduced width here instead made the box taller
+                    // for every dp of margin, since it is `fillMaxWidth().aspectRatio(ratio)`.
+                    aspectRatio = fullWidth.widthDp / fullWidth.heightDp.coerceAtLeast(1f),
+                    horizontalInsetFraction = shownPadding / fullWidth.widthDp,
                     // Counting from the fitted grid above rather than from the stored counts, so a press changes the
                     // number the preview is showing. Storage can legitimately hold more columns than fit — that is the
                     // clamp-on-read rule — and an edit that ignored the fit would move a count nobody can see.
                     onEdit = { edge, add -> viewModel.edit(edge, add, dockConfig.visualCols, dockConfig.visualRows) },
                     companion = EditorCompanion(
-                        fraction = 1f - (heightDp / usable.heightDp.coerceAtLeast(1f)),
+                        fraction = 1f - (shownHeight / usable.heightDp.coerceAtLeast(1f)),
                         atBottom = false,
                     ),
                     modifier = Modifier.padding(top = RowGap * 2),
@@ -198,7 +239,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 app = sampleApp,
                 metrics = shownIcon.toIconMetrics(),
                 cellWidth = (usable.widthDp / dockConfig.visualCols).dp,
-                cellHeight = (heightDp.toFloat() / dockConfig.visualRows).dp,
+                cellHeight = (shownHeight.toFloat() / dockConfig.visualRows).dp,
                 onReroll = viewModel.sample::reroll,
                 modifier = Modifier.padding(top = RowGap * 2),
             )

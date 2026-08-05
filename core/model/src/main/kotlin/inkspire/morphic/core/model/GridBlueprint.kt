@@ -156,6 +156,19 @@ object IconSizingRanges {
 }
 
 /**
+ * The bounds a user may set [GridBlueprint.horizontalPaddingDp] within.
+ *
+ * Beside [IconSizingRanges] and for its stated reason: a range is a fact about the value, so it belongs with the value
+ * rather than in whichever slider happens to edit it.
+ *
+ * **The ceiling is where it is because padding competes with columns, and the loser is the grid.** 64dp a side takes
+ * 128dp off a 360dp phone, which at the 24dp cell floor still leaves room for several columns — enough to be a
+ * deliberate inset, short of enough to make a grid unusable. Nothing clamps *against* the column count, because the
+ * fit already does: `CellFit` sees the reduced width and reports fewer columns, exactly as it does when icons grow.
+ */
+val HorizontalPaddingRange: IntRange = 0..64
+
+/**
  * The static, per-surface description of one grid: which grid it *is*, how it is sized, how its cells subdivide,
  * whether items are free-placed, its default size for each [DeviceConfiguration], how icons fill its cells, and
  * (when editable) its edit limits.
@@ -198,6 +211,17 @@ object IconSizingRanges {
  *
  *   Not folded into [heightDp]: that is a whole grid's extent and this is one row of one, and a list has no total
  *   height at all — it scrolls. `Int` dp for the reason [heightDp] is, [IconSizing] included.
+ * @property horizontalPaddingDp Blank margin kept at the grid's left and right edges, in dp — L1's
+ *   `GridDimensions.horizontalPaddingDp`, and 0 by default there and here.
+ *
+ *   **It is width the grid does not get**, which is what makes it a grid property rather than a decoration applied by
+ *   whoever draws one: every cell dimension is divided out of the remaining width, so a surface that padded itself
+ *   *after* computing its columns would draw cells narrower than the ones it sized its icons for. Every consumer
+ *   therefore subtracts it before fitting, and `CellFit` sees the reduced area.
+ *
+ *   One value rather than a per-[DeviceConfiguration] map, matching [heightDp] and [rowHeightDp] and for the same
+ *   reason: a margin is a physical size, not a count that should change with posture. A user who wants a wider one in
+ *   landscape overrides it there, since overrides are keyed per configuration.
  */
 data class GridBlueprint(
     val slot: GridSlot,
@@ -209,6 +233,7 @@ data class GridBlueprint(
     val icon: IconSizing? = null,
     val heightDp: Int? = null,
     val rowHeightDp: Int? = null,
+    val horizontalPaddingDp: Int = 0,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null

@@ -30,6 +30,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -166,6 +167,7 @@ fun AppsCategoryCard(
     onReorder: (category: String, order: List<ComponentKey>) -> Unit,
     metrics: IconMetrics,
     cardColumns: Int,
+    horizontalPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -304,7 +306,17 @@ fun AppsCategoryCard(
                             DropZone(CardGridZoneId, bounds, z = 0) { item -> item is GridItem.App },
                         )
                     },
-                contentPadding = PaddingValues(CardPadding),
+                // The grid's own margin adds to the card gutter rather than replacing it: `CardPadding` is the gap
+                // between a card and the screen edge that the *tile* needs to read as a tile, and the setting is the
+                // user's inset on top. Content padding, so cards still scroll under the bars — and the per-card
+                // bounds map that hit-tests a drop is built from each card's own `boundsInRoot`, so it follows both
+                // without anything being adjusted.
+                contentPadding = PaddingValues(
+                    start = CardPadding + horizontalPadding,
+                    top = CardPadding,
+                    end = CardPadding + horizontalPadding,
+                    bottom = CardPadding,
+                ),
                 horizontalArrangement = Arrangement.spacedBy(CardSpacing),
                 verticalArrangement = Arrangement.spacedBy(CardSpacing),
             ) {

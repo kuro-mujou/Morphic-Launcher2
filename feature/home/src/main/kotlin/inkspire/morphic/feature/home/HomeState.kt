@@ -87,7 +87,18 @@ data class HomeState(
     val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
     val main: GridConfig? = null,
     val dock: DockSizing? = null,
+    val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
 )
+
+/**
+ * The blank margin at [slot]'s left and right edges, in dp — zero until the store answers.
+ *
+ * Zero is the right "not yet": it is also every grid's blueprint default, so the frame before the first emission
+ * looks like an unconfigured launcher rather than one whose grids jump inward. That is the opposite call from the
+ * grid *counts*, whose fallback is the blueprint's own and whose settle is guarded — because there a wrong first
+ * value would be written back, and here nothing is written at all.
+ */
+fun HomeState.paddingFor(slot: GridSlot): Int = horizontalPaddingDp[slot] ?: 0
 
 /** The items placed in [zone] — one zone's grid contents, in the order the state reports them. */
 fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone == zone }

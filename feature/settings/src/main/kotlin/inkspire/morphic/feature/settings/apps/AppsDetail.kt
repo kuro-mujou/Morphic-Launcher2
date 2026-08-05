@@ -37,11 +37,15 @@ import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.GridDefault
+import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
+import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.icons.IconSizingControls
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
@@ -117,14 +121,19 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
         val size = state.size
         val icon = state.icon
         val rowHeightDp = state.rowHeightDp
-        if (size == null || icon == null || rowHeightDp == null) return@Column
+        val paddingDp = state.paddingDp
+        if (size == null || icon == null || rowHeightDp == null || paddingDp == null) return@Column
         val slot = state.layout.slot
         val metrics = icon.toIconMetrics()
         // What the preview draws while a slider is held — see the Home section for why it is keyed on the resolved value.
         var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
         val shownIcon = previewIcon ?: icon
-        // The whole window, unlike home's: the APPS surface takes all of it, with no dock to subtract.
-        val window = usableWindowArea(safeInsets)
+        // The whole window, unlike home's: the APPS surface takes all of it, with no dock to subtract — minus the
+        // selected layout's own margin, which every fit below divides. A section offering columns against the full
+        // width would promise a grid its surface cannot draw, and for the pager it would be worse than cosmetic: that
+        // fit is also the page **capacity**, so the two would paginate against different numbers.
+        val fullWindow = usableWindowArea(safeInsets)
+        val window = fullWindow.copy(widthDp = (fullWindow.widthDp - paddingDp * 2).coerceAtLeast(1f))
 
         // **Every grid here is shown as its surface draws it**, through the same fit that surface applies — which is
         // what makes the icon group below move both this editor and the preview. Raise the minimum icon dp and a
@@ -145,6 +154,61 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             val fitted = slot.blueprint.fitGridConfig(window, size.cols, storedRows, metrics)
             GridDefault(cols = fitted.visualCols, rows = fitted.visualRows)
         }
+        // Every layout has edges, so this slider is outside the list/grid branch below — unlike the row height, which
+        // only the list has, and the editor, which only a grid with an `editRange` has.
+        var previewPadding by remember(paddingDp) { mutableStateOf<Int?>(null) }
+        val shownPadding = previewPadding ?: paddingDp
+        SettingsCommitSlider(
+            title = "Side margin",
+            subtitle = "Blank space at this layout's left and right edges.",
+            value = paddingDp.toFloat(),
+            valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
+            valueLabel = { "${it.roundToInt()} dp" },
+            onPreview = { previewPadding = it.roundToInt() },
+            onCommit = { viewModel.setPadding(it.roundToInt()) },
+        )
+
+        // The chrome choosers sit with the layout group rather than the icon group, because what they place is drawn
+        // *around* the cells. One shared value for the surface, with the options depending on the layout — see
+        // `AppsSectionViewModel.setSearch`.
+        SettingsSectionHeader("Search")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(ChipGap),
+            verticalArrangement = Arrangement.spacedBy(ChipGap),
+        ) {
+            searchOptionsFor(state.layout).forEach { (label, placement) ->
+                SettingsChip(
+                    label = label,
+                    selected = state.chrome.search == placement,
+                    onClick = { viewModel.setSearch(placement) },
+                )
+            }
+        }
+        Text(
+            text = "Search is not built on the Apps surface yet — this sets where it will sit, and the preview above " +
+                "shows it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.contentMuted,
+            modifier = Modifier.padding(top = RowGap),
+        )
+
+        // Tabs exist on one layout only, so the chooser appears on one chip only rather than being offered and ignored.
+        if (state.layout == AppsLayout.PAGER_WITH_CATEGORY) {
+            SettingsSectionHeader("Category tabs")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(ChipGap),
+                verticalArrangement = Arrangement.spacedBy(ChipGap),
+            ) {
+                VerticalEdge.entries.forEach { edge ->
+                    SettingsChip(
+                        label = if (edge == VerticalEdge.TOP) "Top" else "Bottom",
+                        selected = state.chrome.tabBarEdge == edge,
+                        onClick = { viewModel.setTabBarEdge(edge) },
+                    )
+                }
+            }
+        }
+
         // A scrolling grid stores no rows, so the preview draws **how many fit**: the cell height this column count
         // implies (the same derivation the surface lays out with) divided into the screen. That is what makes adding a
         // column visibly gain rows as the cells narrow — the actual consequence of the press, which a fixed preview
@@ -170,6 +234,10 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
             // height and the ceiling opens up, since a pure-text row can be as spacious as the user likes. The subtitle
             // says which of the two it is, because a slider whose ends moved for an invisible reason reads as a bug.
             val range = rowHeightRange(metrics)
+            // Live, so the lanes in the editor below scale under the finger rather than jumping on release — the same
+            // pair the icon and margin sliders use.
+            var previewRowHeight by remember(rowHeightDp) { mutableStateOf<Float?>(null) }
+            val shownRowHeight = previewRowHeight ?: fitRowHeight(rowHeightDp.dp, metrics).value
             SettingsCommitSlider(
                 title = "Row height",
                 subtitle = buildString {
@@ -180,7 +248,35 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
                 value = fitRowHeight(rowHeightDp.dp, metrics).value,
                 valueRange = range,
                 valueLabel = { "${it.roundToInt()} dp" },
+                onPreview = { previewRowHeight = it },
                 onCommit = { committed -> viewModel.setRowHeight(committed.roundToInt()) },
+            )
+
+            // **The list gets an editor too, with no buttons on it.** One lane and a declared row height means there is
+            // no count to press — but there are two things to *see*: the height this slider sets, and which edge the
+            // search field is on. Both bounds are null, which is what makes `GridEditor` draw the frame alone.
+            GridEditor(
+                cols = 1,
+                rows = 1,
+                colBounds = null,
+                rowBounds = null,
+                aspectRatio = fullWindow.widthDp / fullWindow.heightDp.coerceAtLeast(1f),
+                horizontalInsetFraction = shownPadding / fullWindow.widthDp,
+                onEdit = { _, _ -> },
+                preview = {
+                    AppsEditorPreview(
+                        layout = state.layout,
+                        cols = 1,
+                        rows = 1,
+                        metrics = metrics,
+                        chrome = state.chrome,
+                        areaWidthDp = window.widthDp,
+                        insetFraction = shownPadding / fullWindow.widthDp,
+                        edit = null,
+                        rowHeightDp = shownRowHeight,
+                    )
+                },
+                modifier = Modifier.padding(top = RowGap * 2),
             )
         } else {
             // The same editor home and the dock use. No companion zone: an APPS layout fills the screen, so there is
@@ -194,9 +290,31 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
                     // Null for a scrolling grid, which hides the top and bottom pairs — its rows are however many its
                     // content reaches, so there is nothing there to offer.
                     rowBounds = range.rows,
-                    aspectRatio = window.widthDp / window.heightDp.coerceAtLeast(1f),
+                    // `fullWindow`, not the margin-narrowed `window`: the preview is the device's shape, and the
+                    // margin is drawn inside it. Using the narrowed width made the box grow taller per dp of margin.
+                    aspectRatio = fullWindow.widthDp / fullWindow.heightDp.coerceAtLeast(1f),
+                    horizontalInsetFraction = shownPadding / fullWindow.widthDp,
                     // Counting from the drawn size, so a press moves the number the preview is showing.
                     onEdit = { edge, add -> viewModel.edit(edge, add, drawn) },
+                    // **This layout's own mockup**, so each chip shows the surface it configures rather than one
+                    // generic lattice — the reflective cells for the scrolling grids, the chrome for the ones that
+                    // have it. `window` here (not `fullWindow`): the cell aspect comes from the width the grid is
+                    // actually given.
+                    preview = { edit ->
+                        AppsEditorPreview(
+                            layout = state.layout,
+                            cols = drawn.cols,
+                            rows = drawn.rows ?: maxCells(window.heightDp, derived.height.value),
+                            metrics = metrics,
+                            chrome = state.chrome,
+                            areaWidthDp = window.widthDp,
+                            insetFraction = shownPadding / fullWindow.widthDp,
+                            edit = edit,
+                            // Read only by the list, which takes the other branch — the resolved value, since there is
+                            // no row-height slider on this side to preview from.
+                            rowHeightDp = fitRowHeight(rowHeightDp.dp, metrics).value,
+                        )
+                    },
                     modifier = Modifier.padding(top = RowGap * 2),
                 )
             }
@@ -270,4 +388,22 @@ private val AppsLayout.label: String
         AppsLayout.PAGER -> "Pages"
         AppsLayout.PAGER_WITH_CATEGORY -> "Category pages"
         AppsLayout.CATEGORY_CARD -> "Category cards"
+    }
+
+/**
+ * The search placements this [AppsLayout] can offer, as label → value.
+ *
+ * **Layout-dependent, which is `SearchPlacement`'s whole shape.** A standalone layout pins the field to an edge; the
+ * category pager embeds it in the header beside the tabs, so it has no edge to choose. Offering all three everywhere
+ * would let a user pick a state their layout cannot draw — L1's flat `SearchPosition` did exactly that.
+ */
+private fun searchOptionsFor(layout: AppsLayout): List<Pair<String, SearchPlacement>> =
+    if (layout == AppsLayout.PAGER_WITH_CATEGORY) {
+        listOf("In header" to SearchPlacement.InHeader, "Hidden" to SearchPlacement.Hidden)
+    } else {
+        listOf(
+            "Top" to SearchPlacement.Pinned(VerticalEdge.TOP),
+            "Bottom" to SearchPlacement.Pinned(VerticalEdge.BOTTOM),
+            "Hidden" to SearchPlacement.Hidden,
+        )
     }

@@ -7,7 +7,9 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.VerticalEdge
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -41,6 +43,22 @@ interface SettingsRepository {
 
     /** How frosted surfaces render over the wallpaper — the one global choice, and the strengths tuning it. */
     val backdropEffect: Flow<BackdropEffect>
+
+    /**
+     * The APPS surface's chrome — the search field's placement, and which edge the category tabs sit on.
+     *
+     * **Read by the settings editor today and by the surface when those features land.** Neither search nor the tab bar
+     * is built in `feature:apps` yet, so this is the one setting whose only current consumer is a preview. That is a
+     * deliberate exception to "no model in a vacuum", taken because the preview is a real consumer with a real
+     * question — L1's editor draws both, and drawing them from invented constants is what the exception avoids.
+     */
+    val appsChrome: Flow<AppsChrome>
+
+    /** Sets where the APPS search field sits. */
+    suspend fun setSearchPlacement(placement: SearchPlacement)
+
+    /** Sets which edge the category pager's tab bar sits on. */
+    suspend fun setTabBarEdge(edge: VerticalEdge)
 
     /**
      * Replaces the backdrop effect outright.
@@ -186,4 +204,27 @@ interface SettingsRepository {
      * rather than leaving any without a place.
      */
     suspend fun setListRowHeight(device: DeviceConfiguration, dp: Int?)
+
+    /**
+     * The blank margin at [slot]'s left and right edges on [device], in dp — its blueprint's with any override.
+     *
+     * **Width the grid does not get, not decoration applied over one.** Every cell dimension is divided out of what is
+     * left, so a surface reads this *before* it fits its columns; one that padded itself afterwards would draw cells
+     * narrower than the ones it sized its icons against. That is also why it is not folded into [gridConfig] or
+     * [gridCols] — the list and the card grid have neither, and both have edges.
+     *
+     * Not clamped against what still fits, exactly as [gridCols] is not: `CellFit` sees the reduced width and reports
+     * fewer columns, so narrowing the padding brings them back.
+     */
+    fun horizontalPadding(slot: GridSlot, device: DeviceConfiguration): Flow<Int>
+
+    /**
+     * Sets [slot]'s horizontal padding on [device] to [dp], or clears it (back to the blueprint) when null.
+     *
+     * **Unlike a grid resize, this needs no companion placement write.** Removing a *column* has to say which edge it
+     * went from, because that decides where the displaced items land; padding removes no cell — it makes every cell
+     * narrower. A grid whose columns no longer fit reports fewer on read and re-flows what it draws, and the stored
+     * count is untouched, so widening the padding is reversible where a resize is not.
+     */
+    suspend fun setHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?)
 }

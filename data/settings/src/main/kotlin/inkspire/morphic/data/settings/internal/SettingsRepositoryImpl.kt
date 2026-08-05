@@ -13,10 +13,14 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.SettingsRepository
@@ -64,6 +68,13 @@ private val BackdropEffectSlice = SettingsSlice(
     default = BackdropEffect.Default,
 )
 
+/** The APPS surface's chrome: one key, one blob. */
+private val AppsChromeSlice = SettingsSlice(
+    name = "apps_chrome",
+    serializer = serializer<AppsChrome>(),
+    default = AppsChrome.Default,
+)
+
 /**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
  *
@@ -84,6 +95,13 @@ internal class SettingsRepositoryImpl(
     override val surfaceRegister: Flow<SurfaceRegister> = dataStore.read(SurfaceRegisterSlice) { it }
 
     override val backdropEffect: Flow<BackdropEffect> = dataStore.read(BackdropEffectSlice) { it }
+
+    override val appsChrome: Flow<AppsChrome> = dataStore.read(AppsChromeSlice) { it }
+
+    override suspend fun setSearchPlacement(placement: SearchPlacement) =
+        update(AppsChromeSlice) { copy(search = placement) }
+
+    override suspend fun setTabBarEdge(edge: VerticalEdge) = update(AppsChromeSlice) { copy(tabBarEdge = edge) }
 
     // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
     // path: it is what puts the write inside a DataStore transaction.
@@ -185,6 +203,21 @@ internal class SettingsRepositoryImpl(
     override suspend fun setListRowHeight(device: DeviceConfiguration, dp: Int?) {
         require(dp == null || dp > 0) { "a $dp dp row could not hold an icon" }
         update(SurfaceMetricsSlice) { withListRowHeight(device, dp) }
+    }
+
+    // No `requireNotNull` here, unlike the two extents above: `horizontalPaddingDp` is not nullable on a blueprint,
+    // because every grid has edges. It is the measurement that *does* apply to all eight.
+    override fun horizontalPadding(slot: GridSlot, device: DeviceConfiguration): Flow<Int> {
+        val base = slot.blueprint.horizontalPaddingDp
+        return dataStore.read(SurfaceMetricsSlice) { it.horizontalPadding(slot, device, base) }
+    }
+
+    override suspend fun setHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?) {
+        // Clamped to the declared range rather than left to the caller, which is `updateGrid`'s treatment and not
+        // `setDockHeight`'s. The difference is that both of a padding's bounds are static facts: zero is "no margin",
+        // and the ceiling is a judgement about how much of a grid may be given away — neither needs a measured screen.
+        val clamped = dp?.coerceIn(HorizontalPaddingRange.first, HorizontalPaddingRange.last)
+        update(SurfaceMetricsSlice) { withHorizontalPadding(slot, device, clamped) }
     }
 
     override suspend fun setDockHeight(device: DeviceConfiguration, dp: Int?) {
