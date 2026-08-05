@@ -354,6 +354,22 @@ the landscape half **letterboxed** rather than pinning the activity's orientatio
 the frame decides the *shape* while the target screen decides the *resolution*. And the service **publishes its
 colours**, which L1's did not — see the design-system note above; it is what lets the rotating pair answer the
 brightness question through the same system API as every other wallpaper.
+- **Horizontal padding is width the grid does not get, and it goes *above* whatever publishes geometry** (S4g). Every
+  grid has a `horizontalPaddingDp` on its blueprint (0 by default) with a per-slot × device override, and all seven
+  drawn grids apply it — home's pager and dock, and the five APPS layouts. Two rules make it safe, and both are
+  properties of where it is applied rather than of extra code:
+  - **Subtract before fitting.** Cell dimensions are divided out of the remaining width, so `CellFit` must see the
+    reduced area — otherwise a surface sizes cells for a width it does not have, and the settings editor offers
+    columns the grid cannot draw. The APPS **pager** is the case where that would be more than cosmetic: its fit is
+    also the page *capacity* the store is paginated against.
+  - **Pad before the measurement, not after.** `CoordinateDragGrid`/`CoordinateDragPager` publish geometry from an
+    `onGloballyPositioned` placed *after* the caller's modifier (their KDoc says so), and `AppsPager` /
+    `AppsCategoryPager` register their drop zone from the same bounds — so putting `.padding()` earlier in that chain
+    makes the geometry, the drop zone, the edge-flip band and the drag proxy all describe the padded box for free. A
+    finger→cell read against the unpadded width would name a cell up to a whole column away near the edge.
+  Consequence worth knowing: **the margin belongs to no drop zone**, so releasing a dragged item there cancels and the
+  item returns. That is consistent rather than a gap — the same free slack a long-press needs to reach the surface
+  rather than an item.
 - **An item's touch target is its visible extent, never its cell.** A cell is a *layout* footprint, usually much
   bigger than what is drawn in it (a home cell is a 2×2 visual slot around one icon + label). `LauncherDragCell`
   therefore hands `itemGestures` **down to its content**, which decides what is touchable: `IconLabelCell` puts it
@@ -579,7 +595,7 @@ the default `DevRootScreen` screen.
   written**, at the moment a height commit invalidates it — the asymmetry is that the height was a deliberate change,
   where an icon-size change is not about the dock at all. L1 wrote every clamp back from a `LaunchedEffect` *inside
   its dock settings screen*, which destroyed the preference and only ran while that screen was open. Home carries
-  **no decorative padding** (L1 had a configurable horizontal one; L2 adds it *with* the setting, S4f). The applied
+  a **horizontal margin per zone** (S4g, defaulting to 0 — so an unconfigured launcher still runs edge to edge). The applied
   inset is `systemBars ∪ displayCutout`, hoisted into one `safeInsets` value that feeds both the padding and the width
   the dock is fitted against — L1 kept two derivations of that area (`homeGridArea` from settings,
   `pagerBoundsInWindow` measured) and they could disagree.
@@ -778,7 +794,7 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
   seventh settings section, which is also the slice's first writer. **S5 is now complete.**
 
 Also open: a **home long-press → options menu** (the free cell space now falls through to
-the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or
+the surface for exactly this, and nothing listens yet), home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render and all the
 arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
 `EjectToHome`, an optimistic layer for both the pager and the card (a drop waits for the write) + the pager's page
@@ -889,7 +905,15 @@ becomes the *label's* own height (a row cannot be shorter than its text — `row
 `cellLabelHeight`, since a row styles its label from `bodyLarge` where a cell uses `labelSmall`) and the ceiling **opens
 up** to `IconSizingRanges.IconDp`'s own ceiling. Both ends then stop following the guardrails, which is the point: they
 describe an icon that isn't there, and bounding a pure-text row by one forbade a compact list to anyone who had set
-chunky icons before switching them off. **Left open: the category card's lane count** — a card is a *tile*, so how narrow one
+chunky icons before switching them off. **Chrome is a third slice, `AppsChrome`** — `SearchPlacement` (which `core:model` had built and nothing consumed) plus
+the tab bar's `VerticalEdge`, whose KDoc had named this consumer since B0. It is the one setting whose **only current
+consumer is the editor preview**: search is unbuilt on the APPS surface and neither pager draws a tab bar, so this is a
+deliberate exception to "no model in a vacuum" — a preview is a real consumer with a real question, and L1's editor
+draws both from its own stored pair. Its search default is `Hidden` where L1's is `TOP`, because a default that drew a
+search bar the launcher has not got is the one thing a preview must not do. **Which options are offered is
+layout-dependent**, which is `SearchPlacement`'s whole shape: a standalone layout pins to an edge, the category pager
+embeds in its header. L1's flat `SearchPosition` let a user pick a state their layout could not draw.
+**Left open: the category card's lane count** — a card is a *tile*, so how narrow one
 may get is not an icon guardrail and its blueprint declares no icon sizing; L1 gave its library layout no grid knobs
 either.
 **Resizing a grid names an edge, not a count**, because that is what decides where the items go — removing the *left*
@@ -899,9 +923,34 @@ an add and place-first for a remove so no observer sees a grid too small for its
 `feature:settings` depends on `data:layout` at all: only the button press knows the edge, and a surface re-reading the
 new size later cannot recover it. **The dock's version spills onto home** (`settleDock`, shared with
 `HomeViewModel.fitDockTo` so the two triggers cannot disagree), never deleting as L1 did. One `GridEditor` composable
-serves both grids — a screen-shaped preview with a − / + pair **on each edge it affects**, the companion zone drawn at
-its real proportion; L1 had two ~220-line near-copies and told add from remove by green vs red, which this palette
-(greyscale, red reserved for `error`) cannot do, so the buttons sit where they act instead.
+serves both grids — a screen-shaped mockup at a **fixed size per posture** (L1's four numbers; a fraction of the pane
+made the preview a different size on a tablet and, at a tall phone ratio, taller than the section holding it), ringed
+by L1's own button arrangement, in **three shapes it takes from L1 as well** — both axes editable gives the plus-shape
+(**removes along the top and left, adds along the right and bottom**, each pair spread to the preview's extent so a
+button sits at the corner it acts on); *columns only* drops the top and bottom rows and gives each side rail **− above
++ for its own edge** (L1's `showRowControls = false`, and better than hiding the rails, which left the controls
+furthest from the columns they change); *neither* draws the frame alone. `colBounds` is nullable to say the third,
+symmetric with `rowBounds` — both mean "this axis is not the user's to set" — and the caption follows, down to being
+omitted entirely when there is no axis, since a list showing "1 column" would be a count masquerading as a choice. The companion zone is drawn at its real proportion.
+L1 had two ~220-line near-copies of this. **The APPS editor takes a `preview` slot**, as L1's drawer editor does, so
+each layout shows the surface it configures: the three scrolling grids draw `ReflectivePreview` — cells at their
+*derived* aspect, filling downward and clipped at the fold, which is the only mockup that makes adding a column
+visibly gain rows — while the pagers and the card grid keep the even lattice, because a FIXED_PAGER really does divide
+its page evenly and a card's height *is* its width. The category pager additionally draws L1's header + tab row, and **the list gets an editor with no buttons on it** —
+one lane and a declared row height means nothing to press, but two things to see: `LanePreview` draws full-width lanes
+at `rowHeight ÷ width` (icon square beside a label bar, the one structural fact separating a list from a one-column
+grid at this size), and the search edge sits above or below them. Deliberately *not* `ReflectivePreview`, which derives
+height from width: that is what the scrolling **grids** do, where a list's height is declared — the three-way split in
+`GridBlueprint.rowHeightDp`, reaching the preview layer. **Every slider that moves a preview previews live**
+(`onPreview`), including the dock's *height*, where the shown value feeds the companion split, the fitted grid, the
+editable range, the caption and the icon preview's cell height together — a preview showing the new proportion but the
+old row count would be worse than one showing neither, since the row count is what the height decides.
+**A grid's horizontal margin insets the lattice only, never the companion zone**: home's pager and dock store separate
+margins, so insetting both from one number would show a dock narrowing because the pager's slider moved (L1 passes
+`insetFraction` to its `GridPreview` and none to its `NonGridPreview`). **What is not carried is the colour** — it tells add from remove by red vs
+green, which the palette forbids — and that costs nothing, because in L1 the *position already encodes the action* and
+the colour was reinforcement. An earlier cut mistook the colour for the signal and centred a −/+ pair on each edge
+instead; the arrangement above replaced it.
 **A grid editor shows the grid that is *drawn*, not the one in storage** — and that is what makes the icon controls under
 it move it. Both halves come out of one formula: the icon **guardrails** set the smallest usable cell, and dividing the
 area by it gives both the *bounds* the buttons offer and the *counts* the preview draws (`fitGridConfig` for home and the

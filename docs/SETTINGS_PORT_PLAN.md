@@ -76,7 +76,7 @@ The port is ordered by "no model in a vacuum": build the slice some already-writ
 | `LauncherShell` `darkTheme = true` | same | wallpaper-brightness signal — **L2's own idea, not a port** | ✅ S5f-1 |
 | `AppsScreen(layout = VERTICAL_LIST)` | `feature/apps/AppsScreen.kt` | which APPS layout, per binding | ✅ S2 |
 | `DockHeight = 96.dp` | `feature/home/HomeScreen.kt` | dock extent (rows derive **from** it, not the reverse) | ✅ S4c |
-| home padding | — (deliberately absent) | horizontal padding, added *with* the setting | todo S4g |
+| home padding | — (deliberately absent) | horizontal padding, added *with* the setting | ✅ S4g |
 | `RowHeight = 56.dp` | `AppsVerticalList.kt` | list row height | ✅ S4f |
 | `CellHeight = 96.dp` ×2 | `AppsVerticalGrid.kt`, `AppsCategoryPager.kt` | grid cell height | ✅ S4e (derived, not stored) |
 | `CardColumns = 2` + spacing/padding | `AppsCategoryCard.kt` | card grid geometry (device-blind today) | ✅ S3 (`AppsCardGrid`) |
@@ -470,7 +470,44 @@ every phase ends with something visibly working on device, and no slice is writt
     - **Where the preview needed it too**: `IconSizingPreview` takes `IconMetrics` rather than `IconSizing` precisely so a
       section can hand it the derived cell's metrics; otherwise the preview would draw an icon its surface does not.
     - A test pins the fixed point at four fractions: *the cell draws the icon its height was derived for*.
-  - [ ] **S4g — horizontal padding** for every layout, home's included. Deferred by decision (see the dock, rule 5).
+  - [x] **S4g — horizontal padding**, for all seven drawn grids: home's pager and dock, and the five APPS layouts.
+        `GridBlueprint.horizontalPaddingDp` (0 by default, as L1's `GridDimensions` had it) with a per-slot × device
+        override — a **fifth** `SurfaceMetrics` map, slot-keyed unlike `dockHeightDp`/`listRowHeightDp` because those
+        name the one grid that *has* the measurement and every grid has edges. Three sliders reach seven grids: Home,
+        Dock, and APPS following its layout chip. Two things worth keeping straight, both about where it is applied:
+    - **Subtracted before anything is fitted.** Cells are divided out of the remaining width, so `CellFit` sees the
+      reduced area on the surface *and* in the section — otherwise the editor offers columns the grid cannot draw. The
+      APPS pager is where that would be more than cosmetic: its fit is the page capacity the store is paginated
+      against, so the two would disagree about how many entries a page holds.
+    - **Applied above the geometry publisher**, which is what makes drag and drop correct without a single adjustment:
+      the drag surfaces measure *after* the caller's modifier, so the published `GridGeometry`, the registered drop
+      zone, the edge-flip band and the drag proxy all describe the padded box. The margin is consequently in no drop
+      zone, so a release there cancels — consistent with the free slack a surface long-press needs.
+    - No companion placement write, unlike a resize: a margin removes no cell, so nothing is displaced. The columns it
+      costs are re-reported on read and return when it narrows, which is the same clamp-never-write rule the counts
+      already live by.
+    - **Two editor bugs the margin exposed, both fixed in the same slice.** The preview is
+      `fillMaxWidth().aspectRatio(r)`, so height is *derived* from the ratio — feeding it the narrowed width made the
+      box taller for every dp of margin. And the inset was applied to the whole mockup, shrinking the companion zone
+      too, so home's dock appeared to narrow because the pager's slider moved. L1 has neither: it keeps the screen's
+      ratio and passes `insetFraction` to its `GridPreview` and none to its `NonGridPreview`.
+  - [x] **S4g' — the grid editor, brought up to L1's.** Filed under S4g because the margin is what surfaced it. Four
+        pieces, all ports:
+    - **A fixed mockup size per posture** (240 / 140 / 360 / 280 dp, L1's numbers) with the width from the screen
+        ratio, replacing `fillMaxWidth(0.62f)` — a settings pane is half a tablet and all of a phone, so a fraction
+        gave a different preview in each.
+    - **L1's three button arrangements**, including the columns-only rails and the no-button frame. The earlier cut
+        centred a −/+ pair per edge, on the grounds that a greyscale palette cannot tell add from remove by colour;
+        the premise was right and the conclusion wrong, since in L1 the *position* encodes the action and the colour
+        was reinforcement.
+    - **A `preview` slot with a mockup per APPS layout** — `ReflectivePreview` (cells at their derived aspect,
+        clipped at the fold) for the scrolling grids, the even lattice for the pagers and the card grid, header + tabs
+        for the category pager, and `LanePreview` for the list.
+    - **`AppsChrome`, a third slice**: `SearchPlacement` (built in B0, unconsumed until now) plus the tab bar's
+        `VerticalEdge`, whose KDoc named this consumer. **The one setting whose only consumer is a preview** — search
+        and the tab bar are unbuilt on the surface — which is a deliberate exception to "no model in a vacuum", taken
+        because a preview is a real consumer with a real question and L1's editor draws both. Its search default is
+        `Hidden` where L1's is `TOP`, since a preview must not draw a feature the launcher has not got.
 - [x] **S5 — `data:wallpaper` + effects** — *done.* L1 spends ~1,730 LOC here (a 381-LOC repository, `Blur.kt`, a
       561-LOC `WallpaperTab`, a crop screen, a capture screen, a live-wallpaper service and an effects tab), which is
       more than one slice can carry, so it is broken up by **what a user can do when it lands**:
