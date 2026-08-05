@@ -1,9 +1,11 @@
 package inkspire.morphic.feature.settings.wallpaper
 
+import android.content.ComponentName
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
@@ -30,6 +32,12 @@ import kotlinx.coroutines.launch
  *   field will later detect a wallpaper set outside the launcher.
  * @property applicable whether the stored image can be set on the system at all. False for a capture, which is a
  *   picture *of* the wallpaper — the repository declines it, and the section shows why instead of a dead button.
+ * @property rotatingPortrait the portrait half of the rotating pair, decoded for its slot, or null if unset.
+ * @property rotatingLandscape likewise for landscape. Two fields rather than a map, because there are exactly two and
+ *   the section draws them side by side — a map would be a lookup where a name will do.
+ * @property rotatingActive whether the launcher's own live wallpaper is what the system is currently showing. **Read
+ *   from the system, never stored** (see `WallpaperState`), and refreshed on resume because the only way it changes is
+ *   the user confirming in the system's chooser — which happens while this screen is stopped.
  * @property busy a write is in flight — read by the **crop** screen, whose Save button it disables and relabels while
  *   a large photo is decoded and scaled, and by the section, whose buttons it disables while an apply runs. L1 had no
  *   such flag and did not need one for the crop (its screen had a local `saving`), but it also could not tell you that
@@ -39,9 +47,15 @@ data class WallpaperSectionState(
     val image: WallpaperImage? = null,
     val preview: Bitmap? = null,
     val applied: Boolean = false,
+    val rotatingPortrait: Bitmap? = null,
+    val rotatingLandscape: Bitmap? = null,
+    val rotatingActive: Boolean = false,
     val busy: Boolean = false,
 ) {
     val applicable: Boolean get() = image?.source == WallpaperSource.PICKED
+
+    /** True once either half exists — the point at which applying the live wallpaper would draw something. */
+    val hasRotating: Boolean get() = rotatingPortrait != null || rotatingLandscape != null
 }
 
 /**
@@ -62,21 +76,46 @@ class WallpaperViewModel(
 
     private val busy = MutableStateFlow(false)
 
+    /**
+     * Bumped to re-ask the system which wallpaper is live.
+     *
+     * A trigger rather than a stored flag, which is the whole point: the answer lives in `WallpaperManager` and changes
+     * while this app is stopped (the user confirms in the system's chooser), so what this holder needs is a reason to
+     * look again — not a copy to repair. L1 kept the copy and needed `reconcileLiveWallpaper` to repair it.
+     */
+    private val rotatingProbe = MutableStateFlow(0)
+
     val state: StateFlow<WallpaperSectionState> =
         combine(
-            // The preview is loaded *inside* the map rather than in a separate flow: it is a function of the stored
-            // image and nothing else, so re-deriving it per emission is both correct and cheap — the state changes
+            // The previews are loaded *inside* the map rather than in separate flows: each is a function of the stored
+            // state and nothing else, so re-deriving them per emission is both correct and cheap — the state changes
             // only when the user picks or applies, not per frame.
             wallpaperRepository.wallpaper.map { stored ->
                 WallpaperSectionState(
                     image = stored.image,
                     preview = stored.image?.let { wallpaperRepository.loadImage() },
                     applied = stored.appliedSystemId != 0,
+                    rotatingPortrait = stored.rotating.portrait
+                        ?.let { wallpaperRepository.loadRotatingImage(Orientation.PORTRAIT) },
+                    rotatingLandscape = stored.rotating.landscape
+                        ?.let { wallpaperRepository.loadRotatingImage(Orientation.LANDSCAPE) },
                 )
             },
             busy,
-        ) { base, inFlight -> base.copy(busy = inFlight) }
+            rotatingProbe.map { wallpaperRepository.isRotatingActive() },
+        ) { base, inFlight, active -> base.copy(busy = inFlight, rotatingActive = active) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WallpaperSectionState())
+
+    /**
+     * Re-reads whether the launcher's live wallpaper is active — the section calls this on resume.
+     *
+     * The one thing this holder cannot learn by listening: setting a live wallpaper happens in the *system's* chooser,
+     * so the app is stopped for the moment it changes and there is no callback on the way back. Asking on resume is
+     * exactly what L1 did (`reconcileLiveWallpaper`), minus the stored mode it existed to repair.
+     */
+    fun refreshRotatingActive() {
+        rotatingProbe.value += 1
+    }
 
     /**
      * [uri] decoded small enough to show, for the crop screen to frame — the read half of choosing an image.
@@ -107,6 +146,46 @@ class WallpaperViewModel(
         outHeight: Int,
         onSaved: () -> Unit = {},
     ) = store(uri, crop, outWidth, outHeight, WallpaperSource.PICKED, onSaved)
+
+    /**
+     * Takes [crop] of [uri] as the [orientation] half of the rotating pair, stored at [outWidth] × [outHeight].
+     *
+     * The sibling of [chooseImage] and deliberately not a flag on it: they write different files, and the one they
+     * write is not a variation on a shared behaviour but the whole of what distinguishes them. The size is the *target*
+     * orientation's screen rather than the current one — a landscape half is stored landscape-shaped while the phone is
+     * held upright, which is what [CropTarget] works out for the crop screen.
+     *
+     * Sets nothing on the system, and here there is nothing it could set: a live wallpaper is applied through the
+     * system's chooser, and the service reads whatever file is on disk the next time it draws.
+     */
+    fun chooseRotatingImage(
+        uri: Uri,
+        crop: NormalizedCropRect,
+        outWidth: Int,
+        outHeight: Int,
+        orientation: Orientation,
+        onSaved: () -> Unit = {},
+    ) {
+        if (busy.value) return
+        busy.value = true
+        viewModelScope.launch {
+            try {
+                wallpaperRepository.setRotatingImage(uri, crop, outWidth, outHeight, orientation)
+                onSaved()
+            } finally {
+                busy.value = false
+            }
+        }
+    }
+
+    /**
+     * The launcher's live-wallpaper service, for the section to name in the system intent that applies it.
+     *
+     * Handed through rather than resolved in the UI: the component belongs to the module that declares the service, and
+     * starting an activity belongs to the screen that has a `Context`. L1 built the `ComponentName` in its UI, which is
+     * how its data layer ended up unable to say what its own service was called.
+     */
+    fun rotatingServiceComponent(): ComponentName = wallpaperRepository.rotatingServiceComponent()
 
     /**
      * Waits for the next image to appear in the gallery — the capture screen's cue that a screenshot was taken.

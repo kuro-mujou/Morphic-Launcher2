@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.wallpaper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -53,16 +55,19 @@ import kotlin.math.roundToInt
  * from it means "I did not want that image" rather than "close this detail" — all three are what a back-stack entry
  * is for. L1 kept it a separate screen too, and the settings section is what pushes it.
  *
- * **The viewport is the output.** What the user frames against is the whole window, and that same size is handed to
- * `setImage` as the size to store at — one coordinate space for the rectangle and the result, so what is saved is what
- * was on screen. It is also why this screen draws under the system bars: a wallpaper does, so framing against a
- * smaller box would be framing against the wrong thing.
+ * **The viewport is the shape of the output, and [target] is its size.** What the user frames against has the target
+ * slot's aspect, and the rectangle they end up with is read back in fractions of the source — so the frame and the
+ * result share one coordinate space whatever size either is. It is also why this screen draws under the system bars: a
+ * wallpaper does, so framing against a smaller box would be framing against the wrong thing.
  *
- * **What L1 has here and this does not**: the `forRotate` / `landscape` pair, which pinned the activity's orientation
- * while framing the second image of a rotating wallpaper. That is S5f's, and it arrives with the feature that needs a
- * second image rather than as a parameter nothing passes.
+ * **The landscape half of the rotating pair is framed letterboxed**, in a landscape-shaped frame inside whatever
+ * orientation the phone is in. L1 pinned the *activity* to landscape instead, which is more of the screen to frame with
+ * and a device left facing a way the user did not ask for; and it is not needed for the thing that matters, since the
+ * stored image takes its resolution from the target screen rather than from the frame it was drawn in.
  *
  * @param uri the picked image, as a string because a `NavKey` is `@Serializable` and `Uri` is not.
+ * @param target which slot this fills — the single image, or one half of the rotating pair. It decides the frame's shape
+ *   and the stored size, and which of the ViewModel's two write commands the Save button calls.
  * @param onDone leaves the screen — the same action for Save and Cancel, since both mean "I am finished here". The
  *   host wires it to the back stack; this screen does not know it is on one.
  */
@@ -71,10 +76,27 @@ fun WallpaperCropScreen(
     uri: String,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    target: CropTarget = CropTarget.SINGLE,
 ) {
     val viewModel = koinViewModel<WallpaperViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val parsed = remember(uri) { uri.toUri() }
+
+    // **The size the image is stored at, which is the target slot's screen rather than this one.** For the single image
+    // and the portrait half that is the window upright; for the landscape half it is the same window with its axes
+    // swapped, so a landscape wallpaper is stored at landscape resolution even though it was framed on a phone held
+    // upright. Independent of how the device is currently held, because the pair is per orientation, not per posture.
+    val window = LocalWindowInfo.current.containerSize
+    val storedSize = remember(window, target) {
+        val short = minOf(window.width, window.height)
+        val long = maxOf(window.width, window.height)
+        when (target) {
+            CropTarget.ROTATING_LANDSCAPE -> IntSize(long, short)
+            CropTarget.ROTATING_PORTRAIT -> IntSize(short, long)
+            CropTarget.SINGLE -> window
+        }
+    }
+    val frameRatio = if (storedSize.height > 0) storedSize.width.toFloat() / storedSize.height else 1f
 
     var image by remember { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(parsed) { image = viewModel.preview(parsed)?.asImageBitmap() }
@@ -104,7 +126,12 @@ fun WallpaperCropScreen(
             if (current != null) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        // The target's shape, centred — which is `fillMaxSize` for a slot shaped like this screen, and
+                        // a letterboxed band for the one that is not. `aspectRatio` picks the larger dimension it can
+                        // honour, so the frame is always as big as the screen allows.
+                        .align(Alignment.Center)
+                        .fillMaxSize(FRAME_FRACTION)
+                        .aspectRatio(frameRatio)
                         .clipToBounds()
                         .onSizeChanged { viewport = it }
                         .pointerInput(current) {
@@ -154,21 +181,22 @@ fun WallpaperCropScreen(
                 onClick = {
                     val source = current ?: return@MorphicButton
                     if (viewport.width == 0 || viewport.height == 0) return@MorphicButton
-                    viewModel.chooseImage(
-                        uri = parsed,
-                        // The viewport's corners, read back into the source's own fractions: the transform is
-                        // invertible, so where the visible window sits *on the image* is arithmetic rather than
-                        // bookkeeping this screen has to maintain as the fingers move.
-                        crop = NormalizedCropRect(
-                            left = ((0 - offset.x) / (source.width * scale)).coerceIn(0f, 1f),
-                            top = ((0 - offset.y) / (source.height * scale)).coerceIn(0f, 1f),
-                            right = ((viewport.width - offset.x) / (source.width * scale)).coerceIn(0f, 1f),
-                            bottom = ((viewport.height - offset.y) / (source.height * scale)).coerceIn(0f, 1f),
-                        ),
-                        outWidth = viewport.width,
-                        outHeight = viewport.height,
-                        onSaved = onDone,
+                    // The viewport's corners, read back into the source's own fractions: the transform is
+                    // invertible, so where the visible window sits *on the image* is arithmetic rather than
+                    // bookkeeping this screen has to maintain as the fingers move. In *frame* coordinates, which is
+                    // why the stored size can differ from it without the rectangle needing to know.
+                    val crop = NormalizedCropRect(
+                        left = ((0 - offset.x) / (source.width * scale)).coerceIn(0f, 1f),
+                        top = ((0 - offset.y) / (source.height * scale)).coerceIn(0f, 1f),
+                        right = ((viewport.width - offset.x) / (source.width * scale)).coerceIn(0f, 1f),
+                        bottom = ((viewport.height - offset.y) / (source.height * scale)).coerceIn(0f, 1f),
                     )
+                    val orientation = target.orientation
+                    if (orientation == null) {
+                        viewModel.chooseImage(parsed, crop, storedSize.width, storedSize.height, onDone)
+                    } else {
+                        viewModel.chooseRotatingImage(parsed, crop, storedSize.width, storedSize.height, orientation, onDone)
+                    }
                 },
                 enabled = current != null && !state.busy,
                 modifier = Modifier
@@ -181,6 +209,14 @@ fun WallpaperCropScreen(
         }
     }
 }
+
+/**
+ * How much of the screen the frame may take before its own edge is flush with the display's.
+ *
+ * 1 for a frame shaped like the screen (it fills it, and `aspectRatio` leaves nothing over); short of 1 only so a
+ * letterboxed one has a visible margin, which is what makes it read as a frame rather than as a cropped screen.
+ */
+private const val FRAME_FRACTION = 1f
 
 /**
  * The scale at which [image] just covers [viewport] — the larger of the two ratios, so neither axis is left short.

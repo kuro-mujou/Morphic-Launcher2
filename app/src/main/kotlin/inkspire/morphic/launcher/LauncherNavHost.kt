@@ -100,7 +100,13 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 // mapping rather than a registry: a destination that belongs to one feature stays in it, and `app`
                 // only says where it goes.
                 entry<WallpaperCropRoute> { route ->
-                    WallpaperCropScreen(uri = route.uri, onDone = { navigator.goBack() })
+                    // Both fields, not just the uri: the target decides the shape the screen frames against and the
+                    // size it stores at, so dropping it here would quietly frame a landscape half as a portrait one.
+                    WallpaperCropScreen(
+                        uri = route.uri,
+                        target = route.target,
+                        onDone = { navigator.goBack() },
+                    )
                 }
                 entry<WallpaperCaptureRoute> { WallpaperCaptureScreen(onDone = { navigator.goBack() }) }
                 entry<DevHarnessRoute> { DevRootScreen() }
