@@ -243,8 +243,8 @@ from the baked stack).
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a **wallpaper-brightness**
   signal (chrome must contrast the wallpaper — bright wallpaper → Light scheme/black tint, dark → Dark/white).
   Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
-  `LauncherTheme` overrides its subtree. **The brightness half is built** (see below); the *frosted*
-  surfaces and `FrostedTextField` remain a **deferred launcher-UI subsystem**; settings needs none of it. **The window
+  `LauncherTheme` overrides its subtree. **The brightness half is built, and so is the frosted backdrop** (see below);
+  `FrostedTextField` and the rest of the frosted-chrome subsystem stay deferred; settings needs none of it. **The window
   half has landed**: `app`'s theme carries the platform's own `Theme.Wallpaper` recipe (`windowShowWallpaper` over a
   transparent `windowBackground`, `colorBackgroundCacheHint` null), which is what makes this a launcher's window rather
   than an app's — and what capture, the icon preview's `BlendMode.Src` punch-through and the frosted backdrop were all
@@ -273,6 +273,35 @@ from the baked stack).
     leaves *every* consumer of `getWallpaperColors` with nothing — status-bar icon contrast included. Answering means
     our own rotating pair takes the same path as every other wallpaper instead of needing a special case that reads our
     files behind the system's back. L1's service published nothing and had no caller that missed it.
+- **The frosted backdrop is `core:designsystem/backdrop`, and it samples by *position*.** `Modifier.wallpaperBackdrop`
+  draws the crop of the pre-blurred wallpaper that sits behind wherever the node currently is, so a surface that moves
+  slides *over* the picture rather than carrying a patch of it — which is the whole difference between glass and a
+  texture. `BackdropState` is **one shared image plus a mapping**, not a bitmap per surface, so two frosted surfaces
+  side by side continue each other and the cost is one blur for the screen. It is a `Modifier.Node` and not a
+  `drawBehind` because of exactly that motion: the outline and clip `Path` are cached against size and shape, so a
+  position-only change rebuilds nothing. Ported from L1's `Backdrop.kt`, with four differences:
+  - **All four effects carry the wallpaper's hue, and that is the one deliberate exception to the monochrome palette
+    rule.** The rule makes *chrome* greyscale so the wallpaper and the icons carry the colour; an effect the user picks,
+    whose whole subject is the wallpaper, is not chrome. So L1's two-stage blend is ported exactly: a **wallpaper tone**
+    = `lerp(surfaceVariant, accent, 0.30)` (mode-appropriate, and desaturated here because our `surfaceVariant` is
+    grey), then light = `lerp(White, tone, 0.35)`, dark = `lerp(Black, tone, 0.35)`, and `MaterialYou` = the tone
+    outright. A plain white or black film over a blurred photograph reads as dirty, which is the bad effect the 35%
+    nudge exists to fix. **This reverses a call made mid-slice** — the first cut dropped the hue everywhere and left
+    `MaterialYou` unrenderable, and the author reversed it; the reasoning is kept because the exception is only
+    defensible if the rule it bends is stated.
+  - **The accent is read from the wallpaper, not from the OS palette.** L1 used `colorScheme.primary` above API 31,
+    which worked because its launcher ran a normal M3 dynamic scheme; L2 bridges a **monochrome** scheme, so that
+    expression returns grey. `WallpaperRepository.accentColor` reads it directly — `WallpaperColors.primaryColor` on
+    API 27+, and L1's saturation-weighted `dominantColor` over our own file below that. So **both halves of `Blur.kt`
+    are now ported** after all, and for L1's own reasons.
+  - **The backdrop is provided at the shell**, the same zone boundary the theme is applied at and for the same reason.
+    L1 provided it inside its `HomeScreen`, which is why its settings feature needed a second provider of its own.
+  - **`LocalLockedBackdrop` is not carried.** L1's second backdrop exists so a popup menu and the widget picker can
+    stay frosted when the global effect is `NONE`; L2 has neither surface, so there is one local rather than two.
+  - **The scrim is a required fallback, not a decoration.** With no backdrop — which is the state until the user gives
+    the launcher an image — every frosted surface draws its own flat colour, and only the caller knows what that is.
+    The folder passes `Color.Black`, which is exactly what it painted before, so nothing changes until there is
+    something to sample.
 
 **Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it, and a section that drives it.** Its own module rather than a slice of
 `data:settings`, because it decodes bitmaps, writes files and calls `WallpaperManager` — a *service*, where settings is a
@@ -289,11 +318,24 @@ picture *of* the wallpaper, so `apply` declines it and it exists only for the ef
 read a **live** wallpaper). Capture landed before its consumer on purpose — an effect has to answer "which image do I
 sample?", and answering that once against every source beats re-answering it per source. Nothing invents a crop any more — `setImage` takes a
 `NormalizedCropRect` and the screen passes the region the user framed, against the viewport it also passes as the size
-to store at, so the rectangle and the result share one coordinate space. The reading half has started with
-**`brightness`** (see the design-system notes above for why it needed no image processing); still deliberately absent
-are the **blur and the dominant colour**, which are effect inputs and so wait on the effects that read them. One L1 bug
-not carried: its repository read-modified-wrote its state *outside* any transaction, so picking an image while an apply
-was finishing could lose one of them.
+to store at, so the rectangle and the result share one coordinate space. **The reading half is `brightness`,
+`accentColor` and `backdrop`** — the three questions anything drawing over the wallpaper has: how bright is it, what
+colour is it, and what does it look like blurred. All three share one change signal and one "is our file what is on
+screen?" gate, deliberately, because three answers that could disagree about *which image* they read would be worse
+than any one of them being slightly off. Each also asks the system before it decodes anything: `getWallpaperColors`
+answers the first two over the wallpaper *actually displayed*, and `Blur.kt`'s `dominantColor` is only the API-26
+fallback for the second. One L1 bug not carried: its repository read-modified-wrote its state *outside* any
+transaction, so picking an image while an apply was finishing could lose one of them.
+**`backdrop` answers "which image does an effect sample?" once, for all three sources** — the question the whole
+sources-before-effects ordering was arranged around. Our rotating service active → that orientation's half; a
+**capture** → always (it *is* a picture of what is displayed, and gating it on being applied would reject it forever);
+a picked image → only if `appliedSystemId` still matches the live wallpaper id; otherwise nothing, and every frosted
+surface falls back to its scrim. **That third test is where L1 kept a second copy of the file and L2 does not**: its
+`appliedSingle` was a snapshot frozen at Apply time so an edited-but-unapplied pick could not desynchronise the
+backdrop. The id comparison does the same job without the copy *and* one more the snapshot could not — a wallpaper set
+outside the launcher makes the ids differ, where L1's snapshot went on claiming to match. It is the **same gate**
+`brightness` uses, deliberately: "is our file what is on screen" is one question, and two answers to it would drift.
+It is also a **flow** where L1's was a one-shot read, because two of those four answers change with no action from us.
 **The rotating pair is a *live* wallpaper, and that shapes three things.** Android has no per-orientation static
 wallpaper — `setBitmap` takes one image and the system crops it — so drawing a different picture in landscape means being
 the renderer: `RotatingWallpaperService` lives in `data:wallpaper` beside the files it reads, where L1 put it in its
@@ -714,17 +756,21 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** the rest of the **effects** (S5f), which the wallpaper-brightness signal has now opened. S5f split into
-three when it was costed, because as one slice it is `BackdropEffect` + the params slice + `Blur.kt` + a 350-line
+**Next likely:** **S5f-3**, the last of the effects — or anything below it, since nothing depends on S5f-3. S5f split
+into three when it was costed, because as one slice it was `BackdropEffect` + the params slice + `Blur.kt` + a 350-line
 `Modifier.Node` + an AGSL shader + a settings section + three consumers:
 - **S5f-1 — the brightness signal. Done.** The shell's hardcoded `darkTheme` is gone; see the design-system notes. It
   turned out to need *neither* `Blur.kt` half, which is why it was worth taking first — it is the one reading of the
   wallpaper that is a system call rather than image processing.
-- **S5f-2 — `BackdropEffect` params (a `data:settings` slice) + `Blur.kt` + `wallpaperBackdrop` + the folder's frosted
-  backdrop** (solid black today). This is where the blur and the dominant colour finally get their consumer, and where
-  L1's `BackdropState` / `LocalBackdrop` / crop-mapping machinery lands.
-- **S5f-3 — liquid glass and the effects settings section.** L1's AGSL shader (API 33+, with the blur as its fallback)
-  and the ten-parameter tab that tunes it. Genuinely optional relative to the two above.
+- **S5f-2 — the frosted backdrop. Done.** `BackdropEffect` (which B0 had already built, unconsumed) became a
+  `data:settings` slice, `Blur.kt`'s box blur landed in `data:wallpaper` beside the cropping and scaling it belongs
+  with, `wallpaperBackdrop` + `BackdropState` + `LocalBackdrop` landed in `core:designsystem/backdrop`, and the folder
+  overlay's opaque black sheet became the first frosted surface. See the design-system notes above for the four
+  departures from L1's version, and the wallpaper notes for how the sampled image is chosen.
+- **S5f-3 — liquid glass and the effects settings section.** The one unrendered variant: L1's AGSL shader (API 33+,
+  degrading to the plain blurred crop it already draws), and the tab that tunes all four. Genuinely optional relative
+  to the two above; nothing depends on it. **The slice's writer lands here too**: `backdropEffect` is read-only today,
+  because a setter with no caller is a model in a vacuum.
 
 Also open: a **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), home **padding** (S4g), home **orientation**, or

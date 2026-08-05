@@ -47,13 +47,21 @@ L2 types to storage, not designing new ones:
 | `SideSurfaceKind` (5) | `Surface` (2) | L1's SEARCH/RECENTS/CUSTOM_PANEL never shipped |
 | `SearchPosition` | `SearchPlacement` | exists, **no consumer yet** |
 | `SurfaceTransition` | `SurfaceTransition` | exists, **no consumer yet** |
-| `WallpaperEffect` + params | `BackdropEffect` | exists, **no consumer yet** |
+| `WallpaperEffect` + params | `BackdropEffect` | ✅ S5f-2 — a settings slice, read by the shell, drawn by `wallpaperBackdrop` |
 | `GridConfigKind`, `gridConfigKind()`, `GridDefaults` | — | superseded by `GridBlueprint`; **do not port** |
 
-Six `core:model` types have **zero consumers** outside `core:model` today (`SurfaceTransition`, `BackdropEffect`,
-`SearchPlacement`, `VerticalEdge`, `GridEditRange`, `GridEditorEdge`). Settings will be the first thing to use them,
-which means their shapes have never been checked against a caller — **expect to reshape them**, and treat that as
-the port doing its job rather than as scope creep.
+Six `core:model` types had **zero consumers** outside `core:model` when this was written (`SurfaceTransition`,
+`BackdropEffect`, `SearchPlacement`, `VerticalEdge`, `GridEditRange`, `GridEditorEdge`). Settings would be the first
+thing to use them, which meant their shapes had never been checked against a caller — **expect to reshape them**, and
+treat that as the port doing its job rather than as scope creep.
+
+**`BackdropEffect` is the worked example, and it survived first contact almost intact** (S5f-2). Its sealed shape held
+up where a flat `WallpaperEffect` + `WallpaperEffectParams` pair would not have, and it needed exactly two additions:
+`@Serializable`/`@SerialName` so it can be a settings slice, and a `blurStrength` property so the one thing every
+consumer asks it is not a `when` re-written per caller. What did *not* survive is a variant — `MaterialYou` asks for a
+wallpaper hue, which reads as a conflict with the monochrome palette rule until you notice the rule is about chrome
+and this is an effect the user picks — a distinction only a caller could have surfaced, and one that took a reversal
+mid-slice to settle.
 
 ---
 
@@ -233,6 +241,12 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
     preference, and they stay in `data:settings` (S5f).
 - **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-colour extraction. Pure image processing;
   belongs beside the graphics/icon code, in neither repository's module.
+  - **Revised again at S5f-2: both halves live in `data:wallpaper`.** "Beside the graphics code, in neither
+    repository's module" was written when the wallpaper lived *inside* `data:settings` — image processing genuinely has
+    no business in a preferences store. `data:wallpaper` is the opposite case: it exists because it decodes bitmaps,
+    and `cropAndScale` plus the sampled decode are in the file next door, so moving these somewhere abstract would
+    separate them from their only caller to honour a sentence about a module that no longer holds it. `dominantColor`
+    ships too, as `accentColor`'s API-26 fallback — see S5f-2 for why the hue is kept.
   - **Revised at S5f-1: the brightness signal does not need it, and neither half is ported yet.** The line below said
     the shell's `darkTheme` was waiting on the dominant-colour half. It was not.
     `WallpaperManager.getWallpaperColors` answers the question over the wallpaper *actually displayed* — no permission,
@@ -598,13 +612,48 @@ every phase ends with something visibly working on device, and no slice is writt
       `getWallpaperColors`, status-bar icon contrast included. Answering it means our own pair takes the same path as
       every other wallpaper instead of a special case reading our files behind the system's back. L1's published
       nothing, and had no caller that noticed.
-  - [ ] **S5f-2 — `BackdropEffect`, `Blur.kt`, and the folder's frosted backdrop.** The params as a **settings** slice
-        (they are the genuinely preference-shaped half — see S5a), `Blur.kt` ported to sit beside the graphics code,
-        L1's `BackdropState` / `LocalBackdrop` / `wallpaperBackdrop` node, and the folder's backdrop, which is solid
-        black today. This is where both halves of `Blur.kt` finally get their real consumer.
+  - [x] **S5f-2 — the frosted backdrop.** `BackdropEffect` as a `data:settings` slice, `Blur.kt`'s box blur, L1's
+        `BackdropState` / `LocalBackdrop` / `wallpaperBackdrop` node in a new `core:designsystem/backdrop`, and the
+        folder overlay as its first frosted surface. Six things worth keeping straight:
+    - **The model was already there and mostly right.** B0's sealed `BackdropEffect` needed `@Serializable` +
+      `@SerialName` (short names, so the discriminator in a user's blob survives a class rename) and a `blurStrength`
+      property, so the one question every consumer asks it is not a `when` re-written per caller. See the note in
+      "Target shape" above — this is the worked example of a `core:model` type meeting its first caller.
+    - **All four effects carry the wallpaper's hue — the deliberate exception to the monochrome palette rule.** That
+      rule makes *chrome* greyscale so the wallpaper and the icons carry the colour; an effect the user selects, whose
+      subject is the wallpaper, is not chrome. L1's two-stage blend is ported exactly: a wallpaper tone of
+      `lerp(surfaceVariant, accent, 0.30)`, then `lerp(White|Black, tone, 0.35)` for the blurs and the tone outright
+      for Material You. The 35% nudge is not decoration — a neutral film over a blurred photograph reads as dirty, and
+      that is what it fixes. **Recorded as a reversal**: the first cut of this slice dropped the hue everywhere and
+      left `MaterialYou` unrenderable on palette grounds, and the author reversed it mid-slice.
+    - **Both halves of `Blur.kt` crossed, and the accent does not come from the OS palette.** L1 read
+      `colorScheme.primary` above API 31, which worked because its launcher ran a normal M3 dynamic scheme; L2 bridges
+      a **monochrome** scheme, so that expression returns grey and the dynamic-colour route is closed by a decision
+      made long before this. `accentColor` reads the wallpaper instead — `WallpaperColors.primaryColor` on API 27+,
+      `dominantColor` over our own file below it. Note the trap S5f-1 nearly walked into: `dominantColor` is
+      saturation-weighted, so it is the right statistic for "what colour?" and the wrong one for "how bright?".
+    - **`Blur.kt` went into `data:wallpaper`, not "beside the graphics code".** That instruction was written when the
+      wallpaper lived inside `data:settings`, where image processing had no business; `data:wallpaper` exists *because*
+      it decodes bitmaps, and `cropAndScale` is in the file next door. See the revised note above.
+    - **One answer to "which image does an effect sample?"**, for all three sources at once — which is what the
+      sources-before-effects reordering was for. Rotating active → that orientation's half; a capture → always, since
+      it *is* a picture of what is displayed; a picked image → only while `appliedSystemId` matches the live wallpaper
+      id; otherwise nothing. **That third test replaces L1's `appliedSingle` snapshot** — a whole second copy of the
+      file, kept so an unapplied pick could not desynchronise the backdrop — and it answers one more question the
+      snapshot could not: a wallpaper set outside the launcher makes the ids differ, where the snapshot went on
+      claiming to match. Same gate `brightness` uses, so the two readings cannot drift.
+    - **A flow, where L1 re-read on recomposition.** Two of those four answers change with no action from us (the
+      system's own wallpaper settings, the live-wallpaper chooser), so a one-shot read can show a blur of a wallpaper
+      that is no longer there. It shares `brightness`' change signal.
+    - **Provided at the shell**, the theme's own boundary — L1 provided it inside `HomeScreen`, which is why its
+      settings feature needed a second provider. `LocalLockedBackdrop` is **not** carried: L1's second backdrop exists
+      for a popup menu and a widget picker that L2 does not have.
   - [ ] **S5f-3 — liquid glass, and the effects section.** L1's `LiquidGlass.kt` AGSL shader (API 33+, falling back to
-        the plain blur) and the ten-parameter tab that tunes it. Optional relative to S5f-2, and last for the same
-        reason it was last in L1: nothing else depends on it.
+        the plain blur, which is what `BackdropEffect.LiquidGlass` renders as today) and the tab that tunes it.
+        Two things land with it beyond the shader: the slice's **writer** (`backdropEffect` is read-only until a
+        section calls one, since a setter with no caller is a model in a vacuum), and the **`MaterialYou` decision** —
+        it cannot stay declared-but-unrenderable once a user can pick it. Optional relative to S5f-2, and last for the
+        same reason it was last in L1: nothing else depends on it.
 - [ ] **S6 — Folder + the long tail.** Folder metrics (1 knob), search placement (needs the alphabet-strip/search
       feature to exist first), presets.
 - [ ] **P8 exit criteria** — every placeholder constant in the table above is either settings-driven or has a written
