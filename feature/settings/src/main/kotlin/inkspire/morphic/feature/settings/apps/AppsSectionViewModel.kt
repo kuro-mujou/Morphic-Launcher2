@@ -30,30 +30,45 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Which grid each configurable APPS layout draws — the section's whole navigation, in one map.
+ * The grid this layout draws.
  *
  * **A layout is what the user recognises; a [GridSlot] is what the store is keyed by.** The chips name layouts because
  * that is the choice a user has already made (per home edge, in the surface register), and every control below then
  * addresses that layout's grid. L1 did the same and made the same distinction: its drawer detail edited
  * `drawer.profile(layout)`, the profile of whichever layout was selected.
  *
+ * **Total, and a `when` rather than a map so that it cannot be otherwise.** This began as a map that was *deliberately*
+ * partial — [AppsLayout.CATEGORY_CARD] was left out and [ConfigurableLayouts] was its key set, so one structure carried
+ * two facts. It held while the only caller was this section's chip row, and threw the moment the surface register
+ * asked, because a card layout is a perfectly ordinary thing to bind to an edge even though this section cannot size
+ * it. Every layout draws *some* grid; which of them has knobs is the other question, and it now has its own list.
+ */
+internal val AppsLayout.slot: GridSlot
+    get() = when (this) {
+        AppsLayout.VERTICAL_LIST -> GridSlot.APPS_LIST
+        AppsLayout.VERTICAL_GRID -> GridSlot.APPS_SCROLL
+        AppsLayout.PAGER -> GridSlot.APPS_PAGER
+        AppsLayout.PAGER_WITH_CATEGORY -> GridSlot.APPS_CATEGORY
+        AppsLayout.CATEGORY_CARD -> GridSlot.APPS_CARD
+    }
+
+/**
+ * The layouts this section can configure, in the order their chips appear.
+ *
  * [AppsLayout.CATEGORY_CARD] is deliberately absent, and it is the one gap in this section. Its lane count *is* the
  * user's in principle — `AppsCardGrid` declares an `editRange` — but a card is a **tile**, so how narrow one may get
  * is not an icon guardrail (its blueprint declares no icon sizing at all) and nothing else answers it yet. Offering a
  * ceiling picked by hand is what the rest of this port has avoided; L1 gave its library layout no grid knobs either.
+ *
+ * Stated as its own list rather than read off [slot]'s cases: "which grid does this draw" and "which can I edit" are
+ * different questions, and deriving one from the other is what made asking the first one crash.
  */
-private val LayoutSlots: Map<AppsLayout, GridSlot> = mapOf(
-    AppsLayout.VERTICAL_LIST to GridSlot.APPS_LIST,
-    AppsLayout.VERTICAL_GRID to GridSlot.APPS_SCROLL,
-    AppsLayout.PAGER to GridSlot.APPS_PAGER,
-    AppsLayout.PAGER_WITH_CATEGORY to GridSlot.APPS_CATEGORY,
+internal val ConfigurableLayouts: List<AppsLayout> = listOf(
+    AppsLayout.VERTICAL_LIST,
+    AppsLayout.VERTICAL_GRID,
+    AppsLayout.PAGER,
+    AppsLayout.PAGER_WITH_CATEGORY,
 )
-
-/** The layouts this section can configure, in the order their chips appear. */
-internal val ConfigurableLayouts: List<AppsLayout> = LayoutSlots.keys.toList()
-
-/** The grid [layout] draws. */
-internal val AppsLayout.slot: GridSlot get() = LayoutSlots.getValue(this)
 
 /**
  * What the APPS section shows for the layout currently selected.

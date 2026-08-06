@@ -39,6 +39,7 @@ import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
+import inkspire.morphic.feature.settings.label
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.icons.IconSizingControls
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
@@ -71,12 +72,22 @@ private val ChipGap = 8.dp
  * guessed bound.
  */
 @Composable
-internal fun AppsDetail(modifier: Modifier = Modifier) {
+internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = Modifier) {
     val viewModel = koinViewModel<AppsSectionViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
+    // **Arrived from the register's gear, on that edge's layout.**
+    //
+    // Keyed on `Unit`, so it runs once per *arrival* at this pane rather than once per distinct value. Keying on
+    // `initialLayout` looked right and had a hole: gear on "Pages", tap the "List" chip, go back and gear "Pages"
+    // again — the value never changed, so nothing re-fired and the pane opened on List. Leaving the pane disposes it
+    // (both shells swap details through `AnimatedContent`), so re-entry is exactly the event this should follow.
+    //
+    // Null on every other route in, which leaves the ViewModel's own selection alone. It cannot name an
+    // unconfigurable layout: that gear is not drawn — see `SurfaceRegisterCross`.
+    LaunchedEffect(Unit) { initialLayout?.let(viewModel::selectLayout) }
     val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
 
     val colors = LocalMorphicColors.current
@@ -356,23 +367,6 @@ internal fun AppsDetail(modifier: Modifier = Modifier) {
         },
     )
 }
-
-/**
- * A human label for a layout.
- *
- * Local to this screen rather than on the enum, for the reason the icons section keeps its own: `core:model` stays
- * free of display strings and of localisation. The names describe the *arrangement* a user sees rather than the enum
- * constant — L1 named the same four "Minimalist", "Classic", "Paged" and "Grouped", which named its own history more
- * than the layouts.
- */
-private val AppsLayout.label: String
-    get() = when (this) {
-        AppsLayout.VERTICAL_LIST -> "List"
-        AppsLayout.VERTICAL_GRID -> "Grid"
-        AppsLayout.PAGER -> "Pages"
-        AppsLayout.PAGER_WITH_CATEGORY -> "Category pages"
-        AppsLayout.CATEGORY_CARD -> "Category cards"
-    }
 
 /**
  * The search placements this [AppsLayout] can offer, as label → value.

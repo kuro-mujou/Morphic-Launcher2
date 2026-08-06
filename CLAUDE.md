@@ -867,6 +867,38 @@ detail on a tablet, sliding between the two on a phone, with `SettingsSection` a
 `SettingsScreen`. An earlier cut gave each section its own `NavKey`; that was reversed because a pane which shares the
 screen with another is not a destination. L1's *actual* mistake is still avoided — it declared that enum in the
 **navigation module**, so `feature:home` could import `SettingsSection.WALLPAPER`; ours never leaves the feature.
+**The surface register is a cross, because the setting is spatial** — L1's `SurfaceRegister`, ported: HOME in the
+middle, the four edges around it, five screen-shaped cards in a plus. Which edge opens what is a fact about *where
+things are*, and the four labelled chip groups this replaced made a reader rebuild that arrangement in their head. It
+also reverses this section's own earlier reasoning, which is worth keeping: chips beat the segmented control because
+"an edge offers six options", and what that missed is that the **edges** were the part with a shape, not the options —
+so the options moved into a modal (`SideBindingPicker`, L1's dialog with its radio-and-plain-text body replaced by the
+same mockups) and the edges got the picture.
+- **A card names what is bound; it does not draw it** — L1's icon-and-label card, kept. A cut that filled each card
+  with the layout's own mockup (reusing `AppsEditorPreview`, the drawing the grid editor already owns) was built and
+  **reversed at the author's call**: at 88dp a mockup is a smudge, five at once turn a picker into a wall of texture,
+  and what a reader scans this screen for is *which edge has something on it*, which a glyph and a name answer at once.
+  The picture belongs where a layout is chosen or sized, not where four of them are placed. The picker is L1's radio
+  list for the same reason.
+- Every side shows the **same** glyph, because every binding is the same *surface* and the label carries which
+  arrangement. L1 varied it because its two side surfaces were two modules; the surface taxonomy's collapse of
+  drawer + library into APPS shows up right here.
+- **The gear is L1's, and it lands on the layout, not just the section.** A card is two targets divided by a rule —
+  the body *changes* what is bound, the gear *configures* what is bound already — and since the APPS section edits one
+  layout at a time, the jump carries which one (`onOpenSection(section, layout)`; `SettingsScreen` holds it as a second
+  saveable enum beside `selected`, because `SettingsSection` is the list's vocabulary and a payload one section can
+  carry does not belong inside it). `AppsDetail` applies it in a `LaunchedEffect(Unit)` — once per *arrival* at the
+  pane, not per distinct value, or gearing the same layout twice in a row would silently not re-select it.
+  **No gear where there is nothing to open**: `CATEGORY_CARD` is not in `ConfigurableLayouts`, so a card bound to it
+  shows none — L1's `settingsSection` is nullable for exactly that reason. It would otherwise land on a pane with no
+  chip for it, and on controls that ask a tile grid for icon sizing it does not declare.
+- The card is the shape of **this** device, from `usableWindowArea` rather than L1's `LocalConfiguration`, with L1's
+  fixed long side (176dp) and the short side following the ratio — the same rule `GridEditor` sizes its mockup by, and
+  for the same reason a fraction of the pane was rejected there.
+- `AppsLayout.label` is now **one** vocabulary (`feature/settings/LayoutLabels.kt`). It existed twice with *different*
+  strings — "Pages"/"Category pages"/"Category cards" against "Pager"/"Pager + category"/"Cards" — each promising in
+  KDoc to move when a second screen needed it; the picker was the third.
+
 **A section belongs to a surface and holds everything about it**, layout controls *and* icon sizing, exactly as each
 of L1's five details embedded `IconLayoutControls` under its layout section. **All five surfaces now have theirs** —
 Home, Dock, Apps and Folders — and the standalone icon-sizing screen is **gone**, because the folder section took the

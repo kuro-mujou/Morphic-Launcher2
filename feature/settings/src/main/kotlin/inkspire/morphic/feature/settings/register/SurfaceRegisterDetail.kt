@@ -1,8 +1,6 @@
 package inkspire.morphic.feature.settings.register
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +9,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,13 +19,12 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.data.settings.SideBinding
-import inkspire.morphic.feature.settings.component.SettingsChip
+import inkspire.morphic.feature.settings.SettingsSection
 import org.koin.androidx.compose.koinViewModel
 
-/** Provisional spacing — placeholders until the settings port brings real row and chip components with it. */
+/** Provisional spacing — placeholders until the settings port brings real row components with it. */
 private val ScreenPadding = 20.dp
-private val GroupGap = 24.dp
-private val ChipGap = 8.dp
+private val CrossGap = 20.dp
 
 /**
  * The **surface register**: for each edge of HOME, which surface it opens and in which layout.
@@ -34,24 +34,36 @@ private val ChipGap = 8.dp
  * [SurfaceRegisterViewModel] to `data:settings`, and `feature:shell` is watching the same flow, so the change takes
  * effect on HOME immediately with nothing to apply or confirm.
  *
+ * **It is a cross, because the setting is spatial** ([SurfaceRegisterCross]) — L1's `SurfaceRegister`, ported. Which
+ * edge opens what is a fact about *where things are*, and the four labelled chip groups this replaced made the reader
+ * rebuild that arrangement in their head from a list. Five cards in a plus simply are it.
+ *
+ * **The cross replaced chips, which had replaced a segmented control**, and the reason chips won then is the reason
+ * they lose now: six options per edge is too many to lay out in one row, so they wrapped. What that reasoning missed is
+ * that the *edges* were the part with a shape, not the options — so the options moved into a modal
+ * ([SideBindingPicker]) and the edges got the picture.
+ *
  * **Only the bindings are offered, deliberately.** The register also stores `homeLayout` and `transition`, and neither
  * has a consumer yet — `HomeScreen` is `PAGER_WITH_DOCK` by construction and `SurfacePager` implements only `SLIDE`. A
  * control for a setting that changes nothing is worse than a missing one: it teaches the user the app is broken. They
- * appear here when the things they configure exist.
+ * appear here when the things they configure exist. (L1 offered both from this screen, and its presets from here too.)
  *
- * **Chips rather than the segmented control**, which does exist (`MorphicSegmentedButtons`, so far used only by the dev
- * gallery). It lays its options out in one `Row` with `weight(1f)` each and cannot wrap, which suits two to four
- * options; an edge here offers six. Chips in a `FlowRow` wrap, so they are the right tool for this count — not a
- * stand-in for a missing component.
+ * **One picker, hoisted**, rather than one per slot: which edge is being filled is this screen's state, so at most one
+ * dialog exists whatever the cross is doing.
  *
  * A **detail**, not a screen: the theme, the background, the app bar and back all belong to `SettingsScreen`, which
  * has one of each for what may be two panes.
  */
 @Composable
-internal fun SurfaceRegisterDetail(modifier: Modifier = Modifier) {
+internal fun SurfaceRegisterDetail(
+    onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel = koinViewModel<SurfaceRegisterViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = LocalMorphicColors.current
+
+    var picking by remember { mutableStateOf<HomeEdge?>(null) }
 
     Column(
         modifier = modifier
@@ -61,59 +73,29 @@ internal fun SurfaceRegisterDetail(modifier: Modifier = Modifier) {
     ) {
         Text("Surface register", style = MaterialTheme.typography.headlineSmall, color = colors.content)
         Text(
-            text = "Which surface each edge of home opens. Swipe from an edge to reach it.",
+            text = "Which surface each edge of home opens. Tap a slot to place one; swipe from that edge to reach it.",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.contentMuted,
         )
 
-        // Every edge gets a group, including unbound ones — an edge you cannot see is an edge you cannot bind,
-        // which is the state the launcher ships in.
-        HomeEdge.entries.forEach { edge ->
-            val bound = state.register.sides[edge]
-            Column(Modifier.padding(top = GroupGap)) {
-                Text(
-                    text = edge.name.lowercase().replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.content,
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(ChipGap),
-                    verticalArrangement = Arrangement.spacedBy(ChipGap),
-                    modifier = Modifier.padding(top = ChipGap),
-                ) {
-                    // "None" is a peer of the layouts rather than a separate toggle: an edge is bound to exactly
-                    // one thing or nothing, so one row of mutually exclusive choices says it without a second
-                    // control that could disagree with the first.
-                    SettingsChip(
-                        label = "None",
-                        selected = bound == null,
-                        onClick = { viewModel.bindApps(edge, layout = null) },
-                    )
-                    AppsLayout.entries.forEach { layout ->
-                        SettingsChip(
-                            label = layout.label,
-                            selected = (bound as? SideBinding.Apps)?.layout == layout,
-                            onClick = { viewModel.bindApps(edge, layout) },
-                        )
-                    }
-                }
-            }
-        }
+        SurfaceRegisterCross(
+            bindings = state.register.sides,
+            onPick = { picking = it },
+            onOpenSettings = onOpenSection,
+            modifier = Modifier.padding(top = CrossGap),
+        )
+    }
+
+    val edge = picking
+    if (edge != null) {
+        SideBindingPicker(
+            edge = edge,
+            selected = (state.register.sides[edge] as? SideBinding.Apps)?.layout,
+            onSelect = { layout ->
+                viewModel.bindApps(edge, layout)
+                picking = null
+            },
+            onDismiss = { picking = null },
+        )
     }
 }
-
-/**
- * A human label for a layout.
- *
- * Local to this screen rather than on the enum: `core:model` stays free of display strings (and of localisation), which
- * is the same reason `Category` carries an id and the UI resolves the name. When a second screen needs these, they move
- * to one place in the settings feature — not into the model.
- */
-private val AppsLayout.label: String
-    get() = when (this) {
-        AppsLayout.VERTICAL_LIST -> "List"
-        AppsLayout.VERTICAL_GRID -> "Grid"
-        AppsLayout.PAGER -> "Pager"
-        AppsLayout.PAGER_WITH_CATEGORY -> "Pager + category"
-        AppsLayout.CATEGORY_CARD -> "Cards"
-    }
