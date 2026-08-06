@@ -233,4 +233,33 @@ interface SettingsRepository {
      * count is untouched, so widening the padding is reversible where a resize is not.
      */
     suspend fun setHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?)
+
+    /**
+     * Whether each pager's pages **wrap around** at the ends — resolved, and keyed by the grid that pages.
+     *
+     * **One map rather than a per-slot flow**, which is the opposite shape to every read above it and for a reason
+     * those do not have. Wrapping has no device dimension, and exactly three grids can answer, so the whole answer is
+     * three booleans; meanwhile the shell needs several of them *at once* — HOME's, plus one per bound edge — and
+     * which ones depends on settings it is reading in the same breath. A per-slot flow would make that a dynamic
+     * number of subscriptions to serve a value smaller than the subscription. Surfaces that draw one pager index the
+     * map by their own slot.
+     *
+     * Contains an entry for every wrappable grid, always — a slot with nothing stored resolves to its blueprint's
+     * default rather than being absent, so a reader never has to know whether the user has been here.
+     */
+    val pagerWraps: Flow<Map<GridSlot, Boolean>>
+
+    /**
+     * Turns [slot]'s page wrapping on or off, or clears it (back to the blueprint) when [wraps] is null.
+     *
+     * **Throws for a slot that is not a configurable pager**, exactly as [setExtent] does for a grid with no extent:
+     * `GridBlueprint.wraps` is where "does this grid page" is declared, and deferring to it beats a second list here
+     * that could disagree. A folder pages too but is bounded by construction, so it is not askable either.
+     *
+     * **This write changes a gesture, not just an animation.** A wrapping pager has no edge to hand off from, so the
+     * one-finger swipe on its axis becomes `OneFingerSwipe.NEVER` — turning wrapping on for HOME's pager means a
+     * LEFT- or RIGHT-bound surface needs two fingers to open. That is why the control says so, and why the blueprint
+     * defaults are off.
+     */
+    suspend fun setPagerWrap(slot: GridSlot, wraps: Boolean?)
 }

@@ -243,6 +243,24 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   One value rather than a per-[DeviceConfiguration] map, matching [extentDp] and [rowHeightDp] and for the same
  *   reason: a margin is a physical size, not a count that should change with posture. A user who wants a wider one in
  *   landscape overrides it there, since overrides are keyed per configuration.
+ * @property wraps Whether this grid's **pages wrap around** at the ends — or **null** for a grid whose wrapping is not
+ *   the user's to set, which is every grid but three.
+ *
+ *   Null covers two different reasons, deliberately collapsed because the consequence is the same: a grid that is not
+ *   paged at all (a list, a scrolling grid, the dock, the widget area), and a paged one that is bounded by
+ *   construction (a folder, whose pages are a handful of apps in a card). This is [extentDp] and [rowHeightDp]'s
+ *   convention, and it is what lets `SettingsRepository` refuse a slot that has no such setting rather than every
+ *   caller checking first.
+ *
+ *   Not per-[DeviceConfiguration], and not for [horizontalPaddingDp]'s reason — this one is not a size at all. Whether
+ *   pages loop is a fact about how the user wants to move through their apps, and it does not change when the phone is
+ *   turned on its side.
+ *
+ *   **False where L1's default was true**, which is a deliberate reversal. L1 shipped `pager.infiniteScroll = true`,
+ *   and under the surface-swipe rules that is louder than it sounds: a wrapping pager has no edge to hand off from, so
+ *   `AxisScroll.INFINITE` makes the one-finger swipe on that axis `OneFingerSwipe.NEVER` — with wrapping on by
+ *   default, a horizontal edge binding could only be opened with **two fingers**, and a user who never found this
+ *   setting would never know why. Off by default, opt in.
  */
 data class GridBlueprint(
     val slot: GridSlot,
@@ -255,9 +273,13 @@ data class GridBlueprint(
     val extentDp: Int? = null,
     val rowHeightDp: Int? = null,
     val horizontalPaddingDp: Int = 0,
+    val wraps: Boolean? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null
+
+    /** True when this grid is a pager whose wrapping the user may turn on and off — see [wraps]. */
+    val pages: Boolean get() = wraps != null
 }
 
 /** Builds the per-[DeviceConfiguration] default map from one [GridDefault] per configuration. */
@@ -329,6 +351,8 @@ val HomePagerGrid = GridBlueprint(
     // that a 2×2 visual slot can afford slack; at 100% the same slack is expressed by the 48dp cap instead, in the
     // units a user reads.
     icon = IconSizing(),
+    // Paged, and the wrapping is the user's — see `wraps` for why it starts off where L1 started it on.
+    wraps = false,
 )
 
 /**
@@ -459,6 +483,7 @@ val AppsPagerGrid = GridBlueprint(
     // than home — but a narrower cell already produces a smaller icon at 100%, since the fraction is *of the cell*, so
     // the extra reduction was double-counting the density.
     icon = IconSizing(),
+    wraps = false,
 )
 
 /**
@@ -512,6 +537,10 @@ val AppsCategoryGrid = GridBlueprint(
         tabletLandscape = GridDefault(cols = 8),
     ),
     icon = IconSizing(),
+    // The one grid that is `SCROLL_GRID` *and* paged: each page scrolls vertically, and the pages themselves are the
+    // pager. So `sizing` could never be what says a grid wraps — which is why [GridBlueprint.wraps] is declared
+    // rather than derived from it.
+    wraps = false,
 )
 
 /**

@@ -26,6 +26,7 @@ import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceMetrics
+import inkspire.morphic.data.settings.SurfacePaging
 import inkspire.morphic.data.settings.SurfaceRegister
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -74,6 +75,23 @@ private val AppsChromeSlice = SettingsSlice(
     serializer = serializer<AppsChrome>(),
     default = AppsChrome.Default,
 )
+
+/** How the launcher's three pagers page: one key, one blob, sparse inside. */
+private val SurfacePagingSlice = SettingsSlice(
+    name = "surface_paging",
+    serializer = serializer<SurfacePaging>(),
+    default = SurfacePaging.Default,
+)
+
+/**
+ * The grids whose paging is the user's to configure, with the blueprint default each falls back to.
+ *
+ * Built once from the blueprint registry rather than listed here, so adding a pager is a `wraps = …` on its blueprint
+ * and nothing else — the same deferral `extentBaseOf` makes for one slot at a time. It is also what lets
+ * [SettingsRepositoryImpl.pagerWraps] promise an entry for every wrappable grid without naming any of them.
+ */
+private val WrappableGrids: Map<GridSlot, Boolean> =
+    GridSlot.entries.mapNotNull { slot -> slot.blueprint.wraps?.let { slot to it } }.toMap()
 
 /**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
@@ -233,6 +251,18 @@ internal class SettingsRepositoryImpl(
         // and the ceiling is a judgement about how much of a grid may be given away — neither needs a measured screen.
         val clamped = dp?.coerceIn(HorizontalPaddingRange.first, HorizontalPaddingRange.last)
         update(SurfaceMetricsSlice) { withHorizontalPadding(slot, device, clamped) }
+    }
+
+    // Resolved for every wrappable grid at once — see the interface for why this one is a map where its neighbours
+    // are per-slot reads. Mapping over [WrappableGrids] rather than over what is stored is what makes the promise
+    // "an entry for every pager, always" hold on a fresh install, where the blob is empty.
+    override val pagerWraps: Flow<Map<GridSlot, Boolean>> = dataStore.read(SurfacePagingSlice) { paging ->
+        WrappableGrids.mapValues { (slot, base) -> paging.wrapsFor(slot, base) }
+    }
+
+    override suspend fun setPagerWrap(slot: GridSlot, wraps: Boolean?) {
+        require(slot in WrappableGrids) { "$slot is not a pager whose wrapping is configurable" }
+        update(SurfacePagingSlice) { withWrap(slot, wraps) }
     }
 
     /**
