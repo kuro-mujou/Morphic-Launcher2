@@ -110,6 +110,16 @@ Key rules:
 - **Categories (defs + membership) live in Room**, not the settings blob — users create custom ones.
 - L1's conflated `surface` column became `zone`; L1 `Surface{HOME,DOCK,WIDGET_AREA}` split into L2
   `Surface{HOME,APPS}` + `HomeZone`.
+- **HOME's vertical list is a store of its own, seeded from the grid — not a view of it.** `HomeListRepository`
+  (`data:layout`, the third repository beside `LayoutRepository` and `AppsOrderRepository`) owns `home_list_item`,
+  and the split is what makes HOME's two pairings independent. L1 derived its list *live* from the pager's
+  placements, flattened by (page, row, col), so one drag in the list wrote `MoveApp(page = 0, row = i, col = 0)` for
+  every app and destroyed the grid arrangement permanently. The good half of that idea survives as
+  `seedIfEmpty(readingOrder(...))`, run when the pairing is first chosen: switching to the list hands the user their
+  apps in the order they already recognise, rather than a blank screen with no picker to fill it. Membership is fixed
+  by `setOrder`, which **reconciles against what is stored** (`reconcileReportedOrder`) — the guard is in the store
+  rather than at the call site, as `AppsCategoryChange.Reorder`'s is, because the caller has nothing true to
+  reconcile against.
 
 **Settled for the APPS pager: it holds folders, and a folder's slot *is* its row.** `apps_pager_item` was keyed on
 `component`, so it could only hold an app, and an APPS-hosted folder had nowhere to store its position. Both were
@@ -356,7 +366,8 @@ colours**, which L1's did not — see the design-system note above; it is what l
 brightness question through the same system API as every other wallpaper.
 - **Horizontal padding is width the grid does not get, and it goes *above* whatever publishes geometry** (S4g). Every
   grid has a `horizontalPaddingDp` on its blueprint (0 by default) with a per-slot × device override, and all seven
-  drawn grids apply it — home's pager and dock, and the five APPS layouts. Two rules make it safe, and both are
+  drawn grids apply it — home's pager and dock (and, since the second pairing, its list and widget area), and the
+  five APPS layouts. Two rules make it safe, and both are
   properties of where it is applied rather than of extra code:
   - **Subtract before fitting.** Cell dimensions are divided out of the remaining width, so `CellFit` must see the
     reduced area — otherwise a surface sizes cells for a width it does not have, and the settings editor offers
@@ -521,7 +532,33 @@ delete cascades its membership + placement rows. The APPS pager/category/list **
 repository (not built). Deferred: cross-orientation rotate-seeding (empty-folder auto-dissolve now done, in the
 home layer).
 
-**Home surface — extracted to `feature:home`, real-sized, two zones (pager + dock), with a full folder subsystem.**
+**Home surface — two *pairings*, chosen in one place.** `HomeScreen` is a `when` over `HomeLayout` above shared
+wiring (the ViewModel, the device report, the state), which is deliberately `AppsScreen`'s shape and the same
+argument: both arrangements render the same apps with the same launch behaviour, so "which pairing?" is answered
+once, above everything both need. The arms are **`HomePagerSurface`** (`PAGER_WITH_DOCK`) and **`HomeListSurface`**
+(`LIST_WITH_WIDGET_AREA`); the unbuilt-arm-behind-`else` trap is avoided by listing both, so a third value fails to
+compile until it is drawn. L1 answered this with a `HomeSurfaceRegistry` of `HomeSurface` implementations, each
+declaring a `HomeGestureSet` (`hasPager`/`hasDock`/`hasWidgetArea`/`dropPolicy`/`longPress`) its shell interpreted —
+indirection that made the set of layouts *open* while every consumer still branched on which one it had, so
+`isVerticalListHome` appears nine times in its home screen alone, each occurrence re-deciding which store to read.
+- **`HomeZoneScaffold` is the shared half**, and the only one: a `Column` under a strip, a `Row` beside a rail, the
+  side zone first or last as `SideZoneEdge.isLeading` says, the main area taking the remainder, `uiInsets` on the
+  pair and each zone's own horizontal margin on *its own* modifier (which is what keeps drag geometry correct for
+  free — both drag surfaces publish bounds from an `onGloballyPositioned` placed after the caller's modifier). L1's
+  `Shell(dockLandscape, dockThickness, dockAtStart)` did the same job with two booleans.
+- **The two surfaces share nothing else, and that is not an omission**: a coordinate surface asks "which cell, and
+  who gets shoved aside?" where an ordered one asks "which index?", so there is no planner, no store and no gesture
+  in common.
+- **`HomeLayout.mainSlot`/`sideSlot`/`sideZone`** (`core:model/HomeLayoutGrids.kt`) are what make every *other*
+  consumer layout-agnostic — the ViewModel, both settings sections and the icon-sizing block ask for "the main slot"
+  rather than naming `HOME_MAIN`/`HOME_DOCK`. Three exhaustive one-liners, so a third pairing cannot be added
+  without saying what it is made of.
+- **`HomeState.main` is a sum type** (`HomeMainSizing.Pager` / `.List`), because the two pairings configure a
+  *different quantity* rather than the same one differently: a pager divides the space it is given (counts), a list
+  is one lane with nothing to divide (a row height). Neither could supply the other's value. `DockSizing` became
+  `SideZoneSizing`, one type for both zones, since a dock and a widget area are the same *kind* of thing.
+
+**`PAGER_WITH_DOCK` — real-sized, two zones (pager + dock), with a full folder subsystem.**
 Its own module (`feature:home`, `inkspire.morphic.feature.home`); plain-MVVM `HomeViewModel` (screen-scoped
 `ViewModel`, optimistic placement state, logic out of the UI) joins `LayoutRepository.placements` + `AppRepository`
 apps + `LayoutRepository.folders`. The main area renders on the paged `CoordinateDragPager` at the **real blueprint
@@ -609,7 +646,13 @@ the default `DevRootScreen` screen.
   items alone. Two bugs came from getting this wrong, both worth not repeating: matching a merge target on placement
   alone resolved a folder in the wrong zone, and scoping the *open-folder* lookup to MAIN left a tapped dock folder
   with its id set on the host and nothing to render (opening is zone-independent; merge *targets* are per-zone).
-- **Where the dock sits is `DockEdge`, and it is a rule rather than a setting.** A **bottom strip** on phone portrait,
+- **Where a side zone sits is `SideZoneEdge`, and it is a rule rather than a setting.** Four values, because HOME's
+  two pairings put their zone on opposite ends: a **dock** is a bottom strip or a trailing rail, a **widget area** is
+  a top strip or a leading rail — one is the thing you reach for, the other the thing you look at.
+  `DeviceConfiguration.sideZoneEdge(layout)` is the whole rule, and `isStrip`/`isLeading`/`opposite` are what every
+  consumer reads instead of re-deriving it. This was `DockEdge` with two values while the dock was the only side zone;
+  L1 could not express it at all and passed a `landscape` boolean *and* a `dockAtStart` boolean side by side. The dock
+  half of the rule is unchanged: a **bottom strip** on phone portrait,
   tablet portrait and tablet landscape; a **rail on the trailing edge** on phone landscape — the one posture that is
   short and wide, where a bottom dock would take a third of the height for one row of icons. `END` rather than `RIGHT`
   because a `Row` places it last, which is the right side in LTR and the left in RTL. It keys on the whole
@@ -629,11 +672,10 @@ the default `DevRootScreen` screen.
     home and would not come back. A grid drawn out of bounds for as long as a rotation lasts is cosmetic and reverses
     itself; the write does not. The guard becomes vacuous the day placements are stored per posture.
 - **Layout: the dock has an extent of its own, the pager takes the rest, and there is no padding anywhere.** The dock's
-  extent is a **setting** (`SurfaceMetrics.dockExtentDp`, defaulting to `DockGrid.extentDp`) *and* its rows and
+  extent is a **setting** (`SurfaceMetrics.extentDp[HOME_DOCK]`, defaulting to `DockGrid.extentDp`) *and* its rows and
   columns are stored counts — the extent does not replace a count, it **bounds** the one it divides, since a cell is
-  `extent ÷ count`. It is an *extent* and not a height because `DockEdge` decides which dimension it names; one value
-  per device serves both, since a user configuring a phone in landscape is configuring the rail, and the serialized key
-  stays `dockHeightDp` (a Kotlin rename, not a semantic break — renaming it would reset every stored dock).
+  `extent ÷ count`. It is an *extent* and not a height because `SideZoneEdge` decides which dimension it names; one
+  value per device serves both, since a user configuring a phone in landscape is configuring the rail.
   `CellFit.fitGridConfig` resolves a stored size against what an area can actually hold, from the two
   inputs only the surface knows (the measured width, and the type scale behind a label row) — and it needs **no branch**
   for the rail, because the extent is simply in the area's width there and each axis is fitted to the dimension it is
@@ -660,7 +702,7 @@ the default `DevRootScreen` screen.
 - **The dock's extent is subtracted from home, so growing it can invalidate home's counts too** — the same invalidation
   one grid over, on whichever axis the subtraction happened (a bottom strip takes home's height, a rail takes its
   width), and it is answered in the two halves this codebase already splits such things into. The **surface**
-  fits the pager to what is left (`CellFit.fitGridConfig` over `splitForDock`'s main half, the same expression the
+  fits the pager to what is left (`CellFit.fitGridConfig` over `splitForSideZone`'s main half, the same expression the
   Home settings section computes its bounds from) and re-homes the displaced items to a further page
   (`HomeViewModel.fitMainTo`, the pager's `fitDockTo`); the **count itself is written down** only by the dock
   section's extent commit, which is the deliberate change that caused it. That is the dock's own asymmetry applied
@@ -673,6 +715,41 @@ the default `DevRootScreen` screen.
   leaves room for more rows than the five it stores. **Neither zone settles until the store has answered for it** —
   a blueprint fallback is a smaller grid than one the user has grown, and settling against it would make a transient
   first frame a permanent write.
+
+**`LIST_WITH_WIDGET_AREA` — a widget area at the leading edge, a hand-ordered list of apps filling the rest.**
+`HomeListSurface`, the second arm of `HomeScreen`'s `when`, and structurally the dock pairing's mirror: the same
+`HomeZoneScaffold`, the same "extent bounds the count it divides" rule, the same settings sections. What differs is
+what each zone *holds*, and every difference below follows from that rather than being a choice.
+- **The widget area is the dock in every way but its contents**, which is one field: `WidgetAreaGrid.icon` is
+  **null**, because a widget is not an icon in a cell. That null is load-bearing three times over — `CellFit` fits it
+  by `WidgetMinCell` (48dp square, L1's `MIN_WIDGET_DP`) rather than by inverted icon guardrails, the ViewModel skips
+  it when resolving icon sizing (`SettingsRepository.iconSizing` rightly throws for it), and its settings section
+  draws no icon group at all. That last one is exactly the shape L1's `DockSettingsDetail` took in its `minimalist`
+  branch, returning early before `IconLayoutControls`. Defaults are L1's `WidgetAreaSettings`: 280dp, 4×3 portrait,
+  3×4 landscape — far thicker than a dock's 96dp, which is the difference between the two zones stated as a number.
+- **It renders empty today, and that is a missing feature rather than a missing surface.** Widgets are unbuilt
+  (`GridItem.Widget` has no cell), so nothing can be placed in it — but the zone is real: measured, fitted, and
+  registered as a `CoordinateDragGrid` drop target that **accepts widgets only**. That is L1's `areaReject` rule
+  expressed as `DropZone.accepts` instead of as a check at drop time, so an app carried over it falls through to the
+  list beneath rather than being rejected on release.
+- **Two things the widget area is still owed, both gated on widgets existing.** A shrink does not re-home what no
+  longer fits (`settleDock` evicts to a *coordinate* main area, and this one sits beside a list, which has nowhere to
+  put a widget) — deliberately not L1's answer, which deleted them. And nothing seeds it.
+- **The list is ordered, and dragging it reorders it — nothing else.** No merge ring (a list of apps holds no folders,
+  as L1's does not), no page to carry an item onto, no coordinate to write: a drop is an index, committed through
+  `HomeViewModel.reorderList`. The preview is **MovingGap**, the same model the APPS pager and every folder use;
+  `OrderedFlow` gained `cellFractionY` for it, because a list flows *down*, so "insert before or after?" is the top
+  half of a row rather than the left half of a cell.
+- **A `Column` in a `verticalScroll`, deliberately not a `LazyColumn`** — the opposite call from `AppsVerticalList`,
+  for two reasons that are properties of this list rather than preferences. A lazy list disposes rows that scroll
+  away, and the lifted row **owns the pointer stream driving the drag**, so auto-scrolling far enough would kill the
+  gesture (this is what the APPS pager needs `keepAllPagesPlaced` for). And a home list is the handful of apps the
+  user chose where the drawer is every app installed, so composing it whole costs nothing. It also makes the drag
+  geometry the documented one: the viewport's `onGloballyPositioned` sits **outside** the scroller and
+  `viewportTop - scrollState.value` is the content origin, republished every frame — plus the re-send after
+  auto-scroll, in one `SideEffect`, since the coordinator only re-plans when the *finger* moves.
+- **Not built**, all of it L1 behaviour: the "Add apps" row (a picker), the long-press item menu, and removing an app
+  from the list. Without a picker its contents are whatever the seed put there.
 
 **APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
 (`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were
@@ -844,8 +921,14 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
 - **S5f-3 — liquid glass and the effects section. Done.** The AGSL shader (see the design-system notes) and the
   seventh settings section, which is also the slice's first writer. **S5 is now complete.**
 
+**Next after that: HOME's second pairing is built, so widgets are the thing it is waiting on.** `LIST_WITH_WIDGET_AREA`
+renders, is configurable, and reorders — and its widget area is an empty, correctly-sized, correctly-refusing drop
+zone until `GridItem.Widget` has a cell. Two things become owed the moment it does: re-homing what a shrink evicts
+(the widget area's `settleDock`, which cannot evict to a list), and seeding it.
+
 Also open: a **home long-press → options menu** (the free cell space now falls through to
-the surface for exactly this, and nothing listens yet), home **orientation**, or
+the surface for exactly this, and nothing listens yet), the vertical list's **"Add apps" picker** and item menu
+(without one, its contents are whatever the grid seeded), home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render and all the
 arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
 `EjectToHome`, an optimistic layer for both the pager and the card (a drop waits for the write) + the pager's page
@@ -858,10 +941,19 @@ slice** under one DataStore key (`SettingsSlice`, pure and unit-tested), not L1'
 per-slice flows, not one god flow; and a slice carries no version because `ignoreUnknownKeys` + fully-defaulted fields
 make additive change safe both ways, with the **key name** as the seam for a semantic break. Two slices exist:
 `SurfaceRegister` (HOME's layout, per-edge `SideBinding`, transition) and `SurfaceMetrics` (per-grid **icon** and **grid**
-overrides). Overrides are **sparse and doubly so** — keyed `GridSlot` × `DeviceConfiguration`, nullable per field, and an
+overrides, plus **`extentDp`** and **`rowHeightDp`**). Those last two are **slot-keyed**, which reverses an earlier call
+worth keeping: each was a bare `Map<DeviceConfiguration, Int>` named for the one grid that could answer it
+(`dockHeightDp`, `listRowHeightDp`), on the grounds that a slot-keyed map would make most keys meaningless. HOME's
+second pairing changed the arithmetic — a widget area is a fixed-extent strip too, and a home list declares a row
+height too — so there are now *two* grids per question and a second named map would have been the same pair of
+functions twice. The unrepresentable stays unrepresentable one layer out: `SettingsRepository.extent`/`rowHeight`
+refuse a slot whose blueprint declares neither, exactly as `updateGrid` refuses one with no `editRange`, because the
+blueprint is where "does this grid have one" is declared. **The bill is a storage break**: the old keys are dropped by
+`ignoreUnknownKeys`, so a stored dock extent or APPS list row height resets to its blueprint default once. Acceptable
+only because nothing has shipped — the key name is this slice's seam for a semantic break, and this is one. Overrides are **sparse and doubly so** — keyed `GridSlot` × `DeviceConfiguration`, nullable per field, and an
 emptied entry is *removed*, which is what keeps "a default lives in exactly one place" literally true (the blueprint) and
 makes "reset" a plain write of nulls. Reads are **resolved in the repository** (`iconSizing`/`gridConfig`/`gridCols`), so
-no surface sees the keying. `GridSlot` names the launcher's eight grids and lives **on** `GridBlueprint` so the two
+no surface sees the keying. `GridSlot` names the launcher's ten grids and lives **on** `GridBlueprint` so the two
 cannot drift; `GridBlueprints` proves the mapping total. `feature:settings` is **one destination whose sections are panes**, ported from L1's shell: a section list beside a
 detail on a tablet, sliding between the two on a phone, with `SettingsSection` as ordinary state inside
 `SettingsScreen`. An earlier cut gave each section its own `NavKey`; that was reversed because a pane which shares the
@@ -898,6 +990,24 @@ same mockups) and the edges got the picture.
 - `AppsLayout.label` is now **one** vocabulary (`feature/settings/LayoutLabels.kt`). It existed twice with *different*
   strings — "Pages"/"Category pages"/"Category cards" against "Pager"/"Pager + category"/"Cards" — each promising in
   KDoc to move when a second screen needed it; the picker was the third.
+
+**Two sections follow HOME's pairing, and one control switches it.** The Home section edits the pager's rows and
+columns *or* the list's row height; the Dock section becomes the **Widget area** section — its title, its subtitle,
+its extent range (L1's `120..480` against the dock's `80..320`), and whether it has an icon group at all. The list
+rows and the app-bar title rename with them (`SettingsSection.meta(homeLayout)`, read once by the shell through
+`SettingsShellViewModel` so the list and the bar cannot disagree). Three things carry that:
+- **`HomeLayout.mainSlot`/`sideSlot` again** — both ViewModels resolve *the slot*, so one `IconSizingEdits`, one
+  extent control and one `GridEditor` serve both pairings. `GridSizeState.main` is a sum type (`MainAreaSize.Grid` /
+  `.Rows`) for `HomeMainSizing`'s reason, one layer down.
+- **The switch is HOME's card in the surface register** (`HomeLayoutPicker`, `SideBindingPicker`'s twin), which
+  reverses that section's "HOME is not a choice, so its card does not take a tap" — true only while there was one
+  pairing. The card is already two targets (body changes what is there, gear configures it); the body was simply
+  null. L1 put the same choice in its Home *section* as a scroll row of two mockup cards labelled "Classic" and
+  "Minimalist"; those name eras of that launcher rather than what you get, and the register cross had already decided
+  not to draw mockups at card size. The rule this section states — a control appears when the thing it configures
+  exists — is unchanged: `transition` still has no control, because `SurfacePager` still implements only `SLIDE`.
+- **Switching is non-destructive**, which is what makes it one tap with no confirm: each pairing's zones have their
+  own stored sizes and their own stored contents, so the one going off screen keeps everything it had.
 
 **A section belongs to a surface and holds everything about it**, layout controls *and* icon sizing, exactly as each
 of L1's five details embedded `IconLayoutControls` under its layout section. **All five surfaces now have theirs** —
@@ -1026,8 +1136,13 @@ column shifts everything left, removing the right one drops what sat there. So a
 an add and place-first for a remove so no observer sees a grid too small for its contents. That is why
 `feature:settings` depends on `data:layout` at all: only the button press knows the edge, and a surface re-reading the
 new size later cannot recover it. **The dock's version spills onto home** (`settleDock`, shared with
-`HomeViewModel.fitDockTo` so the two triggers cannot disagree), never deleting as L1 did. One `GridEditor` composable
-serves both grids — a screen-shaped mockup at a **fixed size per posture** (L1's four numbers; a fraction of the pane
+`HomeViewModel.fitDockTo` so the two triggers cannot disagree), never deleting as L1 did. The **companion zone can be on any of four sides** (`CompanionSide.of(edge)`, bridging `SideZoneEdge`), which is what
+makes a top-strip widget area draw above its list rather than below it — and a caller-supplied `preview` now sits
+**inside** the companion split rather than replacing the whole screen, so HOME's list shows its lanes *and* the widget
+area over them. (Passing a preview replaced everything while only the APPS layouts passed one; they have no companion,
+so nothing changed for them.) `LanePreview` moved to `component/` when the home list became its second consumer, as
+`IconPreviewPlate` did. One `GridEditor` composable
+serves every grid — a screen-shaped mockup at a **fixed size per posture** (L1's four numbers; a fraction of the pane
 made the preview a different size on a tablet and, at a tall phone ratio, taller than the section holding it), ringed
 by L1's own button arrangement, in **three shapes it takes from L1 as well** — both axes editable gives the plus-shape
 (**removes along the top and left, adds along the right and bottom**, each pair spread to the preview's extent so a
