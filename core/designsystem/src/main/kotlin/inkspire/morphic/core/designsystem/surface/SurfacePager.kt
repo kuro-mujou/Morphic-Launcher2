@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -21,12 +22,16 @@ import kotlin.math.roundToInt
  * [sideContent]'s keys — an edge with no entry can't be opened — and each binding's [SurfaceBinding.swipe]
  * decides whether one finger or two is needed to reach it.
  *
- * **First cut, deliberately minimal.** Only the SLIDE transform is wired (HOME and the side surface translate
- * together, no scale/fade/parallax), the surfaces are whatever the caller passes, and there is no frosted
- * backdrop, drag-out, or nested-scroll return-edge handling yet. Those were all tangled into L1's single
- * `CrossPager`; here they are follow-ups on top of this clean base. This is why the side surfaces are an open
- * `Map<HomeEdge, …>` slot rather than the real HOME/APPS layouts — the demo drops plain boxes in, the real
- * layouts come later.
+ * **Deliberately minimal.** Only the SLIDE transform is wired (HOME and the side surface translate together, no
+ * scale/fade/parallax), and there is no drag-out from a side surface onto HOME. Those were tangled into L1's single
+ * `CrossPager` along with everything else; here they are follow-ups on top of this clean base. This is why the side
+ * surfaces are an open `Map<HomeEdge, …>` slot rather than the real HOME/APPS layouts — the harness drops plain
+ * boxes in, the shell drops the real screens in.
+ *
+ * **Each slot reports where its content is scrolled**, through a [ScrollEdgeSlot] provided here and read by the
+ * gesture — which is what makes [OneFingerSwipe.AT_EDGE] a real hand-off rather than a synonym for
+ * [OneFingerSwipe.ALWAYS]. Content opts in with `ReportScrollEdges`; content that says nothing reads as at every
+ * edge, which is how every surface behaved before this existed.
  *
  * @param state the pan position + operations; also learns the swipeable edges + their finger policy here.
  * @param sideContent the binding for each swipeable edge. Absent edge = not swipeable.
@@ -65,13 +70,19 @@ fun SurfacePager(
             .surfacePagerGesture(state, enabled),
     ) {
         Box(Modifier.fillMaxSize().surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
-            center()
+            // Each slot gets its own channel for "where is my content resting", which is what makes the nested-scroll
+            // hand-off work without the shell wiring anything: content calls `ReportScrollEdges` and the gesture reads
+            // whichever slot the swipe is crossing. L1 hoisted four `mutableStateOf`s and four reporter lambdas into
+            // its home screen for this; the pager composes the slots, so the pager owns them.
+            CompositionLocalProvider(LocalScrollEdgeSlot provides state.centerScroll) { center() }
         }
         // Between the two, and with no `surfaceSlide` of its own — see [overlay].
         overlay()
         for ((edge, binding) in sideContent) {
             Box(Modifier.fillMaxSize().surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
-                binding.content()
+                CompositionLocalProvider(LocalScrollEdgeSlot provides state.sideScroll.getValue(edge)) {
+                    binding.content()
+                }
             }
         }
     }

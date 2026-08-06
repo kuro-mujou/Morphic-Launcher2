@@ -79,6 +79,23 @@ class LauncherPagerState(
             positionAnimatable.value.roundToInt().mod(pageCount)
         }
 
+    /**
+     * True when the pager has nothing further to the **left** — it is resting on its first page and bounded.
+     *
+     * Read by the surface-swipe hand-off (`ScrollEdges`), which needs to know whether a one-finger swipe crossing
+     * this pager has anywhere left to go. **Never true while wrapping**, which is the whole reason it is phrased
+     * against [isBounded] rather than against the position alone: an infinite pager has no first page to rest on, and
+     * saying otherwise would let a swipe leave the surface from the middle of a lap.
+     *
+     * The epsilon is L1's own — the position is a float mid-settle, so an exact comparison would answer "no" for the
+     * last few frames of a spring that has visibly arrived. L1 restated this expression in three layout files; here
+     * it lives on the state, which is also the only thing that knows whether it is bounded.
+     */
+    val atFirstPage: Boolean get() = isBounded && pagePosition <= PAGE_EDGE_EPSILON
+
+    /** The trailing counterpart of [atFirstPage]: bounded, and resting on the last page. */
+    val atLastPage: Boolean get() = isBounded && pagePosition >= (pageCount - 1) - PAGE_EDGE_EPSILON
+
     /** Signed offset from the nearest page in `[-0.5, 0.5)` — for page indicators / transforms. */
     val currentPageOffsetFraction: Float
         get() = positionAnimatable.value.let { it - it.roundToInt() }
@@ -164,6 +181,9 @@ class LauncherPagerState(
 
         /** Higher = the rubber-band tightens up sooner. */
         const val RUBBER_BAND_STIFFNESS = 3f
+
+        /** How close to a page bound still counts as resting on it, in page units — see [atFirstPage]. */
+        const val PAGE_EDGE_EPSILON = 0.001f
 
         val pagerSpring = spring<Float>(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 0.001f)
     }

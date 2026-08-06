@@ -17,7 +17,34 @@ enum class Surface { HOME, APPS }
  * independently, so different edges may point at different surfaces — or at the same surface with different
  * configuration (that binding lives in the settings layer, not here).
  */
-enum class HomeEdge { LEFT, RIGHT, TOP, BOTTOM }
+enum class HomeEdge {
+    LEFT, RIGHT, TOP, BOTTOM;
+
+    /**
+     * True for the two edges that lie on the **horizontal** axis, so a swipe crossing them is a horizontal one.
+     *
+     * Here rather than at each call site because "which axis does this edge live on?" is the question every gesture
+     * and every policy lookup starts from — the surface pan locks to that axis, and the one-finger policy for an edge
+     * is decided by whatever content owns it. Both spellings were private copies in the surface-pager playground.
+     */
+    val isHorizontal: Boolean get() = this == LEFT || this == RIGHT
+
+    /**
+     * The edge directly across HOME from this one, on the same axis.
+     *
+     * Read when a crossing is described from the *other* end: opening the RIGHT surface pulls HOME's content toward
+     * its right edge, and closing that same surface pulls the surface's own content back toward its **left**. One
+     * expression, so the two directions cannot drift apart. Mirrors [SideZoneEdge.opposite], and for the same reason —
+     * the flip must stay on the axis it started on.
+     */
+    val opposite: HomeEdge
+        get() = when (this) {
+            LEFT -> RIGHT
+            RIGHT -> LEFT
+            TOP -> BOTTOM
+            BOTTOM -> TOP
+        }
+}
 
 /**
  * The composition of the [Surface.HOME] surface. The main area's layout and its companion side zone are

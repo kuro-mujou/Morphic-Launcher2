@@ -40,9 +40,17 @@ private const val AXIS_EPSILON = 0.001f
  *   [EdgeSwipe.close] policy, driven by *this surface's* content: an infinite horizontal pager owns the
  *   one-finger close of a LEFT/RIGHT surface just as HOME's owns its open, so it too needs two fingers.
  *
- * A one-finger swipe is allowed whenever the policy isn't [OneFingerSwipe.NEVER]. [OneFingerSwipe.AT_EDGE] is
- * treated as allowed here because these surfaces don't scroll yet; once they host scrollable content it will
- * additionally require that content to be at its edge (the nested-scroll hand-off), which is the deferred step.
+ * **The nested-scroll hand-off** is what makes [OneFingerSwipe.AT_EDGE] different from [OneFingerSwipe.ALWAYS]: the
+ * content being crossed is asked, live, whether it has reached the edge the swipe is pulling it toward
+ * ([ScrollEdges]), and only then does the pan claim. Both halves read the same way from opposite ends — opening asks
+ * HOME's content about the edge the swipe points at, closing asks the open surface's content about the edge
+ * *opposite* the one it sits on, because closing drags it back the way it came.
+ *
+ * **The question is asked once, at slop, and the answer stands for the whole gesture.** A finger that crosses slop
+ * while the content can still scroll belongs to the content until it lifts — scrolling a list to the bottom and
+ * carrying straight on does *not* start panning; a second swipe from the bottom does. That is L1's behaviour too, and
+ * it is the honest limit of a hand-off decided by a claim rather than by leftover-delta plumbing: continuing would
+ * mean real `nestedScroll` and a scroll connection on every surface. Two fingers skip the question entirely.
  *
  * **[enabled] is consulted twice, and the second time is the one that matters.** At touch-down it catches a reason
  * that already existed — an open folder, say. But the reason may *arrive* mid-gesture: an item's long-press fires
@@ -123,7 +131,11 @@ fun Modifier.surfacePagerGesture(
                                 PanAxis.VERTICAL -> if (state.panY < 0f) HomeEdge.TOP else HomeEdge.BOTTOM
                             }
                             val close = state.edgeSwipes[openEdge]?.close ?: OneFingerSwipe.ALWAYS
-                            if (close == OneFingerSwipe.NEVER && !twoFinger) break
+                            // The nested-scroll hand-off, closing half. The content crossed is *this surface's*, and
+                            // the edge it must have reached is the one **opposite** the surface's own — closing the
+                            // RIGHT surface drags it back rightward, so its content has to be at its left edge.
+                            val sideEdges = state.sideScroll.getValue(openEdge).edges()
+                            if (!twoFinger && !close.allows(sideEdges[openEdge.opposite])) break
                             axis = activeAxis
                             claimed = true
                         } else {
@@ -134,9 +146,13 @@ fun Modifier.surfacePagerGesture(
                                 if (accY > 0f) HomeEdge.TOP else HomeEdge.BOTTOM
                             }
                             val open = state.edgeSwipes[target]?.open ?: break // no surface — hand it back
-                            // A NEVER edge ignores a one-finger swipe: that finger belongs to HOME's infinite
-                            // content on this axis with no edge to hand off from, so hand the gesture back.
-                            if (open == OneFingerSwipe.NEVER && !twoFinger) break
+                            // The nested-scroll hand-off, opening half. The content crossed is HOME's, and the edge
+                            // it must have reached is the one the swipe points at: opening the LEFT surface drags
+                            // HOME rightward, so HOME's pager has to be on its first page.
+                            //
+                            // A NEVER edge fails this whatever the content says: that finger belongs to HOME's
+                            // infinite content on this axis, which has no edge to hand off from at all.
+                            if (!twoFinger && !open.allows(state.centerScroll.edges()[target])) break
                             axis = if (horizontal) PanAxis.HORIZONTAL else PanAxis.VERTICAL
                             claimed = true
                         }

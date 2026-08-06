@@ -55,6 +55,21 @@ class SurfacePagerState {
     var viewportHeight: Int by mutableIntStateOf(0)
         internal set
 
+    /**
+     * Where HOME's own scrollable content is resting — asked when deciding whether a one-finger swipe may **open** a
+     * surface, since that swipe crosses HOME's content.
+     */
+    internal val centerScroll = ScrollEdgeSlot()
+
+    /**
+     * The same for each side surface — asked when deciding whether a one-finger swipe may **close** one, since that
+     * swipe crosses *that* surface's content.
+     *
+     * All four exist from the start rather than being created per binding: they are four empty holders, and an
+     * unreported one already answers correctly (see [ScrollEdges]' default), so there is nothing to key or clean up.
+     */
+    internal val sideScroll: Map<HomeEdge, ScrollEdgeSlot> = HomeEdge.entries.associateWith { ScrollEdgeSlot() }
+
     private val animX = Animatable(0f)
     private val animY = Animatable(0f)
 
