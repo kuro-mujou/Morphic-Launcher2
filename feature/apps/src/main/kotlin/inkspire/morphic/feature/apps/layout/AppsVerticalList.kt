@@ -25,7 +25,10 @@ import inkspire.morphic.core.model.ComponentKey
  * order repository, which doesn't exist yet.
  *
  * **Rows use the shared gesture contract**, not a `clickable` — see [appsItemGestures] for why, and for what the
- * unwired half of that contract is waiting on.
+ * unwired half of that contract is waiting on. The target is the row's **icon and label**, not the strip they sit in:
+ * `AppRowCell` hangs the gestures on a wrap-content group, so the width after a short label falls through to this
+ * surface. That is space this layout does not use yet and deliberately keeps free — the alphabet filter strip and a
+ * surface-level press both want it, and both are below.
  *
  * **The row height is the setting here, and the icon follows it** — the reverse of every grid on the surface, where
  * the icon size is chosen and the cell's height falls out of it. A list is one lane: there is no cell width to derive
@@ -56,8 +59,9 @@ fun AppsVerticalList(
 ) {
     val gestureConfig = rememberAppsGestureConfig()
     // The bar inset plus the grid's own margin, as **content** padding so the rows still scroll under the bars
-    // instead of stopping short of them. A row's touch target is the whole row, and it narrows with the margin —
-    // which is right: the visible extent *is* the target, so there is nothing to keep in step by hand.
+    // instead of stopping short of them. A row's touch target is its icon and label (`AppRowCell` hangs the gestures
+    // on a wrap-content group), so it narrows with the margin for free — the visible extent *is* the target, and
+    // there is nothing to keep in step by hand.
     val contentPadding = appsContentPadding(horizontalPadding)
     // **The stored height, clamped to what this row can honour** — the list's counterpart of the vertical grid's column
     // fit, and the read half of the coupling the settings section's slider is bounded by. With icons on that means the

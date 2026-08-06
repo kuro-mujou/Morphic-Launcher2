@@ -816,7 +816,9 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   which conflated the row's **footprint** with what is drawn in it: a row paints no background, so the width past
   the end of a short label is exactly the slack a grid cell has around its icon, lying on the other axis. So a list
   *does* leave room for a surface long-press. The bill is that a tap out there launches nothing either — one
-  contract covers both — which is already true of the slack around a grid icon.
+  contract covers both — which is already true of the slack around a grid icon. **Both lists keep the slack free**,
+  including this one, whose surface gestures (the alphabet strip, search, a surface press) are all still below: a
+  target narrowed once is worth more than one narrowed again later, when users have learnt the wider one.
 - **The pager is the first layout that stores an arrangement** (`AppsLayout.PAGER`, `AppsPager`) — pages of
   `LauncherGrid` in FIXED_PAGER mode at `AppsPagerGrid`'s size, drawn from `AppsOrderRepository` rather than
   re-derived. Page capacity is a UI read (device → blueprint), pushed to the VM via `setPagerGrid`, exactly as
