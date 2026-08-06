@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.apps.layout.categorypager
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -42,6 +43,8 @@ import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppsCategoryGrid
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
@@ -135,6 +138,26 @@ fun AppsCategoryPager(
     // nobody is subscribed — which is why the proxy below is sized from `viewport` instead.
     val geometries = remember { mutableStateMapOf<Int, GridGeometry>() }
     var viewport by remember { mutableStateOf<Rect?>(null) }
+
+    // Each page's scroller, so the report below can name the *current* page's. A plain map rather than snapshot
+    // state, deliberately: its only reader is the report lambda, which runs from a pointer callback, so nothing
+    // should ever be invalidated by a page re-publishing. Entries are never removed — the map is bounded by the
+    // page count and an index past the end is never asked for.
+    val pageScrolls = remember { mutableMapOf<Int, ScrollState>() }
+
+    // **The only surface that owns both axes**, which is why the report is one value rather than one per scroller:
+    // a second `ReportScrollEdges` in the same slot would replace this one instead of combining with it. Horizontal
+    // is the pager's, vertical is whichever page is showing — and neither is read in composition, so a swipe across
+    // this surface recomposes nothing.
+    ReportScrollEdges {
+        val page = pageScrolls[pagerState.currentPage]
+        ScrollEdges(
+            atLeft = pagerState.atFirstPage,
+            atRight = pagerState.atLastPage,
+            atTop = page?.canScrollBackward != true,
+            atBottom = page?.canScrollForward != true,
+        )
+    }
 
     // Where the dragged app would land, and on which page. The page matters as much as the index here: it names the
     // *category* the drop writes, which is what makes a cross-page drag a re-file.
@@ -244,6 +267,7 @@ fun AppsCategoryPager(
                         onLaunch = onLaunch,
                         onDrop = ::handleDrop,
                         onGeometry = { geometries[pageIndex] = it },
+                        onScrollState = { pageScrolls[pageIndex] = it },
                     )
                 }
             }

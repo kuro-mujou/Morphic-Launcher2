@@ -1,14 +1,23 @@
 package inkspire.morphic.launcher.dev
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,7 +33,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.surface.AxisScroll
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollAxes
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
@@ -38,15 +51,19 @@ import kotlinx.coroutines.launch
  * side surface** to cycle it through the six layout kinds, **tap HOME** to cycle its three kinds — the finger
  * policy each edge gets is recomputed and shown (and the surface is tinted by its close policy).
  *
- * The two policies come from content on the swipe's axis:
- * - **open** (HOME → surface): from HOME's content. Pager owns horizontal, list owns vertical; infinite → the
- *   owned edges are two-finger ([OneFingerSwipe.NEVER]), bounded → one finger at the page edge
- *   ([OneFingerSwipe.AT_EDGE]), the free axis → one finger anytime ([OneFingerSwipe.ALWAYS]).
- * - **close** (surface → HOME): from the side surface's own content, by the same rule on the close axis.
+ * The two policies come from content on the swipe's axis, and that derivation is no longer this file's: each kind
+ * declares a [ScrollAxes] and [ScrollAxes.oneFingerSwipe] turns it into the policy, exactly as the shell does for the
+ * real layouts. This harness worked that rule out first, against simulated content, and then handed it over.
+ * - **open** (HOME → surface): from HOME's axes, on the edge's axis.
+ * - **close** (surface → HOME): from the side surface's axes, by the same rule.
  *
- * Nothing scrolls yet, so [OneFingerSwipe.AT_EDGE] currently behaves like [OneFingerSwipe.ALWAYS] (one finger);
- * only [OneFingerSwipe.NEVER] is two-finger. The at-edge hand-off is the deferred nested-scroll step. System
- * Back always returns to HOME.
+ * **Every simulated surface really scrolls**, which is what makes [OneFingerSwipe.AT_EDGE] testable here: a bounded
+ * axis gets a scroller with far more content than fits, and reports its position through `ReportScrollEdges`. So a
+ * one-finger swipe over such an axis scrolls the content, and only a swipe begun with that content already against
+ * the edge pans to the next surface. [OneFingerSwipe.NEVER] (an infinite scroller) is drawn as a still surface with
+ * a note, since the pan never asks it where it is — two fingers are the only way across.
+ *
+ * System Back always returns to HOME.
  */
 @Composable
 fun SurfacePagerPlaygroundScreen(modifier: Modifier = Modifier) {
@@ -73,13 +90,13 @@ fun SurfacePagerPlaygroundScreen(modifier: Modifier = Modifier) {
             sideContent = HomeEdge.entries.associateWith { edge ->
                 val layout = sideLayouts.getValue(edge)
                 SurfaceBinding(
-                    openSwipe = home.openSwipe(edge),
-                    closeSwipe = layout.closeSwipe(edge),
+                    openSwipe = home.axes.oneFingerSwipe(edge),
+                    closeSwipe = layout.axes.oneFingerSwipe(edge),
                 ) {
                     SideSurface(
                         edge = edge,
                         layout = layout,
-                        close = layout.closeSwipe(edge),
+                        close = layout.axes.oneFingerSwipe(edge),
                         onCycle = { sideLayouts[edge] = layout.next() },
                     )
                 }
@@ -102,7 +119,7 @@ private fun HomeSurface(
     home: HomeKind,
     onCycle: () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(colors.background), contentAlignment = Alignment.Center) {
+    SimulatedContent(axes = home.axes, modifier = Modifier.background(colors.background)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -128,13 +145,11 @@ private fun HomeSurface(
 /** A full-screen side surface, tinted by its close policy and tappable to cycle its simulated layout. */
 @Composable
 private fun SideSurface(edge: HomeEdge, layout: SideLayout, close: OneFingerSwipe, onCycle: () -> Unit) {
-    Box(
-        Modifier.fillMaxSize().background(close.tint).clickable(onClick = onCycle).padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
+    SimulatedContent(axes = layout.axes, modifier = Modifier.background(close.tint)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.clickable(onClick = onCycle).padding(24.dp),
         ) {
             Text("${edge.name} · ${layout.label}", color = Color.White, fontWeight = FontWeight.Bold)
             Text("close: ${close.hint}", color = Color(0xEEFFFFFF), textAlign = TextAlign.Center)
@@ -143,46 +158,96 @@ private fun SideSurface(edge: HomeEdge, layout: SideLayout, close: OneFingerSwip
     }
 }
 
-private val HomeEdge.isHorizontal: Boolean get() = this == HomeEdge.LEFT || this == HomeEdge.RIGHT
-private val HomeEdge.isVertical: Boolean get() = this == HomeEdge.TOP || this == HomeEdge.BOTTOM
+/**
+ * A surface body that genuinely scrolls on whichever of [axes] is [AxisScroll.BOUNDED], and reports where it is
+ * resting — so the hand-off the gesture performs is the real one, over real scroll state.
+ *
+ * [AxisScroll.INFINITE] deliberately gets **no** scroller. It is a wrap-around pager, which cannot be simulated by a
+ * bounded `horizontalScroll`, and the simulation would be pointless anyway: that axis is `OneFingerSwipe.NEVER`, so
+ * the gesture never asks where the content is.
+ *
+ * One vertical [ScrollState] is shared by every horizontal page, so a two-axis surface scrolls its pages in lockstep.
+ * A real category pager keeps one per page and reports the current one; here the difference is invisible, and one
+ * state keeps the harness about the gesture rather than about paging.
+ */
+@Composable
+private fun SimulatedContent(
+    axes: ScrollAxes,
+    modifier: Modifier = Modifier,
+    label: @Composable () -> Unit,
+) {
+    val vertical = rememberScrollState()
+    val horizontal = rememberScrollState()
+    val scrollsX = axes.horizontal == AxisScroll.BOUNDED
+    val scrollsY = axes.vertical == AxisScroll.BOUNDED
 
-/** How the imagined content behaves on an axis: not scrolled, bounded (has an edge), or infinite (no edge). */
-private enum class Scroll { NONE, BOUNDED, INFINITE }
+    ReportScrollEdges {
+        ScrollEdges(
+            atLeft = !scrollsX || !horizontal.canScrollBackward,
+            atRight = !scrollsX || !horizontal.canScrollForward,
+            atTop = !scrollsY || !vertical.canScrollBackward,
+            atBottom = !scrollsY || !vertical.canScrollForward,
+        )
+    }
 
-/** Turns "what owns this axis" into the one-finger policy — the single rule behind the whole spec table. */
-private fun Scroll.toSwipe(): OneFingerSwipe = when (this) {
-    Scroll.NONE -> OneFingerSwipe.ALWAYS
-    Scroll.BOUNDED -> OneFingerSwipe.AT_EDGE
-    Scroll.INFINITE -> OneFingerSwipe.NEVER
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val pageWidth = maxWidth
+        Row(Modifier.fillMaxSize().then(if (scrollsX) Modifier.horizontalScroll(horizontal) else Modifier)) {
+            repeat(if (scrollsX) SimulatedPages else 1) { page ->
+                Column(
+                    modifier = Modifier
+                        .width(pageWidth)
+                        .fillMaxSize()
+                        .then(if (scrollsY) Modifier.verticalScroll(vertical) else Modifier),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (page == 0) Box(Modifier.height(160.dp), contentAlignment = Alignment.Center) { label() }
+                    repeat(if (scrollsY) SimulatedRows else 0) { row ->
+                        Text(
+                            text = "page ${page + 1} · row ${row + 1}",
+                            color = Color(0xCCFFFFFF),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    if (scrollsX && !scrollsY) {
+                        Text("page ${page + 1} of $SimulatedPages", color = Color(0xCCFFFFFF))
+                    }
+                }
+            }
+        }
+    }
 }
 
-/** HOME's three simulated layouts and the open policy each hands every edge. */
-private enum class HomeKind(val label: String, private val horizontal: Scroll, private val vertical: Scroll) {
-    PAGER_INFINITE("pager (∞)", Scroll.INFINITE, Scroll.NONE),
-    PAGER_BOUNDED("pager", Scroll.BOUNDED, Scroll.NONE),
-    LIST("vertical list", Scroll.NONE, Scroll.BOUNDED),
-    ;
+/** Enough pages / rows that the simulated content is comfortably longer than the viewport. */
+private const val SimulatedPages = 3
+private const val SimulatedRows = 30
 
-    /** Opening crosses on the edge's axis, so read HOME's scroll on that axis. */
-    fun openSwipe(edge: HomeEdge): OneFingerSwipe =
-        (if (edge.isHorizontal) horizontal else vertical).toSwipe()
+/** HOME's three simulated layouts and what each of them scrolls. */
+private enum class HomeKind(val label: String, val axes: ScrollAxes) {
+    PAGER_INFINITE("pager (∞)", ScrollAxes(horizontal = AxisScroll.INFINITE)),
+    PAGER_BOUNDED("pager", ScrollAxes(horizontal = AxisScroll.BOUNDED)),
+    LIST("vertical list", ScrollAxes(vertical = AxisScroll.BOUNDED)),
+    ;
 
     fun next(): HomeKind = entries[(ordinal + 1) % entries.size]
 }
 
-/** The six side-surface layouts from the spec, each as its scroll behaviour on the two axes. */
-private enum class SideLayout(val label: String, private val horizontal: Scroll, private val vertical: Scroll) {
-    PAGER_BOUNDED("Pager", Scroll.BOUNDED, Scroll.NONE),
-    PAGER_INFINITE("Pager (∞)", Scroll.INFINITE, Scroll.NONE),
-    PAGER_CATEGORY("Pager + category", Scroll.BOUNDED, Scroll.BOUNDED),
-    PAGER_CATEGORY_INFINITE("Pager + category (∞)", Scroll.INFINITE, Scroll.BOUNDED),
-    VERTICAL_GRID("Vertical grid", Scroll.NONE, Scroll.BOUNDED),
-    VERTICAL_LIST("Vertical list", Scroll.NONE, Scroll.BOUNDED),
+/** The six side-surface layouts from the spec, each as what it scrolls on the two axes. */
+private enum class SideLayout(val label: String, val axes: ScrollAxes) {
+    PAGER_BOUNDED("Pager", ScrollAxes(horizontal = AxisScroll.BOUNDED)),
+    PAGER_INFINITE("Pager (∞)", ScrollAxes(horizontal = AxisScroll.INFINITE)),
+    PAGER_CATEGORY(
+        "Pager + category",
+        ScrollAxes(horizontal = AxisScroll.BOUNDED, vertical = AxisScroll.BOUNDED),
+    ),
+    PAGER_CATEGORY_INFINITE(
+        "Pager + category (∞)",
+        ScrollAxes(horizontal = AxisScroll.INFINITE, vertical = AxisScroll.BOUNDED),
+    ),
+    VERTICAL_GRID("Vertical grid", ScrollAxes(vertical = AxisScroll.BOUNDED)),
+    VERTICAL_LIST("Vertical list", ScrollAxes(vertical = AxisScroll.BOUNDED)),
     ;
-
-    /** Closing crosses on the edge's axis, so read this surface's scroll on that axis. */
-    fun closeSwipe(edge: HomeEdge): OneFingerSwipe =
-        (if (edge.isHorizontal) horizontal else vertical).toSwipe()
 
     fun next(): SideLayout = entries[(ordinal + 1) % entries.size]
 }

@@ -41,6 +41,8 @@ import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
@@ -263,6 +265,13 @@ internal fun HomePagerSurface(
         pageCount = { maxPage.value + 1 + if (draggingPages) 1 else 0 },
         infiniteScroll = { false },
     )
+
+    // **Where HOME is scrolled, for the surface swipe.** A one-finger swipe toward a side surface crosses this pager
+    // first, so it may only leave HOME once the pager has no page left in that direction — L1's
+    // `swipeRightOpensLeft = currentPage == 0`, now stated as where the content is rather than as which gesture is
+    // released. Vertically nothing scrolls (the dock is a fixed strip), so the pair defaults to "at both edges" and
+    // a swipe onto a TOP or BOTTOM surface is free.
+    ReportScrollEdges { ScrollEdges(atLeft = pagerState.atFirstPage, atRight = pagerState.atLastPage) }
 
     // The open folder's drag hooks (null when no folder is open). The one shared coordinator runs over both
     // surfaces; its planner + drop dispatch the folder zone to this delegate, keeping folder reorder logic in

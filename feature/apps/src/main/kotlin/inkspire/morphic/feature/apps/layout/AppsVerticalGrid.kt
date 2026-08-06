@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -15,6 +16,8 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.ComponentKey
@@ -67,6 +70,13 @@ fun AppsVerticalGrid(
     // same inset the list applies, and now carrying the grid's own margin alongside the system's.
     val contentPadding = appsContentPadding(horizontalPadding)
 
+    // The list's report, one layout over: a swipe back to HOME across a TOP or BOTTOM binding hands off to the pan
+    // only once this grid is against the end it is being pulled toward.
+    val gridState = rememberLazyGridState()
+    ReportScrollEdges {
+        ScrollEdges(atTop = !gridState.canScrollBackward, atBottom = !gridState.canScrollForward)
+    }
+
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         // Measured here rather than inside the item, because a cell's height comes from its *width* and only the
         // grid knows that: `GridCells.Fixed` divides whatever is left after the content padding, so the same
@@ -89,6 +99,7 @@ fun AppsVerticalGrid(
             val cell = derivedCell(cellWidth = usableWidth / drawnCols, metrics = metrics)
 
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Fixed(drawnCols),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = contentPadding,

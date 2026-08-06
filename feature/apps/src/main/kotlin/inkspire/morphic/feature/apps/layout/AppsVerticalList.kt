@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -13,6 +14,8 @@ import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 
@@ -70,8 +73,16 @@ fun AppsVerticalList(
     // text. Nothing is written either way, so widening the bound brings the stored height back.
     val drawnRowHeight = fitRowHeight(rowHeight, metrics)
 
+    // **Where this list is scrolled, for the surface swipe.** Reaching HOME from a TOP or BOTTOM binding means
+    // swiping across this list, so the pan may only claim once it has nothing further to scroll that way. Read
+    // inside the lambda, never in composition — see `ReportScrollEdges`.
+    val listState = rememberLazyListState()
+    ReportScrollEdges {
+        ScrollEdges(atTop = !listState.canScrollBackward, atBottom = !listState.canScrollForward)
+    }
+
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
-        LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
+        LazyColumn(state = listState, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
             items(items = apps, key = { it.componentKey.flatten() }) { app ->
                 AppRowCell(
                     app = app,

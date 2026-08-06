@@ -9,6 +9,8 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.surface.AxisScroll
+import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import org.koin.androidx.compose.koinViewModel
@@ -50,6 +52,30 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         HomeLayout.LIST_WITH_WIDGET_AREA -> HomeListSurface(viewModel, state, device, modifier)
     }
 }
+
+/**
+ * **What HOME scrolls, per axis, in each pairing** — the fact the launcher shell turns into each edge's *open*
+ * policy, since a swipe leaving HOME crosses this content first.
+ *
+ * Published from here because it is a property of how these two arms are *drawn*, not of the register that chose
+ * them: `HomePagerSurface` is a horizontal pager beside a fixed strip, `HomeListSurface` is a vertical scroller
+ * beside one. The shell owns the *question* (it is the only layer that sees both sides of an edge) and each feature
+ * owns its own answer — which is what `SurfaceBinding` means by "set by the shell from the layout on each side".
+ *
+ * Both pagers are bounded today (`infiniteScroll = { false }` everywhere), so [AxisScroll.INFINITE] — and with it
+ * `OneFingerSwipe.NEVER` — is currently unreachable. It stays in the enum because infinite paging is a setting L1
+ * had and this one will: the day it returns, this expression is the only thing that changes.
+ *
+ * The **side zone is not modelled here**, and that is a deliberate simplification rather than an oversight: a
+ * vertical swipe that starts inside the dock or the widget area is not over the list at all, but the report is one
+ * answer for the whole surface. L1 made the same simplification, and refining it would mean the report knowing which
+ * region the finger is in — a per-zone answer for a gesture that is decided once, at slop.
+ */
+val HomeLayout.scrollAxes: ScrollAxes
+    get() = when (this) {
+        HomeLayout.PAGER_WITH_DOCK -> ScrollAxes(horizontal = AxisScroll.BOUNDED)
+        HomeLayout.LIST_WITH_WIDGET_AREA -> ScrollAxes(vertical = AxisScroll.BOUNDED)
+    }
 
 /**
  * The resolved [IconMetrics] for [slot], or the ambient default before the store has answered.

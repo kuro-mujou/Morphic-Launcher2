@@ -542,7 +542,8 @@ updates/pruning still deferred).
 **B4 `core:designsystem` — well along.** Theme + `Morphic*` components, plus the interaction primitives, all
 validated in the `app/dev` harness (`DevRootScreen`): the drag toolkit (`DragCoordinator`, `FreeGridPlanner`,
 MovingGap, `launcherItemGestures`, `DropFootprint`/`FloatingDragIcon`), `LauncherPager`, `SurfacePager`
-(HOME↔side-surface pan; per-edge one/two-finger `OneFingerSwipe` policy — `ALWAYS`/`AT_EDGE`/`NEVER`), and the
+(HOME↔side-surface pan; per-edge one/two-finger `OneFingerSwipe` policy — `ALWAYS`/`AT_EDGE`/`NEVER`, with
+`AT_EDGE`'s nested-scroll hand-off wired — see the surface-swipe rules below), and the
 grid (**grid plan G1–G5 + extras**, see [docs/GRID_LAYOUT_PLAN.md](docs/GRID_LAYOUT_PLAN.md)): `LauncherGrid`
 (FIXED_PAGER + SCROLL_GRID sizing), the `coordinateItems`/`flowItems` placement-strategy DSL, `animatePlacement`,
 and the extracted `GridGeometry` seam. Only grid **G6** (full-harness regression gate) is unticked — treat as
@@ -1001,7 +1002,9 @@ renders, is configurable, and reorders — and its widget area is an empty, corr
 zone until `GridItem.Widget` has a cell. Two things become owed the moment it does: re-homing what a shrink evicts
 (the widget area's `settleDock`, which cannot evict to a list), and seeding it.
 
-Also open: a **home long-press → options menu** (the free cell space now falls through to
+Also open: on the surface swipe, **`EjectToHome` and the five transitions past SLIDE** are what is left of L1's
+`CrossPager` — the nested-scroll hand-off and the frosted backdrop, the other two things tangled into it, have both
+landed. A **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), the vertical list's **"Add apps" picker** and item menu
 (without one, its contents are whatever the grid seeded), home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render and all the
@@ -1310,6 +1313,63 @@ unsigned and edge-agnostic) so the content slides while the frost fades. The lau
 boots into it; the dev harness (all playgrounds + the component gallery) is kept as a peer destination reached from a
 row in settings, so no dev chrome ships on a real surface. A gear chip over HOME is the admitted scaffolding standing in
 for the P7 long-press menu.
+
+**The surface swipe is nested-scroll aware, and one fact answers it from both ends.** A one-finger swipe crossing a
+surface boundary belongs to whatever scrolls under it until that content runs out — so `OneFingerSwipe.AT_EDGE` is now
+genuinely different from `ALWAYS`, which is what `LauncherShell`, `SurfacePager` and the playground all said was
+deferred. It is two types, deliberately split by what changes:
+- **`ScrollAxes`** (static) — what a layout scrolls on each axis (`AxisScroll.NONE`/`BOUNDED`/`INFINITE`).
+  `ScrollAxes.oneFingerSwipe(edge)` is the whole derivation of the policy, and it is the surface-pager playground's
+  private `Scroll.toSwipe()` promoted to a real type once the real layouts existed to answer it. Each feature declares
+  its own — `HomeLayout.scrollAxes` in `feature:home`, `AppsLayout.scrollAxes` in `feature:apps` — because the shell
+  owns the *question* (it is the only layer seeing both sides of an edge) and each module owns its answer.
+- **`ScrollEdges`** (live) — where that content is resting right now, four booleans keyed by `HomeEdge`. Published by
+  each layout through `ReportScrollEdges` into a per-slot `ScrollEdgeSlot` that `SurfacePager` provides, and read by
+  the gesture.
+
+Five things about it are load-bearing:
+- **The gesture runs on `PointerEventPass.Initial`, and nothing above works on any other pass.** `positionChange()`
+  returns `Offset.Zero` once a change is consumed, so a parent on the Main pass — which sees its children's events
+  *after* them — accumulates zeros over any scrolling content, never crosses slop, and never reaches the claim block
+  at all. That is exactly how this landed the first time: every piece was wired and none of it ran. Initial gives the
+  pan first refusal on the raw delta and it **consumes only if it claims**, so declining costs the child nothing.
+  L1's `CrossPager` used Initial for the same reason, and taking the default pass was the one part of it not ported.
+  Two consequences fall out, both of which were bugs until they were answered:
+  - **A claim must never be idle.** A swipe pressed against a bound the pan is already clamped at moves nothing while
+    consuming the finger, which on Initial eats every forward page-swipe and downward scroll the open surface's own
+    content needs. So closing is gated on the finger genuinely travelling toward the edge the surface came in from.
+  - **`launcherItemGestures` reads the finger with `positionChangedIgnoreConsumed()`**, the twin of the
+    `changedToUpIgnoreConsumed` beside it. The pan claims at the platform slop (~8dp) and an item needs 20, so with
+    the consumption-sensitive read a swipe begun on an icon went `Down` → `Up` with no `Move`, stayed in `Pressed`,
+    and **launched the app**. Where the finger is is never in dispute; whether the item acts is the machine's
+    decision, and `ReleasedToParent` is the phase that says so.
+- **Opening and closing are the same question from opposite ends.** Opening edge E asks HOME's content about the edge
+  facing E; closing asks *that surface's* content about `E.opposite`, because closing drags it back the way it came.
+  One expression each, so they cannot drift. **L1 had two differently-shaped types for this** — `SurfaceScrollEdges`
+  for side surfaces and `HomeGestureRelease` (`swipeRightOpensLeft`/`swipeUp`/…) for HOME, which conflated the live
+  edge with the policy and could not express a scrolled home list at all: its list home was a flat `swipeUp = false`,
+  forbidding the crossing rather than handing it off at the end of the list.
+- **The slot holds a lambda, not a value, and the gesture invokes it from a pointer callback.** The question is asked
+  once per gesture, so reading the scroll states *there* is free and never stale — where publishing a value means
+  reading `canScrollForward` in composition, and for a `ScrollState` that is a raw read of `value`, i.e. a
+  recomposition of the whole surface per scroll frame. That is the trap `CategoryPage`'s geometry comment already
+  warns about on the same surface, and L1 fell into it (`PlainGridLayout`, `IosCategoryGridLayout`).
+- **One report per surface, not one per scroller** — a second call in the same slot replaces the first rather than
+  combining with it. `AppsCategoryPager` is the case: it owns both axes, so it builds one value from its pager *and*
+  the current page's scroller, which `CategoryPage` hands up beside its geometry (only the surface knows which page is
+  current, and asking in composition would subscribe the layout to the pager's animated position).
+- **The decision is made once, at slop, and stands for the whole gesture.** Scrolling a list to the bottom and
+  carrying straight on does not start panning; a second swipe from the bottom does. L1 behaves the same way. The
+  honest limit of a hand-off decided by a claim rather than by leftover deltas — continuing would mean real
+  `nestedScroll` connections on every surface. Two fingers skip the question entirely.
+
+Two things L1 did here are **not** carried. Its reporters blanked every field to false while an item drag was in
+flight, so the pan could not claim mid-drag; L2 answers that one layer up with `SurfaceGestureLock`, which gates the
+whole gesture instead of lying about where the content is. And L1 hoisted four `mutableStateOf`s plus four reporter
+lambdas into its home screen; the pager composes the slots, so the pager owns them and the shell wires nothing.
+The report is **one answer for a whole surface**, so a vertical swipe starting inside the dock or the widget area is
+treated as if it were over the main area — L1's own simplification, and refining it would mean a per-region answer to
+a question decided once, at slop.
 
 **Known gaps, deliberate:** the effects section's five sliders are **dormant** — the full-screen frost is fixed per
 variant by design, and no frosted *panel* exists yet to read a tuned strength or tint (nor to draw liquid glass's rim).

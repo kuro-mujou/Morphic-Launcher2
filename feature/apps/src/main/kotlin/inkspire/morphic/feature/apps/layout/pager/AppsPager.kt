@@ -48,6 +48,8 @@ import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
@@ -157,6 +159,12 @@ fun AppsPager(
         pageCount = { livePages.value.size.coerceAtLeast(1) },
         infiniteScroll = { false },
     )
+
+    // **Where this pager is resting, for the surface swipe.** Reaching HOME from a LEFT or RIGHT binding crosses
+    // these pages, so the pan claims only on the page nearest the edge being swiped toward — the first page for a
+    // swipe back to a LEFT-bound HOME, the last for a RIGHT-bound one. Nothing scrolls vertically, so a TOP or
+    // BOTTOM binding closes freely.
+    ReportScrollEdges { ScrollEdges(atLeft = pagerState.atFirstPage, atRight = pagerState.atLastPage) }
 
     var geometry by remember { mutableStateOf<GridGeometry?>(null) }
     var viewport by remember { mutableStateOf<Rect?>(null) }

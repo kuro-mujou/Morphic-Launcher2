@@ -21,6 +21,7 @@ import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.backdrop.screenToBitmapMapping
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
+import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.surface.SurfaceGestureLock
@@ -28,11 +29,15 @@ import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.feature.apps.AppsScreen
+import inkspire.morphic.feature.apps.scrollAxes
 import inkspire.morphic.feature.home.HomeScreen
+import inkspire.morphic.feature.home.scrollAxes
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -54,10 +59,10 @@ import org.koin.androidx.compose.koinViewModel
  * defaults deliberately don't choose an edge, because which edge opens the app list is a product decision and the data
  * layer is not where product decisions should be made quietly.
  *
- * **Still to come**, all of it deferred from `SurfacePager` rather than forgotten: the frosted backdrop behind a panned
- * surface, drag-out from a side surface onto HOME (`EjectToHome`), and the nested-scroll hand-off that makes
- * [OneFingerSwipe.AT_EDGE] genuinely different from [OneFingerSwipe.ALWAYS]. L1 had all three tangled into one
- * 549-line `CrossPager`; they arrive here as separate additions on a clean base.
+ * **Still to come**, deferred from `SurfacePager` rather than forgotten: drag-out from a side surface onto HOME
+ * (`EjectToHome`), and the five transitions beyond SLIDE. L1 had those tangled into one 549-line `CrossPager` along
+ * with the frosted backdrop and the nested-scroll hand-off, both of which have since arrived here as separate
+ * additions on a clean base.
  */
 @Composable
 fun LauncherShell(modifier: Modifier = Modifier) {
@@ -106,7 +111,9 @@ fun LauncherShell(modifier: Modifier = Modifier) {
             SurfacePager(
                 state = pagerState,
                 modifier = modifier.fillMaxSize(),
-                sideContent = state.register.sides.mapValues { (_, binding) -> binding.toSurfaceBinding() },
+                sideContent = state.register.sides.mapValues { (edge, binding) ->
+                    binding.toSurfaceBinding(edge, state.register.homeLayout)
+                },
                 // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                 // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
                 enabled = { !gestureLock.isLocked },
@@ -176,17 +183,20 @@ private fun rememberBackdropState(image: Bitmap?, accent: Int?, windowSize: IntS
  * leave HOME, the side surface's own layout decides whether one can come back. `SurfaceBinding` says as much — "set by
  * the shell from the layout on each side".
  *
- * **Both are [OneFingerSwipe.ALWAYS] for now, and that is a stand-in.** The honest values are a function of HOME's
- * `HomeLayout` and this binding's `AppsLayout` — a bounded scroller on the axis means `AT_EDGE`, an infinite one
- * `NEVER`, nothing on the axis `ALWAYS`. Both layouts are now readable here, so the playground's worked-out table can
- * be lifted across; what it still needs is the per-layout scroll facts, which live with the layouts rather than in the
- * register. `ALWAYS` keeps every bound edge reachable with one finger meanwhile, and `AT_EDGE` currently behaves as
- * `ALWAYS` anyway, since the nested-scroll hand-off it depends on is itself deferred.
+ * **Each side names its own scroll behaviour, and one rule turns that into the policy.** `HomeLayout.scrollAxes` and
+ * `AppsLayout.scrollAxes` are declared in the modules that draw those layouts; [ScrollAxes.oneFingerSwipe] is the
+ * whole derivation — a bounded scroller on the edge's axis means `AT_EDGE`, an infinite one `NEVER`, nothing on the
+ * axis `ALWAYS`. That expression is the surface-pager playground's table, promoted from private demo code once the
+ * real layouts existed to answer it. Until this landed both were a hardcoded [OneFingerSwipe.ALWAYS] stand-in, which
+ * cost nothing only because `AT_EDGE` had no hand-off behind it and behaved as `ALWAYS` anyway.
+ *
+ * @param homeLayout HOME's pairing, which decides the *open* half. Passed in because it is the other side of the
+ *   edge: a binding knows what swiping to it shows, not what swiping away from HOME has to cross first.
  */
-private fun SideBinding.toSurfaceBinding(): SurfaceBinding = when (this) {
+private fun SideBinding.toSurfaceBinding(edge: HomeEdge, homeLayout: HomeLayout): SurfaceBinding = when (this) {
     is SideBinding.Apps -> SurfaceBinding(
-        openSwipe = OneFingerSwipe.ALWAYS,
-        closeSwipe = OneFingerSwipe.ALWAYS,
+        openSwipe = homeLayout.scrollAxes.oneFingerSwipe(edge),
+        closeSwipe = layout.scrollAxes.oneFingerSwipe(edge),
     ) {
         AppsScreen(layout = layout)
     }

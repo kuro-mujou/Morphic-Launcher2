@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.apps.layout.categorypager
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -81,6 +82,10 @@ private val HeaderPadding = 16.dp
  *   arithmetic on an ambient value is where a surface stops being able to say what it drew.
  * @param onGeometry reports where this page's cells currently are, republished on every scroll frame because the
  *   content moves under the finger while the finger itself may not move at all.
+ * @param onScrollState hands this page's scroller up to the surface, which reports the *current* page's vertical
+ *   edges for the surface swipe. Published up rather than reported from here for the reason the geometry is: only
+ *   the surface knows which page is current, and asking it in composition would subscribe this whole layout to the
+ *   pager's animated position — so the surface reads it later, from a pointer callback.
  */
 @Composable
 internal fun CategoryPage(
@@ -95,6 +100,7 @@ internal fun CategoryPage(
     onLaunch: (ComponentKey) -> Unit,
     onDrop: () -> Unit,
     onGeometry: (GridGeometry) -> Unit,
+    onScrollState: (ScrollState) -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val colors = LocalMorphicColors.current
     // **The stored column count, clamped to what this page's width can draw at this icon size** — and everything below
@@ -168,6 +174,11 @@ internal fun CategoryPage(
     // dragged over, so an idle page does nothing at all.
     SideEffect {
         geometry?.let(onGeometry)
+        // The scroller itself, not a reading of it, so the surface always sees the live position — the same reason
+        // `ScrollEdgeSlot` holds a lambda. It rides this `SideEffect` rather than taking one of its own because it
+        // is published to a plain map that nothing composes against, so re-publishing an identical value each frame
+        // costs a hash-map write and invalidates nothing.
+        onScrollState(scrollState)
         fingerInRoot?.let(coordinator::moveTo)
     }
 

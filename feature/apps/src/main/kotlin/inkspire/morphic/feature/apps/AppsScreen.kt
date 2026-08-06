@@ -17,6 +17,8 @@ import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.surface.AxisScroll
+import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
 import inkspire.morphic.core.model.AppsPagerGrid
@@ -172,6 +174,28 @@ fun AppsScreen(
         }
     }
 }
+
+/**
+ * **What each APPS layout scrolls, per axis** — the fact the launcher shell turns into an edge's *close* policy,
+ * since a swipe back to HOME crosses this surface's own content.
+ *
+ * The twin of `HomeLayout.scrollAxes`, and the reason both exist rather than one table in the shell: the shell owns
+ * the question and each feature owns its answer, so a new layout declares its own scroll behaviour in the module
+ * that draws it. The `when` is exhaustive, so a sixth [AppsLayout] cannot be added without saying what it scrolls —
+ * the same rule the render `when` above enforces.
+ *
+ * Every pager here is bounded (`infiniteScroll = { false }`), so nothing is [AxisScroll.INFINITE] yet; the value
+ * exists because infinite paging is a setting L1 had and this one will, and this is where it would land.
+ */
+val AppsLayout.scrollAxes: ScrollAxes
+    get() = when (this) {
+        AppsLayout.VERTICAL_LIST, AppsLayout.VERTICAL_GRID, AppsLayout.CATEGORY_CARD ->
+            ScrollAxes(vertical = AxisScroll.BOUNDED)
+        AppsLayout.PAGER -> ScrollAxes(horizontal = AxisScroll.BOUNDED)
+        // The only layout that scrolls on both: pages across, a category down.
+        AppsLayout.PAGER_WITH_CATEGORY ->
+            ScrollAxes(horizontal = AxisScroll.BOUNDED, vertical = AxisScroll.BOUNDED)
+    }
 
 /**
  * The resolved [IconMetrics] for [slot], or the ambient default when the store has not answered yet.

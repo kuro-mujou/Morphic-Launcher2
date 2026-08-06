@@ -53,6 +53,8 @@ import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.ordered.cellFractionY
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -192,6 +194,16 @@ internal fun HomeListSurface(
         )
     }
     val liveGeometry = rememberUpdatedState(listGeometry)
+
+    // **Where HOME is scrolled, for the surface swipe** — the vertical mirror of the pager pairing's report. A
+    // one-finger swipe onto a TOP or BOTTOM surface crosses this list, so it may only leave HOME once the list has
+    // nothing further to scroll in that direction; horizontally nothing moves, so LEFT and RIGHT stay free.
+    //
+    // L1 could not express this: its `HomeGestureRelease` for the list home was a flat `swipeUp = false`, which
+    // forbade a vertical crossing outright rather than handing it off at the end of the list.
+    ReportScrollEdges {
+        ScrollEdges(atTop = !scrollState.canScrollBackward, atBottom = !scrollState.canScrollForward)
+    }
 
     var areaGeometry by remember { mutableStateOf<GridGeometry?>(null) }
 

@@ -42,6 +42,8 @@ import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
+import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
@@ -171,6 +173,12 @@ fun AppsCategoryCard(
     val gestureConfig = rememberAppsGestureConfig()
 
     val gridState = rememberLazyGridState()
+    // **Where the card grid is scrolled, for the surface swipe** — the vertical grid's report, over cards rather
+    // than apps. An open expansion does not change it: the expansion is a `FolderOverlay` with its own paging, and
+    // while it is up the surface swipe is locked out entirely by `SurfaceGestureLock`.
+    ReportScrollEdges {
+        ScrollEdges(atTop = !gridState.canScrollBackward, atBottom = !gridState.canScrollForward)
+    }
     var gridBounds by remember { mutableStateOf<Rect?>(null) }
     // Each card's bounds in root space, so a finger can be turned into a card. A per-card map rather than a grid
     // geometry, because there is no lattice here to compute from: cards are lazy, square, and separated by spacing
