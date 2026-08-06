@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -46,6 +47,18 @@ private const val AXIS_EPSILON = 0.001f
  * HOME's content about the edge the swipe points at, closing asks the open surface's content about the edge
  * *opposite* the one it sits on, because closing drags it back the way it came.
  *
+ * **It runs on [PointerEventPass.Initial], and the hand-off does not work on any other pass.** A parent on the Main
+ * pass sees its children's events *after* them, and `positionChange()` returns `Offset.Zero` once a change has been
+ * consumed — so over any scrolling content the accumulated delta stays at zero, slop is never crossed, and none of
+ * the logic below ever executes. Initial reverses that: this gesture gets first refusal on the raw delta, decides,
+ * and **consumes only if it claims**. Declining costs the child nothing, because nothing was consumed and the event
+ * reaches it on Main exactly as it would have. L1's `CrossPager` used Initial for the same reason; taking the default
+ * pass here was what left `AT_EDGE` inert.
+ *
+ * The other side of owning first refusal is that a claim must never be idle: a swipe pressed against a bound the pan
+ * is already clamped at would consume the finger and move nothing, so the claim is gated on the swipe actually
+ * returning toward HOME.
+ *
  * **The question is asked once, at slop, and the answer stands for the whole gesture.** A finger that crosses slop
  * while the content can still scroll belongs to the content until it lifts — scrolling a list to the bottom and
  * carrying straight on does *not* start panning; a second swipe from the bottom does. That is L1's behaviour too, and
@@ -68,7 +81,7 @@ fun Modifier.surfacePagerGesture(
     pointerInput(state) {
         val touchSlop = viewConfiguration.touchSlop
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!enabled()) return@awaitEachGesture
 
             // Freeze any in-flight settle so this touch takes over the pan cleanly, and capture the page each
@@ -96,7 +109,7 @@ fun Modifier.surfacePagerGesture(
             val tracker = VelocityTracker()
 
             while (true) {
-                val event = awaitPointerEvent()
+                val event = awaitPointerEvent(PointerEventPass.Initial)
                 val pressed = event.changes.filter { it.pressed }
                 if (pressed.isEmpty()) break
 
@@ -130,6 +143,15 @@ fun Modifier.surfacePagerGesture(
                                 PanAxis.HORIZONTAL -> if (state.panX < 0f) HomeEdge.LEFT else HomeEdge.RIGHT
                                 PanAxis.VERTICAL -> if (state.panY < 0f) HomeEdge.TOP else HomeEdge.BOTTOM
                             }
+                            // **Only a swipe that actually returns toward HOME is ours.** The finger has to travel
+                            // toward the edge the open surface came in from — dragging the *other* way is pressed
+                            // against a bound the pan is already clamped at, so it would move nothing while
+                            // consuming the finger. On the Initial pass that is not merely wasteful: it would eat
+                            // every forward page-swipe and downward scroll the open surface's own content needs.
+                            val delta = if (activeAxis == PanAxis.HORIZONTAL) accX else accY
+                            val returning =
+                                if (openEdge == HomeEdge.LEFT || openEdge == HomeEdge.TOP) delta < 0f else delta > 0f
+                            if (!returning) break
                             val close = state.edgeSwipes[openEdge]?.close ?: OneFingerSwipe.ALWAYS
                             // The nested-scroll hand-off, closing half. The content crossed is *this surface's*, and
                             // the edge it must have reached is the one **opposite** the surface's own — closing the

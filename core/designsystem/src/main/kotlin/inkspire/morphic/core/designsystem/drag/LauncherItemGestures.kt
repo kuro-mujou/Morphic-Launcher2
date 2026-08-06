@@ -12,7 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.positionChangedIgnoreConsumed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
@@ -142,7 +142,16 @@ fun Modifier.launcherItemGestures(
                                     perform(machine.onEvent(ItemGestureEvent.Cancel), local)
                                     break
                                 }
-                                if (change.positionChanged()) {
+                                // **Ignoring consumption, deliberately** — the twin of `changedToUpIgnoreConsumed`
+                                // above. Where the finger *is* is never in dispute; whether this item acts on it is
+                                // the machine's decision, and it has a phase for exactly that
+                                // (`ReleasedToParent`). Asking `positionChanged()` instead reads consumption as
+                                // "the finger did not move", and the surface pan claims at the platform slop (~8dp)
+                                // while this item needs 20 — so a swipe begun on an icon went straight from `Down`
+                                // to `Up` with no `Move` in between, left the machine in `Pressed`, and **launched
+                                // the app**. It cost nothing only while the pan ran on the Main pass and could not
+                                // consume ahead of this node.
+                                if (change.positionChangedIgnoreConsumed()) {
                                     perform(machine.onEvent(ItemGestureEvent.Move(local - down.position)), local)
                                     // Once the gesture is claimed as a swipe or a drag, stop the parent
                                     // (pager/scroller) from also reacting to the same finger movement.

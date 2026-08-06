@@ -16,11 +16,15 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * Nothing reads *why* it is locked, only that it is, which is what keeps the set of reasons open — the item options
  * menu (P7) joins by claiming, with no change here or in [SurfacePager].
  *
- * **Why a lock and not pointer consumption.** `launcherItemGestures` already consumes changes once it has claimed a
- * gesture, and that does nothing for the pager: `surfacePagerGesture` reads `positionChange()` without asking whether
- * anyone consumed it. Making it ask would not fix this either — the pager claims at the platform touch slop (~8dp)
- * while an item needs its own 20dp, so the pager reaches its threshold *first* and there is nothing consumed yet to
- * see. The two gestures overlap in time and have to be settled by state, not by ordering.
+ * **Why a lock and not pointer consumption.** Consumption cannot express this, in either direction. The pager runs on
+ * `PointerEventPass.Initial` — ahead of every item — so an item's own consumption is not even visible to it yet. And
+ * ordering cannot arbitrate: the pager claims at the platform touch slop (~8dp) while an item needs its own 20dp, so
+ * the pager reaches its threshold *first* and there is nothing consumed yet to see. The two gestures overlap in time
+ * and have to be settled by state.
+ *
+ * This is also why the item gestures read the finger with `positionChangedIgnoreConsumed()`: an item must go on
+ * knowing where the finger is even while the pan owns it, or a swipe begun on an icon reaches `Up` having never
+ * moved, and is read as a tap.
  *
  * Hosted once at the launcher shell, beside the pager it protects. Absent (null local) means nothing is claiming and
  * nothing can — the dev harness and previews, where the pager runs unguarded exactly as it did before.
