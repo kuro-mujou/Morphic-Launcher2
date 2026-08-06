@@ -361,10 +361,10 @@ internal fun HomeListSurface(
  * so reordering [apps] moves them and `animatePlacement` springs the difference — exactly as a grid's parent-data
  * placement change does.
  *
- * **A row is the one cell whose visible extent really is its whole footprint**, so unlike an icon cell it `.then()`s
- * the gestures onto its own root — which is what [LauncherDragCell]'s KDoc describes for "content that genuinely
- * fills its cell". The cost is that a list leaves no slack for a surface long-press, which `AppsVerticalList` already
- * states for the same reason.
+ * **A row's touch target is its icon and its label**, which `AppRowCell` arranges by hanging the gestures it is given
+ * on a wrap-content group rather than on the row's root — the same "visible extent" rule an icon cell follows. So the
+ * width past a short label falls through to this surface, which is what will make a press-and-hold on the *list*
+ * reach home's own options menu when that lands.
  *
  * **The viewport publishes its bounds, not the content.** `onGloballyPositioned` sits *outside* `verticalScroll`,
  * which is what makes the reported rectangle stable while the content moves under it — see the surface's geometry

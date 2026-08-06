@@ -810,9 +810,13 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   the rest of the launcher on long-press timing or slop — exactly what L1 did, hand-rolling a recogniser (plus a
   click-suppression flag) inside its list composable. The tap-only wiring lives in one `appsItemGestures` shared by
   both layouts, so a layout can't half-wire it and there's one file to change when the P7 menu and `EjectToHome`
-  land. **A row's touch target is the whole row** — the same "visible extent" rule as a grid cell, not an
-  exception: a row's visible extent *is* the full-width strip. Consequence: a list leaves no slack for a surface
-  long-press.
+  land. **A row's touch target is its icon and its label, not the strip they sit in** — the same "visible extent"
+  rule as a grid cell, and `AppRowCell` applies it the same way, by hanging the gestures on a wrap-content group.
+  This reverses an earlier reading ("a row's visible extent *is* the full-width strip, so a list leaves no slack"),
+  which conflated the row's **footprint** with what is drawn in it: a row paints no background, so the width past
+  the end of a short label is exactly the slack a grid cell has around its icon, lying on the other axis. So a list
+  *does* leave room for a surface long-press. The bill is that a tap out there launches nothing either — one
+  contract covers both — which is already true of the slack around a grid icon.
 - **The pager is the first layout that stores an arrangement** (`AppsLayout.PAGER`, `AppsPager`) — pages of
   `LauncherGrid` in FIXED_PAGER mode at `AppsPagerGrid`'s size, drawn from `AppsOrderRepository` rather than
   re-derived. Page capacity is a UI read (device → blueprint), pushed to the VM via `setPagerGrid`, exactly as

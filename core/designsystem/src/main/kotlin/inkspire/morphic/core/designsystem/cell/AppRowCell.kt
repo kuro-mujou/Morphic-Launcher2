@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.cell
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -167,12 +168,21 @@ private const val DEFAULT_LINE_HEIGHT_RATIO = 1.2f
  * out here matters because a row's height is a surface metric bound for the settings layer, and a cell that fixed
  * it would quietly own a dimension it has no business owning.
  *
- * **The whole row is the touch target**, unlike a grid cell — and that is the same rule, not an exception to it:
- * an item's target is its *visible extent*, and a row's visible extent genuinely is the full-width strip (that is
- * what makes it read as a row at all). So [itemGestures] goes on the row's root, exactly as
- * [inkspire.morphic.core.designsystem.grid.LauncherDragCell] describes for content that fills its cell. The
- * consequence is real and intended: a list leaves no slack for a surface-level long-press, because in a list
- * every pixel belongs to a row.
+ * **The touch target is the icon and the label, not the strip they sit in** — the same "visible extent" rule
+ * [IconLabelCell] applies to a grid cell, and applied here the same way: [itemGestures] goes on a **wrap-content
+ * group** holding the icon, the gap and the text, so the blank width after a short label falls through to the
+ * surface beneath (`launcherItemGestures` never consumes a down).
+ *
+ * **This reverses an earlier reading of that rule, and the reversal is the point.** The first cut put the gestures
+ * on the row's root, arguing that a row's visible extent *is* the full-width strip. That conflated the row's
+ * **footprint** with what is drawn in it: a row paints no background of its own, so the space past the end of the
+ * label is not part of anything visible — it is exactly the slack a grid cell has around its icon, lying on the
+ * other axis. The consequence is the one the grid already relies on: a list now leaves room for a press-and-hold
+ * aimed at the *surface*, which is what a home list needs for its own options menu.
+ *
+ * The bill, worth knowing because it is a real behaviour change: a tap on that blank width no longer launches the
+ * app either, since a tap and a long-press are one contract. That matches a grid cell, where the slack around an
+ * icon launches nothing.
  *
  * **[metrics] is honoured except for `showLabel`, and the exception is structural rather than an omission.** A row
  * *is* its label — the icon is an adornment beside it — so a row with no label would not be a row at all, and the
@@ -200,34 +210,50 @@ fun AppRowCell(
         // The one definition of the row's text, shared with `rowLabelHeight` so the height a row-height *bound* is
         // computed from is the height this row actually draws.
         val labelStyle = rowLabelStyle(metrics)
+        // The outer row owns the *footprint* — it fills the cell and applies the inset, which is what the icon was
+        // measured against. The inner row is the **group**: it wraps its content, so it ends where the label ends,
+        // and it is what carries the gestures. Two extents, exactly as `IconLabelCell` splits them.
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .then(itemGestures)
                 .padding(horizontal = RowPadH, vertical = RowPadV),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // A pure-text list drops the icon *and* the gap after it, so the label starts at the row's own inset
-            // rather than where the icon used to end.
-            if (metrics.showIcon) {
-                LauncherIcon(
-                    component = app.componentKey,
-                    contentDescription = app.label,
-                    sizePx = with(LocalDensity.current) { iconSize.roundToPx() },
-                    modifier = Modifier.size(iconSize),
+            // **Wraps horizontally, fills vertically**, and the asymmetry is not a fudge — the two axes have
+            // different amounts of slack in them. Across, the space after a short label is most of the row and is
+            // exactly what should fall through. Down, all that is left is the row's own 8dp inset, invisible either
+            // way; and a group that wrapped it too would leave a *text-only* row (`showIcon = false`) a target one
+            // line of text tall, under the platform's touch minimum. `IconLabelCell` wraps both because a grid cell's
+            // slack is real on both axes.
+            Row(
+                modifier = Modifier.fillMaxHeight().then(itemGestures),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // A pure-text list drops the icon *and* the gap after it, so the label starts at the row's own inset
+                // rather than where the icon used to end.
+                if (metrics.showIcon) {
+                    LauncherIcon(
+                        component = app.componentKey,
+                        contentDescription = app.label,
+                        sizePx = with(LocalDensity.current) { iconSize.roundToPx() },
+                        modifier = Modifier.size(iconSize),
+                    )
+                    Spacer(Modifier.width(IconLabelGap))
+                }
+                // **No `weight`, which is what makes the group wrap.** With one the text stretched to the row's end
+                // and the group was the whole strip again — the target this cell is deliberately not. Unweighted, the
+                // text still measures against the width the outer row leaves it, so a long label ellipsises at
+                // exactly the same place it always did; only a *short* one now stops where it stops.
+                Text(
+                    text = app.label,
+                    style = labelStyle,
+                    // The theme's content colour, not the grid label's white-on-wallpaper: a list is read against
+                    // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
+                    color = colors.content,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.width(IconLabelGap))
             }
-            Text(
-                text = app.label,
-                style = labelStyle,
-                // The theme's content colour, not the grid label's white-on-wallpaper: a list is read against
-                // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
-                color = colors.content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
         }
     }
 }
