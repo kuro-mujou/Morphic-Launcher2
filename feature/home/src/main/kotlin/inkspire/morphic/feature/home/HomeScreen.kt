@@ -62,20 +62,21 @@ fun HomeScreen(modifier: Modifier = Modifier) {
  * beside one. The shell owns the *question* (it is the only layer that sees both sides of an edge) and each feature
  * owns its own answer — which is what `SurfaceBinding` means by "set by the shell from the layout on each side".
  *
- * Both pagers are bounded today (`infiniteScroll = { false }` everywhere), so [AxisScroll.INFINITE] — and with it
- * `OneFingerSwipe.NEVER` — is currently unreachable. It stays in the enum because infinite paging is a setting L1
- * had and this one will: the day it returns, this expression is the only thing that changes.
- *
  * The **side zone is not modelled here**, and that is a deliberate simplification rather than an oversight: a
  * vertical swipe that starts inside the dock or the widget area is not over the list at all, but the report is one
  * answer for the whole surface. L1 made the same simplification, and refining it would mean the report knowing which
  * region the finger is in — a per-zone answer for a gesture that is decided once, at slop.
+ *
+ * @param wraps whether the pager's pages loop — `SettingsRepository.pagerWraps` for [HomeLayout.pagerSlot], and
+ *   ignored by the pairing that has no pager. **This is what makes wrapping more than an animation preference**: a
+ *   wrapping pager never reaches an end, so there is no edge to hand a one-finger swipe off at, and the axis goes
+ *   from [AxisScroll.BOUNDED] to [AxisScroll.INFINITE] — which becomes `OneFingerSwipe.NEVER`, making that edge
+ *   two-finger-only. Turning wrapping on therefore takes a gesture away, and the settings control says so.
  */
-val HomeLayout.scrollAxes: ScrollAxes
-    get() = when (this) {
-        HomeLayout.PAGER_WITH_DOCK -> ScrollAxes(horizontal = AxisScroll.BOUNDED)
-        HomeLayout.LIST_WITH_WIDGET_AREA -> ScrollAxes(vertical = AxisScroll.BOUNDED)
-    }
+fun HomeLayout.scrollAxes(wraps: Boolean): ScrollAxes = when (this) {
+    HomeLayout.PAGER_WITH_DOCK -> ScrollAxes(horizontal = AxisScroll.ofPager(wraps))
+    HomeLayout.LIST_WITH_WIDGET_AREA -> ScrollAxes(vertical = AxisScroll.BOUNDED)
+}
 
 /**
  * The resolved [IconMetrics] for [slot], or the ambient default before the store has answered.

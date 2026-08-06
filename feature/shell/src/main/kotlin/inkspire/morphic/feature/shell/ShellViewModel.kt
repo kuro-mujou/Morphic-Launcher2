@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
@@ -26,6 +27,11 @@ import kotlinx.coroutines.flow.stateIn
  * @property register HOME's layout, its per-edge bindings, and the crossing transition. [SurfaceRegister.Default]
  *   until the store's first emission, which is why the shell never renders "no settings" — it renders the defaults,
  *   and the defaults bind no edge.
+ * @property pagerWraps whether each pager's pages loop, resolved. The shell needs it because wrapping decides the
+ *   *gesture*, not just the animation: a pager with no end has no edge to hand a one-finger swipe off at, so it makes
+ *   that edge two-finger-only. This is the one state field read for both halves of a binding at once — HOME's pager
+ *   for the open policy, the bound layout's for the close — which is why it arrives as a map rather than as the two
+ *   booleans a single surface would want.
  * @property brightness how bright the wallpaper behind the chrome is, which is the launcher's dark/light input.
  *   [WallpaperBrightness.DARK] until the first read, which is what the shell hardcoded before this existed — so a
  *   first frame looks exactly as it used to and then corrects if the wallpaper is bright.
@@ -41,6 +47,7 @@ import kotlinx.coroutines.flow.stateIn
  */
 data class ShellState(
     val register: SurfaceRegister = SurfaceRegister.Default,
+    val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
     val brightness: WallpaperBrightness = WallpaperBrightness.DARK,
     val backdropEffect: BackdropEffect = BackdropEffect.Plain(),
     val backdropImage: Bitmap? = null,
@@ -78,14 +85,17 @@ class ShellViewModel(
     private val orientation = MutableStateFlow(Orientation.PORTRAIT)
 
     val state: StateFlow<ShellState> =
+        // Six sources against `combine`'s five, so the two that come from the same store and answer the same
+        // question — what is bound to each edge, and how the pagers behind those bindings page — are grouped first.
         combine(
-            settingsRepository.surfaceRegister,
+            combine(settingsRepository.surfaceRegister, settingsRepository.pagerWraps, ::Pair),
             wallpaperRepository.brightness,
             settingsRepository.backdropEffect,
             backdropImages(settingsRepository),
             wallpaperRepository.accentColor,
-            ::ShellState,
-        ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ShellState())
+        ) { (register, wraps), brightness, effect, image, accent ->
+            ShellState(register, wraps, brightness, effect, image, accent)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ShellState())
 
     /** Reports the orientation the shell is being drawn in, so the rotating pair's right half is sampled. */
     fun setOrientation(value: Orientation) {

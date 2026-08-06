@@ -146,6 +146,7 @@ fun AppsScreen(
                 // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
                 config = pagerFit,
                 horizontalPadding = pagerPadding,
+                wraps = state.wraps(GridSlot.APPS_PAGER),
             )
             AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
                 categories = state.categories,
@@ -154,6 +155,7 @@ fun AppsScreen(
                 metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
                 cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
                 horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
+                wraps = state.wraps(GridSlot.APPS_CATEGORY),
             )
             // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
             // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
@@ -184,18 +186,20 @@ fun AppsScreen(
  * that draws it. The `when` is exhaustive, so a sixth [AppsLayout] cannot be added without saying what it scrolls —
  * the same rule the render `when` above enforces.
  *
- * Every pager here is bounded (`infiniteScroll = { false }`), so nothing is [AxisScroll.INFINITE] yet; the value
- * exists because infinite paging is a setting L1 had and this one will, and this is where it would land.
+ * @param wraps whether this layout's pager loops — `SettingsRepository.pagerWraps` for [AppsLayout.pagerSlot], and
+ *   ignored by the three layouts that do not page. A wrapping pager has no end to hand a one-finger swipe off at, so
+ *   the axis becomes [AxisScroll.INFINITE] and that edge turns two-finger-only; see `HomeLayout.scrollAxes`, which
+ *   says the same thing from the other side of the boundary.
  */
-val AppsLayout.scrollAxes: ScrollAxes
-    get() = when (this) {
-        AppsLayout.VERTICAL_LIST, AppsLayout.VERTICAL_GRID, AppsLayout.CATEGORY_CARD ->
-            ScrollAxes(vertical = AxisScroll.BOUNDED)
-        AppsLayout.PAGER -> ScrollAxes(horizontal = AxisScroll.BOUNDED)
-        // The only layout that scrolls on both: pages across, a category down.
-        AppsLayout.PAGER_WITH_CATEGORY ->
-            ScrollAxes(horizontal = AxisScroll.BOUNDED, vertical = AxisScroll.BOUNDED)
-    }
+fun AppsLayout.scrollAxes(wraps: Boolean): ScrollAxes = when (this) {
+    AppsLayout.VERTICAL_LIST, AppsLayout.VERTICAL_GRID, AppsLayout.CATEGORY_CARD ->
+        ScrollAxes(vertical = AxisScroll.BOUNDED)
+    AppsLayout.PAGER -> ScrollAxes(horizontal = AxisScroll.ofPager(wraps))
+    // The only layout that scrolls on both: pages across, a category down. Only the pages can wrap — a category's
+    // own scroll is a list of apps, which has a top and a bottom whatever the pager does.
+    AppsLayout.PAGER_WITH_CATEGORY ->
+        ScrollAxes(horizontal = AxisScroll.ofPager(wraps), vertical = AxisScroll.BOUNDED)
+}
 
 /**
  * The resolved [IconMetrics] for [slot], or the ambient default when the store has not answered yet.

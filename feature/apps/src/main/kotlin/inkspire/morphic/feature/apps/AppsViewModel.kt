@@ -48,6 +48,7 @@ private data class AppsSizing(
     val pager: GridConfig?,
     val listRowHeightDp: Int?,
     val padding: Map<GridSlot, Int>,
+    val wraps: Map<GridSlot, Boolean>,
 )
 
 /**
@@ -246,7 +247,17 @@ class AppsViewModel(
      * It also groups honestly — these change together when a settings section is edited, and none of them is content.
      */
     private val sizing: Flow<AppsSizing> =
-        combine(iconSizings, gridCols, pagerConfig, listRowHeight, paddings, ::AppsSizing)
+        // Six sources against `combine`'s five, so the three **per-device maps** are grouped first. They are the
+        // honest three to fold: each is `posture`-gated and each resolves the same way, where the two below are a
+        // single value and a setting with no device dimension at all.
+        combine(
+            combine(iconSizings, gridCols, paddings, ::Triple),
+            pagerConfig,
+            listRowHeight,
+            settingsRepository.pagerWraps,
+        ) { (icon, cols, padding), pager, rowHeight, wraps ->
+            AppsSizing(icon, cols, pager, rowHeight, padding, wraps)
+        }
 
     val state: StateFlow<AppsState> =
         combine(
@@ -282,6 +293,7 @@ class AppsViewModel(
                 pagerConfig = configured.pager,
                 listRowHeightDp = configured.listRowHeightDp,
                 horizontalPaddingDp = configured.padding,
+                pagerWraps = configured.wraps,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 

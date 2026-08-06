@@ -61,6 +61,18 @@ enum class AxisScroll {
 
     /** A wrap-around scroller owns this axis, so it never reaches an edge. */
     INFINITE,
+    ;
+
+    companion object {
+        /**
+         * A pager's axis, given whether its pages wrap: [INFINITE] when they do, [BOUNDED] when they stop at the ends.
+         *
+         * The whole of what a wrap toggle means to the surface swipe, in one expression rather than the same `if` in
+         * each of the three features that own a pager. Here beside the enum because it *is* the enum's rule; which
+         * pagers wrap is a settings question and stays there.
+         */
+        fun ofPager(wraps: Boolean): AxisScroll = if (wraps) INFINITE else BOUNDED
+    }
 }
 
 /**

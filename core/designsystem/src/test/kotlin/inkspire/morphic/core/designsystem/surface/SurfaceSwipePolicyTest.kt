@@ -47,6 +47,23 @@ class SurfaceSwipePolicyTest {
         assertEquals(OneFingerSwipe.NEVER, wrapping.oneFingerSwipe(HomeEdge.RIGHT))
     }
 
+    /**
+     * The wrap toggle's whole meaning to the gesture: turning it on takes the one-finger swipe away on that axis,
+     * because a pager with no ends has no edge to hand off at.
+     */
+    @Test
+    fun `a wrapping pager leaves one finger no way across`() {
+        assertEquals(AxisScroll.BOUNDED, AxisScroll.ofPager(wraps = false))
+        assertEquals(AxisScroll.INFINITE, AxisScroll.ofPager(wraps = true))
+
+        val bounded = ScrollAxes(horizontal = AxisScroll.ofPager(wraps = false))
+        val wrapping = ScrollAxes(horizontal = AxisScroll.ofPager(wraps = true))
+        assertEquals(OneFingerSwipe.AT_EDGE, bounded.oneFingerSwipe(HomeEdge.LEFT))
+        assertEquals(OneFingerSwipe.NEVER, wrapping.oneFingerSwipe(HomeEdge.LEFT))
+        // The perpendicular axis is untouched — wrapping horizontally says nothing about a vertical crossing.
+        assertEquals(OneFingerSwipe.ALWAYS, wrapping.oneFingerSwipe(HomeEdge.TOP))
+    }
+
     @Test
     fun `only AT_EDGE consults where the content is`() {
         assertTrue(OneFingerSwipe.ALWAYS.allows(atEdge = false))

@@ -113,6 +113,7 @@ fun AppsCategoryPager(
     metrics: IconMetrics,
     cols: Int,
     horizontalPadding: Dp,
+    wraps: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -122,9 +123,11 @@ fun AppsCategoryPager(
     // once, so capturing the parameter would freeze the pager at however many categories existed on the first
     // composition — which is none, before the store's first emission.
     val liveCategories = rememberUpdatedState(categories)
+    // Held live for the reason `liveCategories` is, stated above: the factory remembers its lambdas once.
+    val liveWraps = rememberUpdatedState(wraps)
     val pagerState = rememberLauncherPagerState(
         pageCount = { liveCategories.value.size.coerceAtLeast(1) },
-        infiniteScroll = { false },
+        infiniteScroll = { liveWraps.value },
     )
 
     // One geometry per page rather than one for the surface, because each page's grid scrolls independently — see

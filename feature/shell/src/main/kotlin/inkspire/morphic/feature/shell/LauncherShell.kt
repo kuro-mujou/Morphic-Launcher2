@@ -29,9 +29,11 @@ import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.feature.apps.AppsScreen
@@ -112,7 +114,7 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                 state = pagerState,
                 modifier = modifier.fillMaxSize(),
                 sideContent = state.register.sides.mapValues { (edge, binding) ->
-                    binding.toSurfaceBinding(edge, state.register.homeLayout)
+                    binding.toSurfaceBinding(edge, state.register.homeLayout, state::wraps)
                 },
                 // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                 // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
@@ -190,14 +192,35 @@ private fun rememberBackdropState(image: Bitmap?, accent: Int?, windowSize: IntS
  * real layouts existed to answer it. Until this landed both were a hardcoded [OneFingerSwipe.ALWAYS] stand-in, which
  * cost nothing only because `AT_EDGE` had no hand-off behind it and behaved as `ALWAYS` anyway.
  *
+ * **A wrapping pager changes the policy, not just the animation**, which is why [wraps] is consulted here at all: a
+ * pager with no ends has no edge to hand a one-finger swipe off at, so its axis is `AxisScroll.INFINITE` and the
+ * policy comes out `OneFingerSwipe.NEVER`. Turn wrapping on for HOME's pager and a LEFT- or RIGHT-bound surface
+ * becomes two-finger-only; turn it on for the APPS pager and getting *back* does. Both settings sections say so.
+ *
  * @param homeLayout HOME's pairing, which decides the *open* half. Passed in because it is the other side of the
  *   edge: a binding knows what swiping to it shows, not what swiping away from HOME has to cross first.
+ * @param wraps whether the pager behind a given slot loops. A lookup rather than two booleans, because the two sides
+ *   of an edge ask about different grids and only [HomeLayout.pagerSlot] / [AppsLayout.pagerSlot] know which.
  */
-private fun SideBinding.toSurfaceBinding(edge: HomeEdge, homeLayout: HomeLayout): SurfaceBinding = when (this) {
+private fun SideBinding.toSurfaceBinding(
+    edge: HomeEdge,
+    homeLayout: HomeLayout,
+    wraps: (GridSlot?) -> Boolean,
+): SurfaceBinding = when (this) {
     is SideBinding.Apps -> SurfaceBinding(
-        openSwipe = homeLayout.scrollAxes.oneFingerSwipe(edge),
-        closeSwipe = layout.scrollAxes.oneFingerSwipe(edge),
+        openSwipe = homeLayout.scrollAxes(wraps(homeLayout.pagerSlot)).oneFingerSwipe(edge),
+        closeSwipe = layout.scrollAxes(wraps(layout.pagerSlot)).oneFingerSwipe(edge),
     ) {
         AppsScreen(layout = layout)
     }
 }
+
+/**
+ * Whether the pager in [slot] wraps — false for a layout that has no pager, which is what a null [slot] means.
+ *
+ * The null-absorbing read exists so the two call sites above stay one expression each: `pagerSlot` is nullable
+ * precisely because most layouts do not page, and a wrap value for one of those would be meaningless rather than
+ * false. Collapsing "no pager" and "does not wrap" is safe *here* only because both produce
+ * `AxisScroll.BOUNDED`-or-better — a layout with no pager is not gated on that axis at all.
+ */
+private fun ShellState.wraps(slot: GridSlot?): Boolean = slot != null && pagerWraps[slot] == true

@@ -87,7 +87,17 @@ data class AppsState(
     val pagerConfig: GridConfig? = null,
     val listRowHeightDp: Int? = null,
     val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
+    val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
 )
+
+/**
+ * Whether [slot]'s pages wrap around at the ends — false until the store answers, which is also the blueprint's
+ * default, so no frame ever shows a pager behaving differently from how it will settle.
+ *
+ * Slot-keyed rather than one field per pager because this surface has two of them, and which one is on screen is
+ * `AppsLayout.pagerSlot`'s answer rather than a second branch here.
+ */
+fun AppsState.wraps(slot: GridSlot?): Boolean = slot != null && pagerWraps[slot] == true
 
 /**
  * The blank margin at [slot]'s left and right edges, in dp — zero until the store answers.

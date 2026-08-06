@@ -164,6 +164,20 @@ class HomeViewModel(
         }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
+     * Whether the main pager's pages wrap around at the ends.
+     *
+     * Read off the resolved map rather than asked per slot, which is `SettingsRepository.pagerWraps`' shape and its
+     * reason. Defaulted to false rather than left nullable: unlike a size, a missing answer here has an honest
+     * stand-in — an unconfigured launcher does not wrap — and the blueprint agrees, so no frame ever shows a pager
+     * behaving differently from how it will settle.
+     *
+     * **It is not gated on the reported device**, unlike everything else in this holder, because wrapping has no
+     * device dimension. That is why it needs no `flatMapLatest` and can be read straight through.
+     */
+    private val mainWraps: Flow<Boolean> =
+        settingsRepository.pagerWraps.map { it[GridSlot.HOME_MAIN] == true }
+
+    /**
      * What the main area **is**, sized — a grid on one layout and a row height on the other.
      *
      * The `when` is the whole of the layout branch in this holder: everything downstream reads a [HomeMainSizing] and
@@ -174,7 +188,11 @@ class HomeViewModel(
         posture.flatMapLatest { current ->
             when (current?.layout) {
                 null -> flowOf(null)
-                HomeLayout.PAGER_WITH_DOCK -> pagerConfig.map { config -> config?.let(HomeMainSizing::Pager) }
+                // Two settings joined here rather than two fields on the state, because the pager arm is the only
+                // thing that can hold either: a wrap toggle belongs to a pager, and the other arm has none.
+                HomeLayout.PAGER_WITH_DOCK -> combine(pagerConfig, mainWraps) { config, wraps ->
+                    config?.let { HomeMainSizing.Pager(it, wraps) }
+                }
                 HomeLayout.LIST_WITH_WIDGET_AREA ->
                     settingsRepository.rowHeight(GridSlot.HOME_LIST, current.device).map(HomeMainSizing::List)
             }

@@ -86,8 +86,15 @@ data class SideZoneSizing(val extentDp: Int, val cols: Int, val rows: Int)
  */
 sealed interface HomeMainSizing {
 
-    /** [HomeLayout.PAGER_WITH_DOCK]'s main area: a grid of [config], divided out of whatever space is left. */
-    data class Pager(val config: GridConfig) : HomeMainSizing
+    /**
+     * [HomeLayout.PAGER_WITH_DOCK]'s main area: a grid of [config], divided out of whatever space is left.
+     *
+     * @property wraps whether the pages loop round at the ends. Not a size, which stretches this type's name — but it
+     *   is a setting only a *pager* can have, so it belongs to this arm for the same reason the counts do: a `List`
+     *   given one would be a state with no meaning, and keeping it beside the state as a nullable field would make
+     *   that expressible. The sum type is here to stop exactly that.
+     */
+    data class Pager(val config: GridConfig, val wraps: Boolean = false) : HomeMainSizing
 
     /**
      * [HomeLayout.LIST_WITH_WIDGET_AREA]'s main area: one lane of rows [rowHeightDp] tall.

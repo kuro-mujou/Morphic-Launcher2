@@ -145,6 +145,7 @@ fun AppsPager(
     folderMetrics: IconMetrics,
     config: GridConfig,
     horizontalPadding: Dp,
+    wraps: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -155,9 +156,12 @@ fun AppsPager(
     // lambda once, so capturing the parameter directly would freeze the pager at however many pages existed on the
     // first composition — which is none, since the store isn't paged until the surface reports its device.
     val livePages = rememberUpdatedState(pages)
+    // Held live for the reason `livePages` is, stated above: the factory remembers its lambdas once, so reading the
+    // parameter directly would freeze the pager at the blueprint default the store had not yet replaced.
+    val liveWraps = rememberUpdatedState(wraps)
     val pagerState = rememberLauncherPagerState(
         pageCount = { livePages.value.size.coerceAtLeast(1) },
-        infiniteScroll = { false },
+        infiniteScroll = { liveWraps.value },
     )
 
     // **Where this pager is resting, for the surface swipe.** Reaching HOME from a LEFT or RIGHT binding crosses

@@ -261,9 +261,13 @@ internal fun HomePagerSurface(
     // below, because the coordinator doesn't exist yet here and so can't be read directly inside the count lambda.
     val maxPage = rememberUpdatedState(remember(mainItems) { mainItems.maxOfOrNull { it.placement.page } ?: 0 })
     var draggingPages by remember { mutableStateOf(false) }
+    // Held live for `rememberLauncherPagerState`'s reason, stated at `maxPage` above: the factory remembers its
+    // lambdas once, so reading `state` directly would freeze the pager at whatever was stored on the first
+    // composition — which is the blueprint's `false`, before the store has answered.
+    val liveWraps = rememberUpdatedState((state.main as? HomeMainSizing.Pager)?.wraps == true)
     val pagerState = rememberLauncherPagerState(
         pageCount = { maxPage.value + 1 + if (draggingPages) 1 else 0 },
-        infiniteScroll = { false },
+        infiniteScroll = { liveWraps.value },
     )
 
     // **Where HOME is scrolled, for the surface swipe.** A one-finger swipe toward a side surface crosses this pager
