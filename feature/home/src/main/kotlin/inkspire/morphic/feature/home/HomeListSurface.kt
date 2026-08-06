@@ -1,0 +1,394 @@
+package inkspire.morphic.feature.home
+
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.cell.AppRowCell
+import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.cell.fitRowHeight
+import inkspire.morphic.core.designsystem.drag.DragAutoScrollEffect
+import inkspire.morphic.core.designsystem.drag.DropPlanner
+import inkspire.morphic.core.designsystem.drag.DropZone
+import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
+import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
+import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.drag.launcherItemGestures
+import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
+import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.grid.WidgetMinCell
+import inkspire.morphic.core.designsystem.grid.fitGridConfig
+import inkspire.morphic.core.designsystem.grid.splitForSideZone
+import inkspire.morphic.core.designsystem.grid.usableWindowArea
+import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.ordered.cellFractionY
+import inkspire.morphic.core.designsystem.ordered.movingGap
+import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
+import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.HomeListGrid
+import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.WidgetAreaGrid
+import inkspire.morphic.core.model.sideZoneEdge
+import inkspire.morphic.core.model.toGridConfig
+import kotlin.math.floor
+import kotlin.math.roundToInt
+
+/** The drag identities of this layout's two zones — named for the zone, as the pager surface's are. */
+private val ListZoneId = ZoneId("home-list")
+private val WidgetAreaZoneId = ZoneId("home-widget-area")
+
+/**
+ * The plan the list reports for **every** hover it accepts: droppable, and explicitly *painting nothing*.
+ *
+ * An ordered surface previews a reorder by reflowing its own rows around the gap ([movingGapDisplayOrder]), so there
+ * is no target cell for a drop shadow to name — `DropIntent.REORDER` says exactly that and `DropFootprint` returns
+ * early on it. The APPS pager and the category pager each declare the identical constant for the identical reason;
+ * three copies of one `PlacementPlan` is a smell worth a shared name once something needs to *vary*, and so far
+ * nothing does.
+ */
+private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.REORDER)
+
+/**
+ * **`HomeLayout.LIST_WITH_WIDGET_AREA`** — a **widget area** at the leading edge and a hand-ordered **vertical list**
+ * of apps filling the rest.
+ *
+ * The other of HOME's two arrangements, chosen by [HomeScreen]; the pager one is [HomePagerSurface]. They share this
+ * module's ViewModel and state and nothing else, and that is not an omission — a coordinate surface asks "which
+ * cell, and who gets shoved aside?" while an ordered one asks "which index?", so there is no planner, no store and
+ * no gesture the two could share. What *is* shared is [HomeZoneScaffold], because "a zone of fixed extent at one
+ * edge, the main area taking the rest" is the same arrangement either way.
+ *
+ * **The widget area is the dock's mirror**, and reads as one everywhere it matters: same fixed extent, same free
+ * placement, same "the extent bounds the count divided out of it" rule, same settings section — placed at the *top*
+ * (or the leading rail on a phone in landscape) because it is the thing you look at rather than the thing you reach
+ * for. See `SideZoneEdge`.
+ *
+ * **It renders empty today, and that is a missing feature rather than a missing surface.** Widgets are not built
+ * (`GridItem.Widget` has no cell yet), so nothing can be placed in it — but the zone is real: it is measured, sized,
+ * fitted, registered as a drop target, and it *refuses apps*, which is L1's `areaReject` rule expressed as
+ * `DropZone.accepts` instead of as a check at drop time. When widgets land they have somewhere to go.
+ *
+ * **The list is ordered, and dragging it reorders it — nothing else.** There is no merge ring (a list of apps has no
+ * folders in it, exactly as L1's has none), no page to carry an item onto, and no coordinate to write: a drop is an
+ * index, committed through [HomeViewModel.reorderList]. The preview is MovingGap, the same model the APPS pager and
+ * every folder use.
+ *
+ * **A `Column` in a `verticalScroll`, deliberately not a `LazyColumn`** — the opposite call from `AppsVerticalList`,
+ * and for two reasons that are both properties of this list rather than preferences. A lazy list disposes rows that
+ * scroll away, and the lifted row **owns the pointer stream driving the drag**, so auto-scrolling far enough would
+ * kill the gesture (the APPS pager needs `keepAllPagesPlaced` for exactly this). And this list is curated — the
+ * handful of apps the user chose — where the drawer is every app installed, so composing it whole costs nothing.
+ * It is also what makes the drag geometry the documented one: `scrollState.value` is snapshot state, so a stable
+ * viewport anchor minus the scroll offset republishes the content origin every frame for free.
+ *
+ * Not built, all of it L1 behaviour: the "Add apps" row (a picker), the long-press item menu, and removing an app
+ * from the list. Without a picker, the list's contents are what [HomeViewModel] seeded from the grid.
+ *
+ * @param device reported by [HomeScreen], which is the layer that can read the window.
+ */
+@Composable
+internal fun HomeListSurface(
+    viewModel: HomeViewModel,
+    state: HomeState,
+    device: DeviceConfiguration,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+
+    // Where the widget area sits, and therefore whether its extent is a height or a width — the same one expression
+    // the pager surface and both settings sections read, differing only in the layout handed to it.
+    val edge = device.sideZoneEdge(HomeLayout.LIST_WITH_WIDGET_AREA)
+    val window = usableWindowArea(uiInsets)
+
+    val sideSizing = state.side
+    val extent = (sideSizing?.extentDp ?: checkNotNull(WidgetAreaGrid.extentDp)).dp
+    val split = window.splitForSideZone(extent.value, edge)
+
+    val listPadding = state.paddingFor(GridSlot.HOME_LIST).dp
+    val areaPadding = state.paddingFor(GridSlot.HOME_WIDGET_AREA).dp
+    val areaArea = split.side.copy(widthDp = (split.side.widthDp - areaPadding.value * 2).coerceAtLeast(1f))
+
+    // **Fitted by a widget's floor, not an icon's.** `WidgetAreaGrid.icon` is null — a widget is not an icon in a
+    // cell — so there are no guardrails to invert and `CellFit` is given `WidgetMinCell` (L1's `MIN_WIDGET_DP`)
+    // instead. Everything else is the dock's arithmetic exactly: the stored counts clamped to what the extent and
+    // the area can actually hold, never written back. The blueprint stands in until the store answers.
+    val areaConfig = if (sideSizing == null) {
+        remember(device) { WidgetAreaGrid.toGridConfig(device) }
+    } else {
+        WidgetAreaGrid.fitGridConfig(areaArea, sideSizing.cols, sideSizing.rows, WidgetMinCell)
+    }
+
+    // The list's row height is the *setting* and the icon is a fraction of it — the reverse of a grid, and the whole
+    // of what a one-lane layout has to be told. Clamped on read to what the current guardrails can honour
+    // (`fitRowHeight`), never written back, exactly as the grids clamp their counts.
+    val listMetrics = state.metricsFor(GridSlot.HOME_LIST)
+    val storedRowHeight = (state.main as? HomeMainSizing.List)?.rowHeightDp
+    val rowHeight = fitRowHeight((storedRowHeight ?: checkNotNull(HomeListGrid.rowHeightDp)).dp, listMetrics)
+    val rowHeightPx = with(density) { rowHeight.toPx() }
+
+    val gestureConfig = remember {
+        ItemGestureConfig(touchSlopPx = with(density) { 20.dp.toPx() }, longPressTimeoutMillis = 400L)
+    }
+
+    // The order the store reports, and the gap the finger is currently holding open in it. `gap` is an index into the
+    // list *without* the dragged app (see `movingGap`), and `-1` means "not seeded yet" — the first hover derives it
+    // from where the app already sits, so a drag that goes nowhere is a no-op rather than an off-by-one.
+    val order = remember(state.listApps) { state.listApps.map { it.componentKey } }
+    val liveOrder = rememberUpdatedState(order)
+    var gap by remember { mutableIntStateOf(-1) }
+
+    // **The list's geometry, reconstructed rather than measured.** `onGloballyPositioned` does not reliably re-fire
+    // when scrolling moves a node — the scroll moves it through its parent's placement — so the viewport's own
+    // position (which genuinely does not move) minus `scrollState.value` (snapshot state) is the content origin, and
+    // it republishes every frame for free. `CategoryPage` is the worked example of the same rule.
+    val scrollState = rememberScrollState()
+    var viewport by remember { mutableStateOf(Rect.Zero) }
+    val listGeometry = if (viewport == Rect.Zero || rowHeightPx <= 0f) {
+        null
+    } else {
+        GridGeometry(
+            originInRoot = Offset(viewport.left, viewport.top - scrollState.value),
+            cellW = viewport.width,
+            cellH = rowHeightPx,
+            cols = 1,
+            rows = order.size.coerceAtLeast(1),
+        )
+    }
+    val liveGeometry = rememberUpdatedState(listGeometry)
+
+    var areaGeometry by remember { mutableStateOf<GridGeometry?>(null) }
+
+    // One planner over both zones, dispatched by zone id — the shape the pager surface uses, and the reason a future
+    // widget dragged out of the area and back is one gesture rather than a hand-off. The widget area plans nothing
+    // today because nothing it accepts can be lifted yet; `CoordinateDragGrid` registers its zone regardless, so the
+    // finger falls through the list's rows rather than onto them.
+    val planner = remember {
+        DropPlanner { zone, item, fingerInRoot ->
+            if (zone.id != ListZoneId) return@DropPlanner null
+            val geo = liveGeometry.value ?: return@DropPlanner null
+            val app = (item as? GridItem.App)?.component ?: return@DropPlanner null
+            // The row under the finger, unclamped at the bottom so `movingGap` can read "past the last item" as
+            // append; floored at zero because a finger above the first row still means the first row.
+            val slot = floor((fingerInRoot.y - geo.originInRoot.y) / geo.cellH).toInt().coerceAtLeast(0)
+            gap = movingGap(
+                order = liveOrder.value,
+                dragged = app,
+                currentGap = gap,
+                flatSlot = slot,
+                // A list flows down, so the half that decides "before or after" is the top half of a row rather than
+                // the left half of a cell.
+                insertBefore = geo.cellFractionY(fingerInRoot) < 0.5f,
+            )
+            ListReorderPlan
+        }
+    }
+    val coordinator = rememberDragCoordinator(planner)
+    val session = coordinator.session
+    val draggedApp = (session?.item as? GridItem.App)?.component
+
+    // What the user sees: the order with the dragged app lifted to the gap, everything else densified around it. The
+    // same function produces the committed order on drop, so the preview and the write cannot disagree.
+    val displayed = remember(order, draggedApp, gap) { movingGapDisplayOrder(order, draggedApp, gap) }
+    val appsByComponent = remember(state.listApps) { state.listApps.associateBy { it.componentKey } }
+
+    // Hold the dragged app past the drop: the write is asynchronous, so re-deriving the proxy's icon from the state
+    // would lose it for a frame at exactly the moment the finger lifts.
+    val proxyApp = remember(draggedApp) { draggedApp?.let { appsByComponent[it] } }
+
+    // The list's own drop zone. `CoordinateDragGrid` registers the widget area's for itself; the list is a plain
+    // scroller, so it registers from the one measurement it already publishes — the viewport, whose rectangle is
+    // exactly the area a finger may drop in. **It accepts apps only**, which is the mirror of the widget area's rule
+    // one zone over: neither zone can be handed something it has nowhere to put.
+    DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(ListZoneId) } }
+
+    fun handleDrop() {
+        val outcome = coordinator.drop()
+        gap = -1
+        if (outcome == null) return
+        val app = (outcome.item as? GridItem.App)?.component ?: return
+        viewModel.reorderList(movingGapDisplayOrder(liveOrder.value, app, gap.coerceAtLeast(0)))
+    }
+
+    Box(modifier.fillMaxSize()) {
+        HomeZoneScaffold(
+            edge = edge,
+            extent = extent,
+            mainPadding = listPadding,
+            sidePadding = areaPadding,
+            // The widget area, on the same coordinator as the list. It **accepts widgets only**, which is L1's
+            // widget-area rule made structural: a zone that refuses the dragged item is skipped by the hit test, so
+            // an app carried over it falls through to the list beneath instead of being rejected at drop time.
+            side = { zoneModifier ->
+                CoordinateDragGrid(
+                    items = state.inZone(HomeZone.WIDGET_AREA),
+                    config = areaConfig,
+                    coordinator = coordinator,
+                    zoneId = WidgetAreaZoneId,
+                    gestureConfig = gestureConfig,
+                    dragItem = { it.gridItem },
+                    placement = { it.placement },
+                    acceptsItem = { it is GridItem.Widget || it is GridItem.WidgetContainer },
+                    onDrop = { handleDrop() },
+                    modifier = zoneModifier,
+                    onGeometryChange = { areaGeometry = it },
+                    onOpen = {},
+                ) { _, _, _ -> }
+            },
+            main = { zoneModifier ->
+                ListZone(
+                    apps = displayed.mapNotNull(appsByComponent::get),
+                    dragged = draggedApp,
+                    rowHeight = rowHeight,
+                    scrollState = scrollState,
+                    dragging = coordinator.isDragging,
+                    modifier = zoneModifier,
+                    onViewportChange = { bounds ->
+                        viewport = bounds
+                        coordinator.registerZone(DropZone(ListZoneId, bounds, z = 0) { it is GridItem.App })
+                    },
+                    onRow = { app ->
+                        Modifier.launcherItemGestures(
+                            config = gestureConfig,
+                            onOpen = { viewModel.launch(app.componentKey) },
+                            onEdgeAction = {},
+                            onShowMenu = {},
+                            onDismissMenu = {},
+                            onBeginDrag = { coordinator.start(GridItem.App(app.componentKey), it) },
+                            onDragTo = coordinator::moveTo,
+                            onDrop = { handleDrop() },
+                            onCancelDrag = { coordinator.cancel(); gap = -1 },
+                        )
+                    },
+                    metrics = listMetrics,
+                )
+            },
+        )
+
+        // Auto-scroll while a drag is held near the viewport's top or bottom, so an app can be carried to a part of
+        // the list that is off screen. The re-send afterwards is the second half of that rule: the coordinator only
+        // re-plans when the *finger* moves, and auto-scroll exists precisely to move content under a finger held
+        // still — so the same position must be pushed again once the origin has republished, in the same
+        // `SideEffect` (a `snapshotFlow` on the offset fires before the recomposition that derives the new geometry,
+        // and so stays a step behind).
+        val finger = session?.fingerInRoot
+        DragAutoScrollEffect(
+            scrollState = scrollState,
+            bounds = if (finger == null) null else viewport.takeIf { it != Rect.Zero },
+            fingerInRoot = finger,
+        )
+        if (finger != null) {
+            // Reading the offset here is what subscribes this composition to it, so the `SideEffect` below re-runs
+            // on the frame the origin republishes rather than only when the finger itself moves.
+            @Suppress("UNUSED_VARIABLE") val scrolled = scrollState.value
+            SideEffect { coordinator.moveTo(finger) }
+        }
+
+        // The floating proxy: one row-sized icon under the finger. Its counterpart in the list stays composed and
+        // merely invisible — disposing it would kill the pointer stream driving the drag.
+        if (proxyApp != null && finger != null) {
+            val width = listGeometry?.cellW ?: 0f
+            FloatingDragIcon(
+                rootOffset = IntOffset(
+                    (finger.x - width / 2f).roundToInt(),
+                    (finger.y - rowHeightPx / 2f).roundToInt(),
+                ),
+                size = DpSize(with(density) { width.toDp() }, rowHeight),
+            ) {
+                CompositionLocalProvider(LocalIconMetrics provides listMetrics) {
+                    AppRowCell(app = proxyApp, modifier = Modifier.fillMaxSize())
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The list itself: one scrolling lane of [AppRowCell], each row [rowHeight] tall.
+ *
+ * Split out so the surface above reads as "two zones and a drag" rather than as a scroller; it owns nothing but its
+ * own layout, and every piece of drag state is passed in.
+ *
+ * **The viewport publishes its bounds, not the content.** `onGloballyPositioned` sits *outside* `verticalScroll`,
+ * which is what makes the reported rectangle stable while the content moves under it — see the surface's geometry
+ * note. It doubles as the auto-scroll band and (with the scroll offset) as the finger→row origin, so there is one
+ * measurement rather than three that could drift.
+ *
+ * **The dragged row is drawn invisible rather than removed**, because removing it would dispose the node holding the
+ * pointer stream. Its space is exactly the gap the rest of the list has flowed around, so the preview is complete.
+ *
+ * **Manual scrolling is disabled while a drag is in flight**, as on every other dragging surface here: two vertical
+ * gestures over one finger otherwise fight, and the drag's own auto-scroll is how content past the fold is reached.
+ *
+ * @param apps the display order — the stored order with the dragged app lifted to the gap.
+ * @param onRow the gesture modifier for one row, built per app; a row's touch target is its whole visible extent,
+ *   which for a full-width row is the row.
+ */
+@Composable
+private fun ListZone(
+    apps: List<AppInfo>,
+    dragged: ComponentKey?,
+    rowHeight: Dp,
+    scrollState: ScrollState,
+    dragging: Boolean,
+    modifier: Modifier,
+    onViewportChange: (Rect) -> Unit,
+    onRow: (AppInfo) -> Modifier,
+    metrics: IconMetrics,
+) {
+    CompositionLocalProvider(LocalIconMetrics provides metrics) {
+        Box(
+            modifier = modifier.onGloballyPositioned { onViewportChange(it.boundsInRoot()) },
+        ) {
+            Column(Modifier.fillMaxSize().verticalScroll(scrollState, enabled = !dragging)) {
+                apps.forEach { app ->
+                    key(app.componentKey.flatten()) {
+                        AppRowCell(
+                            app = app,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rowHeight)
+                                .graphicsLayer { alpha = if (app.componentKey == dragged) 0f else 1f },
+                            itemGestures = onRow(app),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

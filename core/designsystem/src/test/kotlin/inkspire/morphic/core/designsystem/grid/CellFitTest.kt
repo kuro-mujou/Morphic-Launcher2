@@ -9,6 +9,7 @@ import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
+import inkspire.morphic.core.model.WidgetAreaGrid
 import inkspire.morphic.core.model.blueprint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -334,10 +335,26 @@ class CellFitTest {
     fun `every editable grid yields a non-empty range on a realistic phone`() {
         // The bound the settings editor relies on: whatever slot it shows, there is something to offer.
         GridSlot.entries.forEach { slot ->
-            val range = slot.blueprint.editableRangeIn(GridArea(360f, 780f), metrics, labelHeight) ?: return@forEach
+            // The floor comes from whatever the grid's cells *are* — its icon guardrails, or a widget's own minimum
+            // for the one grid that draws no icons. Asking every slot for icon metrics would pass here and be a lie.
+            val min = if (slot.blueprint.icon == null) WidgetMinCell else minCellFor(metrics, labelHeight)
+            val range = slot.blueprint.editableRangeIn(GridArea(360f, 780f), min) ?: return@forEach
 
             assertTrue("$slot offered an empty column range", !range.cols.isEmpty())
             range.rows?.let { assertTrue("$slot offered an empty row range", !it.isEmpty()) }
         }
+    }
+
+    @Test
+    fun `the widget area is fitted by a widget's floor, not an icon's`() {
+        // The grid the `MinCell` parameter exists for: `WidgetAreaGrid.icon` is null, so there are no guardrails to
+        // invert and `minCellFor` cannot be called at all. 280dp of extent at a 48dp floor is five rows.
+        val config = WidgetAreaGrid.fitGridConfig(GridArea(360f, 280f), cols = 4, rows = 3, min = WidgetMinCell)
+
+        assertEquals(4, config.visualCols)
+        assertEquals(3, config.visualRows)
+        // And the same clamp-on-read every other grid gets: a count the area cannot hold is reduced, not honoured.
+        val squeezed = WidgetAreaGrid.fitGridConfig(GridArea(360f, 100f), cols = 4, rows = 9, min = WidgetMinCell)
+        assertEquals(2, squeezed.visualRows)
     }
 }

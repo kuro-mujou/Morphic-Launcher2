@@ -8,7 +8,9 @@ import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.ui.graphics.vector.ImageVector
+import inkspire.morphic.core.model.HomeLayout
 
 /**
  * A section of the settings surface — **the list's own vocabulary**, not a navigation destination.
@@ -31,10 +33,16 @@ enum class SettingsSection {
     /** Which surface each HOME edge opens, in which layout. L1 called this "Layout". */
     SURFACE_REGISTER,
 
-    /** HOME's main grid: its rows and columns, and its icon sizing. */
+    /**
+     * HOME's **main area**: its size, and its icon sizing.
+     *
+     * What that means depends on HOME's pairing — a grid's rows and columns, or a list's row height — which is why
+     * [meta] takes the pairing and this value does not name one. One section either way, for the reason `APPS` is one
+     * section for five layouts: what the user is configuring is *home*.
+     */
     HOME_GRID,
 
-    /** The dock: its height, the grid inside it, and its icon sizing. */
+    /** HOME's **side zone**: its extent, the grid inside it, and (when it holds icons) their sizing. */
     DOCK,
 
     /** The APPS surface: each arrangement's grid — or the list's row height — and its icon sizing. */
@@ -57,8 +65,17 @@ internal data class SettingsSectionMeta(
     val icon: ImageVector,
 )
 
-internal val SettingsSection.meta: SettingsSectionMeta
-    get() = when (this) {
+/**
+ * A section's row, given HOME's current pairing.
+ *
+ * **A function rather than a property, and [homeLayout] is the only reason.** Two rows change name with it — HOME's
+ * main area is a grid or a list, and its side zone is a dock or a widget area — and a row that said "Dock" while its
+ * pane said "Widget area" would be worse than either. Every other row ignores the argument, which is the honest cost
+ * of keeping one vocabulary rather than two.
+ */
+internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
+    val isList = homeLayout == HomeLayout.LIST_WITH_WIDGET_AREA
+    return when (this) {
         SettingsSection.WALLPAPER -> SettingsSectionMeta(
             "Wallpaper", "Image, and where to apply it", Icons.Outlined.Wallpaper,
         )
@@ -69,11 +86,15 @@ internal val SettingsSection.meta: SettingsSectionMeta
             "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
         SettingsSection.HOME_GRID -> SettingsSectionMeta(
-            "Home", "Grid and icons", Icons.Outlined.Home,
+            "Home",
+            if (isList) "Row height and icons" else "Grid and icons",
+            Icons.Outlined.Home,
         )
-        SettingsSection.DOCK -> SettingsSectionMeta(
-            "Dock", "Height, grid and icons", Icons.Outlined.Dock,
-        )
+        SettingsSection.DOCK -> if (isList) {
+            SettingsSectionMeta("Widget area", "Size and grid", Icons.Outlined.Widgets)
+        } else {
+            SettingsSectionMeta("Dock", "Height, grid and icons", Icons.Outlined.Dock)
+        }
         SettingsSection.APPS -> SettingsSectionMeta(
             "Apps", "Arrangements, grids and icons", Icons.Outlined.Apps,
         )
@@ -82,6 +103,7 @@ internal val SettingsSection.meta: SettingsSectionMeta
             "Folders", "Icon and text size", Icons.Outlined.Folder,
         )
     }
+}
 
 /** A titled run of sections in the list. A null [header] is a run with no heading above it. */
 internal data class SettingsGroup(val header: String?, val sections: List<SettingsSection>)

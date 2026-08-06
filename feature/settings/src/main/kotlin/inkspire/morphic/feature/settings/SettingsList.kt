@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 
 /** Provisional spacing — placeholders, as everywhere else in this module. */
@@ -50,6 +51,8 @@ private val IconGap = 16.dp
  * while the pane's background still reaches the window edge behind it. The caller says which edges apply, because only
  * it knows whether this list has the screen to itself or a detail pane beside it.
  *
+ * @param homeLayout HOME's pairing, which two of the rows are named for — its main area is a grid or a list, and its
+ *   side zone is a dock or a widget area. A row that contradicted the pane it opens would be worse than a generic one.
  * @param selected the section being shown, or null when the list is the whole screen.
  * @param highlightSelected true in two-pane, where [selected] is on screen beside this.
  * @param showChevron true in single-pane, where a tap opens a new pane.
@@ -57,6 +60,7 @@ private val IconGap = 16.dp
  */
 @Composable
 internal fun SettingsList(
+    homeLayout: HomeLayout,
     selected: SettingsSection?,
     onSelect: (SettingsSection) -> Unit,
     highlightSelected: Boolean,
@@ -78,6 +82,7 @@ internal fun SettingsList(
             items(group.sections, key = { it.name }) { section ->
                 SettingsNavRow(
                     section = section,
+                    homeLayout = homeLayout,
                     selected = highlightSelected && section == selected,
                     showChevron = showChevron,
                     onClick = { onSelect(section) },
@@ -98,12 +103,13 @@ internal fun SettingsList(
 @Composable
 private fun SettingsNavRow(
     section: SettingsSection,
+    homeLayout: HomeLayout,
     selected: Boolean,
     showChevron: Boolean,
     onClick: () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
-    val meta = section.meta
+    val meta = section.meta(homeLayout)
     val content = if (selected) colors.onAccent else colors.content
     Row(
         verticalAlignment = Alignment.CenterVertically,

@@ -131,7 +131,7 @@ class AppsSectionViewModel(
                     combine(
                         sizeOf(current.slot, configuration),
                         settingsRepository.iconSizing(current.slot, configuration),
-                        settingsRepository.listRowHeight(configuration),
+                        settingsRepository.rowHeight(GridSlot.APPS_LIST, configuration),
                         settingsRepository.horizontalPadding(current.slot, configuration),
                         settingsRepository.appsChrome,
                     ) { size, icon, rowHeight, padding, chrome ->
@@ -221,7 +221,7 @@ class AppsSectionViewModel(
      */
     fun setRowHeight(dp: Int) {
         val configuration = device.value ?: return
-        viewModelScope.launch { settingsRepository.setListRowHeight(configuration, dp) }
+        viewModelScope.launch { settingsRepository.setRowHeight(GridSlot.APPS_LIST, configuration, dp) }
     }
 
     /**
@@ -266,7 +266,7 @@ class AppsSectionViewModel(
         val slot = layout.value.slot
         viewModelScope.launch {
             if (slot.blueprint.editRange != null) settingsRepository.updateGrid(slot, configuration) { GridOverride() }
-            if (slot == GridSlot.APPS_LIST) settingsRepository.setListRowHeight(configuration, null)
+            if (slot == GridSlot.APPS_LIST) settingsRepository.setRowHeight(GridSlot.APPS_LIST, configuration, null)
             // The margin is part of "the size of this layout" from the user's side, so Reset clears it with the rest
             // rather than leaving one number behind that no button appears to own.
             settingsRepository.setHorizontalPadding(slot, configuration, null)

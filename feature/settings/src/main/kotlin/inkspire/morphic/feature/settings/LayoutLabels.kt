@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.settings
 
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.HomeLayout
 
 /**
  * A human name for an [AppsLayout] — **the settings feature's display vocabulary, in one place**.
@@ -23,4 +24,25 @@ internal val AppsLayout.label: String
         AppsLayout.PAGER -> "Pages"
         AppsLayout.PAGER_WITH_CATEGORY -> "Category pages"
         AppsLayout.CATEGORY_CARD -> "Category cards"
+    }
+
+/**
+ * A human name for a [HomeLayout] — HOME's pairing, in the same one place and for the same reasons.
+ *
+ * **Named for the arrangement, not for L1's history.** L1 called these two "Classic" and "Minimalist", which are names
+ * for *eras* of that launcher rather than descriptions: neither tells a first-time reader that one pages a grid and the
+ * other lists apps under a panel of widgets. [subtitle] carries the second half of that, since a pairing is two zones
+ * and a single word can only name one of them.
+ */
+internal val HomeLayout.label: String
+    get() = when (this) {
+        HomeLayout.PAGER_WITH_DOCK -> "Pages with a dock"
+        HomeLayout.LIST_WITH_WIDGET_AREA -> "List with a widget area"
+    }
+
+/** What each pairing puts where — the half a name cannot carry, for the picker's second line. */
+internal val HomeLayout.subtitle: String
+    get() = when (this) {
+        HomeLayout.PAGER_WITH_DOCK -> "Swipeable pages of icons, over a dock"
+        HomeLayout.LIST_WITH_WIDGET_AREA -> "A list of apps, under a panel for widgets"
     }

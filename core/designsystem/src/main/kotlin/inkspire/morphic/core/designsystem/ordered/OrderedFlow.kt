@@ -28,6 +28,19 @@ fun GridGeometry.cellFractionX(fingerInRoot: Offset): Float {
 }
 
 /**
+ * The finger's **vertical** position within its hovered cell, in `0f..1f` (`< 0.5` → top half).
+ *
+ * The one-lane counterpart of [cellFractionX], and it exists because a *list* flows down where every other ordered
+ * surface here flows across: "insert before or after?" is answered by the top/bottom half of a row rather than by the
+ * left/right half of a cell. Same arithmetic on the other axis, so it belongs beside its sibling rather than being
+ * open-coded by the one surface that needs it — which is how a second copy of [cellFractionX] would have started.
+ */
+fun GridGeometry.cellFractionY(fingerInRoot: Offset): Float {
+    val local = (fingerInRoot.y - originInRoot.y) / cellH
+    return local - floor(local)
+}
+
+/**
  * Which third of its cell the finger is in — the **3-zone** partition an ordered surface uses when it can hold
  * folders: [LEFT]/[RIGHT] insert the gap before/after the hovered item, [CENTER] means merge into it.
  *

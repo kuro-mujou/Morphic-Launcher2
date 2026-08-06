@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.di
 
+import inkspire.morphic.feature.settings.SettingsShellViewModel
 import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
@@ -16,9 +17,11 @@ import org.koin.dsl.module
  * already taken by the layer that owns the preferences themselves.
  *
  * One ViewModel per section, bound with the `viewModel` DSL so each is scoped to its screen's `ViewModelStore` rather
- * than living forever. Sections are added here as they are ported.
+ * than living forever. Sections are added here as they are ported — plus one for the shell itself, which has a single
+ * setting of its own to read (see [SettingsShellViewModel]).
  */
 val settingsSurfaceModule = module {
+    viewModel { SettingsShellViewModel(get()) }
     viewModel { SurfaceRegisterViewModel(get()) }
     viewModel { WallpaperViewModel(get()) }
     viewModel { DockViewModel(get(), get(), get()) }

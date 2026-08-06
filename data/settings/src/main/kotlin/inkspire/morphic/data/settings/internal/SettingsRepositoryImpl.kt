@@ -182,27 +182,42 @@ internal class SettingsRepositoryImpl(
 
     // `requireNotNull` for the same reason `iconSizing` uses one: a grid with no extent in its blueprint is not a
     // fixed-extent strip at all, so asking how thick it is has no honest answer, and inventing one would let a caller
-    // size a grid by a number nobody configured.
-    override fun dockExtent(device: DeviceConfiguration): Flow<Int> {
-        val base = requireNotNull(GridSlot.HOME_DOCK.blueprint.extentDp) {
-            "the dock must declare a default extent; its rows and columns are divided out of it"
-        }
-        return dataStore.read(SurfaceMetricsSlice) { it.dockExtent(device, base) }
+    // size a grid by a number nobody configured. This is also what keeps the store's slot-keyed map from being
+    // writable for the six grids that have no extent — the check is here rather than restated in `SurfaceMetrics`.
+    override fun extent(slot: GridSlot, device: DeviceConfiguration): Flow<Int> {
+        val base = extentBaseOf(slot)
+        return dataStore.read(SurfaceMetricsSlice) { it.extent(slot, device, base) }
     }
 
-    // Same `requireNotNull` as the dock's, and the same meaning: a grid with no row height in its blueprint takes its
-    // rows' height from something already chosen — an extent divided, or a width derived — so there is nothing here
-    // to answer with and a default would be a number nobody configured.
-    override fun listRowHeight(device: DeviceConfiguration): Flow<Int> {
-        val base = requireNotNull(GridSlot.APPS_LIST.blueprint.rowHeightDp) {
-            "the list must declare a default row height; being one lane, it can derive none"
-        }
-        return dataStore.read(SurfaceMetricsSlice) { it.listRowHeight(device, base) }
+    override suspend fun setExtent(slot: GridSlot, device: DeviceConfiguration, dp: Int?) {
+        extentBaseOf(slot) // rejects a grid with no extent, before anything is written
+        // The one bound this layer can state without measuring anything. Everything else about an extent — whether a
+        // line of icons fits it, whether it swallows the screen — needs the current icon sizing and the current
+        // window, so it is checked where those are known rather than guessed at here.
+        require(dp == null || dp > 0) { "a zone $dp dp thick could not hold a cell" }
+        update(SurfaceMetricsSlice) { withExtent(slot, device, dp) }
     }
 
-    override suspend fun setListRowHeight(device: DeviceConfiguration, dp: Int?) {
+    // Same `requireNotNull` as the extent's, and the same meaning: a grid with no row height in its blueprint takes
+    // its rows' height from something already chosen — an extent divided, or a width derived — so there is nothing
+    // here to answer with and a default would be a number nobody configured.
+    override fun rowHeight(slot: GridSlot, device: DeviceConfiguration): Flow<Int> {
+        val base = rowHeightBaseOf(slot)
+        return dataStore.read(SurfaceMetricsSlice) { it.rowHeight(slot, device, base) }
+    }
+
+    override suspend fun setRowHeight(slot: GridSlot, device: DeviceConfiguration, dp: Int?) {
+        rowHeightBaseOf(slot)
         require(dp == null || dp > 0) { "a $dp dp row could not hold an icon" }
-        update(SurfaceMetricsSlice) { withListRowHeight(device, dp) }
+        update(SurfaceMetricsSlice) { withRowHeight(slot, device, dp) }
+    }
+
+    private fun extentBaseOf(slot: GridSlot): Int = requireNotNull(slot.blueprint.extentDp) {
+        "$slot is not a fixed-extent strip, so it has no thickness to resolve"
+    }
+
+    private fun rowHeightBaseOf(slot: GridSlot): Int = requireNotNull(slot.blueprint.rowHeightDp) {
+        "$slot does not declare a row height; being more than one lane, it derives one"
     }
 
     // No `requireNotNull` here, unlike the two extents above: `horizontalPaddingDp` is not nullable on a blueprint,
@@ -218,14 +233,6 @@ internal class SettingsRepositoryImpl(
         // and the ceiling is a judgement about how much of a grid may be given away — neither needs a measured screen.
         val clamped = dp?.coerceIn(HorizontalPaddingRange.first, HorizontalPaddingRange.last)
         update(SurfaceMetricsSlice) { withHorizontalPadding(slot, device, clamped) }
-    }
-
-    override suspend fun setDockExtent(device: DeviceConfiguration, dp: Int?) {
-        // The one bound this layer can state without measuring anything. Everything else about a dock's extent —
-        // whether a line of icons fits it, whether it swallows the screen — needs the current icon sizing and the
-        // current window, so it is checked where those are known rather than guessed at here.
-        require(dp == null || dp > 0) { "a dock $dp dp thick could not hold a cell" }
-        update(SurfaceMetricsSlice) { withDockExtent(device, dp) }
     }
 
     /**

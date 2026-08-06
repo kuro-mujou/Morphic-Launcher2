@@ -127,7 +127,7 @@ interface SettingsRepository {
 
     /**
      * The **visual** column count for [slot] on [device] — the whole of a scrolling grid's size, and half the
-     * dock's (whose rows come from [dockExtent] instead).
+     * dock's (whose rows come from [extent] instead).
      *
      * Not clamped to what actually fits: that needs a measured area, so a surface that cares does it where it
      * measures. Reading a column count the screen has outgrown is far better than storing the clamp, since the
@@ -149,7 +149,7 @@ interface SettingsRepository {
      *
      * **A grid can be editable on one axis only, and the clamp is what enforces it**: a null `minRows` drops a row
      * override rather than storing one. Two grids rely on that for two different reasons — a scrolling grid's rows
-     * come from its content, and the **dock's come from [dockExtent]** (see `DockGrid`). Neither can be given a row
+     * come from its content, and a side zone's **come from [extent]** (see `DockGrid`). Neither can be given a row
      * count by writing one here.
      */
     suspend fun updateGrid(
@@ -159,55 +159,57 @@ interface SettingsRepository {
     )
 
     /**
-     * How thick the dock is on [device], in dp — its blueprint's extent with any user override applied.
+     * How thick the fixed-extent strip [slot] is on [device], in dp — its blueprint's extent with any override.
      *
-     * **A height where the dock is a bottom strip and a width where it is a rail** (`DockEdge`), which is why it is an
+     * **A height where the zone is a strip and a width where it is a rail** (`SideZoneEdge`), which is why it is an
      * extent rather than a height: the stored number is the same thickness either way, and the posture decides which
      * dimension it names and which of the two counts it bounds.
      *
-     * **The dock's one stored number, and the only surface metric named after a single grid.** Every other grid is
-     * configured by counts and takes the space it is given; the dock is a strip whose extent the user sets and whose
-     * rows and columns are then divided out of it. A generic `extent(slot, device)` would offer that question for
-     * seven grids that cannot answer it.
+     * **Only HOME's two side zones can be asked** — the dock and the widget area. Every other grid is configured by
+     * counts and takes the space it is given, so "how thick is the APPS pager" has no answer; a slot whose blueprint
+     * declares no `extentDp` therefore throws rather than resolving to something invented. This used to be a
+     * dock-only method for that reason; the widget area is the second grid that can answer, and naming each of them
+     * would have been the same method twice.
      */
-    fun dockExtent(device: DeviceConfiguration): Flow<Int>
+    fun extent(slot: GridSlot, device: DeviceConfiguration): Flow<Int>
 
     /**
-     * Sets the dock's extent on [device] to [dp], or clears it (back to the blueprint) when null.
+     * Sets [slot]'s extent on [device] to [dp], or clears it (back to the blueprint) when null.
      *
      * **The caller owns the bounds**, unlike [updateGrid], which floors what it is given. Both of an extent's bounds
-     * are runtime facts a store cannot check: the floor is the smallest cell that still renders an icon at the
-     * *current* icon sizing, and the cap is a fraction of the *current* screen — so the cap changes when the device
+     * are runtime facts a store cannot check: the floor is the smallest cell that still renders its content at the
+     * *current* sizing, and the cap is a fraction of the *current* screen — so the cap changes when the device
      * rotates, which no stored constant would. What is enforced here is only that an extent is positive, which is an
      * invariant rather than a preference.
      *
      * **A shrink can leave items with nowhere to sit**, since fewer cells fit. Re-homing them is `data:layout`'s
      * (`GridReflow`), triggered by whoever makes this write — this call persists a number and nothing else.
      */
-    suspend fun setDockExtent(device: DeviceConfiguration, dp: Int?)
+    suspend fun setExtent(slot: GridSlot, device: DeviceConfiguration, dp: Int?)
 
     /**
-     * How tall one row of the APPS vertical list is on [device], in dp — its blueprint's height with any override.
+     * How tall one row of the one-lane list [slot] is on [device], in dp — its blueprint's height with any override.
      *
-     * **The second and last stored extent**, beside [dockExtent], and for the opposite reason. A dock's height is a
-     * strip's, which its row count then divides; a list's row height is what nothing else can determine — one lane
+     * **The other kind of stored size**, beside [extent], and for the opposite reason. A strip's extent is a whole
+     * zone's, which its row count then divides; a list's row height is what nothing else can determine — one lane
      * means no cell width to derive a height from and no extent to divide, so it is the user's outright, and the
      * icon in the row is a fraction of *it*. Every other grid's cell height falls out of a number already chosen
-     * (`CellFit.cellHeight`, or the dock's height ÷ rows), which is why there are two of these and not eight.
+     * (`CellFit.cellHeight`, or an extent ÷ rows), which is why only the two lists can be asked and a slot with no
+     * `rowHeightDp` in its blueprint throws.
      */
-    fun listRowHeight(device: DeviceConfiguration): Flow<Int>
+    fun rowHeight(slot: GridSlot, device: DeviceConfiguration): Flow<Int>
 
     /**
-     * Sets the list's row height on [device] to [dp], or clears it (back to the blueprint) when null.
+     * Sets [slot]'s row height on [device] to [dp], or clears it (back to the blueprint) when null.
      *
-     * **The caller owns the bounds**, as with [setDockExtent]: what a row must be at least depends on the current
-     * icon sizing, and what it may be at most is taste rather than fit — a list scrolls, so a tall row costs density
-     * and nothing else. Only "positive" is enforced here, which is an invariant rather than a preference.
+     * **The caller owns the bounds**, as with [setExtent]: what a row must be at least depends on the current icon
+     * sizing, and what it may be at most is taste rather than fit — a list scrolls, so a tall row costs density and
+     * nothing else. Only "positive" is enforced here, which is an invariant rather than a preference.
      *
-     * Nothing is displaced by this write, unlike the dock's: rows flow, so a taller one shows fewer apps per screen
+     * Nothing is displaced by this write, unlike a strip's: rows flow, so a taller one shows fewer apps per screen
      * rather than leaving any without a place.
      */
-    suspend fun setListRowHeight(device: DeviceConfiguration, dp: Int?)
+    suspend fun setRowHeight(slot: GridSlot, device: DeviceConfiguration, dp: Int?)
 
     /**
      * The blank margin at [slot]'s left and right edges on [device], in dp — its blueprint's with any override.

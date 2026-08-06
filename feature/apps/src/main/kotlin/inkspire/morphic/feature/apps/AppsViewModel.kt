@@ -216,7 +216,7 @@ class AppsViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val listRowHeight: Flow<Int?> =
         device.flatMapLatest { current ->
-            if (current == null) flowOf(null) else settingsRepository.listRowHeight(current)
+            if (current == null) flowOf(null) else settingsRepository.rowHeight(GridSlot.APPS_LIST, current)
         }
 
     /**

@@ -47,9 +47,10 @@ sealed interface SideBinding {
  * from these defaults. There is deliberately **no `version` field** — for a blob store the honest migration seam is
  * the *key name*, since a renamed key lets the old and new formats coexist while a version int inside one key cannot.
  *
- * @property homeLayout HOME's main-area + side-zone pairing. Not yet read by anything — `HomeScreen` is
- *   `PAGER_WITH_DOCK` by construction — but it belongs to this slice rather than a later one, because "what is HOME"
- *   and "what is off its edges" is one question the user answers on one screen.
+ * @property homeLayout HOME's main-area + side-zone pairing, read by `HomeScreen` (which arm to compose) and by both
+ *   of HOME's settings sections (which grid they are editing). It belongs to this slice rather than a later one for
+ *   the reason it was put here before it had a consumer: "what is HOME" and "what is off its edges" is one question
+ *   the user answers on one screen, and the register cross is that screen.
  * @property sides the binding for each swipeable edge; absent edge = not swipeable.
  * @property transition how HOME and a side surface animate past each other. Only `SLIDE` is implemented in
  *   `SurfacePager`; the rest of the enum is stored and ignored until the transforms land.

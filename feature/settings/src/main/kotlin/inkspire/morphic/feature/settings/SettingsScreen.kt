@@ -53,7 +53,10 @@ import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.koin.androidx.compose.koinViewModel
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
@@ -103,10 +106,15 @@ fun SettingsScreen(
         appsLayout = layout
         selected = section
     }
+    // The one thing the *shell* has to know, and no section owns: HOME's pairing names two of the rows in the list
+    // and the title over their panes. Read here rather than in `SettingsList`, so the list and the app bar cannot
+    // disagree about what a section is called.
+    val homeLayout by koinViewModel<SettingsShellViewModel>().homeLayout.collectAsStateWithLifecycle()
 
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
         if (twoPane) {
             SettingsTwoPane(
+                homeLayout = homeLayout,
                 selected = selected ?: settingsGroups.first().sections.first(),
                 onSelect = { selected = it; appsLayout = null },
                 appsLayout = appsLayout,
@@ -117,6 +125,7 @@ fun SettingsScreen(
             )
         } else {
             SettingsSinglePane(
+                homeLayout = homeLayout,
                 selected = selected,
                 onSelect = { selected = it; appsLayout = null },
                 onCloseDetail = { selected = null },
@@ -139,6 +148,7 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsSinglePane(
+    homeLayout: HomeLayout,
     selected: SettingsSection?,
     onSelect: (SettingsSection) -> Unit,
     onCloseDetail: () -> Unit,
@@ -159,7 +169,7 @@ private fun SettingsSinglePane(
             TopAppBar(
                 title = {
                     Crossfade(targetState = selected, label = "settings-title") { section ->
-                        Text(section?.meta?.title ?: "Settings")
+                        Text(section?.meta(homeLayout)?.title ?: "Settings")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background),
@@ -188,6 +198,7 @@ private fun SettingsSinglePane(
         ) { target ->
             if (target == null) {
                 SettingsList(
+                    homeLayout = homeLayout,
                     selected = null,
                     onSelect = onSelect,
                     highlightSelected = false,
@@ -206,6 +217,7 @@ private fun SettingsSinglePane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsTwoPane(
+    homeLayout: HomeLayout,
     selected: SettingsSection,
     onSelect: (SettingsSection) -> Unit,
     onBack: () -> Unit,
@@ -238,6 +250,7 @@ private fun SettingsTwoPane(
                 .consumeWindowInsets(innerPadding),
         ) {
             SettingsList(
+                homeLayout = homeLayout,
                 selected = selected,
                 onSelect = onSelect,
                 highlightSelected = true,

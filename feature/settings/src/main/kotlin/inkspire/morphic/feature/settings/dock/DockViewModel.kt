@@ -3,13 +3,16 @@ package inkspire.morphic.feature.settings.dock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.DeviceConfiguration
-import inkspire.morphic.core.model.DockEdge
 import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.SideZoneEdge
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.sideSlot
+import inkspire.morphic.core.model.sideZone
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.DockEdit
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -40,11 +44,17 @@ import kotlinx.coroutines.launch
  *   and never writes the clamp back, so a count too large for today's icon size returns when the icons shrink.
  * @property rows likewise. Whichever of the two the extent divides is *also* written down when an extent commit
  *   invalidates it (see [setExtent]).
- * @property icon the dock's **resolved** icon sizing — both shown, since these controls now live in this section, and
- *   used: the smallest usable cell it implies is what the extent divides into cells.
- * @property homeIcon HOME's main-area icon sizing. Nothing here edits it and nothing here shows it; it is needed
- *   because this extent decides how much screen home is left with, and how many cells *that* carries depends on home's
- *   own smallest usable cell. See [setExtent].
+ * @property icon the zone's **resolved** icon sizing — both shown, since these controls live in this section, and
+ *   used: the smallest usable cell it implies is what the extent divides into cells. **Null on the widget area**, and
+ *   there it means something different from "not yet": a widget is not an icon in a cell, so that grid declares no
+ *   icon sizing at all and the section draws no icon group. [layout] is what tells the two nulls apart.
+ * @property homeIcon HOME's main-area icon sizing, or null when the main area is a list (which has no count for this
+ *   extent to invalidate). Nothing here edits it and nothing here shows it; it is needed because this extent decides
+ *   how much screen the main area is left with, and how many cells *that* carries depends on its own smallest usable
+ *   cell. See [setExtent].
+ * @property layout which pairing HOME is drawing, and therefore **which zone this section edits** — the dock, or the
+ *   widget area. A real default rather than a null, because the screen must decide which controls to draw before any
+ *   of them has resolved.
  */
 data class DockState(
     val extentDp: Int? = null,
@@ -53,6 +63,7 @@ data class DockState(
     val icon: IconSizing? = null,
     val homeIcon: IconSizing? = null,
     val paddingDp: Int? = null,
+    val layout: HomeLayout = HomeLayout.PAGER_WITH_DOCK,
 )
 
 /**
@@ -79,20 +90,50 @@ class DockViewModel(
 
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
+    /**
+     * Which pairing HOME is drawing — the one input that changes *which zone* this section edits.
+     *
+     * Read rather than chosen, exactly as the home section reads it: the pairing is the surface register's setting,
+     * and this section configures whichever side zone it brings. `Eagerly` so the writes below can read it without a
+     * UI subscriber.
+     */
+    private val layout: StateFlow<HomeLayout> =
+        settingsRepository.surfaceRegister
+            .map { it.homeLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, HomeLayout.PAGER_WITH_DOCK)
+
+    private val posture: StateFlow<Pair<DeviceConfiguration, HomeLayout>?> =
+        combine(device, layout) { configuration, current -> configuration?.let { it to current } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<DockState> = device
-        .flatMapLatest { configuration ->
-            if (configuration == null) {
+    val state: StateFlow<DockState> = posture
+        .flatMapLatest { current ->
+            if (current == null) {
                 flowOf(DockState())
             } else {
+                val (configuration, homeLayout) = current
+                val slot = homeLayout.sideSlot
                 combine(
-                    settingsRepository.dockExtent(configuration),
-                    settingsRepository.gridConfig(SLOT, configuration),
-                    settingsRepository.iconSizing(SLOT, configuration),
-                    settingsRepository.iconSizing(GridSlot.HOME_MAIN, configuration),
-                    settingsRepository.horizontalPadding(SLOT, configuration),
+                    settingsRepository.extent(slot, configuration),
+                    settingsRepository.gridConfig(slot, configuration),
+                    // Asked only of a grid that draws icon cells: the widget area declares none, and `iconSizing`
+                    // rightly throws for it rather than inventing a value nobody configured.
+                    if (slot.blueprint.icon == null) {
+                        flowOf(null)
+                    } else {
+                        settingsRepository.iconSizing(slot, configuration)
+                    },
+                    // And of the main area only when it *has* counts for this extent to invalidate. A list scrolls,
+                    // so taking space from it costs rows on screen and nothing in storage.
+                    if (homeLayout.mainHasCounts) {
+                        settingsRepository.iconSizing(GridSlot.HOME_MAIN, configuration)
+                    } else {
+                        flowOf(null)
+                    },
+                    settingsRepository.horizontalPadding(slot, configuration),
                 ) { extentDp, grid, icon, homeIcon, padding ->
-                    DockState(extentDp, grid.visualCols, grid.visualRows, icon, homeIcon, padding)
+                    DockState(extentDp, grid.visualCols, grid.visualRows, icon, homeIcon, padding, homeLayout)
                 }
             }
         }
@@ -107,7 +148,9 @@ class DockViewModel(
     internal val icons = IconSizingEdits(
         settings = settingsRepository,
         scope = viewModelScope,
-        slot = { SLOT },
+        // The *current* side slot, read per write rather than captured — see the home section's, and note that on the
+        // widget area nothing calls these at all, since that grid draws no icon controls.
+        slot = { slot },
         device = { device.value },
     )
 
@@ -120,7 +163,7 @@ class DockViewModel(
      */
     fun setPadding(dp: Int) {
         val configuration = device.value ?: return
-        viewModelScope.launch { settingsRepository.setHorizontalPadding(SLOT, configuration, dp) }
+        viewModelScope.launch { settingsRepository.setHorizontalPadding(slot, configuration, dp) }
     }
 
     /** Reports the device configuration being edited — the UI's one job, as on every other surface. */
@@ -163,21 +206,26 @@ class DockViewModel(
      * @param homeMaxCells how many the space *left over* can hold, on the same axis, from the same screen and for the
      *   same reason.
      */
-    fun setExtent(dp: Int, edge: DockEdge, maxCells: Int, homeMaxCells: Int) {
+    fun setExtent(dp: Int, edge: SideZoneEdge, maxCells: Int, homeMaxCells: Int) {
         val configuration = device.value ?: return
-        val current = state.value.let { if (edge == DockEdge.BOTTOM) it.rows else it.cols }
+        val homeLayout = layout.value
+        val zoneSlot = homeLayout.sideSlot
+        val current = state.value.let { if (edge.isStrip) it.rows else it.cols }
         viewModelScope.launch {
-            settingsRepository.setDockExtent(configuration, dp)
+            settingsRepository.setExtent(zoneSlot, configuration, dp)
             if (current != null && current > maxCells) {
-                settingsRepository.updateGrid(SLOT, configuration) {
-                    if (edge == DockEdge.BOTTOM) copy(rows = maxCells) else copy(cols = maxCells)
+                settingsRepository.updateGrid(zoneSlot, configuration) {
+                    if (edge.isStrip) copy(rows = maxCells) else copy(cols = maxCells)
                 }
             }
+            // The main area's half applies only when it has a count to invalidate. A vertical list scrolls, so a
+            // taller widget area simply shows fewer rows — there is nothing stored for this commit to reduce.
+            if (!homeLayout.mainHasCounts) return@launch
             val home = settingsRepository.gridConfig(GridSlot.HOME_MAIN, configuration).first()
-            val homeCurrent = if (edge == DockEdge.BOTTOM) home.visualRows else home.visualCols
+            val homeCurrent = if (edge.isStrip) home.visualRows else home.visualCols
             if (homeCurrent > homeMaxCells) {
                 settingsRepository.updateGrid(GridSlot.HOME_MAIN, configuration) {
-                    if (edge == DockEdge.BOTTOM) copy(rows = homeMaxCells) else copy(cols = homeMaxCells)
+                    if (edge.isStrip) copy(rows = homeMaxCells) else copy(cols = homeMaxCells)
                 }
             }
         }
@@ -206,6 +254,8 @@ class DockViewModel(
      */
     fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {
         val configuration = device.value ?: return
+        val homeLayout = layout.value
+        val zoneSlot = homeLayout.sideSlot
 
         val isRow = edge == GridEditorEdge.TOP || edge == GridEditorEdge.BOTTOM
         val delta = if (add) 1 else -1
@@ -213,14 +263,21 @@ class DockViewModel(
         val nextRows = if (isRow) fromRows + delta else fromRows
 
         viewModelScope.launch {
-            val dockConfig = SLOT.blueprint.toGridConfig(
-                SLOT.blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
+            val zoneConfig = zoneSlot.blueprint.toGridConfig(
+                zoneSlot.blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
             )
             val placed = layoutRepository.placements(ORIENTATION).first()
-            val moves = settleDock(
+            // **Only the dock has a placement half today, and that is a gap rather than a rule.** `settleDock` evicts
+            // to HOME's main area, which exists to be evicted onto only when it is a coordinate grid; the widget area
+            // sits beside a *list*, which has nowhere to put a widget. It is also moot until widgets exist — nothing
+            // can be in the zone to displace — so the count is written and the re-homing is owed with the widgets.
+            // Deliberately not L1's answer, which deleted what would not fit.
+            val moves = if (homeLayout.sideZone != HomeZone.DOCK) {
+                emptyList()
+            } else settleDock(
                 dock = placed.filterValues { it.zone == HomeZone.DOCK }.mapValues { it.value.placement },
                 main = placed.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement },
-                dockConfig = dockConfig,
+                dockConfig = zoneConfig,
                 mainConfig = settingsRepository.gridConfig(GridSlot.HOME_MAIN, configuration).first(),
                 edit = DockEdit(edge, add),
             )
@@ -237,8 +294,11 @@ class DockViewModel(
     }
 
     private suspend fun writeSize(configuration: DeviceConfiguration, cols: Int, rows: Int) {
-        settingsRepository.updateGrid(SLOT, configuration) { copy(cols = cols, rows = rows) }
+        settingsRepository.updateGrid(slot, configuration) { copy(cols = cols, rows = rows) }
     }
+
+    /** The zone this section is editing right now — the dock's grid or the widget area's, as HOME's pairing says. */
+    private val slot: GridSlot get() = layout.value.sideSlot
 
     /**
      * Clears both overrides, returning the dock to its blueprint.
@@ -248,17 +308,26 @@ class DockViewModel(
      */
     fun reset() {
         val configuration = device.value ?: return
+        val zoneSlot = layout.value.sideSlot
         viewModelScope.launch {
-            settingsRepository.setDockExtent(configuration, null)
-            settingsRepository.updateGrid(SLOT, configuration) { GridOverride() }
+            settingsRepository.setExtent(zoneSlot, configuration, null)
+            settingsRepository.updateGrid(zoneSlot, configuration) { GridOverride() }
         }
     }
 
     private companion object {
-        val SLOT = GridSlot.HOME_DOCK
-
         /** Portrait only, matching the home surface itself until it gains orientation support. */
         val ORIENTATION = Orientation.PORTRAIT
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }
+
+/**
+ * Whether this pairing's main area has stored **counts** — true for the pager, false for the list.
+ *
+ * The one thing the side zone's section needs to know about the *other* zone: growing an extent takes space from the
+ * main area, and only a main area sized by counts can have one invalidated by that. A list re-flows instead, which is
+ * a rendering consequence and not a stored one.
+ */
+private val HomeLayout.mainHasCounts: Boolean
+    get() = this == HomeLayout.PAGER_WITH_DOCK

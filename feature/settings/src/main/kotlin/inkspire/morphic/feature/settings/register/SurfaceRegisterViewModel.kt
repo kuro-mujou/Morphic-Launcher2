@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceRegister
@@ -53,6 +54,18 @@ class SurfaceRegisterViewModel(
     fun bindApps(edge: HomeEdge, layout: AppsLayout?) {
         val binding = layout?.let(SideBinding::Apps)
         viewModelScope.launch { settingsRepository.setSide(edge, binding) }
+    }
+
+    /**
+     * Sets HOME's own pairing — its main area and the side zone that comes with it.
+     *
+     * One write and nothing else, which is the whole of switching layouts: each pairing's grids have their own stored
+     * sizes and their own stored contents (`home_list_item` beside the placement tables), so the one it is *not*
+     * drawing keeps everything it had. Switching back finds it as it was, which is exactly what L1's shared store
+     * could not offer — its list and its grid were one arrangement, so reordering one flattened the other.
+     */
+    fun setHomeLayout(layout: HomeLayout) {
+        viewModelScope.launch { settingsRepository.setHomeLayout(layout) }
     }
 
     private companion object {

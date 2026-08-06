@@ -38,6 +38,7 @@ import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.apps.ConfigurableLayouts
@@ -83,9 +84,14 @@ private val GearGlyph = 18.dp
  * a fixed dp for the reason that editor's is: a mockup of a screen wants a legible size, which is a physical decision,
  * and the other side then follows from the ratio.
  *
- * **HOME is not a choice**, so its card does not take a tap — L1's rule. The four sides are what the user is placing;
- * the centre is what they are placing things around.
+ * **HOME is a choice too, now that there are two of it.** Its card takes a tap like the four around it, and for the
+ * same reason theirs do: the body *changes what is there* and the gear *configures what is there already*. That
+ * reverses an earlier note here ("HOME is not a choice, so its card does not take a tap — L1's rule"), which was true
+ * only while `PAGER_WITH_DOCK` was the only pairing — L1's own centre card was inert for exactly that reason, and it
+ * put its two-way choice in the Home *section* instead. Here the register is where "what is HOME" is answered, which
+ * is what this section's own KDoc had reserved the spot for.
  *
+ * @param homeLayout HOME's current pairing; the centre card is named for it.
  * @param bindings the register's current per-edge bindings; a missing edge is unbound.
  * @param onPick opens the slot picker for an edge. The picker itself is hoisted to the section, so at most one is ever
  *   composed whatever the cross is doing.
@@ -95,8 +101,10 @@ private val GearGlyph = 18.dp
  */
 @Composable
 internal fun SurfaceRegisterCross(
+    homeLayout: HomeLayout,
     bindings: Map<HomeEdge, SideBinding>,
     onPick: (HomeEdge) -> Unit,
+    onPickHomeLayout: () -> Unit,
     onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -117,13 +125,13 @@ internal fun SurfaceRegisterCross(
         verticalArrangement = Arrangement.spacedBy(CardGap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SideSlot(HomeEdge.TOP, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
+        SideSlot(HomeEdge.TOP, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
         Row(horizontalArrangement = Arrangement.spacedBy(CardGap)) {
-            SideSlot(HomeEdge.LEFT, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
-            HomeSlot(cardWidth, cardHeight, onOpenSettings)
-            SideSlot(HomeEdge.RIGHT, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
+            SideSlot(HomeEdge.LEFT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
+            HomeSlot(homeLayout, cardWidth, cardHeight, onPickHomeLayout, onOpenSettings)
+            SideSlot(HomeEdge.RIGHT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
         }
-        SideSlot(HomeEdge.BOTTOM, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
+        SideSlot(HomeEdge.BOTTOM, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
     }
 }
 
@@ -131,6 +139,7 @@ internal fun SurfaceRegisterCross(
 @Composable
 private fun SideSlot(
     edge: HomeEdge,
+    homeLayout: HomeLayout,
     bindings: Map<HomeEdge, SideBinding>,
     width: Dp,
     height: Dp,
@@ -150,7 +159,7 @@ private fun SideSlot(
             width = width,
             height = height,
             label = bound.layout.label,
-            icon = SettingsSection.APPS.meta.icon,
+            icon = SettingsSection.APPS.meta(homeLayout).icon,
             container = colors.surface,
             content = colors.content,
             onClick = { onPick(edge) },
@@ -168,24 +177,29 @@ private fun SideSlot(
 }
 
 /**
- * The centre: HOME.
+ * The centre: HOME, named for the pairing it is drawing.
  *
  * In `accent` where the sides are plain, since it is the fixed point the others are arranged around — L1 used
- * `primaryContainer` for the same distinction. It takes no click, because there is nothing here to choose.
+ * `primaryContainer` for the same distinction. Two targets like every filled side slot: the body swaps the pairing,
+ * the gear opens the section that sizes whichever main area it brings.
  */
 @Composable
-private fun HomeSlot(width: Dp, height: Dp, onOpenSettings: (SettingsSection, AppsLayout?) -> Unit) {
+private fun HomeSlot(
+    layout: HomeLayout,
+    width: Dp,
+    height: Dp,
+    onPick: () -> Unit,
+    onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
+) {
     val colors = LocalMorphicColors.current
     FilledSlot(
         width = width,
         height = height,
-        label = "Home",
-        icon = SettingsSection.HOME_GRID.meta.icon,
+        label = layout.label,
+        icon = SettingsSection.HOME_GRID.meta(layout).icon,
         container = colors.accent,
         content = colors.onAccent,
-        onClick = null,
-        // The gear is the *only* thing this card does, which is what L1's centre card is too: nothing to choose here,
-        // but its grid is a section away.
+        onClick = onPick,
         onSettings = { onOpenSettings(SettingsSection.HOME_GRID, null) },
     )
 }

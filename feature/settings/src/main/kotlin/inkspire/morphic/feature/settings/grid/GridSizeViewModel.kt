@@ -7,10 +7,13 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.mainSlot
+import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.LayoutChange
@@ -28,29 +31,50 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * What the home-grid section shows — resolved together or not at all, since each is keyed by the device
- * configuration the screen has yet to report.
+ * **How HOME's main area is sized** — a sum type, because the two layouts configure a different quantity rather than
+ * the same quantity differently.
  *
- * @property cols the **stored** visual column count — a wish rather than a promise, exactly as the dock's is. The
- *   count that fits today's icons is smaller whenever the icons have grown since, and the screen clamps it with the
- *   same `CellFit.fitGridConfig` the home surface draws through; nothing writes that clamp back, so shrinking the
- *   icons again brings the count straight back.
- * @property rows likewise. The one write that *does* reduce it is the dock's height commit, which is a deliberate
- *   change to the space home is left with rather than a passing consequence of an icon slider.
- * @property icon the resolved icon sizing, which is what decides how many of either fit.
- * @property dockExtentDp how thick the dock is (its height, or its width where it is a rail), so the preview can show the
- *   share of the screen home actually gets — and so the bounds are computed against that area rather than the whole
- *   window.
+ * A pager divides the space it is given, so its setting is a pair of counts; a list is one lane and has nothing to
+ * divide, so its setting is how tall one row is. Neither could supply the other's value, which is what a sealed type
+ * says and what a record of four nullable fields would not. It mirrors `feature:home`'s own `HomeMainSizing`, and the
+ * two are separate because each carries what *its* layer needs — this one the stored counts, that one a resolved
+ * `GridConfig`.
+ */
+sealed interface MainAreaSize {
+
+    /** The pager's: a stored visual column and row count. */
+    data class Grid(val cols: Int, val rows: Int) : MainAreaSize
+
+    /** The list's: how tall one row is, in dp. */
+    data class Rows(val heightDp: Int) : MainAreaSize
+}
+
+/**
+ * What the home section shows — resolved together or not at all, since each is keyed by the device configuration the
+ * screen has yet to report.
+ *
+ * @property layout which pairing HOME is drawing, and therefore **which grid this section edits**: the pager, or the
+ *   vertical list. It has a real default rather than being nullable because the screen must decide which controls to
+ *   draw before any of them has resolved.
+ * @property main the main area's stored size — a **wish rather than a promise** on either layout. A grid count that
+ *   fits today's icons is smaller whenever the icons have grown since, and a row height outside today's guardrails is
+ *   clamped where it is drawn; the screen applies the same clamps the surface does, and nothing writes them back, so
+ *   shrinking the icons again brings the stored value straight back.
+ * @property icon the resolved icon sizing, which is what decides how many cells fit and how short a row may be.
+ * @property sideExtentDp how thick the side zone is (its height, or its width where it is a rail), so the preview can
+ *   show the share of the screen the main area actually gets — and so the bounds are computed against that area
+ *   rather than against the whole window.
  */
 data class GridSizeState(
-    val cols: Int? = null,
-    val rows: Int? = null,
+    val layout: HomeLayout = HomeLayout.PAGER_WITH_DOCK,
+    val main: MainAreaSize? = null,
     val icon: IconSizing? = null,
-    val dockExtentDp: Int? = null,
+    val sideExtentDp: Int? = null,
     val paddingDp: Int? = null,
 )
 
@@ -79,23 +103,54 @@ class GridSizeViewModel(
 
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
+    /**
+     * Which pairing HOME is drawing — the one input that changes *which grid* this section edits.
+     *
+     * Read rather than chosen: the pairing is the surface register's setting, and this section configures whichever
+     * main area it leaves. `Eagerly` so the writes below can read it without a UI subscriber.
+     */
+    private val layout: StateFlow<HomeLayout> =
+        settingsRepository.surfaceRegister
+            .map { it.homeLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, HomeLayout.PAGER_WITH_DOCK)
+
+    /** Device × layout — see `HomeViewModel`'s own posture, which combines the same pair for the same reason. */
+    private val posture: StateFlow<Pair<DeviceConfiguration, HomeLayout>?> =
+        combine(device, layout) { configuration, current -> configuration?.let { it to current } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<GridSizeState> = device
-        .flatMapLatest { configuration ->
-            if (configuration == null) {
+    val state: StateFlow<GridSizeState> = posture
+        .flatMapLatest { current ->
+            if (current == null) {
                 flowOf(GridSizeState())
             } else {
+                val (configuration, homeLayout) = current
+                val slot = homeLayout.mainSlot
                 combine(
-                    settingsRepository.gridConfig(SLOT, configuration),
-                    settingsRepository.iconSizing(SLOT, configuration),
-                    settingsRepository.dockExtent(configuration),
-                    settingsRepository.horizontalPadding(SLOT, configuration),
-                ) { config, icon, dockExtentDp, padding ->
-                    GridSizeState(config.visualCols, config.visualRows, icon, dockExtentDp, padding)
+                    mainSize(slot, configuration),
+                    settingsRepository.iconSizing(slot, configuration),
+                    settingsRepository.extent(homeLayout.sideSlot, configuration),
+                    settingsRepository.horizontalPadding(slot, configuration),
+                ) { main, icon, sideExtentDp, padding ->
+                    GridSizeState(homeLayout, main, icon, sideExtentDp, padding)
                 }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), GridSizeState())
+
+    /**
+     * The stored size of [slot], in whichever shape that grid has one.
+     *
+     * The choice is made from the **blueprint**, not from the layout, which is what keeps the two in step: a grid that
+     * declares a row height is a one-lane list and has no counts to read, and `gridConfig` would rightly refuse it —
+     * a scrolling grid has no row count to resolve.
+     */
+    private fun mainSize(slot: GridSlot, configuration: DeviceConfiguration) =
+        slot.blueprint.rowHeightDp
+            ?.let { settingsRepository.rowHeight(slot, configuration).map(MainAreaSize::Rows) }
+            ?: settingsRepository.gridConfig(slot, configuration)
+                .map { MainAreaSize.Grid(it.visualCols, it.visualRows) }
 
     /**
      * HOME's own icon sizing, edited from this section rather than from a separate icons screen.
@@ -107,7 +162,11 @@ class GridSizeViewModel(
     internal val icons = IconSizingEdits(
         settings = settingsRepository,
         scope = viewModelScope,
-        slot = { SLOT },
+        // The *current* main slot, read per write rather than captured: switching HOME's pairing changes which grid
+        // this section is editing, and an icon edit must land on the one on screen. That is what the lambda in
+        // `IconSizingEdits`' signature was for — the APPS section's chip row was its first user, and this is its
+        // second.
+        slot = { layout.value.mainSlot },
         device = { device.value },
     )
 
@@ -148,18 +207,39 @@ class GridSizeViewModel(
      */
     fun setPadding(dp: Int) {
         val configuration = device.value ?: return
-        viewModelScope.launch { settingsRepository.setHorizontalPadding(SLOT, configuration, dp) }
+        viewModelScope.launch { settingsRepository.setHorizontalPadding(slot, configuration, dp) }
+    }
+
+    /**
+     * Sets the vertical list's row height, in dp.
+     *
+     * **The list's whole size setting**, and the counterpart of [edit] on the other layout: one lane means there is no
+     * count to press, so the row is what there is to choose. One write, because rows flow — a taller row shows fewer
+     * apps per screen rather than leaving any without a place, so nothing is displaced.
+     *
+     * The bounds belong to the screen, as the extent's do: what a row must be at least depends on the current icon
+     * guardrails and the current type scale (`rowHeightRangeDp`), and a stored height outside them is clamped where it
+     * is drawn rather than written down.
+     */
+    fun setRowHeight(dp: Int) {
+        val configuration = device.value ?: return
+        viewModelScope.launch { settingsRepository.setRowHeight(GridSlot.HOME_LIST, configuration, dp) }
     }
 
     fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {
         val configuration = device.value ?: return
+        // The list has no counts to edit, so this is only ever reached on the pager layout — the screen draws no
+        // buttons on the other one. Guarded rather than assumed, because a stale press must not resize a grid the
+        // user is no longer looking at.
+        val blueprint = GridSlot.HOME_MAIN.blueprint
+        if (layout.value.mainSlot != GridSlot.HOME_MAIN) return
 
         val isRow = edge == GridEditorEdge.TOP || edge == GridEditorEdge.BOTTOM
         val delta = if (add) 1 else -1
         val nextCols = if (isRow) fromCols else fromCols + delta
         val nextRows = if (isRow) fromRows + delta else fromRows
-        val nextConfig = SLOT.blueprint.toGridConfig(
-            SLOT.blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
+        val nextConfig = blueprint.toGridConfig(
+            blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
         )
 
         viewModelScope.launch {
@@ -174,10 +254,23 @@ class GridSizeViewModel(
         }
     }
 
-    /** Clears the size override, returning the grid to its blueprint. Placements are then settled by the surface. */
+    /**
+     * Clears the size override, returning the main area to its blueprint. Placements are then settled by the surface.
+     *
+     * Two shapes because the two layouts store different things: the pager's counts are a grid override, the list's
+     * row height is its own setting. Both are a plain write of "nothing", after which the entry is *removed* rather
+     * than stored empty — so a reset leaves storage exactly as a fresh install has it.
+     */
     fun reset() {
         val configuration = device.value ?: return
-        viewModelScope.launch { settingsRepository.updateGrid(SLOT, configuration) { GridOverride() } }
+        val slot = layout.value.mainSlot
+        viewModelScope.launch {
+            if (slot.blueprint.rowHeightDp != null) {
+                settingsRepository.setRowHeight(slot, configuration, null)
+            } else {
+                settingsRepository.updateGrid(slot, configuration) { GridOverride() }
+            }
+        }
     }
 
     /**
@@ -201,12 +294,13 @@ class GridSizeViewModel(
     }
 
     private suspend fun writeSize(configuration: DeviceConfiguration, cols: Int, rows: Int) {
-        settingsRepository.updateGrid(SLOT, configuration) { copy(cols = cols, rows = rows) }
+        settingsRepository.updateGrid(GridSlot.HOME_MAIN, configuration) { copy(cols = cols, rows = rows) }
     }
 
-    private companion object {
-        val SLOT = GridSlot.HOME_MAIN
+    /** The grid this section is editing right now — the pager's or the list's, as HOME's pairing says. */
+    private val slot: GridSlot get() = layout.value.mainSlot
 
+    private companion object {
         /** Portrait only, matching the home surface itself until it gains orientation support. */
         val ORIENTATION = Orientation.PORTRAIT
         const val STOP_TIMEOUT_MS = 5_000L

@@ -8,18 +8,24 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.mainSlot
+import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.GridReflow
+import inkspire.morphic.data.layout.HomeListRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.settleDock
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.data.settings.SurfaceRegister
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.PlacedItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +36,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -69,6 +76,7 @@ import kotlinx.coroutines.launch
  */
 class HomeViewModel(
     private val layoutRepository: LayoutRepository,
+    private val homeListRepository: HomeListRepository,
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
     private val settingsRepository: SettingsRepository,
@@ -79,93 +87,141 @@ class HomeViewModel(
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
     /**
+     * Which pairing HOME is drawing, from the surface register.
+     *
+     * A `StateFlow` seeded with the register's own default so the first frame shows an unconfigured launcher rather
+     * than nothing, and `Eagerly` because the list seed below awaits it without a UI subscriber.
+     */
+    private val layout: StateFlow<HomeLayout> =
+        settingsRepository.surfaceRegister
+            .map { it.homeLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SurfaceRegister.Default.homeLayout)
+
+    /**
+     * **Device × layout** — the pair every resolved setting below is keyed on, and the reason it is one value.
+     *
+     * Both inputs move a grid's identity, not just its numbers: the device picks which override applies, and the
+     * layout picks *which grid* is being asked about at all (`HomeLayout.mainSlot`/`sideSlot`). Combining them once
+     * means each flow below re-subscribes on either change through a single `flatMapLatest`, rather than every flow
+     * having to remember to watch both.
+     */
+    private val posture: StateFlow<HomePosture?> =
+        combine(device, layout) { current, homeLayout -> current?.let { HomePosture(it, homeLayout) } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
      * Each zone's resolved icon sizing, by slot.
      *
-     * Two entries, because the pager and the dock are two grids with two blueprints — which is what makes their
-     * icon config independent. Before this landed they shared one value only because nothing provided any and both
-     * inherited `LocalIconMetrics`' default.
+     * One entry per zone **that draws icons**, because they are separate grids with separate blueprints — which is
+     * what makes their icon config independent. The widget area contributes none: its blueprint's `icon` is null, and
+     * asking `iconSizing` for it would (rightly) throw, so the filter is what keeps that unrepresentable rather than
+     * a runtime hazard.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val iconSizings: Flow<Map<GridSlot, IconSizing>> =
-        device.flatMapLatest { current ->
-            if (current == null) {
+        posture.flatMapLatest { current ->
+            val slots = current?.iconSlots.orEmpty()
+            if (slots.isEmpty()) {
                 flowOf(emptyMap())
             } else {
                 combine(
-                    ZoneSlots.map { slot -> settingsRepository.iconSizing(slot, current).map { slot to it } },
+                    slots.map { slot -> settingsRepository.iconSizing(slot, current!!.device).map { slot to it } },
                 ) { pairs -> pairs.toMap() }
             }
         }
 
     /**
-     * The main area's grid for the reported device — **the user's size**, resolved from `HOME_MAIN`'s blueprint with
-     * any override applied, exactly as the dock's is.
+     * **HOME's grid arrangement's own size**, resolved for the reported device — `HOME_MAIN`'s, whichever layout is
+     * showing.
      *
-     * A `StateFlow` rather than a plain flow because two things besides the UI read it: the first-run seed needs a
-     * grid to lay apps out in, and [fitDockTo] needs one to spill onto. `Eagerly` so both can await it without a
-     * subscriber having arrived.
+     * Deliberately *not* gated on the layout, unlike [mainSizing]. This is the grid the coordinate placements live
+     * in, and they live there whichever main area is on screen: the seed lays apps out in it, the dock spills onto
+     * it, and the vertical list is seeded by flattening it. A user who first launches on the list layout still needs
+     * their apps placed, and this is what places them.
+     *
+     * A `StateFlow` because three things besides the UI await it, `Eagerly` so they can do so before a subscriber
+     * arrives.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val mainConfig: StateFlow<GridConfig?> =
+    private val pagerConfig: StateFlow<GridConfig?> =
         device.flatMapLatest { current ->
             if (current == null) flowOf(null) else settingsRepository.gridConfig(GridSlot.HOME_MAIN, current)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
-     * The dock's stored size for the reported device — its height, and the counts it divides that height into.
+     * What the main area **is**, sized — a grid on one layout and a row height on the other.
      *
-     * Two flows rather than one because the extent and the dimensions are two settings with two stores, joined here
-     * because a `StateFlow` of one state object is what the surface reads. Null until a device is reported, exactly
-     * as [iconSizings] is empty until then.
+     * The `when` is the whole of the layout branch in this holder: everything downstream reads a [HomeMainSizing] and
+     * never asks which layout produced it.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val dockSizing: Flow<DockSizing?> =
-        device.flatMapLatest { current ->
+    private val mainSizing: Flow<HomeMainSizing?> =
+        posture.flatMapLatest { current ->
+            when (current?.layout) {
+                null -> flowOf(null)
+                HomeLayout.PAGER_WITH_DOCK -> pagerConfig.map { config -> config?.let(HomeMainSizing::Pager) }
+                HomeLayout.LIST_WITH_WIDGET_AREA ->
+                    settingsRepository.rowHeight(GridSlot.HOME_LIST, current.device).map(HomeMainSizing::List)
+            }
+        }
+
+    /**
+     * The side zone's stored size for the reported device — its extent, and the counts it divides that extent into.
+     *
+     * Two flows rather than one because the extent and the dimensions are two settings with two stores, joined here
+     * because a `StateFlow` of one state object is what the surface reads. **Which** zone is a property of the
+     * layout and of nothing else here: the dock and the widget area are the same shape of setting on two slots.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val sideSizing: Flow<SideZoneSizing?> =
+        posture.flatMapLatest { current ->
             if (current == null) {
                 flowOf(null)
             } else {
                 combine(
-                    settingsRepository.dockExtent(current),
-                    settingsRepository.gridConfig(GridSlot.HOME_DOCK, current),
-                ) { extentDp, grid -> DockSizing(extentDp, grid.visualCols, grid.visualRows) }
+                    settingsRepository.extent(current.sideSlot, current.device),
+                    settingsRepository.gridConfig(current.sideSlot, current.device),
+                ) { extentDp, grid -> SideZoneSizing(extentDp, grid.visualCols, grid.visualRows) }
+            }
+        }
+
+    /**
+     * Each zone's horizontal padding, resolved per device — the same shape and the same reason as [iconSizings].
+     *
+     * Both zones, including the widget area: a margin is the one measurement every grid has, which is why it is the
+     * one of the three that is asked of both slots unconditionally.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val paddings: Flow<Map<GridSlot, Int>> =
+        posture.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(emptyMap())
+            } else {
+                combine(
+                    current.slots.map { slot ->
+                        settingsRepository.horizontalPadding(slot, current.device).map { slot to it }
+                    },
+                ) { pairs -> pairs.toMap() }
             }
         }
 
     /**
      * Everything the settings layer decides about how home is drawn, in one value.
      *
-     * Folded together because `combine` takes five flows and the state needs six: three sources of *configuration*
-     * behind one, leaving the three sources of *content* (placements, apps, folders) at the top level. It is also the
-     * honest grouping — these three change together when the user edits a section, and none of them is content.
+     * Folded together because `combine` takes five flows and the state needs more: the sources of *configuration*
+     * behind one, leaving the sources of *content* (placements, apps, folders, the list's order) at the top level. It
+     * is also the honest grouping — these change together when the user edits a section, and none of them is content.
      */
-    /**
-     * Each zone's horizontal padding, resolved per device — the same shape and the same reason as [iconSizings].
-     *
-     * Two grids, two independent values: a user may inset the main area without touching the dock, and the dock is a
-     * strip whose margins read quite differently from a full-height pager's. Built over [ZoneSlots] so adding HOME's
-     * third zone later needs nothing here.
-     */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val paddings: Flow<Map<GridSlot, Int>> =
-        device.flatMapLatest { current ->
-            if (current == null) {
-                flowOf(emptyMap())
-            } else {
-                combine(
-                    ZoneSlots.map { slot -> settingsRepository.horizontalPadding(slot, current).map { slot to it } },
-                ) { pairs -> pairs.toMap() }
-            }
-        }
-
-    private val sizing: Flow<HomeSizing> = combine(iconSizings, mainConfig, dockSizing, paddings, ::HomeSizing)
+    private val sizing: Flow<HomeSizing> = combine(iconSizings, mainSizing, sideSizing, paddings, layout, ::HomeSizing)
 
     val state: StateFlow<HomeState> =
         combine(
             placements,
             appRepository.observeApps(),
             layoutRepository.folders(),
+            homeListRepository.order,
             sizing,
-        ) { placed, apps, folders, configured ->
+        ) { placed, apps, folders, listOrder, configured ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             HomeState(
@@ -184,10 +240,16 @@ class HomeViewModel(
                         else -> null // widgets / containers get their cells later
                     }
                 },
+                layout = configured.layout,
+                // Resolved through the same cache the grid items are, and unresolvable entries are dropped for the
+                // same reason: an app the cache cannot describe has no icon and no label to draw. The *stored* order
+                // keeps them (`HomeListRepository.setOrder` reconciles), so an uninstall-and-reinstall returns them
+                // to where they were.
+                listApps = listOrder.mapNotNull(infoByComponent::get),
                 iconSizing = configured.icon,
                 horizontalPaddingDp = configured.padding,
                 main = configured.main,
-                dock = configured.dock,
+                side = configured.side,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
@@ -201,12 +263,26 @@ class HomeViewModel(
         // The app cache is refreshed once, before the first seed, since a seed with an empty cache places nothing.
         viewModelScope.launch {
             var refreshed = false
-            mainConfig.filterNotNull().collect { config ->
+            pagerConfig.filterNotNull().collect { config ->
                 if (!refreshed) {
                     appRepository.refresh()
                     refreshed = true
                 }
                 seedIfEmpty(config)
+            }
+        }
+        // **The vertical list's first-run default: the grid, flattened.** Seeded when the layout is *chosen* rather
+        // than at startup, because a list seeded on a launcher whose user never opens that layout would be a snapshot
+        // going stale in the database — and because the seed has to run after the grid has something in it.
+        //
+        // `collectLatest` is what makes awaiting the placements safe: switching away cancels the wait rather than
+        // leaving it pending against a layout that is no longer showing. Awaiting at all (rather than `?: return`) is
+        // the same call `fitDockTo` makes — the grid seed and this one resolve from the same store at roughly the
+        // same moment, so a skip would drop the only seed and nothing would ask again.
+        viewModelScope.launch {
+            layout.collectLatest { current ->
+                if (current != HomeLayout.LIST_WITH_WIDGET_AREA) return@collectLatest
+                homeListRepository.seedIfEmpty(readingOrder(placements.first { it.isNotEmpty() }))
             }
         }
         // **The store is followed, not read once — because this holder stopped being its only writer.** [placements]
@@ -241,6 +317,21 @@ class HomeViewModel(
 
     /** Opens the app for [component] (a home tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
     fun launch(component: ComponentKey) = appLauncher.launch(component)
+
+    /**
+     * Commits the vertical list's new order, as the surface dropped it.
+     *
+     * **Not optimistic, unlike [applyChanges].** A coordinate drop has to be, because the free-grid planner's pushed
+     * occupants would otherwise snap back for a frame; an ordered drop already *shows* its result — the MovingGap
+     * preview has the app at its new index before the finger lifts — so the write only has to make that durable. The
+     * store's own flow then re-emits the same list and nothing moves.
+     *
+     * The reconciliation against real membership is the repository's, deliberately: the surface reports only the rows
+     * it could render, and only the store knows the rest. See `HomeListRepository.setOrder`.
+     */
+    fun reorderList(order: List<ComponentKey>) {
+        viewModelScope.launch { homeListRepository.setOrder(order) }
+    }
 
     /**
      * Re-homes anything the dock can no longer hold, now that its grid is [dockConfig] — **the settings write and
@@ -315,7 +406,7 @@ class HomeViewModel(
             // the dock and leave it placed nowhere. **Awaited rather than skipped**: the two configs resolve from the
             // same store at roughly the same moment, so a `?: return` here would drop the very first fit whenever the
             // dock's answer arrived first, and nothing would call again until something else changed.
-            val main = mainConfig.filterNotNull().first()
+            val main = pagerConfig.filterNotNull().first()
             val current = placements.value
             applyChanges(
                 settleDock(
@@ -527,9 +618,6 @@ class HomeViewModel(
     }
 
     companion object {
-        /** The two grids home draws icons in — its paged main area and its dock, each with its own blueprint. */
-        private val ZoneSlots = listOf(GridSlot.HOME_MAIN, GridSlot.HOME_DOCK)
-
         val ORIENTATION = Orientation.PORTRAIT
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val DEFAULT_FOLDER_LABEL = "Folder"
@@ -537,17 +625,62 @@ class HomeViewModel(
 }
 
 /**
+ * The two inputs that decide **which** grids HOME has and how they resolve: the posture it is drawn on, and the
+ * pairing it is drawing.
+ *
+ * A pair rather than two flows because every setting below depends on both, and because [layout] changes the *slot*
+ * rather than the value — `HOME_DOCK` and `HOME_WIDGET_AREA` are different grids with different blueprints, so a
+ * layout change is not a re-resolve of the same question but a different question.
+ */
+private data class HomePosture(val device: DeviceConfiguration, val layout: HomeLayout) {
+
+    /** HOME's two grids in this pairing — the main area's and the side zone's. */
+    val slots: List<GridSlot> get() = listOf(layout.mainSlot, sideSlot)
+
+    /** The side zone's grid: the dock, or the widget area. */
+    val sideSlot: GridSlot get() = layout.sideSlot
+
+    /**
+     * The grids that draw **icon cells**, which is the subset that has icon sizing to resolve.
+     *
+     * The widget area is the one exclusion, and it is a property of the blueprint rather than a name checked here:
+     * a grid whose `icon` is null draws something else, and `SettingsRepository.iconSizing` throws for it by design.
+     */
+    val iconSlots: List<GridSlot> get() = slots.filter { it.blueprint.icon != null }
+}
+
+/**
  * The settings-resolved half of [HomeState], assembled before it joins the content half.
  *
- * Exists because `combine` stops at five flows and home needs six; it is not a second state object. Every field is
- * "not yet" until the surface reports its device, since all three are resolved per device configuration.
+ * Exists because `combine` stops at five flows and home needs more; it is not a second state object. Every field but
+ * [layout] is "not yet" until the surface reports its device, since all of them are resolved per configuration —
+ * [layout] has a real default because the surface must choose what to compose before anything is resolved.
  */
 private data class HomeSizing(
     val icon: Map<GridSlot, IconSizing>,
-    val main: GridConfig?,
-    val dock: DockSizing?,
+    val main: HomeMainSizing?,
+    val side: SideZoneSizing?,
     val padding: Map<GridSlot, Int>,
+    val layout: HomeLayout,
 )
+
+/**
+ * HOME's coordinate placements flattened into a single top-to-bottom order — **the vertical list's seed**.
+ *
+ * L1's own derivation (page, then row, then column), and the one part of its "the list *is* the grid" model worth
+ * keeping: it is what makes switching to the list layout hand the user their apps in the arrangement they already
+ * recognise. Where L1 read this live and wrote back through it, here it runs once, into the list's own store.
+ *
+ * Only [HomeZone.MAIN] and only apps: the dock keeps its own contents across a layout change (it is simply not drawn
+ * on the other one), and a folder has no row in a list that holds apps only.
+ */
+private fun readingOrder(placed: Map<GridItem, PlacedItem>): List<ComponentKey> =
+    placed.entries
+        .filter { (item, at) -> item is GridItem.App && at.zone == HomeZone.MAIN }
+        .sortedWith(
+            compareBy({ it.value.placement.page }, { it.value.placement.row }, { it.value.placement.col }),
+        )
+        .map { (item, _) -> (item as GridItem.App).component }
 
 /**
  * Folds coordinate [changes] into a placement map — the in-memory mirror of what the repository persists.

@@ -4,7 +4,6 @@ import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -82,9 +81,9 @@ data class GridOverride(
  *
  * The second settings slice, and the one that retired the per-surface icon constants scattered through the feature
  * modules. Icon sizing and grid dimensions are two maps in **one** slice rather than two slices, because every
- * consumer of one needs the other: a cell's icon size is a fraction of a cell whose size comes from the grid. The
- * dock's height is a third, and belongs here for the same reason twice over — it is what its cell counts are
- * divided out of, and those counts are what its icons are sized against. The list's row height is a fourth, and the
+ * consumer of one needs the other: a cell's icon size is a fraction of a cell whose size comes from the grid. A
+ * strip's extent is a third, and belongs here for the same reason twice over — it is what its cell counts are
+ * divided out of, and those counts are what its icons are sized against. A list's row height is a fourth, and the
  * same dependency runs the other way there: the row is what its icon is a fraction *of*.
  *
  * **Keyed by [GridSlot] × [DeviceConfiguration], and the second half matters.** `GridBlueprint.defaults` is already
@@ -104,13 +103,8 @@ data class GridOverride(
 data class SurfaceMetrics(
     val icon: Map<GridSlot, Map<DeviceConfiguration, IconOverride>> = emptyMap(),
     val grid: Map<GridSlot, Map<DeviceConfiguration, GridOverride>> = emptyMap(),
-    // The serialized key keeps the old name deliberately: the *meaning* did not change — it is the same strip
-    // thickness, on whichever axis the dock is stacked — only the Kotlin name was wrong once the dock could be a rail.
-    // A key rename is this slice's seam for a semantic break, and renaming one here would silently reset every stored
-    // dock instead.
-    @SerialName("dockHeightDp")
-    val dockExtentDp: Map<DeviceConfiguration, Int> = emptyMap(),
-    val listRowHeightDp: Map<DeviceConfiguration, Int> = emptyMap(),
+    val extentDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
+    val rowHeightDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
     val horizontalPaddingDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
 ) {
     /**
@@ -168,61 +162,65 @@ data class SurfaceMetrics(
     }
 
     /**
-     * The dock's extent on [device] in dp: [base] — its blueprint's — unless the user has set one here.
+     * [slot]'s extent on [device] in dp: [base] — its blueprint's — unless the user has set one here.
      *
-     * A height on the three configurations where the dock is a bottom strip and a width on the one where it is a rail
-     * — the store holds a thickness and `DockEdge` says which dimension that is. One value per device is what makes
-     * that work without a second field: a user configuring a phone in landscape is configuring the rail.
+     * A height on the configurations where the zone is a strip and a width on the one where it is a rail — the store
+     * holds a thickness and `SideZoneEdge` says which dimension that is. One value per device is what makes that work
+     * without a second field: a user configuring a phone in landscape is configuring the rail.
      *
-     * **Not keyed by [GridSlot], unlike its two neighbours.** A slot-keyed map would make seven of the eight keys
-     * meaningless: every other grid either fills the space its parent gives it or scrolls, so "how thick is the APPS
-     * pager" has no answer to store. Naming the one grid that *has* an extent keeps the unrepresentable
-     * unrepresentable, which is worth more here than a third map that looks like the other two.
+     * **Slot-keyed, which reverses an earlier call and is worth saying why.** This was a bare
+     * `Map<DeviceConfiguration, Int>` named for the dock, on the grounds that a slot-keyed map would make seven of the
+     * eight keys meaningless. HOME's second layout is what changed the arithmetic: a **widget area** is a fixed-extent
+     * strip too, so there are now two grids that can answer, and a second named map would have been a second copy of
+     * this pair of functions differing only in which grid's name is in it — the near-duplicate this rewrite exists to
+     * un-make. The unrepresentable is still unrepresentable, just one layer out: [SettingsRepository.setExtent]
+     * refuses a slot whose blueprint declares no `extentDp`, exactly as `updateGrid` refuses one with no `editRange`.
+     * The blueprint is where "does this grid have an extent" is declared, so deferring to it beats restating it here.
      */
-    fun dockExtent(device: DeviceConfiguration, base: Int): Int = dockExtentDp[device] ?: base
+    fun extent(slot: GridSlot, device: DeviceConfiguration, base: Int): Int = extentDp[slot]?.get(device) ?: base
 
     /**
-     * A copy with the dock's extent on [device] set to [dp], or **cleared** when it is null — after which the dock
+     * A copy with [slot]'s extent on [device] set to [dp], or **cleared** when it is null — after which that zone
      * follows its blueprint again, exactly as a nulled field does in the two override maps.
      *
      * No clamp here, and none in the store either. The grid dimensions could be floored on write because
      * `GridEditRange` states a minimum as a static *count*; an extent's bounds are both runtime — its floor is one
      * cell's smallest usable size (which needs the resolved icon sizing) and its ceiling is a fraction of the
      * measured screen. Those belong to whatever measured the screen, so the only rule this layer can honestly
-     * enforce is that an extent is positive, which `SettingsRepository.setDockExtent` requires.
+     * enforce is that an extent is positive, which [SettingsRepository.setExtent] requires.
      */
-    fun withDockExtent(device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
-        copy(dockExtentDp = if (dp == null) dockExtentDp - device else dockExtentDp + (device to dp))
+    fun withExtent(slot: GridSlot, device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
+        copy(extentDp = extentDp.withEntry(slot, device, dp))
 
     /**
-     * How tall one row of the APPS vertical list is on [device] in dp: [base] — its blueprint's — unless the user has
-     * set one here.
+     * How tall one row of [slot] is on [device] in dp: [base] — its blueprint's — unless the user has set one here.
      *
-     * **A fourth map rather than a `slot → extent` one, for the reason [dockExtentDp] is not slot-keyed either**, and
-     * the two are not the same measurement wearing different names: a dock's height is a whole strip's extent, which
-     * its rows then divide; a list's is one row of a grid that has no total height at all, because it scrolls. Naming
-     * each of the two grids that declares a height keeps the six that declare none unable to be asked.
+     * **A separate map from [extentDp] rather than one "sizes" map**, because the two are not the same measurement
+     * wearing different names: an extent is a whole strip's thickness, which its rows then divide; a row height is one
+     * row of a grid that has no total height at all, because it scrolls. A grid declares one or the other and never
+     * both, which is what makes them two questions rather than two spellings of one.
      */
-    fun listRowHeight(device: DeviceConfiguration, base: Int): Int = listRowHeightDp[device] ?: base
+    fun rowHeight(slot: GridSlot, device: DeviceConfiguration, base: Int): Int =
+        rowHeightDp[slot]?.get(device) ?: base
 
     /**
-     * A copy with the list's row height on [device] set to [dp], or **cleared** when it is null — after which the list
+     * A copy with [slot]'s row height on [device] set to [dp], or **cleared** when it is null — after which that grid
      * follows its blueprint again.
      *
-     * No clamp, as [withDockExtent] has none: a row's floor is whatever still renders an icon at the *current* icon
+     * No clamp, as [withExtent] has none: a row's floor is whatever still renders an icon at the *current* icon
      * sizing, which this layer cannot know, and its ceiling is a matter of taste rather than of fit — a list scrolls,
      * so a tall row costs nothing but density.
      */
-    fun withListRowHeight(device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
-        copy(listRowHeightDp = if (dp == null) listRowHeightDp - device else listRowHeightDp + (device to dp))
+    fun withRowHeight(slot: GridSlot, device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
+        copy(rowHeightDp = rowHeightDp.withEntry(slot, device, dp))
 
     /**
      * The blank margin at [slot]'s left and right edges on [device], in dp: [base] — its blueprint's — unless
      * overridden here.
      *
-     * **Slot-keyed, unlike [dockExtentDp] and [listRowHeightDp], and the difference is how many grids can be asked.**
-     * Those two name one grid each because only one grid *has* the measurement — a strip's extent, a list's row. Every
-     * grid has edges, so this one is keyed like [icon] and [grid] are.
+     * **Slot-keyed like [extentDp] and [rowHeightDp], but askable of every grid, which those two are not.**
+     * Those two are answerable only by a grid whose blueprint declares the measurement — a strip's extent, a list's
+     * row. Every grid has edges, so this one may be asked of all ten.
      */
     fun horizontalPadding(slot: GridSlot, device: DeviceConfiguration, base: Int): Int =
         horizontalPaddingDp[slot]?.get(device) ?: base
@@ -238,20 +236,32 @@ data class SurfaceMetrics(
      * columns stored beside it is resolved *on read* by `CellFit`, which reports fewer columns rather than rewriting
      * anything, so narrowing the padding again brings them back. L1 wrote its clamps back and destroyed the number.
      */
-    fun withHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?): SurfaceMetrics {
-        val forSlot = horizontalPaddingDp[slot].orEmpty()
-        val updated = if (dp == null) forSlot - device else forSlot + (device to dp)
-        return copy(
-            horizontalPaddingDp = if (updated.isEmpty()) {
-                horizontalPaddingDp - slot
-            } else {
-                horizontalPaddingDp + (slot to updated)
-            },
-        )
-    }
+    fun withHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
+        copy(horizontalPaddingDp = horizontalPaddingDp.withEntry(slot, device, dp))
 
     companion object {
         /** Nothing overridden: every grid draws at its blueprint's defaults. */
         val Default = SurfaceMetrics()
     }
+}
+
+/**
+ * Sets or clears one `slot → device → value` entry, **pruning both levels when they empty**.
+ *
+ * The sparseness rule shared by the three scalar maps ([SurfaceMetrics.extentDp],
+ * [SurfaceMetrics.rowHeightDp], [SurfaceMetrics.horizontalPaddingDp]), written once. It is the same rule
+ * `withIconOverride`/`withGridOverride` apply to their record maps; those two keep their own copy only because
+ * "empty" is a property of the record there (`isEmpty`) rather than absence of a value.
+ *
+ * Pruning is what keeps a visited-and-reset settings screen leaving the blob exactly as it found it, instead of
+ * accumulating `{"HOME_DOCK":{}}`. L1's ~265 keys stayed permanently populated for want of this.
+ */
+private fun Map<GridSlot, Map<DeviceConfiguration, Int>>.withEntry(
+    slot: GridSlot,
+    device: DeviceConfiguration,
+    value: Int?,
+): Map<GridSlot, Map<DeviceConfiguration, Int>> {
+    val forSlot = this[slot].orEmpty()
+    val updated = if (value == null) forSlot - device else forSlot + (device to value)
+    return if (updated.isEmpty()) this - slot else this + (slot to updated)
 }

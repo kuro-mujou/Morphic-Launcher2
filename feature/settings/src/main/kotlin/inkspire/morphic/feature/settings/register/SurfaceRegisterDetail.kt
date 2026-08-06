@@ -43,13 +43,13 @@ private val CrossGap = 20.dp
  * that the *edges* were the part with a shape, not the options — so the options moved into a modal
  * ([SideBindingPicker]) and the edges got the picture.
  *
- * **Only the bindings are offered, deliberately.** The register also stores `homeLayout` and `transition`, and neither
- * has a consumer yet — `HomeScreen` is `PAGER_WITH_DOCK` by construction and `SurfacePager` implements only `SLIDE`. A
- * control for a setting that changes nothing is worse than a missing one: it teaches the user the app is broken. They
- * appear here when the things they configure exist. (L1 offered both from this screen, and its presets from here too.)
+ * **HOME's pairing is offered here now, and `transition` still is not.** The rule stated here has not changed — a
+ * control for a setting that changes nothing teaches the user the app is broken, so each appears when the thing it
+ * configures exists. `HomeScreen` renders both pairings, so the centre card is live; `SurfacePager` still implements
+ * only `SLIDE`, so the transition stays out. (L1 offered both from this screen, and its presets from here too.)
  *
- * **One picker, hoisted**, rather than one per slot: which edge is being filled is this screen's state, so at most one
- * dialog exists whatever the cross is doing.
+ * **Two pickers, both hoisted**, rather than one per slot: *which* slot is being filled is this screen's state, so at
+ * most one dialog exists whatever the cross is doing.
  *
  * A **detail**, not a screen: the theme, the background, the app bar and back all belong to `SettingsScreen`, which
  * has one of each for what may be two panes.
@@ -64,6 +64,7 @@ internal fun SurfaceRegisterDetail(
     val colors = LocalMorphicColors.current
 
     var picking by remember { mutableStateOf<HomeEdge?>(null) }
+    var pickingHome by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -79,10 +80,23 @@ internal fun SurfaceRegisterDetail(
         )
 
         SurfaceRegisterCross(
+            homeLayout = state.register.homeLayout,
             bindings = state.register.sides,
             onPick = { picking = it },
+            onPickHomeLayout = { pickingHome = true },
             onOpenSettings = onOpenSection,
             modifier = Modifier.padding(top = CrossGap),
+        )
+    }
+
+    if (pickingHome) {
+        HomeLayoutPicker(
+            selected = state.register.homeLayout,
+            onSelect = { layout ->
+                viewModel.setHomeLayout(layout)
+                pickingHome = false
+            },
+            onDismiss = { pickingHome = false },
         )
     }
 

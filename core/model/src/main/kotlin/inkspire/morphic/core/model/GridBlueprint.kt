@@ -47,11 +47,27 @@ data class GridEditRange(val minCols: Int, val minRows: Int?)
  * storage migration, not a refactor.
  */
 enum class GridSlot {
-    /** HOME's paged main area. */
+    /** HOME's paged main area, in [HomeLayout.PAGER_WITH_DOCK]. */
     HOME_MAIN,
 
-    /** HOME's dock strip. */
+    /** HOME's dock strip — the side zone of [HomeLayout.PAGER_WITH_DOCK]. */
     HOME_DOCK,
+
+    /**
+     * HOME's vertical **list**, the main area of [HomeLayout.LIST_WITH_WIDGET_AREA].
+     *
+     * A separate slot from [APPS_LIST] even though both are one-lane lists of apps, because they are two grids on two
+     * surfaces: a user who wants chunky rows on their home screen and a dense A–Z drawer must be able to say so, and
+     * "each grid gets an independent icon config" is the rule that makes that automatic. It is the same reason
+     * [HOME_MAIN] and [APPS_PAGER] are not one slot despite both being paged grids of icons.
+     */
+    HOME_LIST,
+
+    /**
+     * HOME's **widget area** — the side zone of [HomeLayout.LIST_WITH_WIDGET_AREA], and the one grid that holds
+     * widgets rather than icons.
+     */
+    HOME_WIDGET_AREA,
 
     /** The APPS paged grid, and the pages of the category pager. */
     APPS_PAGER,
@@ -196,8 +212,8 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   declares one **bounds the count along that axis** — a cell being `extent ÷ count`, there is a point past which
  *   another line leaves cells too small to draw an icon in.
  *
- *   **An extent rather than a height, because which dimension it is depends on the posture.** The dock is a bottom
- *   strip on three configurations and a rail on the fourth ([DockEdge]), so the same stored number is a height there
+ *   **An extent rather than a height, because which dimension it is depends on the posture.** A side zone is a strip
+ *   on three configurations and a rail on the fourth ([SideZoneEdge]), so the same stored number is a height there
  *   and a width here — and it bounds the *rows* in the first case and the *columns* in the second. L1 called this
  *   `extentDp` for the same reason.
  *
@@ -324,9 +340,9 @@ val HomePagerGrid = GridBlueprint(
  * the cell at least the smallest usable one (`CellFit` in `core:designsystem`). Both axes are the user's, which is why
  * [editRange] gives each a minimum.
  *
- * **Which count the extent bounds depends on where the dock sits** ([DockEdge]): a bottom strip's height bounds its
- * *rows*, a rail's width bounds its *columns*. That is also why the phone-landscape [defaults] are the transpose of
- * the others — a column of four down the trailing edge, where the rest have a row of four across the bottom.
+ * **Which count the extent bounds depends on where the dock sits** ([SideZoneEdge]): a bottom strip's height bounds
+ * its *rows*, a rail's width bounds its *columns*. That is also why the phone-landscape [defaults] are the transpose
+ * of the others — a column of four down the trailing edge, where the rest have a row of four across the bottom.
  *
  * **An extent change can invalidate the count it bounds, and shrinking the strip reduces that count to what it can now
  * hold** — a real write, so what is stored is always a grid the dock can actually draw. The *other* axis is untouched
@@ -352,6 +368,75 @@ val DockGrid = GridBlueprint(
     icon = IconSizing(),
     // The `DockHeight` placeholder `feature:home` has carried since the dock was built, now owned by something.
     extentDp = 96,
+)
+
+/**
+ * HOME's vertical list ([HomeLayout.LIST_WITH_WIDGET_AREA]'s main area) — **one lane, scrolling**, ordered by hand.
+ *
+ * The home twin of [AppsListGrid], and everything structural about it is that grid's: one lane means no cell width to
+ * derive a height from and no extent to divide, so the row height is [rowHeightDp] — *declared* — and the icon is a
+ * fraction of it rather than the other way round. [editRange] is null for the same reason: a list is one lane by
+ * definition, so there is no count to edit, which is not the same as saying nothing about it is configurable.
+ *
+ * **Two things separate it from the APPS list, and both are about what the surface is for.** Its rows are 64dp where
+ * the drawer's are 56 — L1's own two numbers, and the reason is that a home list holds the handful of apps you chose,
+ * where a drawer holds all of them, so density is worth less here and reach is worth more. And its order is **stored**
+ * (`home_list_item`) rather than derived A–Z: the whole point of this layout is that the user arranges it.
+ *
+ * L1 modelled the same list as *a view of the home placements*, flattened by (page, row, col) — which is why
+ * reordering it wrote `MoveApp(page = 0, row = index, col = 0)` for every app and destroyed the grid arrangement
+ * underneath. Two stores is what stops one layout scrambling the other; the flattening survives only as the *seed*
+ * (see `HomeListRepository`), which is the part of L1's idea worth keeping.
+ */
+val HomeListGrid = GridBlueprint(
+    slot = GridSlot.HOME_LIST,
+    sizing = GridSizing.SCROLL_GRID,
+    cellMultiplier = 1,
+    freePlacement = false,
+    editRange = null,
+    defaults = byDevice(
+        phonePortrait = GridDefault(cols = 1),
+        phoneLandscape = GridDefault(cols = 1),
+        tabletPortrait = GridDefault(cols = 1),
+        tabletLandscape = GridDefault(cols = 1),
+    ),
+    icon = IconSizing(),
+    rowHeightDp = 64,
+)
+
+/**
+ * HOME's **widget area** ([HomeLayout.LIST_WITH_WIDGET_AREA]'s side zone) — a free-placement grid with an extent of
+ * its own, and **the one grid whose cells are not icons**.
+ *
+ * Structurally the dock: same [cellMultiplier], same [freePlacement], same "the extent bounds the count divided out of
+ * it" rule, same [SideZoneEdge] deciding which count that is. What differs is what goes in it, and that shows up in
+ * exactly one field — [icon] is **null**, as [AppsCardGrid]'s is, because a widget is not an icon in a cell and there
+ * is no fraction, guardrail or label for a user to set. That null is load-bearing: it is what makes the widget-area
+ * settings section the smallest of the five (an editor and two sliders, no icon group), which is exactly the shape
+ * L1's `DockSettingsDetail` took in its `minimalist` branch, returning early before the icon controls.
+ *
+ * **A null [icon] also means `CellFit` cannot size this grid from an icon guardrail**, so the smallest usable cell
+ * comes from `MinWidgetCellDp` instead — a widget's own floor, and L1's `MIN_WIDGET_DP`.
+ *
+ * [defaults] are L1's `WidgetAreaSettings` (4×3 portrait, 3×4 landscape) with the two tablet configurations added,
+ * which L1 had no per-form-factor defaults for at all. [extentDp] is L1's 280dp: a widget area is meant to be *looked*
+ * at, so it takes far more of the screen than a dock's 96.
+ */
+val WidgetAreaGrid = GridBlueprint(
+    slot = GridSlot.HOME_WIDGET_AREA,
+    sizing = GridSizing.FIXED_PAGER,
+    cellMultiplier = 2,
+    freePlacement = true,
+    editRange = GridEditRange(minCols = 1, minRows = 1),
+    defaults = byDevice(
+        phonePortrait = GridDefault(cols = 4, rows = 3),
+        // The rail: narrower and taller, because on this posture the extent below is a width. L1's own landscape pair.
+        phoneLandscape = GridDefault(cols = 3, rows = 4),
+        tabletPortrait = GridDefault(cols = 5, rows = 3),
+        tabletLandscape = GridDefault(cols = 6, rows = 3),
+    ),
+    icon = null,
+    extentDp = 280,
 )
 
 /**
@@ -529,6 +614,8 @@ val AppsCardGrid = GridBlueprint(
 val GridBlueprints: Map<GridSlot, GridBlueprint> = listOf(
     HomePagerGrid,
     DockGrid,
+    HomeListGrid,
+    WidgetAreaGrid,
     AppsPagerGrid,
     AppsScrollGrid,
     AppsListGrid,

@@ -47,6 +47,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.model.GridEditorEdge
+import inkspire.morphic.core.model.SideZoneEdge
 import kotlin.math.ceil
 
 /** Provisional spacing — placeholders, as everywhere else in this module. */
@@ -69,10 +70,30 @@ private const val MAX_PREVIEW_RATIO = 2.5f
 /**
  * Which side of the edited grid the companion zone sits on.
  *
- * Four values where the dock has two (`DockEdge`), because each section sees the split from its own end: home's
- * companion *is* the dock (bottom or end), the dock's is the pager (top or start).
+ * The same four values as `SideZoneEdge` and deliberately a separate type — see [of]. Each HOME section sees the
+ * split from its own end: the main area's companion *is* the side zone (wherever it sits), and the side zone's is the
+ * main area (the opposite edge).
  */
-internal enum class CompanionSide { TOP, BOTTOM, START, END }
+internal enum class CompanionSide { TOP, BOTTOM, START, END;
+
+    /** Empty, so [of] can hang off it — Kotlin enums carry no implicit companion. */
+    companion object
+}
+
+/**
+ * Where a companion zone sitting on [edge] is drawn.
+ *
+ * The two enums are the same four values and stay separate on purpose: [SideZoneEdge] is a fact about HOME (a domain
+ * value with a rule behind it), while [CompanionSide] is a fact about *this editor* — a grid whose companion is
+ * neither of HOME's zones would still need one. This is the one-line bridge, so the four sections that need it do not
+ * each write their own `when`.
+ */
+internal fun CompanionSide.Companion.of(edge: SideZoneEdge): CompanionSide = when (edge) {
+    SideZoneEdge.TOP -> CompanionSide.TOP
+    SideZoneEdge.BOTTOM -> CompanionSide.BOTTOM
+    SideZoneEdge.START -> CompanionSide.START
+    SideZoneEdge.END -> CompanionSide.END
+}
 
 /** How much of the preview the *other* zone takes, and on which side of the edited grid it sits. */
 internal data class EditorCompanion(val fraction: Float, val side: CompanionSide)
@@ -213,16 +234,13 @@ internal fun GridEditor(
                     .background(colors.surface)
                     .padding(PreviewPad),
             ) {
-                if (preview != null) {
-                    preview(edit)
-                } else {
-                    ScreenPreview(
-                        cols = cols,
-                        rows = rows,
-                        edit = edit,
-                        companion = companion,
-                        insetFraction = horizontalInsetFraction,
-                    )
+                // The companion split wraps **whatever** fills the edited half — a caller's own mockup or the plain
+                // lattice. Passing a `preview` used to replace the whole screen, which was fine while only the APPS
+                // layouts passed one (they have no companion zone) and wrong the moment HOME's vertical list did:
+                // it has a mockup *and* a widget area beside it.
+                ScreenPreview(companion) { half ->
+                    if (preview != null) Box(half) { preview(edit) }
+                    else GridPreview(cols, rows, edit, horizontalInsetFraction, half)
                 }
             }
         }
@@ -282,8 +300,8 @@ private fun EdgeRail(height: Dp, content: @Composable ColumnScope.() -> Unit) {
 }
 
 /**
- * The screen, in miniature: the edited lattice, and — when there is one — the [companion] zone as a plain block
- * taking its real share of the height.
+ * The screen, in miniature: the **edited** half — whatever fills it — and, when there is one, the [companion] zone as
+ * a plain block taking its real share of the screen.
  *
  * The split is by **measured proportion**, not decoration: seeing that the dock eats a fifth of the screen is most of
  * what makes a grid editor legible.
@@ -292,22 +310,16 @@ private fun EdgeRail(height: Dp, content: @Composable ColumnScope.() -> Unit) {
  * what makes the phone-landscape dock legible: it is a rail, so the mockup has to show a rail, and a horizontal split
  * at the same fraction would say the opposite of what the surface does.
  *
- * **[insetFraction] reaches the lattice and never the companion**, because a margin is *this grid's* setting: home's
- * pager and its dock each store their own, so insetting both from one number would show the user a dock narrowing
- * because they moved the pager's slider. L1 draws it the same way — `insetFraction` goes to its `GridPreview` and its
- * `NonGridPreview` takes none. An earlier cut here wrapped the whole mockup, which shrank the screen rather than the
- * grid in it.
+ * **The margin reaches the edited half and never the companion**, because it is *this grid's* setting: home's two
+ * zones each store their own, so insetting both from one number would show the user a dock narrowing because they
+ * moved the pager's slider. That is why the inset is applied inside [edited] rather than around this split — L1 draws
+ * it the same way, passing `insetFraction` to its `GridPreview` and none to its `NonGridPreview`. An earlier cut here
+ * wrapped the whole mockup, which shrank the screen rather than the grid in it.
  */
 @Composable
-private fun ScreenPreview(
-    cols: Int,
-    rows: Int,
-    edit: PreviewEdit?,
-    companion: EditorCompanion?,
-    insetFraction: Float,
-) {
+private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modifier) -> Unit) {
     if (companion == null) {
-        GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxSize())
+        edited(Modifier.fillMaxSize())
         return
     }
     val gridWeight = (1f - companion.fraction).coerceIn(MIN_ZONE_WEIGHT, 1f)
@@ -319,7 +331,7 @@ private fun ScreenPreview(
                 CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
                 Spacer(Modifier.height(PreviewPad))
             }
-            GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxWidth().weight(gridWeight))
+            edited(Modifier.fillMaxWidth().weight(gridWeight))
             if (!first) {
                 Spacer(Modifier.height(PreviewPad))
                 CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
@@ -330,7 +342,7 @@ private fun ScreenPreview(
                 CompanionZone(Modifier.fillMaxHeight().weight(companionWeight))
                 Spacer(Modifier.width(PreviewPad))
             }
-            GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxHeight().weight(gridWeight))
+            edited(Modifier.fillMaxHeight().weight(gridWeight))
             if (!first) {
                 Spacer(Modifier.width(PreviewPad))
                 CompanionZone(Modifier.fillMaxHeight().weight(companionWeight))

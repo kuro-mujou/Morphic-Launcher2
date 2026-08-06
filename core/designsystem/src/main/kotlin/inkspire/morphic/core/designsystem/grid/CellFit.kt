@@ -52,6 +52,34 @@ import kotlin.math.floor
 data class GridArea(val widthDp: Float, val heightDp: Float)
 
 /**
+ * **The smallest cell a grid may be divided into**, in dp — the one input every fit in this file is really made of.
+ *
+ * Extracted as a type once a grid arrived whose cells are not icons. Everything here divides an area by a floor, and
+ * for seven of the eight grids that floor comes from the icon guardrails ([minCellFor]); the **widget area** has no
+ * icon sizing at all (`WidgetAreaGrid.icon` is null — a widget is not an icon in a cell), so it supplies
+ * [WidgetMinCell] instead. Naming the input rather than the *source* of it is what lets one set of functions serve
+ * both, where an `IconMetrics` parameter would have forced a parallel copy for the one grid that cannot produce one.
+ *
+ * Two dimensions rather than one because an icon cell's floors genuinely differ per axis: the row axis has to carry a
+ * label as well. A widget's do not, which is why [WidgetMinCell] is square.
+ */
+data class MinCell(val widthDp: Float, val heightDp: Float)
+
+/**
+ * The floor for a grid of **widgets** — L1's `MIN_WIDGET_DP`, and square on both axes.
+ *
+ * 48dp is the platform's own minimum touch target and the size one `App Widget` cell has historically been quoted at,
+ * so it is a widget's floor in the same sense `minIconDp + padding` is an icon cell's: below it there is nothing to
+ * place. It is a constant rather than a setting because, unlike an icon, nothing about a widget's size is the user's
+ * to choose per grid — a widget declares its own minimum span and the area either holds it or does not.
+ */
+val WidgetMinCell = MinCell(widthDp = 48f, heightDp = 48f)
+
+/** The [MinCell] an icon grid's guardrails imply — [minCellWidthDp] and [minCellHeightDp] as one value. */
+fun minCellFor(metrics: IconMetrics, labelHeightDp: Float): MinCell =
+    MinCell(minCellWidthDp(metrics), minCellHeightDp(metrics, labelHeightDp))
+
+/**
  * The largest grid that fits an area.
  *
  * @property maxCols most columns that fit across the width; always ≥ 1.
@@ -144,13 +172,17 @@ fun maxCells(availableDp: Float, minCellDp: Float): Int {
  *
  * Rows come back null for a [GridSizing.SCROLL_GRID], which has no row count to bound.
  */
-fun GridBlueprint.boundsIn(area: GridArea, metrics: IconMetrics, labelHeightDp: Float): GridBounds = GridBounds(
-    maxCols = maxCells(area.widthDp, minCellWidthDp(metrics)),
+fun GridBlueprint.boundsIn(area: GridArea, min: MinCell): GridBounds = GridBounds(
+    maxCols = maxCells(area.widthDp, min.widthDp),
     maxRows = when (sizing) {
-        GridSizing.FIXED_PAGER -> maxCells(area.heightDp, minCellHeightDp(metrics, labelHeightDp))
+        GridSizing.FIXED_PAGER -> maxCells(area.heightDp, min.heightDp)
         GridSizing.SCROLL_GRID -> null
     },
 )
+
+/** [boundsIn] for an icon grid, whose floor is its guardrails. */
+fun GridBlueprint.boundsIn(area: GridArea, metrics: IconMetrics, labelHeightDp: Float): GridBounds =
+    boundsIn(area, minCellFor(metrics, labelHeightDp))
 
 /**
  * The range a user may set each axis to in [area] — the blueprint's floor up to what actually fits.
@@ -163,18 +195,21 @@ fun GridBlueprint.boundsIn(area: GridArea, metrics: IconMetrics, labelHeightDp: 
  * with nothing to show. The clamp is here, once, rather than at each call site as L1 left it ("callers apply their own
  * minimum").
  */
+fun GridBlueprint.editableRangeIn(area: GridArea, min: MinCell): GridEditableRange? {
+    val range = editRange ?: return null
+    val bounds = boundsIn(area, min)
+    return GridEditableRange(
+        cols = colRangeIn(area.widthDp, min.widthDp),
+        rows = range.minRows?.let { floor -> bounds.maxRows?.let { max -> floor..maxOf(max, floor) } },
+    )
+}
+
+/** [editableRangeIn] for an icon grid, whose floor is its guardrails. */
 fun GridBlueprint.editableRangeIn(
     area: GridArea,
     metrics: IconMetrics,
     labelHeightDp: Float,
-): GridEditableRange? {
-    val range = editRange ?: return null
-    val bounds = boundsIn(area, metrics, labelHeightDp)
-    return GridEditableRange(
-        cols = colRangeIn(area.widthDp, metrics),
-        rows = range.minRows?.let { min -> bounds.maxRows?.let { max -> min..maxOf(max, min) } },
-    )
-}
+): GridEditableRange? = editableRangeIn(area, minCellFor(metrics, labelHeightDp))
 
 /**
  * The column counts this grid may legally have in an area [areaWidthDp] wide — its blueprint's floor, up to what fits.
@@ -186,9 +221,9 @@ fun GridBlueprint.editableRangeIn(
  *
  * A blueprint with no editor has no stated minimum, so the floor is one column: a grid with no cells is not a grid.
  */
-private fun GridBlueprint.colRangeIn(areaWidthDp: Float, metrics: IconMetrics): IntRange {
+private fun GridBlueprint.colRangeIn(areaWidthDp: Float, minCellWidthDp: Float): IntRange {
     val minCols = editRange?.minCols ?: 1
-    return minCols..maxOf(maxCells(areaWidthDp, minCellWidthDp(metrics)), minCols)
+    return minCols..maxOf(maxCells(areaWidthDp, minCellWidthDp), minCols)
 }
 
 /**
@@ -204,7 +239,7 @@ private fun GridBlueprint.colRangeIn(areaWidthDp: Float, metrics: IconMetrics): 
  * showing what it drew — one formula, so the editor cannot claim a column the grid does not have.
  */
 fun GridBlueprint.fitCols(areaWidthDp: Float, cols: Int, metrics: IconMetrics): Int =
-    cols.coerceIn(colRangeIn(areaWidthDp, metrics))
+    cols.coerceIn(colRangeIn(areaWidthDp, minCellWidthDp(metrics)))
 
 /**
  * What an editor may offer per axis.
@@ -236,18 +271,12 @@ data class GridEditableRange(val cols: IntRange, val rows: IntRange?)
  * @param rows the stored visual row count.
  * @param metrics the resolved icon sizing of the cells it will draw; bigger icons mean fewer, larger cells.
  */
-fun GridBlueprint.fitGridConfig(
-    area: GridArea,
-    cols: Int,
-    rows: Int,
-    metrics: IconMetrics,
-    labelHeightDp: Float,
-): GridConfig {
+fun GridBlueprint.fitGridConfig(area: GridArea, cols: Int, rows: Int, min: MinCell): GridConfig {
     require(sizing == GridSizing.FIXED_PAGER) {
         "$slot scrolls, so its rows come from its content rather than from the area it is given"
     }
     // Null only for a grid with no editor at all, whose stored counts are the blueprint's own and already legal.
-    val range = editableRangeIn(area, metrics, labelHeightDp)
+    val range = editableRangeIn(area, min)
     val visualCols = range?.cols?.let(cols::coerceIn) ?: cols
     val visualRows = range?.rows?.let(rows::coerceIn) ?: rows
     // Visual counts scaled into logical ones, exactly as `toGridConfig` does — which is also what keeps both axes
@@ -258,6 +287,15 @@ fun GridBlueprint.fitGridConfig(
         cellMultiplier = cellMultiplier,
     )
 }
+
+/** [fitGridConfig] for an icon grid, whose floor is its guardrails. */
+fun GridBlueprint.fitGridConfig(
+    area: GridArea,
+    cols: Int,
+    rows: Int,
+    metrics: IconMetrics,
+    labelHeightDp: Float,
+): GridConfig = fitGridConfig(area, cols, rows, minCellFor(metrics, labelHeightDp))
 
 /**
  * [boundsIn], with the label row's height read from the current type scale.
@@ -323,6 +361,19 @@ fun derivedCell(cellWidth: Dp, metrics: IconMetrics): DerivedCell {
             metrics = metrics.copy(iconPercent = 1f),
         )
     }
+}
+
+/**
+ * [minCellFor], with the label row's height read from the current type scale — **the one a settings screen calls**.
+ *
+ * The facade exists because `cellLabelHeight` stays internal to the cell package: a caller wanting a floor should ask
+ * this file for it rather than assembling one out of the cell's own parts, which is the same rule the
+ * [minCellHeightDp] facade above states.
+ */
+@Composable
+fun minCellFor(metrics: IconMetrics): MinCell {
+    val labelHeightDp = cellLabelHeight(metrics).value
+    return remember(metrics, labelHeightDp) { minCellFor(metrics, labelHeightDp) }
 }
 
 /** [editableRangeIn], with the label row's height read from the current type scale. */

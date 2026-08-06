@@ -15,26 +15,30 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
-import inkspire.morphic.core.designsystem.grid.dockFraction
+import inkspire.morphic.core.designsystem.grid.MinCell
+import inkspire.morphic.core.designsystem.grid.WidgetMinCell
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.maxCells
+import inkspire.morphic.core.designsystem.grid.minCellFor
 import inkspire.morphic.core.designsystem.grid.minCellHeightDp
 import inkspire.morphic.core.designsystem.grid.minCellWidthDp
-import inkspire.morphic.core.designsystem.grid.splitForDock
+import inkspire.morphic.core.designsystem.grid.sideZoneFraction
+import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.model.DockEdge
-import inkspire.morphic.core.model.DockGrid
-import inkspire.morphic.core.model.dockEdge
-import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.sideSlot
+import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SurfaceDetail
+import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.icons.IconSizingControls
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
@@ -53,16 +57,33 @@ private val RowGap = 8.dp
  * text settings — not the size of the display. The cell count is where that constraint actually bites, and it is
  * enforced there.
  */
-private val ExtentRange = 80f..320f
+private val DockExtentRange = 80f..320f
 
 /**
- * **Dock**: how thick HOME's dock is, the grid inside it, and how its icons are sized.
+ * The widget area's, likewise **L1's verbatim** (`120f..480f` in the same screen's `minimalist` branch).
  *
- * **Where the dock sits decides what this screen's one extent means.** A bottom strip on three device configurations
- * and a rail down the trailing edge on a phone in landscape (`DockEdge`) — so the slider is a *height* on the first
- * and a *width* on the second, and the extent bounds the **rows** there and the **columns** here. One stored number
- * per device serves both, because a user configuring a phone in landscape is configuring the rail. L1 called the same
- * value `extentDp` and titled the same slider the same way.
+ * Far wider and far higher than the dock's, which is the whole difference between the two zones stated as a number: a
+ * dock is a row of icons you reach for, and a widget area is a panel you look at.
+ */
+private val WidgetAreaExtentRange = 120f..480f
+
+/**
+ * **HOME's side zone**: how thick it is, the grid inside it, and (when it holds icons) how those are sized — the
+ * **dock** under `PAGER_WITH_DOCK` and the **widget area** under `LIST_WITH_WIDGET_AREA`.
+ *
+ * One section for both, which is the settings mirror of the two zones being the same *kind* of thing: a fixed-extent
+ * strip whose counts divide that extent. Everything structural is shared — the extent slider, the grid editor, the
+ * margin, the reset — and exactly two things differ, both of them properties of what the zone holds rather than
+ * choices made here. **A widget area draws no icons**, so its blueprint declares no icon sizing and this screen shows
+ * no icon group at all; that is precisely the shape L1's own `DockSettingsDetail` took in its `minimalist` branch,
+ * which returned early before the icon controls. And its cells are fitted by a **widget's** floor rather than an
+ * icon guardrail's (`WidgetMinCell`, L1's `MIN_WIDGET_DP`).
+ *
+ * **Where the zone sits decides what this screen's one extent means.** A strip on three device configurations and a
+ * rail on a phone in landscape (`SideZoneEdge`) — so the slider is a *height* on the first and a *width* on the
+ * second, and the extent bounds the **rows** there and the **columns** here. One stored number per device serves
+ * both, because a user configuring a phone in landscape is configuring the rail. L1 called the same value `extentDp`
+ * and titled the same slider the same way.
  *
  * **Layout group, then icon group** — L1's structure for every surface detail, and the dependency runs that way too:
  * the icons decide the smallest usable cell, which is what the extent above divides into cells. Within the layout group
@@ -100,25 +121,33 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
     val extentDp = state.extentDp ?: return
     val cols = state.cols ?: return
     val rows = state.rows ?: return
-    val icon = state.icon ?: return
-    val homeIcon = state.homeIcon ?: return
     val paddingDp = state.paddingDp ?: return
+    val slot = state.layout.sideSlot
+    // **Null here means "this zone draws no icons", not "not yet"** — see `DockState.icon`. It is what selects the
+    // whole icon half of this screen: the controls, the preview, and the floor the extent is divided by.
+    val icon = state.icon
+    val blueprint = slot.blueprint
 
     // What the preview draws while a slider is held — see the same pair in the Home section for why it is keyed
     // on the resolved value rather than cleared on release.
     var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
     val shownIcon = previewIcon ?: icon
-    val metrics = icon.toIconMetrics()
+    val metrics = icon?.toIconMetrics()
 
     // The same window the launcher measures, minus the same insets home applies — so the bounds offered
     // here describe the dock the user will actually get rather than a second idea of the screen.
     val window = usableWindowArea(uiInsets)
 
-    // **Where the dock sits, which is what makes this section's one slider a height or a width.** A rail on a phone
-    // in landscape, a bottom strip everywhere else; everything below reads the edge rather than the orientation, so
-    // there is one place to look when the rule changes.
-    val dockEdge = device.dockEdge
-    val isRail = dockEdge == DockEdge.END
+    // **Where the zone sits, which is what makes this section's one slider a height or a width.** A rail on a phone
+    // in landscape, a strip everywhere else — at the end the layout puts it. Everything below reads the edge rather
+    // than the orientation, so there is one place to look when the rule changes.
+    val edge = device.sideZoneEdge(state.layout)
+    val isRail = !edge.isStrip
+    val extentRange = if (state.layout == HomeLayout.LIST_WITH_WIDGET_AREA) WidgetAreaExtentRange else DockExtentRange
+
+    // **The floor a cell of this zone may not go below** — its icon guardrails, or a widget's own minimum for the
+    // zone that draws no icons. One value, so every fit, bound and cap below reads the same number.
+    val minCell: MinCell = if (metrics == null) WidgetMinCell else minCellFor(metrics)
 
     // **Previewed while the slider is held**, so the editor above re-splits and re-fits under the finger rather than
     // jumping on release. Everything derived from the extent reads the *shown* one: the dock's fitted grid, its
@@ -132,26 +161,31 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
     // The split the surface itself draws with, so this section cannot describe a dock home will not give. Then
     // narrowed by the margin, because everything below divides *this* width: the fitted grid, the editable column
     // range, and the preview's aspect.
-    val split = window.splitForDock(shownExtent.toFloat(), dockEdge)
-    val dockArea = split.dock.copy(widthDp = (split.dock.widthDp - paddingDp * 2).coerceAtLeast(1f))
+    val split = window.splitForSideZone(shownExtent.toFloat(), edge)
+    val zoneArea = split.side.copy(widthDp = (split.side.widthDp - paddingDp * 2).coerceAtLeast(1f))
 
-    // The smallest cell this dock's icons need along the axis the extent divides — a height on a strip, a width on a
-    // rail. Not a bound on the slider ([ExtentRange] is) but the number the cell cap below is computed from.
-    val minCell = if (isRail) minCellWidthDp(metrics) else minCellHeightDp(metrics)
-    // And home's, because this extent decides how much is left for the pager. A dock is subtracted from the
-    // screen, so growing it can invalidate *home's* count exactly as it invalidates this one — the same
-    // arithmetic on the other side of the subtraction, on whichever axis the subtraction happened.
-    val homeMetrics = homeIcon.toIconMetrics()
-    val homeMinCell = if (isRail) minCellWidthDp(homeMetrics) else minCellHeightDp(homeMetrics)
+    // The smallest cell along the axis the extent divides — a height on a strip, a width on a rail. Not a bound on
+    // the slider ([extentRange] is) but the number the cell cap below is computed from.
+    val minCellOnExtentAxis = if (isRail) minCell.widthDp else minCell.heightDp
+    // And the main area's, because this extent decides how much is left for it. A side zone is subtracted from the
+    // screen, so growing it can invalidate the *main area's* count exactly as it invalidates this one — the same
+    // arithmetic on the other side of the subtraction, on whichever axis the subtraction happened. Null when the main
+    // area is a list, which has no count to invalidate: it simply shows fewer rows.
+    val homeMetrics = state.homeIcon?.toIconMetrics()
+    val homeMinCell = homeMetrics?.let { if (isRail) minCellWidthDp(it) else minCellHeightDp(it) }
 
-    // The dock at this extent, resolved by the **same function the surface uses** — so the preview cannot claim a
-    // shape the real dock will not have.
-    val dockConfig = DockGrid.fitGridConfig(dockArea, cols = cols, rows = rows, metrics = metrics)
-    val range = DockGrid.editableRangeIn(dockArea, metrics)
+    // The zone at this extent, resolved by the **same function the surface uses** — so the preview cannot claim a
+    // shape the real zone will not have.
+    val zoneConfig = blueprint.fitGridConfig(zoneArea, cols = cols, rows = rows, min = minCell)
+    val range = blueprint.editableRangeIn(zoneArea, minCell)
 
     SurfaceDetail(
-        title = "Dock",
-        subtitle = "Its height, and how many columns fit across it. Rows follow from the height.",
+        title = if (metrics == null) "Widget area" else "Dock",
+        subtitle = if (metrics == null) {
+            "Its size, and the grid widgets are placed on."
+        } else {
+            "Its height, and how many columns fit across it. Rows follow from the height."
+        },
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
         layout = {
@@ -164,8 +198,8 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 // usable cell — so "+ a row" is offered only while another row would still leave cells tall
                 // enough to draw an icon in.
                 GridEditor(
-                    cols = dockConfig.visualCols,
-                    rows = dockConfig.visualRows,
+                    cols = zoneConfig.visualCols,
+                    rows = zoneConfig.visualRows,
                     colBounds = range.cols,
                     rowBounds = range.rows,
                     // **The whole screen's ratio, not the narrowed one.** The preview is a picture of the device; the
@@ -176,12 +210,13 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                     // Counting from the fitted grid above rather than from the stored counts, so a press changes the
                     // number the preview is showing. Storage can legitimately hold more columns than fit — that is the
                     // clamp-on-read rule — and an edit that ignored the fit would move a count nobody can see.
-                    onEdit = { edge, add -> viewModel.edit(edge, add, dockConfig.visualCols, dockConfig.visualRows) },
-                    // The pager, on the side the dock is *not* — above a bottom strip, before a rail. So the mockup
-                    // shows a rail as a rail rather than as a strip that happens to be thin.
+                    onEdit = { e, add -> viewModel.edit(e, add, zoneConfig.visualCols, zoneConfig.visualRows) },
+                    // The main area, on the side the zone is *not* — the opposite edge, whichever that is. So the
+                    // mockup shows a rail as a rail rather than as a strip that happens to be thin, and a widget area
+                    // above its list rather than below it.
                     companion = EditorCompanion(
-                        fraction = 1f - window.dockFraction(shownExtent.toFloat(), dockEdge),
-                        side = if (isRail) CompanionSide.START else CompanionSide.TOP,
+                        fraction = 1f - window.sideZoneFraction(shownExtent.toFloat(), edge),
+                        side = CompanionSide.of(edge.opposite),
                     ),
                     modifier = Modifier.padding(top = RowGap * 2),
                 )
@@ -200,32 +235,35 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 } else {
                     "Rows divide this: at ${shownExtent}dp it holds up to ${range?.rows?.last ?: rows}."
                 },
-                value = extentDp.toFloat().coerceIn(ExtentRange),
-                valueRange = ExtentRange,
+                value = extentDp.toFloat().coerceIn(extentRange),
+                valueRange = extentRange,
                 valueLabel = { "${it.roundToInt()} dp" },
                 onPreview = { previewExtent = it.roundToInt() },
                 onCommit = { committed ->
                     val dp = committed.roundToInt()
                     // Re-split at the **committed** extent rather than reading the drag's: the two agree on release,
                     // and deriving the write from the value being written is one fewer thing to keep true.
-                    val committedSplit = window.splitForDock(dp.toFloat(), dockEdge)
+                    val committedSplit = window.splitForSideZone(dp.toFloat(), edge)
                     viewModel.setExtent(
                         dp = dp,
-                        edge = dockEdge,
-                        maxCells = maxCells(dp.toFloat(), minCell),
-                        // What the pager is left with, measured the same way the Home section measures it — so the
-                        // two sections cannot disagree about how many cells home can hold.
-                        homeMaxCells = maxCells(
-                            if (isRail) committedSplit.main.widthDp else committedSplit.main.heightDp,
-                            homeMinCell,
-                        ),
+                        edge = edge,
+                        maxCells = maxCells(dp.toFloat(), minCellOnExtentAxis),
+                        // What the main area is left with, measured the same way the Home section measures it — so
+                        // the two sections cannot disagree about how many cells it can hold. Zero when the main area
+                        // is a list, which the ViewModel then ignores along with the whole clamp.
+                        homeMaxCells = homeMinCell?.let {
+                            maxCells(
+                                if (isRail) committedSplit.main.widthDp else committedSplit.main.heightDp,
+                                it,
+                            )
+                        } ?: 0,
                     )
                 },
             )
 
             SettingsCommitSlider(
                 title = "Side margin",
-                subtitle = "Blank space at the dock's left and right edges.",
+                subtitle = "Blank space at the zone's left and right edges.",
                 value = paddingDp.toFloat(),
                 valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
                 valueLabel = { "${it.roundToInt()} dp" },
@@ -241,34 +279,39 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 Text("Reset size and grid")
             }
         },
-        preview = { previewModifier ->
-            // A dock cell divides the strip's own extent, which is the one cell on the launcher whose size a user sets
-            // *directly* — so seeing the icon in it while dragging the extent slider is worth more here than anywhere.
-            // Both dimensions come from `dockArea`, so the rail case needs no branch: its width is the extent and its
-            // height is the screen's, which is exactly the transpose of the strip.
+        preview = if (shownIcon == null) null else { previewModifier ->
+            // A side-zone cell divides the strip's own extent, which is the one cell on the launcher whose size a user
+            // sets *directly* — so seeing the icon in it while dragging the extent slider is worth more here than
+            // anywhere. Both dimensions come from `zoneArea`, so the rail case needs no branch: its width is the
+            // extent and its height is the screen's, which is exactly the transpose of the strip.
             IconSizingPreview(
                 app = sampleApp,
                 metrics = shownIcon.toIconMetrics(),
-                cellWidth = (dockArea.widthDp / dockConfig.visualCols).dp,
-                cellHeight = (dockArea.heightDp / dockConfig.visualRows).dp,
+                cellWidth = (zoneArea.widthDp / zoneConfig.visualCols).dp,
+                cellHeight = (zoneArea.heightDp / zoneConfig.visualRows).dp,
                 modifier = previewModifier,
             )
         },
-        icons = {
-            IconSizingControls(
-                slot = GridSlot.HOME_DOCK,
-                sizing = icon,
-                onChange = viewModel.icons::change,
-                onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
-                onDpRange = viewModel.icons::changeDpRange,
-                onPreview = { previewIcon = it },
-            )
-            MorphicButton(
-                onClick = viewModel.icons::reset,
-                style = MorphicButtonStyle.Text,
-                modifier = Modifier.padding(top = RowGap * 2),
-            ) {
-                Text("Reset icons")
+        // **No icon group at all on the widget area**, which is `WidgetAreaGrid.icon` being null reaching the screen:
+        // a widget is not an icon in a cell, so there is no fraction, guardrail or label to set. L1's own dock detail
+        // returned early before its icon controls on exactly this branch.
+        icons = if (icon == null) null else {
+            {
+                IconSizingControls(
+                    slot = slot,
+                    sizing = icon,
+                    onChange = viewModel.icons::change,
+                    onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
+                    onDpRange = viewModel.icons::changeDpRange,
+                    onPreview = { previewIcon = it },
+                )
+                MorphicButton(
+                    onClick = viewModel.icons::reset,
+                    style = MorphicButtonStyle.Text,
+                    modifier = Modifier.padding(top = RowGap * 2),
+                ) {
+                    Text("Reset icons")
+                }
             }
         },
     )

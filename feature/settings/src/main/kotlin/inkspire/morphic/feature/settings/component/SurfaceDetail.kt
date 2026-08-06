@@ -57,6 +57,11 @@ private const val IconSectionTitle = "Icon & text"
  *   nothing on their own — the preview is how they are read. Scrolling the controls out from under a preview that had
  *   scrolled away would make them unreadable again, so the two travel as one sticky block. That is the whole reason
  *   this is a `LazyColumn` rather than the `Column` + `verticalScroll` these sections used before.
+ * **A section with no icon group passes null for both [icons] and [preview]**, and the whole pinned block — heading,
+ * preview, controls — is omitted rather than left empty. One section reaches that today: HOME's **widget area**, whose
+ * cells are widgets rather than icons, so `WidgetAreaGrid.icon` is null and there is no fraction, guardrail or label to
+ * set. L1's dock detail took the same shape on the same branch, returning early before its `IconLayoutControls`.
+ *
  * - **Landscape is a different arrangement, not a narrower one.** The layout group scrolls away, the heading pins, and
  *   the icon group fills the viewport as a final full-height item: controls scrolling on the left, preview fixed on the
  *   right. A phone in landscape has room for a cell beside its sliders and no room for one above them.
@@ -79,8 +84,8 @@ internal fun SurfaceDetail(
     subtitle: String,
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
-    preview: @Composable (Modifier) -> Unit,
-    icons: @Composable ColumnScope.() -> Unit,
+    preview: (@Composable (Modifier) -> Unit)?,
+    icons: (@Composable ColumnScope.() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     if (currentDeviceConfiguration().isLandscape) {
@@ -96,8 +101,8 @@ private fun PortraitDetail(
     subtitle: String,
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
-    preview: @Composable (Modifier) -> Unit,
-    icons: @Composable ColumnScope.() -> Unit,
+    preview: (@Composable (Modifier) -> Unit)?,
+    icons: (@Composable ColumnScope.() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -107,12 +112,13 @@ private fun PortraitDetail(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding)
-                    .padding(top = ScreenPadding),
+                    .padding(top = ScreenPadding, bottom = ScreenPadding),
             ) {
                 DetailHeading(title, subtitle)
                 layout()
             }
         }
+        if (icons == null || preview == null) return@LazyColumn
         stickyHeader(key = "icon-header") { _ ->
             Column(modifier = Modifier.fillMaxWidth().background(colors.background)) {
                 IconSectionHeader(onReroll, Modifier.padding(horizontal = ScreenPadding))
@@ -138,8 +144,8 @@ private fun LandscapeDetail(
     subtitle: String,
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
-    preview: @Composable (Modifier) -> Unit,
-    icons: @Composable ColumnScope.() -> Unit,
+    preview: (@Composable (Modifier) -> Unit)?,
+    icons: (@Composable ColumnScope.() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -160,6 +166,7 @@ private fun LandscapeDetail(
                 layout()
             }
         }
+        if (icons == null || preview == null) return@LazyColumn
         stickyHeader(key = "icon-header") { _ ->
             IconSectionHeader(
                 onReroll = onReroll,

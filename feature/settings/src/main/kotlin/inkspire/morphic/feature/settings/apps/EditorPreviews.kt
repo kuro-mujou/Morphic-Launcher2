@@ -27,6 +27,9 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.feature.settings.component.GridPreview
+import inkspire.morphic.feature.settings.component.LanePreview
+import inkspire.morphic.feature.settings.component.previewFaint
+import inkspire.morphic.feature.settings.component.previewInk
 import inkspire.morphic.feature.settings.component.PreviewEdit
 import inkspire.morphic.feature.settings.component.ReflectivePreview
 
@@ -181,75 +184,3 @@ private fun TabRow() {
         }
     }
 }
-
-/** Chrome that reads as present. Greyscale, like everything else this editor draws. */
-@Composable
-private fun previewInk(): Color = LocalMorphicColors.current.contentMuted.copy(alpha = 0.45f)
-
-/** Chrome that reads as secondary — an inactive tab, an action button. */
-@Composable
-private fun previewFaint(): Color = LocalMorphicColors.current.contentMuted.copy(alpha = 0.22f)
-
-/**
- * The **vertical list**: full-width lanes at the row height the user set, filling downward and clipped at the fold.
- *
- * A list has no columns and no row count, so there is nothing here to press — which is why its editor draws this frame
- * with no buttons at all. What it does need is somewhere to see the two things it *can* change: the row height, which
- * scales these lanes, and the search field's edge, which [Standalone] puts above or below them.
- *
- * Each lane carries a leading square (the icon) and a bar (the label), because a row's icon sits *beside* its text —
- * the one structural fact that tells a list from a one-column grid at this size.
- *
- * The aspect is `rowHeight ÷ width` in real dp, so the mockup narrows as the margin widens and lengthens as the slider
- * rises, exactly as the surface does. Clipping the last lane rather than fitting it says the content scrolls.
- */
-@Composable
-private fun LanePreview(rowHeightDp: Float, areaWidthDp: Float, insetFraction: Float) {
-    val inset = insetFraction.coerceIn(0f, MAX_LANE_INSET)
-    val usableWidthDp = (areaWidthDp * (1f - inset * 2)).coerceAtLeast(1f)
-    val aspect = (rowHeightDp / usableWidthDp).coerceIn(MIN_LANE_ASPECT, MAX_LANE_ASPECT)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val laneWidth = maxWidth * (1f - inset * 2)
-        val laneHeight = laneWidth * aspect
-        // One more lane than fits, so the bottom one is cut by the clip rather than stopping short of it.
-        val laneCount = ceil((maxHeight + LaneGap) / (laneHeight + LaneGap)).toInt().coerceAtLeast(1)
-        Column(
-            modifier = Modifier.fillMaxSize().clipToBounds(),
-            verticalArrangement = Arrangement.spacedBy(LaneGap),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            repeat(laneCount) {
-                Row(
-                    modifier = Modifier.width(laneWidth).height(laneHeight),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(LaneGap),
-                ) {
-                    val glyph = (laneHeight * LaneIconFraction).coerceAtLeast(1.dp)
-                    Box(Modifier.size(glyph).clip(RoundedCornerShape(2.dp)).background(previewInk()))
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height((glyph * LaneLabelFraction).coerceAtLeast(1.dp))
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(previewFaint()),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private val LaneGap = 3.dp
-
-/** How much of a lane's height the icon square takes. A row's icon fills it, less the row's own inset. */
-private const val LaneIconFraction = 0.7f
-
-/** The label bar's height as a fraction of the icon's — a line of text beside an icon, at this scale. */
-private const val LaneLabelFraction = 0.4f
-
-/** As the other previews' cap: a wide margin on a narrow screen must still leave a lane to draw. */
-private const val MAX_LANE_INSET = 0.4f
-
-/** Guards on arithmetic, not taste: an extreme height must not draw one sliver or one lane taller than the frame. */
-private const val MIN_LANE_ASPECT = 0.01f
-private const val MAX_LANE_ASPECT = 1f
