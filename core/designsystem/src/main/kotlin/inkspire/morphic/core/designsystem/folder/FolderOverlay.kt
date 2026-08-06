@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +43,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
-import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
+import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -282,26 +284,49 @@ fun FolderOverlay(
     val scrimInteraction = remember { MutableInteractionSource() }
     val innerInteraction = remember { MutableInteractionSource() }
 
+    // **How present this overlay is, `0f..1f`** — one driver, two nodes, animated rather than flipped.
+    //
+    // A pointer holder is faded to nothing but kept composed, so the dragged cell keeps its pointer stream (the
+    // proven "closing surface fades but stays in the tree" rule). What changed is that the flip is now a *fade*: the
+    // frost arrives and leaves over a few frames instead of appearing whole, which is the same motion the shell gives
+    // a side surface. Nothing about the hand-off depends on the timing — dismiss-on-tap is gated on `presenting`
+    // itself, not on the alpha, and the drop shadow and proxy below flip instantly because they belong to the drag
+    // rather than to the presentation.
+    // **An `Animatable` seeded at zero, not `animateFloatAsState`** — and the difference is the whole feature. That
+    // helper initialises to its *target*, so an overlay composed with `presenting = true` would snap in at full
+    // strength and only ever animate on a later change: a folder would fade out but never fade in. Starting at zero
+    // and animating toward the flag gives the entrance as well, and costs a pointer holder nothing (composed at
+    // `false`, it starts at zero and stays there).
+    //
+    // Read inside `graphicsLayer`'s lambda below, so a frame of the fade re-draws without recomposing the card.
+    val presence = remember { Animatable(0f) }
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val presenceSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    LaunchedEffect(presenting) { presence.animateTo(if (presenting) 1f else 0f, presenceSpec) }
+
     // Root spans the screen; the floating proxy is a sibling of the content so its root-space offset isn't
     // shifted by the content's inset.
     Box(modifier.fillMaxSize()) {
-        // Backdrop (frosted, full-bleed behind the bars) + card. A pointer holder is faded to nothing but kept
-        // composed — so the dragged cell keeps its pointer stream (the proven "closing surface fades but stays in the
-        // tree" rule). The modifier chain is kept structurally stable across that flip (only `alpha` and the
-        // clickable's `enabled` change), so the drag isn't disturbed; at alpha 0 the backdrop vanishes and home shows
-        // through, and dismiss-on-tap is off.
+        // **The frost, as its own node under the content** — the same `SurfaceBackdropLayer` the shell puts under a
+        // side surface, and here for the same two reasons. It fixes a real fault: this used to call
+        // `wallpaperBackdrop` directly, which meant liquid glass tried to draw its *refraction rim* across the whole
+        // screen, where the band falls under the system bars and costs a shader for almost nothing. The layer passes
+        // `refracts = false`, so glass renders here as its blur plus its saturation — see `SurfaceBackdropLayer`.
         //
-        // **`wallpaperBackdrop` replaces a flat `background(Color.Black)`**, which was always a placeholder: an
-        // opaque black sheet over the wallpaper is the one thing a launcher's own overlay should not be, since it
-        // throws away the only context telling the user they are still on the home screen. `Color.Black` survives as
-        // the scrim, so a device where the launcher has never been given a wallpaper looks exactly as it did — see
-        // `wallpaperBackdrop`'s fallback. Structurally stable too: the modifier is unconditionally in the chain and
-        // only its inputs change, which is the same rule the alpha flip and the inner border below follow.
+        // And it separates the two motions. They move together today, but the frost and the card are no longer one
+        // node, so giving the card its own entrance later needs no restructuring.
+        //
+        // `Color.Black` is the scrim rather than the theme's background, unlike the shell's: this overlay draws its
+        // title and labels in white by construction, so black is what they are legible against on a device the
+        // launcher has never been given a wallpaper for. That is exactly what this drew before the backdrop existed.
+        SurfaceBackdropLayer(alpha = presence::value, scrimColor = Color.Black)
+
+        // The card and everything in it. Structurally stable across the presenting flip — only `alpha` and the
+        // clickable's `enabled` change — because the cells inside own live pointer streams.
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = if (presenting) 1f else 0f }
-                .wallpaperBackdrop(scrimColor = Color.Black)
+                .graphicsLayer { alpha = presence.value }
                 .clickable(
                     interactionSource = scrimInteraction,
                     indication = null,

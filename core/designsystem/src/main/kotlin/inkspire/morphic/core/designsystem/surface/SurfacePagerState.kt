@@ -84,6 +84,20 @@ class SurfacePagerState {
         }
 
     /**
+     * **How far from HOME the pan has travelled, `0f..1f`** — 0 resting on HOME, 1 with a side surface fully open.
+     *
+     * The scalar the two axes collapse to, because only one of them is ever non-zero: a pan is toward one edge, and
+     * `max` picks whichever without the caller having to know which. What reads it is anything that should *appear*
+     * as a surface arrives rather than travel with it — the full-screen frost above all (`SurfaceBackdropLayer`),
+     * whose whole point is that its motion is not the pane's.
+     *
+     * Deliberately unsigned and edge-agnostic: "how far in is the other surface" is the same question from every
+     * edge, and a consumer that needed to know *which* edge already has [openEdge].
+     */
+    val progress: Float
+        get() = maxOf(kotlin.math.abs(animX.value), kotlin.math.abs(animY.value)).coerceIn(0f, 1f)
+
+    /**
      * Drags the horizontal pan by a raw pixel delta (a finger move). A positive [px] (finger moving right)
      * pulls the LEFT surface in, so the pan *decreases* — matching a page that follows the finger. Clamped to
      * the reachable bounds, so it can't drag toward an edge with no surface.

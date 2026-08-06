@@ -18,12 +18,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.backdrop.BackdropState
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
+import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.backdrop.screenToBitmapMapping
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.wallpaper.WallpaperBrightness
@@ -96,6 +98,21 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                 state = pagerState,
                 modifier = modifier.fillMaxSize(),
                 sideContent = state.register.sides.mapValues { (_, binding) -> binding.toSurfaceBinding() },
+                // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
+                // read against this; the two move differently on purpose — the pane translates, the frost only fades
+                // — which is why it is a slot on the pager rather than a modifier on either. `progress` is the pan
+                // collapsed to "how far in is the other surface", so the screen frosts over as the content arrives
+                // and clears as it leaves, from any edge.
+                //
+                // The scrim is this launcher's own background: with no wallpaper to sample there is nothing to blur,
+                // and the surface above still has to be legible. That is the state a fresh install is in, and it
+                // looks exactly like the opaque APPS background this replaced.
+                overlay = {
+                    SurfaceBackdropLayer(
+                        alpha = pagerState::progress,
+                        scrimColor = LocalMorphicColors.current.background,
+                    )
+                },
             ) {
                 HomeScreen()
             }

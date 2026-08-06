@@ -93,7 +93,7 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
         // Exhaustive over the sealed type rather than over the chips, so a new variant fails to compile here until it
         // has controls — the same rule `AppsScreen` follows for an unbuilt layout.
         when (val effect = state.effect) {
-            BackdropEffect.None -> NoneNote()
+            is BackdropEffect.Plain -> PlainControls(effect, viewModel::set)
             is BackdropEffect.Blur -> BlurControls(effect, viewModel::set)
             is BackdropEffect.MaterialYou -> MaterialYouControls(effect, viewModel::set)
             is BackdropEffect.LiquidGlass -> LiquidGlassControls(effect, viewModel::set)
@@ -101,14 +101,29 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
     }
 }
 
-/** Why the rest of the screen is empty — a heading with nothing under it reads as a bug. */
+/**
+ * The unwashed blur's one control.
+ *
+ * **It has one now, which is the visible half of `None` becoming `Plain`.** Under the old model this variant sampled
+ * nothing, so the section showed a note explaining why it was empty; every effect blurs now, and the amount is the
+ * only thing left to choose once there is no wash over it.
+ *
+ * **Dormant, along with every other slider in this section**, and the whole section shares one reason: the frost
+ * behind an arriving surface is fixed per variant (`BackdropEffect.fullScreenFilm`), and those two layers are the only
+ * frosted surfaces there are. What these sliders are *for* is a frosted **panel** — a popup menu, the widget picker —
+ * which is also where liquid glass's rim lives. Kept rather than cut, at the author's call, because they come back
+ * with the first panel; the alternative reading is this section's own rule that a control which changes nothing is
+ * worse than a missing one. No subtitle here claims otherwise, which is the least this can do meanwhile.
+ */
 @Composable
-private fun NoneNote() {
-    Text(
-        text = "Frosted surfaces fall back to a flat colour, and the wallpaper is not sampled at all.",
-        style = MaterialTheme.typography.bodySmall,
-        color = LocalMorphicColors.current.contentMuted,
-        modifier = Modifier.padding(top = RowGap * 2),
+private fun PlainControls(effect: BackdropEffect.Plain, onSet: (BackdropEffect) -> Unit) {
+    SettingsSectionHeader("Amount")
+    SettingsCommitSlider(
+        title = "Blur",
+        value = effect.strength,
+        valueRange = 0f..1f,
+        valueLabel = ::percent,
+        onCommit = { onSet(effect.copy(strength = it)) },
     )
 }
 
@@ -211,7 +226,7 @@ private fun LiquidGlassControls(effect: BackdropEffect.LiquidGlass, onSet: (Back
 /** The chip's text. Kept beside the enum's use rather than on it — a label is this screen's, not the option's. */
 private val BackdropOption.label: String
     get() = when (this) {
-        BackdropOption.NONE -> "None"
+        BackdropOption.PLAIN -> "Plain"
         BackdropOption.LIGHT_BLUR -> "Light blur"
         BackdropOption.DARK_BLUR -> "Dark blur"
         BackdropOption.MATERIAL_YOU -> "Material You"

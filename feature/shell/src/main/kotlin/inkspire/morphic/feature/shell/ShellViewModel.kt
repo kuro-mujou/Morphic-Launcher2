@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -43,7 +42,7 @@ import kotlinx.coroutines.flow.stateIn
 data class ShellState(
     val register: SurfaceRegister = SurfaceRegister.Default,
     val brightness: WallpaperBrightness = WallpaperBrightness.DARK,
-    val backdropEffect: BackdropEffect = BackdropEffect.None,
+    val backdropEffect: BackdropEffect = BackdropEffect.Plain(),
     val backdropImage: Bitmap? = null,
     val backdropAccent: Int? = null,
 )
@@ -96,10 +95,20 @@ class ShellViewModel(
     /**
      * The blurred wallpaper, re-collected only when something about *the picture* changes.
      *
-     * **The key is a nullable strength, and it carries two facts in one value**: null means the effect samples nothing
-     * at all, and a number is how hard to blur. That is what separates the two ways the effect can move — a tint
-     * slider must not re-blur a bitmap, because how dark the wash is does not change the picture under it. Zero is a
-     * real strength meaning "sample it sharp", which is why this cannot be `0f`-means-off.
+     * **Keyed on the *film's* blur strength, which is a constant** — so today this re-collects only when the
+     * orientation or the displayed wallpaper changes, and never because a preference moved. The full-screen frost is
+     * not tunable (see `BackdropEffect.fullScreenFilm`), and every variant blurs by the same amount, so switching
+     * between them is a redraw with a different wash rather than a re-decode.
+     *
+     * It stays keyed on a strength rather than dropping the key, because the moment a *panel* wants the user's own
+     * strength there will be two, and this is the seam that takes it: `distinctUntilChanged` already means a value
+     * that does not move costs nothing.
+     *
+     * **Every effect gets an image now, `Plain` included.** This used to map `None` to null and load nothing, on the
+     * model that an effect could decline to sample; the full-screen frost overturned that — a surface arriving over
+     * HOME has to occlude it whatever decoration is chosen, so the choice is only ever *which wash*, never *whether
+     * there is a picture*. Null now means one thing, which is what `WallpaperRepository.backdrop` itself means by it:
+     * there is no wallpaper this launcher may read.
      *
      * `blurStrength` is a property on the sealed `BackdropEffect` rather than a `when` here, so the next reader of it
      * does not write the same `when` again.
@@ -110,14 +119,10 @@ class ShellViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun backdropImages(settingsRepository: SettingsRepository): Flow<Bitmap?> =
         combine(
-            settingsRepository.backdropEffect
-                .map { if (it == BackdropEffect.None) null else it.blurStrength }
-                .distinctUntilChanged(),
+            settingsRepository.backdropEffect.map { it.fullScreenFilm.blurStrength }.distinctUntilChanged(),
             orientation,
             ::Pair,
-        ).flatMapLatest { (strength, current) ->
-            if (strength == null) flowOf(null) else wallpaperRepository.backdrop(strength, current)
-        }
+        ).flatMapLatest { (strength, current) -> wallpaperRepository.backdrop(strength, current) }
 
     private companion object {
         /** Keeps the store subscription alive across a configuration change instead of tearing it down and back up. */

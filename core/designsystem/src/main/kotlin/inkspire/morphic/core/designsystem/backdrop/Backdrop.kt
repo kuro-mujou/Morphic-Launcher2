@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.isSpecified
@@ -72,11 +74,12 @@ val LocalBackdrop = staticCompositionLocalOf<BackdropState?> { null }
 /**
  * The global effect frosted surfaces follow unless a call site overrides it.
  *
- * [BackdropEffect.None] rather than [BackdropEffect.Default] as the composition-local default: an unprovided local
- * means "nobody set this up", and a surface outside the shell (the dev harness, a preview) should render flat rather
- * than reach for a backdrop that is not there.
+ * The unwashed variant as the default: an unprovided local means "nobody set this up", and a surface outside the
+ * shell (the dev harness, a preview) should not reach for someone's stored decoration. It renders flat there anyway,
+ * because [LocalBackdrop] is null too and *that* is what decides whether there is anything to sample — which is the
+ * distinction `BackdropEffect` stopped carrying when `None` became [BackdropEffect.Plain].
  */
-val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> { BackdropEffect.None }
+val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> { BackdropEffect.Plain() }
 
 /**
  * Draws the blurred wallpaper behind this node's content, clipped to [shape] — the frosted-surface modifier.
@@ -85,18 +88,24 @@ val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> { BackdropEff
  * is drawn into it. So a surface that moves (a pager swipe, a drag) slides over the wallpaper rather than carrying a
  * fixed patch of it, which is what makes the effect read as glass instead of as a texture.
  *
- * **Falls back to [scrimColor] whenever it cannot sample** — no backdrop provided, or an effect of
- * [BackdropEffect.None]. That is why the parameter is not optional: a frosted surface has to be *opaque enough to read
+ * **Falls back to [scrimColor] whenever there is nothing to sample** — which now means exactly one thing, no
+ * backdrop provided. That is why the parameter is not optional: a frosted surface has to be *opaque enough to read
  * against* on a device where the launcher has never been given a wallpaper, and the caller is the only one who knows
- * what that colour is.
+ * what that colour is. (It used to mean two things, the other being an effect of `None`; every effect blurs now, so
+ * that half is gone.)
  *
  * @param effect overrides the global [LocalBackdropEffect] for this one surface. Null follows the global choice, which
  *   is what almost everything should do.
+ * @param refracts whether this surface can be a **lens**. False for one whose edges are the screen's: liquid glass
+ *   bends light in a band at its rim, and across a whole screen that band falls under the system bars — so a
+ *   full-screen surface renders it as its blur plus its saturation boost instead, which is the part of the effect
+ *   that survives at that size. Every other effect ignores this.
  */
 fun Modifier.wallpaperBackdrop(
     shape: Shape = RectangleShape,
     effect: BackdropEffect? = null,
     scrimColor: Color = Color.Black.copy(alpha = 0.3f),
+    refracts: Boolean = true,
 ): Modifier = composed {
     // A thin `composed` layer that only reads the (rarely-changing) locals and hands them to the node through the
     // element. That is what makes an effect or backdrop change re-fire `update()` → `invalidateDraw()`: a reused node
@@ -110,6 +119,7 @@ fun Modifier.wallpaperBackdrop(
         view = LocalView.current,
         scrimColor = scrimColor,
         wallpaperTone = wallpaperTone(),
+        refracts = refracts,
     )
 }
 
@@ -148,16 +158,30 @@ fun backdropTint(effect: BackdropEffect = LocalBackdropEffect.current): Color = 
  * exception: an effect the user picks, whose whole subject is the wallpaper.
  */
 private fun tintOf(effect: BackdropEffect, tone: Color): Color = when (effect) {
-    BackdropEffect.None -> Color.Transparent
+    // The variant whose whole definition is "no wash" — see `BackdropEffect.Plain`.
+    is BackdropEffect.Plain -> Color.Transparent
     is BackdropEffect.Blur -> when (effect.tone) {
         BackdropBlurTone.LIGHT -> lerp(Color.White, tone, LIGHT_DARK_TINT_HUE).copy(alpha = effect.tint)
         BackdropBlurTone.DARK -> lerp(Color.Black, tone, LIGHT_DARK_TINT_HUE).copy(alpha = effect.tint)
     }
     is BackdropEffect.MaterialYou -> tone.copy(alpha = effect.tint)
-    // No wash, which is L1's own pre-API-33 fallback rather than a placeholder of ours: without the shader this is a
-    // plain blurred crop, and that is what liquid glass degrades to on every device below 33 in L1 too. The shader
-    // itself is S5f-3; listed here rather than behind an `else` so writing it is a compile error at this line.
+    // No wash either, and for a different reason from `Plain`'s: glass tints nothing, it *refracts* and it lifts
+    // saturation (`BackdropEffect.saturation`). A film of colour over it would be the one thing that stops it
+    // reading as glass.
     is BackdropEffect.LiquidGlass -> Color.Transparent
+}
+
+/**
+ * The colour filter a sampled crop is drawn through, or null when the effect leaves colour alone.
+ *
+ * Only liquid glass raises saturation, which is what gives a full-screen sheet of it a look of its own once the rim
+ * has nowhere to be — see [BackdropEffect.saturation]. A `ColorMatrix` rather than a shader, so it works on every API
+ * and is free on the ones that have neither.
+ */
+private fun saturationFilterOf(effect: BackdropEffect): ColorFilter? {
+    val saturation = effect.saturation
+    if (saturation == 1f) return null
+    return ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(saturation) })
 }
 
 /**
@@ -197,12 +221,13 @@ private data class BackdropElement(
     val view: View,
     val scrimColor: Color,
     val wallpaperTone: Color,
+    val refracts: Boolean,
 ) : ModifierNodeElement<BackdropNode>() {
 
-    override fun create() = BackdropNode(shape, effect, backdrop, view, scrimColor, wallpaperTone)
+    override fun create() = BackdropNode(shape, effect, backdrop, view, scrimColor, wallpaperTone, refracts)
 
     override fun update(node: BackdropNode) =
-        node.update(shape, effect, backdrop, view, scrimColor, wallpaperTone)
+        node.update(shape, effect, backdrop, view, scrimColor, wallpaperTone, refracts)
 
     override fun InspectorInfo.inspectableProperties() {
         name = "wallpaperBackdrop"
@@ -226,6 +251,7 @@ private class BackdropNode(
     private var view: View,
     private var scrimColor: Color,
     private var wallpaperTone: Color,
+    private var refracts: Boolean,
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode {
@@ -252,6 +278,7 @@ private class BackdropNode(
         view: View,
         scrimColor: Color,
         wallpaperTone: Color,
+        refracts: Boolean,
     ) {
         if (shape != this.shape) {
             this.shape = shape
@@ -262,6 +289,7 @@ private class BackdropNode(
         this.view = view
         this.scrimColor = scrimColor
         this.wallpaperTone = wallpaperTone
+        this.refracts = refracts
         invalidateDraw()
     }
 
@@ -286,18 +314,23 @@ private class BackdropNode(
     override fun ContentDrawScope.draw() {
         val bd = backdrop
         val outline = outlineFor(size, layoutDirection, this)
-        if (effect == BackdropEffect.None || bd == null || size.width <= 0f || size.height <= 0f) {
+        // The one thing that means "nothing to sample" now: no backdrop at all. An effect can no longer say it —
+        // every variant blurs, and `Plain` is the one with no wash rather than no picture.
+        if (bd == null || size.width <= 0f || size.height <= 0f) {
             drawOutline(outline, color = scrimColor)
             drawContent()
             return
         }
         val window = Rect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height)
         val src = bd.screenToBitmap(window)
-        val glassEffect = effect as? BackdropEffect.LiquidGlass
+        // A lens only where there is a rim to bend light at — see `refracts`. Without one, glass falls through to the
+        // crop below, which draws it through its saturation boost; that is the half of the effect that survives at
+        // full screen, and the whole of it below API 33.
+        val glassEffect = (effect as? BackdropEffect.LiquidGlass)?.takeIf { refracts }
         if (glassEffect != null && liquidGlassSupported) {
             drawGlass(bd.image, src, glassEffect, outline)
         } else {
-            // Every other effect — and liquid glass below API 33, where L1 falls back to exactly this too.
+            // Every other effect — and liquid glass with no rim, or below API 33 where L1 falls back to this too.
             drawBlurredCrop(bd.image, src)
         }
         drawContent()
@@ -372,6 +405,9 @@ private class BackdropNode(
                         ((ct - src.top) * scaleY).roundToInt(),
                     ),
                     dstSize = IntSize(dstW, dstH),
+                    // Saturation, where the effect asks for it. On the *image* rather than as a second full-surface
+                    // pass, so it costs nothing when it is the identity — which it is for every effect but glass.
+                    colorFilter = saturationFilterOf(effect),
                 )
             }
             drawRect(color = tintOf(effect, wallpaperTone))

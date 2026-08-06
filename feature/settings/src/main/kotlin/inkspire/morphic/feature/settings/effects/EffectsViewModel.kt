@@ -24,12 +24,12 @@ import kotlinx.coroutines.launch
  * `WallpaperEffect` + `WallpaperEffectParams` pair into one sealed type is a decision `core:model` already made, and a
  * chip list is not a reason to undo it.
  */
-internal enum class BackdropOption { NONE, LIGHT_BLUR, DARK_BLUR, MATERIAL_YOU, LIQUID_GLASS }
+internal enum class BackdropOption { PLAIN, LIGHT_BLUR, DARK_BLUR, MATERIAL_YOU, LIQUID_GLASS }
 
 /** Which chip [this] shows as selected. */
 internal val BackdropEffect.option: BackdropOption
     get() = when (this) {
-        BackdropEffect.None -> BackdropOption.NONE
+        is BackdropEffect.Plain -> BackdropOption.PLAIN
         is BackdropEffect.Blur -> when (tone) {
             BackdropBlurTone.LIGHT -> BackdropOption.LIGHT_BLUR
             BackdropBlurTone.DARK -> BackdropOption.DARK_BLUR
@@ -79,7 +79,7 @@ internal class EffectsViewModel(
     fun select(option: BackdropOption) {
         val current = state.value.effect
         val next = when (option) {
-            BackdropOption.NONE -> BackdropEffect.None
+            BackdropOption.PLAIN -> current as? BackdropEffect.Plain ?: BackdropEffect.Plain()
             BackdropOption.LIGHT_BLUR -> current.asBlur(BackdropBlurTone.LIGHT)
             BackdropOption.DARK_BLUR -> current.asBlur(BackdropBlurTone.DARK)
             BackdropOption.MATERIAL_YOU -> current as? BackdropEffect.MaterialYou ?: BackdropEffect.MaterialYou()

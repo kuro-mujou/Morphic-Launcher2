@@ -25,16 +25,28 @@ enum class BackdropBlurTone { LIGHT, DARK }
  * silently invalidate. `@SerialName` pins it to the concept instead. An unreadable blob falls back to [Default] with a
  * log, which is `SettingsSlice`'s existing behaviour and the reason a retired variant needs no migration.
  *
- * **Three of the four render; [LiquidGlass] is the gap** (S5f-3 — an AGSL shader), and until then it degrades to a
- * plain blurred crop, which is L1's own fallback on every device below API 33.
+ * **Every variant blurs; what they differ in is the *wash* over that blur.** That is the model the full-screen
+ * backdrop layer forced, and it is the honest one: a surface floating over the wallpaper has to occlude what is
+ * behind it whatever decoration the user picked, so "blur or not" was never really the choice being offered. [Plain]
+ * is the variant with no wash at all — which is why it is not called `None`.
  */
 @Serializable
 sealed interface BackdropEffect {
 
-    /** No backdrop effect — surfaces are clear over the content beneath. */
+    /**
+     * A blur with **no wash over it** — the wallpaper, softened, and nothing else.
+     *
+     * **Named for what it does, not for what it lacks.** It was `None`, from a model in which the effect decided
+     * whether a surface sampled the wallpaper *at all*; under the current one every variant blurs and the effect
+     * chooses the wash, so "none" would have meant "it still blurs, but no colour" — the kind of name that reads as
+     * a bug six months on. The `@SerialName` deliberately stays `"none"`: it is a discriminator in a user's stored
+     * blob, and this is a rename rather than a change of meaning to anything already saved.
+     *
+     * @property strength Blur amount, `0..1` — the one thing left to tune once there is no wash.
+     */
     @Serializable
     @SerialName("none")
-    data object None : BackdropEffect
+    data class Plain(val strength: Float = 0.5f) : BackdropEffect
 
     /**
      * A frosted blur.
@@ -78,9 +90,14 @@ sealed interface BackdropEffect {
     /**
      * A refractive "liquid glass" effect: the backdrop bends and brightens the content behind it, like a lens.
      *
-     * **Unbuilt (S5f-3), and it draws as a plain [Blur] at [blur] strength meanwhile** — which is not a stand-in but
-     * L1's own fallback: its shader needs AGSL, so every device below API 33 gets exactly this. Unlike [MaterialYou]
-     * there is nothing in principle against it; it is a shader nobody has written here yet.
+     * **A lens needs an edge to bend light at, so at full screen it is not one.** The refraction band is a rim on a
+     * bounded rounded rect; across a whole screen that rim falls under the system bars, where it costs a shader and
+     * shows almost nothing. A full-screen surface therefore renders this as its blur plus its [vibrancy] — a
+     * saturation boost, which is what makes a frosted sheet read as glass rather than as fog, and what separates it
+     * from [Plain]. That is also iOS's own recipe for its materials, and it works on every API where the rim does
+     * not. See `Modifier.wallpaperBackdrop`'s `refracts`.
+     *
+     * The rim remains what a *panel* gets — a popup menu, the widget picker — on API 33+.
      *
      * @property blur Lens-source blur amount, `0..1`.
      * @property vibrancy Saturation boost on the refracted content, `0..1`.
@@ -100,27 +117,95 @@ sealed interface BackdropEffect {
         val sheen: Float = 0.4f,
     ) : BackdropEffect
 
-    /** How much the sampled wallpaper is blurred for this effect, `0..1`. Zero for [None], which samples nothing. */
+    /**
+     * How much the sampled wallpaper is blurred for this effect, `0..1`.
+     *
+     * **Every variant has one now, [Plain] included**, which is the whole of the model change: there is no longer a
+     * value of this type that means "sample nothing". A surface with nothing to sample is a surface with no
+     * *backdrop* — `LocalBackdrop` being null — which is a different question and one this type never answered.
+     */
     val blurStrength: Float
         get() = when (this) {
-            None -> 0f
+            is Plain -> strength
             is Blur -> strength
             is MaterialYou -> strength
             is LiquidGlass -> blur
         }
 
+    /**
+     * How much the sampled wallpaper's colour is boosted, as a saturation multiplier — `1f` for no change.
+     *
+     * Only [LiquidGlass] raises it, and that is what gives a full-screen sheet of it a look of its own once the rim
+     * is gone: a box blur alone leaves colours muddy, and pushing saturation back up is what reads as glass. The
+     * ceiling is a drawing decision rather than a preference, so it lives here with the parameter it scales and not
+     * in the shader that was its first consumer.
+     */
+    val saturation: Float
+        get() = when (this) {
+            is LiquidGlass -> 1f + vibrancy * MAX_VIBRANCY_BOOST
+            else -> 1f
+        }
+
+    /**
+     * **The full-screen frost this effect casts** — the same variant with its parameters *fixed*.
+     *
+     * The frost behind an arriving surface is deliberately **not tunable**. It is what a screenful of content is read
+     * against, and a strength or tint slider that can make that content unreadable is not a preference worth
+     * offering — so choosing the variant chooses the whole look, and the per-variant sliders govern the smaller
+     * frosted panels instead. Switching between `Plain`, the two blurs, Material You and glass is the entire control
+     * a user has over it, which is the design this exists to express.
+     *
+     * **Every variant blurs by the same amount**, and that is load-bearing rather than tidy: the blurred bitmap is
+     * produced upstream from this strength, so one shared value means switching variants never re-blurs anything. It
+     * is a redraw with a different wash over an identical picture, not a re-decode.
+     *
+     * What each variant keeps is exactly what distinguishes it: nothing for [Plain], the tone for a [Blur], the
+     * wallpaper's hue for [MaterialYou], and the saturation boost for [LiquidGlass] — whose refraction parameters are
+     * dropped because a lens needs a rim and there is none at this size (see `wallpaperBackdrop`'s `refracts`).
+     */
+    val fullScreenFilm: BackdropEffect
+        get() = when (this) {
+            is Plain -> Plain(strength = FULL_SCREEN_BLUR)
+            is Blur -> Blur(tone = tone, strength = FULL_SCREEN_BLUR, tint = FULL_SCREEN_TINT)
+            is MaterialYou -> MaterialYou(strength = FULL_SCREEN_BLUR, tint = FULL_SCREEN_HUE_TINT)
+            is LiquidGlass -> LiquidGlass(blur = FULL_SCREEN_BLUR, vibrancy = FULL_SCREEN_VIBRANCY)
+        }
+
     companion object {
+
+        /** The most a [LiquidGlass] sheet may push saturation — `vibrancy = 1f` lands here. */
+        private const val MAX_VIBRANCY_BOOST = 0.8f
+
+        /**
+         * How hard the **full-screen** frost blurs, for every variant — see [fullScreenFilm].
+         *
+         * Above the per-surface default (0.5), because this one has to hold a whole screen of text back rather than
+         * sit behind a card of icons, and because with no slider on it there is no second chance to fix a wallpaper
+         * that shows through.
+         */
+        private const val FULL_SCREEN_BLUR = 0.6f
+
+        /** The white or black wash a full-screen [Blur] carries — a little above the per-surface default's 0.28. */
+        private const val FULL_SCREEN_TINT = 0.35f
+
+        /**
+         * [MaterialYou]'s, which is higher because its wash *is* the effect: a hue at the blurs' alpha reads as a
+         * tinted blur rather than as a coloured sheet, which is the whole thing the variant is for.
+         */
+        private const val FULL_SCREEN_HUE_TINT = 0.45f
+
+        /** [LiquidGlass]'s saturation boost at full screen — the half of the effect that survives without a rim. */
+        private const val FULL_SCREEN_VIBRANCY = 0.6f
 
         /**
          * The default: a dark blur at the baseline strength.
          *
          * **L1 defaults to `NONE` and this does not**, which is a choice rather than a slip. The surfaces this reaches
-         * today are ones whose *current* look is a flat opaque black — a placeholder, not a design — so a blur is
-         * strictly the better of the two; and there is no settings section until S5f-3, so a `None` default would make
-         * the feature unreachable rather than off-by-default.
+         * today are ones whose *current* look is a flat opaque black — a placeholder, not a design — so a washed blur
+         * is strictly the better of the two.
          *
          * It costs nothing where there is nothing to sample: the backdrop is null until the user has given the
-         * launcher an image (see `WallpaperRepository.loadBackdrop`), and every frosted surface falls back to its own
+         * launcher an image (see `WallpaperRepository.backdrop`), and every frosted surface falls back to its own
          * flat colour until then. A fresh install therefore looks exactly as it did before this landed.
          */
         val Default: BackdropEffect = Blur(tone = BackdropBlurTone.DARK, strength = 0.5f, tint = 0.28f)

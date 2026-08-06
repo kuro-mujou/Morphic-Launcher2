@@ -30,6 +30,10 @@ import kotlin.math.roundToInt
  *
  * @param state the pan position + operations; also learns the swipeable edges + their finger policy here.
  * @param sideContent the binding for each swipeable edge. Absent edge = not swipeable.
+ * @param overlay drawn **above [center] and below every side surface**, filling the viewport and *not* panned with
+ *   either. The frost a side surface is read against lives here (`SurfaceBackdropLayer`): it has to cover HOME, be
+ *   covered by what arrives, and — the reason it cannot be a modifier on either — move differently from both, since
+ *   the content slides while the frost merely fades. Empty by default, which is what the harness passes.
  * @param center the HOME surface, always present in the centre.
  */
 @Composable
@@ -37,6 +41,7 @@ fun SurfacePager(
     state: SurfacePagerState,
     modifier: Modifier = Modifier,
     sideContent: Map<HomeEdge, SurfaceBinding> = emptyMap(),
+    overlay: @Composable () -> Unit = {},
     center: @Composable () -> Unit,
 ) {
     // Teach the state which edges have a surface (its drag/settle clamps can't open an empty edge) and each
@@ -58,6 +63,8 @@ fun SurfacePager(
         Box(Modifier.fillMaxSize().surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
             center()
         }
+        // Between the two, and with no `surfaceSlide` of its own — see [overlay].
+        overlay()
         for ((edge, binding) in sideContent) {
             Box(Modifier.fillMaxSize().surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
                 binding.content()

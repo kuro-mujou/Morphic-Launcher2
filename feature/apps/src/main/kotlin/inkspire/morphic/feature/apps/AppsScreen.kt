@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.apps
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -18,7 +17,6 @@ import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
 import inkspire.morphic.core.model.AppsPagerGrid
@@ -105,14 +103,15 @@ fun AppsScreen(
     // comment here used to promise would happen. Settings keeps its own boundary, so the two can disagree about
     // dark/light — the launcher follows wallpaper brightness, settings follows the system.
     //
-    // **Opaque, where home is not, and the difference is legibility rather than inconsistency.** The window shows the
-    // wallpaper now, and home wants that: a screenful of icons with shadowed labels reads over any photograph. This
-    // surface is hundreds of rows of plain text at whatever density the user chose, and a busy wallpaper behind it
-    // makes it unreadable. L1 solved the same problem with a *frosted* backdrop — a blur of the wallpaper, dimmed —
-    // which is S5f; until it exists the honest stand-in is the surface's own background rather than a transparency
-    // nobody could use.
-    val colors = LocalMorphicColors.current
-    Box(modifier.fillMaxSize().background(colors.background)) {
+    // **Transparent, and read against the shell's frost** — which is the follow-through on the note that used to be
+    // here. This surface is hundreds of rows of plain text at whatever density the user chose, so a busy wallpaper
+    // directly behind it is unreadable; the opaque background was the honest stand-in until something better existed.
+    // `SurfaceBackdropLayer` in `feature:shell` is that thing: a blurred sheet of the wallpaper between HOME and this,
+    // fading in as the pan brings this surface on. It is opaque-by-scrim when there is no wallpaper to sample, so the
+    // fresh-install look is unchanged.
+    //
+    // Painting nothing here is what lets the two move independently — the frost is not this composable's to carry.
+    Box(modifier.fillMaxSize()) {
         when (layout) {
             AppsLayout.VERTICAL_LIST -> AppsVerticalList(
                 apps = state.apps,
