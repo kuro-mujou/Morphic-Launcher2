@@ -39,6 +39,7 @@ import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
+import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.label
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.icons.IconSizingControls
@@ -270,6 +271,23 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                 onPreview = { previewPadding = it.roundToInt() },
                 onCommit = { viewModel.setPadding(it.roundToInt()) },
             )
+
+            // **Only on the two layouts that page**, said by the state leaving `wraps` null rather than by a second
+            // `state.layout ==` test here. Which of the two pagers it writes follows the chip, which is the whole
+            // difference from L1: its one global flag governed both of these *and* home's, from a control that only
+            // ever appeared in the Home screen.
+            state.wraps?.let { wraps ->
+                SettingsSectionHeader("Paging")
+                SettingsSwitchRow(
+                    title = "Infinite scroll",
+                    // Named for the axis this surface is reached on: wrapping removes the pager's ends, and the
+                    // surface swipe hands off *at* an end — so getting back to home sideways stops working with one
+                    // finger. Worth saying, because it is not discoverable by trying the toggle once.
+                    subtitle = "Pages wrap around at the edges. Returning home sideways then needs two fingers.",
+                    checked = wraps,
+                    onCheckedChange = viewModel::setWraps,
+                )
+            }
 
             // The chrome choosers sit with the layout group rather than the icon group, because what they place is
             // drawn *around* the cells. One shared value for the surface, with the options depending on the layout.

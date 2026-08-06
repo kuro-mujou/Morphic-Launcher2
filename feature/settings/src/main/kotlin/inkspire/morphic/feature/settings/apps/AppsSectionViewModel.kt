@@ -11,6 +11,7 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.GridOverride
@@ -92,6 +93,7 @@ data class AppsSectionState(
     val rowHeightDp: Int? = null,
     val paddingDp: Int? = null,
     val chrome: AppsChrome = AppsChrome.Default,
+    val wraps: Boolean? = null,
 )
 
 /**
@@ -133,9 +135,16 @@ class AppsSectionViewModel(
                         settingsRepository.iconSizing(current.slot, configuration),
                         settingsRepository.rowHeight(GridSlot.APPS_LIST, configuration),
                         settingsRepository.horizontalPadding(current.slot, configuration),
-                        settingsRepository.appsChrome,
-                    ) { size, icon, rowHeight, padding, chrome ->
-                        AppsSectionState(current, size, icon, rowHeight, padding, chrome)
+                        // Six sources against `combine`'s five, so the two that are **not keyed by the device** are
+                        // grouped: the chrome slice is one value for the whole surface, and wrapping is a behaviour.
+                        // The four above are all per-configuration reads.
+                        combine(settingsRepository.appsChrome, settingsRepository.pagerWraps, ::Pair),
+                    ) { size, icon, rowHeight, padding, (chrome, wraps) ->
+                        // Null on the three layouts that do not page, which is what tells the screen to draw no
+                        // control — and what makes the toggle follow the chip: selecting the category pager selects
+                        // *its* grid's setting, not the plain pager's.
+                        val pagerWraps = current.pagerSlot?.let { wraps[it] }
+                        AppsSectionState(current, size, icon, rowHeight, padding, chrome, pagerWraps)
                     }
                 }
             }
@@ -239,6 +248,21 @@ class AppsSectionViewModel(
     /** Sets which edge the category pager's tab bar sits on. */
     fun setTabBarEdge(edge: VerticalEdge) {
         viewModelScope.launch { settingsRepository.setTabBarEdge(edge) }
+    }
+
+    /**
+     * Turns the **selected** pager's page wrapping on or off.
+     *
+     * Per layout, like the margin and unlike the search placement — and here that is the whole improvement on L1,
+     * which had one global flag whose only control lived in the *Home* screen. The two pagers on this surface are
+     * different questions: pages of loose apps and pages that *are* categories.
+     *
+     * No device, because wrapping is a behaviour rather than a size; and guarded by `pagerSlot`, so a stale press
+     * while a non-paging chip is selected writes nothing rather than reaching a repository that would throw.
+     */
+    fun setWraps(value: Boolean) {
+        val slot = layout.value.pagerSlot ?: return
+        viewModelScope.launch { settingsRepository.setPagerWrap(slot, value) }
     }
 
     /**

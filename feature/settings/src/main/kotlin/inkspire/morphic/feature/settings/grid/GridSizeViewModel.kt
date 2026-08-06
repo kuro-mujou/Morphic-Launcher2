@@ -13,6 +13,7 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
+import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.GridReflow
@@ -69,6 +70,9 @@ sealed interface MainAreaSize {
  * @property sideExtentDp how thick the side zone is (its height, or its width where it is a rail), so the preview can
  *   show the share of the screen the main area actually gets — and so the bounds are computed against that area
  *   rather than against the whole window.
+ * @property wraps whether the pager's pages loop, or **null on the pairing that has no pager**. Nullable rather than
+ *   false-by-default so the screen draws the control from the state alone instead of re-deciding from [layout] which
+ *   pairing has one — the same "absent means the question does not apply" the blueprint uses one layer down.
  */
 data class GridSizeState(
     val layout: HomeLayout = HomeLayout.PAGER_WITH_DOCK,
@@ -76,6 +80,7 @@ data class GridSizeState(
     val icon: IconSizing? = null,
     val sideExtentDp: Int? = null,
     val paddingDp: Int? = null,
+    val wraps: Boolean? = null,
 )
 
 /**
@@ -132,8 +137,12 @@ class GridSizeViewModel(
                     settingsRepository.iconSizing(slot, configuration),
                     settingsRepository.extent(homeLayout.sideSlot, configuration),
                     settingsRepository.horizontalPadding(slot, configuration),
-                ) { main, icon, sideExtentDp, padding ->
-                    GridSizeState(homeLayout, main, icon, sideExtentDp, padding)
+                    settingsRepository.pagerWraps,
+                ) { main, icon, sideExtentDp, padding, wraps ->
+                    // The only field here that is *not* keyed by the device: wrapping is a behaviour, so it is read
+                    // straight off the resolved map. `pagerSlot` is what turns "this pairing has no pager" into the
+                    // null the screen reads as "draw no control".
+                    GridSizeState(homeLayout, main, icon, sideExtentDp, padding, homeLayout.pagerSlot?.let { wraps[it] })
                 }
             }
         }
@@ -224,6 +233,21 @@ class GridSizeViewModel(
     fun setRowHeight(dp: Int) {
         val configuration = device.value ?: return
         viewModelScope.launch { settingsRepository.setRowHeight(GridSlot.HOME_LIST, configuration, dp) }
+    }
+
+    /**
+     * Turns the main pager's page wrapping on or off.
+     *
+     * **The one write on this screen that is not keyed by device**, which is why it takes no `configuration`: whether
+     * pages loop is a behaviour, and turning the phone on its side is not a reason for it to change.
+     *
+     * Guarded by `pagerSlot` rather than by the layout, so a stale press on the list pairing writes nothing — the same
+     * shape as [edit]'s guard, and for the same reason: the screen draws no control there, but a press that arrives
+     * anyway must not reach a repository that would throw.
+     */
+    fun setWraps(value: Boolean) {
+        val slot = layout.value.pagerSlot ?: return
+        viewModelScope.launch { settingsRepository.setPagerWrap(slot, value) }
     }
 
     fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {

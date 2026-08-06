@@ -1017,9 +1017,10 @@ follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-cr
 **Settings — `data:settings` (B7) is real, and seven sections are live.** Storage is **one `@Serializable` JSON blob per
 slice** under one DataStore key (`SettingsSlice`, pure and unit-tested), not L1's ~265 flat keys behind a 693-line codec;
 per-slice flows, not one god flow; and a slice carries no version because `ignoreUnknownKeys` + fully-defaulted fields
-make additive change safe both ways, with the **key name** as the seam for a semantic break. Two slices exist:
-`SurfaceRegister` (HOME's layout, per-edge `SideBinding`, transition) and `SurfaceMetrics` (per-grid **icon** and **grid**
-overrides, plus **`extentDp`** and **`rowHeightDp`**). Those last two are **slot-keyed**, which reverses an earlier call
+make additive change safe both ways, with the **key name** as the seam for a semantic break. Four slices exist:
+`SurfaceRegister` (HOME's layout, per-edge `SideBinding`, transition), `SurfaceMetrics` (per-grid **icon** and **grid**
+overrides, plus **`extentDp`** and **`rowHeightDp`**), `AppsChrome`, and `SurfacePaging` (per-pager infinite scroll —
+see the surface-swipe rules above for why it is not in `SurfaceMetrics`). **`extentDp` and `rowHeightDp`** are **slot-keyed**, which reverses an earlier call
 worth keeping: each was a bare `Map<DeviceConfiguration, Int>` named for the one grid that could answer it
 (`dockHeightDp`, `listRowHeightDp`), on the grounds that a slot-keyed map would make most keys meaningless. HOME's
 second pairing changed the arithmetic — a widget area is a fixed-extent strip too, and a home list declares a row
@@ -1083,7 +1084,9 @@ rows and the app-bar title rename with them (`SettingsSection.meta(homeLayout)`,
   null. L1 put the same choice in its Home *section* as a scroll row of two mockup cards labelled "Classic" and
   "Minimalist"; those name eras of that launcher rather than what you get, and the register cross had already decided
   not to draw mockups at card size. The rule this section states — a control appears when the thing it configures
-  exists — is unchanged: `transition` still has no control, because `SurfacePager` still implements only `SLIDE`.
+  exists — is unchanged: `transition` still has no control, because `SurfacePager` still implements only `SLIDE`. The
+  **infinite-scroll switch** is that rule's newest application in the other direction: it appears on the pager pairing
+  and on the two paging APPS chips, and nowhere else, because only those grids have the setting at all.
 - **Switching is non-destructive**, which is what makes it one tap with no confirm: each pairing's zones have their
   own stored sizes and their own stored contents, so the one going off screen keeps everything it had.
 
@@ -1318,7 +1321,8 @@ for the P7 long-press menu.
 surface boundary belongs to whatever scrolls under it until that content runs out — so `OneFingerSwipe.AT_EDGE` is now
 genuinely different from `ALWAYS`, which is what `LauncherShell`, `SurfacePager` and the playground all said was
 deferred. It is two types, deliberately split by what changes:
-- **`ScrollAxes`** (static) — what a layout scrolls on each axis (`AxisScroll.NONE`/`BOUNDED`/`INFINITE`).
+- **`ScrollAxes`** (static) — what a layout scrolls on each axis (`AxisScroll.NONE`/`BOUNDED`/`INFINITE`), which is a
+  function of the **infinite-scroll setting** for a paged axis (`AxisScroll.ofPager`).
   `ScrollAxes.oneFingerSwipe(edge)` is the whole derivation of the policy, and it is the surface-pager playground's
   private `Scroll.toSwipe()` promoted to a real type once the real layouts existed to answer it. Each feature declares
   its own — `HomeLayout.scrollAxes` in `feature:home`, `AppsLayout.scrollAxes` in `feature:apps` — because the shell
@@ -1362,6 +1366,33 @@ Five things about it are load-bearing:
   carrying straight on does not start panning; a second swipe from the bottom does. L1 behaves the same way. The
   honest limit of a hand-off decided by a claim rather than by leftover deltas — continuing would mean real
   `nestedScroll` connections on every surface. Two fingers skip the question entirely.
+
+**Infinite paging is a setting again, and it is per pager.** `SurfacePaging` is the fourth slice — one sparse
+`Map<GridSlot, Boolean>`, read resolved through `SettingsRepository.pagerWraps`. Its own slice rather than a field in
+`SurfaceMetrics` because every map in that one is a *size* keyed `slot × device`, and wrapping is a behaviour with no
+device dimension: turning the phone on its side is not a reason for the pages to stop looping. The default lives on
+`GridBlueprint.wraps`, null meaning "not a pager whose wrapping is the user's" — the same convention `extentDp` and
+`rowHeightDp` use, and what lets `setPagerWrap` refuse a slot rather than every caller checking. Exactly three grids
+declare one: `HOME_MAIN`, `APPS_PAGER`, `APPS_CATEGORY`. A folder pages too and is deliberately not askable — its
+pages are a handful of apps in a card, bounded by construction.
+- **Per pager, where L1 had one global flag.** L1's `pager.infiniteScroll` was one boolean read by home's pager *and*
+  both drawer pagers, with its only control in the **Home** screen — so turning it on to make the home pages loop
+  silently changed the app drawer, and a user configuring the drawer had no control to find. Here each pager owns its
+  answer, so the toggle can live in the section that configures that surface: Home's in the Home section (gated on the
+  pager pairing, as L1's was), and APPS' in the APPS section, where **it follows the chip** — selecting the category
+  pager selects that grid's setting.
+- **It defaults to off, where L1's defaulted on**, and that is the reversal the swipe rules force. A wrapping pager
+  never reaches an end, so there is no edge to hand off at: `AxisScroll.INFINITE` → `OneFingerSwipe.NEVER`. On by
+  default would mean a horizontal edge binding could only be opened with **two fingers** out of the box, with nothing
+  on screen to explain it. Both switches say so in their subtitle, because a control that takes a gesture away has to.
+- **`HomeLayout.pagerSlot`/`AppsLayout.pagerSlot` are what keep every consumer from re-deciding which grid is meant**
+  — `core:model`, because `feature:settings` needs the APPS answer and does not depend on `feature:apps`. Null on the
+  layouts that do not page, which is also what both settings states carry (`wraps: Boolean?`) so a pane draws the
+  control from its state rather than testing the layout a second time.
+- The one genuinely awkward consequence: `HomeMainSizing.Pager` now carries `wraps`, so a type named for sizing holds
+  a behaviour. Kept there because it is a setting only a *pager* can have — a `List` given one would be meaningless —
+  and a nullable field beside the state would make exactly that expressible, which is what the sum type exists to
+  prevent.
 
 Two things L1 did here are **not** carried. Its reporters blanked every field to false while an item drag was in
 flight, so the pan could not claim mid-drag; L2 answers that one layer up with `SurfaceGestureLock`, which gates the

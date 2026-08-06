@@ -34,6 +34,8 @@ import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.LanePreview
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
+import inkspire.morphic.feature.settings.component.SettingsSectionHeader
+import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.icons.IconSizingControls
@@ -175,6 +177,24 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                     areaWidthDp = homeArea.widthDp,
                     companion = companion,
                     onSetRowHeight = viewModel::setRowHeight,
+                )
+            }
+
+            // **Only on the pairing that has a pager**, which the state says by leaving `wraps` null rather than by
+            // this screen asking the layout a second time. L1 gated the same control the same way — on
+            // `homeSurface == PAGER_GRID` — but its single global flag then changed the app drawer's pagers too,
+            // with no control there to show it. Here the toggle writes the grid this section is editing and nothing
+            // else.
+            state.wraps?.let { wraps ->
+                SettingsSectionHeader("Paging")
+                SettingsSwitchRow(
+                    title = "Infinite scroll",
+                    // The second sentence is the part a user cannot discover by trying it once: wrapping removes the
+                    // end of the pager, and the surface swipe hands off *at* an end — so the side surfaces on this
+                    // axis stop opening with one finger. A control that quietly takes a gesture away has to say so.
+                    subtitle = "Pages wrap around at the edges. Side surfaces left and right then need two fingers.",
+                    checked = wraps,
+                    onCheckedChange = viewModel::setWraps,
                 )
             }
 
