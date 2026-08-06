@@ -18,15 +18,18 @@ import kotlinx.coroutines.withContext
  * wrong with a sparse ordinal: two rows sharing one, after which the list's order depends on Room's tie-break rather
  * than on anything the user did. `AppsOrderRepositoryImpl` re-derives its slots the same way.
  *
- * **`clear()` then `upsert()`, not a diff.** A reorder changes almost every row's ordinal anyway, so a diff would
- * compute more than it saved — and clearing is what makes a *removal* fall out of the same path instead of needing
- * its own delete. The one write that does not go through it is [remove], which deletes a single row and leaves the
- * rest to be renumbered by the next full write; the gap it leaves is harmless because `ORDER BY sortOrder` cares
- * about sequence, not contiguity.
+ * **Replace, not diff.** A reorder changes almost every row's ordinal anyway, so a diff would compute more than it
+ * saved — and replacing is what makes a *removal* fall out of the same path instead of needing its own delete. The
+ * one write that does not go through it is [remove], which deletes a single row and leaves the rest to be renumbered
+ * by the next full write; the gap it leaves is harmless because `ORDER BY sortOrder` cares about sequence, not
+ * contiguity.
  *
- * **Not wrapped in a Room transaction**, matching both sibling repositories. That is the honest statement of where
- * this codebase is rather than an argument that it is right — all three should take the database and use
- * `withTransaction`, and it is worth fixing for all three at once.
+ * **The replace is one DAO call, and that is load-bearing** ([HomeListItemDao.replaceAll]). As a `clear()` followed
+ * by an `upsert()` the clear is observable: the DAO's flow re-runs on the invalidation and emits an *empty* list, so
+ * the surface blanks for a frame and a just-dropped row appears to snap back before the new order lands. This is the
+ * one place in `data:layout` that does use a Room transaction, and it is not the general fix the sibling
+ * repositories still need — those should take the database and use `withTransaction`, and it is worth doing for all
+ * three at once.
  *
  * Writes hop to [AppDispatchers.io]; the DAO's `Flow` stays on Room's own executor.
  */
@@ -60,9 +63,8 @@ internal class HomeListRepositoryImpl(
         withContext(dispatchers.io) { dao.deleteByComponent(component) }
     }
 
-    /** Rewrites the table as [components], densely numbered from zero. */
+    /** Rewrites the table as [components], densely numbered from zero, in one transaction. */
     private suspend fun write(components: List<ComponentKey>) {
-        dao.clear()
-        dao.upsert(components.mapIndexed { index, component -> HomeListItemEntity(component, index) })
+        dao.replaceAll(components.mapIndexed { index, component -> HomeListItemEntity(component, index) })
     }
 }

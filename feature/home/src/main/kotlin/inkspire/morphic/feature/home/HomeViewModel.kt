@@ -83,6 +83,21 @@ class HomeViewModel(
 ) : ViewModel() {
     private val placements = MutableStateFlow<Map<GridItem, PlacedItem>>(emptyMap())
 
+    /**
+     * The vertical list's order — **optimistic, over a store that is followed rather than sampled**, exactly as
+     * [placements] is and for the same reason one step further on.
+     *
+     * A drop has to land instantly. Without this the surface re-rendered from the store while the write was still in
+     * flight, so the dragged row returned to where it started and jumped to its new place a frame or two later —
+     * which reads as the drop having failed. The write then merely makes it durable.
+     *
+     * Emissions are ignored while one of our own writes is in flight, so the echo of an earlier write cannot roll a
+     * newer drop back; whatever is skipped is superseded by the emission after the last write lands. That last
+     * emission is also the correction: `setOrder` reconciles the reported list against real membership, so an order
+     * the UI could not fully render is fixed up as soon as the store answers.
+     */
+    private val listOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
+
     /** The device the surface reports, or null until it does. Null keeps [iconSizings] empty rather than guessing. */
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
@@ -219,7 +234,7 @@ class HomeViewModel(
             placements,
             appRepository.observeApps(),
             layoutRepository.folders(),
-            homeListRepository.order,
+            listOrder,
             sizing,
         ) { placed, apps, folders, listOrder, configured ->
             val infoByComponent = apps.associateBy { it.componentKey }
@@ -255,6 +270,9 @@ class HomeViewModel(
 
     /** Layout writes dispatched but not yet seen land — see the store collector in [init]. */
     private var writesInFlight = 0
+
+    /** The same, for the list's own store. Separate because they are separate stores with separate echoes. */
+    private var listWritesInFlight = 0
 
     init {
         // Seeding, keyed on the **configured** grid rather than on the device report: the device changes once, the
@@ -301,6 +319,12 @@ class HomeViewModel(
                 if (writesInFlight == 0) placements.value = stored
             }
         }
+        // The list's store, followed on the same terms — see [listOrder].
+        viewModelScope.launch {
+            homeListRepository.order.collect { stored ->
+                if (listWritesInFlight == 0) listOrder.value = stored
+            }
+        }
     }
 
     /**
@@ -319,18 +343,26 @@ class HomeViewModel(
     fun launch(component: ComponentKey) = appLauncher.launch(component)
 
     /**
-     * Commits the vertical list's new order, as the surface dropped it.
+     * Commits the vertical list's new order, as the surface dropped it — **optimistically**, then durably.
      *
-     * **Not optimistic, unlike [applyChanges].** A coordinate drop has to be, because the free-grid planner's pushed
-     * occupants would otherwise snap back for a frame; an ordered drop already *shows* its result — the MovingGap
-     * preview has the app at its new index before the finger lifts — so the write only has to make that durable. The
-     * store's own flow then re-emits the same list and nothing moves.
+     * The optimism is not decoration here. The MovingGap preview lives on the *drag*, so it is gone the instant the
+     * finger lifts: with the surface still rendering the stored order, the dropped row visibly returned to where it
+     * started and only reached its new place when the write echoed back. Leading the store closes that window, the
+     * same way [applyChanges] closes it for a coordinate drop. See [listOrder].
      *
      * The reconciliation against real membership is the repository's, deliberately: the surface reports only the rows
      * it could render, and only the store knows the rest. See `HomeListRepository.setOrder`.
      */
     fun reorderList(order: List<ComponentKey>) {
-        viewModelScope.launch { homeListRepository.setOrder(order) }
+        listOrder.value = order
+        listWritesInFlight++
+        viewModelScope.launch {
+            try {
+                homeListRepository.setOrder(order)
+            } finally {
+                listWritesInFlight--
+            }
+        }
     }
 
     /**

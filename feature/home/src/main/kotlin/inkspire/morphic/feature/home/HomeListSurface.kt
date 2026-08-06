@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -22,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -38,11 +38,12 @@ import inkspire.morphic.core.designsystem.drag.DragAutoScrollEffect
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
+import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
+import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.WidgetMinCell
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
@@ -222,6 +223,14 @@ internal fun HomeListSurface(
     val session = coordinator.session
     val draggedApp = (session?.item as? GridItem.App)?.component
 
+    // **The gap is cleared when the drag ends, never by the code that reads it.** An earlier cut reset it at the top
+    // of `handleDrop` and then computed the committed order from it two lines later, so every drop wrote the app to
+    // index 0. Resetting on `isDragging` is the APPS pager's shape and it has the property that matters: the only
+    // writer of `-1` runs *after* the drop has been read, and it covers a cancel as well as a release.
+    LaunchedEffect(coordinator.isDragging) {
+        if (!coordinator.isDragging) gap = -1
+    }
+
     // What the user sees: the order with the dragged app lifted to the gap, everything else densified around it. The
     // same function produces the committed order on drop, so the preview and the write cannot disagree.
     val displayed = remember(order, draggedApp, gap) { movingGapDisplayOrder(order, draggedApp, gap) }
@@ -238,11 +247,14 @@ internal fun HomeListSurface(
     DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(ListZoneId) } }
 
     fun handleDrop() {
+        // Read the gap through the drop: it is what the user has been *looking at* — the same
+        // `movingGapDisplayOrder` the rows are drawn from — so the committed order is by construction the one on
+        // screen. A release that never moved leaves a null outcome and writes nothing.
+        val landed = gap
         val outcome = coordinator.drop()
-        gap = -1
-        if (outcome == null) return
+        if (outcome == null || landed < 0) return
         val app = (outcome.item as? GridItem.App)?.component ?: return
-        viewModel.reorderList(movingGapDisplayOrder(liveOrder.value, app, gap.coerceAtLeast(0)))
+        viewModel.reorderList(movingGapDisplayOrder(liveOrder.value, app, landed))
     }
 
     Box(modifier.fillMaxSize()) {
@@ -273,7 +285,6 @@ internal fun HomeListSurface(
             main = { zoneModifier ->
                 ListZone(
                     apps = displayed.mapNotNull(appsByComponent::get),
-                    dragged = draggedApp,
                     rowHeight = rowHeight,
                     scrollState = scrollState,
                     dragging = coordinator.isDragging,
@@ -282,19 +293,10 @@ internal fun HomeListSurface(
                         viewport = bounds
                         coordinator.registerZone(DropZone(ListZoneId, bounds, z = 0) { it is GridItem.App })
                     },
-                    onRow = { app ->
-                        Modifier.launcherItemGestures(
-                            config = gestureConfig,
-                            onOpen = { viewModel.launch(app.componentKey) },
-                            onEdgeAction = {},
-                            onShowMenu = {},
-                            onDismissMenu = {},
-                            onBeginDrag = { coordinator.start(GridItem.App(app.componentKey), it) },
-                            onDragTo = coordinator::moveTo,
-                            onDrop = { handleDrop() },
-                            onCancelDrag = { coordinator.cancel(); gap = -1 },
-                        )
-                    },
+                    coordinator = coordinator,
+                    gestureConfig = gestureConfig,
+                    onDrop = { handleDrop() },
+                    onLaunch = { viewModel.launch(it) },
                     metrics = listMetrics,
                 )
             },
@@ -312,23 +314,30 @@ internal fun HomeListSurface(
             bounds = if (finger == null) null else viewport.takeIf { it != Rect.Zero },
             fingerInRoot = finger,
         )
+        // Reading the offset here is what subscribes this composition to it, so a scroll under a *still* finger
+        // produces a recomposition — and the `SideEffect` then re-sends the same position against the origin that
+        // recomposition derived. It has to be a `SideEffect` rather than a `LaunchedEffect(offset)` because it must
+        // run *after* that recomposition; a `snapshotFlow` on the offset fires before it and stays a step behind.
+        // Re-sending on the drag's other recompositions costs nothing: the same finger resolves the same plan.
         if (finger != null) {
-            // Reading the offset here is what subscribes this composition to it, so the `SideEffect` below re-runs
-            // on the frame the origin republishes rather than only when the finger itself moves.
             @Suppress("UNUSED_VARIABLE") val scrolled = scrollState.value
             SideEffect { coordinator.moveTo(finger) }
         }
 
         // The floating proxy: one row-sized icon under the finger. Its counterpart in the list stays composed and
         // merely invisible — disposing it would kill the pointer stream driving the drag.
-        if (proxyApp != null && finger != null) {
-            val width = listGeometry?.cellW ?: 0f
+        if (proxyApp != null && finger != null && viewport != Rect.Zero) {
+            // **Pinned to the list's own left edge, following the finger only in y.** Every other surface centres its
+            // proxy on the finger because its proxy is one cell — roughly square, and smaller than the finger's
+            // travel. A row is the full width of the list, so centring it horizontally would swing the whole row
+            // sideways with the thumb and leave it hanging off one edge. What a row can meaningfully be dragged
+            // *along* is the one axis it has.
             FloatingDragIcon(
                 rootOffset = IntOffset(
-                    (finger.x - width / 2f).roundToInt(),
+                    viewport.left.roundToInt(),
                     (finger.y - rowHeightPx / 2f).roundToInt(),
                 ),
-                size = DpSize(with(density) { width.toDp() }, rowHeight),
+                size = DpSize(with(density) { viewport.width.toDp() }, rowHeight),
             ) {
                 CompositionLocalProvider(LocalIconMetrics provides listMetrics) {
                     AppRowCell(app = proxyApp, modifier = Modifier.fillMaxSize())
@@ -344,48 +353,62 @@ internal fun HomeListSurface(
  * Split out so the surface above reads as "two zones and a drag" rather than as a scroller; it owns nothing but its
  * own layout, and every piece of drag state is passed in.
  *
+ * **Each row is a [LauncherDragCell]**, which is the same per-item wiring every coordinate surface and the APPS pager
+ * use — and taking it rather than hand-rolling the three parts is what fixed the drag feeling wrong. It brings
+ * [inkspire.morphic.core.designsystem.grid.animatePlacement] (rows *glide* as the gap migrates instead of jumping
+ * between positions, and the lifted row drops the modifier so it lands on release without a spurious return flight),
+ * the `alpha = 0` on the lifted row, and the gesture contract, in one copy. A `Column` places its children in order,
+ * so reordering [apps] moves them and `animatePlacement` springs the difference — exactly as a grid's parent-data
+ * placement change does.
+ *
+ * **A row is the one cell whose visible extent really is its whole footprint**, so unlike an icon cell it `.then()`s
+ * the gestures onto its own root — which is what [LauncherDragCell]'s KDoc describes for "content that genuinely
+ * fills its cell". The cost is that a list leaves no slack for a surface long-press, which `AppsVerticalList` already
+ * states for the same reason.
+ *
  * **The viewport publishes its bounds, not the content.** `onGloballyPositioned` sits *outside* `verticalScroll`,
  * which is what makes the reported rectangle stable while the content moves under it — see the surface's geometry
  * note. It doubles as the auto-scroll band and (with the scroll offset) as the finger→row origin, so there is one
  * measurement rather than three that could drift.
  *
- * **The dragged row is drawn invisible rather than removed**, because removing it would dispose the node holding the
- * pointer stream. Its space is exactly the gap the rest of the list has flowed around, so the preview is complete.
- *
  * **Manual scrolling is disabled while a drag is in flight**, as on every other dragging surface here: two vertical
  * gestures over one finger otherwise fight, and the drag's own auto-scroll is how content past the fold is reached.
  *
  * @param apps the display order — the stored order with the dragged app lifted to the gap.
- * @param onRow the gesture modifier for one row, built per app; a row's touch target is its whole visible extent,
- *   which for a full-width row is the row.
  */
 @Composable
 private fun ListZone(
     apps: List<AppInfo>,
-    dragged: ComponentKey?,
     rowHeight: Dp,
     scrollState: ScrollState,
     dragging: Boolean,
+    coordinator: DragCoordinator,
+    gestureConfig: ItemGestureConfig,
+    onDrop: () -> Unit,
+    onLaunch: (ComponentKey) -> Unit,
+    metrics: IconMetrics,
     modifier: Modifier,
     onViewportChange: (Rect) -> Unit,
-    onRow: (AppInfo) -> Modifier,
-    metrics: IconMetrics,
 ) {
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
-        Box(
-            modifier = modifier.onGloballyPositioned { onViewportChange(it.boundsInRoot()) },
-        ) {
+        Box(modifier = modifier.onGloballyPositioned { onViewportChange(it.boundsInRoot()) }) {
             Column(Modifier.fillMaxSize().verticalScroll(scrollState, enabled = !dragging)) {
                 apps.forEach { app ->
                     key(app.componentKey.flatten()) {
-                        AppRowCell(
-                            app = app,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(rowHeight)
-                                .graphicsLayer { alpha = if (app.componentKey == dragged) 0f else 1f },
-                            itemGestures = onRow(app),
-                        )
+                        LauncherDragCell(
+                            coordinator = coordinator,
+                            item = GridItem.App(app.componentKey),
+                            gestureConfig = gestureConfig,
+                            onDrop = onDrop,
+                            modifier = Modifier.fillMaxWidth().height(rowHeight),
+                            onOpen = { onLaunch(app.componentKey) },
+                        ) { itemGestures ->
+                            AppRowCell(
+                                app = app,
+                                modifier = Modifier.fillMaxSize(),
+                                itemGestures = itemGestures,
+                            )
+                        }
                     }
                 }
             }
