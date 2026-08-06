@@ -259,8 +259,9 @@ from the baked stack).
   transparent `windowBackground`, `colorBackgroundCacheHint` null), which is what makes this a launcher's window rather
   than an app's — and what capture, the icon preview's `BlendMode.Src` punch-through and the frosted backdrop were all
   waiting on. Home paints **no background** as a result (it *is* the wallpaper, and its cell labels already carry a
-  shadow); **APPS stays opaque**, which is legibility rather than inconsistency — hundreds of rows of plain text over a
-  photograph cannot be read, and L1's answer was the frosted backdrop that arrives with the effects.
+  shadow); **APPS and the folder are transparent too, now that the frost they promised exists** — see the
+  full-screen-frost bullet below. The note here used to say "APPS stays opaque, which is legibility rather than
+  inconsistency", naming L1's frosted backdrop as what would replace it; that is what `SurfaceBackdropLayer` is.
   - **That brightness signal is L2's own idea, not a port, and it is now live** — worth knowing before looking for it
     in L1, which has no luminance analysis anywhere and themes from the system's dark mode. `LauncherShell` reads
     `WallpaperRepository.brightness` and the hardcoded `darkTheme = true` is gone.
@@ -290,6 +291,11 @@ from the baked stack).
   side by side continue each other and the cost is one blur for the screen. It is a `Modifier.Node` and not a
   `drawBehind` because of exactly that motion: the outline and clip `Path` are cached against size and shape, so a
   position-only change rebuilds nothing. Ported from L1's `Backdrop.kt`, with four differences:
+  - **Every effect blurs; what they differ in is the *wash* — which is why `None` is now `Plain(strength)`.** The model
+    used to let an effect decline to sample the wallpaper at all, and the full-screen frost overturned that: a surface
+    arriving over HOME has to occlude it whatever decoration the user picked, so the only choice ever really on offer
+    was *which wash*. `blurStrength` is therefore total, and "nothing to sample" means one thing — `LocalBackdrop` being
+    null, i.e. the launcher has no wallpaper it may read. The `@SerialName` stays `"none"`, so no stored blob moved.
   - **All four effects carry the wallpaper's hue, and that is the one deliberate exception to the monochrome palette
     rule.** The rule makes *chrome* greyscale so the wallpaper and the icons carry the colour; an effect the user picks,
     whose whole subject is the wallpaper, is not chrome. So L1's two-stage blend is ported exactly: a **wallpaper tone**
@@ -309,16 +315,44 @@ from the baked stack).
     **The refraction maths is adapted from [Kyant's AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)
     (Apache-2.0) and the attribution must stay in the file.** It samples the *same* crop rectangle the blur path does,
     so switching effects does not shift the picture; the compiled shader and its bound bitmap live on the node, since
-    a drag re-sends uniforms every frame and only the uniforms change. Below API 33 it degrades to a plain blurred
-    crop with no wash — L1's own fallback, not a stand-in.
+    a drag re-sends uniforms every frame and only the uniforms change.
+    - **The rim is a *panel's*, and a full-screen surface is not one** — `wallpaperBackdrop(refracts = false)`. A lens
+      needs an edge to bend light at; across a screen that band falls under the system bars, so it costs a shader and
+      shows nearly nothing. What a full-screen sheet renders instead is the blur plus `BackdropEffect.saturation` — a
+      `ColorMatrix` boost, no shader, every API — which is what makes frosted glass read as glass rather than as fog
+      and is iOS's own recipe for its materials. Side effect worth having: **below API 33 glass now looks like
+      something**, where it degraded to a plain untinted blur and was indistinguishable from `Plain`. That degradation
+      is still L1's own fallback for the rim itself.
   - **The backdrop is provided at the shell**, the same zone boundary the theme is applied at and for the same reason.
     L1 provided it inside its `HomeScreen`, which is why its settings feature needed a second provider of its own.
   - **`LocalLockedBackdrop` is not carried.** L1's second backdrop exists so a popup menu and the widget picker can
-    stay frosted when the global effect is `NONE`; L2 has neither surface, so there is one local rather than two.
+    stay frosted when the global effect is `NONE`; L2 has neither surface, so there is one local rather than two — and
+    the need it answered is now gone as well, since `Plain` still blurs and no effect leaves a surface unfrosted. Those
+    two panels are still what the effect sliders and the glass rim are waiting for.
   - **The scrim is a required fallback, not a decoration.** With no backdrop — which is the state until the user gives
     the launcher an image — every frosted surface draws its own flat colour, and only the caller knows what that is.
-    The folder passes `Color.Black`, which is exactly what it painted before, so nothing changes until there is
-    something to sample.
+    The folder passes `Color.Black` (its title and labels are white by construction); the shell's layer passes the
+    theme's own background, which is exactly what APPS painted before. **It is now the one thing that means "nothing to
+    sample"** — it used to mean that *or* an effect of `None`, and every effect blurs now.
+- **The full-screen frost is `SurfaceBackdropLayer`, and it is a sibling in the stack rather than a modifier.** APPS and
+  the folder paint nothing of their own and are read against one shared sheet of blurred wallpaper sitting **above HOME
+  and below whatever covers it**. A frosted *panel* still samples its own crop (`wallpaperBackdrop`) and should — that
+  is what makes it read as glass sliding over the picture — but a surface that **arrives** wants the opposite, and that
+  is the whole reason this is a separate node: the content slides while the frost only *fades*. A blur travelling with
+  the content reads as a sheet of frosted plastic being carried on screen rather than as the screen frosting over.
+  - **Two motions, two drivers.** `SurfacePagerState.progress` — the pan collapsed to "how far in is the other surface",
+    unsigned and edge-agnostic — drives the shell's; the folder drives its own from an `Animatable` **seeded at zero**,
+    which `animateFloatAsState` cannot do: that helper initialises to its target, so an overlay composed with
+    `presenting = true` would snap in and a folder would fade out but never fade in.
+  - **The frost is not tunable, and that is a design decision rather than an omission.** `BackdropEffect.fullScreenFilm`
+    replaces the stored parameters with fixed ones, and the layer reads it *itself* rather than taking an effect, so no
+    call site can hand it a tuned one. Choosing the variant chooses the whole look — a strength or tint slider that can
+    make a screenful of text unreadable is not a preference worth offering. **One shared blur strength across all five
+    is load-bearing**: the bitmap is blurred upstream from it, so switching variants is a redraw with a different wash
+    over an identical picture, never a re-decode.
+  - **A folder over the drawer is frosted twice**, so its wash compounds (≈0.35 → ≈0.58). Accepted as a depth cue —
+    it *is* one level deeper — rather than plumbed, since de-duplicating means telling the folder what is beneath it.
+    Invisible under `Plain`, which has no wash to compound.
 
 **Wallpaper — `data:wallpaper` (B7b) exists, with the static image in it, and a section that drives it.** Its own module rather than a slice of
 `data:settings`, because it decodes bitmaps, writes files and calls `WallpaperManager` — a *service*, where settings is a
@@ -571,10 +605,13 @@ the default `DevRootScreen` screen.
   push with directional-push + merge-ring partition, dwelled preview, edge-flip pages, trailing empty page mid-drag).
   Seed leaves a free row so a full grid stays rearrangeable.
 - **Folders.** Dropping an app on another (centre merge ring) creates a folder; folders render as a `FolderCell`
-  (2×2 icon preview). Tapping opens `FolderOverlay` — two zones (black scrim + a bounded card sized live by
-  `folderInnerSize` per device/orientation, inset to `systemBars ∪ displayCutout`), a **dense-flow pager** of the
-  folder's ordered apps, launch on tap, in-folder **MovingGap reorder** (persist `ReorderFolder`), and a border
-  outlining the inner zone while dragging.
+  (2×2 icon preview). Tapping opens `FolderOverlay` — two zones (a full-screen `SurfaceBackdropLayer` that **fades in**,
+  plus a transparent bounded card sized live by `folderInnerSize` per device/orientation, inset to
+  `systemBars ∪ displayCutout`), a **dense-flow pager** of the folder's ordered apps, launch on tap, in-folder
+  **MovingGap reorder** (persist `ReorderFolder`), and a border outlining the inner zone while dragging. The frost is
+  its own node *under* the card rather than the card's parent, so the two can be given different entrances later; the
+  card's alpha and the frost's share one driver today. Going through the shared layer is also what fixed a real fault —
+  calling `wallpaperBackdrop` directly meant liquid glass tried to draw its refraction rim across the whole screen.
 - **A folder is a place one drag passes *through*, not a destination it commits to.** This is the whole model, and the
   rest of the folder rules fall out of it. **Enter**: hold a dragged app on any folder's merge ring (~1s) and it opens
   mid-drag with the drag carrying on inside, so the app lands at a *chosen* slot. **Leave**: hold outside the card
@@ -952,6 +989,12 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
   departures from L1's version, and the wallpaper notes for how the sampled image is chosen.
 - **S5f-3 — liquid glass and the effects section. Done.** The AGSL shader (see the design-system notes) and the
   seventh settings section, which is also the slice's first writer. **S5 is now complete.**
+- **S5f-4 — the full-screen frost. Done, and it was not in the plan.** APPS and the folder went transparent behind one
+  shared `SurfaceBackdropLayer`, which is what the "APPS stays opaque" note had been promising since the window learnt
+  to show the wallpaper. It reshaped the model on the way through (`None` → `Plain`; every effect blurs), fixed a
+  full-screen refraction rim in the folder, and left the effect *sliders* dormant — see the design-system and effects
+  notes for all four. What it is still waiting on is a frosted **panel**, which is where the sliders and the rim both
+  come back.
 
 **Next after that: HOME's second pairing is built, so widgets are the thing it is waiting on.** `LIST_WITH_WIDGET_AREA`
 renders, is configurable, and reorders — and its widget area is an empty, correctly-sized, correctly-refusing drop
@@ -1078,14 +1121,20 @@ and the dock. Three places it does not copy L1, and one earlier note that is now
 
 **The effects section is the seventh, and the second in Personalization** — L1's `EffectsTab`, and structurally the
 same screen: a chooser, then the sliders belonging to whatever is chosen. It is also the first thing to *write*
-`backdropEffect`, which S5f-2 left read-only on purpose. Four things worth knowing:
+`backdropEffect`, which S5f-2 left read-only on purpose. Five things worth knowing:
+- **The chooser is the whole control today, and the sliders are dormant.** The frost behind an arriving surface is fixed
+  per variant (`fullScreenFilm`), and those two layers are the only frosted surfaces there are — so nothing reads a
+  strength or a tint. What the sliders are *for* is a frosted **panel** (a popup menu, the widget picker), which is also
+  where liquid glass's rim lives. **Kept rather than cut, at the author's call**, because they return with the first
+  panel; the opposing reading is this section's own rule that a control changing nothing is worse than a missing one.
+  `Plain`'s slider lost its subtitle for that reason — a description of an effect it no longer has is worse than none.
 - **The sliders come from the sealed variant, not from a ten-field bag.** L1 held every parameter of every effect at
   once; here the `when` is over `BackdropEffect` itself, so the compiler checks the mapping is total. The bill: a
   write is a **whole-value** write, and switching *between* variants discards the previous one's parameters. Within a
   variant nothing is lost — flipping a blur's tone keeps its strength and tint, which is the comparison users make.
 - **`BackdropOption` is the chip vocabulary, and it is not the stored enum coming back.** "Light blur" and "Dark blur"
   are two things to pick between but one model variant with a `tone`, so the split lives in the section and never
-  reaches storage.
+  reaches storage. Its first chip is `PLAIN`, not `NONE` — see the model note below.
 - **Liquid glass is hidden, not disabled, below API 33**, with L1's sentence explaining why. An effect that silently
   comes out as a plain blur is worse than one that is not offered.
 - **No live icon preview**, unlike every surface section. Those preview a *cell*, which a pane can draw on its own; an
@@ -1254,12 +1303,17 @@ Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](d
 `Navigator`; feature vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer). `app`
 declares its own dev-harness key, since `entryProvider` is a mapping and not a registry. `feature:shell`'s
 `LauncherShell` is the launcher — `SurfacePager` with `HomeScreen` centre and side surfaces from the register — and it
-owns the **launcher theme boundary**, which is why `HomeScreen`/`AppsScreen` no longer theme themselves. The launcher
+owns the **launcher theme boundary**, which is why `HomeScreen`/`AppsScreen` no longer theme themselves. It also owns
+the **full-screen frost**, which `SurfacePager` takes as an `overlay` slot between the centre and the sides: not panned
+with either, and driven by `SurfacePagerState.progress` (the pan collapsed to "how far in is the other surface",
+unsigned and edge-agnostic) so the content slides while the frost fades. The launcher
 boots into it; the dev harness (all playgrounds + the component gallery) is kept as a peer destination reached from a
 row in settings, so no dev chrome ships on a real surface. A gear chip over HOME is the admitted scaffolding standing in
 for the P7 long-press menu.
 
-**Known gaps, deliberate:** no item is reachable by an accessibility service — `launcherItemGestures` is raw
+**Known gaps, deliberate:** the effects section's five sliders are **dormant** — the full-screen frost is fixed per
+variant by design, and no frosted *panel* exists yet to read a tuned strength or tint (nor to draw liquid glass's rim).
+No item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no
 ktlint/spotless/detekt), so style drift isn't caught. The Gradle **wrapper is missing** from the repo
 (`gradle/wrapper/gradle-wrapper.properties` is tracked but `gradlew`/`gradlew.bat`/`gradle-wrapper.jar` are not),
