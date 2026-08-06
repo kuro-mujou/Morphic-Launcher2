@@ -22,6 +22,8 @@ import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.backdrop.screenToBitmapMapping
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
+import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
+import inkspire.morphic.core.designsystem.surface.SurfaceGestureLock
 import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -80,6 +82,12 @@ fun LauncherShell(modifier: Modifier = Modifier) {
         val scope = rememberCoroutineScope()
         val pagerState = rememberSurfacePagerState()
 
+        // **Who owns the finger, when the answer is not "the pager".** Hosted here because the pager it guards is
+        // here, and because the claimants are spread across three surfaces (an open folder, an item held down with its
+        // menu up) that cannot see each other. See `SurfaceGestureLock` for why this is state rather than pointer
+        // consumption.
+        val gestureLock = remember { SurfaceGestureLock() }
+
         // Back closes an open side surface and returns to HOME. Disabled when already on HOME so back falls through to
         // the system — on a launcher there is nowhere further to go, and swallowing it would trap the user.
         BackHandler(enabled = pagerState.openEdge != null) { scope.launch { pagerState.close() } }
@@ -91,6 +99,7 @@ fun LauncherShell(modifier: Modifier = Modifier) {
         CompositionLocalProvider(
             LocalBackdrop provides rememberBackdropState(state.backdropImage, state.backdropAccent, windowSize),
             LocalBackdropEffect provides state.backdropEffect,
+            LocalSurfaceGestureLock provides gestureLock,
         ) {
             // TODO(SurfacePager): `state.register.transition` is read but not applied — only SLIDE is implemented, so
             //  the other five values are stored and ignored until the transforms land. Deliberately not faked.
@@ -98,6 +107,9 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                 state = pagerState,
                 modifier = modifier.fillMaxSize(),
                 sideContent = state.register.sides.mapValues { (_, binding) -> binding.toSurfaceBinding() },
+                // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
+                // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
+                enabled = { !gestureLock.isLocked },
                 // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
                 // read against this; the two move differently on purpose — the pane translates, the frost only fades
                 // — which is why it is a slot on the pager rather than a modifier on either. `progress` is the pan

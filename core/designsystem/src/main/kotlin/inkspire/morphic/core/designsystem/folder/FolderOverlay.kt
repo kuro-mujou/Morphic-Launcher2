@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
+import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -303,6 +304,13 @@ fun FolderOverlay(
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     val presenceSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     LaunchedEffect(presenting) { presence.animateTo(if (presenting) 1f else 0f, presenceSpec) }
+
+    // **An open folder claims the surface swipe.** A swipe inside a folder is its pager's or nothing; panning to
+    // another surface out from under an overlay leaves the user somewhere they did not ask to be, with the folder
+    // still on screen. Claimed here rather than by each host, so home, the APPS pager and the category card's
+    // expansion are covered at once — `presenting` is exactly the right window, since a pointer holder is invisible
+    // and owns no gestures of its own.
+    LockSurfaceGesture(presenting)
 
     // Root spans the screen; the floating proxy is a sibling of the content so its root-space offset isn't
     // shifted by the content's inset.

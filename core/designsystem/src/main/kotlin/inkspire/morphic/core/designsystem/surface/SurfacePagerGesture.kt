@@ -44,6 +44,12 @@ private const val AXIS_EPSILON = 0.001f
  * treated as allowed here because these surfaces don't scroll yet; once they host scrollable content it will
  * additionally require that content to be at its edge (the nested-scroll hand-off), which is the deferred step.
  *
+ * **[enabled] is consulted twice, and the second time is the one that matters.** At touch-down it catches a reason
+ * that already existed — an open folder, say. But the reason may *arrive* mid-gesture: an item's long-press fires
+ * 400ms after the finger lands, and by then this loop is long past its down. So it is asked again at the moment of
+ * claiming, which is the last point at which handing the swipe back is free. Once claimed the pan keeps it: aborting a
+ * pan already under way would read as the launcher stuttering, and the events are consumed from that point anyway.
+ *
  * @param enabled gate the whole gesture off when it shouldn't run.
  */
 fun Modifier.surfacePagerGesture(
@@ -101,6 +107,9 @@ fun Modifier.surfacePagerGesture(
                     accX += dx
                     accY += dy
                     if (abs(accX) > touchSlop || abs(accY) > touchSlop) {
+                        // Re-asked here, not just at the down: see the note on `enabled`. A claim taken between the
+                        // two — an item's long-press, a folder opening under the finger — hands the swipe back.
+                        if (!enabled()) break
                         val horizontal = abs(accX) >= abs(accY)
                         if (activeAxis != null) {
                             // A surface is open (or mid-transition): only a swipe along that axis is ours — it

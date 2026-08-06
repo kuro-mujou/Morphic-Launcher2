@@ -15,6 +15,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,22 +68,43 @@ fun Modifier.launcherItemGestures(
     // Captured so we can turn item-local finger positions into root coordinates for the coordinator.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
+    // **The surface swipe is claimed for as long as this item owns the finger**, which is from the long-press
+    // onward — the menu going up, and the drag it may turn into. Here rather than at each of the five surfaces that
+    // wire this modifier, for `LauncherDragCell`'s reason: wiring that cannot be forgotten belongs in the one place
+    // every caller already goes through. Stable for the life of the shell, so the `pointerInput` below capturing it
+    // once is correct.
+    val surfaceLock = LocalSurfaceGestureLock.current
+
     onGloballyPositioned { coordinates = it }
         .pointerInput(config, edgeActions) {
             val machine = ItemGestureMachine(config, edgeActions)
 
             fun rootOf(local: Offset): Offset = coordinates?.localToRoot(local) ?: local
 
+            // Whether *this* gesture currently holds the surface-swipe claim, so the release below is idempotent
+            // and the `finally` cannot over-release someone else's.
+            var holdsSurfaceLock = false
+            fun claimSurface() {
+                if (!holdsSurfaceLock) { surfaceLock?.acquire(); holdsSurfaceLock = true }
+            }
+            fun releaseSurface() {
+                if (holdsSurfaceLock) { surfaceLock?.release(); holdsSurfaceLock = false }
+            }
+
             fun perform(effects: List<ItemGestureEffect>, local: Offset) {
                 for (effect in effects) when (effect) {
                     ItemGestureEffect.OpenItem -> onOpen()
                     is ItemGestureEffect.EdgeAction -> onEdgeAction(effect.direction)
-                    ItemGestureEffect.ShowMenu -> onShowMenu()
-                    ItemGestureEffect.DismissMenu -> onDismissMenu()
-                    ItemGestureEffect.BeginDrag -> onBeginDrag(rootOf(local))
+                    // The long-press has fired: from here the finger is this item's, whether it ends as a menu or
+                    // becomes a drag. A drag arrives as `[DismissMenu, BeginDrag, …]` in one list, so the claim is
+                    // taken again immediately after being dropped — which a count absorbs, and which nothing can
+                    // observe in between since this whole loop runs synchronously off the pointer thread.
+                    ItemGestureEffect.ShowMenu -> { claimSurface(); onShowMenu() }
+                    ItemGestureEffect.DismissMenu -> { releaseSurface(); onDismissMenu() }
+                    ItemGestureEffect.BeginDrag -> { claimSurface(); onBeginDrag(rootOf(local)) }
                     is ItemGestureEffect.DragTo -> onDragTo(rootOf(local))
-                    ItemGestureEffect.Drop -> onDrop()
-                    ItemGestureEffect.CancelDrag -> onCancelDrag()
+                    ItemGestureEffect.Drop -> { releaseSurface(); onDrop() }
+                    ItemGestureEffect.CancelDrag -> { releaseSurface(); onCancelDrag() }
                 }
             }
 
@@ -91,43 +113,50 @@ fun Modifier.launcherItemGestures(
                     val down = awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
                     val pointerId: PointerId = down.id
                     var local = down.position
-                    perform(machine.onEvent(ItemGestureEvent.Down), local)
+                    // A claim must not outlive the gesture that took it. Every machine path does release it, but a
+                    // cancelled `pointerInput` coroutine (the node leaving the tree mid-drag) takes none of them, and
+                    // a leaked claim would lock the surface swipe for the rest of the session.
+                    try {
+                        perform(machine.onEvent(ItemGestureEvent.Down), local)
 
-                    // The long-press timer runs beside the event loop; the machine ignores it if the gesture
-                    // has already moved on (swiped/dragging), so no explicit cancellation race is needed.
-                    val longPress = launch {
-                        delay(config.longPressTimeoutMillis.milliseconds)
-                        perform(machine.onEvent(ItemGestureEvent.LongPress), local)
-                    }
+                        // The long-press timer runs beside the event loop; the machine ignores it if the gesture
+                        // has already moved on (swiped/dragging), so no explicit cancellation race is needed.
+                        val longPress = launch {
+                            delay(config.longPressTimeoutMillis.milliseconds)
+                            perform(machine.onEvent(ItemGestureEvent.LongPress), local)
+                        }
 
-                    awaitPointerEventScope {
-                        while (true) {
-                            val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
-                            if (change == null) {
-                                perform(machine.onEvent(ItemGestureEvent.Cancel), local)
-                                break
-                            }
-                            local = change.position
-                            if (change.changedToUpIgnoreConsumed()) {
-                                perform(machine.onEvent(ItemGestureEvent.Up), local)
-                                break
-                            }
-                            if (!change.pressed) {
-                                perform(machine.onEvent(ItemGestureEvent.Cancel), local)
-                                break
-                            }
-                            if (change.positionChanged()) {
-                                perform(machine.onEvent(ItemGestureEvent.Move(local - down.position)), local)
-                                // Once the gesture is claimed as a swipe or a drag, stop the parent
-                                // (pager/scroller) from also reacting to the same finger movement.
-                                val phase = machine.phase
-                                if (phase is ItemGesturePhase.Swiped || phase == ItemGesturePhase.Dragging) {
-                                    change.consume()
+                        awaitPointerEventScope {
+                            while (true) {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
+                                if (change == null) {
+                                    perform(machine.onEvent(ItemGestureEvent.Cancel), local)
+                                    break
+                                }
+                                local = change.position
+                                if (change.changedToUpIgnoreConsumed()) {
+                                    perform(machine.onEvent(ItemGestureEvent.Up), local)
+                                    break
+                                }
+                                if (!change.pressed) {
+                                    perform(machine.onEvent(ItemGestureEvent.Cancel), local)
+                                    break
+                                }
+                                if (change.positionChanged()) {
+                                    perform(machine.onEvent(ItemGestureEvent.Move(local - down.position)), local)
+                                    // Once the gesture is claimed as a swipe or a drag, stop the parent
+                                    // (pager/scroller) from also reacting to the same finger movement.
+                                    val phase = machine.phase
+                                    if (phase is ItemGesturePhase.Swiped || phase == ItemGesturePhase.Dragging) {
+                                        change.consume()
+                                    }
                                 }
                             }
                         }
+                        longPress.cancel()
+                    } finally {
+                        releaseSurface()
                     }
-                    longPress.cancel()
                 }
             }
         }
