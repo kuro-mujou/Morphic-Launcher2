@@ -740,6 +740,28 @@ what each zone *holds*, and every difference below follows from that rather than
   `HomeViewModel.reorderList`. The preview is **MovingGap**, the same model the APPS pager and every folder use;
   `OrderedFlow` gained `cellFractionY` for it, because a list flows *down*, so "insert before or after?" is the top
   half of a row rather than the left half of a cell.
+- **A row is a `LauncherDragCell`, and taking the shared cell rather than its parts is what made the drag feel
+  right.** The first cut hand-rolled three of its four jobs — `launcherItemGestures`, the `alpha = 0` on the lifted
+  row, the drop wiring — and silently dropped the fourth, `animatePlacement`. A `Column` places children in order, so
+  reordering them *moves* each row: with the modifier the rows glide as the gap migrates, and without it they jumped
+  between positions. The lifted row must also **drop** the modifier (which the shared cell does), or it flies back
+  from its old slot on release instead of landing where it was put.
+- **Three things about the commit, each of which read as "the drop failed" when it was wrong.**
+  - **The gap is cleared when the drag ends, never by the code that reads it** — a `LaunchedEffect(isDragging)`, the
+    APPS pager's shape. An earlier cut reset it at the top of `handleDrop` and then built the committed order from it
+    two lines later, so every drop wrote `movingGapDisplayOrder(order, app, 0)` and sent the app to the top.
+  - **The list leads its store**, exactly as `placements` does one field over, and here it is not optional: the
+    MovingGap preview lives on the *drag*, so it is gone the instant the finger lifts. Rendering the stored order
+    across the write meant the dropped row visibly returned to where it started and jumped onward a frame or two
+    later. `HomeViewModel.listOrder` + `listWritesInFlight` closes that window; the store's echo afterwards is also
+    the correction, since `setOrder` reconciles what the UI could render against real membership.
+  - **`HomeListItemDao.replaceAll` is one `@Transaction` for a reason that is invisible until it is removed.** As a
+    `clear()` then an `upsert()` the clear is *observable*: the DAO's flow re-runs on that invalidation and emits an
+    **empty** list, so the surface blanks mid-reorder. It is the one transaction in `data:layout`, and it is not the
+    general fix its siblings still need — those should take the database and use `withTransaction`, together.
+- **The drag proxy keeps the list's left edge and follows the finger in y only.** Every other surface centres its
+  proxy on the finger because a proxy is one cell there — roughly square, smaller than the finger's travel. A row is
+  the full width of the list, so centring it swings the whole row sideways with the thumb.
 - **A `Column` in a `verticalScroll`, deliberately not a `LazyColumn`** — the opposite call from `AppsVerticalList`,
   for two reasons that are properties of this list rather than preferences. A lazy list disposes rows that scroll
   away, and the lifted row **owns the pointer stream driving the drag**, so auto-scrolling far enough would kill the
@@ -748,6 +770,10 @@ what each zone *holds*, and every difference below follows from that rather than
   geometry the documented one: the viewport's `onGloballyPositioned` sits **outside** the scroller and
   `viewportTop - scrollState.value` is the content origin, republished every frame — plus the re-send after
   auto-scroll, in one `SideEffect`, since the coordinator only re-plans when the *finger* moves.
+  The cost of the scroller is that **lifting a row needs a still finger**: movement during the long-press scrolls
+  instead, since the scroll gesture is the parent's. That is ordinary for a reorderable list — L1 sidestepped it with
+  its library's drag *handle* — and it is the thing to change if the lift ever feels finicky, rather than a symptom
+  of anything above.
 - **Not built**, all of it L1 behaviour: the "Add apps" row (a picker), the long-press item menu, and removing an app
   from the list. Without a picker its contents are whatever the seed put there.
 
