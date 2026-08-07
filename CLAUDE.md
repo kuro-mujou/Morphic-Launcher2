@@ -1332,19 +1332,19 @@ and each removed something rather than adding a layer:
 - **`RegisterDropZone` + `LocalSurfacePresented`.** `SurfacePager` keeps **every** slot composed at all times, which
   is what satisfies the "keep a source surface composed while a drag from it is in flight" rule for free — and is
   exactly why an ejected drag survives with no re-tracking. The bill is that *composed* is no longer *on screen*: an
-  off-screen surface's `onGloballyPositioned` does not reliably re-fire as the pan moves it, so bounds it published
-  while it *was* on screen would sit in the registry claiming the finger from off-stage. So registration moved out of
-  the layout callback into a composable gated on presence (defaulted from the local, so it cannot be forgotten), and
-  teardown removes a zone **by instance**, which is what lets two folder overlays hand `ZoneId("folder")` over inside
-  one composition. The same local gates each surface's floating proxy, so two never appear under one finger.
+  off-screen surface's `onGloballyPositioned` does not reliably re-fire as the pan moves
+  it, so bounds it published while it *was* on screen would sit in the registry claiming the finger from off-stage. So
+  registration moved out of the layout callback into a composable gated on presence (defaulted from the local, so it
+  cannot be forgotten), and teardown removes a zone **by instance**, which is what lets two folder overlays hand
+  `ZoneId("folder")` over inside one composition. The same local gates each surface's floating proxy, so two never
+  appear under one finger.
 - **`EjectToHome` is one method** — close this surface — because that is all that was left to do. Compare L1's
   `HomeDragBridge`, which passed the app, the finger in window space and a grab offset, because its `CrossPager`
   stopped delivering pointer events to either subtree as it collapsed and the drag had to be re-tracked at the
   ancestor. **Two triggers, and the split is a property of the layout rather than a preference:** the **derived**
   APPS layouts (A–Z list, A–Z grid) eject *on lift*, since they own no arrangement and a drag on one can only mean one
   thing; the layouts that **store** one (pager, category pager, category card) eject when the finger reaches
-  `TopActionZone` — a band across the top, ported from L1 and reduced from its two modes to one, since nothing in L2
-  can delete an app yet. HOME then takes the app wherever its zones do: the pager and the dock **place** it (`Move` is
+  `TopActionZone` — see the band's own rules below. HOME then takes the app wherever its zones do: the pager and the dock **place** it (`Move` is
   an upsert, so an app with no placement needs no separate path — `HomeState.catalog` is the one addition, so home can
   draw an icon for an app it has never placed), and the vertical list **appends** it (MovingGap migrates a gap from
   where an item already *is*, and a stranger is nowhere). Nothing is removed from the drawer on the way: an app lives
@@ -1356,6 +1356,35 @@ and each removed something rather than adding a layer:
   a card's measured rectangle is no longer trustworthy inside a scroller, so each entry in the hit-test map records
   the **scroll offset it was measured at** and the correction is subtracted at hit-test time — self-contained, and
   zero-cost if `onGloballyPositioned` does re-fire.
+- **The band has two states and two modes, and the states are the design.** `TopActionZone` is a full port of L1's,
+  not the always-open banner the first cut drew. **Collapsed** it is exactly the status-bar inset deep — a hint that
+  costs no screen and cannot be hit on the way to home's top row. **Expanded** (96dp) it has committed to being a
+  target and names what it will do in words, which is the only way to tell *remove* from *uninstall* and the reason a
+  drop shadow could never do this job. The threshold between them is **asymmetric** (status bar to arm, 96dp to
+  disarm), which is what stops it chattering while the finger sits near the boundary — L1 spelled the same rule as two
+  named thresholds. `rememberTopActionState` owns the timing; `DropIntent.REMOVE` is the second value with no cell
+  behind it, added on `REORDER`'s terms rather than letting the band return a `PLACE` plan whose footprint is a lie.
+  - **The two modes commit at different moments, and that is not a preference.** `ADD_TO_HOME` opens *at once* and
+    fires on a **dwell** (~700ms), because its whole point is to get the drawer out of the way *while the finger is
+    still down* — a release would end the gesture it exists to continue. `DELETE` opens after a shorter dwell
+    (~300ms) and fires on **release**, because a destructive action that armed itself under a held finger would be a
+    trap, and fingers cross the top of the screen on their way elsewhere.
+  - **Firing collapses the band, and the next opening waits.** After the hand-off the mode flips to `DELETE` under a
+    finger that may not have moved, so re-opening immediately would swap "Drop to home" for "Remove | Uninstall"
+    in place — which is how a user ends up hovering a delete target they never went looking for. L1's
+    `TOP_ACTION_SWITCH_GRACE_MS`: act → shrink away → pause → open again, offering something else.
+  - **It is registered as a drop zone in *both* modes**, and in `ADD_TO_HOME` that is for the **masking** rather than
+    the drop: while the finger is up there it must stop being the drawer's, or the pager's planner keeps migrating its
+    reorder gap and a release before the dwell lands the app at the top-left instead of cancelling. L1 blanked
+    `hoverTarget`/`pendingGap` explicitly for the same reason; being the topmost zone says it structurally.
+  - **Both targets are the shell's**, because the band spans every surface and the item under the finger may have been
+    lifted in the drawer and never placed at all. `ShellViewModel.removeFromHome` is a plain `RemoveFromGrid`, which is
+    also why it needs no "is it placed?" test — on an unplaced app it deletes no rows, so Remove *is* the cancel.
+    `AppUninstaller` (`data:apps`, the sibling of `AppLauncher`) only opens the platform's uninstall prompt, which
+    confirms and acts for itself; nothing is removed from the layout first, since a declined uninstall would otherwise
+    leave an installed app the user can no longer see. **One bound:** an app dragged out of a home *folder* onto
+    Remove goes back to that folder — it has no grid placement to remove, and the shell cannot see folder membership.
+    L1 behaved identically, for the same reason.
 - **Not built here, deliberately:** the item **context menu**. The gesture machine has modelled
   `Pressed → MenuShown → Dragging` since B4, so every flow above already works with `onShowMenu` a no-op — long-press,
   then move, and the drag begins. The menu is P7 and changes none of this wiring.

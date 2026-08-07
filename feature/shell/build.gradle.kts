@@ -16,6 +16,11 @@ dependencies {
     // The surface register: which surface is bound to which HOME edge, and in which layout.
     implementation(projects.data.settings)
 
+    // The top-action band's two targets. They are the shell's rather than a surface's because the band spans every
+    // surface — the item under the finger may have been lifted in the drawer and never placed at all.
+    implementation(projects.data.layout)
+    implementation(projects.data.apps)
+
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch — chrome sits
     // directly on the picture and has to contrast it. This module owns the theme boundary for every launcher surface,
     // so it is the one that has to ask.

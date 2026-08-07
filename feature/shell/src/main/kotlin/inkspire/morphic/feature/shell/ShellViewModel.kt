@@ -4,8 +4,13 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.data.apps.AppUninstaller
+import inkspire.morphic.data.layout.LayoutChange
+import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
 import inkspire.morphic.data.wallpaper.WallpaperBrightness
@@ -20,6 +25,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * What the launcher shell renders.
@@ -72,7 +78,38 @@ data class ShellState(
 class ShellViewModel(
     settingsRepository: SettingsRepository,
     private val wallpaperRepository: WallpaperRepository,
+    private val layoutRepository: LayoutRepository,
+    private val appUninstaller: AppUninstaller,
 ) : ViewModel() {
+
+    /**
+     * **Takes [item] off HOME** — the top-action band's Remove target.
+     *
+     * It lives here rather than on `HomeViewModel` because the band spans every surface: the item may have been
+     * lifted in the APPS drawer and never placed at all, and the shell is the only layer above both. That case is
+     * also why this needs no "is it placed?" test — `RemoveFromGrid` on an app with no placement deletes no rows, so
+     * a drag that came from the drawer and was thrown at Remove simply ends, which is exactly the cancel it should
+     * be. A folder or container, which can only have come *from* home, is destroyed with its contents' membership,
+     * as its own KDoc says.
+     *
+     * **One bound worth knowing:** an app dragged out of a home *folder* and dropped here goes back to that folder
+     * rather than being deleted from it. It has no grid placement to remove, and the shell cannot see folder
+     * membership — that is home's. L1 behaved identically for the same reason.
+     */
+    fun removeFromHome(item: GridItem) {
+        viewModelScope.launch {
+            layoutRepository.apply(ORIENTATION, listOf(LayoutChange.RemoveFromGrid(item)))
+        }
+    }
+
+    /**
+     * **Opens the system uninstaller** for [component] — the band's Uninstall target.
+     *
+     * Deliberately *not* paired with a [removeFromHome]: the platform asks the user to confirm and may well be
+     * declined, and removing the icon first would leave an installed app the user can no longer see. The layout
+     * prunes itself when the app-removed event arrives, which is the same path any uninstall from anywhere takes.
+     */
+    fun uninstall(component: ComponentKey) = appUninstaller.uninstall(component)
 
     /**
      * Which way the device is held, reported by the shell.
@@ -137,5 +174,11 @@ class ShellViewModel(
     private companion object {
         /** Keeps the store subscription alive across a configuration change instead of tearing it down and back up. */
         const val STOP_TIMEOUT_MS = 5_000L
+
+        /**
+         * The orientation layout writes are scoped to. Portrait-only, matching `HomeViewModel`'s own constant — home
+         * does not store per-posture placements yet, and a removal has to name the same tables the placement did.
+         */
+        val ORIENTATION = Orientation.PORTRAIT
     }
 }

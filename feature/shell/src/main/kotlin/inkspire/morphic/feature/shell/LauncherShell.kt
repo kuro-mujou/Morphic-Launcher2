@@ -40,10 +40,17 @@ import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.designsystem.topaction.TopActionExpandedHeight
+import inkspire.morphic.core.designsystem.topaction.TopActionMode
+import inkspire.morphic.core.designsystem.topaction.TopActionTarget
 import inkspire.morphic.core.designsystem.topaction.TopActionZone
-import inkspire.morphic.core.designsystem.topaction.TopActionZoneHeight
+import inkspire.morphic.core.designsystem.topaction.rememberTopActionState
+import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.Orientation
@@ -174,66 +181,124 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                     HomeScreen()
                 }
 
-                // **The eject target, above every surface** — hence a sibling of the pager rather than its `overlay`
-                // slot, which is deliberately drawn *under* the side surfaces so the frost can sit between them. The
-                // band has to be over the drawer it takes apps out of.
-                EjectTopActionZone(coordinator = coordinator, openEdge = pagerState.openEdge, onEject = eject)
+                // **The top-action band, above every surface** — hence a sibling of the pager rather than its
+                // `overlay` slot, which is deliberately drawn *under* the side surfaces so the frost can sit between
+                // them. The band has to be over the drawer it takes apps out of.
+                TopActionOverlay(
+                    coordinator = coordinator,
+                    openEdge = pagerState.openEdge,
+                    onEject = eject,
+                    onRemove = viewModel::removeFromHome,
+                    onUninstall = viewModel::uninstall,
+                )
             }
         }
     }
 }
 
-/** Where the eject band's drop zone lives in the registry. Above every surface's own, so it wins the finger. */
+/** Where the band's drop zone lives in the registry. Above every surface's own, so it wins the finger. */
 private val TopActionZoneId = ZoneId("top-action")
 
 /**
- * The **drag-out-to-home target** across the top of an open side surface: the affordance ([TopActionZone]) and the
- * drop zone that drives it, which are two halves of one thing and so are wired here rather than in either.
+ * The plan the band reports: droppable, naming no destination, painting nothing.
  *
- * **Entering it is the whole gesture — there is no drop.** The moment the finger arrives, [onEject] closes the side
- * surface and the *same* drag carries on over home, whose zones are on the same coordinator and are uncovered a few
- * frames later. So this zone plans nothing and lands nothing: releasing on it while the surface is still sliding away
- * is a cancel, which is the honest outcome for a gesture abandoned before it reached anywhere to put the app.
+ * The footprint is a required field with nothing meaningful to put in it — no cell is involved in taking an item off
+ * the launcher — which is exactly what [DropIntent.REMOVE] exists to say. The band itself is the affordance.
+ */
+private val TopActionRemovePlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.REMOVE)
+
+/**
+ * The **top-action band** and the drop zone behind it: two halves of one thing, so they are wired together here
+ * rather than in either.
  *
- * No dwell, unlike the folder enter/leave holds. Those are ambiguous — the finger is over a folder *on the way to*
- * somewhere else as often as not — where this band exists for one purpose and is nowhere near anything else the drag
- * could be aiming at, so a hold would only be a delay.
+ * **The band's mode follows which surface the drag is over**, which is the whole reason it belongs to the shell. A
+ * side surface is open → the band hands the drag to HOME. HOME is showing → it takes the item *off* the launcher.
+ * One band with a mode, where L1 had two entirely separate implementations with their own thresholds and their own
+ * copies of the view (the drawer's `SurfaceExtractEngagement` and home's `rememberTopActionState`).
  *
- * **It is only there while there is something to eject**, which is a drag in flight *and* a side surface open. On
- * HOME there is nothing to leave, so the band would be a target that closes nothing.
+ * **The two modes commit at different moments, and [rememberTopActionState] owns why:**
+ * - `ADD_TO_HOME` fires on a **dwell**. The point is to get the drawer out of the way *while the finger is still
+ *   down*, so the same drag carries on over home; a release would end the very gesture it exists to continue. There
+ *   is therefore nothing to drop on, and releasing here is a plain cancel.
+ * - `DELETE` fires on **release**, so it registers a real drop zone. A destructive action that armed itself under a
+ *   held finger would be a trap, and a finger crosses the top of the screen on its way elsewhere often enough.
+ *
+ * **The DELETE zone is registered only while the band is expanded**, which is what makes the collapsed strip
+ * harmless: until the user has held the finger up there long enough to open the band, the top of the screen belongs
+ * to whatever is beneath it and a release goes there. Once open, `z = 2` puts it above every surface's own zone —
+ * necessary rather than decorative, since the drawer's viewport zone covers the same pixels.
  */
 @Composable
-private fun EjectTopActionZone(coordinator: DragCoordinator, openEdge: HomeEdge?, onEject: EjectToHome) {
+private fun TopActionOverlay(
+    coordinator: DragCoordinator,
+    openEdge: HomeEdge?,
+    onEject: EjectToHome,
+    onRemove: (GridItem) -> Unit,
+    onUninstall: (ComponentKey) -> Unit,
+) {
     val session = coordinator.session
-    val armed = session != null && openEdge != null
+    val item = session?.item
+    val mode = when {
+        item == null -> null
+        // A folder living in the drawer has nowhere to go on home yet, so the band offers it nothing there; over
+        // HOME everything placed can at least be removed.
+        openEdge != null -> TopActionMode.ADD_TO_HOME.takeIf { item is GridItem.App }
+        else -> TopActionMode.DELETE
+    }
+
     val density = LocalDensity.current
     val width = LocalWindowInfo.current.containerSize.width.toFloat()
+    val state = rememberTopActionState(
+        mode = mode,
+        fingerInRoot = session?.fingerInRoot,
+        viewportWidth = width,
+        // Only an app has a package to uninstall; a folder gets Remove alone.
+        showUninstall = item is GridItem.App,
+        onEngage = onEject::invoke,
+    )
+
+    // Read here rather than inside `onDrop`: by the time that runs the drag has ended, and the band's own state has
+    // started collapsing behind it. Same "read it before the drop clears it" discipline every surface's landing
+    // handler follows.
+    val target = state.hoveredTarget
     val bounds = remember(width, density) {
-        Rect(0f, 0f, width, with(density) { TopActionZoneHeight.toPx() })
+        Rect(0f, 0f, width, with(density) { TopActionExpandedHeight.toPx() })
     }
     RegisterDropZone(
         coordinator = coordinator,
-        // `z` above every surface's own zone, which is what lets the band be hit at all: the drawer's viewport zone
-        // covers the same pixels and is registered at 0.
         zone = DropZone(
             id = TopActionZoneId,
             bounds = bounds,
             z = 2,
-            planner = { _, _ -> null },
-            // Only an app, because home is the only thing on the other side of this and an app is all it can be
-            // handed today. A folder living in the drawer is a drawer folder; moving one to home is a separate
-            // question with no answer yet.
-            accepts = { item -> item is GridItem.App },
+            // A plan only in DELETE mode, because only there does a release mean anything: a non-null plan is what
+            // makes the coordinator dispatch a *landing* rather than treat the release as a cancel. ADD_TO_HOME
+            // returns null on purpose — its commit is the dwell, so lifting the finger over it means "never mind".
+            planner = { _, _ -> if (mode == TopActionMode.DELETE) TopActionRemovePlan else null },
+            onDrop = { outcome ->
+                when (target) {
+                    TopActionTarget.REMOVE -> onRemove(outcome.item)
+                    TopActionTarget.UNINSTALL ->
+                        (outcome.item as? GridItem.App)?.let { onUninstall(it.component) }
+                    null -> Unit // no half armed — nothing to commit
+                }
+            },
         ),
-        enabled = armed,
-        // The shell is not inside any slot, so `LocalSurfacePresented` is its default `true` here; `armed` is the
-        // real condition and is passed explicitly for that reason.
+        // **Registered whenever the band is open, in either mode** — and in ADD_TO_HOME that is for the masking
+        // rather than for the drop. While the finger is up here it must stop being the drawer's: otherwise the
+        // pager's own planner keeps migrating its reorder gap toward the top-left, and a release before the dwell
+        // completes lands the app there instead of cancelling. Being the topmost zone is what stops that, and it is
+        // L1's rule too — its drawer explicitly blanked `hoverTarget` and `pendingGap` while over the top bar.
+        enabled = state.expanded,
+        // The shell sits in no slot, so `LocalSurfacePresented` would be its default `true`; the real condition is
+        // above, and is passed explicitly for that reason.
     )
-    val hovering = session?.activeZone == TopActionZoneId
-    // Fired from an effect rather than inline: `onEject` starts an animation, and the read that discovers the hover
-    // happens during composition.
-    LaunchedEffect(hovering) { if (hovering) onEject() }
-    TopActionZone(visible = armed, highlighted = hovering)
+
+    TopActionZone(
+        mode = state.mode,
+        expanded = state.expanded,
+        showUninstall = state.showUninstall,
+        hoveredTarget = state.hoveredTarget,
+    )
 }
 
 /**

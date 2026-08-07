@@ -10,8 +10,14 @@ package inkspire.morphic.core.model
  * return a plan whose footprint is a deliberate lie — a token meaning "handled", which any surface that naively
  * paints will render as a shadow at cell (0,0). Now "reflow, don't paint" is representable, and the cost is one
  * paint-nothing branch in `DropFootprint`, which is honest rather than hidden.
+ *
+ * [REMOVE] is the second value with no cell behind it, added for the same reason and on the same terms: the
+ * top-action band takes an item **off** the launcher rather than putting it somewhere, so its plan names no
+ * destination at all. Its affordance is the band itself lighting up, which is why it too paints no shadow. The
+ * alternative was a `PLACE` plan whose footprint was a token — exactly the lie [REORDER] exists to have stopped
+ * telling.
  */
-enum class DropIntent { PLACE, PUSH, MERGE, REORDER, INVALID }
+enum class DropIntent { PLACE, PUSH, MERGE, REORDER, REMOVE, INVALID }
 
 /**
  * The resolved outcome of a drag hovering over a drop zone — the **single value preview and commit both

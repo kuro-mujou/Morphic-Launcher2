@@ -377,8 +377,14 @@ in one sitting.
   which needed all three because its `CrossPager` stopped delivering events to either subtree as it collapsed.
   **Two triggers, and the split is not a preference.** The **derived** layouts (A–Z list, A–Z grid) eject *on lift*:
   they own no arrangement, so a drag on one can only mean one thing. The layouts that **store** an arrangement (the
-  pager, the category pager, the category card) eject when the finger reaches a `TopActionZone` band at the top of
+  pager, the category pager, the category card) eject when the finger reaches the `TopActionZone` band at the top of
   the screen — a drag on them means "rearrange" until the user says otherwise, and the band is how they say it.
+  The band itself is a full port of L1's: **collapsed** to the status-bar inset while it waits, **expanded** to 96dp
+  once a dwell arms it, with an asymmetric threshold between the two so it cannot chatter. It has two modes —
+  `ADD_TO_HOME` over an open side surface (fires on a dwell, because the hand-off has to happen while the finger is
+  still down) and `DELETE` over HOME (Remove | Uninstall, fires on release, because a destructive action must not arm
+  itself). Firing collapses it and the next opening serves an extra grace, so the mode cannot change under a
+  stationary finger. See CLAUDE.md for the full set of rules.
   HOME takes the app wherever its zones do: the pager and the dock place it (a `Move` is an upsert, so an app with no
   placement needs no separate path), the vertical list appends it. `MovingGap` is wired on every ordered surface;
   `DenseReorder` never became a separate thing — the home list uses MovingGap too.

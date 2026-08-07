@@ -7,7 +7,9 @@ import inkspire.morphic.core.icon.source.RawIconSource
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.AppRepositoryImpl
+import inkspire.morphic.data.apps.AppUninstaller
 import inkspire.morphic.data.apps.DefaultAppLauncher
+import inkspire.morphic.data.apps.DefaultAppUninstaller
 import inkspire.morphic.data.apps.DefaultLauncherAppsWrapper
 import inkspire.morphic.data.apps.LauncherAppsRawIconSource
 import inkspire.morphic.data.apps.LauncherAppsWrapper
@@ -20,14 +22,15 @@ import org.koin.dsl.module
  * Koin module for `data:apps`. The bindings are singletons: the wrapper holds long-lived system services,
  * and the repository fronts the shared cache. [AppInfoDao] and [AppDispatchers] are resolved from the
  * database/common modules, and `Context` is provided by the app at Koin start (as `DatabaseModule` expects).
- * [AppLauncher] is a thin stateless command over the wrapper — singleton only to avoid re-allocating it, as is
- * [AppCategorizer].
+ * [AppLauncher] and [AppUninstaller] are thin stateless commands — singletons only to avoid re-allocating them,
+ * as is [AppCategorizer].
  */
 val appsModule = module {
     single<LauncherAppsWrapper> { DefaultLauncherAppsWrapper(get<Context>()) }
     single<RawIconSource> { LauncherAppsRawIconSource(get()) }
     single<AppRepository> { AppRepositoryImpl(get(), get(), get()) }
     single<AppLauncher> { DefaultAppLauncher(get()) }
+    single<AppUninstaller> { DefaultAppUninstaller(get<Context>()) }
 
     // Classification: the curated table is a `Context`-backed asset, read once and cached, so it is a singleton;
     // the categorizer over it is stateless and singleton only to avoid re-allocating it per call site.
