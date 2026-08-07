@@ -89,10 +89,15 @@ internal fun IconSizingControls(
         )
     }
 
-    // Not offered for a list, and that is the mirror of the switch above rather than an inconsistency: a row *is* its
-    // label, so hiding it would leave nothing, where hiding the icon leaves the pure-text list the other switch
-    // promises. `AppRowCell` says the same from its side, which is why neither has to be told.
-    if (slot != GridSlot.APPS_LIST) {
+    // **Neither text control is offered where the cells carry no text**, which the slot already knows: a list row *is*
+    // its label, so hiding it would leave nothing (the mirror of the switch above rather than an inconsistency), and a
+    // category card's preview slots have no label to hide — the blueprint says so with `showLabel = false`, because
+    // four ellipsised words at thumbnail size would eat the room the icons need. `AppRowCell` and `CategoryCardFace`
+    // each say the same from their own side, which is why neither has to be told.
+    //
+    // A card *does* have text: its title. That is card chrome rather than cell sizing, and its control lives with the
+    // rest of the card's in the APPS section — a title is drawn once per tile, not once per icon.
+    if (slot != GridSlot.APPS_LIST && slot != GridSlot.APPS_CARD) {
         SettingsSwitchRow(
             title = "Show labels",
             checked = sizing.showLabel,

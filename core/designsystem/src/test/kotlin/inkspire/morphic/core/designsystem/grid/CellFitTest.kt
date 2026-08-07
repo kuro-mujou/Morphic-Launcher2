@@ -1,9 +1,12 @@
 package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.cellIconLayout
+import inkspire.morphic.core.model.AppsCardGrid
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.FolderGrid
@@ -299,6 +302,42 @@ class CellFitTest {
         assertEquals(AppsScrollGrid.editRange!!.minCols, AppsScrollGrid.fitCols(30f, cols = 4, metrics = metrics))
         assertEquals(AppsScrollGrid.editRange!!.minCols, AppsScrollGrid.fitCols(360f, cols = 0, metrics = metrics))
         assertEquals(1, FolderGrid.fitCols(0f, cols = 0, metrics = metrics))
+    }
+
+    @Test
+    fun `a tile grid's floor is its preview icons' guardrail, plus the paddings around them`() {
+        // A card's floor is two preview icons at their own guardrail plus the paddings around and between them —
+        // `CellFit`'s ordinary inversion, applied to a tile holding four icons rather than a cell holding one.
+        // Two icons at the guardrail, plus the gap between lanes that a column fit does not otherwise account for.
+        val bare = cardMinCell(metrics, CardChrome())
+        assertEquals(2f * metrics.minIconDp.value + CategoryCardSpacing.value, bare.widthDp)
+        // A user who wants larger cards asks for larger *icons*, and the lane count follows — which is the whole point
+        // of deriving the ceiling rather than picking a number that was wrong twice.
+        val chunkyIcons = cardMinCell(chunky, CardChrome())
+        assertTrue(
+            "a bigger guardrail must allow fewer lanes",
+            AppsCardGrid.fitCols(393f, cols = 9, min = chunkyIcons) <
+                AppsCardGrid.fitCols(393f, cols = 9, min = bare),
+        )
+        assertEquals(2, AppsCardGrid.fitCols(areaWidthDp = 393f, cols = 2, min = bare))
+        // Both of a card's own paddings raise that floor too, so widening either can take a lane away.
+        val padded = cardMinCell(metrics, CardChrome(outerPaddingDp = 12, innerPaddingDp = 8))
+        assertEquals(bare.widthDp + 32f, padded.widthDp)
+        // Its blueprint's own minimum still wins on an area too narrow to honour it, as for every other grid.
+        assertEquals(AppsCardGrid.editRange!!.minCols, AppsCardGrid.fitCols(50f, cols = 4, min = padded))
+    }
+
+    @Test
+    fun `a tile grid's fit and editable range agree too, so its editor cannot offer a lane it will not draw`() {
+        // The same invariant as the icon grids' below, on the path that reads a `MinCell` instead of metrics — the
+        // APPS surface and the settings editor both go through it, so a disagreement would be a lane the user could
+        // press for and never see.
+        val min = cardMinCell(metrics, CardChrome(outerPaddingDp = 8, innerPaddingDp = 4))
+        listOf(200f, 360f, 480f, 1024f).forEach { width ->
+            val range = AppsCardGrid.editableRangeIn(GridArea(width, 800f), min)!!.cols
+            assertEquals(range.last, AppsCardGrid.fitCols(width, cols = 99, min = min))
+            assertEquals(range.first, AppsCardGrid.fitCols(width, cols = 0, min = min))
+        }
     }
 
     @Test

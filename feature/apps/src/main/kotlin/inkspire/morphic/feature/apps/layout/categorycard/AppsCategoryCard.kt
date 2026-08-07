@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
+import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -49,6 +51,7 @@ import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -68,8 +71,8 @@ import kotlin.math.roundToInt
  * retires the note on `PreviewIconMetrics` in [CategoryCard] observing that a 72dp icon cap would bind on a tablet
  * given two columns. Fix the columns, not the cap.
  */
-private val CardSpacing = 12.dp
-private val CardPadding = 16.dp
+private val CategoryCardSpacing = 12.dp
+private val CategoryCardGutter = 16.dp
 
 /** This surface's drop zone — the whole card grid, as each paged surface registers its viewport. */
 private val CardGridZoneId = ZoneId("apps-category-cards")
@@ -159,6 +162,10 @@ private val DragProxySize = 72.dp
  * @param onReorder commits a reorder inside an expansion, when the app was already filed there: the category, and the
  *   order its overlay reported. That report covers only the apps the cache could resolve, and is reconciled against
  *   real membership **in the store** rather than here — see `AppsCategoryChange.Reorder`.
+ * @param slotMetrics the icon sizing of one **preview slot** on a card (`GridSlot.APPS_CARD`), which is a different
+ *   grid from the expansion below and so a different setting. A slot is sized to be an icon, and the blueprint turns
+ *   labels off, so what a user changes here is how large the four thumbnails are and where the lane ceiling sits.
+ * @param chrome the resolved [CardChrome] every card on this grid is drawn with.
  * @param metrics an *expansion's* icon sizing (`GridSlot.FOLDER`, since an expansion is that same overlay and grid).
  *   The card previews are the exception and pass their own at each call site, because a preview icon is derived from
  *   the card's square rather than configured.
@@ -173,6 +180,8 @@ fun AppsCategoryCard(
     onMove: (app: ComponentKey, toCategory: String, toSlot: Int) -> Unit,
     onReorder: (category: String, order: List<ComponentKey>) -> Unit,
     metrics: IconMetrics,
+    slotMetrics: IconMetrics,
+    chrome: CardChrome,
     cardColumns: Int,
     horizontalPadding: Dp,
     modifier: Modifier = Modifier,
@@ -346,16 +355,16 @@ fun AppsCategoryCard(
                     .windowInsetsPadding(uiInsets)
                     .onGloballyPositioned { gridBounds = it.boundsInRoot() }
                     .verticalScroll(scrollState, enabled = !coordinator.isDragging)
-                    // The grid's own margin adds to the card gutter rather than replacing it: `CardPadding` is the
+                    // The grid's own margin adds to the card gutter rather than replacing it: `CategoryCardGutter` is the
                     // gap between a card and the screen edge that the *tile* needs to read as a tile, and the
                     // setting is the user's inset on top. Inside the scroller, so cards still travel under the bars.
                     .padding(
-                        start = CardPadding + horizontalPadding,
-                        top = CardPadding,
-                        end = CardPadding + horizontalPadding,
-                        bottom = CardPadding,
+                        start = CategoryCardGutter + horizontalPadding,
+                        top = CategoryCardGutter,
+                        end = CategoryCardGutter + horizontalPadding,
+                        bottom = CategoryCardGutter,
                     ),
-                verticalArrangement = Arrangement.spacedBy(CardSpacing),
+                verticalArrangement = Arrangement.spacedBy(CategoryCardSpacing),
             ) {
                 // TODO(category management): long-press a card for rename / delete, and drag one to reorder the
                 //  categories. Both write category *definitions*, which `AppsCategoryChange` deliberately has no ops
@@ -367,7 +376,7 @@ fun AppsCategoryCard(
                 categories.chunked(cardColumns).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(CardSpacing),
+                        horizontalArrangement = Arrangement.spacedBy(CategoryCardSpacing),
                     ) {
                         row.forEach { entry ->
                             key(entry.category.id) {
@@ -377,6 +386,8 @@ fun AppsCategoryCard(
                                     coordinator = coordinator,
                                     gestureConfig = gestureConfig,
                                     shadowed = id == shadowedCategoryId,
+                                    chrome = chrome,
+                                    metrics = slotMetrics,
                                     onLaunch = onLaunch,
                                     onExpand = { folderHost.open(id) },
                                     onRelease = ::handleRelease,

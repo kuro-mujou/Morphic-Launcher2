@@ -1,6 +1,7 @@
 package inkspire.morphic.data.settings
 
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
@@ -114,6 +115,26 @@ interface SettingsRepository {
         slot: GridSlot,
         device: DeviceConfiguration,
         transform: IconOverride.() -> IconOverride,
+    )
+
+    /**
+     * The **card chrome** to draw tile grid [slot] with on [device] — resolved from its blueprint and any override.
+     *
+     * The third kind of stored size, beside [extent] and [rowHeight], and the one that is not a size of the *grid* at
+     * all: a title's scale, a corner radius and two paddings shape one card, where those two shape the area a grid is
+     * laid out in. A slot whose blueprint declares no `card` throws, which is that pair's convention — only a grid of
+     * tiles can be asked.
+     */
+    fun cardChrome(slot: GridSlot, device: DeviceConfiguration): Flow<CardChrome>
+
+    /**
+     * Overrides one or more card-chrome fields for [slot] on [device]; a null field in [transform] clears it back to
+     * the blueprint, which is how a per-control reset works — [updateIcon]'s contract, for the same reason.
+     */
+    suspend fun updateCard(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: CardOverride.() -> CardOverride,
     )
 
     /**

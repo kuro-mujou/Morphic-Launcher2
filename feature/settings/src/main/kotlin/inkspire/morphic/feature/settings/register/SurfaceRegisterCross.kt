@@ -164,9 +164,12 @@ private fun SideSlot(
             content = colors.content,
             onClick = { onPick(edge) },
             // **No gear where there is nothing to open.** L1's `settingsSection` is nullable for exactly this reason
-            // and its card omits the gear when it is null. The category card is the one layout the APPS section cannot
-            // configure ([ConfigurableLayouts]), so a gear here would land on a pane with no chip for it — and, worse,
-            // on controls that would ask a tile grid for icon sizing it does not declare.
+            // and its card omits the gear when it is null.
+            //
+            // [ConfigurableLayouts] is total today — the category card was its one exclusion and now has a chip of its
+            // own — so this branch never takes its `else`. Kept rather than deleted because the condition is the honest
+            // statement of when a gear belongs, not a workaround for one layout: a future arrangement with no editable
+            // grid would otherwise land on a pane with no chip for it, which is the failure this prevents.
             onSettings = if (bound.layout in ConfigurableLayouts) {
                 { onOpenSettings(SettingsSection.APPS, bound.layout) }
             } else {

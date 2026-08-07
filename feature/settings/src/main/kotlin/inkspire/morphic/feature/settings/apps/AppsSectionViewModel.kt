@@ -2,7 +2,9 @@ package inkspire.morphic.feature.settings.apps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.designsystem.cell.CategoryPreviewSlots
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.GridEditorEdge
@@ -56,19 +58,23 @@ internal val AppsLayout.slot: GridSlot
 /**
  * The layouts this section can configure, in the order their chips appear.
  *
- * [AppsLayout.CATEGORY_CARD] is deliberately absent, and it is the one gap in this section. Its lane count *is* the
- * user's in principle — `AppsCardGrid` declares an `editRange` — but a card is a **tile**, so how narrow one may get
- * is not an icon guardrail (its blueprint declares no icon sizing at all) and nothing else answers it yet. Offering a
- * ceiling picked by hand is what the rest of this port has avoided; L1 gave its library layout no grid knobs either.
+ * **All five**, which closes the gap this list used to describe. The category card was held back because a card is a
+ * **tile**: how narrow one may get is not an icon guardrail, its blueprint declares no icon sizing at all, and the
+ * note here said picking a ceiling by hand was what the rest of this port had avoided. What changed is that the
+ * ceiling is now *derived* where every other grid's is (`CellFit.cardMinCell`, the guardrails inverted), rather
+ * than being a number picked by eye — and that the card's lane count and margin were *already stored and read by
+ * the surface*, so the gap was not a missing feature but a value the user could not reach.
  *
  * Stated as its own list rather than read off [slot]'s cases: "which grid does this draw" and "which can I edit" are
- * different questions, and deriving one from the other is what made asking the first one crash.
+ * different questions, and deriving one from the other is what made asking the first one crash. Keeping it separate
+ * still earns its place now that it is total — the day a layout gains a grid with no editor, only this list moves.
  */
 internal val ConfigurableLayouts: List<AppsLayout> = listOf(
     AppsLayout.VERTICAL_LIST,
     AppsLayout.VERTICAL_GRID,
     AppsLayout.PAGER,
     AppsLayout.PAGER_WITH_CATEGORY,
+    AppsLayout.CATEGORY_CARD,
 )
 
 /**
@@ -79,7 +85,11 @@ internal val ConfigurableLayouts: List<AppsLayout> = listOf(
  * @property size the selected grid's **stored** size. `rows` is null for a scrolling grid, which is [GridDefault]'s own
  *   meaning for it rather than a convention invented here — and is also what tells the screen which sizes it must clamp
  *   before showing them (a scrolling grid's columns are fitted to the measured width; the pager's capacity is not).
- * @property icon its resolved icon sizing.
+ * @property card the category card's resolved tile chrome, or null on every other layout — which is the same
+ *   null-means-*not this grid* the blueprint uses, so a section draws the card group exactly when there is one.
+ * @property icon its resolved icon sizing — or null on the **category card**, where that means something different
+ *   from "not yet": a card is a tile, so that grid declares no icon sizing at all and the section draws no icon group.
+ *   [layout] is what tells the two nulls apart, exactly as it does in the dock section's `DockState.icon`.
  * @property rowHeightDp the vertical list's row height. Present whatever the selection, because it is read in the
  *   list's own arm only — carrying it always is cheaper than a second flow that appears and disappears.
  *
@@ -94,6 +104,7 @@ data class AppsSectionState(
     val paddingDp: Int? = null,
     val chrome: AppsChrome = AppsChrome.Default,
     val wraps: Boolean? = null,
+    val card: CardChrome? = null,
 )
 
 /**
@@ -120,6 +131,22 @@ class AppsSectionViewModel(
     /** The app the icon preview draws, and the dice that changes it. Shared by every section that has a preview. */
     internal val sample = SamplePreviewApp(appRepository, viewModelScope)
 
+    /**
+     * Enough apps to fill a category card's preview, from the same dice — held here rather than asked for per read,
+     * since each call builds its own flow.
+     *
+     * The card is the one preview that draws a *collection*, so it needs a set rather than a single app. They are
+     * installed apps standing in for a category's contents, deliberately not a real category's: previewing a real one
+     * would draw whatever that phone happens to hold, and a category with two apps in it leaves half the slots empty —
+     * which is exactly the state in which the spacing and padding sliders show nothing.
+     *
+     * **Enough for a cluster, not just for the slots**: a card shows `CategoryPreviewSlots - 1` icons plus an overflow
+     * tile of up to `CategoryPreviewSlots` more, so the preview needs both to draw the layout a full category really
+     * gets. Asking for four filled the slots and left nothing over, which drew the one arrangement — four apps, no
+     * cluster — that a category large enough to need this screen never has.
+     */
+    internal val sampleApps = sample.apps(CategoryPreviewSlots * 2 - 1)
+
     private val layout = MutableStateFlow(ConfigurableLayouts.first())
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
@@ -132,19 +159,40 @@ class AppsSectionViewModel(
                 } else {
                     combine(
                         sizeOf(current.slot, configuration),
-                        settingsRepository.iconSizing(current.slot, configuration),
+                        // Asked only of a grid that draws icon cells. The category card is a grid of *tiles*, so its
+                        // blueprint declares no icon sizing and `iconSizing` rightly throws for it — the same branch
+                        // the dock section takes for the widget area, and the same null that tells the screen to draw
+                        // no icon group rather than "not yet".
+                        if (current.slot.blueprint.icon == null) {
+                            flowOf(null)
+                        } else {
+                            settingsRepository.iconSizing(current.slot, configuration)
+                        },
                         settingsRepository.rowHeight(GridSlot.APPS_LIST, configuration),
                         settingsRepository.horizontalPadding(current.slot, configuration),
-                        // Six sources against `combine`'s five, so the two that are **not keyed by the device** are
-                        // grouped: the chrome slice is one value for the whole surface, and wrapping is a behaviour.
-                        // The four above are all per-configuration reads.
-                        combine(settingsRepository.appsChrome, settingsRepository.pagerWraps, ::Pair),
-                    ) { size, icon, rowHeight, padding, (chrome, wraps) ->
+                        // Seven sources against `combine`'s five, so the three that are **not keyed by the selected
+                        // grid** are grouped: the chrome slice is one value for the whole surface, wrapping is a
+                        // behaviour, and the card's tile chrome belongs to one fixed slot. The four above all follow
+                        // whichever layout's chip is selected.
+                        combine(
+                            settingsRepository.appsChrome,
+                            settingsRepository.pagerWraps,
+                            // Asked only of the grid that draws tiles; `cardChrome` rightly throws for the rest, and
+                            // the null is what tells the screen to draw no card group — `icon`'s convention, one
+                            // group over.
+                            if (current.slot.blueprint.card == null) {
+                                flowOf(null)
+                            } else {
+                                settingsRepository.cardChrome(current.slot, configuration)
+                            },
+                            ::Triple,
+                        ),
+                    ) { size, icon, rowHeight, padding, (chrome, wraps, card) ->
                         // Null on the three layouts that do not page, which is what tells the screen to draw no
                         // control — and what makes the toggle follow the chip: selecting the category pager selects
                         // *its* grid's setting, not the plain pager's.
                         val pagerWraps = current.pagerSlot?.let { wraps[it] }
-                        AppsSectionState(current, size, icon, rowHeight, padding, chrome, pagerWraps)
+                        AppsSectionState(current, size, icon, rowHeight, padding, chrome, pagerWraps, card)
                     }
                 }
             }
@@ -172,6 +220,16 @@ class AppsSectionViewModel(
      * range is computed from.
      */
     internal val icons = IconSizingEdits(
+        settings = settingsRepository,
+        scope = viewModelScope,
+        slot = { layout.value.slot },
+        device = { device.value },
+    )
+
+    /**
+     * The card's chrome writes, beside [icons] — two groups of settings on one screen, each owning its own commits.
+     */
+    internal val cardChrome = CardChromeEdits(
         settings = settingsRepository,
         scope = viewModelScope,
         slot = { layout.value.slot },

@@ -1,5 +1,6 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.GridSlot
@@ -45,6 +46,34 @@ data class IconOverride(
     )
 }
 
+
+/**
+ * A user's change to one card grid's **chrome** — every field nullable, meaning "not overridden".
+ *
+ * Sparse for [IconOverride]'s reason, which applies here with an edge: three of these four default to zero, so a
+ * resolved-value store would be indistinguishable from "the user asked for zero" and a later change to a default
+ * could never reach anyone who had touched a neighbouring slider.
+ */
+@Serializable
+data class CardOverride(
+    val titleScale: Float? = null,
+    val cornerRadiusDp: Int? = null,
+    val outerPaddingDp: Int? = null,
+    val innerPaddingDp: Int? = null,
+) {
+    /** True when nothing is overridden — the state in which this entry may as well not be stored. */
+    val isEmpty: Boolean
+        get() = titleScale == null && cornerRadiusDp == null &&
+            outerPaddingDp == null && innerPaddingDp == null
+
+    /** [base] with each overridden field replaced. Field-by-field, so an untouched field keeps following [base]. */
+    fun resolveAgainst(base: CardChrome): CardChrome = CardChrome(
+        titleScale = titleScale ?: base.titleScale,
+        cornerRadiusDp = cornerRadiusDp ?: base.cornerRadiusDp,
+        outerPaddingDp = outerPaddingDp ?: base.outerPaddingDp,
+        innerPaddingDp = innerPaddingDp ?: base.innerPaddingDp,
+    )
+}
 
 /**
  * A user's change to one grid's **dimensions** — nullable per axis, meaning "not overridden".
@@ -106,6 +135,7 @@ data class SurfaceMetrics(
     val extentDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
     val rowHeightDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
     val horizontalPaddingDp: Map<GridSlot, Map<DeviceConfiguration, Int>> = emptyMap(),
+    val card: Map<GridSlot, Map<DeviceConfiguration, CardOverride>> = emptyMap(),
 ) {
     /**
      * The icon sizing to draw with for [slot] on [device]: the blueprint's default with any override applied.
@@ -134,6 +164,28 @@ data class SurfaceMetrics(
         return copy(icon = if (nextForSlot.isEmpty()) icon - slot else icon + (slot to nextForSlot))
     }
 
+
+    /**
+     * The chrome to draw card grid [slot] with on [device]: the blueprint's default with any override applied.
+     *
+     * Keyed per device like everything else in this slice, and that earns its place here rather than being one value
+     * for all postures: a corner and two paddings are sized against a *card*, and a card is a lane wide — so the same
+     * numbers that read as generous at two lanes on a phone crowd the icons at four in landscape.
+     */
+    fun cardChrome(slot: GridSlot, device: DeviceConfiguration, base: CardChrome): CardChrome =
+        card[slot]?.get(device)?.resolveAgainst(base) ?: base
+
+    /** A copy with [transform] applied to [slot]'s card override for [device]. Sparse, as its two siblings are. */
+    fun withCardOverride(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: CardOverride.() -> CardOverride,
+    ): SurfaceMetrics {
+        val forSlot = card[slot].orEmpty()
+        val updated = forSlot.getOrElse(device) { CardOverride() }.transform()
+        val nextForSlot = if (updated.isEmpty) forSlot - device else forSlot + (device to updated)
+        return copy(card = if (nextForSlot.isEmpty()) card - slot else card + (slot to nextForSlot))
+    }
 
     /**
      * The dimensions to lay [slot] out with on [device]: the blueprint's default with any override applied.

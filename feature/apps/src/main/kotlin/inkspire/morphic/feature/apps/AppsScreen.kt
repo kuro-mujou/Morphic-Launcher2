@@ -3,29 +3,34 @@ package inkspire.morphic.feature.apps
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.grid.cardMinCell
+import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.surface.AxisScroll
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
+import inkspire.morphic.core.model.AppsCardGrid
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
 import inkspire.morphic.core.model.AppsPagerGrid
-import inkspire.morphic.core.model.DeviceConfiguration
-import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.colsFor
+import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
@@ -88,6 +93,21 @@ fun AppsScreen(
     val pagerPadding = state.paddingFor(GridSlot.APPS_PAGER).dp
     val pagerArea = usableWindowArea(uiInsets).let {
         GridArea(widthDp = (it.widthDp - pagerPadding.value * 2).coerceAtLeast(1f), heightDp = it.heightDp)
+    }
+    // The card grid's own margin and the width left for its lanes, computed here beside the pager's because the
+    // settings section bounds its lane buttons against exactly this expression. Two derivations of "how wide is the
+    // grid" that could disagree is the thing `usableWindowArea` exists to prevent.
+    val cardPadding = state.paddingFor(GridSlot.APPS_CARD).dp
+    // A card's own chrome and the sizing of one preview slot. Both stand in with the blueprint's own values until the
+    // store answers, which for the chrome is all-zero — the same thing a fresh install draws, so the first frame is
+    // not a different card.
+    val cardChrome = state.cardChrome ?: CardChrome()
+    val cardMetrics = state.metricsFor(GridSlot.APPS_CARD)
+    // The grid's own gutter comes off as well as the user's margin, so what is divided by the lane count is the width
+    // the *lanes* share. `cardMinCell` folds in the spacing between them, which is the other half of the same sum.
+    val cardArea = usableWindowArea(uiInsets).let {
+        val lanes = it.widthDp - cardPadding.value * 2 - CategoryCardGutter.value * 2
+        GridArea(widthDp = lanes.coerceAtLeast(1f), heightDp = it.heightDp)
     }
     // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —
     // but the *report* below is gated on the store having answered. Paginating against a placeholder would write pages
@@ -167,11 +187,21 @@ fun AppsScreen(
                 // op, because the destination id carries the difference.
                 onMove = viewModel::moveCategoryItem,
                 onReorder = viewModel::reorderCategory,
-                // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing. A card's
-                // previews are derived from its own square instead, and pass their own.
+                // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing; a card's
+                // preview slots take their own, which is `APPS_CARD`'s.
                 metrics = state.metricsFor(GridSlot.FOLDER),
-                cardColumns = state.colsFor(GridSlot.APPS_CARD, device),
-                horizontalPadding = state.paddingFor(GridSlot.APPS_CARD).dp,
+                slotMetrics = cardMetrics,
+                chrome = cardChrome,
+                // **Clamped where it is drawn**, as every other scrolling grid here is, and against the same width
+                // the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will
+                // not draw. The floor is a *card's*: two of its preview icons at their own guardrail, plus the
+                // paddings around and between them, which is `CellFit`'s ordinary inversion applied to a tile.
+                cardColumns = AppsCardGrid.fitCols(
+                    areaWidthDp = cardArea.widthDp,
+                    cols = state.colsFor(GridSlot.APPS_CARD, device),
+                    min = cardMinCell(cardMetrics, cardChrome),
+                ),
+                horizontalPadding = cardPadding,
             )
         }
     }

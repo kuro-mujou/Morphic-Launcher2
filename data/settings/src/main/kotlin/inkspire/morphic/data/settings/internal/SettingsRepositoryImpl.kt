@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
@@ -21,6 +22,7 @@ import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
+import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.SettingsRepository
@@ -143,9 +145,11 @@ internal class SettingsRepositoryImpl(
     // `distinctUntilChanged` inside `read` then means a consumer only wakes when *its own* grid's resolved value
     // changes — editing the dock's icon size does not recompose the app drawer.
     //
-    // `requireNotNull` rather than a silent fallback: a grid with no `icon` draws tiles, not icon cells (the category
-    // card), so asking it for icon sizing is a coding mistake. Answering with a plausible default would hide it — and
-    // the caller would then be drawing icons at a size nothing configures.
+    // `requireNotNull` rather than a silent fallback: a grid with no `icon` draws no icons at all (the widget area),
+    // so asking it for icon sizing is a coding mistake. Answering with a plausible default would hide it — and the
+    // caller would then be drawing icons at a size nothing configures. The category card used to be the other such
+    // grid and no longer is: its *slots* are icons even though the card around them is a tile, and leaving them
+    // undeclared is what left their size a pure consequence of the lane count.
     override fun iconSizing(slot: GridSlot, device: DeviceConfiguration): Flow<IconSizing> {
         val base = requireNotNull(slot.blueprint.icon) {
             "$slot draws tiles rather than icon cells, so it has no icon sizing to resolve"
@@ -228,6 +232,24 @@ internal class SettingsRepositoryImpl(
         rowHeightBaseOf(slot)
         require(dp == null || dp > 0) { "a $dp dp row could not hold an icon" }
         update(SurfaceMetricsSlice) { withRowHeight(slot, device, dp) }
+    }
+
+    override fun cardChrome(slot: GridSlot, device: DeviceConfiguration): Flow<CardChrome> {
+        val base = cardBaseOf(slot)
+        return dataStore.read(SurfaceMetricsSlice) { it.cardChrome(slot, device, base) }
+    }
+
+    override suspend fun updateCard(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        transform: CardOverride.() -> CardOverride,
+    ) {
+        cardBaseOf(slot)
+        update(SurfaceMetricsSlice) { withCardOverride(slot, device, transform) }
+    }
+
+    private fun cardBaseOf(slot: GridSlot): CardChrome = requireNotNull(slot.blueprint.card) {
+        "$slot draws cells rather than tiles, so it has no card chrome to resolve"
     }
 
     private fun extentBaseOf(slot: GridSlot): Int = requireNotNull(slot.blueprint.extentDp) {

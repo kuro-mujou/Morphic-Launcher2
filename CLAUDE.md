@@ -1068,9 +1068,11 @@ same mockups) and the edges got the picture.
   saveable enum beside `selected`, because `SettingsSection` is the list's vocabulary and a payload one section can
   carry does not belong inside it). `AppsDetail` applies it in a `LaunchedEffect(Unit)` — once per *arrival* at the
   pane, not per distinct value, or gearing the same layout twice in a row would silently not re-select it.
-  **No gear where there is nothing to open**: `CATEGORY_CARD` is not in `ConfigurableLayouts`, so a card bound to it
-  shows none — L1's `settingsSection` is nullable for exactly that reason. It would otherwise land on a pane with no
-  chip for it, and on controls that ask a tile grid for icon sizing it does not declare.
+  **No gear where there is nothing to open**: the gear is drawn only for a layout in `ConfigurableLayouts` — L1's
+  `settingsSection` is nullable for exactly that reason. That list is **total today**, since the category card gained
+  its own chip, so the branch never takes its `else`; it is kept because the condition states when a gear belongs
+  rather than working around one layout, and an arrangement with no editable grid would otherwise land on a pane with
+  no chip for it.
 - The card is the shape of **this** device, from `usableWindowArea` rather than L1's `LocalConfiguration`, with L1's
   fixed long side (176dp) and the short side following the ratio — the same rule `GridEditor` sizes its mockup by, and
   for the same reason a fraction of the pane was rejected there.
@@ -1222,9 +1224,64 @@ draws both from its own stored pair. Its search default is `Hidden` where L1's i
 search bar the launcher has not got is the one thing a preview must not do. **Which options are offered is
 layout-dependent**, which is `SearchPlacement`'s whole shape: a standalone layout pins to an edge, the category pager
 embeds in its header. L1's flat `SearchPosition` let a user pick a state their layout could not draw.
-**Left open: the category card's lane count** — a card is a *tile*, so how narrow one
-may get is not an icon guardrail and its blueprint declares no icon sizing; L1 gave its library layout no grid knobs
-either.
+**The category card has a chip now, and it closed the one gap this section had.** It was held back because a card is a
+*tile*: how narrow one may get is not an icon guardrail, its blueprint declares no icon sizing, and picking a ceiling
+by hand was what the rest of this port had avoided. Two things resolved it. The card's settings **already existed** —
+`AppsCardGrid` declares an `editRange` and per-device lane defaults, and `AppsScreen` was already reading both the lane
+count and the margin — so the gap was a value the user could not reach rather than a feature nobody had built. And the
+ceiling belongs where every other floor is stated: **`CellFit`**, as a `MinCell` beside `WidgetMinCell`, which
+is the case that pair of overloads exists for.
+
+**Then the card gained real settings, and that retired the constant.** Two flat numbers were picked by eye and both were
+wrong — 96dp let a 393dp phone draw four lanes of unreadable dots, 120dp only looked right because it absorbed chrome it
+could not see. The fix was to stop guessing: `AppsCardGrid` now declares `icon = IconSizing(showLabel = false)`, so
+`CellFit.cardMinCell` *derives* the floor as `2 × minIconDp` + the card's two paddings + the gap between lanes — the same
+inversion `minCellWidthDp` performs for an icon cell, applied to a tile holding four icons. Ask for larger icons and the
+lane count comes down on its own. The one thing to keep straight is that a column fit divides the grid's **raw** width, so
+the floor must describe a *lane* (card + spacing) and the callers must subtract the gutter first; getting that wrong is
+exactly how both constants went wrong.
+
+**A card is a rectangle, and its *preview* is the square.** It used to be `aspectRatio(1f)` on the card, and the title
+then ate into that square from the top: the leftover box came out wider than tall, the slots sized themselves from its
+*height*, and the icons ended up the smallest thing on a tile whose whole job is to make them recognisable. Now the icon
+area is square at the card's full width and the title adds its height above it.
+
+**`CardChrome` is the tile's own settings** (`core:model`, stored as a fifth `SurfaceMetrics` map keyed slot × device,
+sparse like `IconOverride`): title scale, corner radius, and the icon area's **outer** and **inner** padding. All three dp
+values **start at zero** — a card begins as a plain rectangle of edge-to-edge icons, and every bit of decoration is
+something a user turned on. That is deliberate, after a version where the inset, gap and corner were hardcoded numbers no
+control could reach. The outer padding insets the *icon area* only; the title keeps a fixed inset, because a title against
+the corner reads as a rendering fault rather than a choice. The section therefore shows lanes, margin, an icon group with
+**no text controls** (`APPS_CARD` joins `APPS_LIST` in that gate — the slots carry no labels), and the four chrome
+sliders; still no rows (`minRows = null`) and no infinite scroll (declares no `wraps`). The expansion's sizing stays the
+**Folders** section's, since an expansion *is* that overlay on `FolderGrid`.
+
+**A card slot draws `CategoryPreviewIcon`, not an `AppCell`** — the icon alone, sized against the *whole* slot. A cell
+wraps `IconLabelCell`, which insets by `CellPadH`/`CellPadV` and reserves a label row, so two adjacent slots kept an 8dp
+gap however far the spacing slider was dragged down: a control unable to express the thing it is named for. A slot has no
+label and no chrome; it *is* the icon's box, which is what `iconPercent = 1f` means literally here. The **overflow
+cluster** is sized by the same expression (`CategoryClusterTile`): it stands in for one of the four apps, so given the
+raw slot it stayed full-size while its neighbours shrank with the slider. The preview draws the cluster too, off the
+shared `categoryOverflowCluster` split — a preview that divided the apps differently from the surface would be worse
+than none, and four-apps-no-cluster is the one arrangement a category big enough to need this screen never has. Relatedly, `APPS_CARD`
+had to join `AppsViewModel.IconSlots` — leaving it out was not a skipped lookup but a silent substitution, since an
+unresolved slot falls back to `LocalIconMetrics`, which inside `AppsCategoryCard` is the **folder's**: the surface drew
+labels the card grid explicitly turns off while the settings preview drew none.
+
+**Its preview is a whole card, where every other section previews a cell** — `CategoryCardFace`, extracted to
+`core:designsystem/cell` for exactly this: `feature:settings` cannot depend on `feature:apps`, and a second card
+hand-rolled beside the sliders would drift from the one the surface draws. Same extraction, same reason, as
+`IconPreviewPlate`. Half of what the card's controls shape is the tile *around* the icons, which a lone cell cannot show.
+It draws a **made-up category filled with installed apps**, never one of the user's: a real category would show whatever
+that phone happens to hold, and one holding two apps leaves half the slots empty — which is exactly the state in which
+the spacing and padding sliders show nothing. A preview has to draw the full case for its controls to be readable. It
+**punches through to the wallpaper** like the cell previews (`BlendMode.Src` over `PunchThroughPane`), since a card is
+translucent by design and judging its fill against a flat panel judges it against something it never sits on. And it is
+drawn at the width one card is *really* given — the lane less its share of the spacing between lanes — with
+`requiredWidth`, because the pinned header hands down a fixed full-width constraint that a plain `width` is coerced into:
+the card rendered at the pane's width, silently, which is the one thing a size preview must not do. The card's four
+sliders sit **below** it in the pinned group with the icon controls, not above it in the scrolling layout group — a
+control that scrolls its own preview off the screen cannot be judged.
 **Resizing a grid names an edge, not a count**, because that is what decides where the items go — removing the *left*
 column shifts everything left, removing the right one drops what sat there. So a press is **two writes**: the count
 (`updateGrid`) and the placements it displaces (`GridReflow.edit` → `LayoutRepository.apply`), ordered grow-first for

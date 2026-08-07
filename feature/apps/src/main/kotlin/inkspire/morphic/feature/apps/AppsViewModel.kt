@@ -3,6 +3,7 @@ package inkspire.morphic.feature.apps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -49,6 +50,21 @@ private data class AppsSizing(
     val listRowHeightDp: Int?,
     val padding: Map<GridSlot, Int>,
     val wraps: Map<GridSlot, Boolean>,
+    val card: CardChrome?,
+)
+
+/**
+ * The four **per-device** halves of [AppsSizing], grouped so the outer `combine` stays within its five flows.
+ *
+ * Kotlin's `Triple` covered three of them and a fourth arrived with the category card's chrome; a named record is
+ * what that becomes rather than nested pairs, and it says what the four have in common — each is re-resolved when the
+ * device configuration changes, where the three beside it are not.
+ */
+private data class PerDevice(
+    val icon: Map<GridSlot, IconSizing>,
+    val cols: Map<GridSlot, Int>,
+    val padding: Map<GridSlot, Int>,
+    val card: CardChrome?,
 )
 
 /**
@@ -241,6 +257,19 @@ class AppsViewModel(
         }
 
     /**
+     * The category card's resolved tile chrome for the reported device — its corner, title scale and two paddings.
+     *
+     * One value rather than a map, unlike its neighbours: exactly one APPS grid draws tiles, so a slot key would have
+     * four meaningless entries. `GridSlot.APPS_CARD` is written out at the one call site instead, which is the same
+     * choice [listRowHeight] makes for the one grid that declares a row height.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val cardChrome: Flow<CardChrome?> =
+        device.flatMapLatest { current ->
+            if (current == null) flowOf(null) else settingsRepository.cardChrome(GridSlot.APPS_CARD, current)
+        }
+
+    /**
      * Everything the settings layer decides about how this surface is drawn, in one value.
      *
      * Folded together for the reason home's `HomeSizing` is: `combine` stops at five flows and the state needs more.
@@ -251,12 +280,20 @@ class AppsViewModel(
         // honest three to fold: each is `posture`-gated and each resolves the same way, where the two below are a
         // single value and a setting with no device dimension at all.
         combine(
-            combine(iconSizings, gridCols, paddings, ::Triple),
+            combine(iconSizings, gridCols, paddings, cardChrome, ::PerDevice),
             pagerConfig,
             listRowHeight,
             settingsRepository.pagerWraps,
-        ) { (icon, cols, padding), pager, rowHeight, wraps ->
-            AppsSizing(icon, cols, pager, rowHeight, padding, wraps)
+        ) { perDevice, pager, rowHeight, wraps ->
+            AppsSizing(
+                icon = perDevice.icon,
+                cols = perDevice.cols,
+                pager = pager,
+                listRowHeightDp = rowHeight,
+                padding = perDevice.padding,
+                wraps = wraps,
+                card = perDevice.card,
+            )
         }
 
     val state: StateFlow<AppsState> =
@@ -294,6 +331,7 @@ class AppsViewModel(
                 listRowHeightDp = configured.listRowHeightDp,
                 horizontalPaddingDp = configured.padding,
                 pagerWraps = configured.wraps,
+                cardChrome = configured.card,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 
@@ -535,9 +573,8 @@ class AppsViewModel(
         /**
          * The APPS grids whose rows come from their content, so only their columns are configurable.
          *
-         * [GridSlot.APPS_CARD] belongs here and not in [IconSlots], which is the pair of lists saying the same thing
-         * from both ends: a card is a *tile* whose column count is very much the user's, and whose contents are
-         * derived from the square that count produces rather than sized by an icon config.
+         * [GridSlot.APPS_CARD] belongs here: a card grid's rows are however many its content reaches, so only its lane
+         * count is stored. It is in [IconSlots] as well, since its preview slots are icons with sizing of their own.
          */
         private val ScrollingSlots = listOf(GridSlot.APPS_SCROLL, GridSlot.APPS_CATEGORY, GridSlot.APPS_CARD)
 
@@ -545,8 +582,8 @@ class AppsViewModel(
          * Every grid this surface draws — the one list with no exclusions, because every grid has edges.
          *
          * The pager is in it and absent from [ScrollingSlots] (its rows are fixed, so it is sized by `gridConfig`);
-         * the card is in it and absent from [IconSlots] (a tile is not an icon cell). Padding cares about neither
-         * distinction, which is why this list is simply all five.
+         * the card is in both. Padding cares about none of those distinctions, which is why this list is simply all
+         * five.
          */
         private val PaddedSlots = listOf(
             GridSlot.APPS_LIST,
@@ -560,14 +597,19 @@ class AppsViewModel(
          * The grids this surface draws icons in — the APPS grids plus [GridSlot.FOLDER], which renders both a pager
          * folder and an expanded category card.
          *
-         * [GridSlot.APPS_CARD] is deliberately absent: a card is a *tile*, not an icon cell, so its blueprint declares
-         * no icon sizing and asking for one is rejected rather than defaulted.
+         * **[GridSlot.APPS_CARD] is in it**, which reverses what this said. It was excluded on the grounds that a card
+         * is a tile rather than an icon cell — true of the card, and wrong about its *contents*: the four preview slots
+         * are icons and now declare their own sizing. Leaving it out did not merely skip a lookup, it silently handed
+         * the card someone else's: an unresolved slot falls back to `LocalIconMetrics`, which inside `AppsCategoryCard`
+         * is the **folder's**, so the cards drew labels the card grid explicitly turns off while the settings preview
+         * drew none. A missing entry here is not a default, it is whatever the ambient value happens to be.
          */
         private val IconSlots = listOf(
             GridSlot.APPS_LIST,
             GridSlot.APPS_SCROLL,
             GridSlot.APPS_PAGER,
             GridSlot.APPS_CATEGORY,
+            GridSlot.APPS_CARD,
             GridSlot.FOLDER,
         )
         private const val STOP_TIMEOUT_MS = 5_000L

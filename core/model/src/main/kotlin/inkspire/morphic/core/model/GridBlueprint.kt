@@ -33,6 +33,57 @@ data class GridDefault(val cols: Int, val rows: Int? = null)
 data class GridEditRange(val minCols: Int, val minRows: Int?)
 
 /**
+ * The chrome of a grid of **tiles** — everything about an APPS category card that is not its icons or its lane count.
+ *
+ * A card is the one thing on the launcher that is neither a cell nor a surface: it is a titled tile whose *contents*
+ * are a small grid. So the numbers that shape it have no home among the grid metrics — a cell has no corner radius, a
+ * surface has no title — and collecting them here is what stops four unrelated scalars being four more maps in
+ * `SurfaceMetrics`, each meaningful for exactly one slot.
+ *
+ * **The three dp values default to zero, deliberately.** A card starts as a plain rectangle with its icons packed
+ * edge to edge, and every bit of decoration is something the user adds. That is the opposite of the usual "ship a
+ * tasteful default" instinct, and it is the better one here: the previous shape carried a hand-picked 12dp inset, an
+ * 8dp gap and a 24dp corner that nothing owned and no control could reach, so the only way to discover they were
+ * wrong was to look at a screenshot. Starting from nothing makes each of them a decision someone made on purpose.
+ *
+ * @property titleScale multiplier on the theme's title style, matching [IconSizing.labelScale]'s shape and range so
+ *   the two text controls read the same way. A multiplier rather than an sp value so a user who has scaled text
+ *   system-wide keeps that scaling.
+ * @property cornerRadiusDp the card's rounded corner. Zero is a square card.
+ * @property outerPaddingDp the inset between the card's edge and its **icon area**, on all four sides. Zero puts the
+ *   icons flush against the card. It does *not* inset the title, which keeps a fixed inset of its own — a title
+ *   touching the edge of a card reads as a rendering fault rather than as a choice, and there is no reason to let one
+ *   number express both.
+ * @property innerPaddingDp the gap **between** icon slots. Zero packs them into a solid block.
+ */
+data class CardChrome(
+    val titleScale: Float = 1f,
+    val cornerRadiusDp: Int = 0,
+    val outerPaddingDp: Int = 0,
+    val innerPaddingDp: Int = 0,
+)
+
+/** The bounds each [CardChrome] control offers, the counterpart of [IconSizingRanges]. */
+object CardChromeRanges {
+
+    /** Shares [IconSizingRanges.LabelScale]'s window, since it is the same kind of control over the same kind of text. */
+    val TitleScale: ClosedFloatingPointRange<Float> = 0.7f..1.5f
+
+    /**
+     * Up to half of the smallest card a phone can draw, past which "rounded" becomes "pill" and then a circle that
+     * clips its own contents.
+     */
+    val CornerRadiusDp: IntRange = 0..48
+
+    /**
+     * Both paddings share one window, and it is small on purpose: these inset a tile whose whole job is to show four
+     * recognisable icons, so a padding competing with the icons for room is the failure mode. The icon guardrails,
+     * not this, are what a user reaches for to make icons bigger.
+     */
+    val PaddingDp: IntRange = 0..24
+}
+
+/**
  * Which grid a blueprint, a stored override, or a resolved metric belongs to — **the launcher's grids, named**.
  *
  * There is exactly one value per [GridBlueprint], and that is the point: "surface × layout" is not a pair to be
@@ -261,6 +312,9 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   `AxisScroll.INFINITE` makes the one-finger swipe on that axis `OneFingerSwipe.NEVER` — with wrapping on by
  *   default, a horizontal edge binding could only be opened with **two fingers**, and a user who never found this
  *   setting would never know why. Off by default, opt in.
+ * @property card the tile chrome of a grid of **cards** — or **null** for every grid that draws cells rather than
+ *   tiles, which is all but one. [extentDp]'s convention again, and for its reason: it is what lets
+ *   `SettingsRepository` refuse a slot that has no such setting instead of every caller checking first.
  */
 data class GridBlueprint(
     val slot: GridSlot,
@@ -274,6 +328,7 @@ data class GridBlueprint(
     val rowHeightDp: Int? = null,
     val horizontalPaddingDp: Int = 0,
     val wraps: Boolean? = null,
+    val card: CardChrome? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
     val editsRows: Boolean get() = editRange?.minRows != null
@@ -631,6 +686,19 @@ val AppsCardGrid = GridBlueprint(
         // A tablet is nearer square than a phone, so the long edge is not twice the short one; four, not six.
         tabletLandscape = GridDefault(cols = 4),
     ),
+    // **A card's preview icons are sized like any other grid's**, which reverses this blueprint's original `null`.
+    // That null said "a card is a tile, not a cell", and it was true of the *card* while being wrong about what is
+    // inside one: the four slots are icons, and leaving them unowned meant their size was a pure consequence of the
+    // lane count — tiny at four lanes, enormous at two, and different again on rotating the device, with no control
+    // anywhere to say otherwise. Declaring sizing makes that the user's, and buys the lane ceiling for free: the
+    // narrowest usable card is `2 × minIconDp` plus the paddings below, which is `CellFit`'s ordinary inversion of a
+    // guardrail rather than the hand-picked constant it replaced.
+    //
+    // `showLabel = false` because the slots carry no labels — a card is a thumbnail of a category, and four
+    // ellipsised words would eat the room the icons need. It is the same statement `AppsListGrid` makes with
+    // `showIcon`, from the other side, and it is what hides the two text controls in the section.
+    icon = IconSizing(showLabel = false),
+    card = CardChrome(),
 )
 
 /**

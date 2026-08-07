@@ -4,11 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
+import inkspire.morphic.core.designsystem.cell.CategoryPreviewCols
 import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.CellPadV
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LabelGap
 import inkspire.morphic.core.designsystem.cell.cellLabelHeight
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.GridBlueprint
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSizing
@@ -74,6 +77,34 @@ data class MinCell(val widthDp: Float, val heightDp: Float)
  * to choose per grid — a widget declares its own minimum span and the area either holds it or does not.
  */
 val WidgetMinCell = MinCell(widthDp = 48f, heightDp = 48f)
+
+/**
+ * The floor for a grid of **tiles** — the narrowest APPS category card that can still draw its preview.
+ *
+ * **Derived, where this was a flat number picked by eye.** A card's preview is [CategoryPreviewCols]² slots, so the
+ * narrowest card that honours the user's own guardrail is `CategoryPreviewCols × minIconDp`, plus the gap between the
+ * slots and the padding around them. That is exactly the inversion [minCellWidthDp] performs for an icon cell —
+ * `minIconDp + padding` — applied to a tile holding four icons instead of one, and it became available the moment the
+ * card grid started declaring icon sizing.
+ *
+ * The constant it replaced was wrong both times it was chosen: 96dp let a 393dp phone draw four lanes of unreadable
+ * dots, and 120dp only looked right because it happened to absorb chrome it could not see. A ceiling that follows the
+ * guardrails cannot drift like that — ask for larger icons and the lane count comes down on its own, which is what
+ * the same expression already does on every other grid.
+ *
+ * Square because a column fit reads [MinCell.widthDp] and nothing else. A card is its square preview *plus* a title,
+ * so its drawn height is larger; nothing asks this type for that height (the card grid scrolls, so it has no row
+ * count to bound), and carrying a number nobody reads is how it would go stale.
+ */
+fun cardMinCell(metrics: IconMetrics, chrome: CardChrome): MinCell {
+    val cardDp = CategoryPreviewCols * metrics.minIconDp.value +
+        chrome.innerPaddingDp + 2 * chrome.outerPaddingDp
+    // Plus a lane's share of the grid's own chrome, because a column fit divides the grid's *raw* width. Without it
+    // this floor describes a card while the division describes a lane, and the gap between the two is one extra lane
+    // of cards too narrow to fill — which is precisely how the constant this replaced went wrong.
+    val laneDp = cardDp + CategoryCardSpacing.value
+    return MinCell(widthDp = laneDp, heightDp = laneDp)
+}
 
 /** The [MinCell] an icon grid's guardrails imply — [minCellWidthDp] and [minCellHeightDp] as one value. */
 fun minCellFor(metrics: IconMetrics, labelHeightDp: Float): MinCell =
@@ -240,6 +271,16 @@ private fun GridBlueprint.colRangeIn(areaWidthDp: Float, minCellWidthDp: Float):
  */
 fun GridBlueprint.fitCols(areaWidthDp: Float, cols: Int, metrics: IconMetrics): Int =
     cols.coerceIn(colRangeIn(areaWidthDp, minCellWidthDp(metrics)))
+
+/**
+ * [fitCols] for a grid whose floor is not an icon guardrail — the category cards' [CardMinCell].
+ *
+ * Only [MinCell.widthDp] is read, for the reason stated above: a column count is a question about width alone. The
+ * pairing with the icon overload mirrors [boundsIn] and [editableRangeIn], which each take a [MinCell] so that the
+ * one grid unable to produce an [IconMetrics] needs no parallel copy of the fit.
+ */
+fun GridBlueprint.fitCols(areaWidthDp: Float, cols: Int, min: MinCell): Int =
+    cols.coerceIn(colRangeIn(areaWidthDp, min.widthDp))
 
 /**
  * What an editor may offer per axis.

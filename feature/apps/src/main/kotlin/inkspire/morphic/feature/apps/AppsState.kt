@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.apps
 
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.Category
 import inkspire.morphic.core.model.GridConfig
@@ -74,6 +75,9 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  *   capacity: the surface fits it to the measured window and reports the result back
  *   ([AppsViewModel.setPagerFit]), and that fit is what the store paginates against. Both are needed, and this is the
  *   input half — a screen cannot fit a size it was never told.
+ * @property cardChrome the category card's resolved tile chrome — its corner, title scale and the two paddings
+ *   around and between its preview slots. Null until the device is reported, with `CardChrome()`'s own all-zero
+ *   defaults standing in meanwhile — which are the blueprint's too, so that frame draws what a fresh install draws.
  * @property listRowHeightDp how tall one row of the vertical list is, resolved. Null until the device is reported.
  *   The one *cell* dimension on this surface that is stored rather than derived, because a one-lane grid has no cell
  *   width to derive from — see `AppsListGrid`.
@@ -88,6 +92,7 @@ data class AppsState(
     val listRowHeightDp: Int? = null,
     val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
+    val cardChrome: CardChrome? = null,
 )
 
 /**

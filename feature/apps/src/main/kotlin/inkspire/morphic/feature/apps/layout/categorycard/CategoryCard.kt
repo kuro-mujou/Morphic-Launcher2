@@ -2,34 +2,39 @@ package inkspire.morphic.feature.apps.layout.categorycard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import inkspire.morphic.core.designsystem.cell.AppCell
+import inkspire.morphic.core.designsystem.cell.CategoryClusterTile
+import inkspire.morphic.core.designsystem.cell.categoryOverflowCluster
+import inkspire.morphic.core.designsystem.cell.CategoryPreviewIcon
+import inkspire.morphic.core.designsystem.cell.CategoryCardFace
+import inkspire.morphic.core.designsystem.cell.CategoryPreviewSlots
 import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.cell.resolveIconSize
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropFootprint
@@ -38,55 +43,18 @@ import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.feature.apps.AppsCategory
 
 /**
- * One card's own inset, corner, tint and slot spacing — **placeholders, not design choices**, in the same sense as
- * the other APPS layouts' cell heights: these are surface metrics bound for the settings layer, and a flat constant
- * says so where derived arithmetic would read as a decision.
- *
- * They live beside [CategoryCard] rather than with [AppsCategoryCard] because a card is the only thing that reads
- * them; the *grid's* metrics (how many columns of cards, and the spacing between them) stay with the grid.
- */
-private val CardInset = 12.dp
-private val CardCorner = 24.dp
-private val HeaderGap = 8.dp
-private val SlotGap = 8.dp
-private const val CardAlpha = 0.10f
-
-/**
- * The preview's shape: [PreviewCols] × [PreviewCols] slots. The last one becomes the **overflow cluster** when the
- * category holds more than fits, so a fuller card shows [PreviewSlots] - 1 launchable icons plus a tile that opens
- * the rest.
- */
-private const val PreviewCols = 2
-private const val PreviewSlots = PreviewCols * PreviewCols
-
-/**
- * The preview icons' metrics: **no labels**, and the icon filling its slot.
- *
- * A card is a thumbnail of a category, not a grid of it — four labels at this size would be four ellipsised words and
- * would eat the space the icons need to be recognisable. Recognising an icon *is* the preview's whole job, so the
- * label goes and [IconMetrics.iconPercent] goes to 1: the slot is already sized to be an icon.
- *
- * [IconMetrics.maxIconDp]'s default (48dp) is left alone even though it binds on a tablet, where two columns of cards
- * give a slot wider than that and the icon then floats in it. Raising it here would paper over the real cause —
- * [AppsCategoryCard]'s device-blind column count — with a number nothing owns either. Fix the columns, not this.
- *
- * `iconPercent = 1f` is now the default rather than an override, and is kept written out because *this* cell means it
- * literally: the slot is sized to be an icon, so filling it is the intent rather than a value inherited.
- */
-private val PreviewIconMetrics = IconMetrics(iconPercent = 1f, showLabel = false)
-
-/**
- * One category's card: its name, then a [PreviewSlots]-slot thumbnail of the apps filed under it.
+ * One category's card: its name, then a [CategoryPreviewSlots]-slot thumbnail of the apps filed under it.
  *
  * The last slot is the **overflow cluster** when the category holds more than fits — an [IconPreviewPlate] of the next
  * four apps, i.e. the same tile a folder draws on a grid, which is the honest rendering of "and more in here". The
- * cluster opens the category; so does the header. A category with [PreviewSlots] apps or fewer shows them all and has
+ * cluster opens the category; so does the header. A category with [CategoryPreviewSlots] apps or fewer shows them all and has
  * no cluster.
  *
  * Split from [AppsCategoryCard] because it is a leaf: it takes what it draws as parameters and reports its bounds
@@ -98,6 +66,11 @@ private val PreviewIconMetrics = IconMetrics(iconPercent = 1f, showLabel = false
  * costs the surface: a lifted cell owns the pointer stream driving the drag, so the card grid cannot be lazy any
  * more (see [AppsCategoryCard]).
  *
+ * @param chrome the card's resolved tile chrome — its corner, its title's scale, and the two paddings around and
+ *   between the preview slots. Every one of them starts at zero; see `CardChrome`.
+ * @param metrics the resolved icon sizing of a **preview slot**, which is `GridSlot.APPS_CARD`'s own. A slot is sized
+ *   to be an icon, so `iconPercent` means it literally here, and the blueprint declares `showLabel = false` because
+ *   four ellipsised words at this size would eat the room the icons need to be recognisable.
  * @param shadowed true while a dragged app is aimed at this card — drawn as a [DropIntent.MERGE] drop shadow over the
  *   whole card, the same affordance a folder's merge ring gets, because dropping here does the same thing.
  * @param onRelease a preview icon released the finger; it only ends the drag, since the landing belongs to whichever
@@ -112,88 +85,55 @@ internal fun CategoryCard(
     coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
     shadowed: Boolean,
+    chrome: CardChrome,
+    metrics: IconMetrics,
     onLaunch: (ComponentKey) -> Unit,
     onExpand: () -> Unit,
     onRelease: () -> Unit,
     onBounds: (Rect?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMorphicColors.current
     DisposableEffect(Unit) { onDispose { onBounds(null) } }
     Box(modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                // Square, so the four preview slots are square too and a card reads as one tile rather than a band.
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                // **Position + size, never `boundsInRoot()`** — that one is *clipped by ancestor clipping*, and
-                // this card sits inside a `verticalScroll`, which clips. A card below the fold therefore reports an
-                // empty rectangle and can never contain a finger, so a drop onto it is silently ignored; a card half
-                // off the top reports half of itself. `positionInRoot()` does no clipping, so this is the card's
-                // real rectangle whether it is on screen or not.
-                //
-                // It could not bite while the grid was lazy — an item that did not exist reported nothing at all,
-                // and every item that did exist was visible. Making the grid non-lazy (so a drag can start on a card
-                // preview) is what turned "not composed" into "composed and lying".
-                .onGloballyPositioned { onBounds(Rect(it.positionInRoot(), it.size.toSize())) }
-                .clip(RoundedCornerShape(CardCorner))
-                .background(colors.surface.copy(alpha = CardAlpha))
-                .padding(CardInset),
-        ) {
+        CategoryCardFace(
+            title = category.category.name,
+            chrome = chrome,
             // The header is a full-width strip rather than just the glyphs: the target has to be reachable for a
             // one-word category name, and a header row *is* its own visible extent, the same way a list row's is.
-            Text(
-                text = category.category.name,
-                style = MaterialTheme.typography.titleSmall,
-                color = colors.content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().categoryOpenGestures(gestureConfig, onExpand),
+            titleGestures = Modifier.categoryOpenGestures(gestureConfig, onExpand),
+            // **Position + size, never `boundsInRoot()`** - that one is *clipped by ancestor clipping*, and this card
+            // sits inside a `verticalScroll`, which clips. A card below the fold therefore reports an empty rectangle
+            // and can never contain a finger, so a drop onto it is silently ignored; a card half off the top reports
+            // half of itself. `positionInRoot()` does no clipping, so this is the card's real rectangle whether it is
+            // on screen or not.
+            //
+            // It could not bite while the grid was lazy - an item that did not exist reported nothing at all, and
+            // every item that did exist was visible. Making the grid non-lazy (so a drag can start on a card preview)
+            // is what turned "not composed" into "composed and lying".
+            modifier = Modifier.onGloballyPositioned { onBounds(Rect(it.positionInRoot(), it.size.toSize())) },
+        ) { index, slotSize ->
+            // The split is shared with the settings preview of a card, so the two cannot disagree about which apps
+            // are shown and when the last slot becomes a cluster.
+            val cluster = categoryOverflowCluster(category.apps)
+            PreviewSlot(
+                app = category.apps.getOrNull(index),
+                cluster = cluster?.takeIf { index == CategoryPreviewSlots - 1 },
+                slot = slotSize,
+                metrics = metrics,
+                coordinator = coordinator,
+                gestureConfig = gestureConfig,
+                onLaunch = onLaunch,
+                onExpand = onExpand,
+                onRelease = onRelease,
             )
-            Spacer(Modifier.height(HeaderGap))
-            // Slots are sized from the smaller bound and centred, so they stay square whichever way the leftover area
-            // happens to be shaped (the header's height varies with the type scale).
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                // Floored at zero because `Modifier.size` rejects a negative: a card squeezed below the gap's own
-                // width draws nothing rather than crashing.
-                val slot = ((minOf(maxWidth, maxHeight) - SlotGap) / 2).coerceAtLeast(0.dp)
-                // The cluster takes the last slot only when it would hold *more* than the single icon that slot could
-                // show on its own — a category of exactly [PreviewSlots] apps shows all four, no cluster.
-                val overflow = category.apps.drop(PreviewSlots - 1)
-                val cluster = overflow.take(PreviewSlots).takeIf { overflow.size > 1 }
-                Column(verticalArrangement = Arrangement.spacedBy(SlotGap)) {
-                    repeat(PreviewCols) { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(SlotGap)) {
-                            repeat(PreviewCols) { col ->
-                                val index = row * PreviewCols + col
-                                Box(Modifier.size(slot)) {
-                                    PreviewSlot(
-                                        app = category.apps.getOrNull(index),
-                                        cluster = cluster?.takeIf { index == PreviewSlots - 1 },
-                                        slot = slot,
-                                        coordinator = coordinator,
-                                        gestureConfig = gestureConfig,
-                                        onLaunch = onLaunch,
-                                        onExpand = onExpand,
-                                        onRelease = onRelease,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
-        // Over the card rather than inside its `Column`, so it covers the header and preview both, and shaped to the
-        // card so the shadow reads as "this whole collection" instead of a cell.
+        // Over the card rather than inside its face, so it covers the title and preview both, and shaped to the card
+        // so the shadow reads as "this whole collection" instead of a cell.
         if (shadowed) {
             DropFootprint(
                 intent = DropIntent.MERGE,
                 modifier = Modifier.matchParentSize(),
-                shape = RoundedCornerShape(CardCorner),
+                shape = RoundedCornerShape(chrome.cornerRadiusDp.dp),
             )
         }
     }
@@ -209,7 +149,7 @@ internal fun CategoryCard(
  *
  * The icon goes through [LauncherDragCell] specifically, rather than wiring the coordinator by hand, so it gets the
  * same three things every other draggable cell has: the gesture contract, the lifted cell drawn invisible while the
- * proxy stands in for it, and `animatePlacement`. Handing the gestures down to [AppCell] keeps the target the icon
+ * proxy stands in for it, and `animatePlacement`. Handing the gestures down to the icon keeps the target the icon
  * itself, leaving the slack in the slot free for the card beneath.
  */
 @Composable
@@ -217,6 +157,7 @@ private fun PreviewSlot(
     app: AppInfo?,
     cluster: List<AppInfo>?,
     slot: Dp,
+    metrics: IconMetrics,
     coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
@@ -224,10 +165,11 @@ private fun PreviewSlot(
     onRelease: () -> Unit,
 ) {
     when {
-        cluster != null -> IconPreviewPlate(
+        cluster != null -> CategoryClusterTile(
             apps = cluster,
-            size = slot,
-            modifier = Modifier.categoryOpenGestures(gestureConfig, onExpand),
+            slotSize = slot,
+            metrics = metrics,
+            itemGestures = Modifier.categoryOpenGestures(gestureConfig, onExpand),
         )
         app != null -> LauncherDragCell(
             coordinator = coordinator,
@@ -237,10 +179,12 @@ private fun PreviewSlot(
             modifier = Modifier.fillMaxSize(),
             onOpen = { onLaunch(app.componentKey) },
         ) { itemGestures ->
-            AppCell(
+            // **The icon alone, not an `AppCell`.** A card slot has no label and no chrome of its own, and a cell's
+            // own 4dp inset is what stopped the spacing slider ever reaching zero — see `CategoryPreviewIcon`.
+            CategoryPreviewIcon(
                 app = app,
-                modifier = Modifier.fillMaxSize(),
-                metrics = PreviewIconMetrics,
+                slotSize = slot,
+                metrics = metrics,
                 itemGestures = itemGestures,
             )
         }
