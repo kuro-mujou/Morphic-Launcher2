@@ -22,11 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
@@ -101,8 +102,9 @@ private val PreviewIconMetrics = IconMetrics(iconPercent = 1f, showLabel = false
  *   whole card, the same affordance a folder's merge ring gets, because dropping here does the same thing.
  * @param onRelease a preview icon released the finger; it only ends the drag, since the landing belongs to whichever
  *   zone it fell in — another card, or one of home's grids if the drag was ejected.
- * @param onBounds reports this card's root-space bounds as it is laid out, and **null when it leaves composition** so
- *   the surface's hit-test map doesn't keep testing a card that no longer exists.
+ * @param onBounds reports this card's root-space rectangle as it is laid out, and **null when it leaves composition**
+ *   so the surface's hit-test map doesn't keep testing a card that no longer exists. The rectangle is deliberately
+ *   *unclipped* — see the call site; a clipped one makes every off-screen card undroppable.
  */
 @Composable
 internal fun CategoryCard(
@@ -124,7 +126,16 @@ internal fun CategoryCard(
                 // Square, so the four preview slots are square too and a card reads as one tile rather than a band.
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .onGloballyPositioned { onBounds(it.boundsInRoot()) }
+                // **Position + size, never `boundsInRoot()`** — that one is *clipped by ancestor clipping*, and
+                // this card sits inside a `verticalScroll`, which clips. A card below the fold therefore reports an
+                // empty rectangle and can never contain a finger, so a drop onto it is silently ignored; a card half
+                // off the top reports half of itself. `positionInRoot()` does no clipping, so this is the card's
+                // real rectangle whether it is on screen or not.
+                //
+                // It could not bite while the grid was lazy — an item that did not exist reported nothing at all,
+                // and every item that did exist was visible. Making the grid non-lazy (so a drag can start on a card
+                // preview) is what turned "not composed" into "composed and lying".
+                .onGloballyPositioned { onBounds(Rect(it.positionInRoot(), it.size.toSize())) }
                 .clip(RoundedCornerShape(CardCorner))
                 .background(colors.surface.copy(alpha = CardAlpha))
                 .padding(CardInset),

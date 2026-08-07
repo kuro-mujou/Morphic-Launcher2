@@ -434,6 +434,14 @@ brightness question through the same system API as every other wallpaper.
     `S0` and a real offset `S`, a finger at `y` resolves to a cell drawn at `y - (S - S0)` — so the drop footprint sits
     a fixed distance from the finger, tracks it while dragging, and snaps into place the moment the content returns to
     `S0`. A lagging or jittering offset is something else; a rigid one is staleness.
+  - **And the rectangle it reports must be *unclipped*, which `boundsInRoot()` is not.** That call clips to every
+    ancestor's bounds, and a scroller clips — so a node below the fold reports an **empty** rectangle and one half
+    off the top reports half of itself. Anything hit-testing against it then silently refuses, which is not a
+    misplacement you can see: it reads as "that target just doesn't work". Use `positionInRoot()` + `size` for a node
+    *inside* a scroller; `boundsInRoot()` stays right for a **viewport**, which is above the clip it applies. The
+    APPS category card is the worked example, and it only became reachable when that grid stopped being lazy —
+    while it was lazy an off-screen card did not exist, so the difference between "not composed" and "composed and
+    lying" never arose.
   - **A correct geometry that nothing re-reads changes nothing.** `DragCoordinator` resolves a plan only in `moveTo`,
     i.e. when the *finger* moves — while auto-scroll (`DragAutoScrollEffect`) exists precisely to move content under a
     finger held still. A surface that auto-scrolls must therefore **re-send the same finger position** after

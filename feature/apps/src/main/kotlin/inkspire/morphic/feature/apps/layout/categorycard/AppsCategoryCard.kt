@@ -198,6 +198,11 @@ fun AppsCategoryCard(
     // the correction is zero; if it does not, the correction is exactly the scroll that happened since. The
     // alternative — republishing from a stable anchor — needs the card to know the viewport's origin, which only
     // this surface has.
+    //
+    // That rule has a **second half a scroller imposes, and it is the one that actually bit**: the rectangle a card
+    // reports has to be *unclipped*, or a card below the fold reports nothing and silently refuses every drop. See
+    // the `onGloballyPositioned` in [CategoryCard]. Nothing here needs to clip it back — the grid's own drop zone is
+    // the viewport, so a finger can only ever be inside one card that is actually on screen.
     val cardBounds = remember { mutableStateMapOf<String, MeasuredCard>() }
     fun cardAt(finger: Offset): String? {
         val scrolled = scrollState.value
