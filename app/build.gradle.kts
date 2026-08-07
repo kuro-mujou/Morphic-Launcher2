@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.launcher.android.application)
     alias(libs.plugins.launcher.android.application.compose)
@@ -5,11 +7,49 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/**
+ * Release signing, read from an untracked `keystore.properties` at the repo root (`storeFile`, `storePassword`,
+ * `keyAlias`, `keyPassword`). Both it and the `.jks` it points at are gitignored — a signing key must never reach a
+ * commit — which is exactly why this has to tolerate their absence: a fresh clone has neither, and configuring the
+ * build must not fail because of it.
+ *
+ * **It lives here rather than in the convention plugin**, unlike the minification it pairs with. A keystore is a
+ * property of *this application* — one identity, one key — where "release builds are minified and shrunk" is a
+ * project-wide rule. The convention plugin owns the second and says nothing about the first.
+ */
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) keystorePropertiesFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "inkspire.morphic.launcher"
 
     defaultConfig {
         applicationId = "inkspire.morphic.launcher"
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // `findByName` rather than `getByName`: with no `keystore.properties` present there is no config to
+            // find, and a null one leaves the APK unsigned rather than failing the build. `assembleRelease` still
+            // works (you get an unsigned APK); only `installRelease` needs the key.
+            //
+            // Minification and resource shrinking are *not* set here — they come from the
+            // `launcher.android.application` convention plugin, which is where a project-wide rule belongs.
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 }
 
