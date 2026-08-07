@@ -377,7 +377,19 @@ fun FolderOverlay(
                             // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
                             // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
                             .border(InnerZoneOutline, if (session != null) Color.White else Color.Transparent)
-                            .clickable(interactionSource = innerInteraction, indication = null, onClick = {}),
+                            // Consumes a tap on the card's background so it doesn't reach the scrim and dismiss —
+                            // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
+                            // invisible but still laid out over the middle of the screen, and Compose stops
+                            // hit-testing at the topmost sibling it hits: an always-enabled clickable up here takes
+                            // every press aimed at the surface beneath, so items behind an invisible folder could
+                            // neither be launched nor lifted. The cells inside are deliberately *not* gated — one of
+                            // them owns the in-flight pointer stream this overlay is being kept alive for.
+                            .clickable(
+                                interactionSource = innerInteraction,
+                                indication = null,
+                                enabled = presenting,
+                                onClick = {},
+                            ),
                     ) {
                         LauncherPager(
                             state = pagerState,

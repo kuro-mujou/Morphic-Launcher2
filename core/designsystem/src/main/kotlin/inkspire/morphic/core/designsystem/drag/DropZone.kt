@@ -68,34 +68,62 @@ fun RegisterDropZone(
     enabled: Boolean = LocalSurfacePresented.current,
 ) {
     val active = zone?.takeIf { enabled }
-    // What is in the registry right now, so the teardown below can remove *that* rather than whichever instance the
-    // effect happened to be created with. A plain holder, not snapshot state: nothing reads it in composition, and
-    // making it observable would only invite something to.
+    // **This composition's identity as a registrar**, and the token the coordinator records against the id — which
+    // is what lets the teardown below say "give up the registration if it is still mine" without naming a value.
+    // `remember`ed, so it is stable for as long as this call site lives and is a different object from every other
+    // registrar's, including another node publishing the same id.
+    //
+    // It also tracks whether anything is currently published, so a teardown that owes nothing does nothing. A plain
+    // holder rather than snapshot state: nothing reads it in composition, and making it observable would only invite
+    // something to.
     val registered = remember { RegisteredZone() }
-    // Re-published on every composition rather than keyed on the value: a [DropZone] carries three lambdas, so it is
-    // a fresh instance each time and keying a `DisposableEffect` on it would unregister and re-register the zone on
-    // every frame of a drag. The lambdas do have to be refreshed — they close over the surface's live state — so the
-    // put is real work, not a redundant write. `SideEffect` is the sanctioned place to push composition state into a
-    // snapshot map, and nothing composes on the registry.
+    // **Both halves run from the same state, in the same effect**, and that symmetry is the correctness argument
+    // rather than tidiness. Publishing is re-done on every composition instead of being keyed on the value: a
+    // [DropZone] carries three lambdas, so it is a fresh instance each time and keying an effect on it would tear the
+    // zone down and put it back on every frame of a drag. The lambdas genuinely have to be refreshed — they close over
+    // the surface's live state — so the put is real work, not a redundant write. `SideEffect` is the sanctioned place
+    // to push composition state into a snapshot map, and nothing composes on the registry.
+    //
+    // Withdrawal used to be an *edge* instead: a `DisposableEffect` keyed on `active == null`, firing on the
+    // transition rather than on the condition. A zone published from a state and withdrawn from a transition can
+    // outlive its own disabling — any path reaching "not enabled" without flipping that key leaves the zone in the
+    // registry answering for a node nobody can see. That is invisible in a way ordinary bugs are not: `ZoneId`
+    // `"folder"` is **shared** by every folder overlay, so a stale one is not a duplicate but *the* folder zone, and
+    // at `z = 1` it outranks the surface beneath it. The symptom is a rectangle in the middle of the screen — exactly
+    // where an open folder's card sits — that silently swallows every drop while the rest of the surface behaves.
+    //
+    // What makes the withdrawal *land* is that it names the **id it published** and identifies itself by
+    // [registered], rather than handing back the zone value it last built. Two nodes sharing an id can still hand it
+    // over inside one composition — the successor becomes the owner and the predecessor's withdrawal correctly does
+    // nothing — but a registrar giving up an id it still owns can never be refused. Passing the value instead made
+    // that refusable, and it happened: see [DragCoordinator.unregisterZone].
     SideEffect {
         if (active != null) {
-            coordinator.registerZone(active)
-            registered.value = active
+            coordinator.registerZone(active, registered)
+            registered.publishedId = active.id
+        } else {
+            registered.publishedId?.let { coordinator.unregisterZone(it, registered) }
+            registered.publishedId = null
         }
     }
-    // Teardown is the part that genuinely has a lifetime: keyed on identity and presence only, so it fires when the
-    // zone goes away or the surface leaves the screen, and not on a bounds change (which the SideEffect above
-    // already carried). It removes the zone **by instance**, so a node handing a shared id over to another node in
-    // the same composition cannot delete the successor's registration — see [DragCoordinator.unregisterZone].
-    DisposableEffect(coordinator, zone?.id, active == null) {
+    // Disposal is the one case the effect above cannot cover: a composable that leaves the tree gets no further
+    // composition, so it has to hand its zone back on the way out. Keyed on identity alone — a bounds change is
+    // already carried above, and re-keying on it would tear the zone down and put it back on every frame of a drag.
+    DisposableEffect(coordinator, zone?.id) {
         onDispose {
-            registered.value?.let(coordinator::unregisterZone)
-            registered.value = null
+            registered.publishedId?.let { coordinator.unregisterZone(it, registered) }
+            registered.publishedId = null
         }
     }
 }
 
-/** The zone instance [RegisterDropZone] last put in the registry — see the note at its only use. */
+/**
+ * One [RegisterDropZone] call's identity as a registrar, and the id it currently has published (null when none).
+ *
+ * The object itself is the ownership token the coordinator records — see [DragCoordinator.unregisterZone]. Only the
+ * *id* is kept beside it, never the [DropZone]: a fresh zone instance is republished every composition, so a stored
+ * value would say nothing about whether this registrar still holds the id.
+ */
 private class RegisteredZone {
-    var value: DropZone? = null
+    var publishedId: ZoneId? = null
 }

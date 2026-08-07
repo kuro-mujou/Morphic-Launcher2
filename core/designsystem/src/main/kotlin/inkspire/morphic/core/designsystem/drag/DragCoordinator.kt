@@ -65,34 +65,62 @@ class DragCoordinator {
 
     private val zones: SnapshotStateMap<ZoneId, DropZone> = mutableStateMapOf()
 
+    /**
+     * Who currently owns each id — the registrar's token, **not** the zone value it published.
+     *
+     * A [ZoneId] can legitimately change hands (two folder overlays share `ZoneId("folder")`, and one takes over
+     * from the other inside a single composition), so a withdrawal has to be able to tell "I am giving up my own
+     * registration" from "someone else has since taken this id, leave theirs alone". That question is about the
+     * *registrar*, which is stable for as long as the composable lives — the published [DropZone] is not, since a
+     * fresh instance is republished on every composition to refresh the lambdas it carries.
+     *
+     * A plain map rather than snapshot state, deliberately: nothing composes on it, and it must stay in the same
+     * consistency domain as the registrar's own handle. Comparing against the snapshot-held [zones] value instead
+     * is what this replaced, and it could report that a registrar no longer held *its own* zone — after which the
+     * withdrawal was declined and the entry stranded, invisibly, in the registry.
+     */
+    private val owners = mutableMapOf<ZoneId, Any>()
+
     /** The current drag, or null when idle. Observable — reading it in composition recomposes on each move. */
     var session: DragSession? by mutableStateOf(null)
         private set
 
     val isDragging: Boolean get() = session != null
 
-    /** Adds or replaces a zone; [RegisterDropZone] calls this as a surface measures, moves, or comes on screen. */
-    fun registerZone(zone: DropZone) {
+    /**
+     * Adds or replaces the zone registered under [zone]`.id`, recording [owner] as the id's current holder.
+     *
+     * [RegisterDropZone] calls this as a surface measures, moves, or comes on screen — and again on every
+     * composition after that, because a zone carries lambdas closing over the surface's live state. Re-registering
+     * under an id you already hold is therefore the ordinary case, not a takeover.
+     *
+     * @param owner the registrar's stable token; see [owners]. Whoever registers last holds the id.
+     */
+    fun registerZone(zone: DropZone, owner: Any) {
+        owners[zone.id] = owner
         zones[zone.id] = zone
     }
 
-    /** Removes a zone whose surface left the screen. A no-op when the id isn't registered. */
-    fun unregisterZone(id: ZoneId) {
-        zones.remove(id)
-    }
-
     /**
-     * Removes [zone] **only if it is still the one registered under its id** — the teardown [RegisterDropZone] uses.
+     * Withdraws [id], **but only if [owner] still holds it** — the teardown [RegisterDropZone] uses.
      *
-     * The identity check matters because an id can legitimately change hands. Two folder overlays share
-     * `ZoneId("folder")`: when a drag opens a second folder, the first becomes an invisible pointer holder and hands
-     * the zone over in the same composition. Compose runs disposals before side effects, so the hand-off happens to
-     * come out in the right order today — but "happens to" is not an invariant, and getting it wrong pulls the drop
-     * zone out from under the folder the user is actually looking at, which is a bug this codebase has already had
-     * once. Comparing the instance makes the order irrelevant.
+     * The ownership test is what lets an id change hands safely. Two folder overlays share `ZoneId("folder")`: when a
+     * drag opens a second folder, the first becomes an invisible pointer holder and hands the zone over within one
+     * composition. The successor registers and becomes the holder; the predecessor's withdrawal then finds it no
+     * longer holds the id and correctly leaves the successor's registration alone — whichever order the two run in.
+     *
+     * **It compares the registrar, not the registered value**, and that is load-bearing rather than stylistic. This
+     * used to take the [DropZone] and remove it only if that exact instance was still in [zones] — asking a question
+     * about a snapshot-held value from code holding a plain, non-snapshot handle to it. A registrar could be told the
+     * registry no longer held *its own* zone; its withdrawal was then declined and the entry stranded. With
+     * `ZoneId("folder")` sitting at `z = 1` over the whole folder card, a stranded entry goes on winning the finger
+     * across the middle of the screen with no folder visible to explain it: drops in that rectangle were routed into
+     * a folder nobody could see, committing a no-op reorder that left the dragged app where it started.
      */
-    fun unregisterZone(zone: DropZone) {
-        if (zones[zone.id] === zone) zones.remove(zone.id)
+    fun unregisterZone(id: ZoneId, owner: Any) {
+        if (owners[id] !== owner) return
+        owners.remove(id)
+        zones.remove(id)
     }
 
     /** Begins dragging [item] with the finger at [fingerInRoot] (root coordinates), resolving the first plan. */
