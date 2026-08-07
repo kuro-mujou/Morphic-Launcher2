@@ -606,6 +606,23 @@ class HomeViewModel(
         state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { it.folder.id == folderId }
 
     /**
+     * The folder **on this surface** that currently holds [app], or null when it is loose on a grid or not here at
+     * all. Covers both zones, since a dock folder holds an app exactly as a pager one does.
+     *
+     * This is what a landing asks to know which folder is owed a departure, and it deliberately asks about
+     * *membership* rather than about where the drag started (`FolderHostState.dragSourceFolderId`). For a drag lifted
+     * inside one of home's folders the two agree — nothing is written until the drop, so the app is still a member —
+     * but they part company for an app arriving from the APPS drawer, which can already be in a home folder while
+     * having been lifted somewhere else entirely. Membership is the question the write actually depends on.
+     *
+     * Scoped to home's own folders on purpose: an app may sit in an APPS-surface folder *and* on home, which is no
+     * contradiction — two surfaces, two arrangements. The duplicate only exists when one surface would show the app
+     * both loose on its grid and inside one of its own folders.
+     */
+    fun folderHolding(app: ComponentKey): Long? =
+        state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { app in it.folder.apps }?.folder?.id
+
+    /**
      * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement] in
      * [zone]: app→app creates a new folder at the target's cell; app→folder appends to it. Returns null when there
      * is no valid merge (target gone, or a combination not yet supported — folder-on-app, widgets and containers

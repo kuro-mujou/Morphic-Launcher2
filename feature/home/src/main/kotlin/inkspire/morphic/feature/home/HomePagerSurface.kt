@@ -376,9 +376,15 @@ internal fun HomePagerSurface(
     // apart. `Move` is an upsert, so an app with no placement of its own needs no separate "add" path.
     fun commitLanding(outcome: DropOutcome) {
         val zone = homeZoneOf(outcome.zone) ?: return
-        // Read here rather than after any write: `dragSourceFolderId` is cleared when the drag ends, and this runs
-        // inside `coordinator.drop()`, i.e. before the effect that notices.
-        val sourceFolderId = folderHost.dragSourceFolderId
+        // **Which folder this landing has to take the app out of**, asked of *membership* rather than of where the
+        // drag started. For an app lifted inside one of home's folders the two answers agree — nothing is written
+        // until the drop, so it is still a member — but they diverge for an app arriving from the APPS drawer, which
+        // may already be in a home folder while having been lifted somewhere else. Treating that one as a stranger
+        // put it on the grid *and* left it in the folder (the same app twice), and made a merge silently do nothing,
+        // because `folder_item` is uniquely indexed by component. Read before any write, since the state below is
+        // updated optimistically.
+        val landingApp = (outcome.item as? GridItem.App)?.component
+        val sourceFolderId = landingApp?.let(viewModel::folderHolding)
         // 1. Released on a grid while a folder is still on screen. Leaving a folder is a deliberate dwell, so a
         //    release out here is "never mind": write nothing. It could not be honoured anyway — an app being carried
         //    inside a folder has no grid placement, so *placing* it would leave it in the folder **and** on the grid.
@@ -387,19 +393,20 @@ internal fun HomePagerSurface(
             return
         }
         val plan = outcome.plan
-        // 2. The drag started inside a folder and has landed out here. The app has no placement to move, so it is
-        //    placed and removed from that folder in one batch — including onto a merge ring, which is how it moves
-        //    straight into another folder (or combines with an app to make one) in a single gesture.
-        if (sourceFolderId != null) {
-            val app = (outcome.item as? GridItem.App)?.component ?: return
+        // 2. The app is in one of home's folders and has landed out here — whether it was lifted from inside that
+        //    folder or carried in from another surface. It is placed and removed from the folder in one batch,
+        //    including onto a merge ring, which is how it moves straight into another folder (or combines with an
+        //    app to make one) in a single gesture. Dropped back on its own folder this is a no-op, which
+        //    `mergeExtractedApp` recognises.
+        if (sourceFolderId != null && landingApp != null) {
             if (plan.intent == DropIntent.MERGE) {
-                viewModel.mergeExtractedApp(sourceFolderId, app, plan.footprint, zone)
+                viewModel.mergeExtractedApp(sourceFolderId, landingApp, plan.footprint, zone)
             } else {
-                viewModel.dropExtractedApp(sourceFolderId, app, plan, zone)
+                viewModel.dropExtractedApp(sourceFolderId, landingApp, plan, zone)
             }
             return
         }
-        // 3. An ordinary grid drag — or an app arriving from the APPS surface, which is the same write.
+        // 3. An ordinary grid drag — or an app arriving from the APPS surface that no folder here holds.
         if (plan.intent == DropIntent.MERGE) {
             viewModel.mergeChanges(outcome.item, plan.footprint, zone)?.let(viewModel::applyChanges)
         } else {
@@ -607,15 +614,17 @@ internal fun HomePagerSurface(
                         // (the app is already a member, even if the store hasn't said so yet).
                         val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
                         if (incoming != null && order.contains(incoming)) {
-                            // The app landed in this folder at its chosen slot. `from` is the folder the drag
-                            // started in, if any — that is the folder-to-folder move, committed as one batch; null
-                            // when it came off a grid instead, and this folder itself when the drag left and came
-                            // back, which `addToFolder` recognises as the plain reorder it is.
+                            // The app landed in this folder at its chosen slot. `from` is the folder that *holds*
+                            // it — the folder-to-folder move, committed as one batch; null when it came off a grid
+                            // instead, and this folder itself when the drag left and came back, which `addToFolder`
+                            // recognises as the plain reorder it is. Membership rather than
+                            // `dragSourceFolderId` for `commitLanding`'s reason: an app carried in from the APPS
+                            // drawer may already be in one of home's folders without the drag having started there.
                             viewModel.addToFolder(
                                 folderId = folder.folder.id,
                                 reported = order,
                                 incoming = incoming,
-                                from = folderHost.dragSourceFolderId,
+                                from = viewModel.folderHolding(incoming),
                             )
                             folderHost.injectCommitted()
                         } else {

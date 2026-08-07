@@ -1,6 +1,7 @@
 package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.database.dao.FolderItemDao
 import inkspire.morphic.core.database.entity.FolderEntity
 import inkspire.morphic.core.database.entity.FolderItemEntity
 import inkspire.morphic.core.database.entity.IconContainerEntity
@@ -107,6 +108,7 @@ internal class LayoutRepositoryImpl(
             // ── Folders ──
             is LayoutChange.CreateFolder -> {
                 val folderId = daos.folder.insert(FolderEntity(label = change.label))
+                daos.folderItem.detachAll(change.apps)
                 daos.folderItem.upsert(change.apps.toFolderItems(folderId))
                 // The folded apps now live inside the folder, so they leave the grid (an app is in one place).
                 change.apps.forEach { daos.appPlacement.deleteByComponent(it) }
@@ -116,6 +118,7 @@ internal class LayoutRepositoryImpl(
             }
 
             is LayoutChange.AddToFolder -> {
+                daos.folderItem.detachAll(listOf(change.app))
                 val next = (daos.folderItem.maxSortOrder(change.folderId) ?: -1) + 1
                 daos.folderItem.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
                 // The app moved into the folder, so it leaves the grid (no-op if it came from another folder).
@@ -126,6 +129,7 @@ internal class LayoutRepositoryImpl(
 
             is LayoutChange.ReorderFolder -> {
                 daos.folderItem.clearFolder(change.folderId)
+                daos.folderItem.detachAll(change.apps)
                 daos.folderItem.upsert(change.apps.toFolderItems(change.folderId))
             }
 
@@ -171,6 +175,25 @@ internal class LayoutRepositoryImpl(
         }
     }
 }
+
+/**
+ * Takes [apps] out of whatever folder currently holds them, so the upsert that follows can put them in this one.
+ * Every op that makes an app a *member* runs it first — creating a folder around it, adding it to one, or setting a
+ * whole folder's order.
+ *
+ * **This is the store keeping its own invariant**, not a convenience for callers. `folder_item` is uniquely indexed
+ * by `component` — an app lives in at most one folder — and without this the rule was enforced only by the index
+ * *rejecting* the write. Room's `@Upsert` makes that rejection silent: it inserts, catches the constraint failure,
+ * and then updates **by primary key** — which here is `(folderId, component)`, so it matches nothing when the
+ * conflicting row belongs to a *different* folder. The write was dropped with no error and no row changed.
+ *
+ * What that looked like: an app already in one folder, dropped on another app, produced a new folder holding only the
+ * target; dropped on another folder, it stayed where it was and the target gained nothing. Both read as the drop
+ * being ignored. Making membership displace the old row also makes the *order* of a batch stop mattering — a
+ * `RemoveFromFolder` for the app's previous folder may come before or after the op that re-homes it, and several
+ * callers emit it after.
+ */
+private suspend fun FolderItemDao.detachAll(apps: List<ComponentKey>) = apps.forEach { removeByComponent(it) }
 
 /** Apps as dense `folder_item` rows (index = sortOrder). */
 private fun List<ComponentKey>.toFolderItems(folderId: Long): List<FolderItemEntity> =

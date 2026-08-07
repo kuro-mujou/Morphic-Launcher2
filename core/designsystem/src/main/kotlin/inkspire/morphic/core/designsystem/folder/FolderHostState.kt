@@ -137,25 +137,29 @@ class FolderHostState<Id : Any> {
      * The collection the in-flight drag **started in**, or null when it started on the surface. Fixed for the whole
      * drag, however many collections it then visits.
      *
-     * Two separate things need it, and they are the same collection for the same reason — the drag *began* on one of
-     * its cells:
-     * - **Its overlay must stay composed for as long as the drag lives.** That cell received the finger, and an
-     *   in-flight pointer stream cannot be handed to another node, so disposing it kills the gesture mid-drag. This is
-     *   the collection-level form of the drag toolkit's standing rule — *keep a source surface composed while a drag
-     *   from it is in flight* — so a host renders this one invisibly alongside whichever is being *presented*.
-     * - **It may be owed a removal when the drag lands.** On a folder-hosting surface the app is a member here and
-     *   nowhere else, so wherever it comes to rest it has to leave this one. (A category card owes nothing: its `Move`
-     *   unfiles the app from every other category as part of landing it. The host doesn't need to know which case it
-     *   is — it names the collection and the surface decides what that implies.)
+     * **Its overlay must stay composed for as long as the drag lives**, and that is what this is for. The cell that
+     * received the finger lives in that overlay's grid, and an in-flight pointer stream cannot be handed to another
+     * node, so disposing it kills the gesture mid-drag. This is the collection-level form of the drag toolkit's
+     * standing rule — *keep a source surface composed while a drag from it is in flight* — so a host renders this one
+     * invisibly alongside whichever is being *presented*.
+     *
+     * **It is deliberately not the answer to "which collection is owed a removal when the drag lands".** That looks
+     * like the same question and is not: it asks which collection *holds* the app, where this one asks where the
+     * gesture *began*. The two agree for a drag lifted inside a collection on this surface — nothing is written until
+     * the drop, so the app is still a member — and diverge the moment an app arrives from **another surface**, having
+     * been lifted in the APPS drawer while already sitting in one of home's folders. Answering that from here treated
+     * such an app as a stranger and placed it while leaving it in the folder. So a host resolves it from membership
+     * instead: `HomeViewModel.folderHolding`, and the category card's own `categoryOf` fallback, which got there
+     * first.
      *
      * Deliberately *not* a field on [FolderPhase]: it is a property of the **drag**, not of where the interaction is,
      * and the two are independent (which is why it doesn't reintroduce the flags-that-must-agree problem the phase was
      * built to remove). The phase cannot answer it either — it names whichever collection is on screen *now*, which
-     * after one hand-off is no longer the one still owed anything.
+     * after one hand-off is no longer the one holding the pointer stream.
      *
      * Set from the phase at [onDragStart] rather than when the drag leaves, which is the distinction that makes
-     * re-entry work: an app dragged *in* from the surface and then back out is owed to nobody, so its collection is
-     * neither pinned nor barred from being opened again.
+     * re-entry work: an app dragged *in* from the surface and then back out was never lifted inside a collection, so
+     * none is pinned and none is barred from being opened again.
      */
     var dragSourceFolderId: Id? by mutableStateOf(null)
         private set
@@ -225,7 +229,7 @@ class FolderHostState<Id : Any> {
      *   somewhere else says nothing about it.
      */
     fun onDragEnd() {
-        dragSourceFolderId = null // scoped to one drag; the pointer holder is free to go and nothing is owed
+        dragSourceFolderId = null // scoped to one drag; no pointer stream left to preserve, so the holder can go
         phase = when (val current = phase) {
             is FolderPhase.Injecting -> FolderPhase.Closed
             is FolderPhase.Injected, is FolderPhase.Open, FolderPhase.Closed -> current
