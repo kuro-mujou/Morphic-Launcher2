@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
@@ -69,18 +72,36 @@ fun SurfacePager(
             }
             .surfacePagerGesture(state, enabled),
     ) {
+        // **Which slot is on screen**, read once here rather than by each slot. The `0.5` cut is [openEdge]'s own, so
+        // a half-dragged pan hands presence over at the same point it decides which surface it is closer to.
+        //
+        // Through `derivedStateOf` because [SurfacePagerState.openEdge] reads the pan animatables: a raw read here
+        // would subscribe this composable to *every frame* of a pan, and re-running it re-invokes both content
+        // lambdas. The derived value changes twice in a whole pan, which is the real rate of the question.
+        val openEdge by remember(state) { derivedStateOf { state.openEdge } }
         Box(Modifier.fillMaxSize().surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
             // Each slot gets its own channel for "where is my content resting", which is what makes the nested-scroll
             // hand-off work without the shell wiring anything: content calls `ReportScrollEdges` and the gesture reads
             // whichever slot the swipe is crossing. L1 hoisted four `mutableStateOf`s and four reporter lambdas into
             // its home screen for this; the pager composes the slots, so the pager owns them.
-            CompositionLocalProvider(LocalScrollEdgeSlot provides state.centerScroll) { center() }
+            CompositionLocalProvider(
+                LocalScrollEdgeSlot provides state.centerScroll,
+                LocalSurfacePresented provides (openEdge == null),
+            ) { center() }
         }
         // Between the two, and with no `surfaceSlide` of its own — see [overlay].
         overlay()
         for ((edge, binding) in sideContent) {
             Box(Modifier.fillMaxSize().surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
-                CompositionLocalProvider(LocalScrollEdgeSlot provides state.sideScroll.getValue(edge)) {
+                // **Every side surface stays composed, open or not** — parked one viewport off its edge rather than
+                // removed — which is what keeps a lifted cell's pointer stream alive while its surface slides away,
+                // and so what lets a drag be ejected onto HOME at all. [LocalSurfacePresented] is the other half of
+                // that bargain: composed is no longer the same as on screen, and anything that must belong to exactly
+                // one surface at a time (a drop zone, the floating proxy) reads it to tell the two apart.
+                CompositionLocalProvider(
+                    LocalScrollEdgeSlot provides state.sideScroll.getValue(edge),
+                    LocalSurfacePresented provides (openEdge == edge),
+                ) {
                     binding.content()
                 }
             }

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -26,12 +25,13 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
-import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
+import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
@@ -48,6 +48,7 @@ import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.ComponentKey
@@ -109,6 +110,16 @@ internal val PagerReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent
  * **Crossing pages** works the way home's does: one drop zone is the whole viewport, page-swipe is gated off while
  * an item is in flight so the two gestures never fight, holding near an edge flips a page on a dwell, and
  * `keepAllPagesPlaced` keeps the source page composed so the lifted cell keeps its pointer stream across the flip.
+ *
+ * **Crossing to HOME** is the same idea one level out. Carry the app into the eject band at the top of the screen
+ * (`TopActionZone`, registered by `feature:shell`) and the drawer closes with the drag still in flight; the app then
+ * lands on home's grid, committed by *home's* zone. Nothing here participates: the coordinator is the launcher's, and
+ * this surface stays composed behind HOME so the lifted cell keeps its pointer stream — it simply stops being
+ * `LocalSurfacePresented`, which unregisters its zone and stops it drawing the proxy. The app is **not** taken out of
+ * the drawer on the way: it lives in this arrangement *and* may sit on home, so there is nothing to remove.
+ *
+ * The band rather than eject-on-lift (which is what the A–Z list and grid do) because this surface **stores an
+ * arrangement**: a drag on it means "rearrange" until the user says otherwise, and the band is how they say it.
  *
  * **What lives elsewhere in this package.** The leaves it draws — [AppsPagerCell] and [dropFootprintCell] — and the
  * pure maths — [pageDisplayOrder], [entryFor], [appInPages], [folderAt], [canMergeInto]. What stays here is the part
@@ -185,15 +196,8 @@ fun AppsPager(
     // store's ops already follow (`CreateFolder` takes the target, not its slot).
     var mergeTarget by remember { mutableStateOf<AppsItem?>(null) }
 
-    // The open folder's drag hooks (null when none is open). It lives above the coordinator because the planner
-    // reads it and must be built first, while the folder host is created after — the same construction-order
-    // squeeze home documents.
-    val folderDelegate = remember { mutableStateOf<FolderDragDelegate?>(null) }
-
     val planner = remember(config) {
-        DropPlanner { zone, item, fingerInRoot ->
-            // Anything that isn't this pager's zone is the open folder's, which plans its own reorder.
-            if (zone.id != PagerZoneId) return@DropPlanner folderDelegate.value?.onHover(item, fingerInRoot)
+        DropPlanner { item, fingerInRoot ->
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             val stored = livePages.value.getOrNull(page).orEmpty()
@@ -238,13 +242,16 @@ fun AppsPager(
             PagerReorderPlan
         }
     }
-    val coordinator = rememberDragCoordinator(planner)
+    // The launcher's one coordinator, provided by `feature:shell` — not this surface's. That is what lets an app
+    // lifted here be carried onto home: both surfaces' zones sit in one registry, so the eject band merely gets the
+    // drawer out of the way and the same drag lands on a home grid.
+    val coordinator = requireDragCoordinator()
+    val presented = LocalSurfacePresented.current
     val session = coordinator.session
 
     LaunchedEffect(coordinator.isDragging) {
         if (!coordinator.isDragging) { gap = -1; gapPage = -1; mergeTarget = null }
     }
-    DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(PagerZoneId) } }
 
     // Folder hosting, the same lifecycle home uses — `FolderHostState` is surface-independent, and the one thing
     // it can't know is which folder a merge plan targets. On a coordinate surface that answer compares placements;
@@ -268,29 +275,25 @@ fun AppsPager(
     // Where a drag comes to rest — the same four landings home resolves, in the same order, because the question
     // is the surface-independent one: is this the open folder's drop, a release outside it, an app leaving a
     // folder, or an ordinary rearrangement?
-    fun handleDrop() {
-        // Read before dropping: the source is cleared when the drag ends, which the drop is.
+    // What a landing **on one of this pager's pages** means. The same cases home resolves, in the same order,
+    // because the question is the surface-independent one — and, like home's, it is the *zone's* handler rather than
+    // the releasing cell's, so it runs whoever lifted the app.
+    fun commitLanding(outcome: DropOutcome) {
+        // Read here rather than after any write: `dragSourceFolderId` is cleared when the drag ends, and this runs
+        // inside `coordinator.drop()`, i.e. before the effect that notices.
         val sourceFolderId = folderHost.dragSourceFolderId
-        val presentedFolderId = folderHost.openFolderId
-        val outcome = coordinator.drop()
 
-        // 1. Inside the open folder → its own business: a reorder, which is also how an inject commits.
-        if (outcome != null && outcome.zone != PagerZoneId) {
-            folderDelegate.value?.commitReorder(outcome.item)
-            return
-        }
-        // 2. Released outside the folder that is on screen. Leaving is a deliberate dwell, so a release out here
-        //    is "never mind" — and it could not be honoured anyway: an app carried inside a folder has no slot, so
-        //    placing it would leave it in the folder *and* on a page.
-        if (presentedFolderId != null) {
+        // 1. Released on a page while a folder is still on screen. Leaving is a deliberate dwell, so a release out
+        //    here is "never mind" — and it could not be honoured anyway: an app carried inside a folder has no slot,
+        //    so placing it would leave it in the folder *and* on a page.
+        if (folderHost.openFolderId != null) {
             folderHost.close()
             return
         }
-        if (outcome == null) return
         // A merge commits against the entry the planner named, not the cell it painted on.
         val target = mergeTarget?.takeIf { outcome.plan.intent == DropIntent.MERGE }
 
-        // 3. The drag started inside a folder and has landed out here: it is placed and removed from that folder
+        // 2. The drag started inside a folder and has landed out here: it is placed and removed from that folder
         //    in one batch — including onto a merge ring, which is how it moves straight into another folder.
         if (sourceFolderId != null) {
             val app = (outcome.item as? GridItem.App)?.component ?: return
@@ -305,7 +308,7 @@ fun AppsPager(
             }
             return
         }
-        // 4. An ordinary rearrangement.
+        // 3. An ordinary rearrangement.
         if (target != null) {
             (outcome.item as? GridItem.App)?.let { onMerge(it.component, target.iconItem) }
         } else {
@@ -314,6 +317,33 @@ fun AppsPager(
             onMove(item, page, gap.coerceAtLeast(0))
         }
     }
+
+    // A cell of this surface released the finger — that only ends the drag. The landing belongs to whichever zone it
+    // fell in, which may be a page of this pager, a folder open over it, or one of **home's** grids if the drag was
+    // ejected. What is left here is the source-side bookkeeping: a folder on screen with nothing landed under it.
+    fun handleRelease() {
+        val presentedFolderId = folderHost.openFolderId
+        val outcome = coordinator.drop()
+        if (presentedFolderId != null && outcome == null) folderHost.close()
+    }
+
+    // **One drop zone, the whole viewport**, as on every paged surface here. Registered from state rather than from
+    // the layout callback that measures it, because being registered also depends on this surface being the one on
+    // screen: it stays composed behind HOME once a drag has been ejected, and a zone left in the registry from
+    // off-stage would go on claiming the finger from under home's grids.
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = viewport?.let {
+            DropZone(
+                id = PagerZoneId,
+                bounds = it,
+                z = 0,
+                planner = planner,
+                accepts = { item -> item.asIconItem() != null },
+                onDrop = ::commitLanding,
+            )
+        },
+    )
 
     // The app being carried into the open folder, resolved once and held. Keyed on the component alone,
     // deliberately not on `pages`: committing takes it off the page optimistically, so re-deriving afterwards
@@ -354,9 +384,6 @@ fun AppsPager(
                             cols = config.cols,
                             rows = config.rows,
                         )
-                        coordinator.registerZone(
-                            DropZone(PagerZoneId, bounds, z = 0) { item -> item.asIconItem() != null },
-                        )
                     },
                 // Keep off-screen pages placed while dragging, so the lifted cell's pointer stream survives a flip.
                 keepAllPagesPlaced = coordinator.isDragging,
@@ -376,7 +403,7 @@ fun AppsPager(
                             coordinator = coordinator,
                             item = item.gridItem,
                             gestureConfig = gestureConfig,
-                            onDrop = { handleDrop() },
+                            onRelease = ::handleRelease,
                             modifier = cellModifier,
                             onOpen = {
                                 when (item) {
@@ -396,7 +423,9 @@ fun AppsPager(
             val geo = geometry
             // The proxy belongs to whichever surface is presenting the drag: while a folder is on screen that is
             // the folder, drawing the app at its own cell size. Exactly one of them paints.
-            if (session != null && geo != null && draggedEntry != null && folderHost.openFolderId == null) {
+            if (presented && session != null && geo != null && draggedEntry != null &&
+                folderHost.openFolderId == null
+            ) {
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
@@ -451,8 +480,7 @@ fun AppsPager(
                             }
                         },
                         onLeave = folderHost::leaveFolder,
-                        onDrop = { handleDrop() },
-                        onPublishDelegate = { folderDelegate.value = it },
+                        onRelease = ::handleRelease,
                         onDismiss = { folderHost.close() },
                     )
                 }

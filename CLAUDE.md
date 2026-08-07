@@ -1002,15 +1002,15 @@ renders, is configurable, and reorders — and its widget area is an empty, corr
 zone until `GridItem.Widget` has a cell. Two things become owed the moment it does: re-homing what a shrink evicts
 (the widget area's `settleDock`, which cannot evict to a list), and seeding it.
 
-Also open: on the surface swipe, **`EjectToHome` and the five transitions past SLIDE** are what is left of L1's
-`CrossPager` — the nested-scroll hand-off and the frosted backdrop, the other two things tangled into it, have both
+Also open: on the surface swipe, **the five transitions past SLIDE** are all that is left of L1's `CrossPager` — the
+nested-scroll hand-off, the frosted backdrop and `EjectToHome`, the other three things tangled into it, have all
 landed. A **home long-press → options menu** (the free cell space now falls through to
 the surface for exactly this, and nothing listens yet), the vertical list's **"Add apps" picker** and item menu
 (without one, its contents are whatever the grid seeded), home **orientation**, or
-widgets/containers on the grid. On APPS, **all five layouts render and all the
-arrangement-owning ones drag**; what is left is the surrounding behaviour: the alphabet filter strip, search,
-`EjectToHome`, an optimistic layer for both the pager and the card (a drop waits for the write) + the pager's page
-indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanical** job is queued and deliberately
+widgets/containers on the grid. On APPS, **all five layouts render, all the
+arrangement-owning ones drag, and every one of them can drag an app out onto HOME**; what is left is the surrounding
+behaviour: the alphabet filter strip, search, an optimistic layer for both the pager and the card (a drop waits for
+the write) + the pager's page indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanical** job is queued and deliberately
 unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
 
@@ -1317,6 +1317,49 @@ boots into it; the dev harness (all playgrounds + the component gallery) is kept
 row in settings, so no dev chrome ships on a real surface. A gear chip over HOME is the admitted scaffolding standing in
 for the P7 long-press menu.
 
+**The drag is the launcher's, not a surface's — so an app can be dragged from APPS onto HOME.** `feature:shell` hosts
+the **one** `DragCoordinator` and provides it through `LocalDragCoordinator`; every surface reads it. Each surface used
+to remember its own, which was indistinguishable from this while no drag crossed a boundary. Three changes carry it,
+and each removed something rather than adding a layer:
+- **A `DropZone` answers for itself, end to end** — it carries its own `planner` *and* its own `onDrop`, and
+  `DragCoordinator.drop()` dispatches the landing to the zone the finger came to rest in before returning. That is
+  docs/DRAG_AND_DROP_DESIGN.md §10's *"behaviour travels with the destination zone"* made structural, and it is
+  **required** rather than tidy: an app lifted in the drawer is released by a cell in `feature:apps`, and the thing
+  that must commit it is *home's* grid. It deleted the `when (zone.id)` every multi-zone surface repeated in its
+  planner and its drop, and with it the `FolderDragDelegate` hand-off and the construction-order squeeze three files
+  documented (the delegate had to exist before the coordinator, which had to exist before the folder host). A cell's
+  `onRelease` is now only what the *source* surface knows — that a drag has left it.
+- **`RegisterDropZone` + `LocalSurfacePresented`.** `SurfacePager` keeps **every** slot composed at all times, which
+  is what satisfies the "keep a source surface composed while a drag from it is in flight" rule for free — and is
+  exactly why an ejected drag survives with no re-tracking. The bill is that *composed* is no longer *on screen*: an
+  off-screen surface's `onGloballyPositioned` does not reliably re-fire as the pan moves it, so bounds it published
+  while it *was* on screen would sit in the registry claiming the finger from off-stage. So registration moved out of
+  the layout callback into a composable gated on presence (defaulted from the local, so it cannot be forgotten), and
+  teardown removes a zone **by instance**, which is what lets two folder overlays hand `ZoneId("folder")` over inside
+  one composition. The same local gates each surface's floating proxy, so two never appear under one finger.
+- **`EjectToHome` is one method** — close this surface — because that is all that was left to do. Compare L1's
+  `HomeDragBridge`, which passed the app, the finger in window space and a grab offset, because its `CrossPager`
+  stopped delivering pointer events to either subtree as it collapsed and the drag had to be re-tracked at the
+  ancestor. **Two triggers, and the split is a property of the layout rather than a preference:** the **derived**
+  APPS layouts (A–Z list, A–Z grid) eject *on lift*, since they own no arrangement and a drag on one can only mean one
+  thing; the layouts that **store** one (pager, category pager, category card) eject when the finger reaches
+  `TopActionZone` — a band across the top, ported from L1 and reduced from its two modes to one, since nothing in L2
+  can delete an app yet. HOME then takes the app wherever its zones do: the pager and the dock **place** it (`Move` is
+  an upsert, so an app with no placement needs no separate path — `HomeState.catalog` is the one addition, so home can
+  draw an icon for an app it has never placed), and the vertical list **appends** it (MovingGap migrates a gap from
+  where an item already *is*, and a stranger is nowhere). Nothing is removed from the drawer on the way: an app lives
+  in the APPS arrangement *and* may sit on home.
+- **The category card's grid stopped being lazy**, which reverses its own note. Its preview icons are draggable now —
+  a preview is the only part of a card that names one app, so it is the only place a re-file can start without opening
+  the category first — and a lifted cell owns the pointer stream, so a card disposed while auto-scrolling toward the
+  target would kill the gesture. `HomeListSurface` made the same trade for the same reason. One consequence to know:
+  a card's measured rectangle is no longer trustworthy inside a scroller, so each entry in the hit-test map records
+  the **scroll offset it was measured at** and the correction is subtracted at hit-test time — self-contained, and
+  zero-cost if `onGloballyPositioned` does re-fire.
+- **Not built here, deliberately:** the item **context menu**. The gesture machine has modelled
+  `Pressed → MenuShown → Dragging` since B4, so every flow above already works with `onShowMenu` a no-op — long-press,
+  then move, and the drag begins. The menu is P7 and changes none of this wiring.
+
 **The surface swipe is nested-scroll aware, and one fact answers it from both ends.** A one-finger swipe crossing a
 surface boundary belongs to whatever scrolls under it until that content runs out — so `OneFingerSwipe.AT_EDGE` is now
 genuinely different from `ALWAYS`, which is what `LauncherShell`, `SurfacePager` and the playground all said was
@@ -1402,7 +1445,12 @@ The report is **one answer for a whole surface**, so a vertical swipe starting i
 treated as if it were over the main area — L1's own simplification, and refining it would mean a per-region answer to
 a question decided once, at slop.
 
-**Known gaps, deliberate:** the effects section's five sliders are **dormant** — the full-screen frost is fixed per
+**Known gaps, deliberate:** there is **no item context menu** — the gesture machine has modelled
+`Pressed → MenuShown → Dragging` since B4 and every drag flow works through it, but `onShowMenu` is a no-op
+everywhere, so a long-press shows nothing before the drag begins (P7). A drag ejected from APPS draws **no floating
+proxy** for the frames the surface takes to close: the drawer stops painting one the moment it is no longer presented
+and home starts once it is, and neither owns the gap in between (the drop itself is unaffected). The effects section's
+five sliders are **dormant** — the full-screen frost is fixed per
 variant by design, and no frosted *panel* exists yet to read a tuned strength or tint (nor to draw liquid glass's rim).
 No item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no

@@ -121,6 +121,10 @@ sealed interface HomeMainSizing {
  * @property listApps the vertical list's apps in their stored order, resolved through the app cache. Empty on the
  *   pager layout, which has no list — and empty until the store answers on the one that does. Unlike [items] this is
  *   an *order*, not a set of placements: see `HomeListRepository` for why the two stores are separate.
+ * @property catalog every installed app by component — the resolver [items] and [listApps] are already built from,
+ *   published because home now has to render an app it has **never placed**: one dragged in from the APPS surface,
+ *   whose icon has to follow the finger from the moment that surface closes. It has no placement, is in no folder,
+ *   and until it is dropped it is in nothing home owns. [appInfo] falls back to it for exactly that window.
  * @property iconSizing each zone's **resolved** icon sizing, by slot — the blueprint's default with any user
  *   override merged in. One entry per zone that draws icons, because they are separate grids with their own
  *   blueprints and so their own independent icon config; the widget area contributes none, since a widget is not an
@@ -134,6 +138,7 @@ data class HomeState(
     val items: List<HomeItem>,
     val layout: HomeLayout = HomeLayout.PAGER_WITH_DOCK,
     val listApps: List<AppInfo> = emptyList(),
+    val catalog: Map<ComponentKey, AppInfo> = emptyMap(),
     val iconSizing: Map<GridSlot, IconSizing> = emptyMap(),
     val main: HomeMainSizing? = null,
     val side: SideZoneSizing? = null,
@@ -154,12 +159,16 @@ fun HomeState.paddingFor(slot: GridSlot): Int = horizontalPaddingDp[slot] ?: 0
 fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone == zone }
 
 /**
- * Resolves [component] to the app info home knows about, whether it is **placed on a grid or inside a folder**.
+ * Resolves [component] to the app info home can draw — **placed on a grid, inside a folder, or merely installed**.
  *
- * Both are needed because a drag detaches an app from neither until it lands: an app dragged out of a folder is still
- * a member of it and has no placement at all, so anything that looks up "the app under the finger" by placement alone
- * — the floating proxy, the app a folder is being handed to render — finds nothing and draws nothing. Searching both
- * is what lets one drag cross grids and folders without the icon blinking out at each boundary.
+ * The first two are needed because a drag detaches an app from neither until it lands: an app dragged out of a folder
+ * is still a member of it and has no placement at all, so anything that looks up "the app under the finger" by
+ * placement alone — the floating proxy, the app a folder is being handed to render — finds nothing and draws nothing.
+ * Searching both is what lets one drag cross grids and folders without the icon blinking out at each boundary.
+ *
+ * The third extends that same rule across the *surface* boundary, and is why [HomeState.catalog] exists: an app
+ * dragged in from the APPS drawer is in neither of the first two until the drop commits, so home would have nothing
+ * to put under the finger for the whole of the gesture it is meant to be hosting.
  */
 fun HomeState.appInfo(component: ComponentKey): AppInfo? =
     items.firstNotNullOfOrNull { item ->
@@ -167,4 +176,4 @@ fun HomeState.appInfo(component: ComponentKey): AppInfo? =
             is HomeItem.App -> item.info.takeIf { it.componentKey == component }
             is HomeItem.Folder -> item.apps.firstOrNull { it.componentKey == component }
         }
-    }
+    } ?: catalog[component]

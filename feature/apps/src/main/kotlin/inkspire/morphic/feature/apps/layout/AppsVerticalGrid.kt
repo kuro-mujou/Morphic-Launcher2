@@ -111,7 +111,9 @@ fun AppsVerticalGrid(
                         app = app,
                         metrics = cell.metrics,
                         modifier = Modifier.height(cell.height),
-                        itemGestures = Modifier.appsItemGestures(gestureConfig) { onLaunch(app.componentKey) },
+                        itemGestures = Modifier.appsItemGestures(gestureConfig, app.componentKey) {
+                            onLaunch(app.componentKey)
+                        },
                     )
                 }
             }

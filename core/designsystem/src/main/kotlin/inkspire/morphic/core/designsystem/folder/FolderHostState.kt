@@ -94,15 +94,15 @@ sealed interface FolderPhase<out Id : Any> {
  * latched for the rest of the drag, which is why [FolderPhase] has no "leaving" state: leaving *is*
  * [FolderPhase.Closed].
  *
- * **What is deliberately not here.** Two things a surface keeps for itself:
- * - *Committing* the outcomes (place the app, add it to a collection, reorder). Each surface writes through its own
- *   repository, and the ops differ in kind — home pairs a `Move` with a `RemoveFromFolder`, while a category `Move`
- *   re-files atomically and owes nothing — so an interface over them would be shaped by whichever surface got there
- *   first.
- * - The open collection's published [FolderDragDelegate]. It belongs to this concern, but the surface's `DropPlanner`
- *   reads it and must be constructed *before* the [DragCoordinator] it is given to — while this state is created
- *   *after* the coordinator, since its effects observe the drag. The surface is the only place that can hold
- *   something both sides of that construction order can see.
+ * **What is deliberately not here:** *committing* the outcomes (place the app, add it to a collection, reorder).
+ * Each surface writes through its own repository, and the ops differ in kind — home pairs a `Move` with a
+ * `RemoveFromFolder`, while a category `Move` re-files atomically and owes nothing — so an interface over them would
+ * be shaped by whichever surface got there first.
+ *
+ * A second exclusion used to be listed here: the open collection's published `FolderDragDelegate`, which a surface
+ * had to hold because its planner read it and had to be built *before* the coordinator, while this state is built
+ * *after* it. That squeeze is gone — a [DropZone] carries its own planner and its own drop, so the overlay binds them
+ * to its own zone and nothing crosses the boundary.
  *
  * Held as a class rather than loose `remember`s in the composable so the transitions have names and can be reasoned
  * about in one place, over a single [FolderPhase] rather than flags that have to be kept consistent with each other.

@@ -81,16 +81,29 @@ geometry (kills L1's hardcoded-`ICON_SIZE_DP` smell).
 ```kotlin
 data class DropZone(
     val id: ZoneId,
-    val boundsInRoot: Rect,
-    val z: Int,                       // topmost-first hit-test; folder overlay sits above home
-    val geometry: ZoneGeometry,       // window <-> cell/index, from real GridConfig + IconMetrics
-    val behavior: DropBehavior,       // §6 — partition + reflow, travels with the zone
+    val bounds: Rect,
+    val z: Int,                          // topmost-first hit-test; folder overlay sits above home
+    val planner: DropPlanner,            // §6 — what a hover here would do; travels with the zone
     val accepts: (GridItem) -> Boolean,
+    val onDrop: (DropOutcome) -> Unit,   // §10 — and so does what a landing here *writes*
 )
 ```
 
 On each move the coordinator hit-tests the finger against all zones (highest `z` whose bounds contain the point
-and whose `accepts` passes), then asks the planner for a `PlacementPlan` in that zone. **No zone owns the drag.**
+and whose `accepts` passes), then asks **that zone's** planner for a `PlacementPlan`. **No zone owns the drag.**
+
+**Behaviour travels with the zone, and that is now literal.** `planner` and `onDrop` began life on the *surface*,
+dispatched by a `when (zone.id)` that each multi-zone surface repeated. That held only while a drag could never leave
+the surface it started on. It can now — an app lifted in the APPS drawer is released by a cell in `feature:apps` and
+has to be committed by **home's** grid — and the releasing surface knows nothing about placements. So the zone
+answers end to end, and `DragCoordinator.drop()` dispatches the landing to it before returning. A cell's own
+`onRelease` is left with only what the *source* surface knows: that a drag has left it.
+
+**Registration is `RegisterDropZone`, not a call inside `onGloballyPositioned`.** It has two inputs and only one is a
+measurement; the other is `LocalSurfacePresented` — whether this surface is on screen at all. `SurfacePager` keeps
+every slot composed (that is what §5 needs), so a surface panned off the side is laid out once on its way out and a
+layout-driven registration could never be revoked or restored. Teardown removes the zone **by instance**, so two
+overlays sharing `ZoneId("folder")` can hand it over in one composition without either deleting the other's.
 
 **Folder-out falls out for free:** the open folder is just another zone at higher `z`. Inside its bounds → folder
 zone wins (reorder). Move outside its bounds → hit-test falls through to the home/dock zones still registered
@@ -288,11 +301,14 @@ ramp), with "scroll" swapped for "flip page." One timing constant in the shared 
 |---|---|---|---|---|
 | **Home** | ✓ | ✓ | ✗ (drawers are A–Z-derived) | ✓ (drop on its ring, or dwell to enter) |
 | **Dock** | ✓ | ✓ | ✗ | ✓ (same two ways) |
-| **Side surface** | ✓ (extract) | ✓ (extract) | reorder within self | — |
+| **Side surface** | ✓ (eject) | ✓ (eject) | reorder within self | ✓ (drawer folders / categories) |
 | **Folder** | ✓ (leave) | ✓ (leave) | ✗ | reorder within self, **and ✓ folder→folder** |
 
-Every ✓ is one uninterrupted gesture — the cell keeps its pointer stream throughout, and the drop reports the zone it
-landed in (§4). **Folder→folder** has two forms, differing only in precision: drop on the target's merge ring to append
+Every ✓ is one uninterrupted gesture — the cell keeps its pointer stream throughout, and the drop is committed by the
+zone it landed in (§4). **Side-surface → HOME is no exception**: the surface closes mid-drag (`EjectToHome`, part 7)
+and the same session carries on over home's grids. Note what that row does *not* say — nothing is removed from the
+drawer, because an app lives in the drawer's arrangement *and* may sit on home. The dock row is the same drag: the
+dock is just another home zone. **Folder→folder** has two forms, differing only in precision: drop on the target's merge ring to append
 the app, or dwell on that ring to open the target and place it at a chosen slot (§4a). Dropping an app back on the
 folder it came from is a no-op — it never left.
 
@@ -353,7 +369,19 @@ in one sitting.
   dwell-to-enter, dwell-to-leave, both repeatable within one drag, folder→folder in one gesture, auto-dissolve of the
   second-last app, and `FolderHostState` as the surface-agnostic lifecycle (20 unit tests). Pointer survival is the
   §5 rule applied per folder — the folder a drag was lifted from stays composed as an invisible holder.
-- [ ] **7. `EjectToHome`** (vertical grids) + wire `MovingGap`/`DenseReorder` partitions.
+- [x] **7. `EjectToHome`** — a drag lifted on the APPS surface lands on HOME. It cost almost nothing in the end,
+  because the two things that make it hard were already answered: `SurfacePager` keeps every slot composed (so the
+  lifted cell keeps its pointer stream — §5), and hoisting the **one coordinator to `feature:shell`** put home's zones
+  and the drawer's in a single registry. What was left is the surface getting out of the way, which is the whole of
+  the `EjectToHome` interface: one method, no app, no finger position, no grab offset. Compare L1's `HomeDragBridge`,
+  which needed all three because its `CrossPager` stopped delivering events to either subtree as it collapsed.
+  **Two triggers, and the split is not a preference.** The **derived** layouts (A–Z list, A–Z grid) eject *on lift*:
+  they own no arrangement, so a drag on one can only mean one thing. The layouts that **store** an arrangement (the
+  pager, the category pager, the category card) eject when the finger reaches a `TopActionZone` band at the top of
+  the screen — a drag on them means "rearrange" until the user says otherwise, and the band is how they say it.
+  HOME takes the app wherever its zones do: the pager and the dock place it (a `Move` is an upsert, so an app with no
+  placement needs no separate path), the vertical list appends it. `MovingGap` is wired on every ordered surface;
+  `DenseReorder` never became a separate thing — the home list uses MovingGap too.
 - [x] **8a. Page-flip on edge dwell** (§9) — home pager flips on an edge dwell mid-drag, and grows a trailing empty
   page so an app can be carried onto a new one. Lives in `CoordinateDragPager`; the APPS pager inherits it when built.
 - [ ] **8b. Cross-page repagination on drop** — the APPS pager's paged-order store (page + in-page slot, overflow

@@ -98,7 +98,7 @@ internal fun CategoryPage(
     fingerInRoot: Offset?,
     metrics: IconMetrics,
     onLaunch: (ComponentKey) -> Unit,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
     onGeometry: (GridGeometry) -> Unit,
     onScrollState: (ScrollState) -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -217,7 +217,7 @@ internal fun CategoryPage(
                         coordinator = coordinator,
                         item = GridItem.App(app.componentKey),
                         gestureConfig = gestures,
-                        onDrop = onDrop,
+                        onRelease = onRelease,
                         modifier = cellModifier,
                         onOpen = { onLaunch(app.componentKey) },
                     ) { itemGestures ->

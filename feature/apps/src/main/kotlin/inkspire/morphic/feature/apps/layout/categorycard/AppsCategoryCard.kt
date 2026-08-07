@@ -2,16 +2,17 @@ package inkspire.morphic.feature.apps.layout.categorycard
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -20,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -32,16 +34,18 @@ import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.drag.DragAutoScrollEffect
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
-import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
+import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
@@ -119,12 +123,12 @@ private val DragProxySize = 72.dp
  * the drop**. A drop straight onto a card needs no dwell at all and appends.
  *
  * Three things differ from home, and all three are properties of *this* surface rather than choices:
- * - **A drag starts inside an expansion, never on the card grid.** Home has loose apps on its grid to pick up; here
- *   every app is filed in exactly one category, so there is no such thing as an app sitting *on* the surface. The
- *   analogue of home's folder→folder move is expansion→card, and it is the whole gesture. Preview icons on a card stay
- *   tap-to-launch: a folder's preview tile isn't a set of draggable items on home either, and making these draggable
- *   would pin the source card in composition — which a lazy grid cannot honour while auto-scrolling to reach the
- *   target card (see the grid below).
+ * - **A drag starts inside an expansion, or on a card's own preview icons.** The second half reverses this file's
+ *   first cut, which kept previews tap-only on the grounds that making them draggable "would pin the source card in
+ *   composition — which a lazy grid cannot honour". That was true, and the answer was to stop being lazy (see the
+ *   grid below) rather than to withhold the gesture: a preview icon is the only part of a card that names one app, so
+ *   it is the only place a re-file can start without opening the category first. The header and the overflow cluster
+ *   still open; the empty slots and padding still stay free.
  * - **There is no "empty cell" landing.** Off a card there is nowhere for an app to be, so the planner reports no plan
  *   at all and a release there is a cancel. That is why the only intent this surface ever reports is
  *   [DropIntent.MERGE]. It also means a *held* finger almost always has a target: where home's post-leave dwell only
@@ -135,6 +139,10 @@ private val DragProxySize = 72.dp
  *   other category as part of filing it, so one op is the whole re-file — where the pager has to pair a
  *   `RemoveFromFolder` with a `Move` and commit both in one batch. Dropping an app back on the category it was lifted
  *   from is a **no-op** for the same reason home's is: it is still filed there and nothing was written on the way out.
+ *
+ * **Dragging out to HOME** works as it does on the other APPS layouts: carry the app into the eject band at the top
+ * (`TopActionZone`, registered by `feature:shell`) and the surface closes with the drag still live, so it lands on
+ * home's grid. The app keeps its category — being on home and being filed here are independent.
  *
  * **Releasing outside an open expansion cancels** (it closes, nothing is written). Leaving is a deliberate dwell, so a
  * release out there reads as "never mind" — and the drag has no landing to honour anyway.
@@ -172,44 +180,53 @@ fun AppsCategoryCard(
     val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
 
-    val gridState = rememberLazyGridState()
+    val scrollState = rememberScrollState()
     // **Where the card grid is scrolled, for the surface swipe** — the vertical grid's report, over cards rather
     // than apps. An open expansion does not change it: the expansion is a `FolderOverlay` with its own paging, and
     // while it is up the surface swipe is locked out entirely by `SurfaceGestureLock`.
     ReportScrollEdges {
-        ScrollEdges(atTop = !gridState.canScrollBackward, atBottom = !gridState.canScrollForward)
+        ScrollEdges(atTop = !scrollState.canScrollBackward, atBottom = !scrollState.canScrollForward)
     }
     var gridBounds by remember { mutableStateOf<Rect?>(null) }
-    // Each card's bounds in root space, so a finger can be turned into a card. A per-card map rather than a grid
-    // geometry, because there is no lattice here to compute from: cards are lazy, square, and separated by spacing
-    // that is not part of any cell. Entries are added as cards are laid out and removed as they are scrolled away.
-    val cardBounds = remember { mutableStateMapOf<String, Rect>() }
+    // Each card's rectangle, so a finger can be turned into a card. A per-card map rather than a grid geometry,
+    // because there is no lattice here to compute from: cards are square and separated by spacing that belongs to
+    // no cell.
+    //
+    // **Each entry remembers the scroll offset it was measured at**, and [cardAt] subtracts the difference. This is
+    // the "a measured position is not trustworthy inside a scroller" rule, in the one form that works whether or not
+    // `onGloballyPositioned` re-fires as the content moves: if it does, the recorded offset is the current one and
+    // the correction is zero; if it does not, the correction is exactly the scroll that happened since. The
+    // alternative — republishing from a stable anchor — needs the card to know the viewport's origin, which only
+    // this surface has.
+    val cardBounds = remember { mutableStateMapOf<String, MeasuredCard>() }
+    fun cardAt(finger: Offset): String? {
+        val scrolled = scrollState.value
+        return cardBounds.entries
+            .firstOrNull { (_, card) -> card.boundsAt(scrolled).contains(finger) }
+            ?.key
+    }
 
     // The card under the finger, resolved by the planner and read back by the drop, the dwell and the drop shadow —
     // never re-derived from the plan's footprint, which is a token here. Safe because the planner runs on the very
     // move that produced the plan those readers are looking at, so it is always the current answer.
     var hoveredCategoryId by remember { mutableStateOf<String?>(null) }
 
-    // The open expansion's drag hooks. Above the coordinator because the planner reads it and must be built first,
-    // while the folder host is created after (its effects observe the drag) — the construction-order squeeze every
-    // collection-hosting surface documents.
-    val expansionDelegate = remember { mutableStateOf<FolderDragDelegate?>(null) }
     val planner = remember {
-        DropPlanner { zone, item, fingerInRoot ->
-            // Anything that isn't the card grid is the open expansion's zone, which plans its own reorder.
-            if (zone.id != CardGridZoneId) return@DropPlanner expansionDelegate.value?.onHover(item, fingerInRoot)
-            val card = cardBounds.entries.firstOrNull { it.value.contains(fingerInRoot) }?.key
+        DropPlanner { _, fingerInRoot ->
+            val card = cardAt(fingerInRoot)
             hoveredCategoryId = card
             // No card under the finger means no landing exists, not "land where you are": every app is filed in some
             // category, so the gap between cards is not a place. A null plan makes the release a no-op.
             if (card == null) null else CardMergePlan
         }
     }
-    val coordinator = rememberDragCoordinator(planner)
+    // The launcher's one coordinator (`feature:shell`'s), which is what lets an app lifted from a card or an
+    // expansion be carried out through the eject band and dropped onto home.
+    val coordinator = requireDragCoordinator()
+    val presented = LocalSurfacePresented.current
     val session = coordinator.session
 
     LaunchedEffect(coordinator.isDragging) { if (!coordinator.isDragging) hoveredCategoryId = null }
-    DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(CardGridZoneId) } }
 
     // Category hosting, on the same lifecycle home uses for folders — keyed by `String` here, which is the whole of
     // what the generic id on `FolderHostState` buys: the open/leave/enter machine is identical, so this surface gets
@@ -232,35 +249,52 @@ fun AppsCategoryCard(
     val openMembers = expanded?.apps?.map { it.componentKey }
     LaunchedEffect(openMembers) { folderHost.onMembersChanged(openMembers.orEmpty()) }
 
-    fun handleDrop() {
-        // Read before dropping: both are cleared when the drag ends, which the drop is.
-        val sourceCategoryId = folderHost.dragSourceFolderId
-        val presentedId = folderHost.openFolderId
-        val target = hoveredCategoryId
-        val outcome = coordinator.drop()
-
-        // 1. Inside the open expansion → its own business: a reorder, which is also how an arriving app commits.
-        if (outcome != null && outcome.zone != CardGridZoneId) {
-            expansionDelegate.value?.commitReorder(outcome.item)
-            return
-        }
-        // 2. Released outside the expansion that is on screen → "never mind": close it and write nothing. Leaving is
-        //    a deliberate dwell, and there is no landing out here to honour anyway.
-        if (presentedId != null) {
+    // What a landing **on a card** means: file the app there, at the end. The zone's handler rather than the
+    // releasing cell's, so it runs whether the app was lifted from an expansion, from a card's own preview, or —
+    // once the reverse direction exists — from anywhere else on the same coordinator.
+    fun commitLanding(outcome: DropOutcome) {
+        // Released while an expansion is on screen → "never mind": close it and write nothing. Leaving is a
+        // deliberate dwell, and a drop out here was aimed at a card the scrim is covering.
+        if (folderHost.openFolderId != null) {
             folderHost.close()
             return
         }
-        // 3. Released over no card at all.
-        if (outcome == null || target == null) return
+        val target = hoveredCategoryId ?: return
         val app = (outcome.item as? GridItem.App)?.component ?: return
-        // 4. Dropped on a card: file it there, at the end. Back on the category it came from is a no-op — it is still
-        //    filed there and nothing was written on the way out.
+        // Back on the category it came from is a no-op — it is still filed there and nothing was written on the way
+        // out. The source is the expansion the drag started in when there was one, and otherwise simply wherever the
+        // app is filed: a drag lifted from a card's preview icon opens nothing, so the host has no answer for it.
+        val sourceCategoryId = folderHost.dragSourceFolderId ?: categoryOf(categories, app)
         if (target == sourceCategoryId) return
         // The slot is the target's *resolved* size, which can be short of its true membership by however many of its
         // apps the cache couldn't resolve. `moveCategoryItem` coerces, so the app lands at the end of what the user
         // can actually see — which is what "dropped on the card, no position chosen" should mean.
         onMove(app, target, categories.firstOrNull { it.category.id == target }?.apps?.size ?: 0)
     }
+
+    // A cell of this surface released the finger — that only ends the drag; the landing belongs to whichever zone it
+    // fell in. What is left is the source-side bookkeeping: an expansion on screen with nothing landed under it.
+    fun handleRelease() {
+        val presentedId = folderHost.openFolderId
+        val outcome = coordinator.drop()
+        if (presentedId != null && outcome == null) folderHost.close()
+    }
+
+    // The card grid's own drop zone — the whole scroller. Registered from state rather than from the layout callback
+    // because it also depends on this surface being on screen; see [RegisterDropZone].
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = gridBounds?.let {
+            DropZone(
+                id = CardGridZoneId,
+                bounds = it,
+                z = 0,
+                planner = planner,
+                accepts = { item -> item is GridItem.App },
+                onDrop = ::commitLanding,
+            )
+        },
+    )
 
     // The app being carried into the open expansion, resolved once and *held*. Keyed on the component alone,
     // deliberately not on `categories`: it is still filed in the category it came from until the write lands, and the
@@ -281,7 +315,7 @@ fun AppsCategoryCard(
     // gestures would fight over one finger), so holding the app near the top or bottom edge scrolls it instead. Off
     // while an expansion is presented — the grid is behind the scrim, and that dwell means "leave", not "scroll".
     DragAutoScrollEffect(
-        scrollState = gridState,
+        scrollState = scrollState,
         bounds = gridBounds,
         fingerInRoot = session
             ?.takeIf { it.activeZone == CardGridZoneId && openCategoryId == null }
@@ -291,61 +325,77 @@ fun AppsCategoryCard(
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
-            // Lazy, unlike the category *pager*'s pages, which use `LauncherGrid` in SCROLL_GRID mode. The card count
-            // is small, but each card composes up to seven baked icons, so a screenful is already ~30 and the whole
-            // list is hundreds — the same input-size argument that puts `AppsVerticalGrid` on a lazy grid. It costs
-            // nothing here *because* no drag starts on this grid: nothing on it owns a live pointer stream, so a card
-            // being disposed as the drag auto-scrolls past it can't kill the gesture.
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Fixed(cardColumns),
-                userScrollEnabled = !coordinator.isDragging,
+            // **Not lazy**, and this reverses the call the first cut made. It was a `LazyVerticalGrid` on the
+            // vertical grid's argument: a card composes up to seven baked icons, so the *card* count is small but
+            // the icon count is not. What paid for that was the note beside it — "it costs nothing *because* no drag
+            // starts on this grid". A drag does start on it now (a card's preview icons are draggable), and the
+            // lifted cell owns the pointer stream driving it, so a card disposed while auto-scrolling toward the
+            // target would kill the gesture mid-flight. `HomeListSurface` made the same trade for the same reason.
+            //
+            // The `onGloballyPositioned` sits **outside** `verticalScroll`, so the rectangle it reports is the
+            // viewport's and stays still while the content moves under it — the drop zone and the auto-scroll band
+            // both want exactly that.
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(uiInsets)
-                    .onGloballyPositioned {
-                        val bounds = it.boundsInRoot()
-                        gridBounds = bounds
-                        coordinator.registerZone(
-                            DropZone(CardGridZoneId, bounds, z = 0) { item -> item is GridItem.App },
-                        )
-                    },
-                // The grid's own margin adds to the card gutter rather than replacing it: `CardPadding` is the gap
-                // between a card and the screen edge that the *tile* needs to read as a tile, and the setting is the
-                // user's inset on top. Content padding, so cards still scroll under the bars — and the per-card
-                // bounds map that hit-tests a drop is built from each card's own `boundsInRoot`, so it follows both
-                // without anything being adjusted.
-                contentPadding = PaddingValues(
-                    start = CardPadding + horizontalPadding,
-                    top = CardPadding,
-                    end = CardPadding + horizontalPadding,
-                    bottom = CardPadding,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(CardSpacing),
+                    .onGloballyPositioned { gridBounds = it.boundsInRoot() }
+                    .verticalScroll(scrollState, enabled = !coordinator.isDragging)
+                    // The grid's own margin adds to the card gutter rather than replacing it: `CardPadding` is the
+                    // gap between a card and the screen edge that the *tile* needs to read as a tile, and the
+                    // setting is the user's inset on top. Inside the scroller, so cards still travel under the bars.
+                    .padding(
+                        start = CardPadding + horizontalPadding,
+                        top = CardPadding,
+                        end = CardPadding + horizontalPadding,
+                        bottom = CardPadding,
+                    ),
                 verticalArrangement = Arrangement.spacedBy(CardSpacing),
             ) {
                 // TODO(category management): long-press a card for rename / delete, and drag one to reorder the
                 //  categories. Both write category *definitions*, which `AppsCategoryChange` deliberately has no ops
                 //  for — the rewrite plan puts that editor in `feature:settings`, and its op set should be shaped by
                 //  the screen that uses it rather than invented here.
-                items(items = categories, key = { it.category.id }) { entry ->
-                    val id = entry.category.id
-                    CategoryCard(
-                        category = entry,
-                        gestureConfig = gestureConfig,
-                        shadowed = id == shadowedCategoryId,
-                        onLaunch = onLaunch,
-                        onExpand = { folderHost.open(id) },
-                        onBounds = { bounds ->
-                            if (bounds == null) cardBounds.remove(id) else cardBounds[id] = bounds
-                        },
-                    )
+                //
+                // Rows of `cardColumns`, padded out with weighted spacers so a short last row leaves its cards the
+                // same width as every other row's rather than stretching them.
+                categories.chunked(cardColumns).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(CardSpacing),
+                    ) {
+                        row.forEach { entry ->
+                            key(entry.category.id) {
+                                val id = entry.category.id
+                                CategoryCard(
+                                    category = entry,
+                                    coordinator = coordinator,
+                                    gestureConfig = gestureConfig,
+                                    shadowed = id == shadowedCategoryId,
+                                    onLaunch = onLaunch,
+                                    onExpand = { folderHost.open(id) },
+                                    onRelease = ::handleRelease,
+                                    onBounds = { bounds ->
+                                        if (bounds == null) {
+                                            cardBounds.remove(id)
+                                        } else {
+                                            cardBounds[id] = MeasuredCard(bounds, scrollState.value)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                        repeat(cardColumns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
 
             // The floating proxy, drawn by whichever surface is presenting the drag: while an expansion is on screen
             // that is the expansion (at its own cell size), so exactly one of the two paints.
-            if (session != null && draggedApp != null && openCategoryId == null) {
+            // Gated on this being the surface on screen as well: the coordinator is the launcher's, so a drag
+            // ejected onto home is still live here and would otherwise paint a second icon under the same finger.
+            if (presented && session != null && draggedApp != null && openCategoryId == null) {
                 val finger = session.fingerInRoot
                 val halfPx = with(density) { DragProxySize.toPx() } / 2f
                 FloatingDragIcon(
@@ -392,8 +442,7 @@ fun AppsCategoryCard(
                             }
                         },
                         onLeave = folderHost::leaveFolder,
-                        onDrop = ::handleDrop,
-                        onPublishDelegate = { expansionDelegate.value = it },
+                        onRelease = ::handleRelease,
                         onDismiss = { folderHost.close() },
                     )
                 }
@@ -411,3 +460,24 @@ fun AppsCategoryCard(
  */
 private fun appInCategories(categories: List<AppsCategory>, component: ComponentKey): AppInfo? =
     categories.firstNotNullOfOrNull { entry -> entry.apps.firstOrNull { it.componentKey == component } }
+
+/**
+ * The id of the category [component] is currently filed under, or null if the cache resolves it nowhere.
+ *
+ * The fallback source of a drag that did **not** start in an expansion — a card's own preview icon — so that
+ * dropping such an app back on the card it came from is the same no-op that dropping it back into its expansion is.
+ */
+private fun categoryOf(categories: List<AppsCategory>, component: ComponentKey): String? =
+    categories.firstOrNull { entry -> entry.apps.any { it.componentKey == component } }?.category?.id
+
+/**
+ * A card's measured rectangle together with the scroll offset it was measured at.
+ *
+ * The pair exists because [Rect] alone stops being true the moment the content scrolls: `onGloballyPositioned` does
+ * not reliably re-fire when a scroller moves a node through its parent's placement. Carrying the offset makes the
+ * correction self-contained and costs nothing when the callback *does* re-fire — the difference is then zero.
+ */
+private data class MeasuredCard(val bounds: Rect, val scrollOffset: Int) {
+    /** Where this card really is, given the scroller is now at [scrolled]. */
+    fun boundsAt(scrolled: Int): Rect = bounds.translate(0f, (scrollOffset - scrolled).toFloat())
+}

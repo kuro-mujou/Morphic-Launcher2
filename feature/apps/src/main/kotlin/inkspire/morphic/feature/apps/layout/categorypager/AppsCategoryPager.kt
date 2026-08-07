@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,11 +27,13 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
+import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
@@ -43,6 +44,7 @@ import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppsCategoryGrid
@@ -168,8 +170,7 @@ fun AppsCategoryPager(
     var gapPage by remember { mutableIntStateOf(-1) }
 
     val planner = remember(cols) {
-        DropPlanner { zone, item, fingerInRoot ->
-            if (zone.id != CategoryZoneId) return@DropPlanner null
+        DropPlanner { item, fingerInRoot ->
             val page = pagerState.currentPage
             val geo = geometries[page] ?: return@DropPlanner null
             val stored = liveCategories.value.getOrNull(page)?.apps.orEmpty().map { GridItem.App(it.componentKey) }
@@ -203,13 +204,15 @@ fun AppsCategoryPager(
             CategoryReorderPlan
         }
     }
-    val coordinator = rememberDragCoordinator(planner)
+    // The launcher's one coordinator (`feature:shell`'s), which is what lets an app lifted on one of these pages be
+    // carried out through the eject band and dropped onto home.
+    val coordinator = requireDragCoordinator()
+    val presented = LocalSurfacePresented.current
     val session = coordinator.session
 
     LaunchedEffect(coordinator.isDragging) {
         if (!coordinator.isDragging) { gap = -1; gapPage = -1 }
     }
-    DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(CategoryZoneId) } }
 
     EdgeFlipEffect(
         pagerState = pagerState,
@@ -217,14 +220,31 @@ fun AppsCategoryPager(
         fingerInRoot = session?.takeIf { it.activeZone == CategoryZoneId }?.fingerInRoot,
     )
 
-    fun handleDrop() {
-        val outcome = coordinator.drop() ?: return
+    // What a landing **on one of these pages** means: the page names the category, so a reorder and a re-file are
+    // the same write. The zone's handler rather than the releasing cell's, so it runs whoever lifted the app — and
+    // conversely, an app lifted here and ejected onto home is committed by *home's* zone and never reaches this.
+    fun commitLanding(outcome: DropOutcome) {
         val app = (outcome.item as? GridItem.App)?.component ?: return
-        // The page the drop landed on names the category — no separate re-file path, because there is no separate
-        // thing happening. A gap of -1 means the finger never rested on a cell, so there is nothing to write.
+        // A gap of -1 means the finger never rested on a cell, so there is nothing to write.
         val category = gapPage.takeIf { it >= 0 }?.let { categories.getOrNull(it) } ?: return
         onMove(app, category.category.id, gap.coerceAtLeast(0))
     }
+
+    // One drop zone, the whole viewport. Registered from state rather than from the layout callback, because being
+    // registered also depends on this surface being on screen — see [RegisterDropZone].
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = viewport?.let {
+            DropZone(
+                id = CategoryZoneId,
+                bounds = it,
+                z = 0,
+                planner = planner,
+                accepts = { item -> item is GridItem.App },
+                onDrop = ::commitLanding,
+            )
+        },
+    )
 
     val draggedApp = session?.item?.let { item ->
         (item as? GridItem.App)?.component?.let { component ->
@@ -249,9 +269,6 @@ fun AppsCategoryPager(
                     .onGloballyPositioned {
                         val bounds = it.boundsInRoot()
                         viewport = bounds
-                        coordinator.registerZone(
-                            DropZone(CategoryZoneId, bounds, z = 0) { item -> item is GridItem.App },
-                        )
                     },
                 // Keep off-screen pages placed while dragging, so the lifted cell's pointer stream survives a flip.
                 keepAllPagesPlaced = coordinator.isDragging,
@@ -268,7 +285,7 @@ fun AppsCategoryPager(
                         fingerInRoot = if (pageIndex == gapPage) session?.fingerInRoot else null,
                         metrics = metrics,
                         onLaunch = onLaunch,
-                        onDrop = ::handleDrop,
+                        onRelease = { coordinator.drop() },
                         onGeometry = { geometries[pageIndex] = it },
                         onScrollState = { pageScrolls[pageIndex] = it },
                     )
@@ -297,7 +314,10 @@ fun AppsCategoryPager(
             // different icon from the cell it lifted.
             val cell = derivedCell(cellWidth = cellWidth ?: 0.dp, metrics = metrics)
             val cellHeight = cell.height
-            if (session != null && cellWidth != null && draggedApp != null) {
+            // Gated on this being the surface on screen: the coordinator is the launcher's, so a drag that has
+            // been ejected onto home is still live here, and two proxies under one finger is what that would look
+            // like.
+            if (presented && session != null && cellWidth != null && draggedApp != null) {
                 val cellW = with(density) { cellWidth.toPx() }
                 val cellH = with(density) { cellHeight.toPx() }
                 val finger = session.fingerInRoot

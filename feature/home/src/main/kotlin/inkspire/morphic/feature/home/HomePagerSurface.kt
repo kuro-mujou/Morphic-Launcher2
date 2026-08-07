@@ -24,12 +24,12 @@ import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.drag.DragSession
 import inkspire.morphic.core.designsystem.drag.DropFootprint
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
-import inkspire.morphic.core.designsystem.folder.FolderDragDelegate
+import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.folder.FolderOverlay
 import inkspire.morphic.core.designsystem.folder.FolderPhase
 import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
@@ -41,6 +41,7 @@ import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -93,16 +94,19 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * ViewModel and state and nothing else, because they share no gesture, no store and no planner — a coordinate
  * surface asks "which cell, and who gets shoved aside?" where an ordered one asks "which index?".
  *
- * **Why both zones share one `DragCoordinator`.** Because they do, dragging an app from the pager into the dock (or
- * back) is not a special case at all: it is one uninterrupted gesture, the drop reports *which* zone it landed in,
- * and [homeZoneOf] turns that into the [HomeZone] the `Move` writes. Nothing hands the drag over, and there is no
- * second gesture recogniser to keep in sync — the structural fix for L1's `HomeDragBridge` re-tracking hack. The
- * same is true of the open folder, which is simply a third zone on the same coordinator.
+ * **Why both zones share one `DragCoordinator` — and why it is the launcher's, not this screen's.** Because they
+ * share one, dragging an app from the pager into the dock (or back) is not a special case at all: it is one
+ * uninterrupted gesture, the drop reports *which* zone it landed in, and [homeZoneOf] turns that into the [HomeZone]
+ * the `Move` writes. The coordinator is provided by `feature:shell` now, which extends exactly that property across
+ * the *surface* boundary: an app lifted in the APPS drawer lands here through the same hit-test, with no hand-off and
+ * no second recogniser — the structural fix for L1's `HomeDragBridge`. The open folder is simply another zone on it.
  *
- * This screen keeps only what is home-specific: the [DropPlanner] (which zone is being hovered, and that zone's
- * geometry/occupants — the planning itself is shared, see [planCoordinateDrop]), the root drag overlay, and the
- * tap→launch / merge-drop wiring; the grids, gestures, dwelled preview, and edge-flip live in [CoordinateDragPager]
- * / [CoordinateDragGrid], and the folder-interaction lifecycle in [FolderHostState]. Dropping an app onto another
+ * This screen keeps only what is home-specific: a [DropPlanner] **per zone** (that zone's geometry and occupants —
+ * the planning itself is shared, see [planCoordinateDrop]), what a landing in one of its grids *writes*
+ * ([commitLanding], which the coordinator dispatches to whichever zone the finger came to rest in), the root drag
+ * overlay, and the tap→launch wiring; the grids, gestures, dwelled preview, and edge-flip live in
+ * [CoordinateDragPager] / [CoordinateDragGrid], and the folder-interaction lifecycle in [FolderHostState].
+ * Dropping an app onto another
  * (finger in its centre ring) **merges** them into a folder; folders render as a [FolderCell] and tapping one opens
  * a [FolderOverlay]. A tap on an app launches it (via [HomeViewModel.launch]) through the gesture layer's `onOpen`,
  * so cells carry no click handler of their own.
@@ -110,8 +114,10 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * **Folders are places one drag passes through, not destinations it commits to.** Holding a dragged app on a folder's
  * merge ring opens that folder and the drag carries on inside it; holding outside the card closes it again and the
  * drag carries on over the grids — repeatable, in either direction, over any number of folders, because neither half
- * writes anything. Only the drop does, and [handleDrop] decides what it meant from *where the drag started* rather
- * than from a trail of hand-offs: a drag out of a folder is placed-and-removed, a drag off a grid is moved.
+ * writes anything. Only the drop does, and [commitLanding] decides what it meant from *where the drag started*
+ * rather than from a trail of hand-offs: a drag out of a folder is placed-and-removed, a drag off a grid is moved,
+ * and an app arriving from the APPS surface — which started in neither — is simply placed, since `Move` is an
+ * upsert.
  *
  * The dock is a **peer of the main area, not a lesser strip**: it takes apps, folders and (once they exist) widgets,
  * it merges into folders, and a folder living in it opens, reorders, and hands apps in and out exactly as one in the
@@ -277,46 +283,43 @@ internal fun HomePagerSurface(
     // a swipe onto a TOP or BOTTOM surface is free.
     ReportScrollEdges { ScrollEdges(atLeft = pagerState.atFirstPage, atRight = pagerState.atLastPage) }
 
-    // The open folder's drag hooks (null when no folder is open). The one shared coordinator runs over both
-    // surfaces; its planner + drop dispatch the folder zone to this delegate, keeping folder reorder logic in
-    // the overlay (its order/gap aren't hoisted here). It lives here rather than on the folder host below because
-    // the planner reads it and must exist before the coordinator, which the host is created after.
-    val folderDelegate = remember { mutableStateOf<FolderDragDelegate?>(null) }
-
-    // Shared planner, dispatched by zone: home's two coordinate grids run the same [planCoordinateDrop] over their
-    // own geometry/config/occupants, and anything else is the open folder's, which plans its own reorder. The dock
-    // pins `page = 0` — it is a single grid, so it has no other page.
-    val planner = remember(config, dockConfig) {
-        DropPlanner { zone, item, fingerInRoot ->
-            when (zone.id) {
-                MainZoneId -> {
-                    val geo = geometry ?: return@DropPlanner null
-                    val page = pagerState.currentPage
-                    planCoordinateDrop(
-                        geo = geo,
-                        config = config,
-                        page = page,
-                        occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page },
-                        item = item,
-                        fingerInRoot = fingerInRoot,
-                    )
-                }
-                DockZoneId -> {
-                    val geo = dockGeometry ?: return@DropPlanner null
-                    planCoordinateDrop(
-                        geo = geo,
-                        config = dockConfig,
-                        page = 0,
-                        occupants = liveDockPlacements.value.filterKeys { it != item },
-                        item = item,
-                        fingerInRoot = fingerInRoot,
-                    )
-                }
-                else -> folderDelegate.value?.onHover(item, fingerInRoot)
-            }
+    // **One planner per zone, and no dispatch left.** Both grids run the same [planCoordinateDrop] over their own
+    // geometry/config/occupants; the dock pins `page = 0`, being a single grid with no other page. This used to be one
+    // `DropPlanner` with a `when (zone.id)` over three cases, the third handing off to the open folder — a shape that
+    // stopped scaling the moment the coordinator became the *launcher's* rather than this screen's, since the `when`
+    // would then have had to know about the APPS drawer too. A planner now travels with the zone that answers it, so
+    // the folder's arm went to `FolderOverlay` and these two are the whole of home's.
+    val mainPlanner = remember(config) {
+        DropPlanner { item, fingerInRoot ->
+            val geo = geometry ?: return@DropPlanner null
+            val page = pagerState.currentPage
+            planCoordinateDrop(
+                geo = geo,
+                config = config,
+                page = page,
+                occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page },
+                item = item,
+                fingerInRoot = fingerInRoot,
+            )
         }
     }
-    val coordinator = rememberDragCoordinator(planner)
+    val dockPlanner = remember(dockConfig) {
+        DropPlanner { item, fingerInRoot ->
+            val geo = dockGeometry ?: return@DropPlanner null
+            planCoordinateDrop(
+                geo = geo,
+                config = dockConfig,
+                page = 0,
+                occupants = liveDockPlacements.value.filterKeys { it != item },
+                item = item,
+                fingerInRoot = fingerInRoot,
+            )
+        }
+    }
+    // **The launcher's one coordinator, provided by the shell** — not this screen's any more. That is what makes an
+    // app dragged out of the APPS drawer land here: its zones and home's are in a single registry, hit-tested in one
+    // space, so there is no boundary for the drag to cross.
+    val coordinator = requireDragCoordinator()
 
     // The dragged item + hovered plan drive the root overlay below; the dwelled push preview + edge page-flip
     // live inside CoordinateDragPager.
@@ -352,36 +355,39 @@ internal fun HomePagerSurface(
     // Is a drag in flight that could still land on home? Not one inside an open folder — a reorder in there is that
     // surface's gesture and must not grow home's pager behind it. Once the folder closes (the leave dwell) the same
     // drag is home's again and the trailing page appears, which is exactly when it can be carried onto a new page.
-    val homeDragInFlight = coordinator.isDragging && folderHost.openFolderId == null
+    //
+    // **And not one happening on a side surface either.** With one coordinator for the whole launcher, `isDragging`
+    // is true while the user rearranges the APPS drawer; home is composed behind it and would grow a page nobody can
+    // see. The moment that drag is *ejected* the surface closes, home becomes the presented one, and the page
+    // appears — which is precisely when an app carried in from the drawer can be dropped onto a new one.
+    val presented = LocalSurfacePresented.current
+    val homeDragInFlight = presented && coordinator.isDragging && folderHost.openFolderId == null
     LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
-    // Where a drag comes to rest. Four landings, in the order they have to be told apart; every one of them is
-    // zone-generic — the outcome names the drop zone, `homeZoneOf` turns it into the zone to write, and the same
-    // commit serves the pager and the dock. That is what makes a home↔dock drag ordinary rather than a special case,
-    // and it is why one coordinator spans both zones. (`coordinator.drop()` already reports a null outcome for a
-    // release over no zone or an INVALID plan, so anything non-null here is a real landing.)
-    fun handleDrop() {
-        // Read before dropping: the source is cleared when the drag ends, which the drop is.
+    // **What a landing in one of home's grids means.** Three cases, in the order they have to be told apart; all of
+    // them zone-generic — the outcome names the drop zone, `homeZoneOf` turns it into the [HomeZone] to write, and
+    // the same commit serves the pager and the dock. That is what makes a home↔dock drag ordinary rather than a
+    // special case.
+    //
+    // **It is the zone's handler, not the releasing cell's**, which is the change that lets a drag arrive from
+    // somewhere else entirely. An app carried in from the APPS drawer is released by a cell in `feature:apps`, and
+    // that cell knows nothing about placements; the coordinator dispatches the landing to whichever zone it fell in,
+    // so this runs for a drag lifted on home, in one of its folders, or on another surface, without telling the three
+    // apart. `Move` is an upsert, so an app with no placement of its own needs no separate "add" path.
+    fun commitLanding(outcome: DropOutcome) {
+        val zone = homeZoneOf(outcome.zone) ?: return
+        // Read here rather than after any write: `dragSourceFolderId` is cleared when the drag ends, and this runs
+        // inside `coordinator.drop()`, i.e. before the effect that notices.
         val sourceFolderId = folderHost.dragSourceFolderId
-        val presentedFolderId = folderHost.openFolderId
-        val outcome = coordinator.drop()
-        val zone = outcome?.let { homeZoneOf(it.zone) }
-
-        // 1. Inside the open folder → its own business: a reorder, which is also how an inject commits.
-        if (outcome != null && zone == null) {
-            folderDelegate.value?.commitReorder(outcome.item)
-            return
-        }
-        // 2. Released outside the folder that is on screen. Leaving a folder is a deliberate dwell, so a release out
-        //    here is "never mind": close it and write nothing. It could not be honoured anyway — an app being carried
+        // 1. Released on a grid while a folder is still on screen. Leaving a folder is a deliberate dwell, so a
+        //    release out here is "never mind": write nothing. It could not be honoured anyway — an app being carried
         //    inside a folder has no grid placement, so *placing* it would leave it in the folder **and** on the grid.
-        if (presentedFolderId != null) {
+        if (folderHost.openFolderId != null) {
             folderHost.close()
             return
         }
-        if (outcome == null || zone == null) return
         val plan = outcome.plan
-        // 3. The drag started inside a folder and has landed out here. The app has no placement to move, so it is
+        // 2. The drag started inside a folder and has landed out here. The app has no placement to move, so it is
         //    placed and removed from that folder in one batch — including onto a merge ring, which is how it moves
         //    straight into another folder (or combines with an app to make one) in a single gesture.
         if (sourceFolderId != null) {
@@ -393,16 +399,26 @@ internal fun HomePagerSurface(
             }
             return
         }
-        // 4. An ordinary grid drag.
+        // 3. An ordinary grid drag — or an app arriving from the APPS surface, which is the same write.
         if (plan.intent == DropIntent.MERGE) {
             viewModel.mergeChanges(outcome.item, plan.footprint, zone)?.let(viewModel::applyChanges)
         } else {
             // The pushed occupants are already in the drop zone, so they move within it; the dragged item may be
-            // arriving from the other zone, and this is the write that re-stamps it.
+            // arriving from the other zone (or off another surface), and this is the write that stamps it.
             val moves = plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to, zone) } +
                 LayoutChange.Move(outcome.item, plan.footprint, zone)
             viewModel.applyChanges(moves)
         }
+    }
+
+    // A cell *of this surface* released the finger. All it does is end the drag — the landing is committed by
+    // whichever zone it fell in, which may be one of home's, an open folder's, or none at all. What is left here is
+    // the one thing only the releasing surface knows: a folder is on screen and the drag came to rest nowhere, which
+    // reads the same as case 1 above and closes it.
+    fun handleRelease() {
+        val presentedFolderId = folderHost.openFolderId
+        val outcome = coordinator.drop()
+        if (presentedFolderId != null && outcome == null) folderHost.close()
     }
 
     // Opening an item is the same wherever it sits, so both zones share one handler.
@@ -445,7 +461,9 @@ internal fun HomePagerSurface(
                     gestureConfig = gestureConfig,
                     dragItem = { it.gridItem },
                     placement = { it.placement },
-                    onDrop = { handleDrop() },
+                    planner = dockPlanner,
+                    onLand = ::commitLanding,
+                    onRelease = ::handleRelease,
                     modifier = zoneModifier,
                     onGeometryChange = { dockGeometry = it },
                     onOpen = openItem,
@@ -463,7 +481,9 @@ internal fun HomePagerSurface(
                     gestureConfig = gestureConfig,
                     dragItem = { it.gridItem },
                     placement = { it.placement },
-                    onDrop = { handleDrop() },
+                    planner = mainPlanner,
+                    onLand = ::commitLanding,
+                    onRelease = ::handleRelease,
                     modifier = zoneModifier,
                     onGeometryChange = { geometry = it },
                     onOpen = openItem,
@@ -477,7 +497,9 @@ internal fun HomePagerSurface(
         // are gated separately, because they answer different questions — "is there a cell of *this* grid to
         // shadow?" and "whose job is it to draw the icon under the finger?".
         val geo = geometry
-        if (session != null && geo != null) {
+        // Gated on this being the surface on screen, for the same reason the trailing page is: a drag inside the
+        // APPS drawer must not have home painting a second proxy under the same finger from behind it.
+        if (presented && session != null && geo != null) {
             // The proxy spans `cellSpan` logical cells per axis (one visual cell) of the *pager's* grid, and
             // deliberately keeps that size across the whole drag: the icon under the finger must not resize as
             // the drag crosses into the dock, whose cells are a different height.
@@ -601,8 +623,7 @@ internal fun HomePagerSurface(
                         }
                     },
                     onLeave = folderHost::leaveFolder,
-                    onDrop = { handleDrop() },
-                    onPublishDelegate = { folderDelegate.value = it },
+                    onRelease = ::handleRelease,
                     onDismiss = { folderHost.close() },
                 )
             }

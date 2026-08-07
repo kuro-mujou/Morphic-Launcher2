@@ -279,6 +279,9 @@ class HomeViewModel(
                 // keeps them (`HomeListRepository.setOrder` reconciles), so an uninstall-and-reinstall returns them
                 // to where they were.
                 listApps = listOrder.mapNotNull(infoByComponent::get),
+                // Every installed app, not just the placed ones — see [HomeState.catalog]. Already built here as the
+                // resolver above, so publishing it costs a field rather than a second pass.
+                catalog = infoByComponent,
                 iconSizing = configured.icon,
                 horizontalPaddingDp = configured.padding,
                 main = configured.main,

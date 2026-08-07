@@ -2,7 +2,6 @@ package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,8 +15,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
+import inkspire.morphic.core.designsystem.drag.DropOutcome
+import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
@@ -64,7 +66,9 @@ fun <T> CoordinateDragPager(
     gestureConfig: ItemGestureConfig,
     dragItem: (T) -> GridItem,
     placement: (T) -> GridPlacement,
-    onDrop: () -> Unit,
+    planner: DropPlanner,
+    onLand: (DropOutcome) -> Unit,
+    onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
     acceptsItem: (GridItem) -> Boolean = { true },
@@ -85,14 +89,18 @@ fun <T> CoordinateDragPager(
         if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan }
     }
 
-    DisposableEffect(coordinator, zoneId) {
-        onDispose { coordinator.unregisterZone(zoneId) }
-    }
-
     // Edge-dwell page-flip, shared with every other paged drag surface. Scoped to *this* pager's zone: on a
-    // shared coordinator another surface's drag (reordering inside an open folder) must not flip these pages
-    // behind it, which is what passing a null finger says.
+    // shared coordinator another surface's drag (reordering inside an open folder, or one being carried over a
+    // different screen entirely) must not flip these pages behind it, which is what passing a null finger says.
     var viewport by remember { mutableStateOf<Rect?>(null) }
+    // The viewport doubles as the drop zone's rectangle; registration is driven from state rather than from the
+    // layout callback because it also depends on this surface being on screen (see [RegisterDropZone]).
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = viewport?.let {
+            DropZone(zoneId, it, z = 0, planner = planner, accepts = acceptsItem, onDrop = onLand)
+        },
+    )
     EdgeFlipEffect(
         pagerState = pagerState,
         viewport = viewport,
@@ -115,7 +123,6 @@ fun <T> CoordinateDragPager(
                         rows = config.rows,
                     ),
                 )
-                coordinator.registerZone(DropZone(zoneId, b, z = 0, accepts = acceptsItem))
             },
         // While dragging, keep off-screen pages placed so the lifted tile's pointer stream survives a page flip.
         keepAllPagesPlaced = coordinator.isDragging,
@@ -130,7 +137,7 @@ fun <T> CoordinateDragPager(
                     coordinator = coordinator,
                     item = dragItem(item),
                     gestureConfig = gestureConfig,
-                    onDrop = onDrop,
+                    onRelease = onRelease,
                     modifier = cellModifier,
                     edgeActions = edgeActions,
                     onOpen = { onOpen(item) },

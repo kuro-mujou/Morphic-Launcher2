@@ -34,7 +34,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DropFootprint
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
@@ -101,7 +103,7 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
 
         // One zone = the viewport; the footprint's page is whichever page is currently centred.
         val planner = remember {
-            DropPlanner { _, item, fingerInRoot ->
+            DropPlanner { item, fingerInRoot ->
                 val geo = geometry ?: return@DropPlanner null
                 val span = placements[item] ?: return@DropPlanner null
                 val page = pagerState.currentPage
@@ -111,21 +113,24 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
                 FreeGridPlanner.plan(footprint, occupants, config)
             }
         }
-        val coordinator = rememberDragCoordinator(planner)
+        val coordinator = rememberDragCoordinator()
         val gestureConfig = remember {
             ItemGestureConfig(touchSlopPx = with(density) { 20.dp.toPx() }, longPressTimeoutMillis = 400L)
         }
 
-        // One zone for the whole pager viewport, unregistered when the screen leaves.
-        DisposableEffect(coordinator) {
-            onDispose { coordinator.unregisterZone(PagerZoneId) }
-        }
-
-        fun handleDrop() {
-            val outcome = coordinator.drop() ?: return
+        fun commitLanding(outcome: DropOutcome) {
             outcome.plan.moves.forEach { (moved, placement) -> placements[moved] = placement }
             placements[outcome.item] = outcome.plan.footprint
         }
+
+        // One zone for the whole pager viewport, carrying its own planner and commit — and registered from the
+        // measured bounds held in state, which is how every surface publishes a zone now.
+        RegisterDropZone(
+            coordinator = coordinator,
+            zone = viewport?.let {
+                DropZone(PagerZoneId, it, z = 0, planner = planner, onDrop = ::commitLanding)
+            },
+        )
 
         // Edge-dwell page-flip, from core:designsystem/pager — the same effect home and the APPS pager use.
         EdgeFlipEffect(pagerState = pagerState, viewport = viewport, fingerInRoot = coordinator.session?.fingerInRoot)
@@ -144,11 +149,12 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
                             cellW = b.width / COLS,
                             cellH = b.height / ROWS,
                         )
-                        coordinator.registerZone(DropZone(PagerZoneId, b, z = 0) { true })
                     },
                 keepAllPagesPlaced = coordinator.isDragging,
             ) { page ->
-                PageGrid(page, placements, geometry, coordinator, gestureConfig, toast(context), ::handleDrop)
+                PageGrid(page, placements, geometry, coordinator, gestureConfig, toast(context)) {
+                    coordinator.drop()
+                }
             }
 
             // Drag overlay (root space): footprint (on the fixed viewport) + the floating proxy.
@@ -203,7 +209,7 @@ private fun PageGrid(
     coordinator: inkspire.morphic.core.designsystem.drag.DragCoordinator,
     gestureConfig: ItemGestureConfig,
     onToast: (String) -> Unit,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
 ) {
     val density = LocalDensity.current
     val colors = LocalMorphicColors.current
@@ -232,7 +238,7 @@ private fun PageGrid(
                             onDismissMenu = {},
                             onBeginDrag = { root -> coordinator.start(item, root) },
                             onDragTo = { root -> coordinator.moveTo(root) },
-                            onDrop = { onDrop() },
+                            onDrop = { onRelease() },
                             onCancelDrag = { coordinator.cancel() },
                         ),
                     contentAlignment = Alignment.Center,

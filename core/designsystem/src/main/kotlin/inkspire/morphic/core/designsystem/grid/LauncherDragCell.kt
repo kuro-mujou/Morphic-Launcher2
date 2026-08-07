@@ -33,13 +33,18 @@ import inkspire.morphic.core.model.GridItem
  *
  * A tap fires [onOpen], a long-press [onShowMenu], and a press-and-swipe in [edgeActions] fires [onEdgeAction] —
  * all only within whatever bounds [content] gave the gestures.
+ *
+ * @param onRelease the finger came up on this cell, ending the drag. It is **not** where the drop is committed —
+ *   that belongs to the zone the drag landed in ([inkspire.morphic.core.designsystem.drag.DropZone.onDrop]), which
+ *   may be on a different surface entirely from this cell. What the surface does here is its own bookkeeping about
+ *   a drag *leaving* it, and calling `coordinator.drop()` so the landing is dispatched at all.
  */
 @Composable
 fun LauncherDragCell(
     coordinator: DragCoordinator,
     item: GridItem,
     gestureConfig: ItemGestureConfig,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
     onOpen: () -> Unit = {},
@@ -63,7 +68,7 @@ fun LauncherDragCell(
                 onDismissMenu = {},
                 onBeginDrag = { root -> coordinator.start(item, root) },
                 onDragTo = { root -> coordinator.moveTo(root) },
-                onDrop = { onDrop() },
+                onDrop = { onRelease() },
                 onCancelDrag = { coordinator.cancel() },
             ),
         )

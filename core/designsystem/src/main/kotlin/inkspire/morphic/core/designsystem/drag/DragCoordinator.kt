@@ -31,9 +31,9 @@ data class DragSession(
 )
 
 /**
- * The committable result of a successful drop: [item] lands in [zone] as described by [plan]. Handed to the
- * feature layer, which translates it into repository changes. A no-op drop yields null instead (see
- * [DragCoordinator.drop]).
+ * The committable result of a successful drop: [item] lands in [zone] as described by [plan]. Handed to that
+ * zone's own [DropZone.onDrop], which translates it into repository changes. A no-op drop yields null instead
+ * (see [DragCoordinator.drop]).
  */
 data class DropOutcome(
     val zone: ZoneId,
@@ -43,19 +43,25 @@ data class DropOutcome(
 
 /**
  * The single, root-owned owner of a drag from lift to drop. Surfaces register themselves as [DropZone]s via
- * [registerZone]; the gesture layer (built next) drives [start] / [moveTo] / [drop] / [cancel].
+ * [RegisterDropZone]; the gesture layer drives [start] / [moveTo] / [drop] / [cancel].
  *
  * Because **one** coordinator sits above every surface, holds the whole drag, and hit-tests **all** zones in
  * one coordinate space, cross-surface drops and dragging out of a folder need no special handoff — they are
  * the same hit-test. This is the structural replacement for L1's four parallel gesture recognizers and the
  * `HomeDragBridge` re-tracking hack they forced (docs/DRAG_AND_DROP_DESIGN.md §2, §4).
  *
- * Not thread-safe; drive it from the main thread (the gesture pipeline).
+ * **Hosted once, by `feature:shell`.** Each surface used to remember its own, which was enough only while no drag
+ * could cross a surface boundary. It can now — an app is lifted in the APPS drawer and lands on home — and two
+ * coordinators cannot both own one gesture. So the shell provides this through [LocalDragCoordinator] and every
+ * surface reads it; the dev playgrounds provide one of their own, since they stand in for the shell.
  *
- * @param planner injected placement logic — a fake in tests, the engine-backed planner in `feature:home`.
+ * It carries **no planner of its own** for the same reason: with every surface's zones in one registry, a single
+ * planner would have to know about all of them. Each zone answers for itself (see [DropZone]).
+ *
+ * Not thread-safe; drive it from the main thread (the gesture pipeline).
  */
 @Stable
-class DragCoordinator(private val planner: DropPlanner) {
+class DragCoordinator {
 
     private val zones: SnapshotStateMap<ZoneId, DropZone> = mutableStateMapOf()
 
@@ -65,14 +71,28 @@ class DragCoordinator(private val planner: DropPlanner) {
 
     val isDragging: Boolean get() = session != null
 
-    /** Adds or replaces a zone; a surface calls this as it measures or moves. [DropZone.id] is the key. */
+    /** Adds or replaces a zone; [RegisterDropZone] calls this as a surface measures, moves, or comes on screen. */
     fun registerZone(zone: DropZone) {
         zones[zone.id] = zone
     }
 
-    /** Removes a zone whose surface left composition. A no-op when the id isn't registered. */
+    /** Removes a zone whose surface left the screen. A no-op when the id isn't registered. */
     fun unregisterZone(id: ZoneId) {
         zones.remove(id)
+    }
+
+    /**
+     * Removes [zone] **only if it is still the one registered under its id** — the teardown [RegisterDropZone] uses.
+     *
+     * The identity check matters because an id can legitimately change hands. Two folder overlays share
+     * `ZoneId("folder")`: when a drag opens a second folder, the first becomes an invisible pointer holder and hands
+     * the zone over in the same composition. Compose runs disposals before side effects, so the hand-off happens to
+     * come out in the right order today — but "happens to" is not an invariant, and getting it wrong pulls the drop
+     * zone out from under the folder the user is actually looking at, which is a bug this codebase has already had
+     * once. Comparing the instance makes the order irrelevant.
+     */
+    fun unregisterZone(zone: DropZone) {
+        if (zones[zone.id] === zone) zones.remove(zone.id)
     }
 
     /** Begins dragging [item] with the finger at [fingerInRoot] (root coordinates), resolving the first plan. */
@@ -81,25 +101,34 @@ class DragCoordinator(private val planner: DropPlanner) {
         moveTo(fingerInRoot)
     }
 
-    /** Updates the finger position, re-resolving the active zone and its plan. Ignored when not dragging. */
+    /** Updates the finger position, re-resolving the active zone and asking *that zone* what a drop would do. */
     fun moveTo(fingerInRoot: Offset) {
         val current = session ?: return
         val zone = activeZoneAt(fingerInRoot, current.item)
-        val plan = zone?.let { planner.plan(it, current.item, fingerInRoot) }
+        val plan = zone?.planner?.plan(current.item, fingerInRoot)
         session = current.copy(fingerInRoot = fingerInRoot, activeZone = zone?.id, plan = plan)
     }
 
     /**
-     * Ends the drag, clearing [session]. Returns the [DropOutcome] to commit, or null for a no-op drop:
-     * released over no zone, over no droppable target, or over an [DropIntent.INVALID] one.
+     * Ends the drag, clearing [session] and **committing the landing through the zone that owns it**
+     * ([DropZone.onDrop]) before returning it. Returns null for a no-op drop: released over no zone, over no
+     * droppable target, or over an [DropIntent.INVALID] one — in which case nothing is committed.
+     *
+     * The commit is dispatched here rather than by the caller because the caller is whichever *cell* released the
+     * finger, and that cell may belong to an entirely different surface from the one being dropped into. The return
+     * value is still what the releasing surface reads for its own bookkeeping (an open folder closing behind the
+     * drag, say), which is a question about where the drag *left*, not where it landed.
      */
     fun drop(): DropOutcome? {
         val current = session ?: return null
         session = null
         val zoneId = current.activeZone ?: return null
+        val zone = zones[zoneId] ?: return null
         val plan = current.plan ?: return null
         if (plan.intent == DropIntent.INVALID) return null
-        return DropOutcome(zoneId, current.item, plan)
+        val outcome = DropOutcome(zoneId, current.item, plan)
+        zone.onDrop(outcome)
+        return outcome
     }
 
     /** Abandons the drag with no drop (e.g. the gesture was cancelled). */
@@ -114,10 +143,26 @@ class DragCoordinator(private val planner: DropPlanner) {
             .maxByOrNull { it.z }
 }
 
-/** Provides the app-wide [DragCoordinator] below the drag root; null in scopes where dragging isn't set up. */
+/**
+ * Provides the app-wide [DragCoordinator] below the drag root; null in scopes where dragging isn't set up.
+ *
+ * Every launcher surface reads it rather than making one, which is what makes a drag able to leave the surface it
+ * started on. [requireDragCoordinator] is the read to use — the null is for previews and for non-launcher scopes
+ * (settings), not for a surface to quietly opt out of.
+ */
 val LocalDragCoordinator = staticCompositionLocalOf<DragCoordinator?> { null }
 
-/** Remembers a [DragCoordinator] bound to [planner]. Host once at the drag root and expose via the local. */
+/**
+ * The ambient [DragCoordinator], or an error naming the missing provider.
+ *
+ * Deliberately not a silent fallback to a locally remembered one: a surface with a private coordinator looks
+ * completely normal until a drag tries to leave it, and then simply stops at the boundary with nothing to debug.
+ */
 @Composable
-fun rememberDragCoordinator(planner: DropPlanner): DragCoordinator =
-    remember(planner) { DragCoordinator(planner) }
+fun requireDragCoordinator(): DragCoordinator = checkNotNull(LocalDragCoordinator.current) {
+    "No DragCoordinator provided — a launcher surface must sit below LauncherShell (or a harness that provides one)."
+}
+
+/** Remembers a [DragCoordinator]. Host once at the drag root (`feature:shell`) and expose via the local above. */
+@Composable
+fun rememberDragCoordinator(): DragCoordinator = remember { DragCoordinator() }

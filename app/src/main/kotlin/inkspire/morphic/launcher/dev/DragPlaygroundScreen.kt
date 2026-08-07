@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -48,7 +49,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropFootprint
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
@@ -158,21 +161,26 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
         }
         val surfaces = remember { listOf(home, dock, drawer, appsPager) }
 
-        // The planner dispatches on the destination zone's model: free-grid push/merge, or MovingGap reorder.
-        val planner = remember {
-            DropPlanner { zone, item, fingerInRoot ->
-                val surface = surfaces.firstOrNull { it.id == zone.id } ?: return@DropPlanner null
-                val geo = surface.geometry ?: return@DropPlanner null
-                when (val m = surface.model) {
-                    is SurfaceModel.Coordinate -> {
-                        val span = spanOf(surfaces, item) ?: return@DropPlanner null
-                        planWithin(m.placements, geo, surface.config, item, span, fingerInRoot)
+        // **A planner per surface**, since a zone carries its own. This used to be one `DropPlanner` that looked the
+        // surface up from the zone id — the same shape every production surface had, and it goes for the same reason:
+        // one coordinator now spans the whole launcher, so a single planner would have to know every zone in it.
+        val plannerFor = remember<(DemoSurface) -> DropPlanner> {
+            { surface ->
+                DropPlanner { item, fingerInRoot ->
+                    val geo = surface.geometry ?: return@DropPlanner null
+                    when (val m = surface.model) {
+                        is SurfaceModel.Coordinate -> {
+                            val span = spanOf(surfaces, item) ?: return@DropPlanner null
+                            planWithin(m.placements, geo, surface.config, item, span, fingerInRoot)
+                        }
+                        is SurfaceModel.Ordered -> orderedPlan(m, geo, surface.config, item, fingerInRoot)
                     }
-                    is SurfaceModel.Ordered -> orderedPlan(m, geo, surface.config, item, fingerInRoot)
                 }
             }
         }
-        val coordinator = rememberDragCoordinator(planner)
+        // The harness stands in for `feature:shell`, so it hosts the coordinator the way the shell does — and
+        // provides it below, because the shared surfaces read it from the local rather than taking a parameter.
+        val coordinator = rememberDragCoordinator()
 
         // Reset every MovingGap surface's transient gap once no drag is in flight.
         LaunchedEffect(coordinator.isDragging) {
@@ -183,8 +191,9 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
 
         fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
-        fun handleDrop() {
-            val outcome = coordinator.drop() ?: return
+        // Committing a landing belongs to the zone it landed in, so this is what each surface's zone is given; a
+        // release merely calls `coordinator.drop()`, which dispatches here.
+        fun commitLanding(outcome: DropOutcome) {
             if (outcome.plan.intent == DropIntent.MERGE) toast("merge ${label(outcome.item)}")
             applyOutcome(surfaces, outcome.item, outcome.zone, outcome.plan)
         }
@@ -198,11 +207,13 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                     GridSurface(
                         surface = drawer,
                         coordinator = coordinator,
+                        planner = plannerFor(drawer),
+                        onLand = ::commitLanding,
                         sizeModifier = Modifier.size(width = cellDp * drawer.config.cols, height = cellDp * drawer.config.rows),
                         showGuides = showGuides,
                         gestureConfig = gestureConfig,
                         onToast = ::toast,
-                        onDrop = ::handleDrop,
+                        onRelease = { coordinator.drop() },
                     )
                 }
                 Column(
@@ -215,30 +226,36 @@ fun DragPlaygroundScreen(modifier: Modifier = Modifier) {
                     GridSurface(
                         surface = home,
                         coordinator = coordinator,
+                        planner = plannerFor(home),
+                        onLand = ::commitLanding,
                         sizeModifier = Modifier.fillMaxWidth().height(260.dp),
                         showGuides = showGuides,
                         gestureConfig = gestureConfig,
                         onToast = ::toast,
-                        onDrop = ::handleDrop,
+                        onRelease = { coordinator.drop() },
                     )
                     GridSurface(
                         surface = dock,
                         coordinator = coordinator,
+                        planner = plannerFor(dock),
+                        onLand = ::commitLanding,
                         sizeModifier = Modifier.size(width = cellDp * dock.config.cols, height = cellDp * dock.config.rows),
                         showGuides = showGuides,
                         gestureConfig = gestureConfig,
                         onToast = ::toast,
-                        onDrop = ::handleDrop,
+                        onRelease = { coordinator.drop() },
                     )
                     // Ordered surface now on LauncherGrid too; kept fixed-cell (measured 64dp) to isolate the
                     // grid swap from the responsiveness already proven on home.
                     OrderedSurface(
                         surface = appsPager,
                         coordinator = coordinator,
+                        planner = plannerFor(appsPager),
+                        onLand = ::commitLanding,
                         sizeModifier = Modifier.size(width = cellDp * appsPager.config.cols, height = cellDp * appsPager.config.rows),
                         gestureConfig = gestureConfig,
                         onToast = ::toast,
-                        onDrop = ::handleDrop,
+                        onRelease = { coordinator.drop() },
                     )
                 }
             }
@@ -341,11 +358,13 @@ private fun spanOf(surfaces: List<DemoSurface>, item: GridItem): GridPlacement? 
 private fun GridSurface(
     surface: DemoSurface,
     coordinator: DragCoordinator,
+    planner: DropPlanner,
+    onLand: (DropOutcome) -> Unit,
     sizeModifier: Modifier,
     showGuides: Boolean,
     gestureConfig: ItemGestureConfig,
     onToast: (String) -> Unit,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
     val placements = (surface.model as SurfaceModel.Coordinate).placements
@@ -359,7 +378,9 @@ private fun GridSurface(
             gestureConfig = gestureConfig,
             dragItem = { it },
             placement = { placements.getValue(it) },
-            onDrop = onDrop,
+            planner = planner,
+            onLand = onLand,
+            onRelease = onRelease,
             modifier = Modifier.fillMaxSize(),
             edgeActions = SwipeDirection.entries.toSet(),
             onGeometryChange = { surface.geometry = it },
@@ -392,24 +413,38 @@ private fun GridSurface(
 private fun OrderedSurface(
     surface: DemoSurface,
     coordinator: DragCoordinator,
+    planner: DropPlanner,
+    onLand: (DropOutcome) -> Unit,
     sizeModifier: Modifier,
     gestureConfig: ItemGestureConfig,
     onToast: (String) -> Unit,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
     val model = surface.model as SurfaceModel.Ordered
     val cols = surface.config.cols
 
-    DisposableEffect(surface, coordinator) {
-        onDispose { coordinator.unregisterZone(surface.id) }
-    }
+    var bounds by remember { mutableStateOf<Rect?>(null) }
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = bounds?.let {
+            DropZone(
+                id = surface.id,
+                bounds = it,
+                z = 0,
+                planner = planner,
+                accepts = { item -> item in model.order },
+                onDrop = onLand,
+            )
+        },
+    )
 
     Box(
         sizeModifier
             .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
             .onGloballyPositioned {
                 val b = it.boundsInRoot()
+                bounds = b
                 surface.geometry = GridGeometry(
                     originInRoot = Offset(b.left, b.top),
                     cellW = b.width / cols,
@@ -417,7 +452,6 @@ private fun OrderedSurface(
                     cols = cols,
                     rows = surface.config.rows,
                 )
-                coordinator.registerZone(DropZone(surface.id, b, z = 0) { it in model.order })
             },
     ) {
         val dragged = coordinator.session?.item?.takeIf { it in model.order }
@@ -447,7 +481,7 @@ private fun OrderedSurface(
                             onDismissMenu = {},
                             onBeginDrag = { root -> coordinator.start(entry, root) },
                             onDragTo = { root -> coordinator.moveTo(root) },
-                            onDrop = { onDrop() },
+                            onDrop = { onRelease() },
                             onCancelDrag = { coordinator.cancel() },
                         ),
                     contentAlignment = Alignment.Center,

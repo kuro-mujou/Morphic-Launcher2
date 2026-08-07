@@ -22,7 +22,7 @@ class DragCoordinatorTest {
     private fun app(name: String): GridItem = GridItem.App(ComponentKey("pkg", name))
 
     /** A planner that always reports the same plan, so tests isolate the coordinator's own routing. */
-    private fun plannerReturning(plan: PlacementPlan?) = DropPlanner { _, _, _ -> plan }
+    private fun plannerReturning(plan: PlacementPlan?) = DropPlanner { _, _ -> plan }
 
     private val placePlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
 
@@ -30,19 +30,21 @@ class DragCoordinatorTest {
         id: String,
         bounds: Rect,
         z: Int = 0,
+        plan: PlacementPlan? = placePlan,
         accepts: (GridItem) -> Boolean = { true },
-    ) = DropZone(ZoneId(id), bounds, z, accepts)
+        onDrop: (DropOutcome) -> Unit = {},
+    ) = DropZone(ZoneId(id), bounds, z, plannerReturning(plan), accepts, onDrop)
 
     @Test
     fun `starts idle`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         assertFalse(coordinator.isDragging)
         assertNull(coordinator.session)
     }
 
     @Test
     fun `start resolves the zone under the finger and its plan`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
 
         coordinator.start(app("a"), Offset(50f, 50f))
@@ -54,7 +56,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `a finger outside every zone has no active zone or plan`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
 
         coordinator.start(app("a"), Offset(500f, 500f))
@@ -65,7 +67,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `overlapping zones resolve to the highest z`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f), z = 0))
         coordinator.registerZone(zone("folder", Rect(0f, 0f, 100f, 100f), z = 10))
 
@@ -76,10 +78,12 @@ class DragCoordinatorTest {
 
     @Test
     fun `a zone that rejects the item is skipped so the finger falls through`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         // The top zone accepts only "b"; dragging "a" must fall through to the home zone beneath it.
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f), z = 0))
-        coordinator.registerZone(zone("widgets", Rect(0f, 0f, 100f, 100f), z = 10) { it == app("b") })
+        coordinator.registerZone(
+            zone("widgets", Rect(0f, 0f, 100f, 100f), z = 10, accepts = { it == app("b") }),
+        )
 
         coordinator.start(app("a"), Offset(50f, 50f))
 
@@ -88,7 +92,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `moveTo re-resolves the active zone as the finger crosses a boundary`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("left", Rect(0f, 0f, 100f, 100f)))
         coordinator.registerZone(zone("right", Rect(100f, 0f, 200f, 100f)))
 
@@ -101,7 +105,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `drop over a valid target returns the outcome and clears the session`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
         coordinator.start(app("a"), Offset(50f, 50f))
 
@@ -113,7 +117,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `drop over no zone is a no-op`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
         coordinator.start(app("a"), Offset(500f, 500f))
 
@@ -124,8 +128,8 @@ class DragCoordinatorTest {
     @Test
     fun `drop over an invalid target is a no-op`() {
         val invalid = PlacementPlan(GridPlacement(0, 0, 0), intent = DropIntent.INVALID)
-        val coordinator = DragCoordinator(plannerReturning(invalid))
-        coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
+        val coordinator = DragCoordinator()
+        coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f), plan = invalid))
         coordinator.start(app("a"), Offset(50f, 50f))
 
         assertNull(coordinator.drop())
@@ -134,7 +138,7 @@ class DragCoordinatorTest {
 
     @Test
     fun `unregistering the active zone drops the finger through to nothing`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
         coordinator.start(app("a"), Offset(50f, 50f))
         assertEquals(ZoneId("home"), coordinator.session!!.activeZone)
@@ -146,8 +150,54 @@ class DragCoordinatorTest {
     }
 
     @Test
+    fun `each zone is planned by its own planner`() {
+        val leftPlan = PlacementPlan(GridPlacement(0, 1, 1), DropIntent.PLACE)
+        val coordinator = DragCoordinator()
+        coordinator.registerZone(zone("left", Rect(0f, 0f, 100f, 100f), plan = leftPlan))
+        coordinator.registerZone(zone("right", Rect(100f, 0f, 200f, 100f), plan = placePlan))
+
+        coordinator.start(app("a"), Offset(50f, 50f))
+        assertEquals(leftPlan, coordinator.session!!.plan)
+
+        coordinator.moveTo(Offset(150f, 50f))
+        assertEquals(placePlan, coordinator.session!!.plan)
+    }
+
+    @Test
+    fun `a drop is committed by the zone it landed in, not the one it started over`() {
+        val landed = mutableListOf<String>()
+        val coordinator = DragCoordinator()
+        coordinator.registerZone(
+            zone("source", Rect(0f, 0f, 100f, 100f), onDrop = { landed += "source" }),
+        )
+        coordinator.registerZone(
+            zone("destination", Rect(100f, 0f, 200f, 100f), onDrop = { landed += "destination" }),
+        )
+
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.moveTo(Offset(150f, 50f))
+        coordinator.drop()
+
+        assertEquals(listOf("destination"), landed)
+    }
+
+    @Test
+    fun `a no-op drop commits nothing`() {
+        var committed = false
+        val coordinator = DragCoordinator()
+        coordinator.registerZone(
+            zone("home", Rect(0f, 0f, 100f, 100f), onDrop = { committed = true }),
+        )
+
+        coordinator.start(app("a"), Offset(500f, 500f)) // outside every zone
+        coordinator.drop()
+
+        assertFalse(committed)
+    }
+
+    @Test
     fun `cancel clears the drag without an outcome`() {
-        val coordinator = DragCoordinator(plannerReturning(placePlan))
+        val coordinator = DragCoordinator()
         coordinator.registerZone(zone("home", Rect(0f, 0f, 100f, 100f)))
         coordinator.start(app("a"), Offset(50f, 50f))
 

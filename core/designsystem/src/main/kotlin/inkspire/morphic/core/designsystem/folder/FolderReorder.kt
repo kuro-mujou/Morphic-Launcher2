@@ -8,17 +8,22 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 
 /**
- * The open folder's drag hooks, published to the shared `DragCoordinator`'s owner (the home) while the folder
- * is open. The home runs one coordinator over both surfaces; its zone-dispatching planner and drop route the
- * folder zone here, so the folder's MovingGap logic stays inside the overlay (its order/gap/geometry aren't
- * hoisted). This is what lets a drag started in the folder continue as the *same* session onto home.
+ * The open folder's drag hooks — what its own `DropZone` binds its planner and its drop to, so the folder's
+ * MovingGap logic stays inside the overlay (its order, gap and geometry are never hoisted). This is what lets a drag
+ * started in the folder continue as the *same* session onto home.
+ *
+ * **It used to be published to the host surface**, which held it in a `mutableStateOf` and routed the folder zone to
+ * it from a `when (zone.id)` in its own planner and drop — three surfaces each carrying the same pair of branches,
+ * plus a documented construction-order squeeze (the holder had to exist before the coordinator, which had to exist
+ * before the folder host). All of that was one statement said in the wrong place: *this zone's behaviour is the
+ * folder's*. A zone carries its own behaviour now, so the interface stays and the hand-off goes.
  */
 interface FolderDragDelegate {
     /**
      * The drag moved to [fingerInRoot] over the folder zone: **advance the reorder gap** toward it and report
      * that the folder accepts a drop here ([FolderReorderPlan]), or null if it can't take [item] at all.
      *
-     * Unlike the `DropPlanner` it is reached through, this is a **command, not a query** — calling it changes the
+     * Unlike the `DropPlanner` it backs, this is a **command, not a query** — calling it changes the
      * folder's gap, which is the reorder preview. Hence `onHover` rather than `plan`: it is safe only because the
      * coordinator calls it exactly once per finger move, and a name that promised purity would invite a
      * speculative second call that silently desynchronises the gap.

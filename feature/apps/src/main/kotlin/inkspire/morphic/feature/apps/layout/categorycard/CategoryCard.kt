@@ -30,15 +30,17 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
+import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
+import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.feature.apps.AppsCategory
-import inkspire.morphic.feature.apps.layout.appsItemGestures
 
 /**
  * One card's own inset, corner, tint and slot spacing — **placeholders, not design choices**, in the same sense as
@@ -86,21 +88,31 @@ private val PreviewIconMetrics = IconMetrics(iconPercent = 1f, showLabel = false
  * cluster opens the category; so does the header. A category with [PreviewSlots] apps or fewer shows them all and has
  * no cluster.
  *
- * Split from [AppsCategoryCard] because it is a leaf: it takes what it draws as parameters, reports its bounds back,
- * and reads none of the surface's drag state. The surface keeps the state, the planner and the drop.
+ * Split from [AppsCategoryCard] because it is a leaf: it takes what it draws as parameters and reports its bounds
+ * back. The surface keeps the drag state, the planner and the drop.
+ *
+ * **Its preview icons are draggable**, which is the second way an app is re-filed — the first being from inside an
+ * expansion. A preview is the only part of a card that names one app, so it is the only part that can start a drag;
+ * the header and the overflow cluster open the category, and the empty slots and padding stay free. Note what this
+ * costs the surface: a lifted cell owns the pointer stream driving the drag, so the card grid cannot be lazy any
+ * more (see [AppsCategoryCard]).
  *
  * @param shadowed true while a dragged app is aimed at this card — drawn as a [DropIntent.MERGE] drop shadow over the
  *   whole card, the same affordance a folder's merge ring gets, because dropping here does the same thing.
+ * @param onRelease a preview icon released the finger; it only ends the drag, since the landing belongs to whichever
+ *   zone it fell in — another card, or one of home's grids if the drag was ejected.
  * @param onBounds reports this card's root-space bounds as it is laid out, and **null when it leaves composition** so
- *   the surface's hit-test map doesn't keep testing a card that has scrolled away.
+ *   the surface's hit-test map doesn't keep testing a card that no longer exists.
  */
 @Composable
 internal fun CategoryCard(
     category: AppsCategory,
+    coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
     shadowed: Boolean,
     onLaunch: (ComponentKey) -> Unit,
     onExpand: () -> Unit,
+    onRelease: () -> Unit,
     onBounds: (Rect?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -151,9 +163,11 @@ internal fun CategoryCard(
                                         app = category.apps.getOrNull(index),
                                         cluster = cluster?.takeIf { index == PreviewSlots - 1 },
                                         slot = slot,
+                                        coordinator = coordinator,
                                         gestureConfig = gestureConfig,
                                         onLaunch = onLaunch,
                                         onExpand = onExpand,
+                                        onRelease = onRelease,
                                     )
                                 }
                             }
@@ -178,17 +192,25 @@ internal fun CategoryCard(
  * One preview slot: the overflow [cluster] if this is the last slot and there is an overflow, otherwise [app]'s icon,
  * otherwise nothing.
  *
- * An icon launches; the cluster opens the category. Both go through the launcher's one item-gesture contract rather
- * than a `clickable`, so this surface can't drift from the rest of the launcher on long-press timing or slop.
+ * An icon launches on a tap and **lifts on a long-press-and-move**; the cluster opens the category. Both go through
+ * the launcher's one item-gesture contract rather than a `clickable`, so this surface can't drift from the rest of the
+ * launcher on long-press timing or slop.
+ *
+ * The icon goes through [LauncherDragCell] specifically, rather than wiring the coordinator by hand, so it gets the
+ * same three things every other draggable cell has: the gesture contract, the lifted cell drawn invisible while the
+ * proxy stands in for it, and `animatePlacement`. Handing the gestures down to [AppCell] keeps the target the icon
+ * itself, leaving the slack in the slot free for the card beneath.
  */
 @Composable
 private fun PreviewSlot(
     app: AppInfo?,
     cluster: List<AppInfo>?,
     slot: Dp,
+    coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
     onExpand: () -> Unit,
+    onRelease: () -> Unit,
 ) {
     when {
         cluster != null -> IconPreviewPlate(
@@ -196,12 +218,21 @@ private fun PreviewSlot(
             size = slot,
             modifier = Modifier.categoryOpenGestures(gestureConfig, onExpand),
         )
-        app != null -> AppCell(
-            app = app,
+        app != null -> LauncherDragCell(
+            coordinator = coordinator,
+            item = GridItem.App(app.componentKey),
+            gestureConfig = gestureConfig,
+            onRelease = onRelease,
             modifier = Modifier.fillMaxSize(),
-            metrics = PreviewIconMetrics,
-            itemGestures = Modifier.appsItemGestures(gestureConfig) { onLaunch(app.componentKey) },
-        )
+            onOpen = { onLaunch(app.componentKey) },
+        ) { itemGestures ->
+            AppCell(
+                app = app,
+                modifier = Modifier.fillMaxSize(),
+                metrics = PreviewIconMetrics,
+                itemGestures = itemGestures,
+            )
+        }
         else -> Unit
     }
 }

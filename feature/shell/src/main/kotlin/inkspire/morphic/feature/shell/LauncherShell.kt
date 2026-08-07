@@ -2,6 +2,7 @@ package inkspire.morphic.feature.shell
 
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -10,8 +11,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,6 +23,14 @@ import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.backdrop.screenToBitmapMapping
+import inkspire.morphic.core.designsystem.drag.DragCoordinator
+import inkspire.morphic.core.designsystem.drag.DropZone
+import inkspire.morphic.core.designsystem.drag.LocalDragCoordinator
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
+import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.surface.EjectToHome
+import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
@@ -29,6 +40,9 @@ import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.designsystem.topaction.TopActionZone
+import inkspire.morphic.core.designsystem.topaction.TopActionZoneHeight
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
@@ -99,6 +113,23 @@ fun LauncherShell(modifier: Modifier = Modifier) {
         // the system — on a launcher there is nowhere further to go, and swallowing it would trap the user.
         BackHandler(enabled = pagerState.openEdge != null) { scope.launch { pagerState.close() } }
 
+        // **The launcher's one drag coordinator, and this is the layer it belongs to** — the common ancestor of HOME
+        // and every side surface, which is what docs/DRAG_AND_DROP_DESIGN.md §2 has specified from the start. Each
+        // surface used to remember its own, which was indistinguishable from this while no drag could leave the
+        // surface it started on. Now one can: an app lifted in the APPS drawer is dropped onto home's grid, and the
+        // only reason that needs no hand-off is that both surfaces' zones are in *this* registry, hit-tested against
+        // one finger in one coordinate space.
+        //
+        // It is also why there is no L1 `HomeDragBridge` here. That existed because `CrossPager` stopped delivering
+        // pointer events to either subtree as it collapsed, so the finger had to be re-tracked from scratch at the
+        // common ancestor. `SurfacePager` keeps every slot composed, so the lifted cell simply keeps its own pointer
+        // stream the whole way.
+        val coordinator = rememberDragCoordinator()
+
+        // Closing the open side surface *without ending the drag* — the whole of `EjectToHome`. The gesture carries
+        // on over home the moment it is uncovered, because nothing about the drag changes here.
+        val eject = remember(pagerState, scope) { EjectToHome { scope.launch { pagerState.close() } } }
+
         // **Provided at the shell, which is the same boundary the theme is applied at, and for the same reason**: a
         // frosted surface samples *this launcher's* wallpaper, and the settings graph is a different zone with
         // different rules (its icon preview punches through to the real window instead). L1 provided these inside its
@@ -107,38 +138,102 @@ fun LauncherShell(modifier: Modifier = Modifier) {
             LocalBackdrop provides rememberBackdropState(state.backdropImage, state.backdropAccent, windowSize),
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
+            LocalDragCoordinator provides coordinator,
+            LocalEjectToHome provides eject,
         ) {
-            // TODO(SurfacePager): `state.register.transition` is read but not applied — only SLIDE is implemented, so
-            //  the other five values are stored and ignored until the transforms land. Deliberately not faked.
-            SurfacePager(
-                state = pagerState,
-                modifier = modifier.fillMaxSize(),
-                sideContent = state.register.sides.mapValues { (edge, binding) ->
-                    binding.toSurfaceBinding(edge, state.register.homeLayout, state::wraps)
-                },
-                // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
-                // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
-                enabled = { !gestureLock.isLocked },
-                // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
-                // read against this; the two move differently on purpose — the pane translates, the frost only fades
-                // — which is why it is a slot on the pager rather than a modifier on either. `progress` is the pan
-                // collapsed to "how far in is the other surface", so the screen frosts over as the content arrives
-                // and clears as it leaves, from any edge.
-                //
-                // The scrim is this launcher's own background: with no wallpaper to sample there is nothing to blur,
-                // and the surface above still has to be legible. That is the state a fresh install is in, and it
-                // looks exactly like the opaque APPS background this replaced.
-                overlay = {
-                    SurfaceBackdropLayer(
-                        alpha = pagerState::progress,
-                        scrimColor = LocalMorphicColors.current.background,
-                    )
-                },
-            ) {
-                HomeScreen()
+            // A `Box` because the eject band below is a **sibling** of the pager rather than content inside it — see
+            // that call. The caller's [modifier] moves out here with the stacking.
+            Box(modifier.fillMaxSize()) {
+                // TODO(SurfacePager): `state.register.transition` is read but not applied — only SLIDE is implemented, so
+                //  the other five values are stored and ignored until the transforms land. Deliberately not faked.
+                SurfacePager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    sideContent = state.register.sides.mapValues { (edge, binding) ->
+                        binding.toSurfaceBinding(edge, state.register.homeLayout, state::wraps)
+                    },
+                    // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
+                    // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
+                    enabled = { !gestureLock.isLocked },
+                    // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
+                    // read against this; the two move differently on purpose — the pane translates, the frost only fades
+                    // — which is why it is a slot on the pager rather than a modifier on either. `progress` is the pan
+                    // collapsed to "how far in is the other surface", so the screen frosts over as the content arrives
+                    // and clears as it leaves, from any edge.
+                    //
+                    // The scrim is this launcher's own background: with no wallpaper to sample there is nothing to blur,
+                    // and the surface above still has to be legible. That is the state a fresh install is in, and it
+                    // looks exactly like the opaque APPS background this replaced.
+                    overlay = {
+                        SurfaceBackdropLayer(
+                            alpha = pagerState::progress,
+                            scrimColor = LocalMorphicColors.current.background,
+                        )
+                    },
+                ) {
+                    HomeScreen()
+                }
+
+                // **The eject target, above every surface** — hence a sibling of the pager rather than its `overlay`
+                // slot, which is deliberately drawn *under* the side surfaces so the frost can sit between them. The
+                // band has to be over the drawer it takes apps out of.
+                EjectTopActionZone(coordinator = coordinator, openEdge = pagerState.openEdge, onEject = eject)
             }
         }
     }
+}
+
+/** Where the eject band's drop zone lives in the registry. Above every surface's own, so it wins the finger. */
+private val TopActionZoneId = ZoneId("top-action")
+
+/**
+ * The **drag-out-to-home target** across the top of an open side surface: the affordance ([TopActionZone]) and the
+ * drop zone that drives it, which are two halves of one thing and so are wired here rather than in either.
+ *
+ * **Entering it is the whole gesture — there is no drop.** The moment the finger arrives, [onEject] closes the side
+ * surface and the *same* drag carries on over home, whose zones are on the same coordinator and are uncovered a few
+ * frames later. So this zone plans nothing and lands nothing: releasing on it while the surface is still sliding away
+ * is a cancel, which is the honest outcome for a gesture abandoned before it reached anywhere to put the app.
+ *
+ * No dwell, unlike the folder enter/leave holds. Those are ambiguous — the finger is over a folder *on the way to*
+ * somewhere else as often as not — where this band exists for one purpose and is nowhere near anything else the drag
+ * could be aiming at, so a hold would only be a delay.
+ *
+ * **It is only there while there is something to eject**, which is a drag in flight *and* a side surface open. On
+ * HOME there is nothing to leave, so the band would be a target that closes nothing.
+ */
+@Composable
+private fun EjectTopActionZone(coordinator: DragCoordinator, openEdge: HomeEdge?, onEject: EjectToHome) {
+    val session = coordinator.session
+    val armed = session != null && openEdge != null
+    val density = LocalDensity.current
+    val width = LocalWindowInfo.current.containerSize.width.toFloat()
+    val bounds = remember(width, density) {
+        Rect(0f, 0f, width, with(density) { TopActionZoneHeight.toPx() })
+    }
+    RegisterDropZone(
+        coordinator = coordinator,
+        // `z` above every surface's own zone, which is what lets the band be hit at all: the drawer's viewport zone
+        // covers the same pixels and is registered at 0.
+        zone = DropZone(
+            id = TopActionZoneId,
+            bounds = bounds,
+            z = 2,
+            planner = { _, _ -> null },
+            // Only an app, because home is the only thing on the other side of this and an app is all it can be
+            // handed today. A folder living in the drawer is a drawer folder; moving one to home is a separate
+            // question with no answer yet.
+            accepts = { item -> item is GridItem.App },
+        ),
+        enabled = armed,
+        // The shell is not inside any slot, so `LocalSurfacePresented` is its default `true` here; `armed` is the
+        // real condition and is passed explicitly for that reason.
+    )
+    val hovering = session?.activeZone == TopActionZoneId
+    // Fired from an effect rather than inline: `onEject` starts an animation, and the read that discovers the hover
+    // happens during composition.
+    LaunchedEffect(hovering) { if (hovering) onEject() }
+    TopActionZone(visible = armed, highlighted = hovering)
 }
 
 /**

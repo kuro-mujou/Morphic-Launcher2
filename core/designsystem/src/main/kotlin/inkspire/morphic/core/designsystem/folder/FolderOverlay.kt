@@ -53,7 +53,9 @@ import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.ZoneId
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
@@ -112,10 +114,10 @@ private const val LeaveDwellMs = 1000L
  *
  * The apps are a **dense flow** chunked into pages (dots below), swipeable. Long-press to reorder within the flow
  * — a *moving gap*: the dragged app's slot travels through the ordered list and the flow densifies on drop (see
- * `FolderReorder.kt`). The folder's hover/commit hooks are exposed to the home via a [FolderDragDelegate]
- * ([onPublishDelegate]) so the shared coordinator's zone-dispatching planner/drop route the folder zone here
- * without hoisting the folder's order/gap out. A tap launches ([onLaunch]); cells commit through the shared
- * [onDrop].
+ * `FolderReorder.kt`). The folder's hover and drop belong to its **own zone**, registered below, so its order and gap
+ * never have to be hoisted into the host. A tap launches ([onLaunch]); a release in here merely ends the drag
+ * ([onRelease]), and what the *host* has to write — an app injected from the surface joining this folder — reaches
+ * it through [onReorder], which is the only report that crosses the boundary at all.
  *
  * Leaving is a **continuous hand-off**: the drag started here carries on as the *same* session onto home, no lift.
  * Reorder is within the current page.
@@ -125,7 +127,7 @@ private const val LeaveDwellMs = 1000L
  * an in-flight pointer stream can't be moved to another node, so that folder has to stay composed or the gesture dies
  * (the toolkit's "keep a source surface composed while a drag from it is in flight" rule). So the host composes it
  * alongside the newly opened one with `presenting = false`: same overlay, reduced to a pointer holder — invisible,
- * no back handler, no published delegate, no drop zone, no proxy. See [FolderHostState.dragSourceFolderId].
+ * no back handler, no drop zone, no proxy. See [FolderHostState.dragSourceFolderId].
  *
  * The flag is a *role*, not a one-way door: a drag that leaves the source folder and later comes back flips it false
  * → true again, and the overlay must resume completely (visible, zone re-registered, leave-dwell re-armed from
@@ -148,8 +150,7 @@ fun FolderOverlay(
     onLaunch: (ComponentKey) -> Unit,
     onReorder: (List<ComponentKey>) -> Unit,
     onLeave: () -> Unit,
-    onDrop: () -> Unit,
-    onPublishDelegate: (FolderDragDelegate?) -> Unit,
+    onRelease: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
@@ -222,25 +223,36 @@ fun FolderOverlay(
             }
         }
     }
-    // Only the presented folder's hooks go to the coordinator: it is the one holding the registered folder zone, so a
-    // pointer holder publishing too would leave the surface routing folder drops to a folder nobody is looking at.
-    DisposableEffect(delegate, presenting) {
-        if (presenting) onPublishDelegate(delegate)
-        onDispose { if (presenting) onPublishDelegate(null) }
-    }
     // The folder drop zone is owned by the *presented* overlay alone, registered and torn down with that role rather
     // than with composition. A pointer holder must not register (the coordinator would route drops into a folder
     // nobody is looking at) and must not unregister either: [FolderZoneId] is one shared id, so an unguarded
-    // `onDispose` would pull the zone out from under whichever folder is actually on screen.
+    // teardown would pull the zone out from under whichever folder is actually on screen — which is exactly what
+    // [RegisterDropZone]'s `enabled` gate expresses, with `presenting` as the extra condition on top of the
+    // surface-level one it already applies.
+    //
+    // **The zone carries the folder's own hover and drop.** They used to be routed here by the host surface, whose
+    // planner had a `zone.id != mine` branch handing over to the published delegate and whose drop had a matching
+    // one; both were the same statement — *this zone's behaviour is the folder's* — said in the surface instead of
+    // in the zone. The delegate stays for what genuinely crosses the boundary: the host still needs `commitReorder`
+    // to be reachable, because an app injected from outside commits through the host's own write path.
     val bounds = innerBounds
-    DisposableEffect(bounds, presenting) {
-        if (bounds != null && presenting) {
-            coordinator.registerZone(DropZone(FolderZoneId, bounds, z = 1) { it is GridItem.App })
-            onDispose { coordinator.unregisterZone(FolderZoneId) }
-        } else {
-            onDispose { }
-        }
-    }
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = bounds?.let {
+            DropZone(
+                id = FolderZoneId,
+                bounds = it,
+                z = 1,
+                planner = { item, finger -> delegate.onHover(item, finger) },
+                accepts = { item -> item is GridItem.App },
+                onDrop = { outcome -> delegate.commitReorder(outcome.item) },
+            )
+        },
+        // Both conditions, and the surface-level one written out rather than left to the default: passing `enabled`
+        // at all replaces that default, and a folder is only ever the user's business while the surface holding it
+        // is the one on screen.
+        enabled = presenting && LocalSurfacePresented.current,
+    )
     // Whether the finger has been over the inner grid during **this visit** — see the arming note below. Reset when
     // the folder stops being presented, not when the drag ends: a single drag can leave and re-enter, and each entry
     // has to earn its own arming or the hold that opened the folder would immediately close it again.
@@ -409,7 +421,7 @@ fun FolderOverlay(
                                         coordinator = coordinator,
                                         item = GridItem.App(app.componentKey),
                                         gestureConfig = gestureConfig,
-                                        onDrop = onDrop,
+                                        onRelease = onRelease,
                                         modifier = cellModifier,
                                         onOpen = { onLaunch(app.componentKey) },
                                     ) { itemGestures ->

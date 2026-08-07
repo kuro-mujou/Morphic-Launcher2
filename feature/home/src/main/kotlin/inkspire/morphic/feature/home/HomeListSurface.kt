@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -35,13 +34,15 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.drag.DragAutoScrollEffect
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
-import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
+import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.GridGeometry
@@ -53,6 +54,7 @@ import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.ordered.cellFractionY
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
@@ -111,6 +113,11 @@ private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.R
  * folders in it, exactly as L1's has none), no page to carry an item onto, and no coordinate to write: a drop is an
  * index, committed through [HomeViewModel.reorderList]. The preview is MovingGap, the same model the APPS pager and
  * every folder use.
+ *
+ * **An app dragged in from the APPS surface lands at the end**, and that is the one place the reorder model does not
+ * apply: MovingGap migrates the gap from where an item *already is*, and a stranger is nowhere. Appending is also the
+ * honest reading of the gesture — this list has no cell to aim at, so a drop into it says "put this in my list", not
+ * "put it at row seven". A chosen position stays reachable the way it always was, by dragging the row afterwards.
  *
  * **A `Column` in a `verticalScroll`, deliberately not a `LazyColumn`** — the opposite call from `AppsVerticalList`,
  * and for two reasons that are both properties of this list rather than preferences. A lazy list disposes rows that
@@ -207,15 +214,20 @@ internal fun HomeListSurface(
 
     var areaGeometry by remember { mutableStateOf<GridGeometry?>(null) }
 
-    // One planner over both zones, dispatched by zone id — the shape the pager surface uses, and the reason a future
-    // widget dragged out of the area and back is one gesture rather than a hand-off. The widget area plans nothing
-    // today because nothing it accepts can be lifted yet; `CoordinateDragGrid` registers its zone regardless, so the
-    // finger falls through the list's rows rather than onto them.
+    // The list's own planner. The widget area plans nothing today because nothing it accepts can be lifted yet
+    // (`CoordinateDragGrid` still registers its zone, so an app carried over it falls through to the list beneath
+    // rather than being refused on release) — hence the constant `null` one zone over.
     val planner = remember {
-        DropPlanner { zone, item, fingerInRoot ->
-            if (zone.id != ListZoneId) return@DropPlanner null
+        DropPlanner { item, fingerInRoot ->
             val geo = liveGeometry.value ?: return@DropPlanner null
             val app = (item as? GridItem.App)?.component ?: return@DropPlanner null
+            // **An app arriving from the APPS surface is not in this list, so there is no gap to migrate** — it
+            // lands at the end, which is what was specified for it. `movingGap` reasons about an item's *current*
+            // index, so asking it about a stranger would answer from index 0.
+            if (app !in liveOrder.value) {
+                gap = liveOrder.value.size
+                return@DropPlanner ListReorderPlan
+            }
             // The row under the finger, unclamped at the bottom so `movingGap` can read "past the last item" as
             // append; floored at zero because a finger above the first row still means the first row.
             val slot = floor((fingerInRoot.y - geo.originInRoot.y) / geo.cellH).toInt().coerceAtLeast(0)
@@ -231,7 +243,10 @@ internal fun HomeListSurface(
             ListReorderPlan
         }
     }
-    val coordinator = rememberDragCoordinator(planner)
+    // The launcher's one coordinator — the shell's, not this screen's, which is what lets an app dragged out of the
+    // APPS drawer be dropped onto this list at all.
+    val coordinator = requireDragCoordinator()
+    val presented = LocalSurfacePresented.current
     val session = coordinator.session
     val draggedApp = (session?.item as? GridItem.App)?.component
 
@@ -246,28 +261,43 @@ internal fun HomeListSurface(
     // What the user sees: the order with the dragged app lifted to the gap, everything else densified around it. The
     // same function produces the committed order on drop, so the preview and the write cannot disagree.
     val displayed = remember(order, draggedApp, gap) { movingGapDisplayOrder(order, draggedApp, gap) }
-    val appsByComponent = remember(state.listApps) { state.listApps.associateBy { it.componentKey } }
+    // Resolved through [appInfo] rather than from the list's own apps, so the row standing in for the gap can be an
+    // app that is not in the list yet — one being carried in from the APPS drawer, which is in nothing home owns
+    // until the drop. It renders invisible (it *is* the dragged item), which is exactly what the gap should look
+    // like; a lookup scoped to `listApps` would drop it and the gap would never open.
+    val displayedApps = remember(displayed, state) { displayed.mapNotNull(state::appInfo) }
 
     // Hold the dragged app past the drop: the write is asynchronous, so re-deriving the proxy's icon from the state
     // would lose it for a frame at exactly the moment the finger lifts.
-    val proxyApp = remember(draggedApp) { draggedApp?.let { appsByComponent[it] } }
+    val proxyApp = remember(draggedApp) { draggedApp?.let(state::appInfo) }
+
+    // What a landing **in this list** means, whether the app was lifted from a row of it or carried in from the APPS
+    // drawer. Both are the same write, because `movingGapDisplayOrder` inserts a stranger and moves a member with the
+    // one expression — and the gap the planner left is what the user has been *looking at*, the same order the rows
+    // were drawn from, so the committed order is by construction the one on screen.
+    fun commitLanding(outcome: DropOutcome) {
+        if (gap < 0) return // the finger never rested on a row; nothing to write
+        val app = (outcome.item as? GridItem.App)?.component ?: return
+        viewModel.reorderList(movingGapDisplayOrder(liveOrder.value, app, gap))
+    }
 
     // The list's own drop zone. `CoordinateDragGrid` registers the widget area's for itself; the list is a plain
     // scroller, so it registers from the one measurement it already publishes — the viewport, whose rectangle is
     // exactly the area a finger may drop in. **It accepts apps only**, which is the mirror of the widget area's rule
     // one zone over: neither zone can be handed something it has nowhere to put.
-    DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(ListZoneId) } }
-
-    fun handleDrop() {
-        // Read the gap through the drop: it is what the user has been *looking at* — the same
-        // `movingGapDisplayOrder` the rows are drawn from — so the committed order is by construction the one on
-        // screen. A release that never moved leaves a null outcome and writes nothing.
-        val landed = gap
-        val outcome = coordinator.drop()
-        if (outcome == null || landed < 0) return
-        val app = (outcome.item as? GridItem.App)?.component ?: return
-        viewModel.reorderList(movingGapDisplayOrder(liveOrder.value, app, landed))
-    }
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = viewport.takeIf { it != Rect.Zero }?.let {
+            DropZone(
+                id = ListZoneId,
+                bounds = it,
+                z = 0,
+                planner = planner,
+                accepts = { item -> item is GridItem.App },
+                onDrop = ::commitLanding,
+            )
+        },
+    )
 
     Box(modifier.fillMaxSize()) {
         HomeZoneScaffold(
@@ -288,7 +318,12 @@ internal fun HomeListSurface(
                     dragItem = { it.gridItem },
                     placement = { it.placement },
                     acceptsItem = { it is GridItem.Widget || it is GridItem.WidgetContainer },
-                    onDrop = { handleDrop() },
+                    // Nothing it accepts can be lifted yet, so it plans nothing and can land nothing. Both stay
+                    // explicit rather than being defaulted away: the zone is real, and what it is missing is
+                    // widgets, not wiring.
+                    planner = { _, _ -> null },
+                    onLand = {},
+                    onRelease = { coordinator.drop() },
                     modifier = zoneModifier,
                     onGeometryChange = { areaGeometry = it },
                     onOpen = {},
@@ -296,18 +331,17 @@ internal fun HomeListSurface(
             },
             main = { zoneModifier ->
                 ListZone(
-                    apps = displayed.mapNotNull(appsByComponent::get),
+                    apps = displayedApps,
                     rowHeight = rowHeight,
                     scrollState = scrollState,
                     dragging = coordinator.isDragging,
                     modifier = zoneModifier,
-                    onViewportChange = { bounds ->
-                        viewport = bounds
-                        coordinator.registerZone(DropZone(ListZoneId, bounds, z = 0) { it is GridItem.App })
-                    },
+                    onViewportChange = { bounds -> viewport = bounds },
                     coordinator = coordinator,
                     gestureConfig = gestureConfig,
-                    onDrop = { handleDrop() },
+                    // A release here only ends the drag; the landing is committed by whichever zone it fell in —
+                    // this list's, or one of the pager pairing's if the user has switched layouts mid-gesture.
+                    onRelease = { coordinator.drop() },
                     onLaunch = { viewModel.launch(it) },
                     metrics = listMetrics,
                 )
@@ -338,7 +372,9 @@ internal fun HomeListSurface(
 
         // The floating proxy: one row-sized icon under the finger. Its counterpart in the list stays composed and
         // merely invisible — disposing it would kill the pointer stream driving the drag.
-        if (proxyApp != null && finger != null && viewport != Rect.Zero) {
+        // Gated on this being the surface on screen: the coordinator is the launcher's, so `session` is non-null
+        // while the user drags inside the APPS drawer too, and home must not paint a second icon under that finger.
+        if (presented && proxyApp != null && finger != null && viewport != Rect.Zero) {
             // **Pinned to the list's own left edge, following the finger only in y.** Every other surface centres its
             // proxy on the finger because its proxy is one cell — roughly square, and smaller than the finger's
             // travel. A row is the full width of the list, so centring it horizontally would swing the whole row
@@ -396,7 +432,7 @@ private fun ListZone(
     dragging: Boolean,
     coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
     onLaunch: (ComponentKey) -> Unit,
     metrics: IconMetrics,
     modifier: Modifier,
@@ -411,7 +447,7 @@ private fun ListZone(
                             coordinator = coordinator,
                             item = GridItem.App(app.componentKey),
                             gestureConfig = gestureConfig,
-                            onDrop = onDrop,
+                            onRelease = onRelease,
                             modifier = Modifier.fillMaxWidth().height(rowHeight),
                             onOpen = { onLaunch(app.componentKey) },
                         ) { itemGestures ->

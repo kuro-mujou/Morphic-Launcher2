@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -44,7 +45,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropFootprint
+import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
@@ -106,22 +109,22 @@ fun CategoryPagerPlaygroundScreen(modifier: Modifier = Modifier) {
         // The planner always targets the current category (the pager is frozen during a drag, so it can't
         // change). Its geometry is the current grid's — updated on scroll, valid because no scroll happens
         // mid-drag.
+        var zoneBounds by remember { mutableStateOf<Rect?>(null) }
         val planner = remember {
-            DropPlanner { _, item, finger ->
+            DropPlanner { item, finger ->
                 val cat = categories[pagerState.currentPage]
                 val geo = cat.geometry ?: return@DropPlanner null
                 categoryReorderPlan(cat, geo, cols, item, finger)
             }
         }
-        val coordinator = rememberDragCoordinator(planner)
+        val coordinator = rememberDragCoordinator()
 
         // Clear every transient gap once the drag ends.
         LaunchedEffect(coordinator.isDragging) {
             if (!coordinator.isDragging) categories.forEach { it.gap = -1 }
         }
 
-        fun handleDrop() {
-            val outcome = coordinator.drop() ?: return
+        fun commitLanding(outcome: DropOutcome) {
             val cat = categories[pagerState.currentPage]
             val g = outcome.plan.footprint.row * cols + outcome.plan.footprint.col
             cat.apps.remove(outcome.item)
@@ -160,7 +163,7 @@ fun CategoryPagerPlaygroundScreen(modifier: Modifier = Modifier) {
                         .weight(1f)
                         .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
                         .onGloballyPositioned {
-                            coordinator.registerZone(DropZone(PagerZone, it.boundsInRoot(), z = 0) { true })
+                            zoneBounds = it.boundsInRoot()
                         },
                 ) { page ->
                     CategoryPage(
@@ -172,7 +175,7 @@ fun CategoryPagerPlaygroundScreen(modifier: Modifier = Modifier) {
                         colors = colors,
                         coordinator = coordinator,
                         gestureConfig = gestureConfig,
-                        onDrop = ::handleDrop,
+                        onRelease = { coordinator.drop() },
                     )
                 }
 
@@ -192,7 +195,12 @@ fun CategoryPagerPlaygroundScreen(modifier: Modifier = Modifier) {
                 }
             }
 
-            DisposableEffect(coordinator) { onDispose { coordinator.unregisterZone(PagerZone) } }
+            RegisterDropZone(
+                coordinator = coordinator,
+                zone = zoneBounds?.let {
+                    DropZone(PagerZone, it, z = 0, planner = planner, onDrop = ::commitLanding)
+                },
+            )
 
             // Drag overlay (root space): the drop-shadow in the current grid + the floating proxy on the finger.
             val session = coordinator.session
@@ -241,7 +249,7 @@ private fun CategoryPage(
     colors: MorphicColors,
     coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         Text(
@@ -257,13 +265,13 @@ private fun CategoryPage(
                         Modifier.fillMaxWidth().heightIn(min = viewportHeight),
                         contentAlignment = Alignment.BottomStart,
                     ) {
-                        CategoryGrid(category, cols, cellHeight, cellHeightPx, coordinator, gestureConfig, onDrop, Modifier.fillMaxWidth())
+                        CategoryGrid(category, cols, cellHeight, cellHeightPx, coordinator, gestureConfig, onRelease, Modifier.fillMaxWidth())
                     }
                 }
             }
         } else {
             CategoryGrid(
-                category, cols, cellHeight, cellHeightPx, coordinator, gestureConfig, onDrop,
+                category, cols, cellHeight, cellHeightPx, coordinator, gestureConfig, onRelease,
                 Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
             )
         }
@@ -284,7 +292,7 @@ private fun CategoryGrid(
     cellHeightPx: Float,
     coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
-    onDrop: () -> Unit,
+    onRelease: () -> Unit,
     modifier: Modifier,
 ) {
     val rows = maxOf(1, ceil(category.apps.size / cols.toFloat()).toInt())
@@ -328,7 +336,7 @@ private fun CategoryGrid(
                         onDismissMenu = {},
                         onBeginDrag = { root -> coordinator.start(app, root) },
                         onDragTo = { root -> coordinator.moveTo(root) },
-                        onDrop = { onDrop() },
+                        onDrop = { onRelease() },
                         onCancelDrag = { coordinator.cancel() },
                     ),
                 contentAlignment = Alignment.Center,

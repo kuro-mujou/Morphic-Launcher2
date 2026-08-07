@@ -2,7 +2,6 @@ package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -10,11 +9,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
+import inkspire.morphic.core.designsystem.drag.DropOutcome
+import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
+import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.model.GridConfig
@@ -42,10 +45,10 @@ internal const val PUSH_DWELL_MS = 200L
  * `HomeScreen` and the dev harness's `GridSurface` so there is one implementation to reason about.
  *
  * **What stays with the caller — deliberately.** Three things differ per surface, so they are inputs, not baked
- * in: the **planner** (given to the [coordinator] the caller creates — merge/push rules vary), the **drag
- * overlay** (the floating proxy + drop shadow; drawn once at the root, and for a multi-zone surface it spans
- * zones), and the **cell content** ([itemContent]). This composable owns only the per-zone grid + gestures +
- * dwelled preview.
+ * in: the **placement rules** ([planner] and [onLand] — merge/push behaviour and what to write, which travel with
+ * the zone), the **drag overlay** (the floating proxy + drop shadow; drawn once at the root, and for a multi-zone
+ * surface it spans zones), and the **cell content** ([itemContent]). This composable owns only the per-zone grid +
+ * gestures + dwelled preview.
  *
  * The geometry seam: [onGeometryChange] hands back the geometry derived from the grid's *measured* bounds
  * (`origin`, `cellW = width / cols`, `cellH = height / rows`) so the caller's planner and overlay read the exact
@@ -59,7 +62,11 @@ internal const val PUSH_DWELL_MS = 200L
  * @param gestureConfig touch-slop / long-press tuning for each cell's gestures.
  * @param dragItem projects an item to its stable [GridItem] identity (drag key + planner key).
  * @param placement the item's stored placement; a live push preview overrides it while a drag hovers here.
- * @param onDrop invoked when a drag is released — the caller commits the coordinator's outcome (persist / apply).
+ * @param planner what a drop into this zone would do, asked on every finger move it is under.
+ * @param onLand commits a drag that came to rest **in this zone**, wherever it was lifted from — including on
+ *   another surface entirely, which is why it is the zone's and not the releasing cell's.
+ * @param onRelease a cell *of this grid* released the finger. The surface's own end-of-drag bookkeeping; the
+ *   landing itself is [onLand]'s, and may be a different zone's [onLand] altogether.
  * @param modifier applied to the grid; pass sizing/padding here (geometry is measured *after* it).
  * @param edgeActions swipe directions a cell claims as press-and-swipe actions (empty → none).
  * @param acceptsItem gate for what this zone accepts on drop (default: anything).
@@ -80,7 +87,9 @@ fun <T> CoordinateDragGrid(
     gestureConfig: ItemGestureConfig,
     dragItem: (T) -> GridItem,
     placement: (T) -> GridPlacement,
-    onDrop: () -> Unit,
+    planner: DropPlanner,
+    onLand: (DropOutcome) -> Unit,
+    onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
     acceptsItem: (GridItem) -> Boolean = { true },
@@ -102,14 +111,19 @@ fun <T> CoordinateDragGrid(
         if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan }
     }
 
-    DisposableEffect(coordinator, zoneId) {
-        onDispose { coordinator.unregisterZone(zoneId) }
-    }
+    // Held in state rather than registered straight from the layout callback: registration also depends on this
+    // surface being *on screen*, which layout cannot report (see [RegisterDropZone]).
+    var bounds by remember { mutableStateOf<Rect?>(null) }
+    RegisterDropZone(
+        coordinator = coordinator,
+        zone = bounds?.let { DropZone(zoneId, it, z = 0, planner = planner, accepts = acceptsItem, onDrop = onLand) },
+    )
 
     LauncherGrid(
         config = config,
         modifier = modifier.onGloballyPositioned {
             val b = it.boundsInRoot()
+            bounds = b
             onGeometryChange(
                 GridGeometry(
                     originInRoot = Offset(b.left, b.top),
@@ -119,7 +133,6 @@ fun <T> CoordinateDragGrid(
                     rows = config.rows,
                 ),
             )
-            coordinator.registerZone(DropZone(zoneId, b, z = 0, accepts = acceptsItem))
         },
     ) {
         coordinateItems(
@@ -133,7 +146,7 @@ fun <T> CoordinateDragGrid(
                 coordinator = coordinator,
                 item = dragItem(item),
                 gestureConfig = gestureConfig,
-                onDrop = onDrop,
+                onRelease = onRelease,
                 modifier = cellModifier,
                 edgeActions = edgeActions,
                 onOpen = { onOpen(item) },
