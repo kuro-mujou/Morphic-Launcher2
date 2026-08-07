@@ -1329,10 +1329,10 @@ and each removed something rather than adding a layer:
   planner and its drop, and with it the `FolderDragDelegate` hand-off and the construction-order squeeze three files
   documented (the delegate had to exist before the coordinator, which had to exist before the folder host). A cell's
   `onRelease` is now only what the *source* surface knows — that a drag has left it.
-- **`RegisterDropZone` + `LocalSurfacePresented`.** `SurfacePager` keeps **every** slot composed at all times, which
-  is what satisfies the "keep a source surface composed while a drag from it is in flight" rule for free — and is
-  exactly why an ejected drag survives with no re-tracking. The bill is that *composed* is no longer *on screen*: an
-  off-screen surface's `onGloballyPositioned` does not reliably re-fire as the pan moves
+- **`RegisterDropZone` + `LocalSurfacePresented`.** A slot stays composed for the whole of a pan and, when a drag was
+  ejected from it, for the whole of that drag — which is what satisfies the "keep a source surface composed while a
+  drag from it is in flight" rule and is why an ejected drag survives with no re-tracking. The bill is that *composed*
+  is no longer *on screen*: an off-screen surface's `onGloballyPositioned` does not reliably re-fire as the pan moves
   it, so bounds it published while it *was* on screen would sit in the registry claiming the finger from off-stage. So
   registration moved out of the layout callback into a composable gated on presence (defaulted from the local, so it
   cannot be forgotten), and teardown removes a zone **by instance**, which is what lets two folder overlays hand
@@ -1388,6 +1388,27 @@ and each removed something rather than adding a layer:
 - **Not built here, deliberately:** the item **context menu**. The gesture machine has modelled
   `Pressed → MenuShown → Dragging` since B4, so every flow above already works with `onShowMenu` a no-op — long-press,
   then move, and the drag begins. The menu is P7 and changes none of this wiring.
+
+**A side slot is composed only while it is needed, and that is an ANR fix rather than a tidy-up.** `SurfacePager`
+used to compose every bound slot at all times. With one binding that was invisible; with **four** it was five seconds
+of dropped input on a weak device — four whole APPS surfaces, four sets of cells, all baking icons at once. Three
+things caused it together and all three are fixed, which is worth knowing because only the first is about the pager:
+- **The slot gate.** Composition begins the instant a swipe moves off HOME (`SurfacePagerState.engagedEdges`, which
+  flips at *zero* where `openEdge` flips at a half — content has to exist before it can be seen) and ends when the pan
+  settles back. `retainedEdges` is the exception the drag needs: the shell pins the edge an eject came from,
+  synchronously inside `EjectToHome` — the one instant the answer is both needed and still true — and releases it when
+  the drag ends. Each slot is wrapped in a `SaveableStateHolder.SaveableStateProvider`, so a drawer closed and
+  reopened is on the page it was left on; without that the gate would be paid for in the thing a launcher is judged on.
+  The cost that remains is real and accepted: the first frame of a swipe now composes a surface, where before it was
+  already there.
+- **`IconRenderManager.get` coalesces concurrent bakes.** A plain `cache.get() ?: bake()` is a thundering herd — every
+  caller arriving before the first bake finishes repeats the whole load-parse-composite and allocates a bitmap the
+  next `put` immediately makes garbage. That allocation *was* the `HeapTaskDaemon` at 57% in the trace. It is now
+  `suspend`, and duplicate callers await the first one's result rather than holding a thread.
+- **Baking is capped at half the cores, never more than three.** `Dispatchers.Default` is sized to the core count, so
+  a screenful of cells launching a coroutine each will take every core and leave none for the main thread. Leaving
+  cores idle is the point. `LauncherIcon` names no dispatcher any more — where baking runs belongs to the thing that
+  bakes.
 
 **The surface swipe is nested-scroll aware, and one fact answers it from both ends.** A one-finger swipe crossing a
 surface boundary belongs to whatever scrolls under it until that content runs out — so `OneFingerSwipe.AT_EDGE` is now

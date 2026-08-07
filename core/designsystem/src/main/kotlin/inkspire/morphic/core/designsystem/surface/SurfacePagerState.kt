@@ -99,6 +99,27 @@ class SurfacePagerState {
         }
 
     /**
+     * **The edges whose surface is showing at all** — any part of it, however little.
+     *
+     * Not the same question as [openEdge], which is "which one are we closer to" and answers `null` for most of a
+     * pan. This one goes true the instant a swipe moves off HOME and stays true until it settles back, because it
+     * decides whether that surface is *composed*: content has to exist before it can be seen, not once it has won.
+     *
+     * A `Set` rather than a single edge because the caller iterates its slots, and because nothing here forbids two
+     * axes being off-zero at once even though the gesture locks to one.
+     *
+     * Read it through `derivedStateOf`: it is computed from the pan animatables, so a raw read in composition
+     * subscribes the reader to every frame, where the value itself changes twice in a whole pan.
+     */
+    val engagedEdges: Set<HomeEdge>
+        get() = buildSet {
+            if (animX.value < 0f) add(HomeEdge.LEFT)
+            if (animX.value > 0f) add(HomeEdge.RIGHT)
+            if (animY.value < 0f) add(HomeEdge.TOP)
+            if (animY.value > 0f) add(HomeEdge.BOTTOM)
+        }
+
+    /**
      * **How far from HOME the pan has travelled, `0f..1f`** — 0 resting on HOME, 1 with a side surface fully open.
      *
      * The scalar the two axes collapse to, because only one of them is ever non-zero: a pan is toward one edge, and

@@ -15,8 +15,6 @@ import androidx.compose.ui.layout.ContentScale
 import inkspire.morphic.core.icon.layer.IconLayerSet
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.ComponentKey
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /** The baker used to render icons. Provided at the app root once it is wired; `null` renders nothing. */
 val LocalIconRenderManager = staticCompositionLocalOf<IconRenderManager?> { null }
@@ -39,6 +37,12 @@ private const val DEFAULT_ICON_RENDER_PX = 192
  * instant cached icon with no flicker, and a miss bakes off the main thread. [sizePx] is the bake resolution
  * (a cache dimension), distinct from the on-screen size set by [modifier].
  *
+ * **The miss path deliberately names no dispatcher.** It used to `withContext(Dispatchers.Default)`, which put every
+ * composed cell's bake on the pool sized to the core count — hundreds of coroutines taking every core and starving
+ * the main thread. Where baking runs is one decision and it belongs to the thing that bakes: [IconRenderManager.get]
+ * is a `suspend` function that moves onto its own bounded dispatcher and coalesces duplicate requests. A cell just
+ * asks.
+ *
  * Per-app icon overrides and the "skin" backdrop plate are deliberately not here yet (deferred).
  */
 @Composable
@@ -59,9 +63,7 @@ fun LauncherIcon(
         mutableStateOf(manager.peek(component, layerSet, sizePx))
     }
     LaunchedEffect(component, layerSet, sizePx) {
-        if (bitmap == null) {
-            bitmap = withContext(Dispatchers.Default) { manager.get(component, layerSet, sizePx) }
-        }
+        if (bitmap == null) bitmap = manager.get(component, layerSet, sizePx)
     }
 
     val rendered = bitmap

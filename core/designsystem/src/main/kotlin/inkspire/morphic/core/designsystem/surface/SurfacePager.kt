@@ -9,6 +9,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
@@ -26,10 +27,18 @@ import kotlin.math.roundToInt
  * decides whether one finger or two is needed to reach it.
  *
  * **Deliberately minimal.** Only the SLIDE transform is wired (HOME and the side surface translate together, no
- * scale/fade/parallax), and there is no drag-out from a side surface onto HOME. Those were tangled into L1's single
- * `CrossPager` along with everything else; here they are follow-ups on top of this clean base. This is why the side
- * surfaces are an open `Map<HomeEdge, …>` slot rather than the real HOME/APPS layouts — the harness drops plain
- * boxes in, the shell drops the real screens in.
+ * scale/fade/parallax). That is why the side surfaces are an open `Map<HomeEdge, …>` slot rather than the real
+ * HOME/APPS layouts — the harness drops plain boxes in, the shell drops the real screens in.
+ *
+ * **A side slot is composed only while its surface is on screen at all, or while [retainedEdges] holds it.** This
+ * used to compose every bound slot at all times, which was invisible with one binding and an ANR with four: each is
+ * a whole APPS surface, and four of them meant four sets of cells all baking icons at once on a device that could
+ * not afford one. Composition now begins the instant a swipe moves off HOME ([SurfacePagerState.engagedEdges]) —
+ * before any of the surface is visible, so it has a frame to exist in — and ends when the pan settles back.
+ *
+ * Each slot's UI state survives that (`rememberSaveable` inside it, keyed per edge by a `SaveableStateHolder`), so
+ * a drawer closed and re-opened is on the page it was left on. Without it the gate would be paid for in exactly the
+ * thing a launcher is judged on.
  *
  * **Each slot reports where its content is scrolled**, through a [ScrollEdgeSlot] provided here and read by the
  * gesture — which is what makes [OneFingerSwipe.AT_EDGE] a real hand-off rather than a synonym for
@@ -38,6 +47,10 @@ import kotlin.math.roundToInt
  *
  * @param state the pan position + operations; also learns the swipeable edges + their finger policy here.
  * @param sideContent the binding for each swipeable edge. Absent edge = not swipeable.
+ * @param retainedEdges edges to keep composed regardless of the pan. **The drag toolkit's "keep a source surface
+ *   composed while a drag from it is in flight" rule, which the caller owns because only it knows about drags:** an
+ *   app lifted in the drawer and ejected onto HOME is still tracked by the lifted cell's own pointer stream, so
+ *   disposing that cell as the surface slides away would kill the gesture mid-flight.
  * @param enabled whether a swipe may switch surfaces at all. False while something on screen has a better use for
  *   the finger — an open folder, an item held down with its menu up — which the shell resolves through
  *   [SurfaceGestureLock] rather than by trying to out-consume the item gestures. See [surfacePagerGesture].
@@ -54,6 +67,7 @@ fun SurfacePager(
     sideContent: Map<HomeEdge, SurfaceBinding> = emptyMap(),
     enabled: () -> Boolean = { true },
     overlay: @Composable () -> Unit = {},
+    retainedEdges: Set<HomeEdge> = emptySet(),
     center: @Composable () -> Unit,
 ) {
     // Teach the state which edges have a surface (its drag/settle clamps can't open an empty edge) and each
@@ -79,6 +93,13 @@ fun SurfacePager(
         // would subscribe this composable to *every frame* of a pan, and re-running it re-invokes both content
         // lambdas. The derived value changes twice in a whole pan, which is the real rate of the question.
         val openEdge by remember(state) { derivedStateOf { state.openEdge } }
+        // The other, coarser question — *composed* rather than *presented* — read the same way and for the same
+        // reason. It flips at zero where the one above flips at a half.
+        val engagedEdges by remember(state) { derivedStateOf { state.engagedEdges } }
+        // Keeps each slot's `rememberSaveable` state alive across being un-composed, keyed by edge. The standard
+        // mechanism (it is what a nav host uses), and what makes the composition gate above free rather than a
+        // trade: a drawer comes back on the page it was left on.
+        val slotState = rememberSaveableStateHolder()
         Box(Modifier.fillMaxSize().surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
             // Each slot gets its own channel for "where is my content resting", which is what makes the nested-scroll
             // hand-off work without the shell wiring anything: content calls `ReportScrollEdges` and the gesture reads
@@ -92,17 +113,20 @@ fun SurfacePager(
         // Between the two, and with no `surfaceSlide` of its own — see [overlay].
         overlay()
         for ((edge, binding) in sideContent) {
+            // Not composed at all until the surface is at least partly on screen, or the caller has asked for it to
+            // be kept — see the class note. Everything below, including the slot's own state, is absent until then.
+            if (edge !in engagedEdges && edge !in retainedEdges) continue
             Box(Modifier.fillMaxSize().surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
-                // **Every side surface stays composed, open or not** — parked one viewport off its edge rather than
-                // removed — which is what keeps a lifted cell's pointer stream alive while its surface slides away,
-                // and so what lets a drag be ejected onto HOME at all. [LocalSurfacePresented] is the other half of
-                // that bargain: composed is no longer the same as on screen, and anything that must belong to exactly
-                // one surface at a time (a drop zone, the floating proxy) reads it to tell the two apart.
+                // **A composed surface is not necessarily an on-screen one**, which is what
+                // [LocalSurfacePresented] exists to say: a slot stays composed through the whole of a pan and, when
+                // [retainedEdges] holds it, for the whole of a drag lifted on it. Anything that must belong to
+                // exactly one surface at a time — a drop zone, the floating proxy — reads this to tell the two
+                // apart.
                 CompositionLocalProvider(
                     LocalScrollEdgeSlot provides state.sideScroll.getValue(edge),
                     LocalSurfacePresented provides (openEdge == edge),
                 ) {
-                    binding.content()
+                    slotState.SaveableStateProvider(edge) { binding.content() }
                 }
             }
         }

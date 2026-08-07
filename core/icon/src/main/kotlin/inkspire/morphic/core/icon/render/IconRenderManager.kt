@@ -6,36 +6,92 @@ import inkspire.morphic.core.icon.layer.IconLayerSet
 import inkspire.morphic.core.icon.parse.DrawableParser
 import inkspire.morphic.core.icon.source.RawIconSource
 import inkspire.morphic.core.model.ComponentKey
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * The display side of the hybrid render: bakes an icon once and caches the [Bitmap] by [IconId], so a surface
  * showing hundreds of icons draws cached bitmaps instead of re-compositing each one.
  *
- * [get] is get-or-bake and **blocking** (it may load, parse, and composite), so callers run it off the main
- * thread. The editor does *not* go through this cache — it uses the live [IconRenderer] path for instant
- * feedback — and calls [invalidate] on commit so surfaces re-bake with the new layer set.
+ * [get] is get-or-bake and **suspending** — it may load, parse and composite, and it moves that work onto a bounded
+ * dispatcher of its own. The editor does *not* go through this cache — it uses the live [IconRenderer] path for
+ * instant feedback — and calls [invalidate] on commit so surfaces re-bake with the new layer set.
+ *
+ * ## Two properties that are not optional on a weak device
+ *
+ * Both were learned from an ANR: four APPS surfaces composed at once (one per bound HOME edge) asked for the same
+ * icons at the same moment, and the profile showed eight `Dispatchers.Default` threads pegged, `HeapTaskDaemon` at
+ * 57%, and the main thread unable to service input for five seconds.
+ *
+ * - **Concurrent requests for one [IconId] are coalesced.** A plain `cache.get() ?: bake()` is a thundering herd:
+ *   every caller that arrives before the first bake finishes does the whole load-parse-composite again and allocates
+ *   a full bitmap that the next `put` immediately makes garbage. That allocation *is* the GC load in that trace.
+ *   Now the first caller bakes and the rest await its result — suspended, so they hold no thread while they wait.
+ * - **Baking is capped well below the core count** ([bakeParallelism]). Even deduplicated, a screenful of cells
+ *   launches a coroutine each, and `Dispatchers.Default` is sized to the number of cores — so icon baking will
+ *   happily occupy every one of them and leave nothing for the main thread. Leaving cores idle here is the point.
  */
 class IconRenderManager(
     private val rawIconSource: RawIconSource,
     private val parser: DrawableParser,
     private val renderer: IconRenderer,
     maxCacheKb: Int = defaultCacheKb(),
+    bakeDispatcher: CoroutineDispatcher = defaultBakeDispatcher(),
 ) {
     private val cache = object : LruCache<IconId, Bitmap>(maxCacheKb) {
         override fun sizeOf(key: IconId, value: Bitmap): Int = (value.byteCount / 1024).coerceAtLeast(1)
     }
 
+    private val bakeContext = bakeDispatcher
+
+    /**
+     * Bakes currently running, by id, so a second request for the same icon waits on the first instead of repeating
+     * it. Guarded by [lock] rather than being a concurrent map: the check-cache-then-claim step has to be atomic
+     * against another caller doing the same, and a `ConcurrentHashMap` alone would not make it so.
+     */
+    private val inFlight = mutableMapOf<IconId, CompletableDeferred<Bitmap?>>()
+    private val lock = Mutex()
+
     /**
      * The baked icon for [component] rendered from [layerSet] at [sizePx], cached by [IconId]. Returns `null`
      * when the app has no resolvable icon (e.g. uninstalled between listing and baking).
+     *
+     * Safe to call from anywhere: the expensive part is moved to [bakeContext], and a caller that arrives while the
+     * same icon is already baking simply suspends until it is ready.
      */
-    fun get(component: ComponentKey, layerSet: IconLayerSet, sizePx: Int): Bitmap? {
+    suspend fun get(component: ComponentKey, layerSet: IconLayerSet, sizePx: Int): Bitmap? {
         val id = IconId(component, layerSet, sizePx)
         cache.get(id)?.let { return it }
 
-        val drawable = rawIconSource.loadIcon(component) ?: return null
-        val baked = renderer.render(parser.parse(drawable), layerSet, sizePx)
-        cache.put(id, baked)
+        // Claim the bake, or find the claim someone else already made. The cache is re-checked inside the lock
+        // because it may have been filled between the read above and getting here.
+        var owned: CompletableDeferred<Bitmap?>? = null
+        val pending = lock.withLock {
+            cache.get(id)?.let { return it }
+            inFlight[id] ?: CompletableDeferred<Bitmap?>().also {
+                inFlight[id] = it
+                owned = it
+            }
+        }
+        val claim = owned ?: return pending.await()
+
+        // We own it. `finally` rather than a plain completion: a throw here would otherwise leave every waiter
+        // suspended forever on a deferred nobody will ever complete.
+        var baked: Bitmap? = null
+        try {
+            baked = withContext(bakeContext) {
+                rawIconSource.loadIcon(component)?.let { renderer.render(parser.parse(it), layerSet, sizePx) }
+            }
+            if (baked != null) cache.put(id, baked)
+        } finally {
+            lock.withLock { inFlight.remove(id) }
+            claim.complete(baked)
+        }
         return baked
     }
 
@@ -63,5 +119,20 @@ class IconRenderManager(
             val maxKb = Runtime.getRuntime().maxMemory() / 1024
             return (maxKb / 8).toInt().coerceAtLeast(4 * 1024)
         }
+
+        /**
+         * How many icons may be composited at once: **at most half the cores, and never more than three.**
+         *
+         * The cap is the point, not the number. Icon baking is pure CPU with a large allocation attached, and
+         * `Dispatchers.Default` is sized to the core count — so left alone it takes every core, and the main thread
+         * competes with it *and* with the GC the allocations provoke. Three is enough to keep a scrolling drawer
+         * ahead of the eye on a fast device; half the cores is what keeps a four-core device usable at all.
+         */
+        fun bakeParallelism(): Int =
+            (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 3)
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun defaultBakeDispatcher(): CoroutineDispatcher =
+            Dispatchers.Default.limitedParallelism(bakeParallelism())
     }
 }

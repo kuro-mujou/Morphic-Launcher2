@@ -8,7 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -133,9 +135,31 @@ fun LauncherShell(modifier: Modifier = Modifier) {
         // stream the whole way.
         val coordinator = rememberDragCoordinator()
 
+        // **The surface an in-flight drag was ejected from, kept composed until that drag ends.** `SurfacePager`
+        // composes a slot only while it is on screen, so without this the lifted cell would be disposed the moment
+        // its surface finished sliding away — and with it the pointer stream tracking the finger. This is the drag
+        // toolkit's "keep a source surface composed while a drag from it is in flight" rule, stated here because the
+        // pager knows about pans and not about gestures.
+        var dragSourceEdge by remember { mutableStateOf<HomeEdge?>(null) }
+
         // Closing the open side surface *without ending the drag* — the whole of `EjectToHome`. The gesture carries
         // on over home the moment it is uncovered, because nothing about the drag changes here.
-        val eject = remember(pagerState, scope) { EjectToHome { scope.launch { pagerState.close() } } }
+        //
+        // **The edge is pinned here, synchronously, rather than from an effect watching the drag.** This is the exact
+        // instant the surface starts to leave, so it is the only moment at which the answer is both needed and still
+        // true. Watching `isDragging` instead would work today purely because a spring takes ~150ms to reach the
+        // half-way point and a recomposition takes one frame — a race that is fine until the day it isn't.
+        val eject = remember(pagerState, scope) {
+            EjectToHome {
+                dragSourceEdge = pagerState.openEdge
+                scope.launch { pagerState.close() }
+            }
+        }
+        // Released when the drag does, whatever became of it. A drag that never ejected pinned nothing, and one that
+        // stayed on its own surface needed no pin — that surface was open the whole time.
+        LaunchedEffect(coordinator.isDragging) {
+            if (!coordinator.isDragging) dragSourceEdge = null
+        }
 
         // **Provided at the shell, which is the same boundary the theme is applied at, and for the same reason**: a
         // frosted surface samples *this launcher's* wallpaper, and the settings graph is a different zone with
@@ -162,6 +186,7 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                     // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                     // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
                     enabled = { !gestureLock.isLocked },
+                retainedEdges = setOfNotNull(dragSourceEdge),
                     // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
                     // read against this; the two move differently on purpose — the pane translates, the frost only fades
                     // — which is why it is a slot on the pager rather than a modifier on either. `progress` is the pan
