@@ -59,6 +59,7 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
+import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
 import kotlin.math.roundToInt
 
 /**
@@ -188,6 +189,8 @@ fun AppsCategoryCard(
 ) {
     val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
+    // One menu handler for every app on this surface — see `rememberAppsItemMenu`.
+    val showItemMenu = rememberAppsItemMenu()
 
     val scrollState = rememberScrollState()
     // **Where the card grid is scrolled, for the surface swipe** — the vertical grid's report, over cards rather
@@ -389,6 +392,7 @@ fun AppsCategoryCard(
                                     chrome = chrome,
                                     metrics = slotMetrics,
                                     onLaunch = onLaunch,
+                                    showItemMenu = showItemMenu,
                                     onExpand = { folderHost.open(id) },
                                     onRelease = ::handleRelease,
                                     onBounds = { bounds ->
@@ -460,6 +464,7 @@ fun AppsCategoryCard(
                         onLeave = folderHost::leaveFolder,
                         onRelease = ::handleRelease,
                         onDismiss = { folderHost.close() },
+                        onShowMenu = showItemMenu,
                     )
                 }
             }

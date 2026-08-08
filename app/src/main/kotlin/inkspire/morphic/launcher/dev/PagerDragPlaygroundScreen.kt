@@ -235,7 +235,6 @@ private fun PageGrid(
                             onOpen = { onToast("open ${label(item)}") },
                             onEdgeAction = { onToast("swipe $it on ${label(item)}") },
                             onShowMenu = { onToast("menu: ${label(item)}") },
-                            onDismissMenu = {},
                             onBeginDrag = { root -> coordinator.start(item, root) },
                             onDragTo = { root -> coordinator.moveTo(root) },
                             onDrop = { onRelease() },

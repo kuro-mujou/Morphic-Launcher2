@@ -72,7 +72,8 @@ internal const val PUSH_DWELL_MS = 200L
  * @param acceptsItem gate for what this zone accepts on drop (default: anything).
  * @param onGeometryChange receives the zone's measured geometry on every (re)layout.
  * @param onOpen a completed tap on an item.
- * @param onShowMenu a long-press on an item.
+ * @param onShowMenu a long-press on an item, with the item's visible extent in root coordinates —
+ *   the anchor its context menu is placed against.
  * @param onEdgeAction a press-and-swipe on an item in one of [edgeActions].
  * @param itemContent renders an item into its cell. `cellModifier` fills the cell (the layout footprint);
  *   `itemGestures` must be applied to whatever should actually be *touchable* — see [LauncherDragCell], which
@@ -95,7 +96,7 @@ fun <T> CoordinateDragGrid(
     acceptsItem: (GridItem) -> Boolean = { true },
     onGeometryChange: (GridGeometry) -> Unit = {},
     onOpen: (T) -> Unit = {},
-    onShowMenu: (T) -> Unit = {},
+    onShowMenu: (T, anchorInRoot: Rect) -> Unit = { _, _ -> },
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
@@ -150,7 +151,7 @@ fun <T> CoordinateDragGrid(
                 modifier = cellModifier,
                 edgeActions = edgeActions,
                 onOpen = { onOpen(item) },
-                onShowMenu = { onShowMenu(item) },
+                onShowMenu = { anchor -> onShowMenu(item, anchor) },
                 onEdgeAction = { direction -> onEdgeAction(item, direction) },
             ) { itemGestures ->
                 itemContent(item, Modifier.fillMaxSize(), itemGestures)

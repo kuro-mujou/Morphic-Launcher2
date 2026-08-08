@@ -3,11 +3,13 @@ package inkspire.morphic.feature.apps.layout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
+import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
-import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.GridItem
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -38,23 +40,23 @@ import androidx.compose.ui.unit.dp
  * is none (a release over the gap between home and its dock, say) the drag is simply abandoned. There is no
  * source-side bookkeeping to do here, because these layouts own nothing a drag could have left.
  *
- * @param onOpen a tap: launch [component].
+ * @param app the app this cell draws — its component for the drag, its label for the menu's title.
+ * @param onOpen a tap: launch the app.
  */
 @Composable
 internal fun Modifier.appsItemGestures(
     config: ItemGestureConfig,
-    component: ComponentKey,
+    app: AppInfo,
     onOpen: () -> Unit,
 ): Modifier {
     val coordinator = requireDragCoordinator()
     val eject = LocalEjectToHome.current
+    val showMenu = rememberAppsItemMenu()
+    val component = app.componentKey
     return launcherItemGestures(
         config = config,
         onOpen = onOpen,
-        // TODO(P7 gestures): the app's options menu (app info, hide, uninstall). The gesture contract already has the
-        //  long-press → menu → drag path; what is missing is the menu itself, and nothing here changes when it lands.
-        onShowMenu = {},
-        onDismissMenu = {},
+        onShowMenu = { anchor -> showMenu(app, anchor) },
         onEdgeAction = {},
         onBeginDrag = { root ->
             coordinator.start(GridItem.App(component), root)
@@ -64,6 +66,27 @@ internal fun Modifier.appsItemGestures(
         onDrop = { coordinator.drop() },
         onCancelDrag = coordinator::cancel,
     )
+}
+
+/**
+ * Opens the context menu for an app on the APPS surface — **one handler for all five layouts**, which is what stops
+ * the drawer and the pager offering different things for the same app.
+ *
+ * **The APPS surface contributes no verbs of its own**, so this is the host's app menu unadorned: the app's own
+ * shortcuts, App info, Uninstall. Home adds "Remove" because home is where an item is *placed*; there is nothing
+ * here to remove an app from — an app is in the drawer because it is installed, and the row that would take it out
+ * of the drawer is Uninstall, which is already on the menu.
+ *
+ * Returned as a lambda rather than applied inside [appsItemGestures] because three of the five layouts wire
+ * `LauncherDragCell` directly (they own an arrangement, so they have their own drop handling) and need the same
+ * answer.
+ */
+@Composable
+internal fun rememberAppsItemMenu(): (AppInfo, Rect) -> Unit {
+    val host = LocalMenuHost.current
+    return remember(host) {
+        { app, anchor -> host?.showApp(component = app.componentKey, label = app.label, anchor = anchor) }
+    }
 }
 
 /**

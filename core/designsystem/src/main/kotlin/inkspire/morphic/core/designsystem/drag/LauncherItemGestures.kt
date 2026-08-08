@@ -9,12 +9,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangedIgnoreConsumed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.toSize
+import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -45,8 +49,10 @@ import kotlin.time.Duration.Companion.milliseconds
  *   claims no swipes, so every swipe flows to the parent.
  * @param onOpen a completed tap.
  * @param onEdgeAction a press-and-swipe in a registered direction (custom action; a toast for now).
- * @param onShowMenu the long-press fired: open the item's context menu.
- * @param onDismissMenu take the menu back down (drag started, or released with no move).
+ * @param onShowMenu the long-press fired: open the item's context menu, anchored to the **rectangle this modifier
+ *   is attached to** — which is the item's visible extent, since that is where the gestures are hung (see the
+ *   scope note above). Reported from here rather than reconstructed by each surface, so a menu can never be
+ *   anchored to something other than what the user pressed; L1 rebuilt that rectangle three different ways.
  * @param onBeginDrag lift into a drag; the finger is at the given root position.
  * @param onDragTo the drag moved to the given root position.
  * @param onDrop release the drag.
@@ -58,8 +64,7 @@ fun Modifier.launcherItemGestures(
     edgeActions: Set<SwipeDirection> = emptySet(),
     onOpen: () -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
-    onShowMenu: () -> Unit,
-    onDismissMenu: () -> Unit,
+    onShowMenu: (anchorInRoot: Rect) -> Unit,
     onBeginDrag: (rootPosition: Offset) -> Unit,
     onDragTo: (rootPosition: Offset) -> Unit,
     onDrop: () -> Unit,
@@ -75,11 +80,31 @@ fun Modifier.launcherItemGestures(
     // once is correct.
     val surfaceLock = LocalSurfaceGestureLock.current
 
+    // **Taking the menu down is the contract's, not the caller's.** Every path that ends a menu — a drag lifting
+    // out of it, a cancelled gesture — is decided by the machine, so wiring it here means no surface can forget
+    // it and leave a menu hanging over a drag in flight. Same reasoning as the surface lock above: wiring that
+    // cannot be forgotten belongs in the one place every caller already goes through. There was, correspondingly,
+    // an `onDismissMenu` parameter, and every call site in the tree passed `{}`.
+    val menuHost = LocalMenuHost.current
+
     onGloballyPositioned { coordinates = it }
         .pointerInput(config, edgeActions) {
             val machine = ItemGestureMachine(config, edgeActions)
 
             fun rootOf(local: Offset): Offset = coordinates?.localToRoot(local) ?: local
+
+            /**
+             * This node's rectangle in root coordinates — the menu's anchor.
+             *
+             * `positionInRoot() + size`, never `boundsInRoot()`: that call clips to every ancestor, so an item
+             * inside a scroller that is half off the top reports half of itself and one below the fold reports an
+             * empty rectangle. A menu anchored to an empty rect would silently jump to the corner. (The same rule
+             * the APPS category card learnt the hard way — see CLAUDE.md.)
+             */
+            fun anchorInRoot(): Rect {
+                val c = coordinates ?: return Rect.Zero
+                return Rect(c.positionInRoot(), c.size.toSize())
+            }
 
             // Whether *this* gesture currently holds the surface-swipe claim, so the release below is idempotent
             // and the `finally` cannot over-release someone else's.
@@ -99,8 +124,8 @@ fun Modifier.launcherItemGestures(
                     // becomes a drag. A drag arrives as `[DismissMenu, BeginDrag, …]` in one list, so the claim is
                     // taken again immediately after being dropped — which a count absorbs, and which nothing can
                     // observe in between since this whole loop runs synchronously off the pointer thread.
-                    ItemGestureEffect.ShowMenu -> { claimSurface(); onShowMenu() }
-                    ItemGestureEffect.DismissMenu -> { releaseSurface(); onDismissMenu() }
+                    ItemGestureEffect.ShowMenu -> { claimSurface(); onShowMenu(anchorInRoot()) }
+                    ItemGestureEffect.DismissMenu -> { releaseSurface(); menuHost?.dismiss() }
                     ItemGestureEffect.BeginDrag -> { claimSurface(); onBeginDrag(rootOf(local)) }
                     is ItemGestureEffect.DragTo -> onDragTo(rootOf(local))
                     ItemGestureEffect.Drop -> { releaseSurface(); onDrop() }
@@ -111,6 +136,22 @@ fun Modifier.launcherItemGestures(
             coroutineScope {
                 while (true) {
                     val down = awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
+
+                    // **An open menu is modal, so a new press is the menu's and not this item's.** Without this a
+                    // tap "away from the menu" would dismiss it *and* launch whatever icon it happened to land on
+                    // — which on a full home page is most of the screen. Consumption cannot express it: this
+                    // gesture reads the finger with `…IgnoreConsumed` on purpose (see below), so the menu's
+                    // tap-catcher cannot shut it out by consuming. Asking whether a menu is up says it directly.
+                    //
+                    // It cannot swallow the gesture that *opened* the menu: that one is already inside the loop
+                    // below, holding its pointer, and only ever reaches here after the finger has lifted.
+                    if (menuHost?.request != null) {
+                        awaitPointerEventScope {
+                            while (awaitPointerEvent().changes.any { it.pressed }) Unit
+                        }
+                        continue
+                    }
+
                     val pointerId: PointerId = down.id
                     var local = down.position
                     // A claim must not outlive the gesture that took it. Every machine path does release it, but a

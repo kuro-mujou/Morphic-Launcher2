@@ -18,22 +18,17 @@ import kotlinx.serialization.Serializable
  *
  * **A module may declare its own keys.** Nothing here is a registry — `entryProvider` in `app` maps keys to
  * composables, and it can just as well map a key declared elsewhere. `app` declares its own dev-harness key for
- * exactly that reason: a destination only `app` knows about has no business in a `core` module.
+ * exactly that reason: a destination only `app` knows about has no business in a `core` module — and
+ * `feature:settings` declares all three of its own, including the settings destination itself.
+ *
+ * **What is left here is one destination and the [Navigator]**, which is the shape this file was always arguing
+ * for: the start destination is genuinely shared (the shell, `app` and back-handling all name it), and everything
+ * else belongs to whoever owns the screen. `SettingsRoute` lived here while it was argument-free and moved to
+ * `feature:settings` the moment it needed to carry a section — see that file for why the move *is* the answer to
+ * the question this one reserved.
  */
 
 /** The launcher itself: HOME plus the side surfaces panned to from its edges. The start destination. */
 @Serializable
 data object HomeRoute : NavKey
 
-/**
- * The settings surface.
- *
- * Argument-free on purpose *for now*. L1's equivalent took an `initialSection` so a long-press could deep-link
- * straight to one group of settings, and something like that is likely to come back — but as of this commit
- * `feature:settings` has no sections to link to, and inventing the taxonomy before the screens exist is exactly the
- * "no model in a vacuum" mistake. Whether a section becomes a route argument or its own [NavKey] is a decision for
- * the port that introduces them, and it is worth making then: in L1 sections were *not* on the back stack, so
- * settings ended up with two incompatible back mechanisms stitched together by hand.
- */
-@Serializable
-data object SettingsRoute : NavKey

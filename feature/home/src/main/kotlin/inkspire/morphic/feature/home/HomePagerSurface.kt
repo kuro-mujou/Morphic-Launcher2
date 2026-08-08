@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
@@ -40,10 +41,14 @@ import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.menu.LocalMenuHost
+import inkspire.morphic.core.designsystem.menu.MenuAction
+import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
+import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
@@ -65,6 +70,15 @@ import kotlin.math.roundToInt
  */
 private val MainZoneId = ZoneId("home-main")
 private val DockZoneId = ZoneId("home-dock")
+
+/**
+ * What a folder with no name of its own is called in its context menu.
+ *
+ * A folder created by dropping one app on another starts unnamed (rename is still to come), and a menu whose title
+ * is blank reads as a rendering fault. It is *not* used where the folder is drawn — a cell with no label under it is
+ * simply an unnamed folder, and inventing a name there would put a word on screen the user never chose.
+ */
+private const val UnnamedFolder = "Folder"
 
 /**
  * Which persisted [HomeZone] a drop zone writes to, or null when the zone is not one of home's own grids — today
@@ -436,6 +450,45 @@ internal fun HomePagerSurface(
         }
     }
 
+    // **The context menu, on the launcher's one host.** Home supplies only the verb home owns — *Remove*, because
+    // home is where an item is placed — and the host adds the ones every surface shares (the app's own shortcuts,
+    // App info, Uninstall). Both zones share this handler for `openItem`'s reason: what an item offers does not
+    // depend on which of home's two grids it happens to sit in.
+    val menuHost = LocalMenuHost.current
+    val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
+        when (item) {
+            is HomeItem.App -> menuHost?.showApp(
+                component = item.info.componentKey,
+                label = item.info.label,
+                anchor = anchor,
+                surfaceActions = listOf(
+                    MenuAction("Remove") {
+                        viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                    },
+                ),
+            )
+            // No shortcuts stage and no App info — a folder is the launcher's own object, not an installed app.
+            // "Remove folder" takes the folder off the grid and its membership with it (`RemoveFromGrid` cascades),
+            // leaving the apps themselves installed and still in the drawer.
+            is HomeItem.Folder -> menuHost?.show(
+                title = item.folder.label.ifBlank { UnnamedFolder },
+                anchor = anchor,
+                actions = listOf(
+                    MenuAction("Remove folder") {
+                        viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                    },
+                ),
+            )
+        }
+    }
+
+    // An app *inside* a folder is offered less, and the missing verb is the point: it has no grid placement, so a
+    // "Remove" here would be a row that does nothing (`RemoveFromGrid` on a folder member deletes no rows). Taking
+    // an app out of a folder is a drag, which is the gesture this menu's own long-press leads into.
+    val showFolderAppMenu: (AppInfo, Rect) -> Unit = { app, anchor ->
+        menuHost?.showApp(component = app.componentKey, label = app.label, anchor = anchor)
+    }
+
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, which is
     // also the only layer that knows the launcher's real dark/light input (wallpaper brightness, not the system
     // setting). A screen that themed itself could not be told to disagree with the shell.
@@ -444,7 +497,20 @@ internal fun HomePagerSurface(
     // `app`'s theme), so painting anything opaque here would hide the thing the user chose. It was opaque only while
     // the window was: a placeholder for a wallpaper that could not appear yet. What is drawn over it stays legible by
     // its own means — cell labels carry a shadow, and the folder's scrim is its own.
-    Box(modifier.fillMaxSize()) {
+    Box(
+        modifier
+            .fillMaxSize()
+            // **Long-press on empty space → the surface menu.** On the root, so it covers both zones and the margins
+            // between them; `surfaceMenuGestures` owns why a press that lands on an icon does not reach it. Gated on
+            // being the surface on screen for the floating proxy's reason — a surface panned off to one side must not
+            // answer a press meant for the one in front of it.
+            //
+            // **One detector where L1 had three** (home, dock, widget area), because L1's three offered *different*
+            // action sets — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to
+            // the same single row today, so splitting them would be three ways to say one thing; the split returns with
+            // the first verb that is not launcher-wide.
+            .surfaceMenuGestures(gestureConfig, enabled = presented) { menuHost?.showSurface(it) },
+    ) {
         // **The two zones, stacked along the dock's own axis** — see [HomeZoneScaffold], which owns the
         // arrangement, the `uiInsets` padding on the pair, and each zone's own horizontal margin (S4g). The margins
         // reaching each grid's *own* modifier is what keeps drag and drop correct for free: both drag surfaces
@@ -474,6 +540,7 @@ internal fun HomePagerSurface(
                     modifier = zoneModifier,
                     onGeometryChange = { dockGeometry = it },
                     onOpen = openItem,
+                    onShowMenu = showMenu,
                 ) { item, cellModifier, itemGestures ->
                     HomeItemCell(item, session, cellModifier, itemGestures, dockMetrics)
                 }
@@ -494,6 +561,7 @@ internal fun HomePagerSurface(
                     modifier = zoneModifier,
                     onGeometryChange = { geometry = it },
                     onOpen = openItem,
+                    onShowMenu = showMenu,
                 ) { item, cellModifier, itemGestures ->
                     HomeItemCell(item, session, cellModifier, itemGestures, mainMetrics)
                 }
@@ -634,6 +702,7 @@ internal fun HomePagerSurface(
                     onLeave = folderHost::leaveFolder,
                     onRelease = ::handleRelease,
                     onDismiss = { folderHost.close() },
+                    onShowMenu = showFolderAppMenu,
                 )
             }
         }

@@ -98,6 +98,7 @@ internal fun CategoryPage(
     fingerInRoot: Offset?,
     metrics: IconMetrics,
     onLaunch: (ComponentKey) -> Unit,
+    showItemMenu: (AppInfo, Rect) -> Unit,
     onRelease: () -> Unit,
     onGeometry: (GridGeometry) -> Unit,
     onScrollState: (ScrollState) -> Unit,
@@ -220,6 +221,7 @@ internal fun CategoryPage(
                         onRelease = onRelease,
                         modifier = cellModifier,
                         onOpen = { onLaunch(app.componentKey) },
+                        onShowMenu = { anchor -> showItemMenu(app, anchor) },
                     ) { itemGestures ->
                         // `cell.metrics`, not the ambient `LocalIconMetrics` the pager provides: this page's height was
                         // derived by spending `iconPercent`, so the cell must not spend it again.

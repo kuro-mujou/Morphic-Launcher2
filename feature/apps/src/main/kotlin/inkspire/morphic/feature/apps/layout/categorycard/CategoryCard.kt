@@ -88,6 +88,7 @@ internal fun CategoryCard(
     chrome: CardChrome,
     metrics: IconMetrics,
     onLaunch: (ComponentKey) -> Unit,
+    showItemMenu: (AppInfo, Rect) -> Unit,
     onExpand: () -> Unit,
     onRelease: () -> Unit,
     onBounds: (Rect?) -> Unit,
@@ -123,6 +124,7 @@ internal fun CategoryCard(
                 coordinator = coordinator,
                 gestureConfig = gestureConfig,
                 onLaunch = onLaunch,
+                showItemMenu = showItemMenu,
                 onExpand = onExpand,
                 onRelease = onRelease,
             )
@@ -161,6 +163,7 @@ private fun PreviewSlot(
     coordinator: DragCoordinator,
     gestureConfig: ItemGestureConfig,
     onLaunch: (ComponentKey) -> Unit,
+    showItemMenu: (AppInfo, Rect) -> Unit,
     onExpand: () -> Unit,
     onRelease: () -> Unit,
 ) {
@@ -178,6 +181,7 @@ private fun PreviewSlot(
             onRelease = onRelease,
             modifier = Modifier.fillMaxSize(),
             onOpen = { onLaunch(app.componentKey) },
+            onShowMenu = { anchor -> showItemMenu(app, anchor) },
         ) { itemGestures ->
             // **The icon alone, not an `AppCell`.** A card slot has no label and no chrome of its own, and a cell's
             // own 4dp inset is what stopped the spacing slider ever reaching zero — see `CategoryPreviewIcon`.
@@ -209,7 +213,6 @@ private fun Modifier.categoryOpenGestures(
     // TODO(category management): the category's menu — rename, delete, choose an icon. A `feature:settings` concern
     //  (see the card grid's TODO), so this stays empty until that op set exists.
     onShowMenu = {},
-    onDismissMenu = {},
     onEdgeAction = {},
     // A card is not draggable: reordering the categories themselves is category management, deferred with the rest of
     // it. An app *inside* an expansion is what drags here.

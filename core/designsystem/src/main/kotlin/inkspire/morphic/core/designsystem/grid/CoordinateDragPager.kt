@@ -74,7 +74,7 @@ fun <T> CoordinateDragPager(
     acceptsItem: (GridItem) -> Boolean = { true },
     onGeometryChange: (GridGeometry) -> Unit = {},
     onOpen: (T) -> Unit = {},
-    onShowMenu: (T) -> Unit = {},
+    onShowMenu: (T, anchorInRoot: Rect) -> Unit = { _, _ -> },
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
@@ -141,7 +141,7 @@ fun <T> CoordinateDragPager(
                     modifier = cellModifier,
                     edgeActions = edgeActions,
                     onOpen = { onOpen(item) },
-                    onShowMenu = { onShowMenu(item) },
+                    onShowMenu = { anchor -> onShowMenu(item, anchor) },
                     onEdgeAction = { direction -> onEdgeAction(item, direction) },
                 ) { itemGestures ->
                     itemContent(item, Modifier.fillMaxSize(), itemGestures)

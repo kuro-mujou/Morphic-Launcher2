@@ -385,7 +385,7 @@ private fun GridSurface(
             edgeActions = SwipeDirection.entries.toSet(),
             onGeometryChange = { surface.geometry = it },
             onOpen = { onToast("open ${label(it)}") },
-            onShowMenu = { onToast("menu: ${label(it)}") },
+            onShowMenu = { item, _ -> onToast("menu: ${label(item)}") },
             onEdgeAction = { item, direction -> onToast("swipe $direction on ${label(item)}") },
         ) { item, cellModifier, itemGestures ->
             // A harness tile fills its cell and *is* the item, so it takes the gestures on its own root — unlike an
@@ -478,7 +478,6 @@ private fun OrderedSurface(
                             onOpen = { onToast("open ${label(entry)}") },
                             onEdgeAction = { onToast("swipe $it on ${label(entry)}") },
                             onShowMenu = { onToast("menu: ${label(entry)}") },
-                            onDismissMenu = {},
                             onBeginDrag = { root -> coordinator.start(entry, root) },
                             onDragTo = { root -> coordinator.moveTo(root) },
                             onDrop = { onRelease() },

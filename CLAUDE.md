@@ -544,8 +544,49 @@ Foundations: **P0 done; P1 Core done** — `core:model` (B0), `core:common` (B1)
 + live editor deferred). **B6 `data:apps` partial** (LauncherApps wrapper, `AppRepository` + Room cache,
 `RawIconSource`, and **categorization** — `AppCategorizer` folds a curated asset → platform
 `ApplicationInfo.category` → keyword heuristics into a `CategoryGroup` id, ported from L1 but narrowed to *one app
-in, one id out*: ordering and overrides are the category store's job, not the classifier's. `AppEvent` live
-updates/pruning still deferred).
+in, one id out*: ordering and overrides are the category store's job, not the classifier's).
+
+**The app cache is a mirror, and it keeps itself in step** — L1's `AppEvent` half, no longer deferred, and the fix
+for an uninstalled app staying on every surface. Three parts:
+- **`refresh` replaces rather than upserts.** An additive refresh cannot express "this app is gone", and *every*
+  surface resolves its items through this cache — home's placements and list through `HomeState.appInfo`, the APPS
+  order stores through the installed set their sync prunes against, the derived APPS layouts directly — so a row
+  that never disappears is an icon that never disappears, everywhere at once. `AppInfoDao.replaceAll` is one
+  `@Transaction` for `HomeListItemDao.replaceAll`'s exact reason: a separate `clear()` is observable, so every
+  refresh would blank the home screen and the drawer for a frame.
+- **`LauncherAppsWrapper.packageChanges()`** is a `callbackFlow` over `LauncherApps.Callback`, conflated, reporting
+  only *that* something changed — a payload would be a second source of truth about the same question. The
+  repository collects it on `ApplicationScope` from its `init`, which is the exception the "coroutines run on
+  `viewModelScope`" rule reserves: a cache that must mirror the device cannot stop mirroring it because the screen
+  watching it went away. One collector rather than a flow handed to both ViewModels, so there is one answer to
+  "when should the cache be re-read?".
+- **An empty query is treated as a failed read**, not as an empty device: every device has at least this launcher
+  installed, so nothing back means a profile mid-unlock or a binder hiccup, and replacing with it would empty every
+  surface at once. That risk is the price of the mirror being authoritative, and it is the one thing an upsert
+  could never do.
+
+**And the baked icons go with it** — `BakedIconInvalidator`, the other half of making an update visible. The two are
+separate because they go stale for different reasons: the *cache* goes stale when the set of installed apps changes
+and a re-read fixes it, while a *baked icon* goes stale when an app replaces its own artwork, which changes nothing
+the cache can see (same component, same label, same row). That is why `packageChanges` reports **which packages**
+and never what happened to them: "what is installed now?" has one answer and it is `queryActivities`, but *which*
+package moved is a question no re-read can answer. Two consequences worth knowing:
+- **`IconId` cannot capture it, which is what `IconRenderManager.generation` is for.** That key was built so
+  invalidation is automatic — any change *we* make produces a different key — and the app's own artwork is the one
+  input it cannot see. `LauncherIcon` folds the generation into its bake keys, because evicting alone would not
+  redraw anything: the three existing keys are unchanged by an update, so the stale bitmap would sit there until
+  something else happened to recompose that cell. A bump that evicted nothing is skipped, so a first install does
+  not recompose every icon on screen to discover there was nothing to do.
+- **It lives in `data:apps`, not in `core:icon` and not in the Activity.** `core:icon` bakes icons and must not
+  learn about package events; and `MainActivity`'s KDoc already names icon-cache invalidation inside `setContent`
+  as one of the L1 mistakes it exists to avoid. It has no methods — constructing it starts it — so Koin builds it
+  eagerly.
+
+**What is deliberately *not* pruned is the layout.** A placement, a folder membership or a list ordinal for an app
+that has gone stays in Room: it renders as nothing (every join is a `mapNotNull` through the cache), the planner
+sees a free cell, and reinstalling puts the app back where it was. That is the same position `reconcileReportedOrder`
+takes — an app the UI could not resolve must not be deleted on that evidence — and it is what makes an app briefly
+unavailable (SD card, locked work profile) survive rather than lose its place.
 
 **B4 `core:designsystem` — well along.** Theme + `Morphic*` components, plus the interaction primitives, all
 validated in the `app/dev` harness (`DevRootScreen`): the drag toolkit (`DragCoordinator`, `FreeGridPlanner`,
@@ -820,8 +861,11 @@ what each zone *holds*, and every difference below follows from that rather than
   instead, since the scroll gesture is the parent's. That is ordinary for a reorderable list — L1 sidestepped it with
   its library's drag *handle* — and it is the thing to change if the lift ever feels finicky, rather than a symptom
   of anything above.
-- **Not built**, all of it L1 behaviour: the "Add apps" row (a picker), the long-press item menu, and removing an app
-  from the list. Without a picker its contents are whatever the seed put there.
+- **Not built**: the "Add apps" row (a picker), which is L1 behaviour. Without one its contents are whatever the seed
+  put there — and it is the reason the list's own menu verb is *Remove* rather than a pair: an app can be taken off
+  the list but there is still no way to put one back. That menu is the shared item menu with one contribution, and
+  **the contribution is not `RemoveFromGrid`**: this list is an order store of its own, so removing means writing the
+  order without that app, exactly as its drag writes an index rather than a cell.
 
 **APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
 (`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were
@@ -855,15 +899,16 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
 - Cells go through the shared `launcherItemGestures` contract rather than a `clickable`, so APPS cannot drift from
   the rest of the launcher on long-press timing or slop — exactly what L1 did, hand-rolling a recogniser (plus a
   click-suppression flag) inside its list composable. The tap-only wiring lives in one `appsItemGestures` shared by
-  both layouts, so a layout can't half-wire it and there's one file to change when the P7 menu and `EjectToHome`
-  land. **A row's touch target is its icon and its label, not the strip they sit in** — the same "visible extent"
+  both layouts, so a layout can't half-wire it and there was one file to change when the menu and `EjectToHome`
+  landed — both now have. **A row's touch target is its icon and its label, not the strip they sit in** — the same "visible extent"
   rule as a grid cell, and `AppRowCell` applies it the same way, by hanging the gestures on a wrap-content group.
   This reverses an earlier reading ("a row's visible extent *is* the full-width strip, so a list leaves no slack"),
   which conflated the row's **footprint** with what is drawn in it: a row paints no background, so the width past
   the end of a short label is exactly the slack a grid cell has around its icon, lying on the other axis. So a list
   *does* leave room for a surface long-press. The bill is that a tap out there launches nothing either — one
   contract covers both — which is already true of the slack around a grid icon. **Both lists keep the slack free**,
-  including this one, whose surface gestures (the alphabet strip, search, a surface press) are all still below: a
+  including this one — and the surface press is now what it is free *for*, with the alphabet strip and search still
+  below: a
   target narrowed once is worth more than one narrowed again later, when users have learnt the wider one.
 - **The pager is the first layout that stores an arrangement** (`AppsLayout.PAGER`, `AppsPager`) — pages of
   `LauncherGrid` in FIXED_PAGER mode at `AppsPagerGrid`'s size, drawn from `AppsOrderRepository` rather than
@@ -1012,15 +1057,34 @@ zone until `GridItem.Widget` has a cell. Two things become owed the moment it do
 
 Also open: on the surface swipe, **the five transitions past SLIDE** are all that is left of L1's `CrossPager` — the
 nested-scroll hand-off, the frosted backdrop and `EjectToHome`, the other three things tangled into it, have all
-landed. A **home long-press → options menu** (the free cell space now falls through to
-the surface for exactly this, and nothing listens yet), the vertical list's **"Add apps" picker** and item menu
-(without one, its contents are whatever the grid seeded), home **orientation**, or
+landed. The home long-press → options menu now exists and is what the free cell space was being kept for; what it is
+missing is verbs, each waiting on its own feature (an **app picker**, **widgets**, **page management**). The vertical
+list's **"Add apps" picker** is the same gap seen from its own surface — without one, its contents are whatever the
+grid seeded. Home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render, all the
 arrangement-owning ones drag, and every one of them can drag an app out onto HOME**; what is left is the surrounding
 behaviour: the alphabet filter strip, search, an optimistic layer for both the pager and the card (a drop waits for
-the write) + the pager's page indicator, or `data:apps`' `AppEvent` live updates/pruning (B6). One **mechanical** job is queued and deliberately
+the write) + the pager's page indicator. One **mechanical** job is queued and deliberately
 unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
-follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create. Not yet a launcher — the `HOME` intent category is added last (P9), the final flip.
+follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create.
+
+**P9 is flipped: this is a launcher.** `app`'s manifest declares `category.HOME` + `category.DEFAULT`, which is what
+puts Morphic in the system's home-app chooser and lets the home button resolve to it. Four attributes come with the
+role and each answers something an ordinary activity never faces — `launchMode="singleTask"` (home must *return* to
+the running instance, not stack a second), `stateNotNeeded` (the system kills and restarts a home app freely, and its
+state is its stores rather than a `Bundle`), `resumeWhilePausing` (home may resume while the app being left is still
+pausing, which is what makes the button feel immediate), and `configChanges` covering everything (Compose re-reads
+the window; recreating on a rotate would tear down the drag, the open folder and every baked icon). **One filter
+where L1 had two** — its second `MAIN`+`LAUNCHER` filter is redundant, since an intent matches a filter whose
+categories are a superset of its own. Permissions stay where L2 puts them, with the module that needs them:
+`QUERY_ALL_PACKAGES` is still not requested anywhere, `data:apps` requests **`REQUEST_DELETE_PACKAGES`** (see the
+menu notes — without it Uninstall silently does nothing, and L1 only got away without it because
+`QUERY_ALL_PACKAGES` covered it), and the wallpaper section's live-wallpaper shelf got the narrow `<queries>` it
+had been silently missing (without it that query is filtered to this app's own services, so
+the shelf renders permanently empty — being the home app exempts `LauncherApps` from visibility filtering, not
+`PackageManager.queryIntentServices`). One consequence worth knowing: **shortcuts only exist once we are the active
+home app** — `hasShortcutHostPermission()` is false otherwise, so before the flip the menu's first stage would have
+been empty for every app on every device.
 
 **Settings — `data:settings` (B7) is real, and seven sections are live.** Storage is **one `@Serializable` JSON blob per
 slice** under one DataStore key (`SettingsSlice`, pure and unit-tested), not L1's ~265 flat keys behind a 693-line codec;
@@ -1385,8 +1449,9 @@ because a store cannot check either without measuring. **Every surface now repor
 narrower `setGridConfig`/`setPagerGrid`: pushing the input down means page capacity and icon sizing both derive there.
 Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](docs/SETTINGS_PORT_PLAN.md).
 
-**Navigation + shell (B5) done.** `core:navigation` holds type-safe Nav3 `NavKey` destinations and a two-method
-`Navigator`; feature vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer). `app`
+**Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
+vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
+itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`
 declares its own dev-harness key, since `entryProvider` is a mapping and not a registry. `feature:shell`'s
 `LauncherShell` is the launcher — `SurfacePager` with `HomeScreen` centre and side surfaces from the register — and it
 owns the **launcher theme boundary**, which is why `HomeScreen`/`AppsScreen` no longer theme themselves. It also owns
@@ -1465,9 +1530,127 @@ and each removed something rather than adding a layer:
     leave an installed app the user can no longer see. **One bound:** an app dragged out of a home *folder* onto
     Remove goes back to that folder — it has no grid placement to remove, and the shell cannot see folder membership.
     L1 behaved identically, for the same reason.
-- **Not built here, deliberately:** the item **context menu**. The gesture machine has modelled
-  `Pressed → MenuShown → Dragging` since B4, so every flow above already works with `onShowMenu` a no-op — long-press,
-  then move, and the drag begins. The menu is P7 and changes none of this wiring.
+- **The item context menu is the shell's too, and for the band's exact reason** (P7, `core:designsystem/menu`). One
+  `ItemMenuHost` provided through `LocalItemMenuHost`, one `ItemMenuOverlay` above every surface — because the verbs
+  on an item's menu belong to the **item**, and the same app is reachable from home, from the drawer and from inside
+  a folder. L1 answered it per surface (home's `ItemContextMenu`, a near-copy `SideContextMenu` for the drawer and
+  library) and wrote the two stages, the loading state and the toggle twice. The shell binds the three app commands
+  once (`AppInfoOpener`, `AppUninstaller`, `AppShortcuts`); a surface contributes only what it owns — home's
+  *Remove*, the drawer's nothing. It changed none of the drag wiring, exactly as this note predicted.
+
+**Context menus (P7) — `core:designsystem/menu`, one host at the shell.** Long-press an **item** and its menu opens
+under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine` has modelled since B4. Long-press
+**empty space** and the surface's own menu docks to the nearest screen edge. Ported from L1's `InlineContextMenu` +
+`ItemContextMenu` + `ContextMenuPopup`, with these differences:
+
+- **The menu outlives the finger, which meant changing the gesture machine.** `MenuOpen` + `Up` used to emit
+  `DismissMenu` — written before there was a menu, and unusable once there was: a row can only be tapped after the
+  finger is off the item, so the *release* is how the user reaches the menu. It now closes on a choice, on a tap
+  away, or on the drag that may follow. A **cancel** still dismisses (the pointer was taken away, not given up).
+  Nothing depended on the old behaviour: every `onDismissMenu` in the tree was `{}`, which is also why that parameter
+  is gone — the contract dismisses the host itself, on `launcherItemGestures`' "wiring that cannot be forgotten
+  belongs in the one place every caller already goes through" rule.
+- **It renders inline, never in a `Popup`** — L1's own conclusion, and the reason its two implementations exist. The
+  menu opens *while the finger is down*, and a `Popup` is a separate platform window: raising one mid-gesture takes
+  focus and can cancel the pointer stream the drag depends on.
+- **The anchor is reported by the gesture, not reconstructed by the surface.** `onShowMenu` now carries the
+  rectangle the modifier is attached to — which, by the touch-target rule, *is* the item's visible extent. L1 rebuilt
+  it three ways (cell centres on the grid, an icon half-width plus a Y offset in a folder, a row's bounds in the
+  list) and each could drift from what was drawn. `positionInRoot() + size`, never `boundsInRoot()`, for the
+  clipped-inside-a-scroller reason stated elsewhere in this file.
+- **Placement is pure and unit-tested** (`MenuAnchoring.kt`): a tall frame stacks the menu above/below and a wide one
+  puts it beside, each flipping toward the half with room, then clamped into the frame with one gap doing both jobs
+  (off the item, off the edges). Two departures — the halves are judged against `uiInsets`' usable area rather than
+  the raw window, and `MenuPlacement` is **four values** where L1 had `(vertical, towardEnd)`, the same correction
+  `SideZoneEdge` made to a pair of booleans.
+- **Two stages: the app's own shortcuts first, the launcher's actions behind a chevron.** That order is L1's and it
+  is right — shortcuts are what the *app* offers and are what a long-press is usually for. An item with no shortcuts
+  (a folder, an app publishing none) collapses to one stage with **no toggle**, so the second stage never announces
+  itself as missing. The load is a **suspending lambda the menu owns**, where L1 ran that `LaunchedEffect` in each of
+  its three surfaces; it is called from the menu's composition, so it cancels when the menu closes.
+- **It is modal, and that takes two guards rather than one.** The overlay holds `SurfaceGestureLock` for as long as
+  it is up (nothing may pan out from under a menu), and `launcherItemGestures` **ignores a new press while a menu is
+  open** — without which a tap "away from the menu" would dismiss it *and* launch whatever icon it landed on, which
+  on a full home page is most of the screen. Consumption cannot express that: the gesture reads the finger with
+  `…IgnoreConsumed` on purpose, so the tap-catcher cannot shut it out by consuming. Back dismisses the menu before
+  anything else answers.
+- **Colours come from the theme and the panel is frosted.** L1 hardcoded `Color.White` throughout, which would be the
+  one place in the launcher ignoring the wallpaper-brightness signal the whole theme is built on. `wallpaperBackdrop`
+  with `refracts = true` makes this **the first frosted panel**, so the effects section's sliders and liquid glass's
+  rim finally have a consumer.
+- **One width for every menu** (248dp), where L1 sized each to its widest row: a row can then `fillMaxWidth`, so the
+  whole row is the tap target rather than the text on it, and a menu stops changing width between icons.
+- **Unbuilt verbs are absent, not disabled.** L1 showed "Rename" and "Edit icon" greyed out; the settings sections'
+  own rule is that a control which changes nothing is worse than a missing one. So a home folder's menu is
+  *Remove folder* alone, an APPS-pager folder and a category card get **no menu at all**, and rename returns with its
+  op, the icon studio with B9.
+- **What each surface adds is only what it owns**: home's *Remove* (`RemoveFromGrid`), the home list's *Remove* (its
+  own order store, not a placement), an app **inside a folder** nothing — it has no placement, so a Remove row there
+  would do nothing, and taking it out is the drag this menu's long-press already leads into. `data:apps` gained the
+  three commands behind it — `AppInfoOpener`, `AppShortcuts`, and the wrapper reads they need — each resolving the
+  profile from `userSerial` like `AppLauncher`, where L1 hardcoded `Process.myUserHandle()` and `AppInfoOpener` uses
+  `LauncherApps.startAppDetailsActivity` rather than L1's package-only settings intent for exactly that reason.
+- **Uninstall needed two things L1's byte-identical intent did not**, and without either it does nothing *visibly*:
+  **`REQUEST_DELETE_PACKAGES`** (an app targeting API 29+ must hold it to ask for a package to be removed — the
+  uninstaller activity otherwise finishes the instant it opens, with no dialog and no exception to catch; L1 was
+  covered by `QUERY_ALL_PACKAGES`), and **`Intent.EXTRA_USER`**, so a work-profile app is removed *in its profile*
+  — the same per-profile correction the other three commands make. AOSP's Launcher3 sends exactly this pair.
+  Diagnosing it turned up a broader gap: **nothing had ever planted a Timber tree**, so every `Timber.w` in the
+  codebase wrote nowhere and this failure had no way to report itself. `LauncherApplication` now plants one on
+  debuggable builds, read from `ApplicationInfo.FLAG_DEBUGGABLE` rather than `BuildConfig.DEBUG`, which only exists
+  where that build feature is switched on.
+
+**The surface menu is the same panel with a different anchor, and the anchors are a sum type.** `MenuAnchor.Item`
+carries the item's bounds; `MenuAnchor.Press` carries the point a long-press landed on. That is L1's two position
+providers named as one thing rather than two composables a caller had to pick between correctly, and the difference
+is not decoration:
+- **An item menu points at a thing, so it sits beside it and scales out of the edge nearest it.** A surface menu
+  points at nothing, so it **docks flush to whichever vertical edge the press was nearer** and slides in from it,
+  vertically centred on the finger — L1's `EdgeDockedPopupPositionProvider`. Planting it on the press point would
+  claim a relationship with whatever patch of wallpaper it covered, and hugging the edge leaves that wallpaper
+  visible beside it. `ResolvedAnchor` computes the side **once**, because the reveal needs it in composition and the
+  placement needs it in measurement.
+- **A surface menu has no header**, as L1's had none: there is no honest title for "the home screen" that is not a
+  word taking a row.
+- **`surfaceMenuGestures` is how a press reaches it, and it needs no geometry.** It goes on a surface's *root*, so
+  it sees presses that land on icons too (`launcherItemGestures` never consumes a down) — answered twice: the item
+  is given a **head start** (`longPressTimeoutMillis` + 120ms, so which timer wins is a fact rather than a coin
+  toss), and then the gesture **asks `SurfaceGestureLock`**, which is already exactly "something owns this finger".
+  L1 instead ran one root recogniser that resolved the cell and branched on `isOnIcon` — which works, but makes the
+  surface responsible for knowing where every item drew its icon, the very decision this codebase hands down to the
+  cell's content. Asking the lock settles a case nobody wrote down for free: an open folder holds it, so pressing a
+  folder's backdrop cannot open the menu of the surface underneath.
+- **One detector per surface where L1 had three** (home, dock, widget area). L1's three differed because their
+  *actions* did — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to the
+  same row, so three would be three ways to say one thing; the split returns with the first verb that is not
+  launcher-wide.
+- **HOME's menu is one row — Settings — and that is the honest state rather than a stub.** Every verb L1 put above
+  it waits on something unbuilt: "Add app" and "Widgets" need pickers, "Remove page" needs page management. L1's
+  *Wallpaper* row is no longer blocked — see the route note below — and is now a one-line decision rather than an
+  architectural one; it is left out until someone asks for it.
+- **Deep-linking into settings moved `SettingsRoute` out of `core:navigation` and into `feature:settings`**, which
+  is the decision that file's KDoc reserved ("whether a section becomes a route argument or its own `NavKey` is a
+  decision for the port that introduces them"). Three parts: a **route argument**, because settings is one
+  destination whose sections are panes and a pane is not a place on the back stack; **declared in the feature**,
+  which is what lets the argument *be* a `SettingsSection` — L1 put that enum in its navigation module purely
+  because its route carried one, and every module touching navigation could then import the whole taxonomy;
+  and `core:navigation` keeps only `HomeRoute` and the `Navigator`, which is the shape it was always arguing for.
+  **`app` is still the only layer that names a section**: the APPS surface says "open my settings" and passes the
+  `AppsLayout` it is showing (`core:model`, shared by everyone), and the mapping from that to a pane happens in
+  `LauncherNavHost` where both are already visible.
+- **It replaced the dev gear chip**, which `app` had been carrying as admitted scaffolding "until the P7 long-press
+  menu exists". Navigation reaches the shell as an `onOpenSettings` action rather than through `LocalNavigator`,
+  which is `SettingsScreen`'s own `onOpenDevHarness` pattern: `app` owns the back stack, so `app` says where a verb
+  goes and no feature module learns that a destination exists.
+- **APPS gets one too, which reverses L1's call** ("no context menu on empty space in side surfaces") — at the
+  author's direction, and the reason is a property of L2 rather than a preference. L2's touch targets are narrower
+  by construction: an item's gestures cover its icon and its label, never its cell or its row, so every APPS layout
+  has real free space between items and none of it did anything. Its one verb is **"Apps settings"**, which opens
+  the settings for the *arrangement being looked at* — the APPS section has a chip per layout, and without this
+  reaching the one you are using is a long-press on home, then a section, then a chip. One detector on
+  `AppsScreen`'s root, so all five layouts get it identically and a new one cannot forget it.
+- The host is `LauncherMenuHost` / `LocalMenuHost` / `MenuOverlay` — renamed from `ItemMenuHost` in the same change
+  that gave it a second kind of menu, since **one host** is what keeps "both open at once" unrepresentable.
 
 **A side slot is composed only while it is needed, and that is an ANR fix rather than a tidy-up.** `SurfacePager`
 used to compose every bound slot at all times. With one binding that was invisible; with **four** it was five seconds
@@ -1575,13 +1758,15 @@ The report is **one answer for a whole surface**, so a vertical swipe starting i
 treated as if it were over the main area — L1's own simplification, and refining it would mean a per-region answer to
 a question decided once, at slop.
 
-**Known gaps, deliberate:** there is **no item context menu** — the gesture machine has modelled
-`Pressed → MenuShown → Dragging` since B4 and every drag flow works through it, but `onShowMenu` is a no-op
-everywhere, so a long-press shows nothing before the drag begins (P7). A drag ejected from APPS draws **no floating
-proxy** for the frames the surface takes to close: the drawer stops painting one the moment it is no longer presented
-and home starts once it is, and neither owns the gap in between (the drop itself is unaffected). The effects section's
-five sliders are **dormant** — the full-screen frost is fixed per
-variant by design, and no frosted *panel* exists yet to read a tuned strength or tint (nor to draw liquid glass's rim).
+**Known gaps, deliberate:** the item context menu offers **nothing for a folder on the APPS pager** and nothing for
+a category card — rename and dissolve have no ops on the APPS order store, and category management is a
+`feature:settings` concern, so those long-presses show no menu at all rather than a menu of disabled rows. The
+**icon studio** (B9) and **rename** are the two verbs the menu is still owed on home. A drag ejected from APPS draws
+**no floating proxy** for the frames the surface takes to close: the drawer stops painting one the moment it is no longer presented
+and home starts once it is, and neither owns the gap in between (the drop itself is unaffected). The effects section's five sliders are **live again**: the context
+menu is the launcher's first frosted *panel*, so it reads the stored strength and tint and it is the first surface
+with edges of its own for liquid glass's rim to bend light at. The full-screen frost stays fixed per variant by
+design, so those two now genuinely differ.
 No item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). No formatter in the build (no
 ktlint/spotless/detekt), so style drift isn't caught. The Gradle **wrapper is missing** from the repo

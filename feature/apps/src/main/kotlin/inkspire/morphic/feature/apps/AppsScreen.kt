@@ -37,6 +37,11 @@ import inkspire.morphic.feature.apps.layout.AppsVerticalList
 import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
 import inkspire.morphic.feature.apps.layout.categorypager.AppsCategoryPager
 import inkspire.morphic.feature.apps.layout.pager.AppsPager
+import inkspire.morphic.core.designsystem.menu.LocalMenuHost
+import inkspire.morphic.core.designsystem.menu.MenuAction
+import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
+import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -59,14 +64,25 @@ import org.koin.androidx.compose.koinViewModel
  * own configuration* — one ambient value would silently give it the page's sizing. So each layout takes the metrics for
  * the grid it draws, and the two that open folders take the folder's as well.
  *
+ * **Long-press on empty space opens this surface's settings**, which is the one thing the APPS surface menu offers.
+ * L1 had no empty-space menu on its side surfaces at all ("we simply don't add one") and that reads differently here,
+ * because L2's touch targets are narrower by design: an item's gestures cover its icon and its label, never its cell
+ * or its row, so every one of these layouts has real free space between items and none of it did anything. What the
+ * row goes to is the **arrangement being looked at** — the APPS settings section has a chip per layout, and without
+ * this reaching the one you are using is a long-press on home, a section, and then a chip.
+ *
  * @param layout which arrangement to render. A parameter with a default rather than a read of user preference,
  *   because nothing owns that preference yet: it belongs to `data:settings` (B7), per-binding, since the same
  *   surface can be reached from different home edges with different layouts. Wire it there, not here.
+ * @param onOpenLayoutSettings goes to the settings for [layout]. **Nullable, and null means the row is absent** —
+ *   not disabled — which is what the dev harness gets, since a destination it has no back stack for would be a row
+ *   that does nothing. Same shape, and the same reason, as `SettingsScreen`'s own `onOpenDevHarness`.
  */
 @Composable
 fun AppsScreen(
     modifier: Modifier = Modifier,
     layout: AppsLayout = AppsLayout.VERTICAL_LIST,
+    onOpenLayoutSettings: (() -> Unit)? = null,
 ) {
     val viewModel = koinViewModel<AppsViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -133,7 +149,27 @@ fun AppsScreen(
     // fresh-install look is unchanged.
     //
     // Painting nothing here is what lets the two move independently — the frost is not this composable's to carry.
-    Box(modifier.fillMaxSize()) {
+    // **The surface menu**, on the one root every layout is drawn into — so all five get it identically and a new
+    // layout cannot forget it. `surfaceMenuGestures` owns why a press that lands on an icon does not reach here, and
+    // gating on presence is the floating proxy's rule: a surface panned off to one side must not answer a press meant
+    // for the one in front of it.
+    val menuHost = LocalMenuHost.current
+    val gestureConfig = rememberAppsGestureConfig()
+    val presented = LocalSurfacePresented.current
+    Box(
+        modifier
+            .fillMaxSize()
+            .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
+                menuHost?.showSurface(
+                    position = position,
+                    // The host appends the launcher-wide *Settings* row itself; this is the one verb the APPS
+                    // surface owns. Empty when there is nowhere to send it, which collapses the menu to that row.
+                    surfaceActions = onOpenLayoutSettings
+                        ?.let { listOf(MenuAction("Apps settings", onClick = it)) }
+                        .orEmpty(),
+                )
+            },
+    ) {
         when (layout) {
             AppsLayout.VERTICAL_LIST -> AppsVerticalList(
                 apps = state.apps,

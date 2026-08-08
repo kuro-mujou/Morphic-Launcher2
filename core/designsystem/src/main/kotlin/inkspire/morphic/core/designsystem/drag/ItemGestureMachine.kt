@@ -35,7 +35,10 @@ sealed interface ItemGestureEffect {
     /** The long-press fired with the finger still: open the item's context menu. */
     data object ShowMenu : ItemGestureEffect
 
-    /** Take the context menu back down (drag started from it, or it was released with no move). */
+    /**
+     * Take the context menu back down — a drag has started from it, or the gesture was cancelled. Deliberately
+     * **not** emitted when the finger simply lifts: see [ItemGesturePhase.MenuOpen].
+     */
     data object DismissMenu : ItemGestureEffect
 
     /** Lift the item into a drag ([DragCoordinator.start]). */
@@ -62,7 +65,10 @@ sealed interface ItemGesturePhase {
     /** Moved past slop before the long-press: committed to a swipe in [direction], firing on release. */
     data class Swiped(val direction: SwipeDirection) : ItemGesturePhase
 
-    /** The context menu is open (long-press fired). Moving past slop starts a drag; releasing dismisses it. */
+    /**
+     * The context menu is open (long-press fired). Moving past slop starts a drag; **releasing leaves the menu
+     * up** — the finger has to come off the item before any row on it can be tapped — and fires no tap.
+     */
     data object MenuOpen : ItemGesturePhase
 
     /** A drag is in flight; the finger is being tracked at the root. */
@@ -84,7 +90,7 @@ sealed interface ItemGesturePhase {
  * - **tap** → [ItemGestureEffect.OpenItem]
  * - **press + swipe (4 directions)** → [ItemGestureEffect.EdgeAction] (before the long-press fires)
  * - **long-press** → [ItemGestureEffect.ShowMenu]; then **move** → drag ([ItemGestureEffect.BeginDrag] …
- *   [ItemGestureEffect.Drop]); or **release with no move** → [ItemGestureEffect.DismissMenu] and *no* tap
+ *   [ItemGestureEffect.Drop]); or **release with no move** → the menu stays up and *no* tap fires
  *
  * Keeping the decision logic here — pure, deterministic, unit-tested — is the deliberate fix for L1, where
  * four separate recognizers each re-implemented long-press/slop/tap-suppression with different constants and
@@ -182,8 +188,18 @@ class ItemGestureMachine(
                 )
             }
         }
-        // Released with the menu open and no drag: take the menu down, and crucially do NOT fire a tap.
-        ItemGestureEvent.Up, ItemGestureEvent.Cancel -> {
+        // **Released with the menu open: the menu stays, and crucially no tap fires.** The finger lifting is how a
+        // user reaches the menu they just asked for — dismissing here would make it unusable, since the rows can
+        // only be tapped once the finger is off the item. The menu is taken down by choosing something on it, by
+        // tapping away from it, or by the drag above; none of those is this event.
+        //
+        // This reverses what the machine did before there was a menu to open, where releasing emitted
+        // `DismissMenu` and the docs' state diagram said "lift, no move → dismiss menu". Nothing depended on it:
+        // every `onDismissMenu` in the tree was an empty lambda.
+        ItemGestureEvent.Up -> reset()
+        // A cancel is not a release — the pointer was taken away (the node left the tree, another window claimed
+        // the stream), so nothing was chosen and the menu should not be left behind.
+        ItemGestureEvent.Cancel -> {
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.DismissMenu)
         }

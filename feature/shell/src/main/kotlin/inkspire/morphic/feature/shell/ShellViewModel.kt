@@ -8,6 +8,9 @@ import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.data.apps.AppInfoOpener
+import inkspire.morphic.data.apps.AppShortcut
+import inkspire.morphic.data.apps.AppShortcuts
 import inkspire.morphic.data.apps.AppUninstaller
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
@@ -80,6 +83,8 @@ class ShellViewModel(
     private val wallpaperRepository: WallpaperRepository,
     private val layoutRepository: LayoutRepository,
     private val appUninstaller: AppUninstaller,
+    private val appInfoOpener: AppInfoOpener,
+    private val appShortcuts: AppShortcuts,
 ) : ViewModel() {
 
     /**
@@ -110,6 +115,28 @@ class ShellViewModel(
      * prunes itself when the app-removed event arrives, which is the same path any uninstall from anywhere takes.
      */
     fun uninstall(component: ComponentKey) = appUninstaller.uninstall(component)
+
+    /**
+     * **Opens the system app-details screen** for [component] — the item menu's "App info".
+     *
+     * Here rather than on either surface's ViewModel for the menu's own reason: the same three verbs are offered
+     * for an app wherever it is found, so binding them once at the shell is what stops home and the drawer
+     * drifting apart. It joins [uninstall], which the top-action band already needed here for exactly that.
+     */
+    fun openAppInfo(component: ComponentKey) = appInfoOpener.openAppInfo(component)
+
+    /**
+     * **[component]'s own shortcuts** — the item menu's first stage.
+     *
+     * Suspending and *not* launched on [viewModelScope], deliberately: the read belongs to the menu that asked for
+     * it, so it is called from the menu's own composition and cancelled when the menu closes. Scoping it to the
+     * screen would keep a read alive for a menu that is no longer on screen and deliver an answer nobody wants.
+     * Empty when the launcher is not the active home app — see [AppShortcuts], which owns that rule.
+     */
+    suspend fun shortcuts(component: ComponentKey): List<AppShortcut> = appShortcuts.shortcuts(component)
+
+    /** Starts one of the shortcuts [shortcuts] returned. Fire-and-forget, like [uninstall]. */
+    fun startShortcut(shortcut: AppShortcut) = appShortcuts.start(shortcut)
 
     /**
      * Which way the device is held, reported by the shell.

@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.grid
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
@@ -48,7 +49,7 @@ fun LauncherDragCell(
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
     onOpen: () -> Unit = {},
-    onShowMenu: () -> Unit = {},
+    onShowMenu: (anchorInRoot: Rect) -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
     content: @Composable (itemGestures: Modifier) -> Unit,
 ) {
@@ -65,7 +66,6 @@ fun LauncherDragCell(
                 onOpen = onOpen,
                 onEdgeAction = onEdgeAction,
                 onShowMenu = onShowMenu,
-                onDismissMenu = {},
                 onBeginDrag = { root -> coordinator.start(item, root) },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },

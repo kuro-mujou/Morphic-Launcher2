@@ -165,7 +165,7 @@ surface beneath it.
         │ MenuShown      │  (context menu opens; tap now suppressed)
         └────┬───────┬───┘
    move>slop │       │ lift, no move
-        ┌────▼────┐  └──▶ dismiss menu, do NOT fire tap
+        ┌────▼────┐  └──▶ menu STAYS up, do NOT fire tap
         │ Dragging│         ← item's own pointer stream tracks the finger
         └────┬────┘           (source surface kept composed for the drag; see below)
              │ release
@@ -175,6 +175,13 @@ surface beneath it.
 
    quick lift before timeout & no move ──▶ Tap → open item
 ```
+
+**The menu outlives the finger.** Lifting out of `MenuShown` used to emit `DismissMenu` — written before there was
+a menu to open, and unusable once there was: the rows can only be tapped after the finger is off the item, so the
+release *is* how the user reaches the menu. It closes on a choice, on a tap away from it, or on the drag that may
+follow. A **cancel** still dismisses, because that is the pointer being taken away rather than given up. What the
+menu is and where it goes: `core:designsystem/menu` — one host at the shell, above every surface, since the verbs
+belong to the item and the same item is reachable from home, from the drawer and from inside a folder.
 
 **Tracking across surfaces (revised — the original root-overlay plan was wrong).** The dragged item's *own*
 `pointerInput` tracks the whole gesture: once the pointer is down, the gesture owns it until release, wherever

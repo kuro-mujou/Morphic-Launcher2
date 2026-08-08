@@ -93,15 +93,20 @@ private val ListPaneWidth = 360.dp
 fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    initialSection: SettingsSection? = null,
+    initialLayout: AppsLayout? = null,
     onOpenDevHarness: (() -> Unit)? = null,
 ) {
     val twoPane = currentDeviceConfiguration().isTablet
-    var selected by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    // **Seeded from the route, and only from the *first* arrival** — `rememberSaveable`'s initialiser runs once, so
+    // a deep link chooses where settings opens and everything after that is the user's navigation within it. That is
+    // the right shape for an argument that describes an arrival rather than a state to be kept in step.
+    var selected by rememberSaveable { mutableStateOf(initialSection) }
     // **Which layout the APPS pane should open on**, when it was reached from the register's gear rather than from the
     // list. Two saveable enums rather than one compound selection: `SettingsSection` is the list's vocabulary and stays
     // that, and a payload only one section can carry does not belong inside it. Null means "opened normally", which is
     // every other route in.
-    var appsLayout by rememberSaveable { mutableStateOf<AppsLayout?>(null) }
+    var appsLayout by rememberSaveable { mutableStateOf(initialLayout) }
     val openSection: (SettingsSection, AppsLayout?) -> Unit = { section, layout ->
         appsLayout = layout
         selected = section

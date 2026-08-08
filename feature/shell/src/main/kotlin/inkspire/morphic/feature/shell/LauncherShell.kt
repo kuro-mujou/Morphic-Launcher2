@@ -31,6 +31,10 @@ import inkspire.morphic.core.designsystem.drag.LocalDragCoordinator
 import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.rememberDragCoordinator
+import inkspire.morphic.core.designsystem.menu.LauncherMenuHost
+import inkspire.morphic.core.designsystem.menu.LocalMenuHost
+import inkspire.morphic.core.designsystem.menu.MenuAction
+import inkspire.morphic.core.designsystem.menu.MenuOverlay
 import inkspire.morphic.core.designsystem.surface.EjectToHome
 import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
@@ -47,6 +51,7 @@ import inkspire.morphic.core.designsystem.topaction.TopActionMode
 import inkspire.morphic.core.designsystem.topaction.TopActionTarget
 import inkspire.morphic.core.designsystem.topaction.TopActionZone
 import inkspire.morphic.core.designsystem.topaction.rememberTopActionState
+import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -90,7 +95,11 @@ import org.koin.androidx.compose.koinViewModel
  * additions on a clean base.
  */
 @Composable
-fun LauncherShell(modifier: Modifier = Modifier) {
+fun LauncherShell(
+    onOpenSettings: () -> Unit,
+    onOpenAppsSettings: (AppsLayout) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel = koinViewModel<ShellViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -135,6 +144,33 @@ fun LauncherShell(modifier: Modifier = Modifier) {
         // stream the whole way.
         val coordinator = rememberDragCoordinator()
 
+        // **The launcher's one item-menu host, and it belongs at this layer for the coordinator's reason.** The verbs
+        // on an item's menu are the *item's* — App info, Uninstall, its own shortcuts — and the same app is reachable
+        // from home, from the drawer, and from inside a folder. Binding the commands here once is what stops those
+        // three offering different things for the same icon, which is exactly what happened in L1: home had an
+        // `ItemContextMenu` and the side surfaces a near-copy `SideContextMenu`, each with its own two-stage logic.
+        // A surface adds only what it owns — home's "Remove", because home is where an item is *placed*.
+        val menuHost = remember(viewModel, onOpenSettings) {
+            LauncherMenuHost(
+                onAppInfo = viewModel::openAppInfo,
+                onUninstall = viewModel::uninstall,
+                // Rasterised icons become `ImageBitmap` here rather than in the ViewModel, which deliberately deals
+                // in platform bitmaps — the same line `ShellState.backdropImage` draws.
+                loadShortcuts = { component ->
+                    viewModel.shortcuts(component).map { shortcut ->
+                        MenuAction(
+                            label = shortcut.label,
+                            icon = shortcut.icon?.asImageBitmap(),
+                        ) { viewModel.startShortcut(shortcut) }
+                    }
+                },
+                // **Navigation arrives as an action, not as a `Navigator`.** `feature:shell` composes the launcher's
+                // surfaces; which *destination* settings is belongs to `app`, which owns the back stack — the same
+                // reason `SettingsScreen` takes `onOpenDevHarness` rather than learning that route exists.
+                onOpenSettings = onOpenSettings,
+            )
+        }
+
         // **The surface an in-flight drag was ejected from, kept composed until that drag ends.** `SurfacePager`
         // composes a slot only while it is on screen, so without this the lifted cell would be disposed the moment
         // its surface finished sliding away — and with it the pointer stream tracking the finger. This is the drag
@@ -170,6 +206,7 @@ fun LauncherShell(modifier: Modifier = Modifier) {
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
             LocalDragCoordinator provides coordinator,
+            LocalMenuHost provides menuHost,
             LocalEjectToHome provides eject,
         ) {
             // A `Box` because the eject band below is a **sibling** of the pager rather than content inside it — see
@@ -181,7 +218,12 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     sideContent = state.register.sides.mapValues { (edge, binding) ->
-                        binding.toSurfaceBinding(edge, state.register.homeLayout, state::wraps)
+                        binding.toSurfaceBinding(
+                            edge = edge,
+                            homeLayout = state.register.homeLayout,
+                            wraps = state::wraps,
+                            onOpenAppsSettings = onOpenAppsSettings,
+                        )
                     },
                     // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                     // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
@@ -216,6 +258,12 @@ fun LauncherShell(modifier: Modifier = Modifier) {
                     onRemove = viewModel::removeFromHome,
                     onUninstall = viewModel::uninstall,
                 )
+
+                // **The item menu, above everything including the band.** A sibling for the band's reason and one
+                // more of its own: the menu is anchored to an item that may be on any surface, and it is *modal*
+                // while it is up (it locks the surface swipe), so nothing may pan out from under it. It draws
+                // nothing at all when no menu is open.
+                MenuOverlay(menuHost)
             }
         }
     }
@@ -391,12 +439,15 @@ private fun SideBinding.toSurfaceBinding(
     edge: HomeEdge,
     homeLayout: HomeLayout,
     wraps: (GridSlot?) -> Boolean,
+    onOpenAppsSettings: (AppsLayout) -> Unit,
 ): SurfaceBinding = when (this) {
     is SideBinding.Apps -> SurfaceBinding(
         openSwipe = homeLayout.scrollAxes(wraps(homeLayout.pagerSlot)).oneFingerSwipe(edge),
         closeSwipe = layout.scrollAxes(wraps(layout.pagerSlot)).oneFingerSwipe(edge),
     ) {
-        AppsScreen(layout = layout)
+        // The binding is what knows which arrangement this edge shows, so it is what closes over it — the surface
+        // itself only has to say "open my settings".
+        AppsScreen(layout = layout, onOpenLayoutSettings = { onOpenAppsSettings(layout) })
     }
 }
 

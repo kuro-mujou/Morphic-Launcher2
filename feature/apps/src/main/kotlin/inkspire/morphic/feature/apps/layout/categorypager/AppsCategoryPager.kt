@@ -55,6 +55,7 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
+import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
 import kotlin.math.roundToInt
 
 /** This surface's drop zone — the pager viewport, as on the other paged surfaces. */
@@ -120,6 +121,8 @@ fun AppsCategoryPager(
 ) {
     val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
+    // One menu handler for every app on this surface — see `rememberAppsItemMenu`.
+    val showItemMenu = rememberAppsItemMenu()
 
     // Held in a state so the count lambda reads the current list: `rememberLauncherPagerState` remembers the lambda
     // once, so capturing the parameter would freeze the pager at however many categories existed on the first
@@ -285,6 +288,7 @@ fun AppsCategoryPager(
                         fingerInRoot = if (pageIndex == gapPage) session?.fingerInRoot else null,
                         metrics = metrics,
                         onLaunch = onLaunch,
+                        showItemMenu = showItemMenu,
                         onRelease = { coordinator.drop() },
                         onGeometry = { geometries[pageIndex] = it },
                         onScrollState = { pageScrolls[pageIndex] = it },

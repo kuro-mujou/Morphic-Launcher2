@@ -1,29 +1,18 @@
 package inkspire.morphic.launcher
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import inkspire.morphic.core.navigation.HomeRoute
 import inkspire.morphic.core.navigation.LocalNavigator
-import inkspire.morphic.core.navigation.SettingsRoute
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
+import inkspire.morphic.feature.settings.SettingsRoute
 import inkspire.morphic.feature.settings.SettingsScreen
+import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
@@ -58,8 +47,7 @@ private data object DevHarnessRoute : NavKey
  * (which follows wallpaper brightness), settings via its own boundary (which follows the system). One theme around
  * the whole `NavDisplay`, as L1 had, makes it impossible for them to differ.
  *
- * Start destination is [HomeRoute] — with the `HOME` intent category still unset (P9) this is a normal app that opens
- * on the launcher surface, which is exactly what is wanted for developing it.
+ * Start destination is [HomeRoute], which since the P9 flip is also what the home button resolves to.
  */
 @Composable
 fun LauncherNavHost(modifier: Modifier = Modifier) {
@@ -77,18 +65,31 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<HomeRoute> {
                     // The launcher. Which edges are swipeable now comes from the surface register in
                     // `data:settings`; nothing is bound until the user binds one — see `LauncherShell`.
-                    Box(Modifier.fillMaxSize()) {
-                        LauncherShell()
-                        // TODO(P7 gestures): a home long-press → options menu is the real way into settings, and the
-                        //  free cell space already falls through to the surface for exactly that. Until it exists
-                        //  this chip is the only entry point, so it is scaffolding kept in `app` rather than in
-                        //  `feature:shell` — a feature module should not ship a temporary affordance.
-                        DevEntryChip(onClick = { navigator.goTo(SettingsRoute) })
-                    }
+                    //
+                    // **The way in is a long-press on empty space**, which is why the shell takes this action rather
+                    // than reading `LocalNavigator` itself: `app` owns the back stack, so `app` says where "Settings"
+                    // goes. It replaces the gear chip that stood in for the menu until it existed — that chip was
+                    // scaffolding kept here rather than in `feature:shell` precisely so deleting it would touch no
+                    // feature module, and it hasn't.
+                    LauncherShell(
+                        onOpenSettings = { navigator.goTo(SettingsRoute()) },
+                        // **`app` is the only layer that may name a section**, which is what keeps the settings
+                        // taxonomy inside `feature:settings`: the APPS surface says "open my settings" and passes
+                        // the arrangement it is showing (`AppsLayout`, which is `core:model` and shared by
+                        // everyone), and the mapping from that to a pane happens here, where both are already
+                        // visible. L1 exported its 11-value section enum to every consumer to achieve the same
+                        // thing.
+                        onOpenAppsSettings = { layout ->
+                            navigator.goTo(SettingsRoute(SettingsSection.APPS, layout))
+                        },
+                    )
                 }
-                entry<SettingsRoute> {
+                entry<SettingsRoute> { route ->
                     SettingsScreen(
                         onBack = { navigator.goBack() },
+                        // Null for the ordinary way in, which is what opens settings where it always opens.
+                        initialSection = route.section,
+                        initialLayout = route.layout,
                         // Settings is **one** destination: its sections are panes, two of which share the screen on a
                         // tablet, so which one is showing is that screen's own state. The dev harness is the only
                         // thing it needs from out here, and it is passed as an action — which keeps
@@ -115,26 +116,3 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * The temporary way into settings: a small chip over the launcher.
- *
- * Deliberately styled outside the theme (fixed translucent black, white text) for the reason the dev harness chip is
- * — it has to stay legible over any surface underneath, and it is not part of the design system because it is not
- * meant to survive. The P7 long-press menu replaces it.
- */
-@Composable
-private fun DevEntryChip(onClick: () -> Unit) {
-    Box(Modifier.fillMaxSize().systemBarsPadding()) {
-        Text(
-            text = "⚙",
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0x66000000))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-    }
-}

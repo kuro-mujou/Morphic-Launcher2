@@ -138,6 +138,9 @@ private const val LeaveDwellMs = 1000L
  *   composed only to keep an in-flight drag's pointer stream alive. A host must emit both from **one keyed call site**
  *   — moving a folder to a second call site is a different composition position, which disposes it and defeats the
  *   whole point.
+ * @param onShowMenu a long-press on one of the contained apps, with that app's visible extent in root coordinates.
+ *   The host decides what the menu offers, because what an app inside a *folder* can be asked to do is not the same
+ *   as what one on a grid can — it has no placement, so there is nothing to remove it from.
  *
  * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
  */
@@ -156,6 +159,7 @@ fun FolderOverlay(
     metrics: IconMetrics = LocalIconMetrics.current,
     incoming: AppInfo? = null,
     presenting: Boolean = true,
+    onShowMenu: (AppInfo, Rect) -> Unit = { _, _ -> },
 ) {
     // Only the presented folder answers back; a pointer holder is invisible and must not intercept it.
     if (presenting) BackHandler(onBack = onDismiss)
@@ -436,6 +440,7 @@ fun FolderOverlay(
                                         onRelease = onRelease,
                                         modifier = cellModifier,
                                         onOpen = { onLaunch(app.componentKey) },
+                                        onShowMenu = { anchor -> onShowMenu(app, anchor) },
                                     ) { itemGestures ->
                                         AppCell(
                                             app = app,

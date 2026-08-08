@@ -87,7 +87,7 @@ fun AppsVerticalList(
                 AppRowCell(
                     app = app,
                     modifier = Modifier.fillMaxWidth().height(drawnRowHeight),
-                    itemGestures = Modifier.appsItemGestures(gestureConfig, app.componentKey) {
+                    itemGestures = Modifier.appsItemGestures(gestureConfig, app) {
                         onLaunch(app.componentKey)
                     },
                 )

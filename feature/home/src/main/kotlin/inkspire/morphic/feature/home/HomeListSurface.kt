@@ -45,6 +45,9 @@ import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
+import inkspire.morphic.core.designsystem.menu.LocalMenuHost
+import inkspire.morphic.core.designsystem.menu.MenuAction
+import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.WidgetMinCell
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
@@ -246,6 +249,8 @@ internal fun HomeListSurface(
     // The launcher's one coordinator — the shell's, not this screen's, which is what lets an app dragged out of the
     // APPS drawer be dropped onto this list at all.
     val coordinator = requireDragCoordinator()
+    // The launcher's one menu host, for the same reason as the coordinator: the verbs belong to the item.
+    val menuHost = LocalMenuHost.current
     val presented = LocalSurfacePresented.current
     val session = coordinator.session
     val draggedApp = (session?.item as? GridItem.App)?.component
@@ -299,7 +304,20 @@ internal fun HomeListSurface(
         },
     )
 
-    Box(modifier.fillMaxSize()) {
+    Box(
+        modifier
+            .fillMaxSize()
+            // **Long-press on empty space → the surface menu.** On the root, so it covers both zones and the margins
+            // between them; `surfaceMenuGestures` owns why a press that lands on an icon does not reach it. Gated on
+            // being the surface on screen for the floating proxy's reason — a surface panned off to one side must not
+            // answer a press meant for the one in front of it.
+            //
+            // **One detector where L1 had three** (home, dock, widget area), because L1's three offered *different*
+            // action sets — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to
+            // the same single row today, so splitting them would be three ways to say one thing; the split returns with
+            // the first verb that is not launcher-wide.
+            .surfaceMenuGestures(gestureConfig, enabled = presented) { menuHost?.showSurface(it) },
+    ) {
         HomeZoneScaffold(
             edge = edge,
             extent = extent,
@@ -343,6 +361,23 @@ internal fun HomeListSurface(
                     // this list's, or one of the pager pairing's if the user has switched layouts mid-gesture.
                     onRelease = { coordinator.drop() },
                     onLaunch = { viewModel.launch(it) },
+                    // **"Remove" here is the list's own verb**, and it is not `RemoveFromGrid`: this list is an
+                    // order store of its own, not a view of the pager's placements, so taking an app off it means
+                    // writing the order without that app. Same reason its drag writes an index rather than a cell.
+                    onShowMenu = { app, anchor ->
+                        menuHost?.showApp(
+                            component = app.componentKey,
+                            label = app.label,
+                            anchor = anchor,
+                            surfaceActions = listOf(
+                                MenuAction("Remove") {
+                                    viewModel.reorderList(
+                                        state.listApps.map { it.componentKey } - app.componentKey,
+                                    )
+                                },
+                            ),
+                        )
+                    },
                     metrics = listMetrics,
                 )
             },
@@ -434,6 +469,7 @@ private fun ListZone(
     gestureConfig: ItemGestureConfig,
     onRelease: () -> Unit,
     onLaunch: (ComponentKey) -> Unit,
+    onShowMenu: (AppInfo, Rect) -> Unit,
     metrics: IconMetrics,
     modifier: Modifier,
     onViewportChange: (Rect) -> Unit,
@@ -450,6 +486,7 @@ private fun ListZone(
                             onRelease = onRelease,
                             modifier = Modifier.fillMaxWidth().height(rowHeight),
                             onOpen = { onLaunch(app.componentKey) },
+                            onShowMenu = { anchor -> onShowMenu(app, anchor) },
                         ) { itemGestures ->
                             AppRowCell(
                                 app = app,

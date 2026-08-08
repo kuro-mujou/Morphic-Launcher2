@@ -85,13 +85,25 @@ class ItemGestureMachineTest {
     }
 
     @Test
-    fun `releasing with the menu open dismisses it and does NOT fire a tap`() {
+    fun `releasing with the menu open leaves it up and does NOT fire a tap`() {
         val m = machine()
         m.onEvent(ItemGestureEvent.Down)
         m.onEvent(ItemGestureEvent.LongPress)
         val effects = m.onEvent(ItemGestureEvent.Up)
-        assertEquals(listOf(ItemGestureEffect.DismissMenu), effects)
+        // The finger has to come off the item before a menu row can be tapped, so the release is how the user
+        // *reaches* the menu — dismissing here would make it unusable.
+        assertEquals(emptyList<ItemGestureEffect>(), effects)
         assertTrue("must not open the item", ItemGestureEffect.OpenItem !in effects)
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    @Test
+    fun `cancelling with the menu open dismisses it`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.LongPress)
+        // A cancel is the pointer being taken away rather than given up: nothing was chosen, so nothing stays.
+        assertEquals(listOf(ItemGestureEffect.DismissMenu), m.onEvent(ItemGestureEvent.Cancel))
         assertEquals(ItemGesturePhase.Idle, m.phase)
     }
 

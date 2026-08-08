@@ -333,7 +333,6 @@ private fun CategoryGrid(
                         onOpen = {},
                         onEdgeAction = {},
                         onShowMenu = {},
-                        onDismissMenu = {},
                         onBeginDrag = { root -> coordinator.start(app, root) },
                         onDragTo = { root -> coordinator.moveTo(root) },
                         onDrop = { onRelease() },

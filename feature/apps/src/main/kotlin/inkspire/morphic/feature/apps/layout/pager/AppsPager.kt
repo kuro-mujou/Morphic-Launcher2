@@ -63,6 +63,7 @@ import inkspire.morphic.feature.apps.asIconItem
 import inkspire.morphic.feature.apps.gridItem
 import inkspire.morphic.feature.apps.iconItem
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
+import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
 import kotlin.math.roundToInt
 
 /**
@@ -163,6 +164,8 @@ fun AppsPager(
     val perPage = config.rows * config.cols
 
     val gestureConfig = rememberAppsGestureConfig()
+    // One menu handler for every app on this surface, apps in the open folder included — see `rememberAppsItemMenu`.
+    val showItemMenu = rememberAppsItemMenu()
     // Held in a state so the count lambda reads the *current* pages: `rememberLauncherPagerState` remembers the
     // lambda once, so capturing the parameter directly would freeze the pager at however many pages existed on the
     // first composition — which is none, since the store isn't paged until the surface reports its device.
@@ -411,6 +414,11 @@ fun AppsPager(
                                     is AppsItem.Folder -> folderHost.open(item.folder.id)
                                 }
                             },
+                            // A folder shows none: the verbs it would offer (rename, dissolve) have no ops on the
+                            // APPS order store yet, and a menu of one disabled row is worse than no menu.
+                            onShowMenu = { anchor ->
+                                (item as? AppsItem.App)?.let { showItemMenu(it.info, anchor) }
+                            },
                         ) { itemGestures ->
                             AppsPagerCell(item = item, modifier = Modifier.fillMaxSize(), itemGestures = itemGestures)
                         }
@@ -481,6 +489,7 @@ fun AppsPager(
                         },
                         onLeave = folderHost::leaveFolder,
                         onRelease = ::handleRelease,
+                        onShowMenu = showItemMenu,
                         onDismiss = { folderHost.close() },
                     )
                 }
