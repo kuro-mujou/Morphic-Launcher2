@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
 import android.graphics.drawable.Drawable
+import android.os.Handler
+import android.os.Looper
 import android.os.UserHandle
 import android.os.UserManager
 import androidx.core.graphics.drawable.toBitmap
@@ -223,7 +225,16 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
                 trySend(packageNames.toSet()).getOrNull()
             }
         }
-        launcherApps.registerCallback(callback)
+        // **The handler is not optional here, and leaving it out is silent.** `registerCallback(callback)` builds a
+        // `Handler()` for the *calling thread*, which throws when that thread has no Looper — and this flow is
+        // collected on `ApplicationScope`, i.e. `Dispatchers.Default`, which never has one. The exception dies in
+        // the scope's `CoroutineExceptionHandler`, so the effect is not a crash: it is a listener that was never
+        // registered, and an uninstall that updates nothing. Naming the main Looper makes the thread this runs on
+        // a decision rather than an accident of where it happened to be collected.
+        //
+        // Delivering on the main thread costs nothing because the callback does one thing — hand the package names
+        // to the channel. Everything real happens on the collector's own dispatcher.
+        launcherApps.registerCallback(callback, Handler(Looper.getMainLooper()))
         awaitClose { launcherApps.unregisterCallback(callback) }
     }
 

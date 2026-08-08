@@ -554,8 +554,14 @@ for an uninstalled app staying on every surface. Three parts:
   that never disappears is an icon that never disappears, everywhere at once. `AppInfoDao.replaceAll` is one
   `@Transaction` for `HomeListItemDao.replaceAll`'s exact reason: a separate `clear()` is observable, so every
   refresh would blank the home screen and the drawer for a frame.
-- **`LauncherAppsWrapper.packageChanges()`** is a `callbackFlow` over `LauncherApps.Callback`, conflated, reporting
-  only *that* something changed — a payload would be a second source of truth about the same question. The
+- **`LauncherAppsWrapper.packageChanges()`** is a `callbackFlow` over `LauncherApps.Callback`, registered with an
+  explicit **main-Looper `Handler`** — the argumentless `registerCallback(callback)` builds a `Handler()` for the
+  *calling* thread, which throws when that thread has no Looper, and this flow is collected on `ApplicationScope`
+  (`Dispatchers.Default`), which never has one. The throw dies in the scope's `CoroutineExceptionHandler`, so the
+  symptom is not a crash but a listener that was never registered and an uninstall that updates nothing. It
+  reports **which packages** moved and never what happened to them — "what is installed now?" has one answer and it
+  is `queryActivities`, so adds and removes here would be a second source of truth about it, while *which* package
+  moved is a question no re-read can answer (see the baked icons below). The
   repository collects it on `ApplicationScope` from its `init`, which is the exception the "coroutines run on
   `viewModelScope`" rule reserves: a cache that must mirror the device cannot stop mirroring it because the screen
   watching it went away. One collector rather than a flow handed to both ViewModels, so there is one answer to
