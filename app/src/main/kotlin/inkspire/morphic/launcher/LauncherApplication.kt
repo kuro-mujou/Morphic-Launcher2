@@ -1,6 +1,7 @@
 package inkspire.morphic.launcher
 
 import android.app.Application
+import android.content.pm.ApplicationInfo
 import inkspire.morphic.core.common.di.commonModule
 import inkspire.morphic.core.database.di.databaseModule
 import inkspire.morphic.core.icon.di.iconModule
@@ -15,6 +16,7 @@ import inkspire.morphic.feature.shell.di.shellModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
+import timber.log.Timber
 
 /**
  * The launcher [Application]: starts Koin with the app [android.content.Context] and every module's DI graph.
@@ -24,6 +26,7 @@ import org.koin.core.context.startKoin
 class LauncherApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        plantLogging()
         startKoin {
             androidLogger()
             androidContext(this@LauncherApplication)
@@ -40,6 +43,21 @@ class LauncherApplication : Application() {
                 settingsSurfaceModule,
                 shellModule,
             )
+        }
+    }
+
+    /**
+     * Gives Timber somewhere to write — **without which every `Timber.w` in this codebase is a no-op**, which is not
+     * a theoretical gap: it is why a failing uninstall looked like a button that did nothing rather than a warning
+     * naming the package. Every module logs through Timber and nothing had ever planted a tree.
+     *
+     * Debuggable builds only, so a release APK does not narrate itself into logcat. Read from [ApplicationInfo]
+     * rather than `BuildConfig.DEBUG` because that field only exists where the build-config feature is switched on,
+     * and this is the same fact from the manifest the platform itself uses.
+     */
+    private fun plantLogging() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            Timber.plant(Timber.DebugTree())
         }
     }
 }

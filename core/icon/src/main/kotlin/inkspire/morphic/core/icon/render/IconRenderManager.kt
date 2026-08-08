@@ -5,6 +5,9 @@ import android.util.LruCache
 import inkspire.morphic.core.icon.layer.IconLayerSet
 import inkspire.morphic.core.icon.parse.DrawableParser
 import inkspire.morphic.core.icon.source.RawIconSource
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import inkspire.morphic.core.model.ComponentKey
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -103,15 +106,54 @@ class IconRenderManager(
     fun peek(component: ComponentKey, layerSet: IconLayerSet, sizePx: Int): Bitmap? =
         cache.get(IconId(component, layerSet, sizePx))
 
-    /** Drops every cached size/layer-set variant of [component] — e.g. after an app update or an icon edit. */
+    /**
+     * Bumped every time something is evicted — **the one input [IconId] cannot capture**, and the reason it exists.
+     *
+     * That key is built to make invalidation automatic: it carries the component, the resolved layer set and the
+     * bake size, so any change *we* make produces a different key and therefore a different bitmap, for free. The
+     * exception is the app's **own artwork**, which an update replaces without a single one of those values moving
+     * — same component, same layer set, same size, different icon. Nothing in the key can see that, so it needs a
+     * signal, and this is it.
+     *
+     * Compose state rather than a flow because every icon on screen reads it: a state read subscribes that
+     * composition with no coroutine, where a `StateFlow` would mean one collector per icon and there are hundreds.
+     * [inkspire.morphic.core.icon.compose.LauncherIcon] folds it into its bake keys, so a bump re-peeks every icon
+     * — a cache hit for all but the ones just dropped, which re-bake.
+     */
+    var generation: Int by mutableIntStateOf(0)
+        private set
+
+    /** Drops every cached size/layer-set variant of [component] — e.g. after an icon edit. */
     fun invalidate(component: ComponentKey) {
-        cache.snapshot().keys
-            .filter { it.component == component }
-            .forEach { cache.remove(it) }
+        evict { it.component == component }
+    }
+
+    /**
+     * Drops every baked icon belonging to any of [packageNames] — what an install, update or removal invalidates.
+     *
+     * By package rather than by component because that is what the platform reports changed, and one package can
+     * publish several launcher activities. **A change that evicted nothing does not bump [generation]**: an app
+     * being installed for the first time has no stale bakes, and recomposing every icon on screen to discover that
+     * would be work for nothing.
+     */
+    fun invalidatePackages(packageNames: Set<String>) {
+        if (packageNames.isEmpty()) return
+        evict { it.component.packageName in packageNames }
     }
 
     /** Evicts the entire cache. */
-    fun clear() = cache.evictAll()
+    fun clear() {
+        cache.evictAll()
+        generation++
+    }
+
+    /** Removes every entry matching [stale], and reports it once if anything went. */
+    private fun evict(stale: (IconId) -> Boolean) {
+        val doomed = cache.snapshot().keys.filter(stale)
+        if (doomed.isEmpty()) return
+        doomed.forEach { cache.remove(it) }
+        generation++
+    }
 
     private companion object {
         /** ~1/8 of the heap, floored at 4 MB, in KB (the LruCache is sized in KB via [LruCache.sizeOf]). */

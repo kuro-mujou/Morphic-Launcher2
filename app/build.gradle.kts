@@ -75,6 +75,9 @@ dependencies {
     implementation(libs.koin.androidx.compose)
 
     implementation(libs.androidx.core.ktx)
+    // `app` is where Timber's tree is planted — every other module logs through it and none of them could make it
+    // write anywhere. See `LauncherApplication.plantLogging`.
+    implementation(libs.timber)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)

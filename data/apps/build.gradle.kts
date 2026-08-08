@@ -12,6 +12,9 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.icon)
 
+    // `Drawable.toBitmap()`, for rasterising a shortcut's icon — the platform hands one back as a Drawable and a
+    // menu row draws a bitmap. Added here as the code that needs it lands, per the module rule.
+    implementation(libs.androidx.core.ktx)
     implementation(libs.timber)
 
     testImplementation(libs.junit)

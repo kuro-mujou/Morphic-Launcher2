@@ -2,6 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
+      **What makes Uninstall work at all.** An app targeting API 29 or later must hold this to ask the system to
+      remove a package; without it the platform's uninstaller activity finishes the moment it opens, so the user
+      taps Uninstall and simply nothing happens — no dialog, no error, and no exception for `AppUninstaller` to
+      catch and log. AOSP's own Launcher3 requests it for the same one action.
+
+      It is a *normal* permission: granted at install, never prompted, and it only lets us **ask** — the system
+      still shows its own confirmation and does the removal, which is the whole contract `AppUninstaller` documents.
+
+      Declared here rather than in `app` because this module is the only thing that starts that intent, the same
+      rule `data:wallpaper` follows for `SET_WALLPAPER`. L1 asked for `QUERY_ALL_PACKAGES` instead, which happened
+      to cover this and a great deal more besides.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
+    <!--
       Package visibility (Android 11+): to enumerate every launchable app and read its icon through
       LauncherApps we must declare the launcher intent here. This is deliberately narrower than
       QUERY_ALL_PACKAGES — it exposes only activities that answer MAIN/LAUNCHER, which is exactly the set we

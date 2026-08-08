@@ -33,21 +33,39 @@ interface AppUninstaller {
 }
 
 /**
- * Default [AppUninstaller]: `Intent.ACTION_DELETE` on a `package:` URI, which is L1's `performTopAction` exactly.
+ * Default [AppUninstaller]: `Intent.ACTION_DELETE` on a `package:` URI, **carrying the profile the app lives in**.
  *
- * `FLAG_ACTIVITY_NEW_TASK` because the launcher is starting this from application context, not from an activity
- * result flow — we do not wait for an answer (see the interface).
+ * **Two things this needs that L1's copy did not have, and without either it silently does nothing.**
+ *
+ * 1. **`REQUEST_DELETE_PACKAGES`**, declared in this module's manifest. An app targeting API 29 or later must hold
+ *    it to ask the system to remove a package; without it the platform's uninstaller activity finishes immediately
+ *    and the user sees nothing happen at all — no dialog, no error, no exception here to catch. L1 got away with a
+ *    byte-identical intent because it also requested `QUERY_ALL_PACKAGES`, and L2 deliberately does not.
+ * 2. **[Intent.EXTRA_USER]**, so a work-profile app is uninstalled *in its profile*. The URI names a package and a
+ *    package name means nothing on its own across profiles — the same per-profile correction [AppLauncher] and
+ *    [AppInfoOpener] make to L1's hardcoded `Process.myUserHandle()`. AOSP's own Launcher3 sends exactly this pair.
+ *
+ * `FLAG_ACTIVITY_NEW_TASK` because the launcher starts this from application context, not from an activity result
+ * flow — we do not wait for an answer (see the interface).
  *
  * `internal` so only Koin constructs it — consumers depend on the [AppUninstaller] interface.
  */
 internal class DefaultAppUninstaller(
     private val context: Context,
+    private val launcherApps: LauncherAppsWrapper,
 ) : AppUninstaller {
 
     override fun uninstall(component: ComponentKey) {
+        // A serial with no live profile means it was removed since the app was placed; there is nothing to remove.
+        val user = launcherApps.userFor(component.userSerial)
+        if (user == null) {
+            Timber.w("No live profile for %s; nothing to uninstall", component.flatten())
+            return
+        }
         val intent = Intent(Intent.ACTION_DELETE).apply {
             data = Uri.fromParts("package", component.packageName, null)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            putExtra(Intent.EXTRA_USER, user)
         }
         try {
             context.startActivity(intent)

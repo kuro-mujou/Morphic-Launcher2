@@ -59,10 +59,15 @@ fun LauncherIcon(
         return
     }
 
-    var bitmap by remember(component, layerSet, sizePx) {
+    // **The generation is part of the bake key**, which is what makes an app update actually change the icon on
+    // screen. Evicting the cache alone would not: the three keys below are unchanged by an update, so nothing here
+    // would re-run and the stale bitmap would stay until something else happened to recompose this cell. See
+    // [IconRenderManager.generation] for why the key cannot capture this on its own.
+    val generation = manager.generation
+    var bitmap by remember(component, layerSet, sizePx, generation) {
         mutableStateOf(manager.peek(component, layerSet, sizePx))
     }
-    LaunchedEffect(component, layerSet, sizePx) {
+    LaunchedEffect(component, layerSet, sizePx, generation) {
         if (bitmap == null) bitmap = manager.get(component, layerSet, sizePx)
     }
 

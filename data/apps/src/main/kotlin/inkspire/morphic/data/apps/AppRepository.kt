@@ -17,10 +17,14 @@ interface AppRepository {
     fun observeApps(): Flow<List<AppInfo>>
 
     /**
-     * Re-queries `LauncherApps` across all profiles and upserts the result into the cache.
+     * Re-queries `LauncherApps` across all profiles and **replaces** the cache with the result.
      *
-     * This is an additive refresh — it does not yet prune apps that were uninstalled since the last run.
-     * Live install/uninstall updates (and that pruning) arrive with the `AppEvent` listener in a later part.
+     * A replace, not an upsert: the cache is a mirror of what is installed, so an app that has been uninstalled
+     * has to leave it. That it did not used to is why uninstalling an app left its icon on every surface — each
+     * one resolves its items *through* this cache, so a row that never disappears is an icon that never does.
+     *
+     * Callers still need this at start-up, for changes that happened while the process was dead; while it is
+     * alive the repository keeps itself in step (see the implementation) and nobody has to poll.
      */
     suspend fun refresh()
 }
