@@ -61,6 +61,7 @@ import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
+import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
 import kotlin.math.roundToInt
 
 /**
@@ -482,6 +483,10 @@ internal fun HomePagerSurface(
         }
     }
 
+    // Whether the widget picker is up. Surface-local rather than hoisted to `HomeScreen`, for the reason the menu
+    // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
+    var widgetPickerOpen by remember { mutableStateOf(false) }
+
     // An app *inside* a folder is offered less, and the missing verb is the point: it has no grid placement, so a
     // "Remove" here would be a row that does nothing (`RemoveFromGrid` on a folder member deletes no rows). Taking
     // an app out of a folder is a drag, which is the gesture this menu's own long-press leads into.
@@ -509,7 +514,16 @@ internal fun HomePagerSurface(
             // action sets — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to
             // the same single row today, so splitting them would be three ways to say one thing; the split returns with
             // the first verb that is not launcher-wide.
-            .surfaceMenuGestures(gestureConfig, enabled = presented) { menuHost?.showSurface(it) },
+            .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
+                menuHost?.showSurface(
+                    position = position,
+                    // **The one verb HOME owns today.** The host appends Settings itself; every other row L1 put
+                    // here is waiting on something unbuilt (an app picker, page management). The picker is hosted
+                    // by *this* surface rather than by `HomeScreen` because the size labels it shows are measured
+                    // against the grid a widget would land on, and only the surface drawing that grid knows it.
+                    surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
+                )
+            },
     ) {
         // **The two zones, stacked along the dock's own axis** — see [HomeZoneScaffold], which owns the
         // arrangement, the `uiInsets` padding on the pair, and each zone's own horizontal margin (S4g). The margins
@@ -705,6 +719,20 @@ internal fun HomePagerSurface(
                     onShowMenu = showFolderAppMenu,
                 )
             }
+        }
+
+        // **The widget picker**, last in the stack so it covers everything including an open folder. It sizes its
+        // "3 × 2" labels against the pager's grid, which is where a widget dropped on this pairing goes — and
+        // against the pager's *measured* cells, so before the first layout it shows no size rather than one
+        // derived from a second, guessed geometry.
+        if (widgetPickerOpen) {
+            val geo = geometry
+            WidgetPickerSheet(
+                grid = config,
+                cellWidthPx = geo?.cellW ?: 0f,
+                cellHeightPx = geo?.cellH ?: 0f,
+                onDismiss = { widgetPickerOpen = false },
+            )
         }
     }
 }

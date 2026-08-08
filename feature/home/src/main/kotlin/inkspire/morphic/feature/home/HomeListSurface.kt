@@ -72,6 +72,7 @@ import inkspire.morphic.core.model.HomeListGrid
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.WidgetAreaGrid
+import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import kotlin.math.floor
@@ -251,6 +252,8 @@ internal fun HomeListSurface(
     val coordinator = requireDragCoordinator()
     // The launcher's one menu host, for the same reason as the coordinator: the verbs belong to the item.
     val menuHost = LocalMenuHost.current
+    // Whether the widget picker is up — surface-local, see the menu row below.
+    var widgetPickerOpen by remember { mutableStateOf(false) }
     val presented = LocalSurfacePresented.current
     val session = coordinator.session
     val draggedApp = (session?.item as? GridItem.App)?.component
@@ -316,7 +319,15 @@ internal fun HomeListSurface(
             // action sets — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to
             // the same single row today, so splitting them would be three ways to say one thing; the split returns with
             // the first verb that is not launcher-wide.
-            .surfaceMenuGestures(gestureConfig, enabled = presented) { menuHost?.showSurface(it) },
+            .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
+                menuHost?.showSurface(
+                    position = position,
+                    // The same one verb the pager pairing offers, and the same reason the sheet is hosted here
+                    // rather than above both arms: it is sized against the grid a widget would land on, which
+                    // differs between the two.
+                    surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
+                )
+            },
     ) {
         HomeZoneScaffold(
             edge = edge,
@@ -426,6 +437,20 @@ internal fun HomeListSurface(
                     AppRowCell(app = proxyApp, modifier = Modifier.fillMaxSize())
                 }
             }
+        }
+
+        // **Sized against the widget area, not the list.** This pairing puts widgets in its side zone — the list
+        // holds apps in one lane and has no cells to describe — so the "3 × 2" a user reads here is the widget
+        // area's grid. That the two pairings answer this differently is exactly why the sheet takes the grid as a
+        // parameter rather than deriving one.
+        if (widgetPickerOpen) {
+            val geo = areaGeometry
+            WidgetPickerSheet(
+                grid = areaConfig,
+                cellWidthPx = geo?.cellW ?: 0f,
+                cellHeightPx = geo?.cellH ?: 0f,
+                onDismiss = { widgetPickerOpen = false },
+            )
         }
     }
 }

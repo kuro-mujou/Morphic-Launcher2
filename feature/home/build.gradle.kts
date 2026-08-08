@@ -13,6 +13,12 @@ dependencies {
     implementation(projects.data.layout) // LayoutRepository + FreeGridPlanner (coordinate placement engine)
     // Resolved per-zone icon sizing: the pager's and the dock's blueprints, with the user's overrides merged in.
     implementation(projects.data.settings)
+    // The widget picker's catalogue — what is installed, grouped by the app publishing it.
+    implementation(projects.data.widgets)
+
+    // The picker's chrome: a close, a back and a chevron. The extended set for `feature:settings`' reason — it is
+    // the artifact this project already ships, and R8 keeps only the vectors actually referenced.
+    implementation(libs.androidx.compose.material.icons.extended)
 
     testImplementation(libs.junit)
 }
