@@ -387,6 +387,31 @@ class HomeViewModel(
     }
 
     /**
+     * Takes [component] off the vertical list — the list's own *Remove*.
+     *
+     * **It has to be the membership op, and a reorder cannot stand in for it.** The obvious-looking alternative is
+     * `reorderList(current - component)`, and that silently does nothing: `HomeListRepository.setOrder` reconciles
+     * what the UI reported against real membership on purpose, so an app missing from the reported list is treated
+     * as one the surface could not *render* and is appended back at the end. That guard is right — it is what stops
+     * an uninstalled-but-unpruned app being deleted because no row could be drawn for it — which is exactly why
+     * removal needs an op that says so rather than one that hopes to be inferred.
+     *
+     * Optimistic on the same terms as [reorderList], and for the same reason: the row should leave under the finger
+     * that chose Remove rather than a write later.
+     */
+    fun removeFromList(component: ComponentKey) {
+        listOrder.value = listOrder.value - component
+        listWritesInFlight++
+        viewModelScope.launch {
+            try {
+                homeListRepository.remove(component)
+            } finally {
+                listWritesInFlight--
+            }
+        }
+    }
+
+    /**
      * Re-homes anything the dock can no longer hold, now that its grid is [dockConfig] — **the settings write and
      * the placement store meeting**.
      *

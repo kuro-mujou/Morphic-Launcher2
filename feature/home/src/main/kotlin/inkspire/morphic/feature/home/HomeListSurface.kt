@@ -372,20 +372,18 @@ internal fun HomeListSurface(
                     // this list's, or one of the pager pairing's if the user has switched layouts mid-gesture.
                     onRelease = { coordinator.drop() },
                     onLaunch = { viewModel.launch(it) },
-                    // **"Remove" here is the list's own verb**, and it is not `RemoveFromGrid`: this list is an
-                    // order store of its own, not a view of the pager's placements, so taking an app off it means
-                    // writing the order without that app. Same reason its drag writes an index rather than a cell.
+                    // **"Remove" here is the list's own verb**, and it is neither `RemoveFromGrid` nor a reorder:
+                    // this list is an order store of its own, not a view of the pager's placements, so taking an
+                    // app off it is a *membership* write. Writing the order without that app looks equivalent and
+                    // is not — the store reconciles a reported order against real membership and would put the app
+                    // straight back at the end. See [HomeViewModel.removeFromList].
                     onShowMenu = { app, anchor ->
                         menuHost?.showApp(
                             component = app.componentKey,
                             label = app.label,
                             anchor = anchor,
                             surfaceActions = listOf(
-                                MenuAction("Remove") {
-                                    viewModel.reorderList(
-                                        state.listApps.map { it.componentKey } - app.componentKey,
-                                    )
-                                },
+                                MenuAction("Remove") { viewModel.removeFromList(app.componentKey) },
                             ),
                         )
                     },

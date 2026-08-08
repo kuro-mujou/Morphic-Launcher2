@@ -887,8 +887,11 @@ what each zone *holds*, and every difference below follows from that rather than
 - **Not built**: the "Add apps" row (a picker), which is L1 behaviour. Without one its contents are whatever the seed
   put there — and it is the reason the list's own menu verb is *Remove* rather than a pair: an app can be taken off
   the list but there is still no way to put one back. That menu is the shared item menu with one contribution, and
-  **the contribution is not `RemoveFromGrid`**: this list is an order store of its own, so removing means writing the
-  order without that app, exactly as its drag writes an index rather than a cell.
+  **the contribution is neither `RemoveFromGrid` nor a reorder**: this list is an order store of its own, so removing
+  is a *membership* write (`HomeListRepository.remove`). Writing the order without the app looks equivalent and is
+  not — `setOrder` reconciles a reported order against real membership, so the app is treated as one the surface
+  could not render and is appended straight back at the end. That guard is right, which is exactly why removal needs
+  an op that says what it means rather than one that hopes to be inferred.
 
 **APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
 (`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were
