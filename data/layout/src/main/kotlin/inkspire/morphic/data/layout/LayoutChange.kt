@@ -7,6 +7,7 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
+import inkspire.morphic.core.model.WidgetInfo
 
 /**
  * The write-command vocabulary for the HOME layout — one value per intended change to *where items sit and
@@ -58,6 +59,28 @@ sealed interface LayoutChange {
      * unbound. The referenced **app stays installed** — this is a layout detach, never an uninstall.
      */
     data class RemoveFromGrid(val item: GridItem) : LayoutChange
+
+    /**
+     * Records a newly bound [widget] **and** places it at [at] in [zone], as one command.
+     *
+     * **Why a widget cannot just be `Move`d onto the grid the way an app is.** An app is identified by a component
+     * the app cache already knows, so a placement row is the whole of "it is on home". A widget is identified by
+     * an `appWidgetId` the platform has just handed us, and nothing else in the launcher has ever heard of it —
+     * its provider and label live in a row only this command writes. `Move` on a [GridItem.Widget] would leave a
+     * placement pointing at a widget with no definition, which renders as nothing.
+     *
+     * The pair is one op rather than two for the reason `CreateFolder` is: the two rows are meaningless apart, and
+     * a batch that could be interrupted between them would leave exactly the dangling state above.
+     *
+     * It is the mirror of [RemoveFromGrid] on a widget, which drops the definition and lets the placement cascade.
+     * What neither of them does is talk to the `AppWidgetHost` — allocating and releasing the id belongs to
+     * `data:widgets`, and this store only keeps records.
+     */
+    data class PlaceWidget(
+        val widget: WidgetInfo,
+        val at: GridPlacement,
+        val zone: HomeZone = HomeZone.MAIN,
+    ) : LayoutChange
 
     // ── Folders (hold apps only) ─────────────────────────────────────────────────────────────────────────
 

@@ -24,6 +24,9 @@ dependencies {
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch — chrome sits
     // directly on the picture and has to contrast it. This module owns the theme boundary for every launcher surface,
     // so it is the one that has to ask.
+    // The AppWidgetHost's listening window is "the launcher is on screen", which is what this composable means.
+    implementation(projects.data.widgets)
+
     implementation(projects.data.wallpaper)
 
     // `BackHandler`, so back closes an open side surface instead of leaving the launcher.

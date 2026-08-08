@@ -105,6 +105,19 @@ internal class LayoutRepositoryImpl(
                 is GridItem.Widget -> daos.widget.delete(item.appWidgetId)
             }
 
+            // ── A newly bound widget: its definition, then where it sits ──
+            // In that order, because the placement is the row a surface joins *through* the definition — writing
+            // it first would emit a placement the UI resolves to nothing for as long as the two writes are apart.
+            is LayoutChange.PlaceWidget -> {
+                daos.widget.upsert(change.widget.toEntity())
+                daos.widgetPlacement.upsert(
+                    listOf(
+                        GridItem.Widget(change.widget.appWidgetId)
+                            .toEntity(orientation, change.zone, change.at),
+                    ),
+                )
+            }
+
             // ── Folders ──
             is LayoutChange.CreateFolder -> {
                 val folderId = daos.folder.insert(FolderEntity(label = change.label))

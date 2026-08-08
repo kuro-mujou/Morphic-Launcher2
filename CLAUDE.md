@@ -1076,6 +1076,43 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
   notes for all four. What it is still waiting on is a frosted **panel**, which is where the sliders and the rim both
   come back.
 
+**Widgets are built: the picker, the host, the cell.** `data:widgets` holds two types with deliberately different
+jobs — `WidgetCatalog` answers "what *could* be added?" from `AppWidgetManager` with no host at all (a live read,
+not a cache, for `AppShortcuts`' reason), and `AppWidgetHostController` owns the one `AppWidgetHost` per process.
+The distinction runs all the way through: `WidgetProvider` has no id and `BoundWidget` does.
+- **An allocated `appWidgetId` is a resource, not a value.** It outlives the process, so a widget whose id is
+  allocated but never placed is a leak the user can neither see nor clear. Every path that abandons the add gives
+  it back, which is why `WidgetAddFlow`'s callback returns a **Boolean** — the caller says whether it *kept* the
+  widget. Removing one is likewise two halves that must both happen (`HomeViewModel.removeWidget`): the layout
+  rows, and the id.
+- **`LayoutChange.PlaceWidget` writes the definition *and* the placement.** A widget cannot be `Move`d onto the
+  grid the way an app can: an app is a component the cache already knows, while a widget's provider and label live
+  in a row only this op writes, so a bare `Move` would leave a placement resolving to nothing.
+- **The add flow decides nothing about placement.** L1's controller held the home state, both grid configs, four
+  cell sizes and the surface kind so it could place the widget itself — fourteen mutable fields reassigned every
+  composition. Here it owns only the activity-result choreography (silent bind → system dialog if refused → the
+  provider's configuration screen if it has one) and hands back a `BoundWidget`.
+- **`startListening` is scoped to the launcher being on screen**, from `LauncherShell` — a provider only pushes to
+  a listening host, so a clock stops ticking without it. Not `MainActivity`, which also hosts settings.
+- **A widget's footprint is the item's, not the grid's** — and assuming otherwise was one bug with three faces.
+  `planCoordinateDrop` hardcoded one visual cell, so a big widget got a 1×1 shadow *and* a `Move` that resized it
+  on drop; the drop shadow separately derived its own size from a cell count rather than from the plan that had
+  already resolved one. Both now read the item's own span, and the shadow reads `plan.footprint`.
+- **The drag proxy is a *snapshot*.** Every other dragged thing is a cell the launcher can re-draw; a widget's
+  content is another app's `RemoteViews`, and a second `AppWidgetHostView` for one id would be a second live
+  instance. `AppWidgetHostController.snapshot` draws the on-screen view into a bitmap — L1's `captureBitmap`, for
+  exactly this.
+- **A widget's tap is not ours to suppress, so the view is *told* the gesture was taken.** `AppWidgetHostView`
+  receives the same touches we do and fires its own click on `ACTION_UP`, which is why long-pressing a widget and
+  releasing used to trigger it. The gesture machine cannot help — it only decides whether *we* open the item — and
+  consuming the release does not either, because the interop layer hands the up to the view on the Initial pass,
+  before a Main-pass node could consume. `WidgetCell` sends a synthetic **`ACTION_CANCEL`** instead, driven off
+  two signals it already has (`LocalMenuHost.request`, the coordinator's `isDragging`) rather than a second
+  long-press timer to keep in step with ours. AOSP's Launcher3 does the same from a `CheckLongPressHelper`.
+  `ItemGesturePhase.ownsFinger` came out of the same investigation and is a separate, smaller correction: the item
+  now consumes once it owns the finger rather than only while swiping or dragging.
+- **Still to come**: resize, widget containers, and the widget area's shrink eviction (it cannot evict to a list).
+
 **Next after that: HOME's second pairing is built, so widgets are the thing it is waiting on.** `LIST_WITH_WIDGET_AREA`
 renders, is configurable, and reorders — and its widget area is an empty, correctly-sized, correctly-refusing drop
 zone until `GridItem.Widget` has a cell. Two things become owed the moment it does: re-homing what a shrink evicts

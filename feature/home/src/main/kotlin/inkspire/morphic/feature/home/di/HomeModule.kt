@@ -16,6 +16,6 @@ import org.koin.dsl.module
  * reopened, and die with the screen.
  */
 val homeModule = module {
-    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { WidgetPickerViewModel(get()) }
 }

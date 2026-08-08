@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -37,6 +39,7 @@ import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.grid.GridSpan
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
@@ -52,16 +55,22 @@ import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
+import inkspire.morphic.data.layout.WidgetSpan
+import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
+import inkspire.morphic.feature.home.widgetpicker.rememberWidgetAddFlow
+import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
 /**
@@ -80,6 +89,9 @@ private val DockZoneId = ZoneId("home-dock")
  * simply an unnamed folder, and inventing a name there would put a word on screen the user never chose.
  */
 private const val UnnamedFolder = "Folder"
+
+/** The same fallback for a widget whose provider publishes no label. */
+private const val UnnamedWidget = "Widget"
 
 /**
  * Which persisted [HomeZone] a drop zone writes to, or null when the zone is not one of home's own grids — today
@@ -211,7 +223,6 @@ internal fun HomePagerSurface(
             metrics = dockMetrics,
         )
     }
-    val dockCellSpan = dockConfig.cellMultiplier
 
     // **The pager is fitted to what the dock leaves it**, through the same `fitGridConfig` the dock reads its own
     // counts with — which is the half that was missing. The main area is the only grid that was drawn at its stored
@@ -238,7 +249,6 @@ internal fun HomePagerSurface(
             metrics = mainMetrics,
         )
     }
-    val cellSpan = config.cellMultiplier
 
     // Both zones re-settle whenever their grid changes, and for the same reason: a smaller grid has cells that may
     // hold items. Idempotent — a grid everything already fits writes nothing — which is why neither needs a "did it
@@ -275,6 +285,20 @@ internal fun HomePagerSurface(
     val folders = remember(state.items) { state.items.filterIsInstance<HomeItem.Folder>() }
     // The current placement maps, read live by the planner while a drag is in flight.
     val livePlacements = rememberUpdatedState(placements)
+
+    /**
+     * **The dragged item's footprint** — its own placement's spans, or one visual cell of [zoneConfig] when it has
+     * no placement at all (an app arriving from the APPS drawer, which is nowhere until it lands).
+     *
+     * Read live by both planners, because a widget's size is a property of the *item* and not of the grid: an app
+     * and a folder are always one visual cell, so assuming that worked until widgets existed and then quietly
+     * resized every one of them to a single cell on drop.
+     */
+    val liveSpanOf = rememberUpdatedState<(GridItem, GridConfig) -> GridSpan>({ item, zoneConfig ->
+        state.items.firstOrNull { it.gridItem == item }?.placement
+            ?.let { GridSpan(colSpan = it.colSpan, rowSpan = it.rowSpan) }
+            ?: GridSpan(zoneConfig.cellMultiplier, zoneConfig.cellMultiplier)
+    })
     val liveDockPlacements = rememberUpdatedState(dockPlacements)
 
     // Pager: page count is (highest occupied page + 1), plus one trailing empty page while a *home* drag is in
@@ -314,6 +338,7 @@ internal fun HomePagerSurface(
                 page = page,
                 occupants = livePlacements.value.filterKeys { it != item }.filterValues { it.page == page },
                 item = item,
+                span = liveSpanOf.value(item, config),
                 fingerInRoot = fingerInRoot,
             )
         }
@@ -327,6 +352,7 @@ internal fun HomePagerSurface(
                 page = 0,
                 occupants = liveDockPlacements.value.filterKeys { it != item },
                 item = item,
+                span = liveSpanOf.value(item, dockConfig),
                 fingerInRoot = fingerInRoot,
             )
         }
@@ -448,6 +474,9 @@ internal fun HomePagerSurface(
         when (item) {
             is HomeItem.App -> viewModel.launch(item.info.componentKey)
             is HomeItem.Folder -> folderHost.open(item.folder.id)
+            // A widget handles its own taps — its content is another app's views, and every button in it is
+            // theirs. The launcher's job here is to *not* intercept.
+            is HomeItem.Widget -> Unit
         }
     }
 
@@ -468,6 +497,14 @@ internal fun HomePagerSurface(
                     },
                 ),
             )
+            // A widget offers one verb and no shortcuts stage: it is not an app, so App info and Uninstall would
+            // name its *provider* rather than the thing being long-pressed. Removing it also releases the
+            // `appWidgetId` — see [HomeViewModel.removeWidget], which is why this is not a plain `RemoveFromGrid`.
+            is HomeItem.Widget -> menuHost?.show(
+                title = item.info.label.ifBlank { UnnamedWidget },
+                anchor = anchor,
+                actions = listOf(MenuAction("Remove widget") { viewModel.removeWidget(item.info.appWidgetId) }),
+            )
             // No shortcuts stage and no App info — a folder is the launcher's own object, not an installed app.
             // "Remove folder" takes the folder off the grid and its membership with it (`RemoveFromGrid` cascades),
             // leaving the apps themselves installed and still in the drawer.
@@ -481,6 +518,28 @@ internal fun HomePagerSurface(
                 ),
             )
         }
+    }
+
+    // **The add flow, and the placement it reports back to.** The flow owns the activity-result choreography
+    // (bind, then the provider's configuration screen); *where* the widget goes is this surface's, because only it
+    // knows the grid and the cells it was measured at. Returning false releases the id — see `WidgetAddFlow`.
+    val widgetHost = koinInject<AppWidgetHostController>()
+    val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
+        val geo = geometry
+        val span = geo?.let {
+            WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
+        }
+        span != null && viewModel.placeWidget(
+            widget = WidgetInfo(
+                appWidgetId = bound.appWidgetId,
+                providerPackage = bound.provider.packageName,
+                providerClass = bound.provider.className,
+                label = bound.label,
+            ),
+            span = span,
+            zone = HomeZone.MAIN,
+            config = config,
+        )
     }
 
     // Whether the widget picker is up. Surface-local rather than hoisted to `HomeScreen`, for the reason the menu
@@ -589,11 +648,13 @@ internal fun HomePagerSurface(
         // Gated on this being the surface on screen, for the same reason the trailing page is: a drag inside the
         // APPS drawer must not have home painting a second proxy under the same finger from behind it.
         if (presented && session != null && geo != null) {
-            // The proxy spans `cellSpan` logical cells per axis (one visual cell) of the *pager's* grid, and
-            // deliberately keeps that size across the whole drag: the icon under the finger must not resize as
-            // the drag crosses into the dock, whose cells are a different height.
-            val footprintW = geo.cellW * cellSpan
-            val footprintH = geo.cellH * cellSpan
+            // The proxy is the dragged item's own footprint in the *pager's* cells, and deliberately keeps that
+            // size across the whole drag: what is under the finger must not resize as the drag crosses into the
+            // dock, whose cells are a different height. It was one visual cell until widgets existed, which drew
+            // a 4x2 widget as a single icon-sized square.
+            val draggedSpan = liveSpanOf.value(session.item, config)
+            val footprintW = geo.cellW * draggedSpan.colSpan
+            val footprintH = geo.cellH * draggedSpan.rowSpan
             // The shadow, unlike the proxy, belongs to the zone being hovered, so it is drawn from *that*
             // zone's geometry and cell span — the two grids have different origins and cell sizes, and a
             // footprint is only meaningful in the grid that produced it.
@@ -604,22 +665,25 @@ internal fun HomePagerSurface(
             // today only because that backdrop is opaque black — it won't be once the frosted backdrop lands).
             // Extract is unaffected: its active zone really is a home grid, which is exactly when the landing
             // cell should show.
-            val shadow = when (session.activeZone) {
-                MainZoneId -> geo to cellSpan
-                DockZoneId -> dockGeometry?.let { it to dockCellSpan }
+            val shadowGeo = when (session.activeZone) {
+                MainZoneId -> geo
+                DockZoneId -> dockGeometry
                 else -> null
             }
-            if (shadow != null) {
-                val (shadowGeo, shadowSpan) = shadow
+            if (shadowGeo != null) {
                 session.plan?.let { plan ->
                     val topLeft = shadowGeo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
                     DropFootprint(
                         intent = plan.intent,
                         modifier = Modifier
                             .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
+                            // **Sized from the plan, not from a cell count.** The plan already states the
+                            // footprint it resolved, spans included, so reading it here is what makes a widget's
+                            // shadow the widget's size — and removes the second, guessed derivation that made
+                            // every shadow one visual cell.
                             .size(
-                                with(density) { (shadowGeo.cellW * shadowSpan).toDp() },
-                                with(density) { (shadowGeo.cellH * shadowSpan).toDp() },
+                                with(density) { (shadowGeo.cellW * plan.footprint.colSpan).toDp() },
+                                with(density) { (shadowGeo.cellH * plan.footprint.rowSpan).toDp() },
                             ),
                     )
                 }
@@ -635,7 +699,14 @@ internal fun HomePagerSurface(
             // a folder the app is a member with no cell of its own, so it is looked up through [appInfo], which
             // searches folder contents too. Without that the icon vanishes the instant the folder closes.
             val draggedFolder = state.items.firstOrNull { it.gridItem == session.item } as? HomeItem.Folder
-            if ((draggedApp != null || draggedFolder != null) && folderHost.openFolderId == null) {
+            // A widget cannot be re-drawn the way a cell can — its content is another app's views — so the proxy
+            // is a snapshot of the one on screen, taken once when the drag starts. See
+            // `AppWidgetHostController.snapshot`.
+            val draggedWidget = session.item as? GridItem.Widget
+            val widgetShot = remember(draggedWidget) { draggedWidget?.let { widgetHost.snapshot(it.appWidgetId) } }
+            if ((draggedApp != null || draggedFolder != null || widgetShot != null) &&
+                folderHost.openFolderId == null
+            ) {
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
@@ -652,6 +723,12 @@ internal fun HomePagerSurface(
                         FolderCell(
                             label = draggedFolder.folder.label,
                             apps = draggedFolder.apps,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (widgetShot != null) {
+                        Image(
+                            bitmap = widgetShot.asImageBitmap(),
+                            contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -732,6 +809,12 @@ internal fun HomePagerSurface(
                 cellWidthPx = geo?.cellW ?: 0f,
                 cellHeightPx = geo?.cellH ?: 0f,
                 onDismiss = { widgetPickerOpen = false },
+                // Closing first is what lets the system's bind dialog and the provider's configuration screen come
+                // up over the launcher rather than over a sheet that would still be there when they returned.
+                onAddWidget = { provider ->
+                    widgetPickerOpen = false
+                    addWidget.start(provider.component)
+                },
             )
         }
     }
@@ -758,6 +841,12 @@ private fun HomeItemCell(
     when (item) {
         is HomeItem.App ->
             AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
+        is HomeItem.Widget -> WidgetCell(
+            appWidgetId = item.info.appWidgetId,
+            label = item.info.label.ifBlank { UnnamedWidget },
+            modifier = cellModifier,
+            itemGestures = itemGestures,
+        )
         is HomeItem.Folder -> {
             // Hide the app currently being dragged (e.g. extracted out of this folder) from the tile preview, so it
             // isn't shown in the folder icon and under the finger at the same time. The real folder removal commits

@@ -9,6 +9,7 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**
@@ -34,6 +35,23 @@ sealed interface HomeItem {
         override val zone: HomeZone,
     ) : HomeItem {
         override val gridItem: GridItem get() = GridItem.App(info.componentKey)
+    }
+
+    /**
+     * A placed widget: the [info] the layout store keeps about it (its `appWidgetId`, provider and label) at
+     * [placement] in [zone].
+     *
+     * **Its [placement] carries a real span**, unlike an app's or a folder's — those are always one visual cell,
+     * where a widget is whatever size its provider asked for when it was added. Everything downstream already
+     * handles that (the planner, the occupancy map and the cell layout all read spans), which is why adding
+     * widgets needed no change to any of them.
+     */
+    data class Widget(
+        val info: WidgetInfo,
+        override val placement: GridPlacement,
+        override val zone: HomeZone,
+    ) : HomeItem {
+        override val gridItem: GridItem get() = GridItem.Widget(info.appWidgetId)
     }
 
     /**
@@ -175,5 +193,7 @@ fun HomeState.appInfo(component: ComponentKey): AppInfo? =
         when (item) {
             is HomeItem.App -> item.info.takeIf { it.componentKey == component }
             is HomeItem.Folder -> item.apps.firstOrNull { it.componentKey == component }
+            // A widget is not an app and holds none, so it can never answer this.
+            is HomeItem.Widget -> null
         }
     } ?: catalog[component]

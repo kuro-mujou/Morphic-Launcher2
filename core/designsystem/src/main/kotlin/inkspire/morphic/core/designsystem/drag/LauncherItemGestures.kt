@@ -161,7 +161,17 @@ fun Modifier.launcherItemGestures(
                                 }
                                 local = change.position
                                 if (change.changedToUpIgnoreConsumed()) {
+                                    // Read *before* the event, because `Up` resets the machine to `Idle` — and what
+                                    // matters is whether the item owned the finger at the moment it was released.
+                                    val claimed = machine.phase.ownsFinger
                                     perform(machine.onEvent(ItemGestureEvent.Up), local)
+                                    // Consuming the release is what tells an **embedded View** the gesture was
+                                    // taken from it: a widget's `AppWidgetHostView` is a second consumer of these
+                                    // same touches, and without a cancel it fires the widget's own click as the
+                                    // user lifts out of the long-press menu. See [ItemGesturePhase.ownsFinger] —
+                                    // suppressing our own `OpenItem` never could have stopped that, because the
+                                    // tap belongs to the hosted view rather than to us.
+                                    if (claimed) change.consume()
                                     break
                                 }
                                 if (!change.pressed) {
@@ -179,12 +189,9 @@ fun Modifier.launcherItemGestures(
                                 // consume ahead of this node.
                                 if (change.positionChangedIgnoreConsumed()) {
                                     perform(machine.onEvent(ItemGestureEvent.Move(local - down.position)), local)
-                                    // Once the gesture is claimed as a swipe or a drag, stop the parent
-                                    // (pager/scroller) from also reacting to the same finger movement.
-                                    val phase = machine.phase
-                                    if (phase is ItemGesturePhase.Swiped || phase == ItemGesturePhase.Dragging) {
-                                        change.consume()
-                                    }
+                                    // Once the item owns the finger, stop anything else reacting to the same
+                                    // movement — a parent pager or scroller, and an embedded View below.
+                                    if (machine.phase.ownsFinger) change.consume()
                                 }
                             }
                         }

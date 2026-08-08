@@ -11,6 +11,9 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.data.widgets.AppWidgetHostController
+import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.sideSlot
@@ -22,6 +25,8 @@ import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.HomeListRepository
 import inkspire.morphic.data.layout.LayoutChange
+import inkspire.morphic.data.layout.GridOccupancy
+import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.settleDock
 import inkspire.morphic.data.settings.SettingsRepository
@@ -80,6 +85,7 @@ class HomeViewModel(
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
     private val settingsRepository: SettingsRepository,
+    private val widgetHost: AppWidgetHostController,
 ) : ViewModel() {
     private val placements = MutableStateFlow<Map<GridItem, PlacedItem>>(emptyMap())
 
@@ -247,16 +253,27 @@ class HomeViewModel(
      */
     private val sizing: Flow<HomeSizing> = combine(iconSizings, mainSizing, sideSizing, paddings, layout, ::HomeSizing)
 
+    /**
+     * The definitions a placement resolves *through* — a folder's contents, a widget's provider and label.
+     *
+     * Folded into one flow for [sizing]'s reason (`combine` takes five and the state wants more), and this is the
+     * honest pairing: both are stores of *what an item is*, where the placement tables say only where it sits. A
+     * placement whose definition is missing renders as nothing, which is what the `mapNotNull` below relies on.
+     */
+    private val definitions: Flow<HomeDefinitions> =
+        combine(layoutRepository.folders(), layoutRepository.widgets(), ::HomeDefinitions)
+
     val state: StateFlow<HomeState> =
         combine(
             placements,
             appRepository.observeApps(),
-            layoutRepository.folders(),
+            definitions,
             listOrder,
             sizing,
-        ) { placed, apps, folders, listOrder, configured ->
+        ) { placed, apps, defined, listOrder, configured ->
             val infoByComponent = apps.associateBy { it.componentKey }
-            val folderById = folders.associateBy { it.id }
+            val folderById = defined.folders.associateBy { it.id }
+            val widgetById = defined.widgets.associateBy { it.appWidgetId }
             HomeState(
                 items = placed.mapNotNull { (item, at) ->
                     when (item) {
@@ -270,7 +287,9 @@ class HomeViewModel(
                                 zone = at.zone,
                             )
                         }
-                        else -> null // widgets / containers get their cells later
+                        is GridItem.Widget ->
+                            widgetById[item.appWidgetId]?.let { HomeItem.Widget(it, at.placement, at.zone) }
+                        else -> null // containers get their cells later
                     }
                 },
                 layout = configured.layout,
@@ -384,6 +403,43 @@ class HomeViewModel(
                 listWritesInFlight--
             }
         }
+    }
+
+    /**
+     * Takes the widget [appWidgetId] off HOME — **and gives its id back to the platform**.
+     *
+     * The second half is why this is not a plain `RemoveFromGrid`. An allocated id is a resource that outlives this
+     * process: dropping our rows alone would leave the platform believing the widget still exists, keeping the
+     * provider updating something nobody can see, with no way for the user to reach it again. `data:layout` cannot
+     * do it — the host belongs to `data:widgets` and the store deliberately only keeps records — so the two halves
+     * meet here, which is the same shape as the top-action band's Uninstall (a layout change beside a system call).
+     *
+     * Order matters only for what a failure would leave behind: the rows go first, so a host that refuses the
+     * release leaves an orphaned id rather than a cell drawing a widget the layout no longer knows about.
+     */
+    fun removeWidget(appWidgetId: Int) {
+        applyChanges(listOf(LayoutChange.RemoveFromGrid(GridItem.Widget(appWidgetId))))
+        widgetHost.deleteId(appWidgetId)
+    }
+
+    /**
+     * Places a widget the add flow has just bound and configured, at the first free rect of [span] on [zone]'s grid.
+     *
+     * **It searches rather than being told a cell**, because the picker is reached from a long-press whose position
+     * says where the *menu* opened, not where a widget of an unknown size will fit. L1 searched from the pressed
+     * cell for the same reason; the difference is that its search fell back to deleting the id silently, where this
+     * returns false so the caller can say so.
+     *
+     * @return false when nothing of that size fits, in which case **nothing is written** and the caller still owns
+     *   the id — a widget half-added is worse than one not added.
+     */
+    fun placeWidget(widget: WidgetInfo, span: WidgetSpan, zone: HomeZone, config: GridConfig): Boolean {
+        val occupied = state.value.items.filter { it.zone == zone }.map { it.placement }
+        val at = GridOccupancy(config, occupied)
+            .findFreeRect(page = 0, row = 0, col = 0, rowSpan = span.rowSpan, colSpan = span.colSpan)
+            ?: return false
+        applyChanges(listOf(LayoutChange.PlaceWidget(widget, at, zone)))
+        return true
     }
 
     /**
@@ -662,6 +718,10 @@ class HomeViewModel(
             it.gridItem != dragged && it.placement == targetPlacement && it.zone == zone
         } ?: return null
         return when (target) {
+            // Nothing merges onto a widget: a folder holds apps, and a widget is not one. Returning null is what
+            // makes the drop fall through to an ordinary push, which is the honest outcome — the finger is over a
+            // widget's centre, and there is no collection for the app to join there.
+            is HomeItem.Widget -> null
             is HomeItem.App -> listOf(
                 LayoutChange.CreateFolder(
                     label = DEFAULT_FOLDER_LABEL,
@@ -757,6 +817,17 @@ private data class HomeSizing(
     val side: SideZoneSizing?,
     val padding: Map<GridSlot, Int>,
     val layout: HomeLayout,
+)
+
+/**
+ * The definition stores a placement resolves through — see `HomeViewModel.definitions`.
+ *
+ * Two flows in one value rather than two more arguments to a `combine` that has run out of them, exactly as
+ * [HomeSizing] groups the configuration sources.
+ */
+private data class HomeDefinitions(
+    val folders: List<Folder>,
+    val widgets: List<WidgetInfo>,
 )
 
 /**

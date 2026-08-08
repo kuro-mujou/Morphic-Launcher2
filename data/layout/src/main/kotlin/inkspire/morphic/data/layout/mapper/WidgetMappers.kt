@@ -24,3 +24,12 @@ internal fun widgetContainersOf(
 /** A bound-widget row as its [WidgetInfo] metadata. */
 internal fun WidgetEntity.toWidgetInfo(): WidgetInfo =
     WidgetInfo(appWidgetId = appWidgetId, providerPackage = providerPackage, providerClass = providerClass, label = label)
+
+/** The row for a newly bound widget — the definition half of `LayoutChange.PlaceWidget`. */
+internal fun WidgetInfo.toEntity(): WidgetEntity =
+    WidgetEntity(
+        appWidgetId = appWidgetId,
+        providerPackage = providerPackage,
+        providerClass = providerClass,
+        label = label,
+    )

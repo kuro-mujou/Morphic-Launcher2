@@ -49,6 +49,7 @@ import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
 import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
 import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.grid.GridSpan
 import inkspire.morphic.core.designsystem.grid.WidgetMinCell
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
@@ -72,7 +73,13 @@ import inkspire.morphic.core.model.HomeListGrid
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.WidgetAreaGrid
+import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.data.layout.LayoutChange
+import inkspire.morphic.data.layout.WidgetSpan
+import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
+import inkspire.morphic.feature.home.widgetpicker.rememberWidgetAddFlow
+import org.koin.compose.koinInject
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import kotlin.math.floor
@@ -108,10 +115,11 @@ private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.R
  * (or the leading rail on a phone in landscape) because it is the thing you look at rather than the thing you reach
  * for. See `SideZoneEdge`.
  *
- * **It renders empty today, and that is a missing feature rather than a missing surface.** Widgets are not built
- * (`GridItem.Widget` has no cell yet), so nothing can be placed in it — but the zone is real: it is measured, sized,
- * fitted, registered as a drop target, and it *refuses apps*, which is L1's `areaReject` rule expressed as
- * `DropZone.accepts` instead of as a check at drop time. When widgets land they have somewhere to go.
+ * **It holds widgets, and only widgets.** `DropZone.accepts` refuses everything else, which is L1's `areaReject`
+ * rule made structural rather than a check at drop time: a zone that refuses the dragged item is skipped by the hit
+ * test, so an app carried over the area falls through to the list beneath instead of being rejected on release.
+ * Adding one is the surface menu's *Widgets* row; moving one within the area is the same shared planner the pager
+ * pairing's zones use.
  *
  * **The list is ordered, and dragging it reorders it — nothing else.** There is no merge ring (a list of apps has no
  * folders in it, exactly as L1's has none), no page to carry an item onto, and no coordinate to write: a drop is an
@@ -252,8 +260,44 @@ internal fun HomeListSurface(
     val coordinator = requireDragCoordinator()
     // The launcher's one menu host, for the same reason as the coordinator: the verbs belong to the item.
     val menuHost = LocalMenuHost.current
+    // The add flow, reporting into the **widget area** — this pairing's home for widgets. Same shape as the pager
+    // pairing's; what differs is the zone and the grid, which is the whole reason each surface owns its own.
+    val widgetHost = koinInject<AppWidgetHostController>()
+    val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
+        val geo = areaGeometry
+        val span = geo?.let {
+            WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, areaConfig)
+        }
+        span != null && viewModel.placeWidget(
+            widget = WidgetInfo(
+                appWidgetId = bound.appWidgetId,
+                providerPackage = bound.provider.packageName,
+                providerClass = bound.provider.className,
+                label = bound.label,
+            ),
+            span = span,
+            zone = HomeZone.WIDGET_AREA,
+            config = areaConfig,
+        )
+    }
+
     // Whether the widget picker is up — surface-local, see the menu row below.
     var widgetPickerOpen by remember { mutableStateOf(false) }
+
+    // A widget in the area offers the one verb a widget has, exactly as it does on the pager pairing's grids —
+    // removing it also releases its `appWidgetId`, which is why it goes through the ViewModel rather than being a
+    // plain `RemoveFromGrid`.
+    val showAreaMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
+        (item as? HomeItem.Widget)?.let { widget ->
+            menuHost?.show(
+                title = widget.info.label.ifBlank { "Widget" },
+                anchor = anchor,
+                actions = listOf(
+                    MenuAction("Remove widget") { viewModel.removeWidget(widget.info.appWidgetId) },
+                ),
+            )
+        }
+    }
     val presented = LocalSurfacePresented.current
     val session = coordinator.session
     val draggedApp = (session?.item as? GridItem.App)?.component
@@ -347,16 +391,54 @@ internal fun HomeListSurface(
                     dragItem = { it.gridItem },
                     placement = { it.placement },
                     acceptsItem = { it is GridItem.Widget || it is GridItem.WidgetContainer },
-                    // Nothing it accepts can be lifted yet, so it plans nothing and can land nothing. Both stay
-                    // explicit rather than being defaulted away: the zone is real, and what it is missing is
-                    // widgets, not wiring.
-                    planner = { _, _ -> null },
-                    onLand = {},
+                    // The same shared planner the pager pairing's two zones use — a zone is described by its
+                    // geometry, its dimensions and its occupants, not by an algorithm of its own.
+                    planner = { item, finger ->
+                        areaGeometry?.let { geo ->
+                            planCoordinateDrop(
+                                geo = geo,
+                                config = areaConfig,
+                                page = 0,
+                                occupants = state.inZone(HomeZone.WIDGET_AREA)
+                                    .filter { it.gridItem != item }
+                                    .associate { it.gridItem to it.placement },
+                                item = item,
+                                // A widget keeps its own footprint here too — the area holds nothing else, so
+                                // the one-visual-cell fallback is only ever the first frame of a drag from
+                                // somewhere that has no placement.
+                                span = state.inZone(HomeZone.WIDGET_AREA)
+                                    .firstOrNull { it.gridItem == item }?.placement
+                                    ?.let { GridSpan(colSpan = it.colSpan, rowSpan = it.rowSpan) }
+                                    ?: GridSpan(areaConfig.cellMultiplier, areaConfig.cellMultiplier),
+                                fingerInRoot = finger,
+                            )
+                        }
+                    },
+                    onLand = { outcome ->
+                        val plan = outcome.plan ?: return@CoordinateDragGrid
+                        viewModel.applyChanges(
+                            plan.moves.map { (item, to) ->
+                                LayoutChange.Move(item, to, HomeZone.WIDGET_AREA)
+                            } + LayoutChange.Move(outcome.item, plan.footprint, HomeZone.WIDGET_AREA),
+                        )
+                    },
                     onRelease = { coordinator.drop() },
                     modifier = zoneModifier,
                     onGeometryChange = { areaGeometry = it },
                     onOpen = {},
-                ) { _, _, _ -> }
+                    onShowMenu = { item, anchor -> showAreaMenu(item, anchor) },
+                ) { item, cellModifier, itemGestures ->
+                    // Only a widget can be here — `acceptsItem` refuses everything else, and nothing seeds it — so
+                    // anything the state reports for this zone that is not one is a row we cannot draw.
+                    (item as? HomeItem.Widget)?.let {
+                        WidgetCell(
+                            appWidgetId = it.info.appWidgetId,
+                            label = it.info.label.ifBlank { "Widget" },
+                            modifier = cellModifier,
+                            itemGestures = itemGestures,
+                        )
+                    }
+                }
             },
             main = { zoneModifier ->
                 ListZone(
@@ -448,6 +530,10 @@ internal fun HomeListSurface(
                 cellWidthPx = geo?.cellW ?: 0f,
                 cellHeightPx = geo?.cellH ?: 0f,
                 onDismiss = { widgetPickerOpen = false },
+                onAddWidget = { provider ->
+                    widgetPickerOpen = false
+                    addWidget.start(provider.component)
+                },
             )
         }
     }

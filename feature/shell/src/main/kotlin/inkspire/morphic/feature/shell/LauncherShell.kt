@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.backdrop.BackdropState
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
@@ -64,12 +65,14 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.wallpaper.WallpaperBrightness
+import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.apps.scrollAxes
 import inkspire.morphic.feature.home.HomeScreen
 import inkspire.morphic.feature.home.scrollAxes
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 /**
  * The launcher itself: **HOME in the centre, side surfaces off its edges**, panned between by a swipe.
@@ -112,6 +115,16 @@ fun LauncherShell(
     // Pushed down rather than read in the holder, the same way every surface reports its `DeviceConfiguration`: the
     // rotating wallpaper is two pictures, so "which one" is a question only something holding the window can answer.
     LaunchedEffect(orientation) { viewModel.setOrientation(orientation) }
+
+    // **The widget host listens while the launcher is on screen, and only then.** A provider only pushes updates to
+    // a listening host, so a clock stops ticking without this; listening while the launcher is not visible is work
+    // for nobody. Here rather than in `MainActivity` because "the launcher is on screen" is precisely what this
+    // composable means — the Activity also hosts settings, where no widget is drawn.
+    val widgetHost = koinInject<AppWidgetHostController>()
+    LifecycleStartEffect(widgetHost) {
+        widgetHost.startListening()
+        onStopOrDispose { widgetHost.stopListening() }
+    }
 
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other

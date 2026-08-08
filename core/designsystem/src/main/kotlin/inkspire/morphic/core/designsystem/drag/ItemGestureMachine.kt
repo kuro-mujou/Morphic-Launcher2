@@ -83,6 +83,23 @@ sealed interface ItemGesturePhase {
 }
 
 /**
+ * Whether the item has **claimed the finger** — it is swiping, dragging, or holding its menu open.
+ *
+ * What this decides is *consumption*: from here the gesture is the item's, so nothing else may act on the same
+ * pointer. For most items that only stops a parent pager or scroller from reacting. For one it matters far more:
+ * a cell hosting an **embedded View** (an `AppWidgetHostView`) is a second, independent consumer of the same
+ * touches, and Compose's interop layer sends it an `ACTION_CANCEL` exactly when a Compose ancestor consumes. That
+ * cancel is what stops a widget firing its own click as the user releases out of the long-press menu — nothing in
+ * this machine could suppress it, because the tap was never ours to suppress.
+ *
+ * [ItemGesturePhase.Pressed] is deliberately *not* here: an ordinary tap must reach the widget.
+ */
+internal val ItemGesturePhase.ownsFinger: Boolean
+    get() = this is ItemGesturePhase.Swiped ||
+        this == ItemGesturePhase.Dragging ||
+        this == ItemGesturePhase.MenuOpen
+
+/**
  * The one item-gesture state machine, shared by every draggable item on every surface. It turns a stream of
  * [ItemGestureEvent]s into [ItemGestureEffect]s, encoding exactly the launcher's gesture contract
  * (docs/DRAG_AND_DROP_DESIGN.md §5):

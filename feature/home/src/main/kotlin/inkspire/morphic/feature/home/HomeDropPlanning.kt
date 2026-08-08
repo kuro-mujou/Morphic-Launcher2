@@ -3,6 +3,7 @@ package inkspire.morphic.feature.home
 import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.core.designsystem.grid.Cell
 import inkspire.morphic.core.designsystem.grid.GridGeometry
+import inkspire.morphic.core.designsystem.grid.GridSpan
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -27,7 +28,7 @@ import kotlin.math.abs
  * described by *data* (its geometry, its dimensions, its occupants) and not by its own algorithm.
  *
  * The rule, unchanged from the single-zone version:
- * - the footprint is one **visual** cell (`span × span` logical cells) snapped to the **logical** lattice;
+ * - the footprint is [span] logical cells, snapped to the **logical** lattice;
  * - if the finger is over an occupant, that occupant's cell partitions into a centre merge ring plus four push
  *   triangles — the ring merges into a folder, a triangle picks which way the occupant is shoved;
  * - otherwise the free-grid engine pushes whatever the footprint lands on.
@@ -45,6 +46,10 @@ import kotlin.math.abs
  * @param geo the zone's measured geometry, as published by its grid — the same cells the user can see.
  * @param config the zone's logical dimensions; `cellMultiplier` is the visual-cell span.
  * @param page the page the drop lands on — the pager's current page, or 0 for a single (non-paged) zone.
+ * @param span the dragged item's footprint. **Not derivable here**, and assuming one visual cell is what broke
+ *   widgets: an app and a folder are always one, but a widget is whatever size its provider asked for, so the
+ *   plan drew a 1×1 shadow and the `Move` it produced resized the widget to match on drop. The caller reads it
+ *   from the item's own placement, which is the only place that knows.
  * @param occupants the zone's items *excluding* [item], already restricted to [page].
  * @return the plan the live drop shadow and the eventual commit both read, or null when there is nothing to plan.
  */
@@ -54,12 +59,13 @@ internal fun planCoordinateDrop(
     page: Int,
     occupants: Map<GridItem, GridPlacement>,
     item: GridItem,
+    span: GridSpan,
     fingerInRoot: Offset,
 ): PlacementPlan {
-    // A visual cell in *size*, free to land on any logical cell in *position* — see [GridGeometry.snapTopLeftCell].
-    val span = config.cellMultiplier
-    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span, rowSpan = span)
-    val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span, colSpan = span)
+    // Whatever size the item is, free to land on any logical cell in *position* — see
+    // [GridGeometry.snapTopLeftCell] for why the lattice is the logical one rather than the visual one.
+    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span.colSpan, rowSpan = span.rowSpan)
+    val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span.rowSpan, colSpan = span.colSpan)
 
     val target = geo.cellAt(fingerInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }
         ?: return FreeGridPlanner.plan(footprint, occupants, config)
