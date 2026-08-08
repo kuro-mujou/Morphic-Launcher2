@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.pager
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -38,6 +39,16 @@ fun LauncherPager(
     pageContent: @Composable (page: Int) -> Unit,
 ) {
     val pageCount = state.pageCount
+
+    // **A shrinking page count has to move the pager, and nothing else will.** The position is a float the layout
+    // places from; when the last page goes away it is left past the end, where `pagePosition` rubber-bands it —
+    // so the pager sits frozen part-way between two pages with no gesture in flight to spring it back. Removing
+    // the last item from the last page reaches that state without the screen being touched at all.
+    //
+    // Here rather than in each surface because it is a property of *a pager whose count can change*, which is
+    // every one of them: home's pages come and go with its items, and the APPS pager's with what is installed.
+    LaunchedEffect(pageCount) { state.settleWithinPageCount() }
+
     Layout(
         modifier = modifier.clipToBounds(),
         content = {

@@ -148,6 +148,28 @@ class LauncherPagerState(
 
     suspend fun stopAllAnimations() = positionAnimatable.stop()
 
+    /**
+     * Brings the position back inside the page range — **what a pager owes itself when its page count shrinks**.
+     *
+     * Every other way of leaving the range is transient: a drag past the end is rubber-banded and springs back on
+     * release, and a fling is clamped by [clampIfBounded]. Losing a page is different, because nothing about the
+     * *gesture* has changed — the position was legitimately settled on page 1 and page 1 stopped existing.
+     * [pagePosition] then rubber-bands it forever, which is a pager frozen part-way between two pages with no
+     * gesture in flight to release it. Removing the last item from the last page is exactly that, and it took no
+     * touch at all to reach.
+     *
+     * Animated rather than snapped, because the page that is left has to be seen arriving: the user removed
+     * something and the launcher slides back to what remains.
+     *
+     * A no-op when the count grows, which is the common case — the trailing empty page that appears mid-drag.
+     */
+    suspend fun settleWithinPageCount() {
+        if (!isBounded) return
+        val max = (pageCount - 1).toFloat()
+        if (positionAnimatable.value <= max) return
+        positionAnimatable.animateTo(max, pagerSpring)
+    }
+
     private fun clampIfBounded(value: Float): Float =
         if (isBounded) value.coerceIn(0f, (pageCount - 1).toFloat()) else value
 
