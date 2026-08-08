@@ -127,7 +127,28 @@ fun <T> CoordinateDragPager(
         // While dragging, keep off-screen pages placed so the lifted tile's pointer stream survives a page flip.
         keepAllPagesPlaced = coordinator.isDragging,
     ) { page ->
-        LauncherGrid(config = config, modifier = Modifier.fillMaxSize()) {
+        // The lattice, per page — each page is its own grid box, so the markers are drawn in the page's own
+        // coordinates and a mid-flip page shows them where its own cells are. The finger is only ever over one
+        // page, so the others draw nothing: their local finger is outside the buffer.
+        val markerSpan = livePlan?.footprint?.let { GridSpan(it.colSpan, it.rowSpan) }
+            ?: GridSpan(config.cellMultiplier, config.cellMultiplier)
+        var pageBounds by remember { mutableStateOf<Rect?>(null) }
+
+        LauncherGrid(
+            config = config,
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { pageBounds = it.boundsInRoot() }
+                .gridSnapMarkers(
+                    config = config,
+                    localFinger = {
+                        val origin = pageBounds?.topLeft
+                        val finger = coordinator.session?.takeIf { it.activeZone == zoneId }?.fingerInRoot
+                        if (origin == null || finger == null) null else finger - origin
+                    },
+                    draggedSpan = { markerSpan },
+                ),
+        ) {
             coordinateItems(
                 items = items.filter { placement(it).page == page },
                 itemKey = { dragItem(it) },

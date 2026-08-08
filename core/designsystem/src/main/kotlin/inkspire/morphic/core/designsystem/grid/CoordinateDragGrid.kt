@@ -120,21 +120,42 @@ fun <T> CoordinateDragGrid(
         zone = bounds?.let { DropZone(zoneId, it, z = 0, planner = planner, accepts = acceptsItem, onDrop = onLand) },
     )
 
+    // **The lattice, shown while something is dragged over this zone.** Applied here rather than by each surface
+    // so every coordinate zone reveals the same grid the same way — and *inside* the caller's modifier, so it is
+    // drawn in the grid's own box and not across whatever padding the caller added.
+    //
+    // The footprint's size comes from the live plan, which already states it; the fallback is one visual cell,
+    // which is what an app is on every zone that has one.
+    val markerSpan = livePlan?.footprint?.let { GridSpan(it.colSpan, it.rowSpan) }
+        ?: GridSpan(config.cellMultiplier, config.cellMultiplier)
+
     LauncherGrid(
         config = config,
-        modifier = modifier.onGloballyPositioned {
-            val b = it.boundsInRoot()
-            bounds = b
-            onGeometryChange(
-                GridGeometry(
-                    originInRoot = Offset(b.left, b.top),
-                    cellW = b.width / config.cols,
-                    cellH = b.height / config.rows,
-                    cols = config.cols,
-                    rows = config.rows,
-                ),
+        modifier = modifier
+            .gridSnapMarkers(
+                config = config,
+                // Local to this grid, and null unless the drag is actually over *this* zone — the same test the
+                // push preview above makes, since a shared coordinator drives every zone at once.
+                localFinger = {
+                    val origin = bounds?.topLeft
+                    val finger = coordinator.session?.takeIf { it.activeZone == zoneId }?.fingerInRoot
+                    if (origin == null || finger == null) null else finger - origin
+                },
+                draggedSpan = { markerSpan },
             )
-        },
+            .onGloballyPositioned {
+                val b = it.boundsInRoot()
+                bounds = b
+                onGeometryChange(
+                    GridGeometry(
+                        originInRoot = Offset(b.left, b.top),
+                        cellW = b.width / config.cols,
+                        cellH = b.height / config.rows,
+                        cols = config.cols,
+                        rows = config.rows,
+                    ),
+                )
+            },
     ) {
         coordinateItems(
             items = items,

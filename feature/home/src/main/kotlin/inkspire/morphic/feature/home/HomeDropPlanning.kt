@@ -27,10 +27,20 @@ import kotlin.math.abs
  * described by *data* (its geometry, its dimensions, its occupants) and not by its own algorithm.
  *
  * The rule, unchanged from the single-zone version:
- * - the footprint is one **visual** cell (`span × span` logical cells) snapped to the visual lattice;
+ * - the footprint is one **visual** cell (`span × span` logical cells) snapped to the **logical** lattice;
  * - if the finger is over an occupant, that occupant's cell partitions into a centre merge ring plus four push
  *   triangles — the ring merges into a folder, a triangle picks which way the occupant is shoved;
  * - otherwise the free-grid engine pushes whatever the footprint lands on.
+ *
+ * **The lattice it snaps to is the whole point of `cellMultiplier`, and this used to get it wrong.** A home grid is
+ * declared sub-divided — 4×5 visual cells at `cellMultiplier = 2` really is a 8×10 logical grid, and an app is a
+ * 2×2 logical footprint rather than a 1×1 one. The user is never shown that: they see 4×5 cells holding one icon
+ * each. What the subdivision buys is that an icon can come to rest **straddling** two visual cells — its top-left
+ * on any logical cell, so the offsets between the visible cells are reachable — which is the whole reason a
+ * launcher subdivides at all. Passing `step = span` here rounded the top-left back onto the visual lattice, which
+ * made a grid declared at `cellMultiplier = 2` behave in every observable way like one declared at 1: the
+ * subdivision cost twice the occupancy bookkeeping and bought nothing. `step = 1` is what L1 does — it resolves
+ * the hovered cell at logical granularity and centres the footprint on it.
  *
  * @param geo the zone's measured geometry, as published by its grid — the same cells the user can see.
  * @param config the zone's logical dimensions; `cellMultiplier` is the visual-cell span.
@@ -46,8 +56,9 @@ internal fun planCoordinateDrop(
     item: GridItem,
     fingerInRoot: Offset,
 ): PlacementPlan {
+    // A visual cell in *size*, free to land on any logical cell in *position* — see [GridGeometry.snapTopLeftCell].
     val span = config.cellMultiplier
-    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span, rowSpan = span, step = span)
+    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span, rowSpan = span)
     val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span, colSpan = span)
 
     val target = geo.cellAt(fingerInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }

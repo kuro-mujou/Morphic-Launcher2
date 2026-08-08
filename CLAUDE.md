@@ -764,6 +764,23 @@ the default `DevRootScreen` screen.
     landscape grid — and against the **rail**, which is the transpose, so nearly every dock item would be evicted to
     home and would not come back. A grid drawn out of bounds for as long as a rotation lasts is cosmetic and reverses
     itself; the write does not. The guard becomes vacuous the day placements are stored per posture.
+- **`cellMultiplier` is a *placement* subdivision, and the snap has to honour it or it buys nothing.** HOME's three
+  free-placement grids (pager, dock, widget area) declare `cellMultiplier = 2`: a 4×5 grid of visible cells really is
+  8×10 logical ones, and an app is a 2×2 logical footprint. The user is never shown that — they see 4×5 cells with
+  one icon each — and what the subdivision buys is that an icon can come to rest **straddling** two visible cells,
+  because its top-left may be any *logical* cell. The offsets between the cells are reachable, which is the only
+  reason to subdivide.
+  `planCoordinateDrop` passed `step = cellMultiplier` to `GridGeometry.snapTopLeftCell`, rounding the top-left back
+  onto the visual lattice — so a grid declared at 2 behaved in every observable way like one declared at 1, and the
+  subdivision cost twice the occupancy bookkeeping for nothing. The `step` parameter is now **gone rather than
+  defaulted**: its only ever use was that mistake, and a parameter is an invitation to repeat it. L1 resolves the
+  hovered cell at logical granularity and centres the footprint on it, which is what this now does.
+  - **The lattice is shown while dragging** (`gridSnapMarkers`, `core:designsystem/grid`), which is the half that
+    makes the freedom legible — L1's `GridLinesCanvas`, ported: a concave-diamond marker at every **visual** cell
+    corner, fading in around the dragged footprint's *edges* and out again as it leaves. Visual corners rather than
+    every logical intersection deliberately: they are the grid the user thinks in and the reference a half-cell
+    offset is read *against*, where marking every logical cell would double the dots and put half of them in the
+    middle of a cell. A `drawBehind` taking lambdas, so a drag re-runs the draw phase and nothing else.
 - **Layout: the dock has an extent of its own, the pager takes the rest, and there is no padding anywhere.** The dock's
   extent is a **setting** (`SurfaceMetrics.extentDp[HOME_DOCK]`, defaulting to `DockGrid.extentDp`) *and* its rows and
   columns are stored counts — the extent does not replace a count, it **bounds** the one it divides, since a cell is

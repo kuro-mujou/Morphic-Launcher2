@@ -27,25 +27,29 @@ data class GridGeometry(
      * The footprint's top-left [Cell] for a [colSpan]×[rowSpan] item whose proxy is centred on the finger —
      * the item's own top-left rounded to the nearest cell (half-cell hysteresis), clamped onto the grid.
      *
-     * [step] coarsens the snap lattice: the top-left is rounded to the nearest multiple of [step] cells on each
-     * axis. The default `1` snaps to every logical cell; passing the grid's `cellMultiplier` snaps to whole
-     * *visual* cells, so full-cell items (e.g. app icons on a sub-cell home grid) stay aligned instead of
-     * landing on a half-cell offset. Grid dimensions are a multiple of the multiplier, so the clamp still lands
-     * on the lattice.
+     * **It snaps to the logical lattice, always, and that is the whole point of a sub-divided grid.** On a
+     * `cellMultiplier = 2` home grid an app is a 2×2 logical footprint, and rounding its top-left to any *logical*
+     * cell is what lets it come to rest straddling two of the cells the user can see — the offsets between them
+     * are reachable, which is the reason to subdivide at all.
+     *
+     * There used to be a `step` parameter that coarsened this, and home passed its `cellMultiplier` to it: the
+     * footprint was rounded back onto the visual lattice, so a grid declared at 2 behaved in every observable way
+     * like one declared at 1 and the subdivision bought nothing but twice the occupancy bookkeeping. It is gone
+     * rather than defaulted, because its only ever use was that mistake and a parameter is an invitation to repeat
+     * it. A surface that genuinely wants whole-cell alignment can round the result itself and say so.
      */
-    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int, step: Int = 1): Cell {
+    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
         val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellW / 2f
         val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellH / 2f
-        val col = snapToLattice(topLeftX / cellW, step, cols - colSpan)
-        val row = snapToLattice(topLeftY / cellH, step, rows - rowSpan)
-        return Cell(row, col)
+        return Cell(
+            row = snapToLattice(topLeftY / cellH, rows - rowSpan),
+            col = snapToLattice(topLeftX / cellW, cols - colSpan),
+        )
     }
 
-    /** Rounds [cell] to the nearest multiple of [step], then clamps the start to `0..maxStart`. */
-    private fun snapToLattice(cell: Float, step: Int, maxStart: Int): Int {
-        val snapped = (cell / step).roundToInt() * step
-        return snapped.coerceIn(0, maxStart.coerceAtLeast(0))
-    }
+    /** Rounds [cell] to the nearest whole cell, then clamps the start to `0..maxStart`. */
+    private fun snapToLattice(cell: Float, maxStart: Int): Int =
+        cell.roundToInt().coerceIn(0, maxStart.coerceAtLeast(0))
 
     /** The [Cell] directly under [rootPosition], or null when the finger is outside the grid. */
     fun cellAt(rootPosition: Offset): Cell? {
