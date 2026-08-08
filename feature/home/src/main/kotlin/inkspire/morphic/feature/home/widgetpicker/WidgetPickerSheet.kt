@@ -62,6 +62,7 @@ import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
+import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.data.layout.WidgetSpan
@@ -121,6 +122,16 @@ internal fun WidgetPickerSheet(
     var opened by remember { mutableStateOf<WidgetProviderGroup?>(null) }
     // Back closes the detail pane first and the sheet second, so the two panes read as depth rather than as a swap.
     BackHandler { if (opened != null) opened = null else onDismiss() }
+
+    // **The sheet is modal, and one claim says so twice.** `SurfaceGestureLock` is the launcher's answer to "does
+    // something on screen own the finger?", and both behaviours fall out of holding it: `SurfacePager` gates its
+    // pan on `!isLocked`, so a swipe cannot slide another surface in from under an open sheet; and
+    // `surfaceMenuGestures` stands down while it is held, so a long-press on the scrim cannot open the menu of the
+    // surface buried behind. The second is the same free consequence an open folder already gets.
+    //
+    // The declarative form, because the reason is a piece of state (this composable is on screen) rather than an
+    // event — which is exactly the split `LockSurfaceGesture` documents, and the folder overlay's own case.
+    LockSurfaceGesture(locked = true)
 
     Box(
         modifier = modifier
