@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Package visibility (Android 11+) for the wallpaper section's **installed live wallpapers** shelf, which asks the
+      package manager for every service answering `WallpaperService`. Without this declaration that query is filtered
+      down to services in *this* app — i.e. it returns only our own `RotatingWallpaperService`, which the shelf then
+      deliberately excludes, so the row renders permanently empty and looks like a device with no live wallpapers
+      installed rather than a query that was never allowed to see them.
+
+      Declared here, beside the code that runs the query, for the same reason `data:apps` declares its launcher query
+      and `data:wallpaper` declares `SET_WALLPAPER`: the capability travels with the module that needs it. And
+      deliberately narrow rather than L1's `QUERY_ALL_PACKAGES`, which asked for visibility of every package on the
+      device to answer this one question.
+
+      Not covered by the launcher role either: being the default home app exempts `LauncherApps` from visibility
+      filtering, not `PackageManager.queryIntentServices`.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.service.wallpaper.WallpaperService" />
+        </intent>
+    </queries>
+
+</manifest>

@@ -1,18 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      `enableOnBackInvokedCallback` is the app-wide opt-in to predictive back. The shell already answers back with a
+      `BackHandler` (an open side surface closes to HOME); without this the system runs the legacy path and the
+      predictive animation never plays.
+    -->
     <application
         android:name=".LauncherApplication"
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MorphicLauncher2">
 
+        <!--
+          **This is the flip that makes the APK a launcher** (P9 in the rewrite plan): `category.HOME` is what puts
+          Morphic in the system's home-app chooser, and `category.DEFAULT` is what lets an implicit HOME intent — the
+          home button — resolve to it at all. Everything above this line has been a launcher-shaped app.
+
+          Four attributes come with the role, each answering something the home button does that an ordinary activity
+          never faces:
+
+          - `launchMode="singleTask"` — pressing home while already home must *return* to the running instance, not
+            stack a second one on top of it.
+          - `stateNotNeeded="true"` — the system may kill and restart a home app freely, and it must come back
+            without a saved `Bundle`. The launcher's state is its stores, not its instance state, so this is a
+            statement of fact rather than a concession.
+          - `resumeWhilePausing="true"` — home is allowed to resume while the app being left is still pausing, which
+            is what makes the home button feel immediate rather than waiting on whatever is on screen.
+          - `configChanges="…"` — the launcher handles every configuration change itself. Compose re-reads the window
+            and recomposes; recreating the activity on a rotate would tear down the drag, the open folder and every
+            baked icon for no gain.
+
+          **One filter, where L1 had two.** L1 declared a second `MAIN` + `LAUNCHER` filter beside this one, which is
+          redundant: an intent matches a filter when the action matches and *every* category on the intent is present
+          on the filter, so a plain MAIN/LAUNCHER query already matches this filter's superset. `LAUNCHER` stays here
+          so the launcher is reachable from its own app list like any other app.
+
+          Deliberately **no `android:windowSoftInputMode`**: nothing on a launcher surface takes text yet (search is
+          unbuilt), and the same reasoning keeps the IME out of `uiInsets`. It belongs here the day a surface asks
+          for a keyboard, not before.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resumeWhilePausing="true"
+            android:stateNotNeeded="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
