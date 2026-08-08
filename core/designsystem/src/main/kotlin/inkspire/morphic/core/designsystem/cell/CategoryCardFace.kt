@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,23 +60,23 @@ val CategoryCardGutter = 16.dp
 val CategoryCardSpacing = 12.dp
 
 /**
- * The title's own inset — **fixed, and deliberately not [CardChrome.outerPaddingDp]**.
+ * The title's own horizontal inset — **fixed, and deliberately not [CardChrome.outerPaddingDp]**.
  *
- * That padding insets the *icon area*, which is allowed to reach zero so the four slots can sit flush against the
- * card's edge. A title given the same treatment would then start hard against the corner, which reads as a rendering
- * fault rather than as a choice — so the two are separate, and only one of them is offered as a control.
+ * That padding insets the *icon area* within the tile, and is allowed to reach zero so the four slots sit flush
+ * against it. The title is outside the tile entirely now, so it needs an inset of its own or a long name would run to
+ * the very edge of the lane and touch its neighbour. Small, because the label is centred and ellipsised anyway.
  */
-private val TitleInset = 12.dp
+private val TitleInset = 4.dp
 
-/** The gap between the title and the icon area. Fixed, for [TitleInset]'s reason: it is the title's, not the grid's. */
-private val TitleGap = 8.dp
+/** The gap between the tile and the title beneath it. Fixed, for [TitleInset]'s reason: it is the title's. */
+private val TitleGap = 6.dp
 
-/** How translucent the card's fill is over the surface behind it. */
-private const val CardAlpha = 0.10f
+/** How translucent the card's fill is over the surface behind it — what the launcher's own cards are drawn at. */
+const val CardAlpha = 0.10f
 
 /**
- * **One category card's face** — its fill, corner, title and the square icon area beneath — with the contents of each
- * slot left to the caller.
+ * **One category card's face** — a square tile of app icons with the category's name beneath it — with the contents of
+ * each slot left to the caller.
  *
  * It lives in `core:designsystem` rather than beside the APPS surface because it has two consumers that cannot share a
  * module: the surface draws it with draggable, launchable cells in the slots, and the **settings section** draws it as
@@ -84,11 +85,13 @@ private const val CardAlpha = 0.10f
  * is worse than no preview. Same extraction, and the same reason, as [IconPreviewPlate] when the category card became
  * a folder tile's second consumer.
  *
- * **Two squares, one rectangle.** The icon area is square and takes the card's full width, so a slot is as large as the
- * lane allows; the title adds its height above it, which makes the card as a whole a portrait rectangle. The card used
- * to be the square instead, and the header then ate into it from the top — the leftover box came out wider than tall,
- * the slots sized themselves from its *height*, and the icons ended up the smallest thing on a tile whose whole job is
- * to make them recognisable.
+ * **The tile is the square, and the label is outside it** — iOS's App Library shape, and the second correction to this
+ * layout. The card was originally the square, with the title *inside* eating into it from the top: the leftover box came
+ * out wider than tall, the slots sized themselves from its *height*, and the icons ended up the smallest thing on a tile
+ * whose whole job is to make them recognisable. Making the icon area the square fixed the icons but left the title
+ * sharing the fill, which reads as a header bar rather than as a label. Now the background, the corner and the padding
+ * are all the **tile's**, and the name sits under it centred on nothing — so the fill traces the icons exactly, and the
+ * card as a whole is a portrait rectangle: a square plus one line of text.
  *
  * **Everything [chrome] carries starts at zero.** A card with no override is a square-cornered rectangle whose icons
  * are packed edge to edge and flush to its sides. That is not a placeholder awaiting taste — it is so that every piece
@@ -96,6 +99,15 @@ private const val CardAlpha = 0.10f
  * hardcoded numbers no control could reach and no screenshot could justify.
  *
  * @param chrome the resolved [CardChrome] — the title's scale, the corner, and the icon area's two paddings.
+ * @param fillAlpha how opaque the tile's fill is. Defaults to [CardAlpha], which is what the **surface** draws.
+ *
+ *   A settings preview overrides it upward, and that is a deliberate departure from "a preview shows what the surface
+ *   draws". The surface's 10% reads well because a card there sits on the *frosted* backdrop — blurred wallpaper under
+ *   a wash. The preview punches through to **raw** wallpaper, where the same 10% all but disappears and a
+ *   corner-radius slider has no visible corner to act on. Two less invasive fixes were tried and both failed: a wash
+ *   behind the card cut the contrast instead of adding it (in a dark theme the wash and the card are both near-black),
+ *   and an outline blended into the wallpaper it was drawn over. A control you cannot see the effect of is worth more
+ *   than a preview that matches to the percentage point.
  * @param titleGestures applied to the title row, which is a full-width strip: a one-word category name still has to be
  *   reachable, and a header row *is* its own visible extent, the same way a list row's is. Empty in a preview, where
  *   nothing is tappable.
@@ -109,35 +121,22 @@ fun CategoryCardFace(
     chrome: CardChrome,
     modifier: Modifier = Modifier,
     titleGestures: Modifier = Modifier,
+    fillAlpha: Float = CardAlpha,
     slot: @Composable (index: Int, size: Dp) -> Unit,
 ) {
     val colors = LocalMorphicColors.current
     val shape: Shape = RoundedCornerShape(chrome.cornerRadiusDp.dp)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(colors.surface.copy(alpha = CardAlpha)),
-    ) {
-        Text(
-            text = title,
-            style = cardTitleStyle(chrome),
-            color = colors.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = TitleInset, end = TitleInset, top = TitleInset)
-                .then(titleGestures),
-        )
-        Spacer(Modifier.height(TitleGap))
-        // **The square, at the card's full width.** `aspectRatio` before `padding`, so the icon area *including* its
-        // outer padding is the square: a user widening that padding then shrinks the icons inside a block whose
-        // footprint on the card does not move, which is what makes the two sliders independent of each other.
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // **The tile is the square, and the background is the tile's** — the title sits below it, outside the fill.
+        // `aspectRatio` before `padding`, so the icon area *including* its outer padding is the square: a user
+        // widening that padding then shrinks the icons inside a block whose footprint does not move, which is what
+        // makes the two sliders independent of each other.
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .clip(shape)
+                .background(colors.surface.copy(alpha = fillAlpha))
                 .padding(chrome.outerPaddingDp.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -156,6 +155,19 @@ fun CategoryCardFace(
                 }
             }
         }
+        Spacer(Modifier.height(TitleGap))
+        Text(
+            text = title,
+            style = cardTitleStyle(chrome),
+            color = colors.content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TitleInset)
+                .then(titleGestures),
+        )
     }
 }
 
@@ -233,6 +245,11 @@ fun CategoryClusterTile(
             apps = apps,
             size = metrics.resolveIconSize(slotSize, slotSize),
             modifier = itemGestures,
+            // **No plate here.** A cluster sits inside a tile that already has a fill, so a second rounded backing is
+            // a box within a box — and it made this the one slot on the card with a visible container while its three
+            // neighbours were bare icons. Without it the four mini-icons fill the cluster edge to edge, which is what
+            // makes it read as "more of the same" rather than as a different kind of thing.
+            backing = false,
         )
     }
 }

@@ -35,6 +35,21 @@ private val CaptionGap = 6.dp
 private const val CARD_FIT = 0.94f
 
 /**
+ * How opaque the previewed card's fill is — **heavier than the surface's own `CardAlpha`, deliberately.**
+ *
+ * The surface draws 10% because a card there sits on the frosted backdrop: blurred wallpaper under a wash, which a
+ * faint tint reads clearly against. This preview punches through to **raw** wallpaper, where 10% all but disappears —
+ * and the corner-radius slider then has no visible corner to act on, which is the one thing this preview exists for.
+ *
+ * So it is the one number here that does not match the surface. Two less invasive fixes were tried first and both
+ * failed: a wash drawn behind the card *cut* the contrast rather than adding it (in a dark theme the wash and the card
+ * are both near-black), and an outline blended into the wallpaper it was drawn over. What the preview still shows
+ * truthfully is everything the controls actually change — the card's width, its corner, its two paddings and its icon
+ * sizes; only the fill's opacity is exaggerated so those are legible.
+ */
+private const val PreviewFillAlpha = 0.5f
+
+/**
  * **The live category-card preview** — a real [CategoryCardFace] at its real dp width, updating as the sliders below
  * it move.
  *
@@ -87,6 +102,7 @@ internal fun CategoryCardPreview(
                         modifier = Modifier
                             .requiredWidth(cardWidth)
                             .graphicsLayer { scaleX = fit; scaleY = fit },
+                        fillAlpha = PreviewFillAlpha,
                     ) { index, slotSize ->
                         // The surface's own split, shared rather than restated: the last slot becomes an overflow
                         // cluster when the category holds more than fits, which is the arrangement any category big

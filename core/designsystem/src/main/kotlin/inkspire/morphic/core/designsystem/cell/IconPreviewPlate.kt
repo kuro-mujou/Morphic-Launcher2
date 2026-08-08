@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
@@ -34,6 +35,13 @@ import inkspire.morphic.core.model.AppInfo
  *
  * @param size the plate's edge length; the four icon slots are derived from it, so a caller sizes the tile and
  *   nothing else.
+ * @param backing whether to draw the rounded translucent plate behind the icons, **and the inset that goes with it**.
+ *   The two are one flag rather than two because the inset exists only to keep the icons off the plate's rounded edge —
+ *   with no plate there is nothing to inset from, and the 2×2 fills the tile edge to edge.
+ *
+ *   True for a folder on a grid, which needs the plate to read as one object among loose icons. False for the category
+ *   card's overflow cluster, which sits *inside* a tile that already has a fill: a second plate there is a box within a
+ *   box, and it made the cluster the only slot on the card with a visible container.
  *
  * TODO(launcher backing plate): a plain translucent surface for now. Replace with the themed skin/backing-plate
  *  (the deferred live-Compose backdrop) when that subsystem lands.
@@ -43,18 +51,26 @@ fun IconPreviewPlate(
     apps: List<AppInfo>,
     size: Dp,
     modifier: Modifier = Modifier,
+    backing: Boolean = true,
 ) {
     val colors = LocalMorphicColors.current
     // Derived from the plate's own size so the tile scales as one thing: a home folder's plate and a card cluster's
     // plate are wildly different sizes, and fixed dp gaps would swamp the small one.
     val gap = size * PREVIEW_GAP_FRACTION
-    val pad = size * PREVIEW_PADDING_FRACTION
+    val pad = if (backing) size * PREVIEW_PADDING_FRACTION else 0.dp
     val slot = (size - pad * 2 - gap) / 2
     Column(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(size * CORNER_FRACTION))
-            .background(colors.surface.copy(alpha = BACKING_ALPHA))
+            .then(
+                if (backing) {
+                    Modifier
+                        .clip(RoundedCornerShape(size * CORNER_FRACTION))
+                        .background(colors.surface.copy(alpha = BACKING_ALPHA))
+                } else {
+                    Modifier
+                },
+            )
             .padding(pad),
         verticalArrangement = Arrangement.spacedBy(gap),
     ) {

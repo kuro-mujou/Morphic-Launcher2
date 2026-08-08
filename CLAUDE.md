@@ -1241,10 +1241,12 @@ lane count comes down on its own. The one thing to keep straight is that a colum
 the floor must describe a *lane* (card + spacing) and the callers must subtract the gutter first; getting that wrong is
 exactly how both constants went wrong.
 
-**A card is a rectangle, and its *preview* is the square.** It used to be `aspectRatio(1f)` on the card, and the title
-then ate into that square from the top: the leftover box came out wider than tall, the slots sized themselves from its
-*height*, and the icons ended up the smallest thing on a tile whose whole job is to make them recognisable. Now the icon
-area is square at the card's full width and the title adds its height above it.
+**The tile is the square, and the label is outside it** — iOS's App Library shape, reached in two corrections. The card
+was originally the square with the title *inside* it, eating into it from the top: the leftover box came out wider than
+tall, the slots sized themselves from its *height*, and the icons ended up the smallest thing on a tile whose whole job
+is to make them recognisable. Making the icon area the square fixed the icons but left the title sharing the fill, which
+reads as a header bar rather than a label. Now the background, corner and padding are all the **tile's** and the name
+sits under it, centred — so the fill traces the icons exactly and a card is a square plus one line of text.
 
 **`CardChrome` is the tile's own settings** (`core:model`, stored as a fifth `SurfaceMetrics` map keyed slot × device,
 sparse like `IconOverride`): title scale, corner radius, and the icon area's **outer** and **inner** padding. All three dp
@@ -1261,12 +1263,25 @@ wraps `IconLabelCell`, which insets by `CellPadH`/`CellPadV` and reserves a labe
 gap however far the spacing slider was dragged down: a control unable to express the thing it is named for. A slot has no
 label and no chrome; it *is* the icon's box, which is what `iconPercent = 1f` means literally here. The **overflow
 cluster** is sized by the same expression (`CategoryClusterTile`): it stands in for one of the four apps, so given the
-raw slot it stayed full-size while its neighbours shrank with the slider. The preview draws the cluster too, off the
+raw slot it stayed full-size while its neighbours shrank with the slider. It also draws **no backing plate**
+(`IconPreviewPlate(backing = false)`, which drops the inset with it, since the inset only exists to keep icons off the
+plate's rounded edge) — a cluster sits inside a tile that already has a fill, so a plate there is a box within a box and
+made it the one slot on the card with a visible container. A folder on a *grid* keeps its plate: loose among plain
+icons, that is what makes it read as one object. The preview draws the cluster too, off the
 shared `categoryOverflowCluster` split — a preview that divided the apps differently from the surface would be worse
 than none, and four-apps-no-cluster is the one arrangement a category big enough to need this screen never has. Relatedly, `APPS_CARD`
 had to join `AppsViewModel.IconSlots` — leaving it out was not a skipped lookup but a silent substitution, since an
 unresolved slot falls back to `LocalIconMetrics`, which inside `AppsCategoryCard` is the **folder's**: the surface drew
 labels the card grid explicitly turns off while the settings preview drew none.
+
+**The preview's fill is the one number that does not match the surface** — `PreviewFillAlpha` at 0.5 against the
+surface's `CardAlpha` of 0.10. A card on the launcher sits on the *frosted* backdrop, so a faint tint reads clearly;
+the settings punch reveals **raw** wallpaper, where 10% all but disappears and the corner-radius slider has no visible
+corner to act on. Two subtler fixes were tried first and both failed, which is why the number is written down rather
+than reverted: a wash behind the card *cut* the contrast (in a dark theme the wash and the card are both near-black —
+the real frost works because it **blurs**, not because it washes), and an outline blended into the wallpaper it was
+drawn over. Everything the controls actually change still matches the surface exactly; only the opacity is exaggerated
+so those are legible.
 
 **Its preview is a whole card, where every other section previews a cell** — `CategoryCardFace`, extracted to
 `core:designsystem/cell` for exactly this: `feature:settings` cannot depend on `feature:apps`, and a second card
