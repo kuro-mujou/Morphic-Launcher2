@@ -1594,12 +1594,18 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
   (a folder, an app publishing none) collapses to one stage with **no toggle**, so the second stage never announces
   itself as missing. The load is a **suspending lambda the menu owns**, where L1 ran that `LaunchedEffect` in each of
   its three surfaces; it is called from the menu's composition, so it cancels when the menu closes.
-- **It is modal, and that takes two guards rather than one.** The overlay holds `SurfaceGestureLock` for as long as
-  it is up (nothing may pan out from under a menu), and `launcherItemGestures` **ignores a new press while a menu is
-  open** — without which a tap "away from the menu" would dismiss it *and* launch whatever icon it landed on, which
-  on a full home page is most of the screen. Consumption cannot express that: the gesture reads the finger with
-  `…IgnoreConsumed` on purpose, so the tap-catcher cannot shut it out by consuming. Back dismisses the menu before
-  anything else answers.
+- **It is modal, and the overlay's own full-screen tap-catcher is what makes it so.** Compose hit-tests siblings
+  in reverse draw order and stops at the first hit, so a press anywhere reaches the catcher and never reaches the
+  surface beneath it — no consumption involved, which is why the items' deliberate `…IgnoreConsumed` reads do not
+  defeat it. The overlay also holds `SurfaceGestureLock` for as long as it is up, so nothing may pan out from under
+  a menu, and back dismisses it before anything else answers.
+  - `launcherItemGestures` briefly carried a second guard — ignore a new press while a menu is open — added on the
+    reasoning that consumption could not stop a tap "away from the menu" from also launching the icon it landed on.
+    That reasoning was wrong about *which* mechanism blocks it, and the widget picker's scrim demonstrated as much:
+    a long-press over an icon behind it produces nothing from the icon. The guard was removed as dead code. The one
+    case sibling hit-testing genuinely does not cover is a press already **down** when an overlay appears, since a
+    pointer keeps the hit path it was assigned at DOWN — but that is the gesture that opened the menu, which is
+    supposed to keep running.
 - **Colours come from the theme and the panel is frosted.** L1 hardcoded `Color.White` throughout, which would be the
   one place in the launcher ignoring the wallpaper-brightness signal the whole theme is built on. `wallpaperBackdrop`
   with `refracts = true` makes this **the first frosted panel**, so the effects section's sliders and liquid glass's

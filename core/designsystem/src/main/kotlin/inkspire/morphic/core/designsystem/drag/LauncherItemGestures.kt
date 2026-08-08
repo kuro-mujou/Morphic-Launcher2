@@ -137,21 +137,6 @@ fun Modifier.launcherItemGestures(
                 while (true) {
                     val down = awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
 
-                    // **An open menu is modal, so a new press is the menu's and not this item's.** Without this a
-                    // tap "away from the menu" would dismiss it *and* launch whatever icon it happened to land on
-                    // — which on a full home page is most of the screen. Consumption cannot express it: this
-                    // gesture reads the finger with `…IgnoreConsumed` on purpose (see below), so the menu's
-                    // tap-catcher cannot shut it out by consuming. Asking whether a menu is up says it directly.
-                    //
-                    // It cannot swallow the gesture that *opened* the menu: that one is already inside the loop
-                    // below, holding its pointer, and only ever reaches here after the finger has lifted.
-                    if (menuHost?.request != null) {
-                        awaitPointerEventScope {
-                            while (awaitPointerEvent().changes.any { it.pressed }) Unit
-                        }
-                        continue
-                    }
-
                     val pointerId: PointerId = down.id
                     var local = down.position
                     // A claim must not outlive the gesture that took it. Every machine path does release it, but a
