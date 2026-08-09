@@ -19,13 +19,37 @@ import timber.log.Timber
  *
  * @property configure the provider's configuration activity, or null when it has none — which is the branch the
  *   add flow turns on, since a widget with a configuration screen must show it before it can be placed.
- * @property minWidthPx the size the provider asks for, in pixels, for [WidgetSpan] to turn into a footprint.
+ * @property minWidthPx the size the provider asks for, in pixels, for `WidgetSpan` to turn into a footprint.
+ * @property minResizeWidthPx the smallest width the provider says it can still *draw* at — see
+ *   [WidgetResizeRules].
  */
 data class BoundWidget(
     val appWidgetId: Int,
     val provider: ComponentName,
     val label: String,
     val configure: ComponentName?,
+    val minWidthPx: Int,
+    val minHeightPx: Int,
+    val resize: WidgetResizeRules,
+)
+
+/**
+ * How small a provider says it can still be drawn — the **floor** on a resize.
+ *
+ * **`resizeMode` is deliberately not here, and that is a product decision.** A provider also declares which axes
+ * it will allow to be resized, and this launcher does not honour it: providers under-declare constantly (a great
+ * many ship `resizeMode="none"` and resize perfectly well), so gating on it mostly denies the user a size the
+ * widget could have drawn. Every widget is resizable here.
+ *
+ * The minimums *are* honoured, because they are a different claim: an axis declaration is about permission, where
+ * a minimum is about whether the layout can render at all below that size. Letting a widget be squeezed to
+ * nothing would break the thing the user is trying to keep.
+ *
+ * @property minWidthPx the smallest width the provider will accept, in pixels — its `minResizeWidth`, falling
+ *   back to `minWidth` when it declares none. A minimum larger than the size it asks to be *added* at would be a
+ *   contradiction; taking the smaller of the two is the reading that can always be satisfied.
+ */
+data class WidgetResizeRules(
     val minWidthPx: Int,
     val minHeightPx: Int,
 )
@@ -187,6 +211,13 @@ internal class DefaultAppWidgetHostController(
             configure = info.configure,
             minWidthPx = info.minWidth,
             minHeightPx = info.minHeight,
+            resize = WidgetResizeRules(
+                // `minResizeWidth` is optional and defaults to 0, which would mean "no minimum at all" — so the
+                // add-time minimum stands in, and the smaller of the two wins where a provider declares both.
+                minWidthPx = info.minResizeWidth.takeIf { it > 0 }?.coerceAtMost(info.minWidth) ?: info.minWidth,
+                minHeightPx = info.minResizeHeight.takeIf { it > 0 }?.coerceAtMost(info.minHeight)
+                    ?: info.minHeight,
+            ),
         )
     }
 
