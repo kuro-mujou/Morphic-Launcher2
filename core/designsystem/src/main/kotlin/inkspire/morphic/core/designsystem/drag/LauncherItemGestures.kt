@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -87,6 +88,25 @@ fun Modifier.launcherItemGestures(
     // an `onDismissMenu` parameter, and every call site in the tree passed `{}`.
     val menuHost = LocalMenuHost.current
 
+    // **Every callback is read through `rememberUpdatedState`, and that is a correctness fix rather than a habit.**
+    //
+    // `pointerInput(config, edgeActions)` restarts its block only when those two change — which is almost never —
+    // so the block captures whatever lambdas the *first* composition passed and keeps calling them forever. A
+    // caller whose callback closes over state that arrives later is then silently frozen at the value it had
+    // before that state existed. That is not hypothetical: home builds its item menu inside `onShowMenu`, and the
+    // "Resize" row is offered only once the grid has published its measured geometry — which happens a frame after
+    // the first composition, so the row could never appear.
+    //
+    // Keying the `pointerInput` on the callbacks instead would restart the gesture whenever one was re-created,
+    // which for lambdas rebuilt every recomposition means tearing down an in-flight drag.
+    val currentOnOpen by rememberUpdatedState(onOpen)
+    val currentOnEdgeAction by rememberUpdatedState(onEdgeAction)
+    val currentOnShowMenu by rememberUpdatedState(onShowMenu)
+    val currentOnBeginDrag by rememberUpdatedState(onBeginDrag)
+    val currentOnDragTo by rememberUpdatedState(onDragTo)
+    val currentOnDrop by rememberUpdatedState(onDrop)
+    val currentOnCancelDrag by rememberUpdatedState(onCancelDrag)
+
     onGloballyPositioned { coordinates = it }
         .pointerInput(config, edgeActions) {
             val machine = ItemGestureMachine(config, edgeActions)
@@ -118,18 +138,18 @@ fun Modifier.launcherItemGestures(
 
             fun perform(effects: List<ItemGestureEffect>, local: Offset) {
                 for (effect in effects) when (effect) {
-                    ItemGestureEffect.OpenItem -> onOpen()
-                    is ItemGestureEffect.EdgeAction -> onEdgeAction(effect.direction)
+                    ItemGestureEffect.OpenItem -> currentOnOpen()
+                    is ItemGestureEffect.EdgeAction -> currentOnEdgeAction(effect.direction)
                     // The long-press has fired: from here the finger is this item's, whether it ends as a menu or
                     // becomes a drag. A drag arrives as `[DismissMenu, BeginDrag, …]` in one list, so the claim is
                     // taken again immediately after being dropped — which a count absorbs, and which nothing can
                     // observe in between since this whole loop runs synchronously off the pointer thread.
-                    ItemGestureEffect.ShowMenu -> { claimSurface(); onShowMenu(anchorInRoot()) }
+                    ItemGestureEffect.ShowMenu -> { claimSurface(); currentOnShowMenu(anchorInRoot()) }
                     ItemGestureEffect.DismissMenu -> { releaseSurface(); menuHost?.dismiss() }
-                    ItemGestureEffect.BeginDrag -> { claimSurface(); onBeginDrag(rootOf(local)) }
-                    is ItemGestureEffect.DragTo -> onDragTo(rootOf(local))
-                    ItemGestureEffect.Drop -> { releaseSurface(); onDrop() }
-                    ItemGestureEffect.CancelDrag -> { releaseSurface(); onCancelDrag() }
+                    ItemGestureEffect.BeginDrag -> { claimSurface(); currentOnBeginDrag(rootOf(local)) }
+                    is ItemGestureEffect.DragTo -> currentOnDragTo(rootOf(local))
+                    ItemGestureEffect.Drop -> { releaseSurface(); currentOnDrop() }
+                    ItemGestureEffect.CancelDrag -> { releaseSurface(); currentOnCancelDrag() }
                 }
             }
 
