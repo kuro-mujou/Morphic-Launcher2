@@ -7,7 +7,7 @@ per-surface drop behaviors, and the placement engine that resolves them.
 > phase/build order lives in [REWRITE_PLAN.md](REWRITE_PLAN.md). This file is the source of truth for
 > **how drag-and-drop works** — read it before touching `data:layout` (B8) or `core:designsystem/drag` (B4).
 
-Reference: L1 at `../launcher`. Its **placement engine** (`data/layout`: `SpreadPush`,
+Reference: L1 (`../Morphic-Launcher` or `../launcher` — the folder name differs per machine, see CLAUDE.md). Its **placement engine** (`data/layout`: `SpreadPush`,
 `GridReflow`, `GridEdit`) is good and worth porting; its **UI/gesture layer** is the mess this design
 replaces. Patterns borrowed from the Reorderable lib (`D:\Android\Reorderable`) are noted inline.
 

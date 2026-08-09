@@ -1,7 +1,8 @@
 # Morphic Launcher 2 — Rewrite Plan (learning + cleanup build)
 
 **Goal:** rebuild Morphic Launcher from scratch, bottom-up, as a clean **refactor** (not a re-type) of the
-original at `../launcher` — the reference / answer key, never deleted.
+original (`../Morphic-Launcher` or `../launcher` — the folder name differs per machine, see CLAUDE.md)
+— the reference / answer key, never deleted.
 
 > Working model, refactor mandate, docs/KDoc convention, and the domain concepts (surface taxonomy, layout
 > persistence) live in [CLAUDE.md](../CLAUDE.md). This file holds **only the plan**: phases, the build map,
@@ -40,7 +41,7 @@ original at `../launcher` — the reference / answer key, never deleted.
 ## Bottom-layer build map (`core:*` + `data:*`)
 
 Everything below `feature:*`, in rough **dependency order** (each stage may depend on the ones above it).
-Class lists are taken from the Launcher 1 reference at `../launcher`. Legend: ⚠️ = real logic — understand
+Class lists are taken from the Launcher 1 reference (`../Morphic-Launcher` or `../launcher`). Legend: ⚠️ = real logic — understand
 before porting; 🔧 = known smell — refactor, don't copy. Build a module only when a consumer needs it (the
 "no model in a vacuum" principle); this map is the *shape*, not a "write it all now" list.
 

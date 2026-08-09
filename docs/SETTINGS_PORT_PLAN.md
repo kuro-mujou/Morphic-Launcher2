@@ -8,7 +8,7 @@ content-masquerading-as-preferences that come with them.
 > [REWRITE_PLAN.md](REWRITE_PLAN.md) (this is **B7** + **P8**). This file is the source of truth for **what the
 > settings layer holds and in what order it lands**. Read it before touching `data:settings` or `feature:settings`.
 >
-> L1 reference: `../launcher` — `data/settings` (15 files, ~1,960 LOC) and `feature/settings` (35 files, 6,479 LOC).
+> L1 reference (`../Morphic-Launcher` or `../launcher`, per machine) — `data/settings` (15 files, ~1,960 LOC) and `feature/settings` (35 files, 6,479 LOC).
 
 ---
 
@@ -801,7 +801,7 @@ dock never draws and then discarding it, where `findFreeRectOnPage` never invent
 
 ## Smells not to reproduce
 
-Recorded so the port is checked against them rather than trusting memory. All from `../launcher/data/settings`.
+Recorded so the port is checked against them rather than trusting memory. All from L1's `data/settings`.
 
 1. **God object across four lifetimes** — see the table at the top.
 2. **One flow → global invalidation**, with a full-store decode per emission.

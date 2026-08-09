@@ -23,9 +23,14 @@ This is the part that isn't derivable from the code:
   reached via review rather than by typing. So: explain the *why* of each change (in KDoc and in the
   summary), call out the design decisions you made and any alternatives you rejected, and prefer several
   small reviewable commits over one large drop.
-- **Never port Launcher 1 verbatim.** The original at `../launcher` (aka "L1", root Gradle project `Launcher`) is the
+- **Never port Launcher 1 verbatim.** The original (aka "L1", root Gradle project `Launcher`) is the
   **reference / answer key**: it runs, but it's fragile and smell-ridden (duplication, poor
   separation, logic in the wrong layer). Never delete it; compare against it, then do it *better*.
+  - **Its folder name differs per machine, so look before assuming one.** It is a **sibling of this repo**, named
+    `../Morphic-Launcher` on the home machine and `../launcher` on the work machine. Run
+    `ls ../Morphic-Launcher ../launcher` (or `ls ..`) once, at the point L1 is first needed — a hardcoded guess is
+    wrong on one machine every time, and the failure is silent in the worst way: a missing directory reads as "L1
+    has nothing on this", so the comparison this whole rule exists to force gets skipped rather than reported.
   For each piece: understand what L1 does and *why* → question the design (duplicated? honest name?
   right module/layer?) → fix the smell in L2. Worked examples of this mandate:
   `GridBlueprint` (centralized scattered grid config; dropped a wrong interface abstraction + dead
