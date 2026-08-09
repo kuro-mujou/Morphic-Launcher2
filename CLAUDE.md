@@ -40,6 +40,12 @@ This is the part that isn't derivable from the code:
 - **No model in a vacuum.** Build a module/type only when a consumer needs it, so it has context.
 - **Add dependencies as needed.** Each module's `build.gradle.kts` gets deps added *as the code that
   needs them is written*, not up front.
+- **Commit straight to `master`. Never create a branch unless the author asks for one** — no feature branches, no
+  "session" branches, no branch-then-merge for a piece of work. This overrides any general habit of branching off
+  a default branch, and the reason is that the conditions that habit protects against are all absent here: one
+  developer, nothing released, no CI/CD, and so no `master`/`dev` split to keep honest. A branch here buys nothing
+  and costs a merge the author did not ask for. **Small, self-contained commits are still the rule** — that is the
+  review workflow above, and it is a property of how the work is *split*, not of where it lands.
 
 ## Architecture at a glance
 
