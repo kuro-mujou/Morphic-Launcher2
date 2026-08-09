@@ -40,6 +40,9 @@ import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.GridSpan
+import inkspire.morphic.core.designsystem.grid.ResizeBounds
+import inkspire.morphic.core.designsystem.grid.ResizeOverlay
+import inkspire.morphic.core.designsystem.grid.clampToGrid
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
@@ -57,6 +60,7 @@ import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomePagerGrid
@@ -68,9 +72,11 @@ import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.AppWidgetHostController
+import inkspire.morphic.data.widgets.WidgetResizeRules
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
 import inkspire.morphic.feature.home.widgetpicker.rememberWidgetAddFlow
 import org.koin.compose.koinInject
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /**
@@ -92,6 +98,61 @@ private const val UnnamedFolder = "Folder"
 
 /** The same fallback for a widget whose provider publishes no label. */
 private const val UnnamedWidget = "Widget"
+
+
+/**
+ * A resize in progress on one of home's coordinate zones — **the resolved outcome, not the finger's request**.
+ *
+ * Every handle move is turned into one of these by [resolving], so the frame the user sees is always something
+ * the grid would actually accept: the request is clamped to the grid, the planner is asked whether the occupants
+ * in the way can be pushed clear, and only an accepted rectangle replaces [placement]. A request that fails
+ * either test leaves the frame exactly where it was and sets [refused], which is the whole of the "you cannot go
+ * there" feedback.
+ *
+ * @property item what is being resized — held rather than looked up, because a resize outlives any one frame of
+ *   the state it started from.
+ * @property rules the provider's own limits, in **pixels**. Kept in the provider's units rather than converted to
+ *   cells when the menu was built, so the minimums follow the grid: the cells they are measured against can change
+ *   under an open frame (a rotation, a settings edit), and a span frozen at menu time would then be wrong.
+ * @property placement the last cells the grid accepted: what the frame draws, what the item is drawn at, and what
+ *   a commit writes.
+ * @property moves where each pushed occupant would go — the **live preview**, and half of what a commit writes.
+ *   Emptied by a commit, since the pushed cells are then the stored ones.
+ * @property refused the last request was out of the grid, or needed room the planner could not clear. Drawn in
+ *   the error colour.
+ */
+internal data class HomeResize(
+    val item: GridItem,
+    val zone: HomeZone,
+    val rules: WidgetResizeRules,
+    val placement: GridPlacement,
+    val moves: Map<GridItem, GridPlacement> = emptyMap(),
+    val refused: Boolean = false,
+) {
+    /** Where [other] renders while this resize is live: its pushed cell, the frame's own cells, or nowhere new. */
+    fun previewOf(other: GridItem): GridPlacement? = if (other == item) placement else moves[other]
+}
+
+/**
+ * This resize with [candidate] taken into account — the one place a handle drag becomes a decision.
+ *
+ * Two tests, and failing either keeps [HomeResize.placement] where it is rather than moving the frame somewhere
+ * that could not be committed: the rectangle is pulled inside [config] (an over-drag), and [plan] is asked what
+ * the push would cost (null meaning the occupants cannot be cleared). Note that a clamped rectangle is still
+ * *accepted* — the frame follows the finger up to the grid's edge and reports the clamp as [HomeResize.refused] —
+ * where a blocked one is not.
+ *
+ * @param plan the planner, taking the clamped rectangle and answering with the moves it would make, or null.
+ */
+internal fun HomeResize.resolving(
+    candidate: GridPlacement,
+    config: GridConfig,
+    plan: (GridPlacement) -> Map<GridItem, GridPlacement>?,
+): HomeResize {
+    val clamped = clampToGrid(candidate, config)
+    val moves = plan(clamped) ?: return copy(refused = true)
+    return copy(placement = clamped, moves = moves, refused = clamped != candidate)
+}
 
 /**
  * Which persisted [HomeZone] a drop zone writes to, or null when the zone is not one of home's own grids — today
@@ -469,6 +530,29 @@ internal fun HomePagerSurface(
         if (presentedFolderId != null && outcome == null) folderHost.close()
     }
 
+    // The widget host, read here because the item menu asks it whether a widget may be resized at all — a live
+    // read of the provider rather than anything the layout stores.
+    val widgetHost = koinInject<AppWidgetHostController>()
+
+    // The resize frame, when one is up. Null the rest of the time, which is what keeps it out of the way — the
+    // overlay consumes every event it sees, so it must exist only while a resize is genuinely being made. It
+    // survives each commit and is cleared by a press outside the item, because resizing is several drags rather
+    // than one.
+    var resizing by remember { mutableStateOf<HomeResize?>(null) }
+
+    // **The resize's live preview, per zone.** A resize is not a drag, so the push preview `CoordinateDragGrid`
+    // already runs off the coordinator's plan does not apply — but the picture should be the same one: the
+    // occupants a resize would displace stand aside while the finger is still down, and the item itself is drawn
+    // at the cells it is being given. Only the zone holding the item previews anything; the other one is not part
+    // of this resize at all.
+    //
+    // **Undwelled, where a drag's push waits `PUSH_DWELL_MS`** — and the difference is in the gesture rather than
+    // in the preference. A drag sweeps across cells it does not mean, so its plan changes constantly and the dwell
+    // is what stops occupants strobing; a resize edge is deliberate, moves one cell at a time and is *drawn* by
+    // the frame the whole while, so occupants that waited would simply sit inside a rectangle that has already
+    // claimed them.
+    fun resizePreviewIn(zone: HomeZone): HomeResize? = resizing?.takeIf { it.zone == zone }
+
     // Opening an item is the same wherever it sits, so both zones share one handler.
     val openItem: (HomeItem) -> Unit = { item ->
         when (item) {
@@ -503,7 +587,27 @@ internal fun HomePagerSurface(
             is HomeItem.Widget -> menuHost?.show(
                 title = item.info.label.ifBlank { UnnamedWidget },
                 anchor = anchor,
-                actions = listOf(MenuAction("Remove widget") { viewModel.removeWidget(item.info.appWidgetId) }),
+                actions = buildList {
+                    // **Every widget is offered a resize**, whatever its `resizeMode` says — see
+                    // `WidgetResizeRules` for why that declaration is not honoured. What the provider *is*
+                    // believed about is how small it can be drawn, which is a live read of it rather than
+                    // anything the layout stores. A widget the platform can no longer describe gets no row,
+                    // because there is nothing to bound the drag with.
+                    val rules = widgetHost.boundWidget(item.info.appWidgetId)?.resize
+                    if (rules != null) {
+                        add(
+                            MenuAction("Resize") {
+                                resizing = HomeResize(
+                                    item = item.gridItem,
+                                    zone = item.zone,
+                                    rules = rules,
+                                    placement = item.placement,
+                                )
+                            },
+                        )
+                    }
+                    add(MenuAction("Remove widget") { viewModel.removeWidget(item.info.appWidgetId) })
+                },
             )
             // No shortcuts stage and no App info — a folder is the launcher's own object, not an installed app.
             // "Remove folder" takes the folder off the grid and its membership with it (`RemoveFromGrid` cascades),
@@ -523,7 +627,6 @@ internal fun HomePagerSurface(
     // **The add flow, and the placement it reports back to.** The flow owns the activity-result choreography
     // (bind, then the provider's configuration screen); *where* the widget goes is this surface's, because only it
     // knows the grid and the cells it was measured at. Returning false releases the id — see `WidgetAddFlow`.
-    val widgetHost = koinInject<AppWidgetHostController>()
     val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
         val geo = geometry
         val span = geo?.let {
@@ -545,6 +648,7 @@ internal fun HomePagerSurface(
     // Whether the widget picker is up. Surface-local rather than hoisted to `HomeScreen`, for the reason the menu
     // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
     var widgetPickerOpen by remember { mutableStateOf(false) }
+
 
     // An app *inside* a folder is offered less, and the missing verb is the point: it has no grid placement, so a
     // "Remove" here would be a row that does nothing (`RemoveFromGrid` on a folder member deletes no rows). Taking
@@ -599,6 +703,7 @@ internal fun HomePagerSurface(
             // pager is one gesture with no hand-off. Its extent is the user's setting, and the count it divides that
             // extent into is clamped to it rather than stored — see `dockConfig` above.
             side = { zoneModifier ->
+                val dockResize = resizePreviewIn(HomeZone.DOCK)
                 CoordinateDragGrid(
                     items = dockItems,
                     config = dockConfig,
@@ -606,7 +711,8 @@ internal fun HomePagerSurface(
                     zoneId = DockZoneId,
                     gestureConfig = gestureConfig,
                     dragItem = { it.gridItem },
-                    placement = { it.placement },
+                    placement = { dockResize?.previewOf(it.gridItem) ?: it.placement },
+                    trackedItem = dockResize?.item,
                     planner = dockPlanner,
                     onLand = ::commitLanding,
                     onRelease = ::handleRelease,
@@ -619,6 +725,7 @@ internal fun HomePagerSurface(
                 }
             },
             main = { zoneModifier ->
+                val mainResize = resizePreviewIn(HomeZone.MAIN)
                 CoordinateDragPager(
                     items = mainItems,
                     config = config,
@@ -627,7 +734,8 @@ internal fun HomePagerSurface(
                     zoneId = MainZoneId,
                     gestureConfig = gestureConfig,
                     dragItem = { it.gridItem },
-                    placement = { it.placement },
+                    placement = { mainResize?.previewOf(it.gridItem) ?: it.placement },
+                    trackedItem = mainResize?.item,
                     planner = mainPlanner,
                     onLand = ::commitLanding,
                     onRelease = ::handleRelease,
@@ -798,6 +906,36 @@ internal fun HomePagerSurface(
             }
         }
 
+        // **The resize frame**, above the grids so its handles are reachable over any cell. It draws in the zone
+        // the item lives in, so a widget in the dock is framed by the dock's cells.
+        resizing?.let { session ->
+            val zoneConfig = if (session.zone == HomeZone.DOCK) dockConfig else config
+            val zoneGeometry = geometryFor(session.zone, geometry, dockGeometry) ?: return@let
+            ResizeOverlay(
+                placement = session.placement,
+                geometry = zoneGeometry,
+                bounds = session.rules.asResizeBounds(zoneGeometry),
+                refused = session.refused,
+                // Read back from state rather than from the captured `session`: several pointer events can arrive
+                // between two compositions, and each must resolve against the outcome of the one before it.
+                onResize = { candidate ->
+                    resizing = resizing?.resolving(candidate, zoneConfig) { rect ->
+                        viewModel.planResize(session.item, rect, session.zone, zoneConfig)
+                    }
+                },
+                onCommit = {
+                    // Whatever is committed is a rectangle the planner already accepted, because that is the only
+                    // kind `resolving` lets through — so the write is exactly the push that has been on screen.
+                    val settled = resizing ?: session
+                    viewModel.resizeItem(settled.item, settled.placement, settled.zone, zoneConfig)
+                    // The frame stays up for the next drag — see `ResizeOverlay`. The preview is now the stored
+                    // truth, so it is dropped rather than replayed over the top of it.
+                    resizing = settled.copy(moves = emptyMap(), refused = false)
+                },
+                onDismiss = { resizing = null },
+            )
+        }
+
         // **The widget picker**, last in the stack so it covers everything including an open folder. It sizes its
         // "3 × 2" labels against the pager's grid, which is where a widget dropped on this pairing goes — and
         // against the pager's *measured* cells, so before the first layout it shows no size rather than one
@@ -864,3 +1002,29 @@ private fun HomeItemCell(
         }
     }
 }
+
+
+/**
+ * The measured geometry of [zone] on this surface, or null before it has been laid out.
+ *
+ * A widget can sit in either coordinate zone, and a resize frame has to be drawn in the cells of the one it is
+ * actually in — the two grids have different origins and different cell sizes, so a frame drawn from the wrong
+ * one is not merely misaligned, it is a different size.
+ */
+private fun geometryFor(zone: HomeZone, main: GridGeometry?, dock: GridGeometry?): GridGeometry? =
+    if (zone == HomeZone.DOCK) dock else main
+
+/**
+ * The provider's resize rules as grid [ResizeBounds] — pixels turned into cells against [geometry].
+ *
+ * `ceil`, because a widget needing part of a further cell needs the whole cell: rounding down would offer a size
+ * the provider has already said it cannot draw at. Floored at one cell, since a footprint of nothing is not a
+ * thing the grid can express.
+ */
+private fun WidgetResizeRules.asResizeBounds(geometry: GridGeometry): ResizeBounds = ResizeBounds(
+    // Both axes always: the provider's `resizeMode` is not honoured here — see `WidgetResizeRules`.
+    horizontal = true,
+    vertical = true,
+    minColSpan = if (geometry.cellW > 0f) ceil(minWidthPx / geometry.cellW).toInt().coerceAtLeast(1) else 1,
+    minRowSpan = if (geometry.cellH > 0f) ceil(minHeightPx / geometry.cellH).toInt().coerceAtLeast(1) else 1,
+)

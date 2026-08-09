@@ -25,6 +25,8 @@ import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.HomeListRepository
 import inkspire.morphic.data.layout.LayoutChange
+import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.layout.LayoutRepository
@@ -439,6 +441,51 @@ class HomeViewModel(
             .findFreeRect(page = 0, row = 0, col = 0, rowSpan = span.rowSpan, colSpan = span.colSpan)
             ?: return false
         applyChanges(listOf(LayoutChange.PlaceWidget(widget, at, zone)))
+        return true
+    }
+
+    /**
+     * What giving [item] the cells [to] would do to everything else: where each occupant it overlaps would be
+     * pushed to, or **null when the grid cannot make room** for it at all.
+     *
+     * **The same engine a drop runs**, which is the point — a resize and a move differ only in which rectangle is
+     * being asked for, so `FreeGridPlanner` answers both and there is one definition of "what happens to the
+     * things in the way". L1 had a separate `resizeMoves` calling `SpreadPush` directly.
+     *
+     * It is asked twice per resize and that is safe rather than wasteful: the planner is pure, and a preview
+     * writes nothing, so the answer the frame previewed and the answer [resizeItem] commits are computed from the
+     * same state and cannot disagree. Sharing the *logic* rather than caching a result is the same rule the drag
+     * shadow follows — see `FreeGridPlanner`'s own note on L1's three-way divergence.
+     */
+    fun planResize(
+        item: GridItem,
+        to: GridPlacement,
+        zone: HomeZone,
+        config: GridConfig,
+    ): Map<GridItem, GridPlacement>? {
+        val occupants = state.value.items
+            .filter { it.zone == zone && it.gridItem != item && it.placement.page == to.page }
+            .associate { it.gridItem to it.placement }
+        // `relocate` is what separates this from a drop, and `FreePush` states the reason: a resize claims an
+        // *area* and says nothing about direction, so an occupant that cannot slide out sideways should be given
+        // free space elsewhere rather than turning the whole expansion red while half the grid is empty.
+        val plan = FreeGridPlanner.plan(to, occupants, config, relocate = true)
+        return if (plan.intent == DropIntent.INVALID) null else plan.moves
+    }
+
+    /**
+     * Commits a resize: [item] takes the cells [to], and whatever it now overlaps is pushed aside.
+     *
+     * @return false when [planResize] cannot make room, in which case **nothing is written** — the overlay is
+     *   already drawing that rectangle as refused, and committing a partial push would move neighbours for a
+     *   resize that never happened.
+     */
+    fun resizeItem(item: GridItem, to: GridPlacement, zone: HomeZone, config: GridConfig): Boolean {
+        val moves = planResize(item, to, zone, config) ?: return false
+        applyChanges(
+            moves.map { (moved, at) -> LayoutChange.Move(moved, at, zone) } +
+                LayoutChange.Move(item, to, zone),
+        )
         return true
     }
 
