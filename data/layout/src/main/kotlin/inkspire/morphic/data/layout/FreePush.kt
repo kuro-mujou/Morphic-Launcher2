@@ -2,6 +2,7 @@ package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridPlacement
+import kotlin.math.abs
 
 /**
  * The outcome of a [FreePush.push] attempt.
@@ -44,7 +45,8 @@ sealed interface PushResult<out K> {
  *   the remaining directions ordered by nearest exit edge.
  * - A shove **cascades**: if the shoved occupant lands on another, that one is shoved the same way, and so on.
  * - If a cascade would push any occupant off the grid, that direction fails; if no direction works for some
- *   occupant, the whole push is [PushResult.Blocked]. The push never spills onto another page.
+ *   occupant, the whole push is [PushResult.Blocked] — unless `relocate` is on, below. The push never spills
+ *   onto another page.
  *
  * The engine is pure and side-effect-free: it copies the occupants, never mutates the input, and returns only
  * the deltas. The dragged item's own placement is *not* included — the caller places it at the footprint.
@@ -57,12 +59,22 @@ object FreePush {
      * @param config the target grid's dimensions.
      * @param preferred the direction to try first, if the partition strategy computed one; otherwise the
      *   nearest-exit order alone decides.
+     * @param relocate last resort for an occupant no direction can clear: give it the **nearest free space that
+     *   fits** instead of failing the whole push (see [relocation]).
+     *
+     *   **Off by default, and which gesture asks for it is the point.** In a *drag* the push direction is part of
+     *   what the user said — it comes from the sub-zone of the cell the finger entered — so an item flying across
+     *   the screen would answer a question nobody asked, and a refusal is undone by moving the finger a cell
+     *   over. A *resize* says nothing about direction at all: the user is claiming an area, and the items in it
+     *   simply need to be somewhere else, so refusing an expansion because the neighbour cannot slide *sideways*
+     *   while half the screen is empty is the wrong answer. Hence: drags cascade, resizes relocate.
      */
     fun <K> push(
         footprint: GridPlacement,
         occupants: Map<K, GridPlacement>,
         config: GridConfig,
         preferred: PushDirection? = null,
+        relocate: Boolean = false,
     ): PushResult<K> {
         if (!footprint.fitsIn(config)) return PushResult.Blocked
 
@@ -82,6 +94,7 @@ object FreePush {
             }
 
             val shifts = order.firstNotNullOfOrNull { cascade(id, footprint, it, working, config) }
+                ?: (if (relocate) relocation(id, current, footprint, working, config) else null)
                 ?: return PushResult.Blocked
             for ((key, placement) in shifts) {
                 working[key] = placement
@@ -150,6 +163,44 @@ object FreePush {
             }
         }
         return result
+    }
+
+    /**
+     * A new home for [rect] when no direction could clear it: the **nearest free space on the grid** that its
+     * spans fit in, or null when the grid genuinely has nowhere left.
+     *
+     * "Nearest" is Manhattan distance between top-left corners — the same spans, so corner distance and centre
+     * distance agree — which keeps the item as close to where the user last saw it as the grid allows. Ties are
+     * broken by the row-major scan: topmost, then leftmost, which reads as "it went up out of the way" rather
+     * than as an arbitrary jump.
+     *
+     * It relocates **one** occupant into space that is already free, and never cascades — so it cannot loop, and
+     * it cannot displace anything that the push had not already decided to move. Positions are scanned at
+     * *logical* granularity, so an item may come to rest straddling the visual lattice exactly as a dropped one
+     * may; that is what `cellMultiplier` means (see the note in `CLAUDE.md`).
+     */
+    private fun <K> relocation(
+        id: K,
+        rect: GridPlacement,
+        footprint: GridPlacement,
+        working: Map<K, GridPlacement>,
+        config: GridConfig,
+    ): Map<K, GridPlacement>? {
+        val others = working.filterKeys { it != id }.values
+        var best: GridPlacement? = null
+        var bestCost = Int.MAX_VALUE
+        for (row in 0..config.rows - rect.rowSpan) {
+            for (col in 0..config.cols - rect.colSpan) {
+                val cost = abs(row - rect.row) + abs(col - rect.col)
+                if (cost >= bestCost) continue
+                val candidate = rect.copy(row = row, col = col)
+                if (candidate.overlaps(footprint)) continue
+                if (others.any { it.overlaps(candidate) }) continue
+                bestCost = cost
+                best = candidate
+            }
+        }
+        return best?.let { mapOf(id to it) }
     }
 
     /** Moves [rect] to just past [obstacle]'s far edge in [dir]; `null` if that would cross the grid origin. */

@@ -228,6 +228,13 @@ sealed interface CellIntent { data class Push(val dir: PushDirection); object Me
 - **`FreePush`** (home, dock) — 2-D spread-push: shove the occupant in the opposite direction of the entered
   sub-zone; **cascade** if the next cell is also occupied. If the chain runs off the grid edge with no room →
   **invalid drop** (error shadow). Gaps allowed; spans supported.
+  - **A resize asks for one more thing: `relocate`.** An occupant no direction can clear is given the *nearest
+    free space that fits* instead of failing the push. Only a resize passes it, and the difference is in the
+    gesture rather than in taste: a drag's push direction is part of what the user said (it comes from the
+    sub-zone the finger entered), and a refusal is undone by moving the finger one cell over — where a resize
+    says nothing about direction at all. It claims an **area**, so the items inside it just need to be somewhere
+    else, and refusing an expansion because a neighbour cannot slide sideways while half the grid is empty is
+    the wrong answer. Relocation moves one occupant into space that is already free and never cascades.
 - **`MovingGap`** (APPS pager, folder) — all items are **1×1**. Lifting an item leaves **one visible gap** on its
   page; the grid splits into left-list `[0..i-1]` and right-list `[i+1..end]`. Dragging toward one list disables
   the near zone; the far zone **migrates the gap one step** toward the finger

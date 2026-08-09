@@ -100,6 +100,59 @@ class FreePushTest {
         assertEquals(PushResult.Blocked, FreePush.push(footprint, emptyMap<String, GridPlacement>(), config))
     }
 
+    // ── relocate: the resize path (see FreePush.push) ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `relocate rehomes an occupant no direction can clear`() {
+        // The widget's right edge is dragged over the far column: the occupant there cannot go right (off the
+        // grid), left or up (packed), or down (packed) — but the middle of the grid is empty. This is the case
+        // that used to turn a resize red with half the screen free.
+        val footprint = GridPlacement(page = 0, row = 0, col = 2, rowSpan = 4, colSpan = 2)
+        val occupants = mapOf(
+            "far" to GridPlacement(page = 0, row = 0, col = 3),
+            "packed" to GridPlacement(page = 0, row = 0, col = 2),
+        )
+        val moves = FreePush.push(footprint, occupants, config, relocate = true).moves()
+        assertEquals(setOf("far", "packed"), moves.keys)
+        moves.values.forEach { assertTrue("$it still overlaps", !it.overlaps(footprint)) }
+    }
+
+    @Test
+    fun `relocate picks the nearest free space, topmost on a tie`() {
+        // Only column 0 is free. Rows 1 and 3 are equidistant from the occupant's row 2; the row-major scan
+        // takes the upper one, so the item reads as having moved out of the way rather than jumped.
+        val footprint = GridPlacement(page = 0, row = 0, col = 1, rowSpan = 4, colSpan = 3)
+        val occupants = mapOf(
+            "a" to GridPlacement(page = 0, row = 2, col = 1),
+            "top" to GridPlacement(page = 0, row = 0, col = 0),
+            "bottom" to GridPlacement(page = 0, row = 2, col = 0),
+        )
+        val moves = FreePush.push(footprint, occupants, config, relocate = true).moves()
+        assertEquals(GridPlacement(page = 0, row = 1, col = 0), moves["a"])
+    }
+
+    @Test
+    fun `relocate still blocks when the grid has nowhere left`() {
+        val small = GridConfig(rows = 2, cols = 2)
+        val footprint = GridPlacement(page = 0, row = 0, col = 0, rowSpan = 2, colSpan = 2)
+        val occupants = mapOf("a" to GridPlacement(page = 0, row = 0, col = 0))
+        assertEquals(PushResult.Blocked, FreePush.push(footprint, occupants, small, relocate = true))
+    }
+
+    @Test
+    fun `relocate is off for a drag, which keeps the cascade rule`() {
+        val footprint = GridPlacement(page = 0, row = 0, col = 0, rowSpan = 1, colSpan = 4)
+        val occupants = mapOf(
+            "a" to GridPlacement(page = 0, row = 0, col = 0),
+            "b" to GridPlacement(page = 0, row = 1, col = 0),
+            "c" to GridPlacement(page = 0, row = 2, col = 0),
+            "d" to GridPlacement(page = 0, row = 3, col = 0),
+        )
+        // Columns 1..3 below the footprint are free, so `relocate` would find "a" a home — a drag must not.
+        assertEquals(PushResult.Blocked, FreePush.push(footprint, occupants, config))
+        assertTrue(FreePush.push(footprint, occupants, config, relocate = true) is PushResult.Moved)
+    }
+
     @Test
     fun `push is blocked when a cascade would run off the grid edge`() {
         // Footprint fills the top row; the only escape is down, but the column below is packed to the bottom

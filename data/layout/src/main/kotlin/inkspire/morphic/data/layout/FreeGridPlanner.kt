@@ -26,6 +26,8 @@ object FreeGridPlanner {
      * @param config the target grid's dimensions.
      * @param preferred the push direction from the entered sub-zone, or null to let nearest-edge decide.
      * @param merge true when the finger is in the merge ring of a target already known to accept a merge.
+     * @param relocate let an occupant no direction can clear take the nearest free space instead of failing the
+     *   push — see [FreePush.push], which explains why a resize asks for this and a drag does not.
      */
     fun plan(
         footprint: GridPlacement,
@@ -33,11 +35,12 @@ object FreeGridPlanner {
         config: GridConfig,
         preferred: PushDirection? = null,
         merge: Boolean = false,
+        relocate: Boolean = false,
     ): PlacementPlan {
         // Merge is decided upstream (finger in a mergeable target's inner ring); no cells shift.
         if (merge) return PlacementPlan(footprint, DropIntent.MERGE)
 
-        return when (val result = FreePush.push(footprint, occupants, config, preferred)) {
+        return when (val result = FreePush.push(footprint, occupants, config, preferred, relocate)) {
             is PushResult.Moved -> PlacementPlan(
                 footprint = footprint,
                 intent = if (result.moves.isEmpty()) DropIntent.PLACE else DropIntent.PUSH,
