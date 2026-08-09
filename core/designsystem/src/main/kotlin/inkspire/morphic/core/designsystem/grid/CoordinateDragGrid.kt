@@ -69,6 +69,10 @@ internal const val PUSH_DWELL_MS = 200L
  *   landing itself is [onLand]'s, and may be a different zone's [onLand] altogether.
  * @param modifier applied to the grid; pass sizing/padding here (geometry is measured *after* it).
  * @param edgeActions swipe directions a cell claims as press-and-swipe actions (empty → none).
+ * @param trackedItem an item whose [placement] the finger is driving in place — a live resize. It skips the
+ *   settle spring, for the reason [LauncherDragCell] states. The *placement* itself still comes from [placement],
+ *   because who is being resized and where is entirely the surface's business; all this zone needs to know is
+ *   that one of its cells is currently following a finger.
  * @param acceptsItem gate for what this zone accepts on drop (default: anything).
  * @param onGeometryChange receives the zone's measured geometry on every (re)layout.
  * @param onOpen a completed tap on an item.
@@ -93,6 +97,7 @@ fun <T> CoordinateDragGrid(
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
+    trackedItem: GridItem? = null,
     acceptsItem: (GridItem) -> Boolean = { true },
     onGeometryChange: (GridGeometry) -> Unit = {},
     onOpen: (T) -> Unit = {},
@@ -171,6 +176,7 @@ fun <T> CoordinateDragGrid(
                 onRelease = onRelease,
                 modifier = cellModifier,
                 edgeActions = edgeActions,
+                tracksFinger = dragItem(item) == trackedItem,
                 onOpen = { onOpen(item) },
                 onShowMenu = { anchor -> onShowMenu(item, anchor) },
                 onEdgeAction = { direction -> onEdgeAction(item, direction) },

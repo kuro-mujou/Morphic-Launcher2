@@ -18,6 +18,9 @@ import inkspire.morphic.core.model.GridItem
  * Given the cell's placement [modifier] (from the grid layout), it applies the drag-state visuals:
  * - occupants glide to their (previewed) cells via [animatePlacement]; the **lifted** item skips the animation
  *   and is drawn invisible (`alpha = 0`) — the floating proxy in the surface's overlay stands in for it.
+ * - so does an item whose placement the finger is driving *in place* ([tracksFinger]) — a live resize. It is the
+ *   lifted item's reason without the proxy: a spring settling toward where the finger already is reads as lag,
+ *   not as motion, and here the resize frame is drawn over the cell so the two would visibly disagree.
  *
  * **The gestures are handed to [content], not applied to the cell.** A cell is a *layout* footprint and is
  * usually much larger than the item drawn in it — a home cell is a whole 2×2 visual slot around an icon and a
@@ -35,6 +38,8 @@ import inkspire.morphic.core.model.GridItem
  * A tap fires [onOpen], a long-press [onShowMenu], and a press-and-swipe in [edgeActions] fires [onEdgeAction] —
  * all only within whatever bounds [content] gave the gestures.
  *
+ * @param tracksFinger this item's placement is being driven directly by the finger right now (a live resize), so
+ *   it must land on each new cell at once rather than glide there.
  * @param onRelease the finger came up on this cell, ending the drag. It is **not** where the drop is committed —
  *   that belongs to the zone the drag landed in ([inkspire.morphic.core.designsystem.drag.DropZone.onDrop]), which
  *   may be on a different surface entirely from this cell. What the surface does here is its own bookkeeping about
@@ -48,6 +53,7 @@ fun LauncherDragCell(
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
+    tracksFinger: Boolean = false,
     onOpen: () -> Unit = {},
     onShowMenu: (anchorInRoot: Rect) -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
@@ -56,7 +62,7 @@ fun LauncherDragCell(
     val isDragged = coordinator.session?.item == item
     Box(
         modifier
-            .then(if (isDragged) Modifier else Modifier.animatePlacement())
+            .then(if (isDragged || tracksFinger) Modifier else Modifier.animatePlacement())
             .graphicsLayer { alpha = if (isDragged) 0f else 1f },
     ) {
         content(
