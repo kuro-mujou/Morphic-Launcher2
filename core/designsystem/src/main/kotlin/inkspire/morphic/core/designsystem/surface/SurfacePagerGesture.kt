@@ -71,6 +71,14 @@ private const val AXIS_EPSILON = 0.001f
  * claiming, which is the last point at which handing the swipe back is free. Once claimed the pan keeps it: aborting a
  * pan already under way would read as the launcher stuttering, and the events are consumed from that point anyway.
  *
+ * **A claimant at slop postpones the decision; it does not end the gesture.** Being disabled at slop reads as *"not
+ * yet"*, so the loop keeps accumulating and decides on the first event at which nothing is claiming. That is the one
+ * qualification to the paragraph above, and it is what [EmbeddedViewTouchFrame] needs: an embedded Android View cannot
+ * be *asked* whether it wants a gesture — Compose hands it moves on the `Final` pass, after this one has decided — so
+ * it claims at the **down** and hands the claim back once it has declined. A pan that broke off at slop instead would
+ * make every widget a dead zone for surface switching; waiting costs one event of latency and nothing else. Nothing
+ * else observes the difference, because every other claimant holds its claim until its own gesture ends.
+ *
  * @param enabled gate the whole gesture off when it shouldn't run.
  */
 fun Modifier.surfacePagerGesture(
@@ -127,10 +135,11 @@ fun Modifier.surfacePagerGesture(
                 if (!claimed) {
                     accX += dx
                     accY += dy
-                    if (abs(accX) > touchSlop || abs(accY) > touchSlop) {
-                        // Re-asked here, not just at the down: see the note on `enabled`. A claim taken between the
-                        // two — an item's long-press, a folder opening under the finger — hands the swipe back.
-                        if (!enabled()) break
+                    // Re-asked here, not just at the down: see the notes on `enabled`. A claim taken between the two —
+                    // an item's long-press, a folder opening under the finger, an embedded View that may want the
+                    // gesture — postpones the decision rather than ending it, so the accumulation above carries on and
+                    // a claim that is dropped mid-gesture still leaves a pan possible.
+                    if ((abs(accX) > touchSlop || abs(accY) > touchSlop) && enabled()) {
                         val horizontal = abs(accX) >= abs(accY)
                         if (activeAxis != null) {
                             // A surface is open (or mid-transition): only a swipe along that axis is ours — it

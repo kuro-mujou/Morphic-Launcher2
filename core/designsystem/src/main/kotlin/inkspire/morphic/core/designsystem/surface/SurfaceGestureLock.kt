@@ -26,6 +26,13 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * knowing where the finger is even while the pan owns it, or a swipe begun on an icon reaches `Up` having never
  * moved, and is read as a tap.
  *
+ * **A claim may be provisional, which is why the pan waits rather than declining.** Most claimants know they want the
+ * finger before they take it. [EmbeddedViewTouchFrame] cannot: an embedded Android View is handed movement on the
+ * `Final` pass, after the pan has decided, so it claims at the **down** on the chance that it wants the gesture and
+ * releases once it has declined. `surfacePagerGesture` therefore treats a claim at slop as *"not yet"* and decides on
+ * the first event at which the count is zero. Nothing here changes for the other claimants — they simply never
+ * release mid-gesture.
+ *
  * Hosted once at the launcher shell, beside the pager it protects. Absent (null local) means nothing is claiming and
  * nothing can — the dev harness and previews, where the pager runs unguarded exactly as it did before.
  */

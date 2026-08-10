@@ -3,6 +3,7 @@ package inkspire.morphic.feature.home
 import android.appwidget.AppWidgetHostView
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.View
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
+import inkspire.morphic.core.designsystem.surface.EmbeddedViewTouchFrame
+import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import org.koin.compose.koinInject
@@ -48,6 +51,12 @@ private val WidgetShape = RoundedCornerShape(12.dp)
  * That is the exception `LauncherDragCell` names: an icon narrows its touch target to the icon and its label
  * because a cell is mostly slack around them, while a widget genuinely *fills* its cell — every pixel of it is the
  * item. The widget's own taps still reach it, because `launcherItemGestures` never consumes a down.
+ *
+ * **Its *swipes* reach it through [EmbeddedViewTouchFrame], which is a whole mechanism rather than a modifier.** The
+ * surface-switching pan runs on `PointerEventPass.Initial` and so outranks the hosted view on every event, which made
+ * a scrolling list widget unscrollable — the pan claimed the finger before the view was even handed the movement. The
+ * frame is what lets the widget claim first; see its KDoc for why the platform's own
+ * `requestDisallowInterceptTouchEvent` could not do the job on its own.
  *
  * **A widget that will not resolve draws its [label] instead** — its provider uninstalled, or an id the platform no
  * longer knows. Naming it rather than drawing nothing is deliberate: an empty cell that cannot be removed reads as
@@ -85,6 +94,7 @@ internal fun WidgetCell(
     // touched, a cancel is a no-op on it, and the alternative is plumbing "is it me?" through a modifier that is
     // opaque by design.
     val menuHost = LocalMenuHost.current
+    val gestureLock = LocalSurfaceGestureLock.current
     val coordinator = requireDragCoordinator()
     val launcherOwnsFinger = menuHost?.request != null || coordinator.isDragging
     var hostView by remember(appWidgetId) { mutableStateOf<AppWidgetHostView?>(null) }
@@ -104,23 +114,32 @@ internal fun WidgetCell(
 
     AndroidView(
         factory = { context ->
-            // A `FrameLayout` stands in when the widget will not resolve, because `AndroidView`'s factory has to
-            // return a view. The flag above then swaps to the placeholder on the next composition.
-            host.createView(context, appWidgetId)
-                ?.also { hostView = it; host.registerView(appWidgetId, it) }
-                ?: FrameLayout(context).also { resolved = false }
+            // The widget's view is always wrapped, never handed to `AndroidView` directly: the frame is what hears it
+            // claim a scroll, and it is exactly the size of its child so the measurement below is unaffected. A bare
+            // `FrameLayout` stands in when the widget will not resolve, because the factory has to return a view; the
+            // flag then swaps to the placeholder on the next composition.
+            val widget = host.createView(context, appWidgetId)
+            if (widget == null) {
+                resolved = false
+                FrameLayout(context)
+            } else {
+                hostView = widget
+                host.registerView(appWidgetId, widget)
+                EmbeddedViewTouchFrame(context, widget, gestureLock)
+            }
         },
         onRelease = { view ->
-            if (view is AppWidgetHostView) host.unregisterView(appWidgetId, view)
+            view.hostedWidget()?.let { host.unregisterView(appWidgetId, it) }
         },
         update = { view ->
-            if (view is AppWidgetHostView && size.width > 0 && size.height > 0) {
+            val widget = view.hostedWidget()
+            if (widget != null && size.width > 0 && size.height > 0) {
                 val widthDp = with(density) { size.width.toDp().value.toInt() }
                 val heightDp = with(density) { size.height.toDp().value.toInt() }
                 // The deprecated four-argument form on purpose: its replacement takes a list of *candidate* sizes
                 // for a widget the host may show at several, and ours has exactly one — the cell it was placed in.
                 @Suppress("DEPRECATION")
-                view.updateAppWidgetSize(null, widthDp, heightDp, widthDp, heightDp)
+                widget.updateAppWidgetSize(null, widthDp, heightDp, widthDp, heightDp)
             }
         },
         modifier = modifier
@@ -130,6 +149,16 @@ internal fun WidgetCell(
             .then(itemGestures),
     )
 }
+
+/**
+ * The [AppWidgetHostView] inside an [EmbeddedViewTouchFrame], or null for the placeholder a widget that would not
+ * resolve is drawn with.
+ *
+ * Reached through the frame rather than remembered separately so the size update and the unregister cannot disagree
+ * about which view they are talking about — `unregisterView` matches by identity.
+ */
+private fun View.hostedWidget(): AppWidgetHostView? =
+    (this as? EmbeddedViewTouchFrame)?.embedded as? AppWidgetHostView
 
 /**
  * Tells this view that the touch gesture it is in the middle of has been taken away.

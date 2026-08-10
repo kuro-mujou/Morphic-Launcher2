@@ -1122,6 +1122,30 @@ The distinction runs all the way through: `WidgetProvider` has no id and `BoundW
   long-press timer to keep in step with ours. AOSP's Launcher3 does the same from a `CheckLongPressHelper`.
   `ItemGesturePhase.ownsFinger` came out of the same investigation and is a separate, smaller correction: the item
   now consumes once it owns the finger rather than only while swiping or dragging.
+- **And a widget's *swipe* is not ours to take, which is what `EmbeddedViewTouchFrame` is for** — the fix for a list
+  widget that could not be scrolled at all, because the surface pan claimed the finger first every time. It is
+  structural rather than a missed check: `surfacePagerGesture` runs on `PointerEventPass.Initial`, which runs parents
+  **before** children, so the hosted view is always behind it — and while that view can still be intercepted Compose's
+  `PointerInteropFilter` hands it moves on the **`Final`** pass, two passes *after* the pan has decided on the same
+  event. `AndroidView` does wire the platform's own `requestDisallowInterceptTouchEvent` through
+  (`AndroidViewHolder` → the filter), but all that changes is *when* the filter dispatches; it cannot outrank an
+  ancestor on Initial. Worth knowing that the *other* two gestures were already correct for the same reason inverted:
+  the filter sets `suppressMovementConsumption` while the view has merely handled the down, so `LauncherPager` still
+  pages over a clickable widget and stops only once the widget genuinely claims. The pan was the one gesture the
+  signal could not reach.
+  - **So the claim is made in reverse, and the pan learnt to wait.** The frame takes a `SurfaceGestureLock` claim at
+    the **down** — on the chance the view wants the gesture — and hands it back once the view has had *its own* touch
+    slop's worth of movement without asking to keep it. `surfacePagerGesture` now treats a claim at slop as *"not
+    yet"*, deciding on the first event at which nothing is claiming, where it used to hand the swipe back for the
+    whole gesture. Both halves are needed: a pan that broke off would make every interactive widget a dead zone for
+    surface switching, which is the cheaper fix and was rejected for that reason. The bill is **one event of latency**
+    for a pan that starts on a widget, and nothing else — no other claimant ever releases mid-gesture, so none of them
+    can observe the difference.
+  - Two details that are silent when wrong. `super.dispatchTouchEvent` must run **before** the verdict, since a child
+    claims from inside its own touch handling and so arrives on the very event being judged. And a view that does not
+    handle the **down** receives nothing further (the filter records that return value and stops dispatching), so it
+    can never claim and the frame must answer for it there — otherwise the claim outlives the gesture and locks the
+    swipe for the session.
 - **Still to come**: resize, widget containers, and the widget area's shrink eviction (it cannot evict to a list).
 
 **Next after that: HOME's second pairing is built, so widgets are the thing it is waiting on.** `LIST_WITH_WIDGET_AREA`
@@ -1802,6 +1826,11 @@ Five things about it are load-bearing:
   carrying straight on does not start panning; a second swipe from the bottom does. L1 behaves the same way. The
   honest limit of a hand-off decided by a claim rather than by leftover deltas — continuing would mean real
   `nestedScroll` connections on every surface. Two fingers skip the question entirely.
+  - **One qualification: a `SurfaceGestureLock` claim at slop postpones the decision rather than ending it.** The loop
+    keeps accumulating and decides on the first event at which nothing is claiming. That exists for
+    `EmbeddedViewTouchFrame` (see the widget notes) — an embedded Android View cannot be *asked* whether it wants a
+    gesture, so it claims pre-emptively and releases when it declines. Nothing else notices, because every other
+    claimant holds its claim until its own gesture is over.
 
 **Infinite paging is a setting again, and it is per pager.** `SurfacePaging` is the fourth slice — one sparse
 `Map<GridSlot, Boolean>`, read resolved through `SettingsRepository.pagerWraps`. Its own slice rather than a field in
