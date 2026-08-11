@@ -74,10 +74,13 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
     // v2: apps_pager_item became app-or-folder (the APPS pager hosts folders, and that row is a folder's slot).
     // v3: icon_override collapsed from twenty flat, stringly, nullable columns to `component` + one serialized
     //     `layerSet` blob — the shape L1 reached only after four destructive bumps of its own. See the entity.
+    // v4: widget_container gained `autoRotate` and `resetOnReturn`, the two behaviours its settings screen offers
+    //     beside the axis. Genuinely per-container rather than per-surface, which is why they are columns here and
+    //     not a `data:settings` slice: two stacks on one home screen may reasonably differ.
     // The bump is required even though the builder falls back to a destructive migration — Room validates the
     // schema hash on open and would throw, not rebuild. Pre-launcher, so the cost of that rebuild is a dev
     // database, not user data; the first real migration is owed the moment this ships (P9).
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(

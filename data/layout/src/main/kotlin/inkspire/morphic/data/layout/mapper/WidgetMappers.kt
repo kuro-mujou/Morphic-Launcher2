@@ -17,6 +17,8 @@ internal fun widgetContainersOf(
             id = container.id,
             axis = container.axis,
             widgetIds = idsByContainer[container.id].orEmpty().map { it.appWidgetId },
+            autoRotate = container.autoRotate,
+            resetOnReturn = container.resetOnReturn,
         )
     }
 }

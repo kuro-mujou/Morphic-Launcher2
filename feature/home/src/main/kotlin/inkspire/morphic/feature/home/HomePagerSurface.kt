@@ -54,11 +54,6 @@ import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import inkspire.morphic.core.designsystem.picker.AppPicker
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -239,6 +234,8 @@ internal fun HomePagerSurface(
     state: HomeState,
     device: DeviceConfiguration,
     modifier: Modifier = Modifier,
+    onOpenIconContainerSettings: (Long) -> Unit = {},
+    onOpenWidgetContainerSettings: (Long) -> Unit = {},
 ) {
     val density = LocalDensity.current
 
@@ -594,20 +591,6 @@ internal fun HomePagerSurface(
     // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
     var widgetPickerOpen by remember { mutableStateOf(false) }
 
-    // **Which widget container an add is destined for, if any** — null when the widget is going onto the grid.
-    //
-    // One flow with a target rather than a second flow, which works because `rememberWidgetAddFlow` keeps its
-    // callback current through `rememberUpdatedState` for exactly this: the surface's *latest* logic is called back
-    // into, so state set just before `start` is still visible when the provider's configuration screen returns.
-    // Every route that opens the picker sets it — to a container from the item menu, to null from the surface menu —
-    // and dismissing clears it, so an abandoned add cannot leave a later one aimed at a container nobody chose.
-    var addWidgetTarget by remember { mutableStateOf<Long?>(null) }
-
-    // **Which icon container the app picker is filling**, and null when it is closed — the picker's whole state,
-    // since the sheet has nothing else to remember. Held as the *target* rather than as an open flag beside one, so
-    // "open with no container" is unrepresentable.
-    var iconPickerTarget by remember { mutableStateOf<Long?>(null) }
-
     val menuHost = LocalMenuHost.current
     val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
         when (item) {
@@ -674,7 +657,7 @@ internal fun HomePagerSurface(
                 title = IconContainerTitle,
                 anchor = anchor,
                 actions = listOf(
-                    MenuAction("Add app") { iconPickerTarget = item.container.id },
+                    MenuAction("Container settings") { onOpenIconContainerSettings(item.container.id) },
                     MenuAction("Remove container") {
                         viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
                     },
@@ -689,10 +672,7 @@ internal fun HomePagerSurface(
                 title = WidgetContainerTitle,
                 anchor = anchor,
                 actions = listOf(
-                    MenuAction("Add widget") {
-                        addWidgetTarget = item.container.id
-                        widgetPickerOpen = true
-                    },
+                    MenuAction("Container settings") { onOpenWidgetContainerSettings(item.container.id) },
                     MenuAction("Remove container") { viewModel.removeWidgetContainer(item.container.id) },
                 ),
             )
@@ -709,26 +689,11 @@ internal fun HomePagerSurface(
             providerClass = bound.provider.className,
             label = bound.label,
         )
-        val container = addWidgetTarget
-        addWidgetTarget = null
-        if (container != null) {
-            // A contained widget needs **no span and no free cell**: the container already holds a placement, and
-            // its pages each fill it. That is the whole difference between the two destinations, and it is why this
-            // cannot fail the way the grid path can.
-            viewModel.addWidgetToContainer(container, info)
-            true
-        } else {
-            val geo = geometry
-            val span = geo?.let {
-                WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
-            }
-            span != null && viewModel.placeWidget(
-                widget = info,
-                span = span,
-                zone = HomeZone.MAIN,
-                config = config,
-            )
+        val geo = geometry
+        val span = geo?.let {
+            WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
         }
+        span != null && viewModel.placeWidget(widget = info, span = span, zone = HomeZone.MAIN, config = config)
     }
 
     // An app *inside* a folder is offered less, and the missing verb is the point: it has no grid placement, so a
@@ -765,14 +730,7 @@ internal fun HomePagerSurface(
                     // here is waiting on something unbuilt (an app picker, page management). The picker is hosted
                     // by *this* surface rather than by `HomeScreen` because the size labels it shows are measured
                     // against the grid a widget would land on, and only the surface drawing that grid knows it.
-                    // The target is cleared here, not just when an add completes: this route puts a widget on the
-                    // *grid*, so arriving with a container still set from an abandoned add would silently file it.
-                    surfaceActions = listOf(
-                        MenuAction("Widgets") {
-                            addWidgetTarget = null
-                            widgetPickerOpen = true
-                        },
-                    ),
+                    surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
                 )
             },
     ) {
@@ -817,11 +775,8 @@ internal fun HomePagerSurface(
                         metrics = dockMetrics,
                         onLaunch = viewModel::launch,
                         onOpenFolder = folderHost::open,
-                        onAddWidgetToContainer = { containerId ->
-                            addWidgetTarget = containerId
-                            widgetPickerOpen = true
-                        },
-                        onAddIconToContainer = { containerId -> iconPickerTarget = containerId },
+                        onAddWidgetToContainer = onOpenWidgetContainerSettings,
+                        onAddIconToContainer = onOpenIconContainerSettings,
                     )
                 }
             },
@@ -853,11 +808,8 @@ internal fun HomePagerSurface(
                         metrics = mainMetrics,
                         onLaunch = viewModel::launch,
                         onOpenFolder = folderHost::open,
-                        onAddWidgetToContainer = { containerId ->
-                            addWidgetTarget = containerId
-                            widgetPickerOpen = true
-                        },
-                        onAddIconToContainer = { containerId -> iconPickerTarget = containerId },
+                        onAddWidgetToContainer = onOpenWidgetContainerSettings,
+                        onAddIconToContainer = onOpenIconContainerSettings,
                     )
                 }
             },
@@ -1084,60 +1036,22 @@ internal fun HomePagerSurface(
                 grid = config,
                 cellWidthPx = geo?.cellW ?: 0f,
                 cellHeightPx = geo?.cellH ?: 0f,
-                onDismiss = {
-                    widgetPickerOpen = false
-                    addWidgetTarget = null
-                },
+                onDismiss = { widgetPickerOpen = false },
                 // Closing first is what lets the system's bind dialog and the provider's configuration screen come
                 // up over the launcher rather than over a sheet that would still be there when they returned.
                 onAddWidget = { provider ->
                     widgetPickerOpen = false
                     addWidget.start(provider.component)
                 },
-                // **The Components section is offered only when a widget is not already destined for a container.**
-                // Adding a container *into* a container is not a thing — neither kind nests — so the rows would be
-                // two that could not work, on the one route where the sheet has been opened to fill something.
-                onAddIconContainer = if (addWidgetTarget != null) {
-                    null
-                } else {
-                    {
-                        widgetPickerOpen = false
-                        viewModel.createIconContainer(HomeZone.MAIN, config)
-                    }
+                onAddIconContainer = {
+                    widgetPickerOpen = false
+                    viewModel.createIconContainer(HomeZone.MAIN, config)
                 },
-                onAddWidgetContainer = if (addWidgetTarget != null) {
-                    null
-                } else {
-                    {
-                        widgetPickerOpen = false
-                        viewModel.createWidgetContainer(HomeZone.MAIN, config)
-                    }
+                onAddWidgetContainer = {
+                    widgetPickerOpen = false
+                    viewModel.createWidgetContainer(HomeZone.MAIN, config)
                 },
             )
-        }
-
-        // **The icon container's app picker**, beside the widget one and last for the same reason. It is a plain
-        // `AppPicker` in a sheet rather than a screen of its own: picking an app to put in a container is one
-        // choice with nothing to configure afterwards, unlike a widget, which has a provider to browse and a
-        // configuration activity to run.
-        iconPickerTarget?.let { containerId ->
-            LauncherBottomSheet(onDismiss = { iconPickerTarget = null }) {
-                Text(
-                    text = "Add to container",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = LocalMorphicColors.current.content,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-                )
-                AppPicker(
-                    // Recomputed from the state the surface already collects, so an app installed while the sheet
-                    // is open appears in it — and one already in this container never does.
-                    apps = state.appsNotIn(containerId),
-                    onPick = { component ->
-                        viewModel.addAppToIconContainer(containerId, component)
-                        iconPickerTarget = null
-                    },
-                )
-            }
         }
     }
 }
@@ -1209,6 +1123,8 @@ private fun HomeItemCell(
             axis = item.container.axis,
             modifier = cellModifier,
             itemGestures = itemGestures,
+            autoRotate = item.container.autoRotate,
+            resetOnReturn = item.container.resetOnReturn,
             onAddWidget = { onAddWidgetToContainer(item.container.id) },
         )
     }

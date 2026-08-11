@@ -65,6 +65,19 @@ enum class WidgetContainerAxis { HORIZONTAL, VERTICAL }
  * **Paged, not stacked.** Dividing one cell's footprint between the contained widgets would shrink each of them,
  * which is the opposite of why a user groups widgets: each still wants the whole footprint, and what the container
  * buys back is the *cells*, by showing one widget at a time.
+ *
+ * @property autoRotate whether it pages itself on a timer, so a container of glanceable widgets cycles without being
+ *   touched. Off by default: a launcher that animates on its own while nobody is looking at it is a choice, not a
+ *   baseline.
+ * @property resetOnReturn whether returning to home puts it back on its **first** page. Off by default, on the same
+ *   terms — leaving a container where the user left it is the less surprising of the two, and this exists for the
+ *   opposite taste: a container whose first page is the one that matters, with the rest kept behind it.
  */
 @Serializable
-data class WidgetContainer(val id: Long, val axis: WidgetContainerAxis, val widgetIds: List<Int>)
+data class WidgetContainer(
+    val id: Long,
+    val axis: WidgetContainerAxis,
+    val widgetIds: List<Int>,
+    val autoRotate: Boolean = false,
+    val resetOnReturn: Boolean = false,
+)

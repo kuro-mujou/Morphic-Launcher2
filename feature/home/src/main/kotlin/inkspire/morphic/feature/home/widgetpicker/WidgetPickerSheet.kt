@@ -86,7 +86,9 @@ import org.koin.androidx.compose.koinViewModel
  *
  * @param grid the grid a chosen widget would land on, used only to phrase its size ("3 × 2"). The *caller's* grid
  *   rather than one derived here, because home's two pairings put widgets in different zones — the pager on one,
- *   the widget area on the other — and each surface already knows its own.
+ *   the widget area on the other — and each surface already knows its own. **Null when there is no grid to land
+ *   on**, which is the widget container's case: every page of a container fills the container, so a footprint would
+ *   be a promise nothing keeps.
  * @param cellWidthPx the measured cell size of that grid; a widget's span is its stated minimum divided by this.
  *   Zero before the surface has been measured, which [WidgetSpan.forMinSize] answers with no label at all rather
  *   than a wrong one.
@@ -101,7 +103,7 @@ import org.koin.androidx.compose.koinViewModel
  */
 @Composable
 internal fun WidgetPickerSheet(
-    grid: GridConfig,
+    grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
     onDismiss: () -> Unit,
@@ -362,7 +364,7 @@ private fun AppRow(group: WidgetProviderGroup, onClick: () -> Unit) {
 @Composable
 private fun DetailPane(
     group: WidgetProviderGroup,
-    grid: GridConfig,
+    grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
     onBack: () -> Unit,
@@ -484,20 +486,25 @@ private fun Dots(current: Int, count: Int, modifier: Modifier = Modifier) {
 }
 
 /**
- * "3 × 2" for [provider] on [grid], or empty when the grid has not been measured yet.
+ * "3 × 2" for [provider] on [grid], or empty when there is no size to promise.
  *
- * Empty rather than a guess: a size label is a promise about where the widget will fit, and one computed against a
- * cell size of zero would be a confident lie. The row above it (the widget's name) still reads on its own.
+ * Two ways that happens, and both mean the same thing here. The grid may not have been **measured** yet, and a span
+ * computed against a cell size of zero would be a confident lie. Or there may be no grid at all — a widget added to
+ * a **container** fills the container whatever it asked for, so its footprint is not the caller's to state. Empty
+ * either way; the widget's name above it still reads on its own.
  */
 private fun sizeLabel(
     provider: WidgetProvider,
-    grid: GridConfig,
+    grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
-): String = WidgetSpan.forMinSize(
-    minWidthPx = provider.minWidthPx,
-    minHeightPx = provider.minHeightPx,
-    cellWidthPx = cellWidthPx,
-    cellHeightPx = cellHeightPx,
-    config = grid,
-)?.visualLabel(grid).orEmpty()
+): String {
+    if (grid == null) return ""
+    return WidgetSpan.forMinSize(
+        minWidthPx = provider.minWidthPx,
+        minHeightPx = provider.minHeightPx,
+        cellWidthPx = cellWidthPx,
+        cellHeightPx = cellHeightPx,
+        config = grid,
+    )?.visualLabel(grid).orEmpty()
+}

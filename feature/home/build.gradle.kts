@@ -1,5 +1,8 @@
 plugins {
     alias(libs.plugins.launcher.android.feature)
+    // A container's settings screen is a `@Serializable` NavKey, declared in this module rather than in
+    // core:navigation — a container is an *instance*, so the key carries its id.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -18,6 +21,13 @@ dependencies {
     // `LauncherIcon`, for an icon container's slots. Drawn directly rather than through a designsystem cell because
     // a container's *arrangement* decides how big each icon is — see `IconContainerCell`.
     implementation(projects.core.icon)
+
+    // `NavKey`, for the container settings destination this module declares. `app` still maps keys to screens; this
+    // module only declares the key, which is what keeps a HOME-only destination out of every other consumer's sight.
+    implementation(projects.core.navigation)
+
+    // `BackHandler`, so system back and a screen's own back affordance are the same action rather than two.
+    implementation(libs.androidx.activity.compose)
 
     // The picker's chrome: a close, a back and a chevron. The extended set for `feature:settings`' reason — it is
     // the artifact this project already ships, and R8 keeps only the vectors actually referenced.

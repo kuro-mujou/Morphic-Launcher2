@@ -160,4 +160,20 @@ sealed interface LayoutChange {
      * it back on the grid or an [AddToWidgetContainer] to re-home it, exactly as [RemoveFromFolder] does.
      */
     data class RemoveFromWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
+
+    /**
+     * Sets widget container [containerId]'s three settings — how it is paged, and the two behaviours that page it
+     * without being asked.
+     *
+     * **All three together, where [SetIconContainerArrangement] sets one.** That is not inconsistency: an icon
+     * container has exactly one setting and this holder has three, edited on one screen that holds all of them. A
+     * whole-value write is what stops two controls toggled in quick succession racing into a lost update, and the
+     * caller always has every value to hand.
+     */
+    data class SetWidgetContainerOptions(
+        val containerId: Long,
+        val axis: WidgetContainerAxis,
+        val autoRotate: Boolean,
+        val resetOnReturn: Boolean,
+    ) : LayoutChange
 }

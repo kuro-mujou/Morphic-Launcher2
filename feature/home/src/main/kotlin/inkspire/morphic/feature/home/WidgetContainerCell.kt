@@ -22,16 +22,31 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.surface.claimSurfaceGestureWhilePressed
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * How long each widget is shown for when the container rotates itself.
+ *
+ * A placeholder in the "don't invent a dimension nothing owns yet" sense — it is not a setting anyone owns, and the
+ * screen offers the behaviour as a switch rather than a duration. Five seconds is long enough to read a clock or a
+ * forecast and short enough that the second widget is discovered rather than waited for.
+ */
+private const val AutoRotateIntervalMs = 5_000L
 
 /** The dots' sizes and spacing — L1's, which are chosen against a widget rather than against a page of them. */
 private val ActiveDotSize = 6.dp
@@ -66,6 +81,8 @@ internal fun WidgetContainerCell(
     axis: WidgetContainerAxis,
     modifier: Modifier = Modifier,
     itemGestures: Modifier = Modifier,
+    autoRotate: Boolean = false,
+    resetOnReturn: Boolean = false,
     onAddWidget: () -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
@@ -93,6 +110,36 @@ internal fun WidgetContainerCell(
         // Gated off mid-drag for the reason every other dragging surface gates its own scroller: two gestures
         // otherwise fight over one finger while an item is being carried across the screen.
         val userScrollEnabled = !coordinator.isDragging
+
+        // **Both behaviours are scoped to the launcher being resumed**, which is not tidiness in either case.
+        // Auto-rotate would otherwise animate a container nobody is looking at, for as long as the process lives;
+        // and "on return" *is* a resume, so `repeatOnLifecycle` is not a wrapper round the reset but the whole of
+        // it — the block runs again each time home comes back, which is exactly the event being described.
+        val lifecycle = LocalLifecycleOwner.current.lifecycle
+        if (autoRotate && widgets.size > 1) {
+            LaunchedEffect(pagerState, widgets.size, lifecycle) {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    while (true) {
+                        delay(AutoRotateIntervalMs.milliseconds)
+                        // Skipped rather than cancelled while a drag is in flight: the pager is already refusing
+                        // the finger then, and a container that shuffled under a dragged icon would move the drop
+                        // target out from under it.
+                        if (!coordinator.isDragging) {
+                            pagerState.animateScrollToPage((pagerState.currentPage + 1) % widgets.size)
+                        }
+                    }
+                }
+            }
+        }
+        if (resetOnReturn) {
+            LaunchedEffect(pagerState, lifecycle) {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    // `scrollTo`, not `animateScrollTo`: the user has just come back to home and the container
+                    // should already be where they will find it, rather than visibly rewinding in front of them.
+                    pagerState.scrollToPage(0)
+                }
+            }
+        }
         val page: @Composable (Int) -> Unit = { index ->
             WidgetCell(
                 appWidgetId = widgets[index].appWidgetId,

@@ -494,20 +494,6 @@ class HomeViewModel(
     }
 
     /**
-     * Files a widget the add flow has just bound into widget container [containerId].
-     *
-     * **No span and no free cell**, unlike [placeWidget]: the container already owns a placement and each of its
-     * pages fills it, so there is nothing to size and nothing that can refuse. That is why this returns nothing
-     * where its sibling returns a Boolean — there is no failure for the caller to release the id over.
-     *
-     * The op carries the whole [widget] rather than its id so the definition is written with the membership; see
-     * `LayoutChange.AddToWidgetContainer`.
-     */
-    fun addWidgetToContainer(containerId: Long, widget: WidgetInfo) {
-        applyChanges(listOf(LayoutChange.AddToWidgetContainer(containerId, widget)))
-    }
-
-    /**
      * Takes widget container [containerId] off HOME — **with every widget inside it, and their ids**.
      *
      * This is [removeWidget]'s rule applied once per contained widget, and it is not optional: deleting the

@@ -12,6 +12,8 @@ import androidx.navigation3.ui.NavDisplay
 import inkspire.morphic.core.navigation.HomeRoute
 import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
+import inkspire.morphic.feature.home.containersettings.ContainerSettingsRoute
+import inkspire.morphic.feature.home.containersettings.ContainerSettingsScreen
 import inkspire.morphic.feature.settings.SettingsRoute
 import inkspire.morphic.feature.settings.SettingsScreen
 import inkspire.morphic.feature.settings.SettingsSection
@@ -109,6 +111,15 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         onEditIcon = { component ->
                             navigator.goTo(IconStudioRoute.App(component.flatten()))
                         },
+                        // A container's "+" and its context menu. Declared by `feature:home` — a container is a HOME
+                        // item, and everything the screen reads is already wired there — and mapped here for
+                        // `entryProvider`'s reason: it is a mapping, not a registry.
+                        onOpenIconContainerSettings = { id ->
+                            navigator.goTo(ContainerSettingsRoute.Icon(id))
+                        },
+                        onOpenWidgetContainerSettings = { id ->
+                            navigator.goTo(ContainerSettingsRoute.Widget(id))
+                        },
                     )
                 }
                 entry<SettingsRoute> { route ->
@@ -145,6 +156,15 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 }
                 entry<IconStudioRoute.App> { route ->
                     IconStudioScreen(route = route, onBack = { navigator.goBack() })
+                }
+                // Two entries for one screen, as the icon studio has: the key is a sealed pair because the two
+                // containers share no settings at all, so a single key carrying both kinds would be a state whose
+                // fields are half meaningless.
+                entry<ContainerSettingsRoute.Icon> { route ->
+                    ContainerSettingsScreen(route = route, onBack = { navigator.goBack() })
+                }
+                entry<ContainerSettingsRoute.Widget> { route ->
+                    ContainerSettingsScreen(route = route, onBack = { navigator.goBack() })
                 }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },

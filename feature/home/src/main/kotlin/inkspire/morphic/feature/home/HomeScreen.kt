@@ -37,7 +37,11 @@ import org.koin.androidx.compose.koinViewModel
  * @param modifier passed to whichever surface is chosen; each fills it.
  */
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    onOpenIconContainerSettings: (Long) -> Unit = {},
+    onOpenWidgetContainerSettings: (Long) -> Unit = {},
+) {
     val viewModel = koinViewModel<HomeViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -48,7 +52,14 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
     when (state.layout) {
-        HomeLayout.PAGER_WITH_DOCK -> HomePagerSurface(viewModel, state, device, modifier)
+        HomeLayout.PAGER_WITH_DOCK -> HomePagerSurface(
+            viewModel = viewModel,
+            state = state,
+            device = device,
+            modifier = modifier,
+            onOpenIconContainerSettings = onOpenIconContainerSettings,
+            onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
+        )
         HomeLayout.LIST_WITH_WIDGET_AREA -> HomeListSurface(viewModel, state, device, modifier)
     }
 }

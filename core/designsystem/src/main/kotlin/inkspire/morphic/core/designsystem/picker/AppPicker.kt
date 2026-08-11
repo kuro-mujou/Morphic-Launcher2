@@ -1,21 +1,25 @@
 package inkspire.morphic.core.designsystem.picker
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppRowCell
@@ -41,11 +45,18 @@ private val PickerRowHeight = 64.dp
  * every caller already holds them: each supplies the list from its own ViewModel, which is also what lets a caller
  * filter first (a folder picker offers only apps not already in it).
  *
- * Single-select, because that is what every consumer above needs first and it is the smaller promise. A
- * multi-select variant is an additive change if "Add apps" wants one; guessing at it now would be designing for a
- * caller that does not exist.
+ * **Both selection modes, decided by [selected].** It went in single-select only, on the grounds that guessing at a
+ * multi-select variant would be designing for a caller that did not exist. The icon container's settings screen is
+ * that caller: filling a container one app at a time, with the sheet closing after each, is the wrong shape for
+ * what is usually one deliberate act of "put these four in here". The addition is a nullable set rather than a
+ * second composable, because everything else — the search, the collator, the rows, the empty states — is identical,
+ * and two pickers that had to agree about all of it is the duplication this design system keeps not making.
  *
  * @param apps what to offer, in the order to offer it. Not re-sorted here — the caller's order is the answer.
+ * @param onPick a tap on a row. In single-select that is the choice; in multi-select it is a **toggle**, and the
+ *   caller commits when it is done.
+ * @param selected null for single-select. A set — even an empty one — puts a checkbox on every row and makes
+ *   [onPick] a toggle. Held by the caller rather than here, so the commit reads the same state the rows drew.
  * @param searchState hoisted so it survives a configuration change, per the design system's text-field rule: the
  *   field's own KDoc explains why this is the one component whose state stays with the caller.
  */
@@ -54,6 +65,7 @@ fun AppPicker(
     apps: List<AppInfo>,
     onPick: (ComponentKey) -> Unit,
     modifier: Modifier = Modifier,
+    selected: Set<ComponentKey>? = null,
     searchState: TextFieldState = rememberTextFieldState(),
     placeholder: String = "Search apps",
 ) {
@@ -74,13 +86,22 @@ fun AppPicker(
         )
         LazyColumn(Modifier.fillMaxSize()) {
             items(matches, key = { it.componentKey.flatten() }) { app ->
-                AppRowCell(
-                    app = app,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(PickerRowHeight)
-                        .clickable { onPick(app.componentKey) },
-                )
+                val row = Modifier
+                    .fillMaxWidth()
+                    .height(PickerRowHeight)
+                    .clickable { onPick(app.componentKey) }
+                if (selected == null) {
+                    AppRowCell(app = app, modifier = row)
+                } else {
+                    Row(modifier = row, verticalAlignment = Alignment.CenterVertically) {
+                        // The row carries the click, not the box — a checkbox is a 20dp target inside a 64dp row,
+                        // and the whole row is what a user aims at. `onClick = null` is Compose's own way of saying
+                        // "this control is drawn, and something else is the target", which also stops it taking a
+                        // second, competing tap.
+                        Checkbox(checked = app.componentKey in selected, onCheckedChange = null)
+                        AppRowCell(app = app, modifier = Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
             }
         }
         // **"Nothing matched" and "nothing has arrived yet" are different**, and saying the first when the second

@@ -103,6 +103,8 @@ fun LauncherShell(
     onOpenAppsSettings: (AppsLayout) -> Unit,
     onEditIcon: (ComponentKey) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenIconContainerSettings: (Long) -> Unit = {},
+    onOpenWidgetContainerSettings: (Long) -> Unit = {},
 ) {
     val viewModel = koinViewModel<ShellViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -262,7 +264,13 @@ fun LauncherShell(
                         )
                     },
                 ) {
-                    HomeScreen()
+                    // Two more destinations the shell passes on without naming, exactly as `onEditIcon` is —
+                    // a container's settings key belongs to `feature:home`, and `app` is the only layer that
+                    // maps a key to a screen. Ids rather than the key itself, so this module never imports it.
+                    HomeScreen(
+                        onOpenIconContainerSettings = onOpenIconContainerSettings,
+                        onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
+                    )
                 }
 
                 // **The top-action band, above every surface** — hence a sibling of the pager rather than its

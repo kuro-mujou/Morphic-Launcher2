@@ -202,6 +202,13 @@ internal class LayoutRepositoryImpl(
             }
 
             is LayoutChange.RemoveFromWidgetContainer -> daos.widgetContainerItem.removeByWidget(change.appWidgetId)
+
+            is LayoutChange.SetWidgetContainerOptions -> daos.widgetContainer.setOptions(
+                id = change.containerId,
+                axis = change.axis,
+                autoRotate = change.autoRotate,
+                resetOnReturn = change.resetOnReturn,
+            )
         }
     }
 
