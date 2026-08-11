@@ -1,6 +1,6 @@
 package inkspire.morphic.core.icon.render
 
-import inkspire.morphic.core.icon.layer.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.icon.parse.ParsedLayer
 
 /**

@@ -1,5 +1,7 @@
 package inkspire.morphic.core.icon
 
+import inkspire.morphic.core.model.icon.IconShape
+
 /**
  * The catalog of built-in [IconShape]s and the vector drawable each resolves to. Adding a shape is: drop a
  * `shape_*.xml` vector into `res/drawable`, add an entry here, and (if it should be pickable) list it in

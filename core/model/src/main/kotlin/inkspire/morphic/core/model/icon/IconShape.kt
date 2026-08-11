@@ -1,4 +1,4 @@
-package inkspire.morphic.core.icon
+package inkspire.morphic.core.model.icon
 
 import kotlinx.serialization.Serializable
 
@@ -9,8 +9,11 @@ import kotlinx.serialization.Serializable
  *
  * A shape is defined by a **vector drawable** prepared as a resource, referenced by this stable [id]. Adding
  * a new shape means dropping in a vector drawable and pointing an id at it — no per-shape path math in code.
- * Turning the id into a drawable and building the clip mask from the vector's silhouette are rendering
- * concerns, added later once the shape drawables exist.
+ *
+ * **The id is all that lives here; what it resolves to does not.** The id → `R.drawable` mapping is
+ * `IconShapes` in `core:icon`, beside the renderer that builds the clip mask from the vector's silhouette,
+ * because a resource id is an Android concept and this module has none. That is also what lets a drawable be
+ * renamed without touching a single persisted blob.
  *
  * It is a value class so it is a zero-cost, type-safe wrapper over the id, and `@Serializable` persists it as
  * just that id string inside the layer set (matching the "shape-by-id" on-disk form). Treat [id] as a stable

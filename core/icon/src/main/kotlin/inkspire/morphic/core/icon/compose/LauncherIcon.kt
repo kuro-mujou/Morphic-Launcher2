@@ -12,15 +12,27 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import inkspire.morphic.core.icon.layer.IconLayerSet
+import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.ComponentKey
 
 /** The baker used to render icons. Provided at the app root once it is wired; `null` renders nothing. */
 val LocalIconRenderManager = staticCompositionLocalOf<IconRenderManager?> { null }
 
-/** The global default layer set every app icon uses until per-app overrides land (data:icons, B9). */
+/** The global default layer set an app icon uses when it has no override of its own. */
 val LocalIconLayerSet = staticCompositionLocalOf { IconLayerSet.Base }
+
+/**
+ * The apps that have been **detached** from [LocalIconLayerSet] and render from a recipe of their own, provided by
+ * `app` from `data:icons`. Empty until something is customised, which is what makes the plain case free.
+ *
+ * **A map rather than a per-icon lookup**, because every icon on screen asks this question and a `Flow` per cell
+ * would be hundreds of collectors. `static` for the same reason [LocalIconLayerSet] is: reads are the hot path here
+ * and there are hundreds of them. The bill is that re-providing it recomposes the whole subtree rather than only its
+ * readers — paid once per icon edit, and cheap even then, because a recomposition with unchanged inputs re-`remember`s
+ * nothing and re-bakes nothing (see below).
+ */
+val LocalIconOverrides = staticCompositionLocalOf<Map<ComponentKey, IconLayerSet>> { emptyMap() }
 
 // TODO(B4): fallback bake resolution. The grid `AppCell` now passes a real sizePx (from IconMetrics), so this
 //  is only for standalone / @Preview callers and any layout cell that doesn't yet pass a size (e.g. the list
@@ -43,7 +55,18 @@ private const val DEFAULT_ICON_RENDER_PX = 192
  * is a `suspend` function that moves onto its own bounded dispatcher and coalesces duplicate requests. A cell just
  * asks.
  *
- * Per-app icon overrides and the "skin" backdrop plate are deliberately not here yet (deferred).
+ * **Which recipe an icon renders from is resolved in [layerSet]'s default**, and that placement is doing real work:
+ * an *explicit* argument bypasses both the per-app override and the global default, which is exactly what the icon
+ * studio's live preview needs — it draws a set the user is still editing and has not committed anywhere. Every
+ * ordinary caller passes nothing and gets the resolution.
+ *
+ * **No cache invalidation is needed when a recipe changes, and calling it would be wrong.** [IconId] carries the
+ * layer set, so an edited icon simply *is* a different key — it misses, bakes, and the stale bitmap ages out of the
+ * LRU on its own. [IconRenderManager.invalidate] exists for the one input the key cannot see (an app replacing its
+ * own artwork) and bumps [IconRenderManager.generation], which recomposes every icon on screen; spending that on a
+ * change the key already handles would be work for nothing.
+ *
+ * The "skin" backdrop plate is deliberately still not here (deferred).
  */
 @Composable
 fun LauncherIcon(
@@ -51,7 +74,7 @@ fun LauncherIcon(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     sizePx: Int = DEFAULT_ICON_RENDER_PX,
-    layerSet: IconLayerSet = LocalIconLayerSet.current,
+    layerSet: IconLayerSet = LocalIconOverrides.current[component] ?: LocalIconLayerSet.current,
 ) {
     val manager = LocalIconRenderManager.current
     if (manager == null) {

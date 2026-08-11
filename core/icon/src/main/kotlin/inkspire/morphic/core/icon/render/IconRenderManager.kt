@@ -2,9 +2,8 @@ package inkspire.morphic.core.icon.render
 
 import android.graphics.Bitmap
 import android.util.LruCache
-import inkspire.morphic.core.icon.layer.IconLayerSet
-import inkspire.morphic.core.icon.parse.DrawableParser
-import inkspire.morphic.core.icon.source.RawIconSource
+import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.icon.parse.ParsedIconLoader
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -22,8 +21,12 @@ import kotlinx.coroutines.withContext
  * showing hundreds of icons draws cached bitmaps instead of re-compositing each one.
  *
  * [get] is get-or-bake and **suspending** — it may load, parse and composite, and it moves that work onto a bounded
- * dispatcher of its own. The editor does *not* go through this cache — it uses the live [IconRenderer] path for
- * instant feedback — and calls [invalidate] on commit so surfaces re-bake with the new layer set.
+ * dispatcher of its own.
+ *
+ * The editor does **not** go through this cache: it renders the same layers as live Compose nodes
+ * ([inkspire.morphic.core.icon.compose.IconLayerStack]) so a slider drag responds per frame rather than baking a
+ * bitmap per frame. Nor does a commit need [invalidate] — an edited icon has a different [IconId] by construction,
+ * so it misses, re-bakes, and the superseded bitmap ages out of the LRU on its own.
  *
  * ## Two properties that are not optional on a weak device
  *
@@ -40,8 +43,7 @@ import kotlinx.coroutines.withContext
  *   happily occupy every one of them and leave nothing for the main thread. Leaving cores idle here is the point.
  */
 class IconRenderManager(
-    private val rawIconSource: RawIconSource,
-    private val parser: DrawableParser,
+    private val parsedIcons: ParsedIconLoader,
     private val renderer: IconRenderer,
     maxCacheKb: Int = defaultCacheKb(),
     bakeDispatcher: CoroutineDispatcher = defaultBakeDispatcher(),
@@ -87,8 +89,10 @@ class IconRenderManager(
         // suspended forever on a deferred nobody will ever complete.
         var baked: Bitmap? = null
         try {
+            // The load and parse run **inside** the bounded bake context along with the composite, which is what keeps
+            // the parallelism cap covering all three. See `ParsedIconLoader` for why it does not hop for itself.
             baked = withContext(bakeContext) {
-                rawIconSource.loadIcon(component)?.let { renderer.render(parser.parse(it), layerSet, sizePx) }
+                parsedIcons.load(component)?.let { renderer.render(it, layerSet, sizePx) }
             }
             if (baked != null) cache.put(id, baked)
         } finally {
@@ -123,7 +127,12 @@ class IconRenderManager(
     var generation: Int by mutableIntStateOf(0)
         private set
 
-    /** Drops every cached size/layer-set variant of [component] — e.g. after an icon edit. */
+    /**
+     * Drops every cached size/layer-set variant of [component].
+     *
+     * **Not for an icon edit** — that changes the [IconId] and so invalidates itself. This is for a change the key
+     * cannot see, which today means one thing: the app replaced its own artwork. See [generation].
+     */
     fun invalidate(component: ComponentKey) {
         evict { it.component == component }
     }

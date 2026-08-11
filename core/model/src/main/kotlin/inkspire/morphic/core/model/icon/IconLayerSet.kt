@@ -1,4 +1,4 @@
-package inkspire.morphic.core.icon.layer
+package inkspire.morphic.core.model.icon
 
 import kotlinx.serialization.Serializable
 
@@ -10,6 +10,18 @@ import kotlinx.serialization.Serializable
  *
  * The invariant is enforced in code, not the type: construction validates it, and the reorder helpers
  * ([moveUp]/[moveDown]) refuse a move that would break it (returning the set unchanged) rather than throwing.
+ *
+ * ## Why the recipe lives in `core:model` and not beside the renderer
+ *
+ * This whole package is an icon's **recipe** — pure data describing what an icon should look like — while
+ * turning it into pixels is `core:icon`'s job. That split is this codebase's third of the same kind, after
+ * `BackdropEffect` (model here, rendering in `core:designsystem`) and `DeviceConfiguration` (pure enum here,
+ * detection in `core:designsystem`), and it is what lets the two modules that **store** a set — `data:settings`
+ * for the global default, `data:icons` for per-app overrides — persist it without either taking a dependency on
+ * a module that allocates bitmaps.
+ *
+ * It also means serialization belongs here rather than there: a set is written as one JSON blob, so every type
+ * in this package is `@Serializable` and their `@SerialName`s are a stable on-disk contract.
  */
 @Serializable
 data class IconLayerSet(val layers: List<IconLayerSpec>) {

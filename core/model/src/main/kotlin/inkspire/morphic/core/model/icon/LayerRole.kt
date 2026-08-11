@@ -1,4 +1,4 @@
-package inkspire.morphic.core.icon.layer
+package inkspire.morphic.core.model.icon
 
 import kotlinx.serialization.Serializable
 

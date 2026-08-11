@@ -1,10 +1,10 @@
 package inkspire.morphic.core.icon.render
 
 import android.graphics.drawable.Drawable
-import inkspire.morphic.core.icon.layer.IconLayerSet
-import inkspire.morphic.core.icon.layer.IconLayerSpec
-import inkspire.morphic.core.icon.layer.LayerRole
-import inkspire.morphic.core.icon.layer.LayerSource
+import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.LayerRole
+import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 

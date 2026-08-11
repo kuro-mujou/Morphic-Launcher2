@@ -4,16 +4,14 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
-import inkspire.morphic.core.icon.IconShape
+import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.icon.IconShapes
-import inkspire.morphic.core.icon.layer.IconLayerSet
-import inkspire.morphic.core.icon.layer.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
@@ -58,7 +56,7 @@ class IconRenderer(
         val bitmap = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bitmap)
 
-        canvas.withMatrix(layerTransform(layer.spec, sizePx)) {
+        canvas.withMatrix(LayerTransform.of(layer.spec, sizePx).toMatrix(sizePx)) {
             drawContent(canvas, layer.content, sizePx)
         }
 
@@ -88,16 +86,6 @@ class IconRenderer(
         }
         canvas.drawBitmap(mask, 0f, 0f, maskPaint)
         mask.recycle()
-    }
-
-    /** offset (fraction of the box) · zoom (about centre) · rotation (degrees, about centre). */
-    private fun layerTransform(spec: IconLayerSpec, sizePx: Int): Matrix {
-        val center = sizePx / 2f
-        return Matrix().apply {
-            postScale(spec.zoom, spec.zoom, center, center)
-            postRotate(spec.rotation, center, center)
-            postTranslate(spec.offsetX * sizePx, spec.offsetY * sizePx)
-        }
     }
 
     private fun decodeCustomImage(path: String): Drawable? =
