@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.data.settings.IconPreset
 
@@ -42,28 +41,22 @@ import inkspire.morphic.data.settings.IconPreset
  *
  * Saving is likewise **independent of Save**. Naming a recipe puts it in the library and commits it nowhere, so a
  * user can build a look, keep it, and back out without applying it to anything.
+ *
+ * A section body: no surface and no title of its own — see [StudioSections][LayerStackRows] for why those belong to
+ * the host. **The text field's state stays hoisted here rather than in the screen**, deliberately: a half-typed name is
+ * scoped to the panel being open, and closing the panel discarding it is the behaviour a user expects.
  */
 @Composable
-fun StudioPresets(
+internal fun PresetsControls(
     presets: List<IconPreset>,
-    hazeState: HazeState,
     onSave: (String) -> Unit,
     onLoad: (IconPreset) -> Unit,
     onDelete: (String) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val nameState = rememberTextFieldState()
     val name by remember { derivedName(nameState) }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .studioSurface(hazeState, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("Presets", color = StudioContentColor, style = MaterialTheme.typography.titleSmall)
-
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,

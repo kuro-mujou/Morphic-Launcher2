@@ -15,7 +15,7 @@ import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 
 /** The blur radius every studio surface uses. One value, so surfaces at different depths still read as one material. */
-private val StudioBlurRadius = 20.dp
+private val StudioBlurRadius = 8.dp
 
 /** The dark wash over the blur. Enough to carry white text over a white canvas, light enough to stay glass. */
 private val StudioTint = Color.Black.copy(alpha = 0.4f)

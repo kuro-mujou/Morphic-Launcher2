@@ -51,63 +51,21 @@ import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.data.icons.InstalledIconPack
 
-/**
- * The studio's floating settings surface: the layer stack, and the controls for whichever layer is selected.
+/*
+ * The bodies of the studio's sections — one per `StudioTool`, emitted into whatever `StudioToolPanel` lays out.
  *
- * **There is no "this layer / whole icon" scope toggle, and that is a simplification the model earned rather than a
- * decision taken here.** L1's editor mixed per-layer tools (transform, colour, shadow) with whole-icon ones (icon
- * shape, background, theming, size, skin, pack) in one flat row, and its UI plan left the split as an open question.
- * In L2 every one of those whole-icon tools has already gone somewhere else: the tile shape became a *per-layer*
- * shape (there is no stack-level mask), the background is the background layer's source, theming is
- * [LayerSource.AppDefaultMonochrome] on the foreground, sizing is `data:settings` and a different screen entirely,
- * the skin is deferred, and an icon pack **is** a per-layer source. So everything here acts on one layer, and the
- * question does not arise.
+ * A section emits controls and nothing else: no surface, no title, no scroll. Those belong to the host, which is the
+ * only thing that knows a section is one of several — so a new section cannot arrive with its own idea of what a panel
+ * looks like, and the host can rearrange them (a side rail in landscape) without touching one.
+ *
+ * There is no "this layer / whole icon" scope toggle, and that is a simplification the model earned rather than a
+ * decision taken here. L1's editor mixed per-layer tools (transform, colour, shadow) with whole-icon ones (icon shape,
+ * background, theming, size, skin, pack) in one flat row, and its UI plan left the split as an open question. In L2
+ * every one of those whole-icon tools has already gone somewhere else: the tile shape became a *per-layer* shape (there
+ * is no stack-level mask), the background is the background layer's source, theming is `AppDefaultMonochrome` on the
+ * foreground, sizing is `data:settings` and a different screen entirely, the skin is deferred, and an icon pack **is**
+ * a per-layer source. So every section but Presets and More acts on one layer, and the question does not arise.
  */
-@Composable
-fun StudioPanel(
-    state: IconStudioState,
-    hazeState: HazeState,
-    onSelectLayer: (Int) -> Unit,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
-    onCommit: () -> Unit,
-    onToggleVisible: () -> Unit,
-    onMove: (up: Boolean) -> Unit,
-    onAdd: () -> Unit,
-    onRemove: () -> Unit,
-    onPickImage: () -> Unit,
-    onPickPack: (String) -> Unit,
-    onBrowsePack: ((String) -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .studioSurface(hazeState, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        LayerStackRows(
-            state = state,
-            onSelectLayer = onSelectLayer,
-            onToggleVisible = onToggleVisible,
-            onMove = onMove,
-            onAdd = onAdd,
-            onRemove = onRemove,
-        )
-
-        state.selectedLayer?.let { spec ->
-            SelectedLayerControls(
-                spec = spec,
-                packs = state.packs,
-                onUpdate = onUpdate,
-                onCommit = onCommit,
-                onPickImage = onPickImage,
-                onPickPack = onPickPack,
-                onBrowsePack = onBrowsePack,
-            )
-        }
-    }
-}
 
 /**
  * The stack, top layer first — **drawn in the order it is drawn on screen**, which is the reverse of the list's
@@ -115,7 +73,7 @@ fun StudioPanel(
  * in their head for no reason.
  */
 @Composable
-private fun LayerStackRows(
+internal fun LayerStackRows(
     state: IconStudioState,
     onSelectLayer: (Int) -> Unit,
     onToggleVisible: () -> Unit,
@@ -142,10 +100,25 @@ private fun LayerStackRows(
             // Disabled rather than hidden, because *which* move is illegal is the information: a greyed arrow says
             // "the foreground cannot go below its background" before the move is attempted, where a vanished button
             // says nothing and a refused drag says nothing twice.
-            StudioIconButton(Icons.Default.KeyboardArrowUp, "Move up", state.canMoveUp) { onMove(true) }
-            StudioIconButton(Icons.Default.KeyboardArrowDown, "Move down", state.canMoveDown) { onMove(false) }
-            StudioIconButton(Icons.Default.Add, "Add layer", enabled = true, onClick = onAdd)
-            StudioIconButton(Icons.Default.Delete, "Remove layer", state.canRemoveSelected, onClick = onRemove)
+            StudioIconButton(
+                icon = Icons.Default.KeyboardArrowUp,
+                contentDescription = "Move up",
+                enabled = state.canMoveUp,
+                onClick = { onMove(true) },
+            )
+            StudioIconButton(
+                icon = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Move down",
+                enabled = state.canMoveDown,
+                onClick = { onMove(false) },
+            )
+            StudioIconButton(Icons.Default.Add, "Add layer", onClick = onAdd)
+            StudioIconButton(
+                icon = Icons.Default.Delete,
+                contentDescription = "Remove layer",
+                enabled = state.canRemoveSelected,
+                onClick = onRemove,
+            )
         }
     }
 }
@@ -193,59 +166,30 @@ private fun LayerRow(
     }
 }
 
-/** Which control group is showing. */
-private enum class LayerTool(val label: String) {
-    TRANSFORM("Transform"),
-    SHAPE("Shape"),
-    SOURCE("Source"),
-
-    /**
-     * Opacity, blend mode and recolouring together.
-     *
-     * They are **not** one thing in the model — opacity and blend are compositing fields on the spec, recolouring
-     * is a `LayerEffect` — but that distinction is about what can vary independently in storage, and a user
-     * adjusting how a layer reads colour-wise does not care which side of it a control sits on. One tab.
-     */
-    COLOR("Color"),
-
-    /** The gradient overlay. Its own tab because it is four controls, not because it is a different *kind* of thing. */
-    GRADIENT("Gradient"),
-}
-
+/**
+ * How the layer reads: opacity and blend, recolouring, and the gradient overlay.
+ *
+ * **One section rather than the two tabs this used to be**, because the model already groups them — `LayerEffect.Color`
+ * and `LayerEffect.Gradient` are variants of one sealed list, and the deferred shadow will be a third. Splitting them
+ * across bar entries would mean the rail grew every time that list did. See [StudioTool.EFFECTS].
+ *
+ * The gradient keeps a heading of its own inside the section: it is four controls that only make sense read together,
+ * where the rest are independent.
+ */
 @Composable
-private fun SelectedLayerControls(
+internal fun EffectsControls(
     spec: IconLayerSpec,
-    packs: List<InstalledIconPack>,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
-    onPickImage: () -> Unit,
-    onPickPack: (String) -> Unit,
-    onBrowsePack: ((String) -> Unit)?,
 ) {
-    var tool by remember { mutableIntStateOf(0) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 260.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        MorphicSegmentedButtons(
-            options = LayerTool.entries.map { it.label },
-            selectedIndex = tool,
-            onSelect = { tool = it },
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        when (LayerTool.entries[tool]) {
-            LayerTool.TRANSFORM -> TransformControls(spec, onUpdate, onCommit)
-            LayerTool.SHAPE -> ShapeControls(spec, onUpdate)
-            LayerTool.SOURCE -> SourceControls(spec, packs, onUpdate, onPickImage, onPickPack, onBrowsePack)
-            LayerTool.COLOR -> ColorControls(spec, onUpdate, onCommit)
-            LayerTool.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
-        }
-    }
+    ColorControls(spec, onUpdate, onCommit)
+    Text(
+        text = "Gradient",
+        color = StudioContentColor,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    GradientControls(spec, onUpdate, onCommit)
 }
 
 /**
@@ -259,7 +203,7 @@ private fun SelectedLayerControls(
  * undo steps over the whole drag rather than through a hundred frames of it.
  */
 @Composable
-private fun TransformControls(
+internal fun TransformControls(
     spec: IconLayerSpec,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
@@ -509,7 +453,7 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  * how you put a coloured disc behind a legacy icon).
  */
 @Composable
-private fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
+internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
     LabelledControl("Shape") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // "None" first and always reachable: unshaped is what every icon renders as today, so it has to be a
@@ -540,7 +484,7 @@ private fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ico
  * than a missing one.
  */
 @Composable
-private fun SourceControls(
+internal fun SourceControls(
     spec: IconLayerSpec,
     packs: List<InstalledIconPack>,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
@@ -626,7 +570,7 @@ private fun LabelledControl(label: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
     ChoiceChip(label = label, selected = selected, modifier = Modifier.fillMaxWidth(), onClick = onClick)
 }
 
@@ -644,32 +588,8 @@ private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier = Mo
     )
 }
 
-@Composable
-private fun StudioIconButton(
-    icon: ImageVector,
-    contentDescription: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = if (enabled) 0.14f else 0.05f))
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = StudioContentColor.copy(alpha = if (enabled) 1f else 0.35f),
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
 /** What a row calls the layer. The role, not the index — "layer 2" tells the user nothing. */
-private val LayerRole.label: String
+internal val LayerRole.label: String
     get() = when (this) {
         LayerRole.FOREGROUND -> "Foreground"
         LayerRole.BACKGROUND -> "Background"
@@ -677,7 +597,7 @@ private val LayerRole.label: String
     }
 
 /** The one-line summary of where a layer's pixels come from, shown beside its role. */
-private val LayerSource.label: String
+internal val LayerSource.label: String
     get() = when (this) {
         LayerSource.AppDefault -> "app default"
         LayerSource.AppDefaultMonochrome -> "monochrome"
