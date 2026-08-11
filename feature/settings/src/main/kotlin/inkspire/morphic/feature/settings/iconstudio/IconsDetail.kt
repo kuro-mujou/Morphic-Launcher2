@@ -27,7 +27,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.navigation.LocalNavigator
+import inkspire.morphic.feature.settings.SettingsShellViewModel
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * The **Icons** section: a hub, not an editor.
@@ -48,7 +52,7 @@ internal fun IconsDetail(modifier: Modifier = Modifier) {
     // The same navigation shape as `WallpaperDetail`, and for the same reason: the destination belongs to *this*
     // feature, so the module already knows it exists and there is nothing for `app` to be told. Contrast the
     // launcher shell, which takes `onOpenSettings` as an action precisely because settings is not its business.
-    val editAll = { navigator.goTo(IconStudioRoute.Global) }
+    val editAll = { navigator.goTo(IconStudioRoute.Global()) }
     val editOne = { navigator.goTo(IconStudioRoute.App()) }
 
     if (currentDeviceConfiguration().isLandscape) {
@@ -60,7 +64,7 @@ internal fun IconsDetail(modifier: Modifier = Modifier) {
                 DashboardAction("Edit all icons", AllSubtitle, Icons.Outlined.Palette, Modifier.weight(1f), editAll)
                 DashboardAction("Edit specific apps", OneSubtitle, Icons.Outlined.Apps, Modifier.weight(1f), editOne)
             }
-            PresetsPlaceholder(Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            PresetsList(Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
         }
     } else {
         Column(
@@ -71,7 +75,7 @@ internal fun IconsDetail(modifier: Modifier = Modifier) {
                 DashboardAction("Edit all icons", AllSubtitle, Icons.Outlined.Palette, Modifier.weight(1f), editAll)
                 DashboardAction("Edit specific apps", OneSubtitle, Icons.Outlined.Apps, Modifier.weight(1f), editOne)
             }
-            PresetsPlaceholder(Modifier.fillMaxWidth())
+            PresetsList(Modifier.fillMaxWidth())
         }
     }
 }
@@ -111,32 +115,68 @@ private fun DashboardAction(
 }
 
 /**
- * Where saved icon presets will go.
+ * The saved-recipe library, and the one place a preset is *applied*.
  *
- * **A placeholder that says so, rather than an empty area or a disabled control.** The settings sections' own rule
- * is that a control which changes nothing is worse than a missing one — so this is deliberately not a row of greyed
- * cards. It is here at all because it is the slot the real feature fills: a preset is a named `IconLayerSet`, which
- * the persistence model already supports without a schema change, so what is missing is the UI and a place to put
- * it. L1 held the same slot open for the same reason.
+ * **Tapping one opens the studio loaded with it rather than writing it.** That is the whole design of applying:
+ * a preset changes every icon on the device that inherits the default, which is not something to do from a list
+ * row with no way to look first. So the row navigates, the studio shows the preset over a real app, the session
+ * opens **dirty**, and Save is what commits — the same shape as an inheriting app opening dirty because saving is
+ * what detaches it.
+ *
+ * Saving and deleting live in the studio, where a recipe exists to be saved. This is a library, not an editor.
  */
 @Composable
-private fun PresetsPlaceholder(modifier: Modifier = Modifier) {
+private fun PresetsList(modifier: Modifier = Modifier) {
     val colors = LocalMorphicColors.current
+    val navigator = LocalNavigator.current
+    val viewModel: SettingsShellViewModel = koinViewModel()
+    val presets by viewModel.iconPresets.collectAsStateWithLifecycle()
+
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Presets", style = MaterialTheme.typography.titleSmall, color = colors.content)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.surface)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Save a look and apply it to every app — not built yet.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.contentMuted,
-            )
+
+        if (presets.isEmpty()) {
+            // Says how to make one rather than that there are none — an empty library is the starting state, and
+            // the only thing a reader needs from it is the next step.
+            PresetCard(colors.surface) {
+                Text(
+                    text = "Save a look from the icon studio and it appears here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.contentMuted,
+                )
+            }
         }
+
+        presets.forEach { preset ->
+            PresetCard(colors.surfaceElevated, onClick = { navigator.goTo(IconStudioRoute.Global(preset.name)) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(preset.name, style = MaterialTheme.typography.bodyMedium, color = colors.content)
+                    Text(
+                        text = "${preset.layerSet.layers.size} layers — open to apply",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.contentMuted,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PresetCard(
+    background: androidx.compose.ui.graphics.Color,
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(background)
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        content()
     }
 }

@@ -21,7 +21,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -74,6 +76,9 @@ fun IconStudioScreen(
     val viewModel: IconStudioViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hazeState = rememberHazeState()
+    // Which bottom panel is showing. Screen state and nothing more — the recipe does not care, and neither does
+    // undo, so it stays out of the ViewModel.
+    var showPresets by remember { mutableStateOf(false) }
 
     val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -161,6 +166,9 @@ fun IconStudioScreen(
                 StudioAction(state.background.name.lowercase().replace('_', ' '), hazeState, true) {
                     viewModel.cycleBackground()
                 }
+                StudioAction(if (showPresets) "layers" else "presets", hazeState, true) {
+                    showPresets = !showPresets
+                }
             }
 
             Column(
@@ -179,7 +187,18 @@ fun IconStudioScreen(
                     StudioAction("save", hazeState, enabled = state.dirty, onClick = viewModel::save)
                 }
 
-                if (state.subject !is StudioSubject.Unchosen) {
+                if (state.subject !is StudioSubject.Unchosen && showPresets) {
+                    StudioPresets(
+                        presets = state.presets,
+                        hazeState = hazeState,
+                        onSave = viewModel::savePreset,
+                        onLoad = viewModel::loadPreset,
+                        onDelete = viewModel::deletePreset,
+                        modifier = Modifier.uiInsetsPadding(),
+                    )
+                }
+
+                if (state.subject !is StudioSubject.Unchosen && !showPresets) {
                     StudioPanel(
                         state = state,
                         hazeState = hazeState,

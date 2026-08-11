@@ -27,10 +27,15 @@ sealed interface IconStudioRoute : NavKey {
      *
      * Previewed on a sample app rather than on nothing, since a recipe only means something drawn over real
      * artwork.
+     *
+     * @property preset a saved recipe to open *loaded with*, rather than with what is currently stored. That is
+     *   how the dashboard's preset list applies one: it opens the studio showing the preset, unsaved, so the user
+     *   sees what they are about to do to every icon on the device before Save commits it. A one-tap silent
+     *   global restyle would be the alternative, and it is not one worth offering.
      */
     @Serializable
     @SerialName("icon_studio_global")
-    data object Global : IconStudioRoute
+    data class Global(val preset: String? = null) : IconStudioRoute
 
     /**
      * Edit **one app's** recipe.

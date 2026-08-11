@@ -16,6 +16,7 @@ import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.icons.CustomIconStore
 import inkspire.morphic.data.icons.IconOverrideRepository
 import inkspire.morphic.data.icons.IconPackManager
+import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +65,7 @@ class IconStudioViewModel(
 
     init {
         when (route) {
-            is IconStudioRoute.Global -> openGlobal()
+            is IconStudioRoute.Global -> openGlobal(route.preset)
             is IconStudioRoute.App -> route.component?.let(ComponentKey::parse)
                 ?.let { openApp(it) }
                 ?: loadPickable()
@@ -82,6 +83,29 @@ class IconStudioViewModel(
             val apps = appRepository.observeApps().first()
             _state.update { it.copy(subject = StudioSubject.Unchosen, pickable = apps) }
         }
+    }
+
+    /**
+     * Saves what is being edited as a preset called [name].
+     *
+     * **Independent of Save.** A preset is a recipe kept in a library, not a commitment to use it anywhere, so
+     * naming one neither writes the global default nor detaches an app — a user can build a look, keep it, and
+     * back out without applying it.
+     */
+    fun savePreset(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        val set = _state.value.editing
+        viewModelScope.launch { settingsRepository.saveIconPreset(trimmed, set) }
+    }
+
+    /** Loads [preset] into the editor. An ordinary edit: recorded in history, undoable, and not saved. */
+    fun loadPreset(preset: IconPreset) =
+        _state.update { it.withEditing(preset.layerSet).withSelectionInRange().recordHistory() }
+
+    /** Removes a saved preset. Does not touch anything it was applied to — a preset is a copy, not a link. */
+    fun deletePreset(name: String) {
+        viewModelScope.launch { settingsRepository.deleteIconPreset(name) }
     }
 
     /** Chooses the app to edit — the picker's one output, and how [StudioSubject.Unchosen] is left. */
@@ -207,6 +231,13 @@ class IconStudioViewModel(
             it.replaceSelectedSource(LayerSource.IconPack(pack, drawableName)).copy(browsing = null).recordHistory()
         }
         loadPackArtwork()
+    }
+
+    /** Keeps the preset library in step, since saving and deleting both happen from this screen. */
+    private fun observePresets() {
+        viewModelScope.launch {
+            settingsRepository.iconPresets.collect { presets -> _state.update { it.copy(presets = presets) } }
+        }
     }
 
     /** Loads the installed packs for the chooser. Once per screen; nothing about the list changes while it is up. */
@@ -372,11 +403,17 @@ class IconStudioViewModel(
      * The sample is simply the first installed app for now. It has to be *some* real app — a recipe drawn over
      * nothing shows nothing — and which one is a question for the extras rail's shuffle, not for this.
      */
-    private fun openGlobal() {
+    private fun openGlobal(preset: String? = null) {
         viewModelScope.launch {
-            val stored = settingsRepository.iconLayerSet.first()
+            // A named preset opens *loaded with* it rather than with what is stored — and stays unsaved, so the
+            // user sees what it will do to every icon before committing. See `IconStudioRoute.Global.preset`.
+            val stored = preset
+                ?.let { name -> settingsRepository.iconPresets.first().firstOrNull { it.name == name }?.layerSet }
+                ?: settingsRepository.iconLayerSet.first()
             val sample = appRepository.observeApps().first().firstOrNull()
-            saved = stored
+            // `saved` is what is *persisted*, which a preset-loaded session deliberately is not — so it opens
+            // dirty, and Save is what applies the preset. Same shape as an inheriting app opening dirty.
+            saved = settingsRepository.iconLayerSet.first()
             resetHistory(stored)
             _state.update {
                 it.copy(
@@ -387,6 +424,7 @@ class IconStudioViewModel(
             }
             loadStoredImages(stored)
             loadPacks()
+            observePresets()
             sample?.componentKey?.let(::loadArtwork)
             loadPackArtwork()
         }
@@ -411,6 +449,7 @@ class IconStudioViewModel(
             }
             loadStoredImages(stored)
             loadPacks()
+            observePresets()
             loadArtwork(component)
             loadPackArtwork()
         }

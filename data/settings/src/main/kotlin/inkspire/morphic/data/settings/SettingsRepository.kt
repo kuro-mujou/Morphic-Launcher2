@@ -91,6 +91,20 @@ interface SettingsRepository {
     suspend fun setBackdropEffect(effect: BackdropEffect)
 
     /**
+     * The user's saved icon recipes. Empty until one is saved; there are no built-ins.
+     *
+     * A whole list rather than a lookup by name, because that is how it is used — the library is *shown*, and a
+     * preset is chosen from what is on screen rather than fetched by a name someone typed.
+     */
+    val iconPresets: Flow<List<IconPreset>>
+
+    /** Saves [layerSet] under [name], replacing any preset already called that. */
+    suspend fun saveIconPreset(name: String, layerSet: IconLayerSet)
+
+    /** Removes the preset called [name]. A no-op if there is none. */
+    suspend fun deleteIconPreset(name: String)
+
+    /**
      * Replaces the global default icon recipe outright.
      *
      * A whole-value write for [setBackdropEffect]'s reason, one step further: a layer set is an **ordered list**, so

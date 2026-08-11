@@ -8,6 +8,7 @@ import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.data.icons.InstalledIconPack
+import inkspire.morphic.data.settings.IconPreset
 
 /**
  * What the canvas is drawn *on*, cycled by a single control.
@@ -124,6 +125,7 @@ data class IconStudioState(
     val packs: List<InstalledIconPack> = emptyList(),
     val packImages: Map<String, Bitmap> = emptyMap(),
     val browsing: PackBrowse? = null,
+    val presets: List<IconPreset> = emptyList(),
 ) {
 
     /** The layer the controls act on, or null before anything has loaded. */

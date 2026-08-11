@@ -304,9 +304,15 @@ never learn what a pack is.
 assigns it. The list needs no separate "drawable lister": that file's **values** are drawable names, so browsing
 is a projection of what a pack already loads. **Individual mode only** — a named drawable on the global default
 would be inherited by every app — and the grid decodes only cells that scroll into view, cancelling on a flick,
-over a bounded LRU. **Deferred:** drawables the author mapped to no app, and `drawable.xml`'s categories; presets (a
-named `IconLayerSet`, which the blob already stores without a schema change — the dashboard holds the slot);
-shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
+over a bounded LRU. **Deferred:** drawables the author mapped to no app, and `drawable.xml`'s categories; shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
+
+**Presets are a named `IconLayerSet`** — the recipe plus a name, no separate format, and stored as a
+`data:settings` slice rather than a Room table because a library is a handful of documents read whole, where
+per-app overrides are a row per customised app read one at a time. **Applying one is opening the studio loaded
+with it, never a write**: a preset restyles every icon that inherits the default, which is not something to do
+from a list row with no way to look first — so the dashboard row navigates, the session opens *dirty*, and Save
+commits. A preset is a **copy, not a link**: loading is an ordinary undoable edit and deleting touches nothing it
+was applied to. Built-in curated presets stay out, being a content decision rather than an engineering one.
 
 **The studio is a full-screen destination, and the settings pane above it is a hub.** L1's icon settings *were*
 the editor, hosted in the detail pane and built out of settings-list vocabulary, and its own docs conclude that

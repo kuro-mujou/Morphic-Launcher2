@@ -25,6 +25,8 @@ import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.GridOverride
+import inkspire.morphic.data.settings.IconPreset
+import inkspire.morphic.data.settings.IconPresets
 import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
@@ -92,6 +94,18 @@ private val IconLayerSetSlice = SettingsSlice(
     default = IconLayerSet.Base,
 )
 
+/**
+ * The user's saved icon recipes: one key, one blob, one list.
+ *
+ * Its own slice rather than a field beside the global default, because the two change for different reasons and
+ * at different rates — editing the default rewrites its blob, and that should not rewrite the library with it.
+ */
+private val IconPresetsSlice = SettingsSlice(
+    name = "icon_presets",
+    serializer = serializer<IconPresets>(),
+    default = IconPresets.Default,
+)
+
 /** The APPS surface's chrome: one key, one blob. */
 private val AppsChromeSlice = SettingsSlice(
     name = "apps_chrome",
@@ -139,12 +153,19 @@ internal class SettingsRepositoryImpl(
 
     override val iconLayerSet: Flow<IconLayerSet> = dataStore.read(IconLayerSetSlice) { it }
 
+    override val iconPresets: Flow<List<IconPreset>> = dataStore.read(IconPresetsSlice) { it.presets }
+
     override val appsChrome: Flow<AppsChrome> = dataStore.read(AppsChromeSlice) { it }
 
     override suspend fun setSearchPlacement(placement: SearchPlacement) =
         update(AppsChromeSlice) { copy(search = placement) }
 
     override suspend fun setTabBarEdge(edge: VerticalEdge) = update(AppsChromeSlice) { copy(tabBarEdge = edge) }
+
+    override suspend fun saveIconPreset(name: String, layerSet: IconLayerSet) =
+        update(IconPresetsSlice) { with(IconPreset(name, layerSet)) }
+
+    override suspend fun deleteIconPreset(name: String) = update(IconPresetsSlice) { without(name) }
 
     // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
     // path: it is what puts the write inside a DataStore transaction.

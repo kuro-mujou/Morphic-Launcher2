@@ -1,7 +1,7 @@
 # Icon Studio (B9)
 
-**Status:** S1–S8 landed (2026-08-11); S1 and S2 verified on device. **Remaining: S9 (presets).** Shadows are
-deferred with reason — see S6.
+**Status:** S1–S9 landed (2026-08-11) — the plan is complete. S1 and S2 verified on device. Shadows are deferred
+with reason (see S6), as are a pack's unmapped drawables and built-in curated presets.
 **Covers:** the per-app + global icon editor, its persistence, and the render path it needs.
 **L1 reference:** five docs, read in full — `ICON_STUDIO_PLAN`, `ICON_SKIN_PLAN`, `ICON_LAYER_STUDIO_PLAN`,
 `ICON_DASHBOARD_PLAN`, `ICON_STUDIO_UI_PLAN`. This is one plan replacing all five, for the reason below.
@@ -453,7 +453,23 @@ feed the background layer is the open question.
       queueing thousands of decodes) over a bounded LRU in the manager, since a pack maps hundreds to thousands.
     - Still not carried: drawables the pack author shipped but mapped to **no** app, and the category grouping a
       `drawable.xml` holds. Both are additive on top of this.
-- **S9 — presets (deferred).** A named `IconLayerSet` blob; the dashboard placeholder is already its slot.
+- **S9 — presets. — CODE LANDED (2026-08-11); on-device verification pending.** A named `IconLayerSet`, stored as
+  a `data:settings` slice, saved and loaded from the studio and listed in the dashboard slot that was held for it.
+  **No schema change**, exactly as this plan predicted — a preset *is* the recipe plus a name.
+  - **A slice rather than a Room table**, which is the opposite call from per-app overrides one module over. The
+    line is whether the store grows with *use of the launcher*: overrides get a row per customised app and are
+    read one at a time by every icon on screen, where presets are a handful, chosen deliberately, and read as a
+    whole list. That is a document.
+  - **Applying is opening the studio loaded with it, not a write.** A preset changes every icon that inherits the
+    default, which is not something to do from a list row with no way to look first. So a dashboard row navigates,
+    the studio shows the preset over a real app, the session opens **dirty**, and Save commits — the same shape as
+    an inheriting app opening dirty because saving is what detaches it. `IconStudioRoute.Global` gained a
+    `preset` for this, and still carries nothing about an app.
+  - **A preset is a copy, not a link**: loading one is an ordinary undoable edit, and deleting one touches nothing
+    it was ever applied to. Saving is independent of Save, so a look can be kept without being applied anywhere.
+  - **Built-in curated presets are deliberately absent.** L1 planned to ship some; which looks are worth shipping
+    is a content decision rather than an engineering one, and the mechanism takes a seeded list whenever someone
+    designs one.
 
 Rationale for the order: persistence first because it is what everything sits on and what L1 got wrong four
 times; the live path before the editor because it is the risky part and can be verified against the bake path
