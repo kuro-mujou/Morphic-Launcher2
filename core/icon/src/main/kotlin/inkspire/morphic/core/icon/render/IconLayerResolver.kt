@@ -32,7 +32,7 @@ class IconLayerResolver {
         layerSet: IconLayerSet,
         icon: ParsedIcon,
         customImage: (path: String) -> Drawable?,
-        packImage: (packPackage: String) -> Drawable? = { null },
+        packImage: (packPackage: String, drawableName: String?) -> Drawable? = { _, _ -> null },
     ): List<ResolvedLayer> =
         layerSet.layers
             .filter { it.visible }
@@ -49,7 +49,7 @@ class IconLayerResolver {
 private fun IconLayerSpec.resolveContent(
     icon: ParsedIcon,
     customImage: (path: String) -> Drawable?,
-    packImage: (packPackage: String) -> Drawable?,
+    packImage: (packPackage: String, drawableName: String?) -> Drawable?,
 ): ParsedLayer? = when (val src = source) {
     LayerSource.AppDefault -> when (role) {
         LayerRole.FOREGROUND -> icon.foreground
@@ -63,5 +63,5 @@ private fun IconLayerSpec.resolveContent(
 
     is LayerSource.CustomImage -> customImage(src.path)?.let { ParsedLayer.Image(it) }
 
-    is LayerSource.IconPack -> packImage(src.packPackage)?.let { ParsedLayer.Image(it) }
+    is LayerSource.IconPack -> packImage(src.packPackage, src.drawableName)?.let { ParsedLayer.Image(it) }
 }

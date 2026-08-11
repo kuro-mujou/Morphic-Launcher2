@@ -36,6 +36,8 @@ import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.picker.AppPicker
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.icon.compose.IconLayerStack
+import inkspire.morphic.core.model.icon.LayerSource
+import inkspire.morphic.core.model.icon.key
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -85,8 +87,9 @@ fun IconStudioScreen(
     val customImage: (String) -> Drawable? = remember(state.images, resources) {
         { path -> state.images[path]?.toDrawable(resources) }
     }
-    val packImage: (String) -> Drawable? = remember(state.packImages, resources) {
-        { pack -> state.packImages[pack]?.toDrawable(resources) }
+    // Keyed by pack *and* chosen drawable, so two layers naming the same pack cannot show each other's icon.
+    val packImage: (String, String?) -> Drawable? = remember(state.packImages, resources) {
+        { pack, name -> state.packImages[LayerSource.IconPack(pack, name).key]?.toDrawable(resources) }
     }
 
     BackHandler(onBack = onBack)
@@ -189,9 +192,26 @@ fun IconStudioScreen(
                         onRemove = viewModel::removeSelected,
                         onPickImage = { imagePicker.launch(imageRequest) },
                         onPickPack = viewModel::pickPack,
+                        // Null in the global studio: a named drawable would be inherited by every app, so the
+                        // affordance is absent there rather than offered and then refused.
+                        onBrowsePack = if (state.subject is StudioSubject.App) viewModel::browsePack else null,
                         modifier = Modifier.uiInsetsPadding(),
                     )
                 }
+            }
+
+            state.browsing?.let { browse ->
+                PackDrawablePicker(
+                    browse = browse,
+                    loadPreview = viewModel::packPreview,
+                    onPick = viewModel::pickPackDrawable,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .studioSurface(hazeState, shape = RectangleShape)
+                        .uiInsetsPadding()
+                        .padding(top = 64.dp),
+                )
+                BackHandler { viewModel.browsePack(null) }
             }
 
             if (state.subject is StudioSubject.Unchosen) {

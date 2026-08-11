@@ -44,16 +44,28 @@ sealed interface LayerSource {
      * Resolves to nothing when the pack does not cover this app, which is ordinary rather than exceptional: no
      * pack themes everything. The layer then draws nothing and whatever is beneath shows through.
      *
-     * No `drawableName` yet. That would name *one specific* drawable in the pack rather than letting its
-     * `appfilter.xml` decide, and it needs a browser to pick from — which needs a `drawable.xml` lister that L1
-     * never finished either. Adding it later is a defaulted field on this class and no schema change.
+     * @property drawableName one specific drawable in the pack, or `null` to let its `appfilter.xml` decide which
+     *   one belongs to this app. **Only meaningful for a single app**: the global default is inherited by every
+     *   app, so a name there would give all of them the same picture — which is why the studio offers the browser
+     *   in individual mode alone. Added as a defaulted field, so recipes written before it existed still read.
      */
     @Serializable
     @SerialName("icon_pack")
-    data class IconPack(val packPackage: String) : LayerSource
+    data class IconPack(
+        val packPackage: String,
+        val drawableName: String? = null,
+    ) : LayerSource
 
     /** A flat colour fill; [argb] is a packed ARGB colour (e.g. a solid background for a legacy icon). */
     @Serializable
     @SerialName("solid_fill")
     data class SolidFill(val argb: Int) : LayerSource
 }
+
+/**
+ * The identity of the artwork an [LayerSource.IconPack] layer draws — the pack **and** the chosen drawable.
+ *
+ * Both, because two layers may name the same pack and different drawables, so keying a resolved-artwork cache on
+ * the package alone would have the second layer show the first one's icon.
+ */
+val LayerSource.IconPack.key: String get() = "$packPackage/${drawableName ?: ""}"

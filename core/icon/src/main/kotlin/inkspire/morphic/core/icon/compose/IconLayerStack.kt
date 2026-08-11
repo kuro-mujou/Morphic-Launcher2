@@ -86,7 +86,7 @@ fun IconLayerStack(
     layerSet: IconLayerSet,
     modifier: Modifier = Modifier,
     customImage: (path: String) -> Drawable? = { null },
-    packImage: (packPackage: String) -> Drawable? = { null },
+    packImage: (packPackage: String, drawableName: String?) -> Drawable? = { _, _ -> null },
 ) {
     val resolver = remember { IconLayerResolver() }
     val layers = remember(layerSet, icon, customImage, packImage) {

@@ -65,7 +65,7 @@ class IconRenderer(
         icon: ParsedIcon,
         layerSet: IconLayerSet,
         sizePx: Int,
-        packImage: (packPackage: String) -> Drawable? = { null },
+        packImage: (packPackage: String, drawableName: String?) -> Drawable? = { _, _ -> null },
     ): Bitmap {
         val output = createBitmap(sizePx, sizePx)
         val canvas = Canvas(output)

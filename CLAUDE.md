@@ -300,9 +300,11 @@ in `data:icons`' own manifest and **must stay in step with `IconPackManager.Them
 it through `IconPackImages`, a seam declared on the consumer side like `RawIconSource`, so the render modules
 never learn what a pack is.
 
-**Deferred:** browsing a pack's drawables to pick a *specific* one rather than letting `appfilter.xml` decide (it
-needs a `drawable.xml` lister, which L1 never finished either; the model takes a `drawableName` as a defaulted
-field whenever it does, with no schema change); presets (a
+**A pack's drawables can also be browsed**, to give one app a *named* icon rather than the one `appfilter.xml`
+assigns it. The list needs no separate "drawable lister": that file's **values** are drawable names, so browsing
+is a projection of what a pack already loads. **Individual mode only** — a named drawable on the global default
+would be inherited by every app — and the grid decodes only cells that scroll into view, cancelling on a flick,
+over a bounded LRU. **Deferred:** drawables the author mapped to no app, and `drawable.xml`'s categories; presets (a
 named `IconLayerSet`, which the blob already stores without a schema change — the dashboard holds the slot);
 shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
 

@@ -1,7 +1,7 @@
 # Icon Studio (B9)
 
-**Status:** S1–S8 landed (2026-08-11); S1 and S2 verified on device. **Remaining: S9 (presets), and browsing an
-icon pack's drawables.** Shadows are deferred with reason — see S6.
+**Status:** S1–S8 landed (2026-08-11); S1 and S2 verified on device. **Remaining: S9 (presets).** Shadows are
+deferred with reason — see S6.
 **Covers:** the per-app + global icon editor, its persistence, and the render path it needs.
 **L1 reference:** five docs, read in full — `ICON_STUDIO_PLAN`, `ICON_SKIN_PLAN`, `ICON_LAYER_STUDIO_PLAN`,
 `ICON_DASHBOARD_PLAN`, `ICON_STUDIO_UI_PLAN`. This is one plan replacing all five, for the reason below.
@@ -442,9 +442,17 @@ feed the background layer is the open question.
     subject to package visibility filtering on API 30+, so without it detection returns an empty list on every
     modern device — not an error. L1 never hit it because it held `QUERY_ALL_PACKAGES`, which this launcher does
     not request anywhere.
-  - **Deferred: browsing a pack's drawables** to pick a specific one rather than letting `appfilter.xml` decide.
-    It needs a `drawable.xml` lister, which L1 never finished either, and `LayerSource.IconPack` takes a
-    `drawableName` as a defaulted field whenever it arrives — no schema change.
+  - **Browsing a pack's drawables landed too**, and it turned out cheaper than this plan assumed. The deferral
+    said it needed a `drawable.xml` lister; in fact the `appfilter.xml` we already parse and cache has drawable
+    names as its **values**, so the list is a projection of data a pack loads anyway. `LayerSource.IconPack`
+    gained a defaulted `drawableName` — no schema change, exactly as predicted.
+    - **Individual mode only, and that is the model rather than a scoping call.** A named drawable on the global
+      default is inherited by every app, so it would give all of them the same picture; the browser is absent in
+      the global studio rather than offered and refused.
+    - The grid decodes **only cells that scroll into view** (`produceState`, so a fast flick cancels rather than
+      queueing thousands of decodes) over a bounded LRU in the manager, since a pack maps hundreds to thousands.
+    - Still not carried: drawables the pack author shipped but mapped to **no** app, and the category grouping a
+      `drawable.xml` holds. Both are additive on top of this.
 - **S9 — presets (deferred).** A named `IconLayerSet` blob; the dashboard placeholder is already its slot.
 
 Rationale for the order: persistence first because it is what everything sits on and what L1 got wrong four

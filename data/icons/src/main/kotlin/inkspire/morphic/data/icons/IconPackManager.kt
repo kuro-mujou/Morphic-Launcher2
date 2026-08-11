@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import android.util.LruCache
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
@@ -61,6 +62,9 @@ class IconPackManager(
     private val loadLock = Mutex()
     private var loaded: LoadedPack? = null
 
+    /** Browser thumbnails, by `pack/name`. Bounded — a browsable pack has thousands of drawables. */
+    private val previews = LruCache<String, Bitmap>(PreviewCacheEntries)
+
     /** Every installed icon pack, by label. Empty when none is installed — or when `<queries>` is missing. */
     suspend fun installedPacks(): List<InstalledIconPack> = withContext(dispatchers.io) {
         ThemeActions
@@ -90,14 +94,48 @@ class IconPackManager(
      * typical. The caller draws nothing for that layer, which leaves the app's own icon showing through from
      * whatever is beneath — the same outcome L1 reached by falling back to the default icon.
      */
-    suspend fun drawable(packPackage: String, component: ComponentKey): Drawable? =
-        withContext(dispatchers.io) {
-            val pack = load(packPackage) ?: return@withContext null
-            val name = pack.componentDrawable[component.appFilterKey()] ?: return@withContext null
-            val id = pack.resources.getIdentifier(name, "drawable", packPackage)
-            if (id == 0) return@withContext null
-            runCatching { ResourcesCompat.getDrawable(pack.resources, id, null) }.getOrNull()
-        }
+    suspend fun drawable(
+        packPackage: String,
+        component: ComponentKey,
+        drawableName: String? = null,
+    ): Drawable? = withContext(dispatchers.io) {
+        val pack = load(packPackage) ?: return@withContext null
+        // An explicit name wins outright: it is the user having browsed the pack and chosen, which is a stronger
+        // statement than the pack author's own mapping and must not be second-guessed by it.
+        val name = drawableName ?: pack.componentDrawable[component.appFilterKey()] ?: return@withContext null
+        pack.resolve(name)
+    }
+
+    /**
+     * Every drawable [packPackage] maps to some app, for browsing.
+     *
+     * **Taken from the `appfilter.xml` this pack has already parsed**, whose values *are* drawable names — so the
+     * "drawable lister" a browser was thought to need turns out to be a projection of data the pack loads anyway.
+     * What that misses is drawables the author shipped but mapped to nothing (generic shapes, alternates) and the
+     * category grouping a `drawable.xml` carries; both are additive later and neither blocks browsing.
+     *
+     * Sorted by name because there is no other order available — a pack's mapping is a hash, and the names are
+     * what search works on.
+     */
+    suspend fun drawableNames(packPackage: String): List<String> = withContext(dispatchers.io) {
+        load(packPackage)?.componentDrawable?.values?.distinct()?.sorted().orEmpty()
+    }
+
+    /**
+     * A small preview of one named drawable, for a browser cell.
+     *
+     * Cached, because a grid re-asks for the same cell every time it scrolls back and re-decoding a vector each
+     * time is what makes such a grid stutter. The cache is bounded and holds thumbnails, so a few hundred of them
+     * is a fraction of one baked icon's worth of memory.
+     */
+    suspend fun preview(packPackage: String, drawableName: String): Bitmap? = withContext(dispatchers.io) {
+        val key = "$packPackage/$drawableName"
+        previews.get(key)?.let { return@withContext it }
+
+        val pack = load(packPackage) ?: return@withContext null
+        val bitmap = runCatching { pack.resolve(drawableName)?.toBitmap(PreviewPx, PreviewPx) }.getOrNull()
+        bitmap?.also { previews.put(key, it) }
+    }
 
     private suspend fun load(packPackage: String): LoadedPack? = loadLock.withLock {
         loaded?.takeIf { it.packageName == packPackage }?.let { return it }
@@ -149,7 +187,14 @@ class IconPackManager(
         val packageName: String,
         val resources: Resources,
         val componentDrawable: Map<String, String>,
-    )
+    ) {
+        /** The pack's drawable of this name, or `null` when it does not have one under it. */
+        fun resolve(drawableName: String): Drawable? {
+            val id = resources.getIdentifier(drawableName, "drawable", packageName)
+            if (id == 0) return null
+            return runCatching { ResourcesCompat.getDrawable(resources, id, null) }.getOrNull()
+        }
+    }
 
     private companion object {
         /**
@@ -171,6 +216,9 @@ class IconPackManager(
 
         /** Big enough for a chooser tile, small enough that listing every installed pack costs nothing. */
         const val PreviewPx = 96
+
+        /** Roughly a few screens of a browser grid at [PreviewPx] — enough that scrolling back is free. */
+        const val PreviewCacheEntries = 300
     }
 }
 

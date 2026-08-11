@@ -76,6 +76,7 @@ fun StudioPanel(
     onRemove: () -> Unit,
     onPickImage: () -> Unit,
     onPickPack: (String) -> Unit,
+    onBrowsePack: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -102,6 +103,7 @@ fun StudioPanel(
                 onCommit = onCommit,
                 onPickImage = onPickImage,
                 onPickPack = onPickPack,
+                onBrowsePack = onBrowsePack,
             )
         }
     }
@@ -218,6 +220,7 @@ private fun SelectedLayerControls(
     onCommit: () -> Unit,
     onPickImage: () -> Unit,
     onPickPack: (String) -> Unit,
+    onBrowsePack: ((String) -> Unit)?,
 ) {
     var tool by remember { mutableIntStateOf(0) }
 
@@ -238,7 +241,7 @@ private fun SelectedLayerControls(
         when (LayerTool.entries[tool]) {
             LayerTool.TRANSFORM -> TransformControls(spec, onUpdate, onCommit)
             LayerTool.SHAPE -> ShapeControls(spec, onUpdate)
-            LayerTool.SOURCE -> SourceControls(spec, packs, onUpdate, onPickImage, onPickPack)
+            LayerTool.SOURCE -> SourceControls(spec, packs, onUpdate, onPickImage, onPickPack, onBrowsePack)
             LayerTool.COLOR -> ColorControls(spec, onUpdate, onCommit)
             LayerTool.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
         }
@@ -543,6 +546,7 @@ private fun SourceControls(
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onPickImage: () -> Unit,
     onPickPack: (String) -> Unit,
+    onBrowsePack: ((String) -> Unit)?,
 ) {
     LabelledControl("Source") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -583,6 +587,17 @@ private fun SourceControls(
                         label = pack.label,
                         selected = (spec.source as? LayerSource.IconPack)?.packPackage == pack.packageName,
                     ) { onPickPack(pack.packageName) }
+                }
+
+                // **Only when a pack is already chosen, and only for a single app.** Browsing offers a *named*
+                // drawable, which the global default would hand to every app — so `onBrowsePack` is null there
+                // and the row is absent rather than disabled.
+                val chosen = spec.source as? LayerSource.IconPack
+                if (chosen != null && onBrowsePack != null) {
+                    ChoiceRow(
+                        label = chosen.drawableName?.let { "Icon: $it — change" } ?: "Choose a different icon",
+                        selected = chosen.drawableName != null,
+                    ) { onBrowsePack(chosen.packPackage) }
                 }
             }
 

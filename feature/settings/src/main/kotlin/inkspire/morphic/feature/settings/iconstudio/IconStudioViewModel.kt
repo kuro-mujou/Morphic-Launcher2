@@ -11,6 +11,7 @@ import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
+import inkspire.morphic.core.model.icon.key
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.icons.CustomIconStore
 import inkspire.morphic.data.icons.IconOverrideRepository
@@ -172,6 +173,42 @@ class IconStudioViewModel(
         loadPackArtwork()
     }
 
+    /**
+     * Opens the drawable browser for [packPackage], or closes it when [packPackage] is null.
+     *
+     * **Refuses in the global studio**, because a named drawable there would be inherited by every app. The UI
+     * does not offer the affordance either, so this is the guard behind the guard rather than the only one.
+     */
+    fun browsePack(packPackage: String?) {
+        if (packPackage == null) {
+            _state.update { it.copy(browsing = null) }
+            return
+        }
+        if (_state.value.subject !is StudioSubject.App) return
+
+        _state.update { it.copy(browsing = PackBrowse(packPackage)) }
+        viewModelScope.launch {
+            val names = iconPacks.drawableNames(packPackage)
+            // Guard against the browser having been closed, or another pack opened, while the names loaded.
+            _state.update {
+                if (it.browsing?.packPackage == packPackage) it.copy(browsing = PackBrowse(packPackage, names)) else it
+            }
+        }
+    }
+
+    /** One drawable's thumbnail for a browser cell. Cached in the manager, so scrolling back is free. */
+    suspend fun packPreview(packPackage: String, drawableName: String): Bitmap? =
+        iconPacks.preview(packPackage, drawableName)
+
+    /** Chooses a specific drawable from the pack being browsed, and closes the browser. */
+    fun pickPackDrawable(drawableName: String) {
+        val pack = _state.value.browsing?.packPackage ?: return
+        _state.update {
+            it.replaceSelectedSource(LayerSource.IconPack(pack, drawableName)).copy(browsing = null).recordHistory()
+        }
+        loadPackArtwork()
+    }
+
     /** Loads the installed packs for the chooser. Once per screen; nothing about the list changes while it is up. */
     private fun loadPacks() {
         viewModelScope.launch {
@@ -189,19 +226,20 @@ class IconStudioViewModel(
      */
     private fun loadPackArtwork() {
         val component = _state.value.subject.previewComponent ?: return
-        val missing = _state.value.editing.packPackages() - _state.value.packImages.keys
+        val missing = _state.value.editing.packLayers().filterNot { it.key in _state.value.packImages }
         if (missing.isEmpty()) return
         viewModelScope.launch {
-            val loaded = missing.mapNotNull { pack ->
-                iconPacks.drawable(pack, component)?.let { pack to it.toBitmap() }
+            val loaded = missing.mapNotNull { source ->
+                iconPacks.drawable(source.packPackage, component, source.drawableName)
+                    ?.let { source.key to it.toBitmap() }
             }
             if (loaded.isNotEmpty()) _state.update { it.copy(packImages = it.packImages + loaded) }
         }
     }
 
-    /** Every icon pack this recipe draws from. */
-    private fun IconLayerSet.packPackages(): Set<String> =
-        layers.mapNotNull { (it.source as? LayerSource.IconPack)?.packPackage }.toSet()
+    /** Every pack layer this recipe draws from — by pack *and* chosen drawable, since both decide the artwork. */
+    private fun IconLayerSet.packLayers(): List<LayerSource.IconPack> =
+        layers.mapNotNull { it.source as? LayerSource.IconPack }.distinct()
 
     /** Swaps the selected layer's source, leaving every other property of it alone. */
     private fun IconStudioState.replaceSelectedSource(source: LayerSource): IconStudioState {

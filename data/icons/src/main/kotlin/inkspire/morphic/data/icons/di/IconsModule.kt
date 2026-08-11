@@ -28,6 +28,6 @@ val iconsModule = module {
     single { IconPackManager(get<Context>(), get()) }
     single<IconPackImages> {
         val packs = get<IconPackManager>()
-        IconPackImages { packPackage, component -> runBlocking { packs.drawable(packPackage, component) } }
+        IconPackImages { pack, component, name -> runBlocking { packs.drawable(pack, component, name) } }
     }
 }

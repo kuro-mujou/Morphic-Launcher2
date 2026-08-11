@@ -73,6 +73,21 @@ sealed interface StudioSubject {
 }
 
 /**
+ * Browsing one pack's drawables to choose a specific icon for this app.
+ *
+ * **Individual mode only, and that is a property of the model rather than a scoping decision.** A named drawable
+ * on the *global* default would be inherited by every app, giving all of them the same picture — so there is
+ * nothing sensible for this to mean there, and the studio does not offer it.
+ *
+ * @property names every drawable the pack maps to some app, which is what the browser lists. Not filtered here;
+ *   the search field is the UI's.
+ */
+data class PackBrowse(
+    val packPackage: String,
+    val names: List<String> = emptyList(),
+)
+
+/**
  * Everything the icon studio shows.
  *
  * **[editing] is the screen's, not the store's**, and that is the central fact about this screen rather than an
@@ -87,9 +102,12 @@ sealed interface StudioSubject {
  *   A freshly picked image is previewed from here before any file exists, which is what lets an abandoned edit
  *   leave nothing behind; see `CustomIconStore`.
  * @property packs the installed icon packs, for the chooser. Empty is the ordinary state on a device with none.
- * @property packImages this app as drawn by each pack the recipe names, by package. Resolved off the main thread
- *   for the same reason [images] is: the first lookup into a pack parses an `appfilter.xml` of thousands of
- *   entries, and a layer whose pack does not cover this app is simply absent here.
+ * @property packImages this app as drawn by each pack the recipe names, keyed by package **and chosen drawable**,
+ *   since two layers may name the same pack and different drawables. Resolved off the main thread for the same
+ *   reason [images] is: the first lookup into a pack parses an `appfilter.xml` of thousands of entries, and a
+ *   layer whose pack does not cover this app is simply absent here.
+ * @property browsing the pack whose drawables are being browsed, or null. Null in the global studio always — see
+ *   [PackBrowse].
  */
 data class IconStudioState(
     val subject: StudioSubject = StudioSubject.Unchosen,
@@ -105,6 +123,7 @@ data class IconStudioState(
     val images: Map<String, Bitmap> = emptyMap(),
     val packs: List<InstalledIconPack> = emptyList(),
     val packImages: Map<String, Bitmap> = emptyMap(),
+    val browsing: PackBrowse? = null,
 ) {
 
     /** The layer the controls act on, or null before anything has loaded. */

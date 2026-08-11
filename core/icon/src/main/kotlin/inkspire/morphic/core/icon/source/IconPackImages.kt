@@ -16,6 +16,11 @@ import inkspire.morphic.core.model.ComponentKey
  */
 fun interface IconPackImages {
 
-    /** [component]'s artwork from [packPackage], or `null` when that pack does not cover the app. */
-    fun drawable(packPackage: String, component: ComponentKey): Drawable?
+    /**
+     * [component]'s artwork from [packPackage], or `null` when that pack does not cover the app.
+     *
+     * @param drawableName one specific drawable, when the user has browsed the pack and chosen; `null` lets the
+     *   pack's own mapping decide which drawable belongs to [component].
+     */
+    fun drawable(packPackage: String, component: ComponentKey, drawableName: String?): Drawable?
 }
