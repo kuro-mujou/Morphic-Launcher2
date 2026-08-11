@@ -1,6 +1,7 @@
 # Icon Studio (B9)
 
-**Status:** PLAN (2026-08-11). No code yet.
+**Status:** S1–S7 landed (2026-08-11); S1 and S2 verified on device. **Remaining: S8 (icon packs), S9 (presets).**
+Shadows are deferred with reason — see S6.
 **Covers:** the per-app + global icon editor, its persistence, and the render path it needs.
 **L1 reference:** five docs, read in full — `ICON_STUDIO_PLAN`, `ICON_SKIN_PLAN`, `ICON_LAYER_STUDIO_PLAN`,
 `ICON_DASHBOARD_PLAN`, `ICON_STUDIO_UI_PLAN`. This is one plan replacing all five, for the reason below.
