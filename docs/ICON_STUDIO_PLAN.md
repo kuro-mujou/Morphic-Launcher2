@@ -331,8 +331,22 @@ feed the background layer is the open question.
   the background layer's source, theming is `AppDefaultMonochrome` on the foreground, sizing is `data:settings`
   and another screen, the skin is deferred, and a pack will be a per-layer source. Everything acts on one layer,
   so the question does not arise.
-- **S4 — the dashboard.** `SettingsSection.ICONS` returns as the hub: Edit all / Edit specific / Presets
-  placeholder. Small, and deliberately after S3 so the thing it links to already works.
+- **S4 — the dashboard. — CODE LANDED (2026-08-11); on-device verification pending.** `SettingsSection.ICONS`
+  returns, in the Personalization group, as a hub: Edit all icons / Edit specific apps / a Presets placeholder,
+  adaptive (portrait two cards over the presets; landscape a narrow action column beside them). **The name means
+  what it said in L1 at last** — that section was shape, background and layers, and this codebase has been holding
+  the name back for it while grid and icon *sizing* lived in each surface's own section.
+  - It navigates through `LocalNavigator`, the same shape `WallpaperDetail` uses, because the destination belongs
+    to *this* feature and there is nothing for `app` to be told. That is not a contradiction of the shell taking
+    `onOpenSettings` as an action: the shell's rule is about a module learning of a destination that is **not its
+    own**.
+  - The Presets placeholder **says it is not built** rather than showing disabled cards, per the settings
+    sections' own rule that a control which changes nothing is worse than a missing one. It is present at all
+    because it is the slot the real feature fills, and the persistence model already supports it — a preset is a
+    named `IconLayerSet`, so no schema change is owed.
+  - **Every dev chip is now retired**: Settings → Icons reaches both dashboard actions and a long-press on any app
+    icon reaches "Edit icon". A shortcut kept beside a real route is how two paths to one screen start behaving
+    differently.
 - **S5 — legacy background detection.** Edge sampling in the parser; a pre-filled `SolidFill` background.
 - **S6 — effects, incrementally.** `opacity`/`blend` on the spec first (cheapest, highest payoff), then the
   `ColorMatrix` group, then shadows, then gradient. Each ships alone; none touches the schema.

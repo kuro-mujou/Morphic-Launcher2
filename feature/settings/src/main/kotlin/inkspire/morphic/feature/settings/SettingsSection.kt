@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,6 +30,17 @@ enum class SettingsSection {
 
     /** How frosted surfaces render over the wallpaper: the global effect, and the strengths tuning it. */
     EFFECTS,
+
+    /**
+     * How app icons are drawn: the layer recipe every icon inherits, and the per-app overrides on top of it.
+     *
+     * **The name L1 used, finally meaning what it said there.** Its `Icons` section was shape, background and
+     * layers — the icon studio — and this codebase has been holding the name back for it, with grid and icon
+     * *sizing* living in each surface's own section instead. This row is a hub rather than an editor: the editing
+     * happens in a full-screen destination, because a creative workspace is the wrong thing to put in a pane that
+     * shares a tablet screen with a list.
+     */
+    ICONS,
 
     /** Which surface each HOME edge opens, in which layout. L1 called this "Layout". */
     SURFACE_REGISTER,
@@ -82,6 +94,9 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         SettingsSection.EFFECTS -> SettingsSectionMeta(
             "Effects", "Frosted surfaces over the wallpaper", Icons.Outlined.AutoAwesome,
         )
+        SettingsSection.ICONS -> SettingsSectionMeta(
+            "Icons", "Shape, background and layers", Icons.Outlined.Palette,
+        )
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
             "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
@@ -120,7 +135,10 @@ internal data class SettingsGroup(val header: String?, val sections: List<Settin
  * folders last — a folder is drawn over a surface rather than being one.
  */
 internal val settingsGroups: List<SettingsGroup> = listOf(
-    SettingsGroup("Personalization", listOf(SettingsSection.WALLPAPER, SettingsSection.EFFECTS)),
+    SettingsGroup(
+        "Personalization",
+        listOf(SettingsSection.WALLPAPER, SettingsSection.EFFECTS, SettingsSection.ICONS),
+    ),
     SettingsGroup(
         "Layout",
         listOf(

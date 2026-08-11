@@ -37,9 +37,7 @@ import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerRole
-import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.data.apps.AppRepository
-import inkspire.morphic.feature.settings.iconstudio.IconStudioRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -140,16 +138,9 @@ fun IconLayerPlaygroundScreen(modifier: Modifier = Modifier) {
             DevChip("next app") { appIndex++ }
         }
 
-        // **Temporary scaffolding, and one of the three is already gone.** Editing *one app* now has its real way
-        // in — long-press an icon on the launcher, "Edit icon" — so that chip is deleted rather than kept as a
-        // shortcut, since a duplicate route is how two paths to one screen quietly start behaving differently.
-        // These two go with the settings dashboard, which is what will offer them for real. Kept in `app` rather
-        // than in `feature:settings` so their deletion touches no feature module.
-        val navigator = LocalNavigator.current
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DevChip("studio: global") { navigator.goTo(IconStudioRoute.Global) }
-            DevChip("studio: pick") { navigator.goTo(IconStudioRoute.App()) }
-        }
+        // The temporary chips that reached the studio are gone: every way in is real now — Settings → Icons for
+        // the two dashboard actions, and a long-press on any app icon for "Edit icon". A shortcut kept beside a
+        // real route is how two paths to one screen quietly start behaving differently.
     }
 }
 
