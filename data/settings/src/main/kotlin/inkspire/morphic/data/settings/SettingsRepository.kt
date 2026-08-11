@@ -12,6 +12,7 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.PreviewBackground
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -115,6 +116,27 @@ interface SettingsRepository {
      * a step is an index. L1 could not do that, because its equivalent state was a bag of flat fields.
      */
     suspend fun setIconLayerSet(layerSet: IconLayerSet)
+
+    /**
+     * What the **icon studio's canvas** is drawn on, so the studio reopens on the backdrop the user left it on.
+     *
+     * **A workspace preference, and the first one here that is not about what the launcher looks like.** It shapes no
+     * surface and reaches no rendered icon — it is the paper, not the drawing — which is exactly why it is *not* part of
+     * [iconLayerSet]: a recipe stored with a backdrop in it would make an icon's identity depend on what someone
+     * happened to be looking at while they made it. It is a preference all the same, by the only test that matters
+     * here: the user chose it, and would be annoyed to choose it again.
+     *
+     * Emits [PreviewBackground.Default] until one is chosen.
+     */
+    val iconStudioBackground: Flow<PreviewBackground>
+
+    /**
+     * Remembers [background] as the icon studio's canvas.
+     *
+     * A whole-value write like [setBackdropEffect], for the simplest version of its reason: the setting *is* one value,
+     * so there is no field to patch.
+     */
+    suspend fun setIconStudioBackground(background: PreviewBackground)
 
     /** Sets HOME's main-area + side-zone pairing. */
     suspend fun setHomeLayout(layout: HomeLayout)

@@ -15,18 +15,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.model.icon.PreviewBackground
 import kotlin.math.ceil
 import kotlin.math.min
 
 /** How much of the canvas's shorter side the icon's bound takes. Large enough to work in, short of edge to edge. */
 private const val IconBoundFraction = 0.62f
 
-/** One square of the transparency checkerboard. */
+/** One square of the transparency checkerboard, at canvas scale. */
 private val CheckerSquare = 12.dp
 
 /** The checkerboard's two greys — mid-toned, so they read against both a black and a white surround. */
 private val CheckerLight = Color(0xFFBDBDBD)
-private val CheckerDark = Color(0xFF8A8A8A)
+internal val CheckerDark = Color(0xFF8A8A8A)
 
 /**
  * The studio's canvas: a backdrop, and a **square bound** in the middle of it that the icon is drawn in.
@@ -50,8 +51,9 @@ fun StudioCanvas(
     val checkerPx = with(density) { CheckerSquare.toPx() }
 
     BoxWithConstraints(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
+            .then(modifier)
             .drawBehind { drawBackdrop(background, checkerPx) },
         contentAlignment = Alignment.Center,
     ) {
@@ -100,8 +102,13 @@ private fun DrawScope.drawBackdrop(background: PreviewBackground, checkerPx: Flo
     drawCheckerboard(topLeft, Size(side, side), checkerPx)
 }
 
-/** The transparency checkerboard, drawn over [area] starting at [topLeft]. */
-private fun DrawScope.drawCheckerboard(topLeft: Offset, area: Size, squarePx: Float) {
+/**
+ * The transparency checkerboard, drawn over [area] starting at [topLeft].
+ *
+ * Internal rather than private so the background swatch on the cycle button draws the *same* checkerboard, at its own
+ * [squarePx] — a swatch claiming to show what a backdrop looks like has to be made of the backdrop's own parts.
+ */
+internal fun DrawScope.drawCheckerboard(topLeft: Offset, area: Size, squarePx: Float) {
     drawRect(CheckerLight, topLeft = topLeft, size = area)
 
     val columns = ceil(area.width / squarePx).toInt()

@@ -21,6 +21,7 @@ import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
@@ -106,6 +107,26 @@ private val IconPresetsSlice = SettingsSlice(
     default = IconPresets.Default,
 )
 
+/**
+ * The icon studio's canvas backdrop: one key, one bare enum.
+ *
+ * **The smallest slice there is, and its own key for [IconLayerSetSlice]'s stated reason** — that comment reserved a new
+ * key for anything global about icons that turns out *not* to be part of the recipe, and this is the first such thing.
+ * Joining the recipe's blob would mean every backdrop cycle rewrote the global default, and every icon in the launcher
+ * would recompose because someone toggled the checkerboard.
+ *
+ * Stored as the bare enum rather than wrapped in a record, like [BackdropEffectSlice]: the setting *is* the value, so a
+ * wrapper would be a bag with one field. A blob is therefore one JSON string — the constant's own name, so **renaming a
+ * value silently resets it** to [PreviewBackground.Default]. Left as-is rather than annotated with `@SerialName`s: it is
+ * the same exposure every other plain enum in a slice has (`HomeLayout`, `VerticalEdge`, `SurfaceTransition`), and the
+ * failure is a recoverable fall back to a default rather than a corrupt read.
+ */
+private val IconStudioBackgroundSlice = SettingsSlice(
+    name = "icon_studio_background",
+    serializer = serializer<PreviewBackground>(),
+    default = PreviewBackground.Default,
+)
+
 /** The APPS surface's chrome: one key, one blob. */
 private val AppsChromeSlice = SettingsSlice(
     name = "apps_chrome",
@@ -154,6 +175,12 @@ internal class SettingsRepositoryImpl(
     override val iconLayerSet: Flow<IconLayerSet> = dataStore.read(IconLayerSetSlice) { it }
 
     override val iconPresets: Flow<List<IconPreset>> = dataStore.read(IconPresetsSlice) { it.presets }
+
+    override val iconStudioBackground: Flow<PreviewBackground> = dataStore.read(IconStudioBackgroundSlice) { it }
+
+    // Ignores the old value: one value replaced outright. See the interface.
+    override suspend fun setIconStudioBackground(background: PreviewBackground) =
+        update(IconStudioBackgroundSlice) { background }
 
     override val appsChrome: Flow<AppsChrome> = dataStore.read(AppsChromeSlice) { it }
 

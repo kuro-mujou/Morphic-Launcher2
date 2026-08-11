@@ -64,6 +64,10 @@ class IconStudioViewModel(
     val state: StateFlow<IconStudioState> = _state.asStateFlow()
 
     init {
+        // Above the route branch, because the canvas exists in all three cases — including the picker's, which floats
+        // over it rather than replacing it.
+        observeBackground()
+
         when (route) {
             is IconStudioRoute.Global -> openGlobal(route.preset)
             is IconStudioRoute.App -> route.component?.let(ComponentKey::parse)
@@ -111,8 +115,39 @@ class IconStudioViewModel(
     /** Chooses the app to edit — the picker's one output, and how [StudioSubject.Unchosen] is left. */
     fun selectApp(component: ComponentKey) = openApp(component)
 
-    /** Advances the preview backdrop. Pure screen state: nothing about it is persisted or shared. */
-    fun cycleBackground() = _state.update { it.copy(background = it.background.next()) }
+    /**
+     * Advances the preview backdrop, and **remembers it** — the studio reopens on whatever it was left on.
+     *
+     * **Optimistic, then written.** The state moves first so the canvas turns over under the finger rather than after a
+     * round trip through DataStore; [observeBackground]'s collector then echoes the same value back, which is a no-op.
+     * The alternative — write, and let the flow be the only thing that moves the state — would cost a frame on every tap
+     * *and* mis-handle a fast double tap, since the second press would read a `background` the first write had not
+     * landed yet and compute the same successor twice.
+     */
+    fun cycleBackground() {
+        val next = _state.value.background.next()
+        _state.update { it.copy(background = next) }
+        viewModelScope.launch { settingsRepository.setIconStudioBackground(next) }
+    }
+
+    /**
+     * Keeps the canvas on the stored backdrop.
+     *
+     * **The one thing on this screen that *is* projected from the store**, against [IconStudioState.editing] being read
+     * once and owned. It can be because nothing edits it continuously: a cycle is a discrete tap, so there is no drag
+     * for an emission to overwrite — the divergence that makes projecting the recipe wrong does not arise here.
+     *
+     * Collected rather than read once so an externally-changed value still arrives, and because the write path above
+     * relies on the echo being harmless. There is one implausible window — a tap landing before the first emission,
+     * which would briefly show the stored value instead — and it corrects itself, since that tap's own write emits next.
+     */
+    private fun observeBackground() {
+        viewModelScope.launch {
+            settingsRepository.iconStudioBackground.collect { stored ->
+                _state.update { it.copy(background = stored) }
+            }
+        }
+    }
 
     /** Points the controls at a layer. Pure selection — nothing about the recipe changes, so no history entry. */
     fun selectLayer(index: Int) = _state.update { it.copy(selected = index) }

@@ -7,45 +7,9 @@ import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
+import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.data.icons.InstalledIconPack
 import inkspire.morphic.data.settings.IconPreset
-
-/**
- * What the canvas is drawn *on*, cycled by a single control.
- *
- * A drawing app's transparency checkerboard, plus flat black and white, plus the two mixes — because the question an
- * icon designer actually has is "does this read on a dark background, on a light one, and where exactly are its
- * transparent parts?", and no single backdrop answers all three.
- *
- * **L1's sixth option, the launcher's own wallpaper, is deliberately absent.** The studio never shows it. That is
- * partly a design call and partly load-bearing: Haze blurs whatever node is really beneath a floating surface, and
- * the wallpaper reaches the settings previews through a `BlendMode.Src` punch to a *transparent* window — which
- * would leave the studio's panels with nothing to sample.
- */
-enum class PreviewBackground {
-    BLACK,
-    WHITE,
-
-    /** The checkerboard everywhere — transparency shown across the whole canvas. */
-    CHECKERBOARD,
-
-    /** Black outside the icon's bound, checkerboard within it: the icon's own alpha against a dark surround. */
-    BLACK_WITH_CHECKER,
-
-    /** White outside the icon's bound, checkerboard within it. */
-    WHITE_WITH_CHECKER,
-    ;
-
-    /** The next background in the cycle, wrapping — the whole of the control's behaviour. */
-    fun next(): PreviewBackground = entries[(ordinal + 1) % entries.size]
-
-    /** Whether the area *inside* the icon bound shows the transparency checkerboard. */
-    val checkersInsideBound: Boolean
-        get() = this == CHECKERBOARD || this == BLACK_WITH_CHECKER || this == WHITE_WITH_CHECKER
-
-    /** Whether the area *outside* the icon bound does. */
-    val checkersOutsideBound: Boolean get() = this == CHECKERBOARD
-}
 
 /**
  * Which recipe the studio is editing, resolved from [IconStudioRoute] once the app (if any) has been parsed.
@@ -109,13 +73,18 @@ data class PackBrowse(
  *   layer whose pack does not cover this app is simply absent here.
  * @property browsing the pack whose drawables are being browsed, or null. Null in the global studio always — see
  *   [PackBrowse].
+ * @property background what the canvas is drawn on. **Unlike [editing], this one *is* a projection of the store** —
+ *   it is persisted, so the studio reopens on the backdrop the user left it on. It can be, because nothing edits it
+ *   continuously: a cycle is one discrete tap, so there is no drag for an emission to overwrite. Its default here is
+ *   [PreviewBackground.Default], the same value the settings slice falls back to, so the frame before storage answers
+ *   shows what storage would have said.
  */
 data class IconStudioState(
     val subject: StudioSubject = StudioSubject.Unchosen,
     val editing: IconLayerSet = IconLayerSet.Base,
     val parsed: ParsedIcon? = null,
     val label: String? = null,
-    val background: PreviewBackground = PreviewBackground.BLACK_WITH_CHECKER,
+    val background: PreviewBackground = PreviewBackground.Default,
     val selected: Int = 0,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
