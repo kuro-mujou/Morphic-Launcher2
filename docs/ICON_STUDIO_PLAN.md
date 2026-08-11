@@ -309,12 +309,28 @@ feed the background layer is the open question.
   (what the layers are), `IconLayerResolver` (which draw and what each means) and `LayerTransform` (where they
   sit). Only the drawing API differs, which is unavoidable — and the shape mask, being the one piece each path
   implements in its own API, is the first place to look if the playground ever shows a difference.
-- **S3 — editor shell + route + entry points.** `IconStudioRoute` declared in `feature:settings` (the precedent
-  and its reasoning are `WallpaperCropRoute`'s); canvas + background cycle + the Haze surface helper + layer list
-  + transform controls only; the shared **app picker**; the item menu's "Edit icon" verb, which is one of the two
-  the menu is still owed. Driveable end to end. **Haze compiles for the first time here** — it is the one
-  unproven dependency in the plan, so it is worth standing up the shared surface modifier on day one of this
-  slice rather than at the end of it.
+- **S3 — editor shell + route + entry points. — CODE LANDED (2026-08-11); on-device verification pending.** Four
+  parts:
+  - **S3a** — Haze proven and `studioSurface` stood up. The API was read out of the published sources rather than
+    taken from L1's notes, which were a guess (that plan marks the imports "assumed" and never compiled). Two
+    decisions: the content colour is **fixed white**, the studio being the one zone whose backdrop the *user*
+    switches between black and white; and the fallback background sits **before** `hazeEffect` in the chain, so it
+    is covered by the blur rather than doubling its wash.
+  - **S3b** — route, plain-MVVM ViewModel, canvas. The key is a **sealed pair** (`Global` / `App(component?)`)
+    rather than L1's mode-plus-nullable-component, which can express a global route carrying an app.
+  - **S3c** — the layer stack and per-layer transform / shape / source. Undo is **punctuated**: the live path
+    records nothing and `commitEdit` lands one history entry per gesture. **Explicit Save in both modes**, which
+    departs from L1's live-committing global studio — a slice is one JSON blob, and a global edit restyles every
+    icon on the device.
+  - **S3d** — the shared `AppPicker` (`core:designsystem`) and the item menu's **Edit icon** verb, routed through
+    `app` so `feature:shell` never learns the studio exists.
+
+  **One thing the model made unnecessary: L1's "this layer / whole icon" scope split.** Its UI plan left that an
+  open question — a segmented toggle, or a separate "Icon settings" entry? In L2 all six of its whole-icon tools
+  have gone elsewhere: the tile shape became a *per-layer* shape (there is no stack-level mask), the background is
+  the background layer's source, theming is `AppDefaultMonochrome` on the foreground, sizing is `data:settings`
+  and another screen, the skin is deferred, and a pack will be a per-layer source. Everything acts on one layer,
+  so the question does not arise.
 - **S4 — the dashboard.** `SettingsSection.ICONS` returns as the hub: Edit all / Edit specific / Presets
   placeholder. Small, and deliberately after S3 so the thing it links to already works.
 - **S5 — legacy background detection.** Edge sampling in the parser; a pre-filled `SolidFill` background.
