@@ -42,4 +42,22 @@ dependencies {
     // Section icons in the settings list. The extended set because the sections need `Dock`, `Category`,
     // `Dashboard` and `AutoAwesome`, none of which are in the core icon subset — the same ones L1 picked.
     implementation(libs.androidx.compose.material.icons.extended)
+
+    // The icon studio: it edits per-app recipes, and it renders them live rather than baked.
+    implementation(projects.data.icons)
+    implementation(projects.core.icon)
+
+    // Haze — the studio's floating surfaces, and **the launcher's only other blur system**, which is worth a word
+    // because a near-copy of an existing mechanism is normally the mistake this rewrite keeps un-making.
+    //
+    // They do not overlap. `wallpaperBackdrop` samples a *pre-blurred wallpaper bitmap* by position — one blur for
+    // the whole screen, shared, so a panel sliding over it continues the picture — and it can only ever show the
+    // wallpaper. The studio's canvas is deliberately not the wallpaper (it is black / white / a checkerboard, and
+    // the icon being edited), so it is the one screen in the launcher whose backdrop is content the launcher itself
+    // draws, and the one screen `wallpaperBackdrop` structurally cannot serve. Haze blurs whatever is really there.
+    //
+    // That "no wallpaper in the studio" decision is also what *guarantees* this works: Haze needs a real drawn node
+    // to sample, and the transparent punch-through every settings preview uses would leave it nothing.
+    implementation(libs.haze)
+    implementation(libs.haze.blur)
 }
