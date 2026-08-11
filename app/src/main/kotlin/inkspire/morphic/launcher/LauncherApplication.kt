@@ -6,6 +6,7 @@ import inkspire.morphic.core.common.di.commonModule
 import inkspire.morphic.core.database.di.databaseModule
 import inkspire.morphic.core.icon.di.iconModule
 import inkspire.morphic.data.apps.di.appsModule
+import inkspire.morphic.data.icons.di.iconsModule
 import inkspire.morphic.data.layout.di.layoutModule
 import inkspire.morphic.data.settings.di.settingsModule
 import inkspire.morphic.data.wallpaper.di.wallpaperModule
@@ -36,6 +37,7 @@ class LauncherApplication : Application() {
                 databaseModule,
                 appsModule,
                 iconModule,
+                iconsModule,
                 layoutModule,
                 settingsModule,
                 wallpaperModule,

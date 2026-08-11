@@ -48,7 +48,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             CompositionLocalProvider(LocalIconRenderManager provides iconRenderManager) {
-                LauncherNavHost()
+                // What icons *look* like is a second, separate question from what bakes them, and it is answered
+                // from repositories rather than from anything this Activity owns — so it is assembled next door.
+                ProvideIconRecipes {
+                    LauncherNavHost()
+                }
             }
         }
     }

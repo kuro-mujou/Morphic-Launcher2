@@ -43,6 +43,7 @@ private enum class DevScreen(val label: String) {
     Reflow("Reflow"),
     ScrollGrid("ScrollGrid"),
     CategoryPager("CategoryPager"),
+    IconLayers("IconLayers"),
     ;
 
     fun next(): DevScreen = entries[(ordinal + 1) % entries.size]
@@ -91,6 +92,7 @@ fun DevRootScreen(modifier: Modifier = Modifier) {
                     DevScreen.Reflow -> ReflowPlaygroundScreen()
                     DevScreen.ScrollGrid -> ScrollGridPlaygroundScreen()
                     DevScreen.CategoryPager -> CategoryPagerPlaygroundScreen()
+                    DevScreen.IconLayers -> IconLayerPlaygroundScreen()
                 }
                 // Theme-independent chip so it reads over either screen; label shows what tapping switches TO.
                 Text(

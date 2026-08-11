@@ -60,6 +60,7 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.model)
     implementation(projects.data.apps)
+    implementation(projects.data.icons)
     implementation(projects.data.layout)
     implementation(projects.core.navigation)
     implementation(projects.data.settings) // settingsModule, for startKoin
