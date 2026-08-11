@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.home.widgetpicker
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,14 +9,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,44 +51,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
-import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
-import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.WidgetProvider
 import inkspire.morphic.data.widgets.WidgetProviderGroup
+import inkspire.morphic.feature.home.LauncherBottomSheet
 import org.koin.androidx.compose.koinViewModel
-
-/** How much of the screen the sheet takes. L1's fraction. */
-private const val SheetHeightFraction = 0.7f
-
-/** The sheet's own shape — rounded at the top only, since the bottom is the screen edge. */
-private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
 
 /**
  * **The widget picker** — a bottom sheet listing every installed widget, grouped by the app that publishes it, with
  * one app's widgets browsed as a pager of previews.
  *
  * A port of L1's `WidgetPickerSheet`, keeping its two-pane shape: a list of apps that slides left to a detail pane
- * for the one chosen, and back again. Three things are L2's rather than L1's, and all three are the house rules
- * rather than taste:
+ * for the one chosen, and back again. What differs from L1 is the house rules rather than taste:
  * - **Colours come from the theme.** L1 hardcoded `Color.White` throughout, which over a bright wallpaper is the
  *   one surface ignoring the brightness signal the whole launcher theme is built on.
- * - **It is a frosted panel** (`wallpaperBackdrop`), the second after the context menu, so it reads the user's
- *   chosen backdrop effect like everything else that floats over the wallpaper.
- * - **Insets are `uiInsets`**, one expression, where L1 stacked `statusBarsPadding` and `navigationBarsPadding` —
- *   which between them miss a landscape cutout.
+ * - **The sheet itself is [LauncherBottomSheet]** — the frosted panel, the scrim, the modality claim and `uiInsets`
+ *   all live there, extracted when the icon container's app picker became the second thing wanting exactly this
+ *   chrome. This file is the two panes and nothing else.
  *
  * **L1's "Components" section is here**, above the apps: an icon container and a widget container, which are things
  * the launcher itself offers rather than things an app publishes — which is why they are their own section and not
@@ -126,76 +112,47 @@ internal fun WidgetPickerSheet(
 ) {
     val viewModel = koinViewModel<WidgetPickerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val colors = LocalMorphicColors.current
 
     var opened by remember { mutableStateOf<WidgetProviderGroup?>(null) }
-    // Back closes the detail pane first and the sheet second, so the two panes read as depth rather than as a swap.
-    BackHandler { if (opened != null) opened = null else onDismiss() }
 
-    // **The sheet is modal, and one claim says so twice.** `SurfaceGestureLock` is the launcher's answer to "does
-    // something on screen own the finger?", and both behaviours fall out of holding it: `SurfacePager` gates its
-    // pan on `!isLocked`, so a swipe cannot slide another surface in from under an open sheet; and
-    // `surfaceMenuGestures` stands down while it is held, so a long-press on the scrim cannot open the menu of the
-    // surface buried behind. The second is the same free consequence an open folder already gets.
-    //
-    // The declarative form, because the reason is a piece of state (this composable is on screen) rather than an
-    // event — which is exactly the split `LockSurfaceGesture` documents, and the folder overlay's own case.
-    LockSurfaceGesture(locked = true)
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.scrim)
-            // A tap anywhere off the sheet closes it. `detectTapGestures` rather than `clickable` so it stays
-            // silent — no ripple and no semantics click on a full-screen scrim, exactly as the context menu's
-            // tap-catcher does.
-            .pointerInput(Unit) { detectTapGestures { onDismiss() } },
-        contentAlignment = Alignment.BottomCenter,
+    LauncherBottomSheet(
+        onDismiss = onDismiss,
+        // Back closes the detail pane first and the sheet second, so the two read as depth rather than as a swap.
+        onBack = { if (opened != null) opened = null else onDismiss() },
+        modifier = modifier,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(SheetHeightFraction)
-                .clip(SheetShape)
-                .wallpaperBackdrop(shape = SheetShape, scrimColor = colors.surfaceElevated)
-                // Swallows taps on the sheet itself, so they do not reach the scrim behind it and dismiss.
-                .pointerInput(Unit) { detectTapGestures { } }
-                .uiInsetsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            AnimatedContent(
-                targetState = opened,
-                transitionSpec = {
-                    // Opening pushes the list out to the left and brings the detail in from the right; going back
-                    // reverses it. Expressive motion from the theme, where L1 used the animation defaults.
-                    if (targetState != null) {
-                        (slideInHorizontally { it } + fadeIn()) togetherWith
-                            (slideOutHorizontally { -it } + fadeOut())
-                    } else {
-                        (slideInHorizontally { -it } + fadeIn()) togetherWith
-                            (slideOutHorizontally { it } + fadeOut())
-                    }
-                },
-                label = "widgetPicker",
-            ) { target ->
-                if (target == null) {
-                    ListPane(
-                        groups = state.groups,
-                        onOpen = { opened = it },
-                        onDismiss = onDismiss,
-                        onAddIconContainer = onAddIconContainer,
-                        onAddWidgetContainer = onAddWidgetContainer,
-                    )
+        AnimatedContent(
+            targetState = opened,
+            transitionSpec = {
+                // Opening pushes the list out to the left and brings the detail in from the right; going back
+                // reverses it. Expressive motion from the theme, where L1 used the animation defaults.
+                if (targetState != null) {
+                    (slideInHorizontally { it } + fadeIn()) togetherWith
+                        (slideOutHorizontally { -it } + fadeOut())
                 } else {
-                    DetailPane(
-                        group = target,
-                        grid = grid,
-                        cellWidthPx = cellWidthPx,
-                        cellHeightPx = cellHeightPx,
-                        onBack = { opened = null },
-                        onAddWidget = onAddWidget,
-                    )
+                    (slideInHorizontally { -it } + fadeIn()) togetherWith
+                        (slideOutHorizontally { it } + fadeOut())
                 }
+            },
+            label = "widgetPicker",
+        ) { target ->
+            if (target == null) {
+                ListPane(
+                    groups = state.groups,
+                    onOpen = { opened = it },
+                    onDismiss = onDismiss,
+                    onAddIconContainer = onAddIconContainer,
+                    onAddWidgetContainer = onAddWidgetContainer,
+                )
+            } else {
+                DetailPane(
+                    group = target,
+                    grid = grid,
+                    cellWidthPx = cellWidthPx,
+                    cellHeightPx = cellHeightPx,
+                    onBack = { opened = null },
+                    onAddWidget = onAddWidget,
+                )
             }
         }
     }

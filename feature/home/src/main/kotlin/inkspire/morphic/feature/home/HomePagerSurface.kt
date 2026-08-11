@@ -54,6 +54,11 @@ import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import inkspire.morphic.core.designsystem.picker.AppPicker
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -598,6 +603,11 @@ internal fun HomePagerSurface(
     // and dismissing clears it, so an abandoned add cannot leave a later one aimed at a container nobody chose.
     var addWidgetTarget by remember { mutableStateOf<Long?>(null) }
 
+    // **Which icon container the app picker is filling**, and null when it is closed — the picker's whole state,
+    // since the sheet has nothing else to remember. Held as the *target* rather than as an open flag beside one, so
+    // "open with no container" is unrepresentable.
+    var iconPickerTarget by remember { mutableStateOf<Long?>(null) }
+
     val menuHost = LocalMenuHost.current
     val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
         when (item) {
@@ -651,14 +661,20 @@ internal fun HomePagerSurface(
                     },
                 ),
             )
-            // **One verb, because the arrangement chooser is not built yet** — that is the next container slice, and
-            // a row that opened nothing would be worse than a missing one (the settings sections' own rule). Removing
-            // a container takes its membership rows with it by cascade and leaves every app installed and every
-            // nested folder's contents alone; the icons simply stop being grouped.
+            // **Add app** is the same picker the empty container's "+" opens, offered here because once a container
+            // holds anything there is no "+" left to press. **No arrangement chooser yet** — that is the next
+            // container slice, and a row that opened nothing would be worse than a missing one (the settings
+            // sections' own rule).
+            //
+            // Removing takes the membership rows with it by cascade and leaves every app installed and every nested
+            // folder's contents alone. What it does *not* do is put those icons back on the grid: they lose their
+            // home placement and remain in the drawer, exactly as removing a folder does. Consistent, and worth
+            // knowing before pressing it.
             is HomeItem.IconContainer -> menuHost?.show(
                 title = IconContainerTitle,
                 anchor = anchor,
                 actions = listOf(
+                    MenuAction("Add app") { iconPickerTarget = item.container.id },
                     MenuAction("Remove container") {
                         viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
                     },
@@ -805,6 +821,7 @@ internal fun HomePagerSurface(
                             addWidgetTarget = containerId
                             widgetPickerOpen = true
                         },
+                        onAddIconToContainer = { containerId -> iconPickerTarget = containerId },
                     )
                 }
             },
@@ -840,6 +857,7 @@ internal fun HomePagerSurface(
                             addWidgetTarget = containerId
                             widgetPickerOpen = true
                         },
+                        onAddIconToContainer = { containerId -> iconPickerTarget = containerId },
                     )
                 }
             },
@@ -1073,6 +1091,30 @@ internal fun HomePagerSurface(
                 },
             )
         }
+
+        // **The icon container's app picker**, beside the widget one and last for the same reason. It is a plain
+        // `AppPicker` in a sheet rather than a screen of its own: picking an app to put in a container is one
+        // choice with nothing to configure afterwards, unlike a widget, which has a provider to browse and a
+        // configuration activity to run.
+        iconPickerTarget?.let { containerId ->
+            LauncherBottomSheet(onDismiss = { iconPickerTarget = null }) {
+                Text(
+                    text = "Add to container",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = LocalMorphicColors.current.content,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+                )
+                AppPicker(
+                    // Recomputed from the state the surface already collects, so an app installed while the sheet
+                    // is open appears in it — and one already in this container never does.
+                    apps = state.appsNotIn(containerId),
+                    onPick = { component ->
+                        viewModel.addAppToIconContainer(containerId, component)
+                        iconPickerTarget = null
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -1091,6 +1133,7 @@ internal fun HomePagerSurface(
  *   is the item and its slots are not.
  * @param onOpenFolder the same, for a folder nested in an icon container.
  * @param onAddWidgetToContainer the "+" of an *empty* widget container, by container id.
+ * @param onAddIconToContainer the same, for an empty icon container.
  */
 @Composable
 private fun HomeItemCell(
@@ -1102,6 +1145,7 @@ private fun HomeItemCell(
     onLaunch: (ComponentKey) -> Unit = {},
     onOpenFolder: (Long) -> Unit = {},
     onAddWidgetToContainer: (Long) -> Unit = {},
+    onAddIconToContainer: (Long) -> Unit = {},
 ) {
     when (item) {
         is HomeItem.App ->
@@ -1134,6 +1178,7 @@ private fun HomeItemCell(
             itemGestures = itemGestures,
             onLaunch = onLaunch,
             onOpenFolder = onOpenFolder,
+            onAddIcon = { onAddIconToContainer(item.container.id) },
         )
         is HomeItem.WidgetContainer -> WidgetContainerCell(
             widgets = item.widgets,

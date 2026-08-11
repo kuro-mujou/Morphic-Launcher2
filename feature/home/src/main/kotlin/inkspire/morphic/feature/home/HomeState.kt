@@ -9,7 +9,9 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetInfo
+import java.text.Collator
 import inkspire.morphic.core.model.Folder as FolderModel
 import inkspire.morphic.core.model.IconContainer as IconContainerModel
 import inkspire.morphic.core.model.WidgetContainer as WidgetContainerModel
@@ -226,6 +228,38 @@ fun HomeState.paddingFor(slot: GridSlot): Int = horizontalPaddingDp[slot] ?: 0
 
 /** The items placed in [zone] — one zone's grid contents, in the order the state reports them. */
 fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone == zone }
+
+/** The placed icon container [containerId], or null when it is gone or its definition is not resolved yet. */
+fun HomeState.iconContainer(containerId: Long): HomeItem.IconContainer? =
+    items.filterIsInstance<HomeItem.IconContainer>().firstOrNull { it.container.id == containerId }
+
+/**
+ * Every installed app that icon container [containerId] does **not** already hold, in label order — what its "+"
+ * offers.
+ *
+ * Filtered because `AppPicker`'s own KDoc says the caller does it ("a folder picker offers only apps not already in
+ * it"), and here it is more than tidiness: adding an app a container already holds is a no-op the user cannot
+ * distinguish from a broken button, since `AddToIconContainer` detaches before it inserts.
+ *
+ * **Sorted with a locale-aware `Collator`, never `lowercase()`** — the lesson the APPS ordering already learned and
+ * the picker's own matching applies: raw UTF-16 puts every accented label after `Z`, so a Vietnamese or French list
+ * breaks into two alphabets. Equal labels keep catalogue order, since `sortedWith` is stable.
+ *
+ * A derived read on the state rather than a ViewModel method, beside [appInfo] and [inZone], because that is what
+ * it is: a projection of [catalog] with no store behind it and nothing to persist. Being a function of the
+ * collected state is also what keeps it live — an app installed while the sheet is open appears in it.
+ */
+fun HomeState.appsNotIn(containerId: Long): List<AppInfo> {
+    val held = iconContainer(containerId)
+        ?.container?.items
+        ?.filterIsInstance<IconItem.App>()
+        ?.mapTo(mutableSetOf()) { it.component }
+        .orEmpty()
+    val collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
+    return catalog.values
+        .filterNot { it.componentKey in held }
+        .sortedWith(compareBy(collator) { it.label })
+}
 
 /**
  * Resolves [component] to the app info home can draw — **placed on a grid, inside a folder, or merely installed**.

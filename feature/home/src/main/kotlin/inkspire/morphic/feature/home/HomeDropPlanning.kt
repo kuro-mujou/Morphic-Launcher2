@@ -80,11 +80,29 @@ internal fun planCoordinateDrop(
 private const val MERGE_INNER_RADIUS = 0.3f
 
 /**
- * Whether the dragged item may combine onto [target]: for now only an **app**, onto another app or a folder,
- * and never onto itself. Folder-on-app, widget, and container merges arrive with those item types.
+ * Whether the dragged item may combine onto [target] — never onto itself, and otherwise decided by what the
+ * target can *hold*.
+ *
+ * A `when` over the target rather than a boolean expression, so each holder states its own rule and a new
+ * [GridItem] kind fails to compile until it says whether anything may be dropped into it.
+ *
+ * - An **app or a folder** takes only an app: dropping one app on another makes a folder, and dropping one into a
+ *   folder adds it. Folder-on-app is still refused, because folders do not nest.
+ * - An **icon container** takes either, which is the whole of what makes it fillable by drag — it is the one
+ *   holder whose contents are `IconItem`, i.e. exactly "app or folder".
+ * - Neither kind of **widget** takes anything from this surface. A widget container holds widgets, and merging a
+ *   widget into one is the drag that is still to come; nothing an icon drag is carrying can go there. Returning
+ *   false is what makes the drop fall through to an ordinary push, which is the honest outcome — the finger is
+ *   over something that cannot receive it.
  */
-internal fun canMerge(dragged: GridItem, target: GridItem): Boolean =
-    dragged is GridItem.App && dragged != target && (target is GridItem.App || target is GridItem.Folder)
+internal fun canMerge(dragged: GridItem, target: GridItem): Boolean {
+    if (dragged == target) return false
+    return when (target) {
+        is GridItem.App, is GridItem.Folder -> dragged is GridItem.App
+        is GridItem.IconContainer -> dragged is GridItem.App || dragged is GridItem.Folder
+        is GridItem.Widget, is GridItem.WidgetContainer -> false
+    }
+}
 
 /** True when [cell] falls inside this placement's rectangle. */
 internal fun GridPlacement.covers(cell: Cell): Boolean =

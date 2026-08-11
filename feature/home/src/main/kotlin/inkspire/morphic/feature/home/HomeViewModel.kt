@@ -483,6 +483,17 @@ class HomeViewModel(
     }
 
     /**
+     * Adds [component] to icon container [containerId] — the "+" picker's commit.
+     *
+     * One op, because `AddToIconContainer` detaches the app from wherever it was as part of filing it: off the grid,
+     * out of a folder, out of another container. So the picker needs no "is it placed?" test and no removal to pair
+     * with, which is the same composition the drag path relies on.
+     */
+    fun addAppToIconContainer(containerId: Long, component: ComponentKey) {
+        applyChanges(listOf(LayoutChange.AddToIconContainer(containerId, IconItem.App(component))))
+    }
+
+    /**
      * Files a widget the add flow has just bound into widget container [containerId].
      *
      * **No span and no free cell**, unlike [placeWidget]: the container already owns a placement and each of its
@@ -899,29 +910,33 @@ class HomeViewModel(
      * space, so a placement alone matches items in every zone at once.
      */
     fun mergeChanges(dragged: GridItem, targetPlacement: GridPlacement, zone: HomeZone): List<LayoutChange>? {
-        val draggedApp = (dragged as? GridItem.App)?.component ?: return null
         val target = state.value.items.firstOrNull {
             it.gridItem != dragged && it.placement == targetPlacement && it.zone == zone
         } ?: return null
+        val draggedApp = (dragged as? GridItem.App)?.component
         return when (target) {
-            // Nothing merges onto a widget: a folder holds apps, and a widget is not one. Returning null is what
-            // makes the drop fall through to an ordinary push, which is the honest outcome — the finger is over a
-            // widget's centre, and there is no collection for the app to join there.
-            //
-            // A **widget container** is the same answer for the same reason. An **icon container** genuinely could
-            // take the app, and will: that is `AddToIconContainer`, and it waits for the slice that also teaches
-            // `HomeDropPlanning.canMerge` to offer a merge ring over one. Until then a container is a plain
-            // occupant, so a drop on it pushes rather than silently doing nothing.
-            is HomeItem.Widget, is HomeItem.WidgetContainer, is HomeItem.IconContainer -> null
-            is HomeItem.App -> listOf(
-                LayoutChange.CreateFolder(
-                    label = DEFAULT_FOLDER_LABEL,
-                    apps = listOf(target.info.componentKey, draggedApp),
-                    at = targetPlacement,
-                    zone = zone,
-                ),
-            )
-            is HomeItem.Folder -> listOf(LayoutChange.AddToFolder(target.folder.id, draggedApp))
+            // Nothing merges onto either kind of widget: a widget is not an app and a widget container holds only
+            // widgets, so nothing an icon drag carries can go there. Returning null is what makes the drop fall
+            // through to an ordinary push, which is the honest outcome — the finger is over something that cannot
+            // receive what it is holding. It mirrors `canMerge`, which is what stops the ring being offered at all.
+            is HomeItem.Widget, is HomeItem.WidgetContainer -> null
+            is HomeItem.App -> draggedApp?.let {
+                listOf(
+                    LayoutChange.CreateFolder(
+                        label = DEFAULT_FOLDER_LABEL,
+                        apps = listOf(target.info.componentKey, it),
+                        at = targetPlacement,
+                        zone = zone,
+                    ),
+                )
+            }
+            is HomeItem.Folder -> draggedApp?.let { listOf(LayoutChange.AddToFolder(target.folder.id, it)) }
+            // **One op is the whole move**, unlike the folder paths: `AddToIconContainer` detaches the item from
+            // wherever it was — its grid cell, its folder, another container — as part of filing it, so there is no
+            // removal to pair with it. That detach is the store keeping its own invariant rather than a courtesy to
+            // this caller; see `LayoutRepositoryImpl.detachIconItem`.
+            is HomeItem.IconContainer ->
+                dragged.asIconItem()?.let { listOf(LayoutChange.AddToIconContainer(target.container.id, it)) }
         }
     }
 
@@ -1033,6 +1048,32 @@ private data class HomeDefinitions(
 )
 
 /**
+ * This item as something an **icon container** can hold, or null when it is not one of the two.
+ *
+ * The bridge between the grid's five-way [GridItem] and the container's two-way [IconItem], which exist separately
+ * because they answer different questions — "what can sit on a grid?" against "what reads as a single tappable
+ * icon?". A widget or a container is neither: it has no icon-sized representation, and a container inside a
+ * container is a grouping inside a grouping.
+ */
+private fun GridItem.asIconItem(): IconItem? = when (this) {
+    is GridItem.App -> IconItem.App(component)
+    is GridItem.Folder -> IconItem.Folder(folderId)
+    is GridItem.Widget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
+}
+
+/**
+ * The same bridge the other way — which grid item this container member *was*, so the optimistic mirror can take
+ * its placement away when it is filed into a container.
+ *
+ * Total where [asIconItem] is partial, which is the honest asymmetry: everything an icon container can hold is
+ * something that could have been on the grid, but not everything on the grid is something it can hold.
+ */
+private fun IconItem.asGridItem(): GridItem = when (this) {
+    is IconItem.App -> GridItem.App(component)
+    is IconItem.Folder -> GridItem.Folder(folderId)
+}
+
+/**
  * HOME's coordinate placements flattened into a single top-to-bottom order — **the vertical list's seed**.
  *
  * L1's own derivation (page, then row, then column), and the one part of its "the list *is* the grid" model worth
@@ -1064,7 +1105,14 @@ private fun Map<GridItem, PlacedItem>.withApplied(changes: List<LayoutChange>): 
             when (change) {
                 is LayoutChange.Move -> put(change.item, PlacedItem(change.to, change.zone))
                 is LayoutChange.RemoveFromGrid -> remove(change.item)
-                else -> Unit // container/folder membership ops don't move grid placements
+                // **Filing an icon into a container takes it off the grid**, and mirroring that here is what stops
+                // it being drawn twice for the frame or two the write takes: the store's `detachIconItem` deletes
+                // the placement, so without this the old cell keeps its icon until the echo arrives. The container's
+                // *contents* still wait for the store — they come from a definition flow this map knows nothing
+                // about — so the icon briefly disappears rather than briefly duplicating, which is the better of
+                // the two and the same trade `CreateFolder` already makes.
+                is LayoutChange.AddToIconContainer -> remove(change.item.asGridItem())
+                else -> Unit // the remaining membership ops don't move grid placements
             }
         }
     }

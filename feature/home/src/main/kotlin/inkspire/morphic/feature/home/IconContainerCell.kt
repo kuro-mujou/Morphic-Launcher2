@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -53,11 +54,12 @@ private const val EmptyGlyphFraction = 0.3f
  * `awaitFirstDown(requireUnconsumed = false)` and reads movement with `positionChangedIgnoreConsumed()`, so a
  * long-press *on a slot* still reaches the container's own menu and drag.
  *
- * **An empty container draws a "+", and it is inert.** Something has to be drawn — an empty cell that cannot be
- * removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable widget. But it is
- * a glyph rather than a button: its spec'd action is to open an *app picker*, and the launcher has none yet (three
- * other surfaces are waiting on the same one). A control that does nothing is worse than a missing one, so it says
- * "drag something here" by being a target shape rather than by offering a tap that would go nowhere.
+ * **An empty container draws a "+", and it is a real button.** Something has to be drawn — an empty cell that
+ * cannot be removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable widget.
+ * It opens `core:designsystem`'s `AppPicker`, which is **this component's first consumer**: it went into the design
+ * system ahead of any caller precisely because three of them were named and blocked, and the container's "+" turned
+ * out to be the fourth and the first to arrive. Dragging an icon in still works and is the faster route; the button
+ * is what makes an empty container usable without one.
  */
 @Composable
 internal fun IconContainerCell(
@@ -67,6 +69,7 @@ internal fun IconContainerCell(
     itemGestures: Modifier = Modifier,
     onLaunch: (ComponentKey) -> Unit = {},
     onOpenFolder: (Long) -> Unit = {},
+    onAddIcon: () -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
     BoxWithConstraints(
@@ -78,12 +81,14 @@ internal fun IconContainerCell(
         contentAlignment = Alignment.Center,
     ) {
         if (icons.isEmpty()) {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = null,
-                tint = colors.contentMuted,
-                modifier = Modifier.size(maxWidth.coerceAtMost(maxHeight) * EmptyGlyphFraction),
-            )
+            IconButton(onClick = onAddIcon) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Add app",
+                    tint = colors.contentMuted,
+                    modifier = Modifier.size(maxWidth.coerceAtMost(maxHeight) * EmptyGlyphFraction),
+                )
+            }
             return@BoxWithConstraints
         }
 
