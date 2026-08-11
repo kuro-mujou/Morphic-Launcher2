@@ -423,6 +423,16 @@ feed the background layer is the open question.
   - **No crop screen, unlike L1.** A layer already has offset, zoom and rotation, so a crop step would be a second
     and *destructive* way to do the same thing. Images are fitted into a transparent square on the way in instead,
     which also means the renderers need no aspect-ratio special case and so cannot disagree about one.
+  - **The colour picker landed with it** (`MorphicColorPicker`, `core:designsystem`) — a saturation/value panel
+    over a hue bar, and L1's is finally ported. It has **no alpha channel**, deliberately: every colour here sits
+    somewhere that already carries opacity (a layer has one, a gradient has a strength), and `LayerEffect.Color`
+    already states that a tint's alpha is ignored because two ways to set one thing is one too many. Hue is held
+    as state rather than re-derived from the colour, because hue is undefined at black, white and every grey — a
+    picker that recomputed it would jump under the user's finger the moment they dragged into a corner.
+  - It replaced **three** near-identical swatch rows (solid fill, tint, gradient stops) with one `ColorField`.
+    The swatches stayed alongside the picker rather than being replaced by it: swatches are how a colour is chosen
+    *quickly*, the picker how one is chosen *exactly*, and making every black require a drag across a panel would
+    have been slower for the common case in exchange for precision nobody wanted there.
 - **S8 — icon packs.** Per the section above.
 - **S9 — presets (deferred).** A named `IconLayerSet` blob; the dashboard placeholder is already its slot.
 

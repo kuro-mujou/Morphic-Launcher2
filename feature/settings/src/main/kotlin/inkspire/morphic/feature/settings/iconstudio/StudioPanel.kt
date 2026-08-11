@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
+import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.icon.IconShapes
@@ -345,18 +347,12 @@ private fun ColorControls(
         )
     }
     LabelledControl("Tint") {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            // "None" first, because a tint is the one recolouring that cannot be undone by returning a slider to
-            // the middle — without a way off, picking one would be a one-way door.
-            Swatch(argb = null, selected = color.tintArgb == null) {
-                onUpdate { it.withColor(color.copy(tintArgb = null)) }
-            }
-            FillSwatches.take(6).forEach { argb ->
-                Swatch(argb = argb, selected = color.tintArgb == argb) {
-                    onUpdate { it.withColor(color.copy(tintArgb = argb)) }
-                }
-            }
-        }
+        // Clearable because a tint is the one recolouring that cannot be undone by returning a slider to its
+        // middle — without a way off, picking one would be a one-way door.
+        ClearableColorField(
+            argb = color.tintArgb,
+            onChange = { argb -> onUpdate { it.withColor(color.copy(tintArgb = argb)) } },
+        )
     }
 }
 
@@ -394,21 +390,86 @@ private fun GradientControls(
         )
     }
     LabelledControl("From") {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FillSwatches.forEach { argb ->
-                Swatch(argb = argb, selected = gradient.startArgb == argb) {
-                    onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
-                }
-            }
+        ColorField(argb = gradient.startArgb) { argb ->
+            onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
         }
     }
     LabelledControl("To") {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FillSwatches.forEach { argb ->
-                Swatch(argb = argb, selected = gradient.endArgb == argb) {
-                    onUpdate { it.withGradient(gradient.copy(endArgb = argb)) }
-                }
+        ColorField(argb = gradient.endArgb) { argb ->
+            onUpdate { it.withGradient(gradient.copy(endArgb = argb)) }
+        }
+    }
+}
+
+/**
+ * Choosing a colour: quick swatches, and a full picker one tap away.
+ *
+ * **One component for all four colours in this editor** — a solid fill, a tint, and a gradient's two stops. They
+ * were three near-identical swatch rows before the picker existed, which is exactly the shape that drifts: L1 has
+ * a whole file of near-copies for the same reason.
+ *
+ * The swatches stay rather than being replaced by the picker. They are how a colour is chosen *quickly* and the
+ * picker is how one is chosen *exactly*, and an editor that made every black require a drag across a saturation
+ * panel would be slower for the common case in exchange for precision nobody wanted there.
+ *
+ * @param clearable whether "no colour" is a choice. False for a fill or a gradient stop, which must be *some*
+ *   colour; true for a tint, which is an effect a user has to be able to get back off.
+ */
+@Composable
+private fun ColorField(argb: Int, modifier: Modifier = Modifier, onChange: (Int) -> Unit) =
+    ColorFieldBody(argb, modifier, clearable = false) { picked -> picked?.let(onChange) }
+
+/**
+ * [ColorField] where *no colour* is one of the choices.
+ *
+ * A separate function rather than a `clearable` flag on one, because the flag would not change the **type**: a
+ * caller that must have a colour would still be handed a nullable one and have to decide what to do with a null
+ * that cannot happen. Two signatures make each call site say which it is, and the shared body is the same either
+ * way.
+ */
+@Composable
+private fun ClearableColorField(argb: Int?, modifier: Modifier = Modifier, onChange: (Int?) -> Unit) =
+    ColorFieldBody(argb, modifier, clearable = true, onChange = onChange)
+
+@Composable
+private fun ColorFieldBody(
+    argb: Int?,
+    modifier: Modifier = Modifier,
+    clearable: Boolean = false,
+    onChange: (Int?) -> Unit,
+) {
+    var picking by remember { mutableStateOf(false) }
+
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (clearable) Swatch(argb = null, selected = argb == null) { onChange(null) }
+            FillSwatches.take(if (clearable) 6 else 7).forEach { swatch ->
+                Swatch(argb = swatch, selected = argb == swatch) { onChange(swatch) }
             }
+            // The way to a colour that is not on the row. Shows the current one, so it doubles as the readout.
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(argb?.let { Color(it) } ?: Color.Transparent)
+                    .border(
+                        width = if (picking) 2.dp else 1.dp,
+                        color = if (picking) StudioContentColor else Color.White.copy(0.3f),
+                        shape = CircleShape,
+                    )
+                    .clickable { picking = !picking },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+", color = StudioContentColor, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        if (picking) {
+            MorphicColorPicker(
+                // Black when there is nothing yet: the picker has to start somewhere, and it is the one value a
+                // user reading the panel will not mistake for a colour that was already chosen.
+                argb = argb ?: 0xFF000000.toInt(),
+                onArgbChange = onChange,
+            )
         }
     }
 }
@@ -500,22 +561,15 @@ private fun SourceControls(
             )
 
             (spec.source as? LayerSource.SolidFill)?.let { fill ->
-                // **A swatch row, not a colour picker** — L1 had a full HSV picker in its design system and it is
-                // not ported. A fixed palette is enough to make the source usable now, and it is the control that
-                // is replaced rather than a workaround that has to be unpicked.
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FillSwatches.forEach { argb ->
-                        Swatch(argb = argb, selected = fill.argb == argb) {
-                            onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
-                        }
-                    }
+                ColorField(argb = fill.argb) { argb ->
+                    onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
                 }
             }
         }
     }
 }
 
-/** The fixed palette a solid fill can take until a real colour picker exists. Greys plus the primaries. */
+/** The quick-pick palette behind every [ColorField] — greys plus the primaries, with the picker for the rest. */
 private val FillSwatches = listOf(
     0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0xFF808080.toInt(),
     0xFFE53935.toInt(), 0xFF1E88E5.toInt(), 0xFF43A047.toInt(),

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
+import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
 import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSlider
@@ -81,6 +82,9 @@ fun DevGalleryScreen(modifier: Modifier = Modifier) {
 
             SectionHeader("Text field", colors)
             TextFieldDemo()
+
+            SectionHeader("Color picker", colors)
+            ColorPickerDemo()
 
             SectionHeader("Palette", colors)
             colorRoles(colors).forEach { (name, color) ->
@@ -247,3 +251,18 @@ private fun colorRoles(c: MorphicColors): List<Pair<String, Color>> = listOf(
 )
 
 private fun hex(color: Color): String = "#%08X".format(color.toArgb())
+
+@Composable
+private fun ColorPickerDemo() {
+    val colors = LocalMorphicColors.current
+    var argb by remember { mutableStateOf(0xFF1E88E5.toInt()) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Morphic color picker — saturation/value panel over a hue bar, no alpha",
+            color = colors.contentMuted,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        MorphicColorPicker(argb = argb, onArgbChange = { argb = it })
+        Swatch("#%06X".format(argb and 0xFFFFFF), Color(argb), colors)
+    }
+}
