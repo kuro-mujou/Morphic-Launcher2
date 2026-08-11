@@ -101,6 +101,7 @@ import org.koin.compose.koinInject
 fun LauncherShell(
     onOpenSettings: () -> Unit,
     onOpenAppsSettings: (AppsLayout) -> Unit,
+    onEditIcon: (ComponentKey) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewModel = koinViewModel<ShellViewModel>()
@@ -163,9 +164,12 @@ fun LauncherShell(
         // three offering different things for the same icon, which is exactly what happened in L1: home had an
         // `ItemContextMenu` and the side surfaces a near-copy `SideContextMenu`, each with its own two-stage logic.
         // A surface adds only what it owns — home's "Remove", because home is where an item is *placed*.
-        val menuHost = remember(viewModel, onOpenSettings) {
+        val menuHost = remember(viewModel, onOpenSettings, onEditIcon) {
             LauncherMenuHost(
                 onAppInfo = viewModel::openAppInfo,
+                // Another destination the shell must not name — see `onOpenSettings` below. The icon studio is
+                // `feature:settings`', and `app` is the only layer that knows where a verb goes.
+                onEditIcon = onEditIcon,
                 onUninstall = viewModel::uninstall,
                 // Rasterised icons become `ImageBitmap` here rather than in the ViewModel, which deliberately deals
                 // in platform bitmaps — the same line `ShellState.backdropImage` draws.

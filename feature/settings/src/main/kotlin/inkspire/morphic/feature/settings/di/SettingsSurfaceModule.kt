@@ -5,6 +5,8 @@ import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
+import inkspire.morphic.feature.settings.iconstudio.IconStudioRoute
+import inkspire.morphic.feature.settings.iconstudio.IconStudioViewModel
 import inkspire.morphic.feature.settings.folder.FolderViewModel
 import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
 import inkspire.morphic.feature.settings.wallpaper.WallpaperViewModel
@@ -29,4 +31,9 @@ val settingsSurfaceModule = module {
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
     viewModel { EffectsViewModel(get()) }
+
+    // The one ViewModel here taking a parameter: the studio cannot work out *what it is editing* for itself, and
+    // that arrives as the destination. Passed at `koinViewModel { parametersOf(route) }` rather than read from a
+    // handle, so the screen and the graph agree by construction.
+    viewModel { (route: IconStudioRoute) -> IconStudioViewModel(route, get(), get(), get(), get()) }
 }

@@ -64,6 +64,7 @@ data class MenuRequest(
 @Stable
 class LauncherMenuHost(
     private val onAppInfo: (ComponentKey) -> Unit,
+    private val onEditIcon: (ComponentKey) -> Unit,
     private val onUninstall: (ComponentKey) -> Unit,
     private val loadShortcuts: suspend (ComponentKey) -> List<MenuAction>,
     private val onOpenSettings: () -> Unit,
@@ -73,11 +74,12 @@ class LauncherMenuHost(
         private set
 
     /**
-     * Opens the menu for an **app**: its shortcuts, then App info, [surfaceActions], and Uninstall.
+     * Opens the menu for an **app**: its shortcuts, then App info, Edit icon, [surfaceActions], and Uninstall.
      *
-     * The order is L1's, and the middle is where a surface's own verbs go — after the one that describes the app
-     * and before the one that destroys it, so the destructive row is never the one a mis-tap lands on next to
-     * "Remove".
+     * The order is L1's, and the middle is where a surface's own verbs go — after the ones that describe or
+     * customise the app and before the one that destroys it, so the destructive row is never the one a mis-tap
+     * lands on next to "Remove". **Edit icon sits beside App info** because both are about the app itself wherever
+     * it is showing, unlike a surface's verbs, which are about this particular placement of it.
      */
     fun showApp(
         component: ComponentKey,
@@ -90,6 +92,7 @@ class LauncherMenuHost(
             title = label,
             actions = buildList {
                 add(MenuAction("App info") { onAppInfo(component) })
+                add(MenuAction("Edit icon") { onEditIcon(component) })
                 addAll(surfaceActions)
                 add(MenuAction("Uninstall") { onUninstall(component) })
             },

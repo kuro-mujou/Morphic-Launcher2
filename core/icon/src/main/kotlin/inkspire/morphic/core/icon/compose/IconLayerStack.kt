@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
@@ -124,8 +125,8 @@ private fun DrawScope.drawLayerContent(content: ParsedLayer) {
 @Composable
 private fun Modifier.shapeMask(shape: IconShape?): Modifier {
     val res = shape?.let { IconShapes.drawableResOrNull(it) } ?: return this
-    val context = LocalContext.current
-    val maskDrawable = remember(res, context) { context.getDrawable(res) } ?: return this
+    val resource = LocalResources.current
+    val maskDrawable = remember(res, resource) { resource.getDrawable(res, null) } ?: return this
 
     return this
         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }

@@ -13,6 +13,8 @@ import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.settings.SettingsRoute
 import inkspire.morphic.feature.settings.SettingsScreen
 import inkspire.morphic.feature.settings.SettingsSection
+import inkspire.morphic.feature.settings.iconstudio.IconStudioRoute
+import inkspire.morphic.feature.settings.iconstudio.IconStudioScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
@@ -82,6 +84,11 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         onOpenAppsSettings = { layout ->
                             navigator.goTo(SettingsRoute(SettingsSection.APPS, layout))
                         },
+                        // The item menu's "Edit icon". Flattened here because a `NavKey` has to be serializable
+                        // and `ComponentKey` is not something to pin into the back stack's stored form.
+                        onEditIcon = { component ->
+                            navigator.goTo(IconStudioRoute.App(component.flatten()))
+                        },
                     )
                 }
                 entry<SettingsRoute> { route ->
@@ -110,6 +117,15 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                     )
                 }
                 entry<WallpaperCaptureRoute> { WallpaperCaptureScreen(onDone = { navigator.goBack() }) }
+                // Two entries because the studio's key is a sealed pair rather than a mode enum beside a nullable
+                // component — `Global` carries nothing, because there is nothing for it to carry. The screen is one
+                // screen; only what it edits differs.
+                entry<IconStudioRoute.Global> { route ->
+                    IconStudioScreen(route = route, onBack = { navigator.goBack() })
+                }
+                entry<IconStudioRoute.App> { route ->
+                    IconStudioScreen(route = route, onBack = { navigator.goBack() })
+                }
                 entry<DevHarnessRoute> { DevRootScreen() }
             },
         )
