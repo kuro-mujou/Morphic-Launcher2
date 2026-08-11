@@ -193,6 +193,9 @@ private enum class LayerTool(val label: String) {
      * adjusting how a layer reads colour-wise does not care which side of it a control sits on. One tab.
      */
     COLOR("Color"),
+
+    /** The gradient overlay. Its own tab because it is four controls, not because it is a different *kind* of thing. */
+    GRADIENT("Gradient"),
 }
 
 @Composable
@@ -222,6 +225,7 @@ private fun SelectedLayerControls(
             LayerTool.SHAPE -> ShapeControls(spec, onUpdate)
             LayerTool.SOURCE -> SourceControls(spec, onUpdate)
             LayerTool.COLOR -> ColorControls(spec, onUpdate, onCommit)
+            LayerTool.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
         }
     }
 }
@@ -343,6 +347,59 @@ private fun ColorControls(
             FillSwatches.take(6).forEach { argb ->
                 Swatch(argb = argb, selected = color.tintArgb == argb) {
                     onUpdate { it.withColor(color.copy(tintArgb = argb)) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The gradient overlay's two stops, its direction and how strongly it is laid on.
+ *
+ * **Strength doubles as the on/off switch**: at zero the effect is identity and `withGradient` drops it from the
+ * list entirely, so there is no separate toggle to disagree with the slider. That is the same shape the colour
+ * controls have — an effect at its defaults is simply not stored.
+ */
+@Composable
+private fun GradientControls(
+    spec: IconLayerSpec,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // Seeded at zero strength when absent, so the sliders show a coherent gradient before it is turned on rather
+    // than jumping to arbitrary values the moment strength leaves zero.
+    val gradient = spec.gradient ?: LayerEffect.Gradient(strength = 0f)
+
+    LabelledControl("Strength  ${"%.2f".format(gradient.strength)}") {
+        MorphicSlider(
+            value = gradient.strength,
+            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
+            valueRange = 0f..1f,
+            onValueChangeFinished = onCommit,
+        )
+    }
+    LabelledControl("Angle  ${"%.0f".format(gradient.angleDegrees)}°") {
+        MorphicSlider(
+            value = gradient.angleDegrees,
+            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
+            valueRange = 0f..360f,
+            onValueChangeFinished = onCommit,
+        )
+    }
+    LabelledControl("From") {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FillSwatches.forEach { argb ->
+                Swatch(argb = argb, selected = gradient.startArgb == argb) {
+                    onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
+                }
+            }
+        }
+    }
+    LabelledControl("To") {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FillSwatches.forEach { argb ->
+                Swatch(argb = argb, selected = gradient.endArgb == argb) {
+                    onUpdate { it.withGradient(gradient.copy(endArgb = argb)) }
                 }
             }
         }

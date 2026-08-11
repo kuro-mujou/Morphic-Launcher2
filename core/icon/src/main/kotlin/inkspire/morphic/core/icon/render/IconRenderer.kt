@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
@@ -16,6 +18,7 @@ import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
+import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
@@ -87,7 +90,22 @@ class IconRenderer(
 
         // Shape is fixed in the box (it does not move with the content), so mask after restoring the matrix.
         layer.spec.shape?.let { applyShapeMask(canvas, it, sizePx) }
+        // After the mask, so a gradient colours the shaped silhouette rather than the square it was cut from.
+        layer.spec.gradient?.let { applyGradient(canvas, it, sizePx) }
         return bitmap
+    }
+
+    /** Paints [gradient] over the layer, clipped to what the layer has already drawn. */
+    private fun applyGradient(canvas: Canvas, gradient: LayerEffect.Gradient, sizePx: Int) {
+        val (x0, y0, x1, y1) = LayerGradient.endpoints(gradient.angleDegrees, sizePx).toList()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(x0, y0, x1, y1, gradient.startArgb, gradient.endArgb, Shader.TileMode.CLAMP)
+            // SRC_ATOP is what makes this an overlay rather than a rectangle: it keeps the layer's own alpha, so
+            // the gradient colours the artwork and stops at its edge.
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+            alpha = (gradient.strength.coerceIn(0f, 1f) * 255).toInt()
+        }
+        canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
     }
 
     private fun drawContent(canvas: Canvas, content: ParsedLayer, sizePx: Int) {

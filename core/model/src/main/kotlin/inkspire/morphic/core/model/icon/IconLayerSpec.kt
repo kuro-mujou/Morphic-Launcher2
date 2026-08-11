@@ -40,4 +40,14 @@ data class IconLayerSpec(
         val rest = effects.filterNot { it is LayerEffect.Color }
         return copy(effects = if (color == null || color.isIdentity) rest else rest + color)
     }
+
+    /** The layer's gradient overlay, or null when it has none. */
+    val gradient: LayerEffect.Gradient?
+        get() = effects.filterIsInstance<LayerEffect.Gradient>().firstOrNull()?.takeIf { !it.isIdentity }
+
+    /** Replaces (or clears) this layer's gradient overlay, leaving every other effect in place and in order. */
+    fun withGradient(gradient: LayerEffect.Gradient?): IconLayerSpec {
+        val rest = effects.filterNot { it is LayerEffect.Gradient }
+        return copy(effects = if (gradient == null || gradient.isIdentity) rest else rest + gradient)
+    }
 }

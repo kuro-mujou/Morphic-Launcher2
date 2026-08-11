@@ -8,8 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -27,10 +29,12 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.icon.render.IconLayerResolver
 import inkspire.morphic.core.icon.render.LayerFilter
+import inkspire.morphic.core.icon.render.LayerGradient
 import inkspire.morphic.core.icon.render.LayerTransform
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
+import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.IconShape
 
 /**
@@ -51,13 +55,18 @@ import inkspire.morphic.core.model.icon.IconShape
  * - [LayerTransform] does the offset/zoom/rotation arithmetic, for both.
  * - [LayerFilter] does the colour-matrix arithmetic, for both — and shares the *same shape*, since Android's and
  *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
+ * - [LayerGradient] decides which way an angle runs, for both.
  * - The shape mask is built from the **same** vector drawable via [IconShapes], and applied the same way — as a
  *   destination-in mask over the finished layer.
  *
  * What is *not* shared is the drawing API (Android's `Canvas` there, [DrawScope] here). That is unavoidable, and
- * it is exactly why the four above are.
+ * it is exactly why the five above are.
  *
- * Shadow and gradient effects are still to come; they are additive `LayerEffect` variants and need no change here.
+ * **The per-layer order is content → shape mask → gradient → composite**, and it is the same on both sides for
+ * different-looking reasons: the bake gets it from statement order inside one function, and this path gets it from
+ * which node carries which modifier. Worth checking against `IconRenderer` if either is touched.
+ *
+ * A **shadow** effect is the one still missing, and it is not simply additive here — see the plan's S6 note.
  *
  * @param icon the app's parsed layers, from `ParsedIconLoader` — the same input the bake takes.
  * @param customImage resolves a custom-image layer's stored path to a drawable. Defaults to drawing nothing, and
@@ -138,7 +147,8 @@ private fun DrawScope.drawLayerContent(content: ParsedLayer) {
 private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
     val matrix = remember(spec.color) { LayerFilter.colorMatrixOf(spec.color) }
     val blend = spec.blend.composeBlendMode()
-    if (spec.opacity == 1f && blend == null && matrix == null) return this
+    val gradient = spec.gradient
+    if (spec.opacity == 1f && blend == null && matrix == null && gradient == null) return this
 
     return this.drawWithContent {
         drawIntoCanvas { canvas ->
@@ -149,9 +159,27 @@ private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
             }
             canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
             drawContent()
+            // Inside the layer, so source-atop has the layer's own pixels as its destination — which is what makes
+            // the gradient colour the artwork instead of covering the icon with a rectangle. The same isolation the
+            // saveLayer already provides for the blend mode, doing a second job.
+            gradient?.let { drawGradientOverlay(it) }
             canvas.restore()
         }
     }
+}
+
+/** Paints a gradient over whatever has been drawn, clipped to it — the live twin of `IconRenderer.applyGradient`. */
+private fun DrawScope.drawGradientOverlay(gradient: LayerEffect.Gradient) {
+    val (x0, y0, x1, y1) = LayerGradient.endpoints(gradient.angleDegrees, size.width.toInt()).toList()
+    drawRect(
+        brush = Brush.linearGradient(
+            colors = listOf(Color(gradient.startArgb), Color(gradient.endArgb)),
+            start = Offset(x0, y0),
+            end = Offset(x1, y1),
+        ),
+        alpha = gradient.strength.coerceIn(0f, 1f),
+        blendMode = BlendMode.SrcAtop,
+    )
 }
 
 /** The Compose blend mode for [LayerBlend], or `null` for `NORMAL` — which is the default source-over. */

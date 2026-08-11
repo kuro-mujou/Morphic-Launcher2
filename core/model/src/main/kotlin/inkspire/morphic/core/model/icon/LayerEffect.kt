@@ -50,4 +50,26 @@ sealed interface LayerEffect {
         val isIdentity: Boolean
             get() = tintArgb == null && saturation == 1f && brightness == 1f && hueDegrees == 0f
     }
+
+    /**
+     * A two-stop linear gradient painted **over the layer and clipped to it** — source-atop, so it colours the
+     * artwork rather than covering the icon with a rectangle.
+     *
+     * @property angleDegrees the direction the gradient runs, clockwise from "straight down". 0 is top-to-bottom.
+     * @property strength how strongly it is laid over the layer; 0 is invisible, 1 fully replaces the colour. A
+     *   separate knob from the stops' own alpha because it is the one a user reaches for, and having to dilute two
+     *   colours by hand to soften a gradient is the sort of thing that makes a control feel broken.
+     */
+    @Serializable
+    @SerialName("gradient")
+    data class Gradient(
+        val startArgb: Int = 0xFFFFFFFF.toInt(),
+        val endArgb: Int = 0xFF000000.toInt(),
+        val angleDegrees: Float = 0f,
+        val strength: Float = 1f,
+    ) : LayerEffect {
+
+        /** True when it would paint nothing, which is the only way a gradient is a no-op. */
+        val isIdentity: Boolean get() = strength <= 0f
+    }
 }

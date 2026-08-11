@@ -386,6 +386,33 @@ feed the background layer is the open question.
     the *app* ships).
   - **The schema promise held**: the spec gained two fields and the slice test asserting the exact stored JSON of
     `IconLayerSet.Base` still passes, because defaults are not encoded.
+  - **The gradient overlay landed next**, and was genuinely additive as predicted: a `LayerEffect.Gradient`
+    variant, `LayerGradient` joining the shared set (which way an angle runs is pure convention, and therefore
+    exactly what two renderers drift on), and source-atop in both paths so it colours the artwork rather than
+    covering the icon with a rectangle. Its **strength doubles as the on/off switch** — at zero the effect is
+    identity and is dropped from the list, so there is no toggle to disagree with the slider.
+  - **The per-layer order is content → shape mask → gradient → composite**, the same on both sides for
+    different-looking reasons: statement order in one function, modifier nesting in the other.
+
+  ### The shadow effect is *not* additive, and that is a decision to take rather than a task to do
+
+  Every other effect has been a variant plus a few lines per renderer. A shadow is not, because it derives from
+  the layer's **finished silhouette** — after the transform and after the shape mask, since an outer shadow has to
+  extend beyond the shape and must not be clipped by it. The baked path has that silhouette as a bitmap and can
+  blur it with `BlurMaskFilter` on any API. The live path has *nodes*, and Compose's only blur is
+  `RenderEffect`, which is **API 31+** against this project's `minSdk` of 26.
+
+  So there is no option that is simultaneously cheap, live, and identical on every device:
+  - **Gate the effect on API 31+** — both paths always agree, and the effect is simply not offered below it. This
+    is the codebase's own established answer: liquid glass is *hidden* below API 33 because "an effect that
+    silently comes out as a plain blur is worse than one that is not offered". Costs the feature on API 26–30
+    even though the bake could render it there.
+  - **Blur via `RenderEffect` and accept the gap** — full support everywhere, but below API 31 the *editor* shows
+    a hard-edged shadow while the icon bakes soft. That is the divergence the shared derivations exist to prevent,
+    and the editor cannot show you it is lying.
+  - **Rasterise the layer in the live path** — identical on every device, but a shadowed layer then re-bakes per
+    frame while its sliders move, which is precisely the cost the live path was built to avoid.
+  - **Defer shadows.** The effect list takes them whenever; nothing else is owed.
 - **S7 — custom image layers.** The picker + crop + `CustomIconStore`, and the file lifecycle. **L1 leaked
   orphans** when a pick was abandoned without saving (it recorded this and accepted it); the fix is to write the
   file only at commit.
