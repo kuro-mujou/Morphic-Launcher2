@@ -35,5 +35,5 @@ val settingsSurfaceModule = module {
     // The one ViewModel here taking a parameter: the studio cannot work out *what it is editing* for itself, and
     // that arrives as the destination. Passed at `koinViewModel { parametersOf(route) }` rather than read from a
     // handle, so the screen and the graph agree by construction.
-    viewModel { (route: IconStudioRoute) -> IconStudioViewModel(route, get(), get(), get(), get(), get()) }
+    viewModel { (route: IconStudioRoute) -> IconStudioViewModel(route, get(), get(), get(), get(), get(), get()) }
 }

@@ -5,6 +5,7 @@ import inkspire.morphic.core.icon.parse.DrawableParser
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.icon.render.IconRenderer
+import inkspire.morphic.core.icon.source.IconPackImages
 import org.koin.dsl.module
 
 /**
@@ -18,5 +19,7 @@ val iconModule = module {
     single { DrawableParser() }
     single { ParsedIconLoader(get(), get()) }
     single { IconRenderer(get<Context>()) }
-    single { IconRenderManager(get(), get()) }
+    // `getOrNull` for the pack seam: `data:icons` binds it, and a build or a test without that module still
+    // renders — a pack layer simply draws nothing, which is the same outcome as a pack that covers no apps.
+    single { IconRenderManager(get(), get(), getOrNull() ?: IconPackImages { _, _ -> null }) }
 }

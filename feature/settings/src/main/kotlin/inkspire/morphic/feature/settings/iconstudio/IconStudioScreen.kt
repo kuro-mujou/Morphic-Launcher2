@@ -60,7 +60,8 @@ import org.koin.core.parameter.parametersOf
  * *did* was right and only how it looked was wrong.
  *
  * Not here yet: a **shadow** effect (deferred — it is the one effect that could not be matched across both render
- * paths below API 31), and a real colour picker behind the solid-fill, tint and gradient swatch rows.
+ * paths below API 31), and browsing an icon pack's drawables to pick a *specific* one rather than letting its
+ * `appfilter.xml` decide.
  */
 @Composable
 fun IconStudioScreen(
@@ -84,6 +85,9 @@ fun IconStudioScreen(
     val customImage: (String) -> Drawable? = remember(state.images, resources) {
         { path -> state.images[path]?.toDrawable(resources) }
     }
+    val packImage: (String) -> Drawable? = remember(state.packImages, resources) {
+        { pack -> state.packImages[pack]?.toDrawable(resources) }
+    }
 
     BackHandler(onBack = onBack)
 
@@ -106,6 +110,7 @@ fun IconStudioScreen(
                         layerSet = state.editing,
                         modifier = Modifier.fillMaxSize(),
                         customImage = customImage,
+                        packImage = packImage,
                     )
                 }
             }
@@ -183,6 +188,7 @@ fun IconStudioScreen(
                         onAdd = viewModel::addLayer,
                         onRemove = viewModel::removeSelected,
                         onPickImage = { imagePicker.launch(imageRequest) },
+                        onPickPack = viewModel::pickPack,
                         modifier = Modifier.uiInsetsPadding(),
                     )
                 }

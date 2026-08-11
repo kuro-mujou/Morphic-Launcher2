@@ -49,6 +49,7 @@ import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
+import inkspire.morphic.data.icons.InstalledIconPack
 
 /**
  * The studio's floating settings surface: the layer stack, and the controls for whichever layer is selected.
@@ -59,7 +60,7 @@ import inkspire.morphic.core.model.icon.LayerSource
  * In L2 every one of those whole-icon tools has already gone somewhere else: the tile shape became a *per-layer*
  * shape (there is no stack-level mask), the background is the background layer's source, theming is
  * [LayerSource.AppDefaultMonochrome] on the foreground, sizing is `data:settings` and a different screen entirely,
- * the skin is deferred, and an icon pack will be a per-layer source. So everything here acts on one layer, and the
+ * the skin is deferred, and an icon pack **is** a per-layer source. So everything here acts on one layer, and the
  * question does not arise.
  */
 @Composable
@@ -74,6 +75,7 @@ fun StudioPanel(
     onAdd: () -> Unit,
     onRemove: () -> Unit,
     onPickImage: () -> Unit,
+    onPickPack: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -95,9 +97,11 @@ fun StudioPanel(
         state.selectedLayer?.let { spec ->
             SelectedLayerControls(
                 spec = spec,
+                packs = state.packs,
                 onUpdate = onUpdate,
                 onCommit = onCommit,
                 onPickImage = onPickImage,
+                onPickPack = onPickPack,
             )
         }
     }
@@ -209,9 +213,11 @@ private enum class LayerTool(val label: String) {
 @Composable
 private fun SelectedLayerControls(
     spec: IconLayerSpec,
+    packs: List<InstalledIconPack>,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
     onPickImage: () -> Unit,
+    onPickPack: (String) -> Unit,
 ) {
     var tool by remember { mutableIntStateOf(0) }
 
@@ -232,7 +238,7 @@ private fun SelectedLayerControls(
         when (LayerTool.entries[tool]) {
             LayerTool.TRANSFORM -> TransformControls(spec, onUpdate, onCommit)
             LayerTool.SHAPE -> ShapeControls(spec, onUpdate)
-            LayerTool.SOURCE -> SourceControls(spec, onUpdate, onPickImage)
+            LayerTool.SOURCE -> SourceControls(spec, packs, onUpdate, onPickImage, onPickPack)
             LayerTool.COLOR -> ColorControls(spec, onUpdate, onCommit)
             LayerTool.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
         }
@@ -533,8 +539,10 @@ private fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ico
 @Composable
 private fun SourceControls(
     spec: IconLayerSpec,
+    packs: List<InstalledIconPack>,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onPickImage: () -> Unit,
+    onPickPack: (String) -> Unit,
 ) {
     LabelledControl("Source") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -559,6 +567,24 @@ private fun SourceControls(
                 selected = spec.source is LayerSource.CustomImage,
                 onClick = onPickImage,
             )
+
+            // **Absent rather than disabled when no pack is installed**, per the settings sections' rule that a
+            // control which changes nothing is worse than a missing one. An empty list is the ordinary state, and
+            // it is also what a missing `<queries>` declaration would look like — see `IconPackManager`.
+            if (packs.isNotEmpty()) {
+                Text(
+                    "Icon pack",
+                    color = StudioContentColor.copy(alpha = 0.75f),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                packs.forEach { pack ->
+                    ChoiceRow(
+                        label = pack.label,
+                        selected = (spec.source as? LayerSource.IconPack)?.packPackage == pack.packageName,
+                    ) { onPickPack(pack.packageName) }
+                }
+            }
 
             (spec.source as? LayerSource.SolidFill)?.let { fill ->
                 ColorField(argb = fill.argb) { argb ->
@@ -642,4 +668,5 @@ private val LayerSource.label: String
         LayerSource.AppDefaultMonochrome -> "monochrome"
         is LayerSource.CustomImage -> "image"
         is LayerSource.SolidFill -> "solid colour"
+        is LayerSource.IconPack -> "icon pack"
     }

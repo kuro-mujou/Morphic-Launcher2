@@ -7,6 +7,7 @@ import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
+import inkspire.morphic.data.icons.InstalledIconPack
 
 /**
  * What the canvas is drawn *on*, cycled by a single control.
@@ -85,6 +86,10 @@ sealed interface StudioSubject {
  * @property images every custom-image layer's artwork, by its path — **including images not yet written to disk**.
  *   A freshly picked image is previewed from here before any file exists, which is what lets an abandoned edit
  *   leave nothing behind; see `CustomIconStore`.
+ * @property packs the installed icon packs, for the chooser. Empty is the ordinary state on a device with none.
+ * @property packImages this app as drawn by each pack the recipe names, by package. Resolved off the main thread
+ *   for the same reason [images] is: the first lookup into a pack parses an `appfilter.xml` of thousands of
+ *   entries, and a layer whose pack does not cover this app is simply absent here.
  */
 data class IconStudioState(
     val subject: StudioSubject = StudioSubject.Unchosen,
@@ -98,6 +103,8 @@ data class IconStudioState(
     val dirty: Boolean = false,
     val pickable: List<AppInfo> = emptyList(),
     val images: Map<String, Bitmap> = emptyMap(),
+    val packs: List<InstalledIconPack> = emptyList(),
+    val packImages: Map<String, Bitmap> = emptyMap(),
 ) {
 
     /** The layer the controls act on, or null before anything has loaded. */

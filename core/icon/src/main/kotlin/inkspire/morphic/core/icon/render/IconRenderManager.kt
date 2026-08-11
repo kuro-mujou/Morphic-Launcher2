@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.LruCache
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
+import inkspire.morphic.core.icon.source.IconPackImages
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -45,6 +46,7 @@ import kotlinx.coroutines.withContext
 class IconRenderManager(
     private val parsedIcons: ParsedIconLoader,
     private val renderer: IconRenderer,
+    private val packImages: IconPackImages = IconPackImages { _, _ -> null },
     maxCacheKb: Int = defaultCacheKb(),
     bakeDispatcher: CoroutineDispatcher = defaultBakeDispatcher(),
 ) {
@@ -92,7 +94,9 @@ class IconRenderManager(
             // The load and parse run **inside** the bounded bake context along with the composite, which is what keeps
             // the parallelism cap covering all three. See `ParsedIconLoader` for why it does not hop for itself.
             baked = withContext(bakeContext) {
-                parsedIcons.load(component)?.let { renderer.render(it, layerSet, sizePx) }
+                parsedIcons.load(component)?.let { parsed ->
+                    renderer.render(parsed, layerSet, sizePx) { pack -> packImages.drawable(pack, component) }
+                }
             }
             if (baked != null) cache.put(id, baked)
         } finally {

@@ -54,12 +54,23 @@ class IconRenderer(
         xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
     }
 
-    /** Renders the visible layers of [layerSet] for [icon] into one `sizePx` × `sizePx` bitmap. */
-    fun render(icon: ParsedIcon, layerSet: IconLayerSet, sizePx: Int): Bitmap {
+    /**
+     * Renders the visible layers of [layerSet] for [icon] into one `sizePx` × `sizePx` bitmap.
+     *
+     * @param packImage this app's artwork from an installed icon pack, pre-bound to the component by the caller —
+     *   this class draws pixels and has no business knowing which app they belong to. Defaults to nothing, which
+     *   is what a recipe with no pack layer needs and what the harness passes.
+     */
+    fun render(
+        icon: ParsedIcon,
+        layerSet: IconLayerSet,
+        sizePx: Int,
+        packImage: (packPackage: String) -> Drawable? = { null },
+    ): Bitmap {
         val output = createBitmap(sizePx, sizePx)
         val canvas = Canvas(output)
 
-        resolver.resolve(layerSet, icon, ::decodeCustomImage).forEach { layer ->
+        resolver.resolve(layerSet, icon, ::decodeCustomImage, packImage).forEach { layer ->
             val layerBitmap = renderLayer(layer, sizePx)
             // Opacity, blend and colour are applied **as the layer joins the stack**, not while its content is
             // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the

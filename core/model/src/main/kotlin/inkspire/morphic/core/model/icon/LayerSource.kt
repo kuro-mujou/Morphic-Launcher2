@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
  * Where a layer's content comes from. Persisted inside the layer set, so the [SerialName]s are a stable
  * on-disk contract — rename with care.
  *
- * Icon packs are intentionally absent for now (deferred), so a layer is one of: the parsed app icon, the
- * app's monochrome layer, an imported image, or a flat colour.
+ * A layer is one of: the parsed app icon, the app's monochrome layer, an imported image, a flat colour, or an
+ * installed icon pack's rendering of this app.
  */
 @Serializable
 sealed interface LayerSource {
@@ -31,6 +31,26 @@ sealed interface LayerSource {
     @Serializable
     @SerialName("custom_image")
     data class CustomImage(val path: String) : LayerSource
+
+    /**
+     * This app's icon as drawn by the installed icon pack [packPackage].
+     *
+     * **A source, not a mode**, which is what makes "apply a pack to everything" not a feature: it is setting the
+     * global default's foreground source, and it then goes through the same commit, the same cache key and the
+     * same invalidation as any other edit. A pack picked for *one* app is the same thing in that app's own
+     * recipe. Either way, **every decoration layer the user added is untouched** — a pack only ever occupies the
+     * slot it was put in.
+     *
+     * Resolves to nothing when the pack does not cover this app, which is ordinary rather than exceptional: no
+     * pack themes everything. The layer then draws nothing and whatever is beneath shows through.
+     *
+     * No `drawableName` yet. That would name *one specific* drawable in the pack rather than letting its
+     * `appfilter.xml` decide, and it needs a browser to pick from — which needs a `drawable.xml` lister that L1
+     * never finished either. Adding it later is a defaulted field on this class and no schema change.
+     */
+    @Serializable
+    @SerialName("icon_pack")
+    data class IconPack(val packPackage: String) : LayerSource
 
     /** A flat colour fill; [argb] is a packed ARGB colour (e.g. a solid background for a legacy icon). */
     @Serializable

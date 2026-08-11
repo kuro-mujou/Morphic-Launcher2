@@ -75,6 +75,8 @@ import inkspire.morphic.core.model.icon.IconShape
  *   is a parameter rather than something this composable does for itself because decoding a file is I/O: the host
  *   decodes off the main thread and hands the results in, where doing it here would put a disk read in a
  *   composition that reruns on every slider frame.
+ * @param packImage the same arrangement for an icon-pack layer, and for a sharper version of the same reason —
+ *   the first lookup into a pack parses an `appfilter.xml` of thousands of entries.
  * @param modifier must resolve to a **square**. The layer geometry is defined in a square box, so a non-square
  *   node would stretch every transform along one axis — and, being only a distortion, would look plausible.
  */
@@ -84,9 +86,12 @@ fun IconLayerStack(
     layerSet: IconLayerSet,
     modifier: Modifier = Modifier,
     customImage: (path: String) -> Drawable? = { null },
+    packImage: (packPackage: String) -> Drawable? = { null },
 ) {
     val resolver = remember { IconLayerResolver() }
-    val layers = remember(layerSet, icon, customImage) { resolver.resolve(layerSet, icon, customImage) }
+    val layers = remember(layerSet, icon, customImage, packImage) {
+        resolver.resolve(layerSet, icon, customImage, packImage)
+    }
 
     // **The stack composites offscreen, and a blend mode is why.** Sibling nodes draw onto whatever canvas they
     // are given, so without its own buffer a `MULTIPLY` on the bottom layer would multiply against the *studio

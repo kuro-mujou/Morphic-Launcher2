@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Icon packs are ordinary installed apps, found by the de-facto theme intents they declare. On API 30+
+    `queryIntentActivities` is subject to package visibility filtering, so without this block it answers only
+    about *this* app and pack detection comes back empty on every modern device — not an error, just an empty
+    list, which is the worst way for it to fail.
+
+    Narrow on purpose: one `<intent>` per action rather than `QUERY_ALL_PACKAGES`, which this launcher does not
+    request anywhere. L1 never needed this because it held that permission for other reasons.
+
+    **Keep in step with `IconPackManager.ThemeActions`** — an action listed there and missing here is one this
+    app cannot see.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="org.adw.launcher.icons.ACTION_PICK_ICON" /></intent>
+        <intent><action android:name="com.gau.go.launcherex.theme" /></intent>
+        <intent><action android:name="com.dlto.atom.launcher.THEME" /></intent>
+        <intent><action android:name="com.anddoes.launcher.THEME" /></intent>
+        <intent><action android:name="com.teslacoilsw.launcher.THEME" /></intent>
+        <intent><action android:name="com.sonyericsson.home.ICON_PACK" /></intent>
+    </queries>
+
+</manifest>

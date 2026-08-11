@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.iconstudio
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
@@ -13,6 +14,7 @@ import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.icons.CustomIconStore
 import inkspire.morphic.data.icons.IconOverrideRepository
+import inkspire.morphic.data.icons.IconPackManager
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +54,7 @@ class IconStudioViewModel(
     private val parsedIcons: ParsedIconLoader,
     private val appRepository: AppRepository,
     private val customIcons: CustomIconStore,
+    private val iconPacks: IconPackManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(IconStudioState())
@@ -156,6 +159,49 @@ class IconStudioViewModel(
             }
         }
     }
+
+    /**
+     * Points the selected layer at an installed icon pack.
+     *
+     * The **whole** of "apply a pack": in the global studio this sets the default's foreground source and every
+     * app inherits it, and in one app's studio it sets that app's. There is no pack *mode* anywhere, which is why
+     * decoration layers are untouched by construction — a pack only ever occupies the slot it is put in.
+     */
+    fun pickPack(packPackage: String) {
+        _state.update { it.replaceSelectedSource(LayerSource.IconPack(packPackage)).recordHistory() }
+        loadPackArtwork()
+    }
+
+    /** Loads the installed packs for the chooser. Once per screen; nothing about the list changes while it is up. */
+    private fun loadPacks() {
+        viewModelScope.launch {
+            val installed = iconPacks.installedPacks()
+            if (installed.isNotEmpty()) _state.update { it.copy(packs = installed) }
+        }
+    }
+
+    /**
+     * Resolves this app's artwork from every pack the recipe names, for the preview.
+     *
+     * Additive and keyed on what is missing, so switching between two packs does not re-parse the one already
+     * loaded. A pack that does not cover this app resolves to nothing and is simply absent from the map — the
+     * ordinary case rather than an error, since no pack themes everything.
+     */
+    private fun loadPackArtwork() {
+        val component = _state.value.subject.previewComponent ?: return
+        val missing = _state.value.editing.packPackages() - _state.value.packImages.keys
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            val loaded = missing.mapNotNull { pack ->
+                iconPacks.drawable(pack, component)?.let { pack to it.toBitmap() }
+            }
+            if (loaded.isNotEmpty()) _state.update { it.copy(packImages = it.packImages + loaded) }
+        }
+    }
+
+    /** Every icon pack this recipe draws from. */
+    private fun IconLayerSet.packPackages(): Set<String> =
+        layers.mapNotNull { (it.source as? LayerSource.IconPack)?.packPackage }.toSet()
 
     /** Swaps the selected layer's source, leaving every other property of it alone. */
     private fun IconStudioState.replaceSelectedSource(source: LayerSource): IconStudioState {
@@ -302,7 +348,9 @@ class IconStudioViewModel(
                 ).withHistoryFlags()
             }
             loadStoredImages(stored)
+            loadPacks()
             sample?.componentKey?.let(::loadArtwork)
+            loadPackArtwork()
         }
     }
 
@@ -324,7 +372,9 @@ class IconStudioViewModel(
                 it.copy(subject = StudioSubject.App(component), editing = stored, label = label).withHistoryFlags()
             }
             loadStoredImages(stored)
+            loadPacks()
             loadArtwork(component)
+            loadPackArtwork()
         }
     }
 

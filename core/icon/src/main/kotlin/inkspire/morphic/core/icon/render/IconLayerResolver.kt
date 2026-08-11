@@ -20,17 +20,24 @@ class IconLayerResolver {
      * content is dropped from the result (an empty background, or a custom image whose file is gone) — it
      * still exists in the set for the editor, it just contributes nothing to the composite.
      *
+     * Both image lookups are **injected and pre-bound**: `packImage` already knows which app it is resolving
+     * for, because this class deliberately does not. What it keeps is the `when` over [LayerSource] — one place
+     * that decides what each source *means*, rather than a copy of that decision in each renderer.
+     *
      * @param customImage decodes a [LayerSource.CustomImage] path to a drawable; returns `null` if missing.
+     * @param packImage draws this app from an installed icon pack; `null` when the pack does not cover it, which
+     *   is ordinary rather than exceptional.
      */
     fun resolve(
         layerSet: IconLayerSet,
         icon: ParsedIcon,
         customImage: (path: String) -> Drawable?,
+        packImage: (packPackage: String) -> Drawable? = { null },
     ): List<ResolvedLayer> =
         layerSet.layers
             .filter { it.visible }
             .mapNotNull { spec ->
-                spec.resolveContent(icon, customImage)?.let { content -> ResolvedLayer(content, spec) }
+                spec.resolveContent(icon, customImage, packImage)?.let { ResolvedLayer(it, spec) }
             }
 }
 
@@ -42,6 +49,7 @@ class IconLayerResolver {
 private fun IconLayerSpec.resolveContent(
     icon: ParsedIcon,
     customImage: (path: String) -> Drawable?,
+    packImage: (packPackage: String) -> Drawable?,
 ): ParsedLayer? = when (val src = source) {
     LayerSource.AppDefault -> when (role) {
         LayerRole.FOREGROUND -> icon.foreground
@@ -54,4 +62,6 @@ private fun IconLayerSpec.resolveContent(
     is LayerSource.SolidFill -> ParsedLayer.Color(src.argb)
 
     is LayerSource.CustomImage -> customImage(src.path)?.let { ParsedLayer.Image(it) }
+
+    is LayerSource.IconPack -> packImage(src.packPackage)?.let { ParsedLayer.Image(it) }
 }

@@ -288,8 +288,21 @@ invisibly when one is missed. **No crop screen, unlike L1**: a layer already has
 crop would be a second and destructive way to do the same thing; images are fitted into a transparent square on
 the way in, which also spares both renderers an aspect-ratio special case they could disagree about.
 
-**Deferred:** icon packs as a layer source (**next** — a pack replaces the *content* of the fg and bg layers and
-leaves every decoration layer alone, so it is one more `LayerSource` variant rather than a mode); presets (a
+**Icon packs are a `LayerSource`, not a mode**, which is what makes "apply a pack to everything" not a feature:
+it is setting the global default's fg source, and it then goes through the same commit, cache key and
+invalidation as any other edit — and every decoration layer is untouched by construction, since a pack only ever
+occupies the slot it is put in. `IconPackManager` is L1's, ported: packs are found by the de-facto **theme
+intents** they declare and mapped through an `appfilter.xml` keyed on `ComponentInfo{pkg/cls}`, both conventions
+rather than choices. **One thing L1 got away with and we cannot** — `queryIntentActivities` is subject to package
+visibility filtering on API 30+, so detection returns an *empty list* on every modern device without a narrow
+`<queries>` block; L1 was covered by `QUERY_ALL_PACKAGES`, which this launcher does not request. That block lives
+in `data:icons`' own manifest and **must stay in step with `IconPackManager.ThemeActions`**. `core:icon` reaches
+it through `IconPackImages`, a seam declared on the consumer side like `RawIconSource`, so the render modules
+never learn what a pack is.
+
+**Deferred:** browsing a pack's drawables to pick a *specific* one rather than letting `appfilter.xml` decide (it
+needs a `drawable.xml` lister, which L1 never finished either; the model takes a `drawableName` as a defaulted
+field whenever it does, with no schema change); presets (a
 named `IconLayerSet`, which the blob already stores without a schema change — the dashboard holds the slot);
 shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
 
