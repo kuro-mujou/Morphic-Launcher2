@@ -1,11 +1,16 @@
 package inkspire.morphic.core.designsystem.surface
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 
 /**
  * **Claims on the launcher's surface-switching swipe** — who, right now, has a better use for the finger than
@@ -79,5 +84,49 @@ fun LockSurfaceGesture(locked: Boolean) {
     DisposableEffect(lock, locked) {
         if (locked) lock.acquire()
         onDispose { if (locked) lock.release() }
+    }
+}
+
+/**
+ * Holds a claim for as long as a finger is down on this node — **the form for a node whose own content wants every
+ * swipe that starts on it**, whatever direction it turns out to go.
+ *
+ * The widget container is what it was written for. Its pages are a *Compose* pager nested deep inside the surface,
+ * and `surfacePagerGesture` runs on `PointerEventPass.Initial` — ahead of every descendant — so it reaches the
+ * platform slop first and consumes the movement before the inner pager is handed any. [EmbeddedViewTouchFrame]
+ * cannot help: that mechanism exists for an embedded Android `View`, which can call
+ * `requestDisallowInterceptTouchEvent`, and a Compose pager is not one. The surface's own `ScrollEdges` report is
+ * not available either, since [ReportScrollEdges] is deliberately **one answer per surface** and a per-container
+ * answer is not expressible in it.
+ *
+ * So the claim is made unconditionally, at the down. **The consequence is that a surface pan cannot start on a
+ * widget container** — which is the design rejected for a *plain* widget, where it would make every widget a dead
+ * zone for surface switching, and which is right here for a reason that is a property of the thing: a widget
+ * container exists in order to be swiped between pages, so its whole area is a gesture target where a plain
+ * widget's usually is not.
+ *
+ * It **consumes nothing**, so this changes who may claim rather than who receives events: home's own
+ * [inkspire.morphic.core.designsystem.pager.LauncherPager] is unaffected by the lock and is settled the ordinary
+ * way instead, by the inner pager consuming the drag as a child.
+ */
+@Composable
+fun Modifier.claimSurfaceGestureWhilePressed(): Modifier {
+    val lock = LocalSurfaceGestureLock.current ?: return this
+    return pointerInput(lock) {
+        awaitEachGesture {
+            // Initial, so the claim is in place before the pan can reach slop on any later event. Neither call
+            // consumes; `requireUnconsumed = false` is what lets this see a down an ancestor has already taken.
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            lock.acquire()
+            try {
+                // Released on up *or* cancel — draining the gesture rather than waiting for a clean up is what
+                // stops a claim outliving a stream the system took away.
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                } while (event.changes.any { it.pressed })
+            } finally {
+                lock.release()
+            }
+        }
     }
 }

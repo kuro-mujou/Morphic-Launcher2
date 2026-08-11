@@ -36,7 +36,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -53,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,10 +93,10 @@ private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
  * - **Insets are `uiInsets`**, one expression, where L1 stacked `statusBarsPadding` and `navigationBarsPadding` —
  *   which between them miss a landscape cutout.
  *
- * **L1's "Components" section is deliberately absent.** Its picker offered an icon container and a widget container
- * beside the widgets; L2 has the entities for both and no cell that can draw either, so those rows would add an
- * item the user cannot see. Absent rather than disabled, on the same rule the item menu and the settings sections
- * follow. They return with the cells.
+ * **L1's "Components" section is here**, above the apps: an icon container and a widget container, which are things
+ * the launcher itself offers rather than things an app publishes — which is why they are their own section and not
+ * two more rows in the list. They were absent while nothing could draw either; they arrived with the cells, on the
+ * same rule that kept them out (a row that adds an item the user cannot see is worse than a missing one).
  *
  * @param grid the grid a chosen widget would land on, used only to phrase its size ("3 × 2"). The *caller's* grid
  *   rather than one derived here, because home's two pairings put widgets in different zones — the pager on one,
@@ -105,6 +108,10 @@ private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
  *   disabling it — the same nullable-lambda shape `SettingsScreen.onOpenDevHarness` and `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
  *   appears with nothing else here changing.
+ * @param onAddIconContainer adds an empty icon container. Nullable on [onAddWidget]'s terms, and the caller passes
+ *   null when the sheet was opened to fill a container — neither kind nests, so the section would be two rows that
+ *   could not work.
+ * @param onAddWidgetContainer the same, for a widget container.
  */
 @Composable
 internal fun WidgetPickerSheet(
@@ -114,6 +121,8 @@ internal fun WidgetPickerSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onAddWidget: ((WidgetProvider) -> Unit)? = null,
+    onAddIconContainer: (() -> Unit)? = null,
+    onAddWidgetContainer: (() -> Unit)? = null,
 ) {
     val viewModel = koinViewModel<WidgetPickerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -174,6 +183,8 @@ internal fun WidgetPickerSheet(
                         groups = state.groups,
                         onOpen = { opened = it },
                         onDismiss = onDismiss,
+                        onAddIconContainer = onAddIconContainer,
+                        onAddWidgetContainer = onAddWidgetContainer,
                     )
                 } else {
                     DetailPane(
@@ -190,12 +201,16 @@ internal fun WidgetPickerSheet(
     }
 }
 
-/** The first pane: a search field over one row per app that publishes widgets. */
+/**
+ * The first pane: a search field, the launcher's own **Components**, then one row per app that publishes widgets.
+ */
 @Composable
 private fun ListPane(
     groups: List<WidgetProviderGroup>?,
     onOpen: (WidgetProviderGroup) -> Unit,
     onDismiss: () -> Unit,
+    onAddIconContainer: (() -> Unit)? = null,
+    onAddWidgetContainer: (() -> Unit)? = null,
 ) {
     val colors = LocalMorphicColors.current
     val search = rememberTextFieldState()
@@ -242,9 +257,99 @@ private fun ListPane(
             modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            // **Components come first, and only when nothing is being searched.** They are the launcher's own
+            // offerings rather than any app's, so the search field — which filters apps by name — has nothing to
+            // say about them, and leaving them pinned above a filtered list would read as two failed matches.
+            val components = listOfNotNull(
+                onAddIconContainer?.let {
+                    ComponentRowSpec(
+                        icon = Icons.Filled.GridView,
+                        label = "Icon container",
+                        description = "A panel that holds app and folder icons.",
+                        onClick = it,
+                    )
+                },
+                onAddWidgetContainer?.let {
+                    ComponentRowSpec(
+                        icon = Icons.Filled.Widgets,
+                        label = "Widget container",
+                        // Reworded from L1's, which says the widgets are stacked. Ours pages between them.
+                        description = "A panel that pages between several widgets.",
+                        onClick = it,
+                    )
+                },
+            )
+            if (query.isBlank() && components.isNotEmpty()) {
+                item(key = "components-heading") { SectionHeading("Components") }
+                items(components, key = { it.label }) { spec -> ComponentRow(spec) }
+                item(key = "apps-heading") { SectionHeading("Apps") }
+            }
             items(filtered, key = { it.packageName }) { group ->
                 AppRow(group = group, onClick = { onOpen(group) })
             }
+        }
+    }
+}
+
+/** One **Components** row's content — kept as a value so the two are declared where the lambdas that fill them are. */
+private data class ComponentRowSpec(
+    val icon: ImageVector,
+    val label: String,
+    val description: String,
+    val onClick: () -> Unit,
+)
+
+/** A group label above a run of rows. Only drawn when there is more than one group to tell apart. */
+@Composable
+private fun SectionHeading(text: String) {
+    val colors = LocalMorphicColors.current
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = colors.contentMuted,
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp),
+    )
+}
+
+/**
+ * One of the launcher's own components: an icon beside a name and a line saying what it is.
+ *
+ * Taller than an [AppRow] because it carries a description, which it needs: "Icon container" does not say what a
+ * container *does*, where an app's name plus a widget count does. L1's own two labels, with the widget container's
+ * description reworded — ours pages between its widgets rather than stacking them.
+ */
+@Composable
+private fun ComponentRow(spec: ComponentRowSpec) {
+    val colors = LocalMorphicColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = spec.onClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.accentMuted),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = spec.icon,
+                contentDescription = null,
+                tint = colors.content,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = spec.label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
+            Text(
+                text = spec.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.contentMuted,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
+            )
         }
     }
 }

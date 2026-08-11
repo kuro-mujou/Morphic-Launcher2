@@ -11,6 +11,8 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.Folder as FolderModel
+import inkspire.morphic.core.model.IconContainer as IconContainerModel
+import inkspire.morphic.core.model.WidgetContainer as WidgetContainerModel
 
 /**
  * A single item placed on the home surface. Carries where it sits — which [zone]'s grid, and the [placement]
@@ -66,6 +68,55 @@ sealed interface HomeItem {
     ) : HomeItem {
         override val gridItem: GridItem get() = GridItem.Folder(folder.id)
     }
+
+    /**
+     * A placed icon container: the [container] definition plus its resolved [icons], in container order.
+     *
+     * Unresolvable members are dropped from [icons] on the same terms as a folder's — an app the cache cannot
+     * describe has no icon to draw — while the *stored* membership keeps them, so an app that is briefly
+     * unavailable comes back to the slot it had.
+     */
+    data class IconContainer(
+        val container: IconContainerModel,
+        val icons: List<ContainerIcon>,
+        override val placement: GridPlacement,
+        override val zone: HomeZone,
+    ) : HomeItem {
+        override val gridItem: GridItem get() = GridItem.IconContainer(container.id)
+    }
+
+    /**
+     * A placed widget container: the [container] definition plus the resolved [widgets] it pages between, in
+     * container order.
+     *
+     * [widgets] is the same [WidgetInfo] a loose [Widget] carries, because a contained widget is hosted exactly as
+     * a placed one is — what the container changes is *where* it draws and *when* it is visible, not what it is.
+     */
+    data class WidgetContainer(
+        val container: WidgetContainerModel,
+        val widgets: List<WidgetInfo>,
+        override val placement: GridPlacement,
+        override val zone: HomeZone,
+    ) : HomeItem {
+        override val gridItem: GridItem get() = GridItem.WidgetContainer(container.id)
+    }
+}
+
+/**
+ * One resolved entry inside an icon container — an app or a nested folder, ready to draw.
+ *
+ * The rendered twin of `core:model`'s `IconItem`, which names the same two cases by *id*: this carries what a cell
+ * needs instead (an [AppInfo], or a folder plus the apps its preview tile shows), exactly as [HomeItem.Folder]
+ * carries resolved apps beside the definition. Keeping the two separate is what lets the store stay id-keyed while
+ * the surface never re-resolves anything.
+ */
+sealed interface ContainerIcon {
+
+    /** An app in the container, as its own cell would draw it. */
+    data class App(val info: AppInfo) : ContainerIcon
+
+    /** A folder in the container: the [folder] definition plus the resolved [apps] behind its preview tile. */
+    data class Folder(val folder: FolderModel, val apps: List<AppInfo>) : ContainerIcon
 }
 
 /**
@@ -125,8 +176,8 @@ sealed interface HomeMainSizing {
 }
 
 /**
- * The home surface's render state for the current orientation — the placed [items] (apps and folders) across
- * *all* zones, exactly as the repository streams them. Widgets and containers join this once their cells exist.
+ * The home surface's render state for the current orientation — every placed item across *all* zones, exactly as the
+ * repository streams them: apps, folders, widgets and both kinds of container.
  *
  * One flat list rather than a field per zone: the zones share every rule that matters (one item is in one zone,
  * one drag crosses between them), so splitting them here would only mean re-joining them at each use. The surface
@@ -187,13 +238,23 @@ fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone ==
  * The third extends that same rule across the *surface* boundary, and is why [HomeState.catalog] exists: an app
  * dragged in from the APPS drawer is in neither of the first two until the drop commits, so home would have nothing
  * to put under the finger for the whole of the gesture it is meant to be hosting.
+ *
+ * An **icon container** is searched for the first reason, one level deeper: an app dragged out of one is still a
+ * member and has no placement of its own, so nothing but the container could name it. Its nested folders are
+ * searched too, since a folder inside a container holds apps exactly as one on the grid does.
  */
 fun HomeState.appInfo(component: ComponentKey): AppInfo? =
     items.firstNotNullOfOrNull { item ->
         when (item) {
             is HomeItem.App -> item.info.takeIf { it.componentKey == component }
             is HomeItem.Folder -> item.apps.firstOrNull { it.componentKey == component }
-            // A widget is not an app and holds none, so it can never answer this.
-            is HomeItem.Widget -> null
+            is HomeItem.IconContainer -> item.icons.firstNotNullOfOrNull { icon ->
+                when (icon) {
+                    is ContainerIcon.App -> icon.info.takeIf { it.componentKey == component }
+                    is ContainerIcon.Folder -> icon.apps.firstOrNull { it.componentKey == component }
+                }
+            }
+            // Neither kind of widget is an app or holds one, so they can never answer this.
+            is HomeItem.Widget, is HomeItem.WidgetContainer -> null
         }
     } ?: catalog[component]

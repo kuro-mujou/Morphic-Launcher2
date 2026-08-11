@@ -15,6 +15,9 @@ dependencies {
     implementation(projects.data.settings)
     // The widget picker's catalogue, and the AppWidgetHost that binds and draws what it offers.
     implementation(projects.data.widgets)
+    // `LauncherIcon`, for an icon container's slots. Drawn directly rather than through a designsystem cell because
+    // a container's *arrangement* decides how big each icon is — see `IconContainerCell`.
+    implementation(projects.core.icon)
 
     // The picker's chrome: a close, a back and a chevron. The extended set for `feature:settings`' reason — it is
     // the artifact this project already ships, and R8 keeps only the vectors actually referenced.

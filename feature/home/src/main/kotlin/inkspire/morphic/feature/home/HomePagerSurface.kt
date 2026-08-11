@@ -55,6 +55,7 @@ import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
@@ -96,8 +97,18 @@ private val DockZoneId = ZoneId("home-dock")
  */
 private const val UnnamedFolder = "Folder"
 
-/** The same fallback for a widget whose provider publishes no label. */
-private const val UnnamedWidget = "Widget"
+/** The same fallback for a widget whose provider publishes no label. Internal, since a container's pages draw one. */
+internal const val UnnamedWidget = "Widget"
+
+/**
+ * Menu titles for the two containers.
+ *
+ * Constants rather than a label read off the item, because **a container has no name**: nothing gives it one and
+ * nothing stores one. That is not the [UnnamedFolder] case, where a real (empty) label exists and this stands in
+ * for it — here the title simply says what the thing is, which is all a menu needs in order not to open headless.
+ */
+private const val IconContainerTitle = "Icon container"
+private const val WidgetContainerTitle = "Widget container"
 
 
 /**
@@ -561,6 +572,12 @@ internal fun HomePagerSurface(
             // A widget handles its own taps — its content is another app's views, and every button in it is
             // theirs. The launcher's job here is to *not* intercept.
             is HomeItem.Widget -> Unit
+            // **Neither container opens, and that is the design rather than a gap.** A container has no expanded
+            // view: its contents are already on screen, so what a tap means is whatever it landed on. An icon
+            // container's slots launch and open for themselves (`IconContainerCell`), a widget container's pages
+            // are the widget's own — and a tap on the gaps between them is a tap on the container itself, which
+            // has nothing to do.
+            is HomeItem.IconContainer, is HomeItem.WidgetContainer -> Unit
         }
     }
 
@@ -568,6 +585,19 @@ internal fun HomePagerSurface(
     // home is where an item is placed — and the host adds the ones every surface shares (the app's own shortcuts,
     // App info, Uninstall). Both zones share this handler for `openItem`'s reason: what an item offers does not
     // depend on which of home's two grids it happens to sit in.
+    // Whether the widget picker is up. Surface-local rather than hoisted to `HomeScreen`, for the reason the menu
+    // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
+    var widgetPickerOpen by remember { mutableStateOf(false) }
+
+    // **Which widget container an add is destined for, if any** — null when the widget is going onto the grid.
+    //
+    // One flow with a target rather than a second flow, which works because `rememberWidgetAddFlow` keeps its
+    // callback current through `rememberUpdatedState` for exactly this: the surface's *latest* logic is called back
+    // into, so state set just before `start` is still visible when the provider's configuration screen returns.
+    // Every route that opens the picker sets it — to a container from the item menu, to null from the surface menu —
+    // and dismissing clears it, so an abandoned add cannot leave a later one aimed at a container nobody chose.
+    var addWidgetTarget by remember { mutableStateOf<Long?>(null) }
+
     val menuHost = LocalMenuHost.current
     val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
         when (item) {
@@ -621,6 +651,35 @@ internal fun HomePagerSurface(
                     },
                 ),
             )
+            // **One verb, because the arrangement chooser is not built yet** — that is the next container slice, and
+            // a row that opened nothing would be worse than a missing one (the settings sections' own rule). Removing
+            // a container takes its membership rows with it by cascade and leaves every app installed and every
+            // nested folder's contents alone; the icons simply stop being grouped.
+            is HomeItem.IconContainer -> menuHost?.show(
+                title = IconContainerTitle,
+                anchor = anchor,
+                actions = listOf(
+                    MenuAction("Remove container") {
+                        viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                    },
+                ),
+            )
+            // **Add widget** is what makes the paging reachable before any drag work exists, and it costs nothing —
+            // it reuses the add flow this surface already holds, aimed at this container. **Remove container** goes
+            // through the ViewModel rather than being a plain `RemoveFromGrid` for `removeWidget`'s reason, once per
+            // contained widget: the cascade drops membership but not the widgets' definitions or their allocated
+            // ids, so the plain op would leak every widget in it.
+            is HomeItem.WidgetContainer -> menuHost?.show(
+                title = WidgetContainerTitle,
+                anchor = anchor,
+                actions = listOf(
+                    MenuAction("Add widget") {
+                        addWidgetTarget = item.container.id
+                        widgetPickerOpen = true
+                    },
+                    MenuAction("Remove container") { viewModel.removeWidgetContainer(item.container.id) },
+                ),
+            )
         }
     }
 
@@ -628,27 +687,33 @@ internal fun HomePagerSurface(
     // (bind, then the provider's configuration screen); *where* the widget goes is this surface's, because only it
     // knows the grid and the cells it was measured at. Returning false releases the id — see `WidgetAddFlow`.
     val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
-        val geo = geometry
-        val span = geo?.let {
-            WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
-        }
-        span != null && viewModel.placeWidget(
-            widget = WidgetInfo(
-                appWidgetId = bound.appWidgetId,
-                providerPackage = bound.provider.packageName,
-                providerClass = bound.provider.className,
-                label = bound.label,
-            ),
-            span = span,
-            zone = HomeZone.MAIN,
-            config = config,
+        val info = WidgetInfo(
+            appWidgetId = bound.appWidgetId,
+            providerPackage = bound.provider.packageName,
+            providerClass = bound.provider.className,
+            label = bound.label,
         )
+        val container = addWidgetTarget
+        addWidgetTarget = null
+        if (container != null) {
+            // A contained widget needs **no span and no free cell**: the container already holds a placement, and
+            // its pages each fill it. That is the whole difference between the two destinations, and it is why this
+            // cannot fail the way the grid path can.
+            viewModel.addWidgetToContainer(container, info)
+            true
+        } else {
+            val geo = geometry
+            val span = geo?.let {
+                WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
+            }
+            span != null && viewModel.placeWidget(
+                widget = info,
+                span = span,
+                zone = HomeZone.MAIN,
+                config = config,
+            )
+        }
     }
-
-    // Whether the widget picker is up. Surface-local rather than hoisted to `HomeScreen`, for the reason the menu
-    // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
-    var widgetPickerOpen by remember { mutableStateOf(false) }
-
 
     // An app *inside* a folder is offered less, and the missing verb is the point: it has no grid placement, so a
     // "Remove" here would be a row that does nothing (`RemoveFromGrid` on a folder member deletes no rows). Taking
@@ -684,7 +749,14 @@ internal fun HomePagerSurface(
                     // here is waiting on something unbuilt (an app picker, page management). The picker is hosted
                     // by *this* surface rather than by `HomeScreen` because the size labels it shows are measured
                     // against the grid a widget would land on, and only the surface drawing that grid knows it.
-                    surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
+                    // The target is cleared here, not just when an add completes: this route puts a widget on the
+                    // *grid*, so arriving with a container still set from an abandoned add would silently file it.
+                    surfaceActions = listOf(
+                        MenuAction("Widgets") {
+                            addWidgetTarget = null
+                            widgetPickerOpen = true
+                        },
+                    ),
                 )
             },
     ) {
@@ -721,7 +793,19 @@ internal fun HomePagerSurface(
                     onOpen = openItem,
                     onShowMenu = showMenu,
                 ) { item, cellModifier, itemGestures ->
-                    HomeItemCell(item, session, cellModifier, itemGestures, dockMetrics)
+                    HomeItemCell(
+                        item = item,
+                        session = session,
+                        cellModifier = cellModifier,
+                        itemGestures = itemGestures,
+                        metrics = dockMetrics,
+                        onLaunch = viewModel::launch,
+                        onOpenFolder = folderHost::open,
+                        onAddWidgetToContainer = { containerId ->
+                            addWidgetTarget = containerId
+                            widgetPickerOpen = true
+                        },
+                    )
                 }
             },
             main = { zoneModifier ->
@@ -744,7 +828,19 @@ internal fun HomePagerSurface(
                     onOpen = openItem,
                     onShowMenu = showMenu,
                 ) { item, cellModifier, itemGestures ->
-                    HomeItemCell(item, session, cellModifier, itemGestures, mainMetrics)
+                    HomeItemCell(
+                        item = item,
+                        session = session,
+                        cellModifier = cellModifier,
+                        itemGestures = itemGestures,
+                        metrics = mainMetrics,
+                        onLaunch = viewModel::launch,
+                        onOpenFolder = folderHost::open,
+                        onAddWidgetToContainer = { containerId ->
+                            addWidgetTarget = containerId
+                            widgetPickerOpen = true
+                        },
+                    )
                 }
             },
         )
@@ -946,12 +1042,34 @@ internal fun HomePagerSurface(
                 grid = config,
                 cellWidthPx = geo?.cellW ?: 0f,
                 cellHeightPx = geo?.cellH ?: 0f,
-                onDismiss = { widgetPickerOpen = false },
+                onDismiss = {
+                    widgetPickerOpen = false
+                    addWidgetTarget = null
+                },
                 // Closing first is what lets the system's bind dialog and the provider's configuration screen come
                 // up over the launcher rather than over a sheet that would still be there when they returned.
                 onAddWidget = { provider ->
                     widgetPickerOpen = false
                     addWidget.start(provider.component)
+                },
+                // **The Components section is offered only when a widget is not already destined for a container.**
+                // Adding a container *into* a container is not a thing — neither kind nests — so the rows would be
+                // two that could not work, on the one route where the sheet has been opened to fill something.
+                onAddIconContainer = if (addWidgetTarget != null) {
+                    null
+                } else {
+                    {
+                        widgetPickerOpen = false
+                        viewModel.createIconContainer(HomeZone.MAIN, config)
+                    }
+                },
+                onAddWidgetContainer = if (addWidgetTarget != null) {
+                    null
+                } else {
+                    {
+                        widgetPickerOpen = false
+                        viewModel.createWidgetContainer(HomeZone.MAIN, config)
+                    }
                 },
             )
         }
@@ -966,7 +1084,13 @@ internal fun HomePagerSurface(
  * @param session the live drag, needed only to hide a dragged-out app from a folder's tile preview (see below).
  * @param cellModifier fills the cell's layout footprint.
  * @param itemGestures must be handed to whatever should be *touchable*; the cells pass it to their icon+label
- *   group, leaving the surrounding slack free for the surface's own gestures.
+ *   group, leaving the surrounding slack free for the surface's own gestures. The two **containers** are the stated
+ *   exception: like a widget, a container genuinely fills its cell, so it takes these on its root.
+ * @param onLaunch a tap on an app **inside an icon container**. The cell's own taps arrive through the gesture
+ *   contract instead; a container's slots are the one place a cell needs a click of its own, because the container
+ *   is the item and its slots are not.
+ * @param onOpenFolder the same, for a folder nested in an icon container.
+ * @param onAddWidgetToContainer the "+" of an *empty* widget container, by container id.
  */
 @Composable
 private fun HomeItemCell(
@@ -975,6 +1099,9 @@ private fun HomeItemCell(
     cellModifier: Modifier,
     itemGestures: Modifier,
     metrics: IconMetrics,
+    onLaunch: (ComponentKey) -> Unit = {},
+    onOpenFolder: (Long) -> Unit = {},
+    onAddWidgetToContainer: (Long) -> Unit = {},
 ) {
     when (item) {
         is HomeItem.App ->
@@ -1000,6 +1127,21 @@ private fun HomeItemCell(
                 itemGestures = itemGestures,
             )
         }
+        is HomeItem.IconContainer -> IconContainerCell(
+            icons = item.icons,
+            arrangement = item.container.arrangement,
+            modifier = cellModifier,
+            itemGestures = itemGestures,
+            onLaunch = onLaunch,
+            onOpenFolder = onOpenFolder,
+        )
+        is HomeItem.WidgetContainer -> WidgetContainerCell(
+            widgets = item.widgets,
+            axis = item.container.axis,
+            modifier = cellModifier,
+            itemGestures = itemGestures,
+            onAddWidget = { onAddWidgetToContainer(item.container.id) },
+        )
     }
 }
 
