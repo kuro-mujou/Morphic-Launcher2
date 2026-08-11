@@ -15,6 +15,8 @@ dependencies {
     implementation(projects.core.database)
 
     implementation(libs.kotlinx.serialization.json)
+    // `createBitmap`, for squaring an imported image — added as the code that needs it lands, per the module rule.
+    implementation(libs.androidx.core.ktx)
     implementation(libs.timber) // an unreadable row is reported rather than silently dropped
 
     testImplementation(libs.junit)

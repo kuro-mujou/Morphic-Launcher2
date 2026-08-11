@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import android.graphics.Bitmap
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
@@ -81,6 +82,9 @@ sealed interface StudioSubject {
  *
  * @property parsed the subject's parsed layers, for the live render. Null while loading, or when the app has gone.
  * @property label what the chrome calls the subject — an app's name, or nothing for the global default.
+ * @property images every custom-image layer's artwork, by its path — **including images not yet written to disk**.
+ *   A freshly picked image is previewed from here before any file exists, which is what lets an abandoned edit
+ *   leave nothing behind; see `CustomIconStore`.
  */
 data class IconStudioState(
     val subject: StudioSubject = StudioSubject.Unchosen,
@@ -93,6 +97,7 @@ data class IconStudioState(
     val canRedo: Boolean = false,
     val dirty: Boolean = false,
     val pickable: List<AppInfo> = emptyList(),
+    val images: Map<String, Bitmap> = emptyMap(),
 ) {
 
     /** The layer the controls act on, or null before anything has loaded. */

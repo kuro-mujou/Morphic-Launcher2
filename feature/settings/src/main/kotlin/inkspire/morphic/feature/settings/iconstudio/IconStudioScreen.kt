@@ -1,6 +1,10 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import android.graphics.drawable.Drawable
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,9 +21,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
+import androidx.core.graphics.drawable.toDrawable
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.hazeSource
@@ -52,8 +59,8 @@ import org.koin.core.parameter.parametersOf
  * passes over working controls, which is the right way round: L1's own conclusion was that everything its studio
  * *did* was right and only how it looked was wrong.
  *
- * Not here yet: per-layer effects (the model's effect list is still empty), custom **image** layers (they need a
- * picker and a file, which is its own slice), and a real colour picker behind a solid fill.
+ * Not here yet: a **shadow** effect (deferred — it is the one effect that could not be matched across both render
+ * paths below API 31), and a real colour picker behind the solid-fill, tint and gradient swatch rows.
  */
 @Composable
 fun IconStudioScreen(
@@ -64,6 +71,19 @@ fun IconStudioScreen(
     val viewModel: IconStudioViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hazeState = rememberHazeState()
+
+    val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.pickImage(uri)
+    }
+
+    // Custom-image layers draw from what the ViewModel has already decoded — never from a file read here. The
+    // live path's `customImage` is a parameter for exactly this: a disk read inside a composition that reruns on
+    // every slider frame would be the wrong place for I/O, and a freshly picked image has no file yet anyway.
+    val resources = LocalResources.current
+    val customImage: (String) -> Drawable? = remember(state.images, resources) {
+        { path -> state.images[path]?.toDrawable(resources) }
+    }
 
     BackHandler(onBack = onBack)
 
@@ -85,6 +105,7 @@ fun IconStudioScreen(
                         icon = parsed,
                         layerSet = state.editing,
                         modifier = Modifier.fillMaxSize(),
+                        customImage = customImage,
                     )
                 }
             }
@@ -161,6 +182,7 @@ fun IconStudioScreen(
                         onMove = viewModel::moveSelected,
                         onAdd = viewModel::addLayer,
                         onRemove = viewModel::removeSelected,
+                        onPickImage = { imagePicker.launch(imageRequest) },
                         modifier = Modifier.uiInsetsPadding(),
                     )
                 }

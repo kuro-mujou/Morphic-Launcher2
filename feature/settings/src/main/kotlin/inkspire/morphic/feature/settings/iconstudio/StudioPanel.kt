@@ -71,6 +71,7 @@ fun StudioPanel(
     onMove: (up: Boolean) -> Unit,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
+    onPickImage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -90,7 +91,12 @@ fun StudioPanel(
         )
 
         state.selectedLayer?.let { spec ->
-            SelectedLayerControls(spec = spec, onUpdate = onUpdate, onCommit = onCommit)
+            SelectedLayerControls(
+                spec = spec,
+                onUpdate = onUpdate,
+                onCommit = onCommit,
+                onPickImage = onPickImage,
+            )
         }
     }
 }
@@ -203,6 +209,7 @@ private fun SelectedLayerControls(
     spec: IconLayerSpec,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
+    onPickImage: () -> Unit,
 ) {
     var tool by remember { mutableIntStateOf(0) }
 
@@ -223,7 +230,7 @@ private fun SelectedLayerControls(
         when (LayerTool.entries[tool]) {
             LayerTool.TRANSFORM -> TransformControls(spec, onUpdate, onCommit)
             LayerTool.SHAPE -> ShapeControls(spec, onUpdate)
-            LayerTool.SOURCE -> SourceControls(spec, onUpdate)
+            LayerTool.SOURCE -> SourceControls(spec, onUpdate, onPickImage)
             LayerTool.COLOR -> ColorControls(spec, onUpdate, onCommit)
             LayerTool.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
         }
@@ -463,7 +470,11 @@ private fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ico
  * than a missing one.
  */
 @Composable
-private fun SourceControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
+private fun SourceControls(
+    spec: IconLayerSpec,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onPickImage: () -> Unit,
+) {
     LabelledControl("Source") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (spec.role != LayerRole.CUSTOM) {
@@ -479,6 +490,14 @@ private fun SourceControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
             ChoiceRow("Solid colour", spec.source is LayerSource.SolidFill) {
                 onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
             }
+            // Offered on *every* layer, foreground and background included — replacing an app's own artwork is
+            // what makes this more than decoration, and the renderer draws an image wherever it is put. Tapping
+            // it again re-picks, which is why the row is a button rather than a selected state.
+            ChoiceRow(
+                label = if (spec.source is LayerSource.CustomImage) "Custom image — change" else "Custom image",
+                selected = spec.source is LayerSource.CustomImage,
+                onClick = onPickImage,
+            )
 
             (spec.source as? LayerSource.SolidFill)?.let { fill ->
                 // **A swatch row, not a colour picker** — L1 had a full HSV picker in its design system and it is

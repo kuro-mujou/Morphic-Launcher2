@@ -1,5 +1,7 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import android.graphics.Bitmap
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
@@ -9,6 +11,7 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.icons.CustomIconStore
 import inkspire.morphic.data.icons.IconOverrideRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +51,7 @@ class IconStudioViewModel(
     private val overrideRepository: IconOverrideRepository,
     private val parsedIcons: ParsedIconLoader,
     private val appRepository: AppRepository,
+    private val customIcons: CustomIconStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(IconStudioState())
@@ -129,11 +133,43 @@ class IconStudioViewModel(
     }
 
     /**
+     * Imports [uri] as the selected layer's artwork, or as a new layer when the selection cannot take one.
+     *
+     * **Nothing is written to disk here.** The image is decoded, kept in [IconStudioState.images] under a
+     * reserved path, and drawn from memory — so backing out of the studio leaves no file behind, which is the
+     * bug L1 recorded and accepted. [save] writes whatever the committed recipe still refers to.
+     */
+    fun pickImage(uri: Uri) {
+        viewModelScope.launch {
+            val bitmap = customIcons.decode(uri) ?: return@launch
+            val path = customIcons.reservePath()
+            unsaved[path] = bitmap
+
+            _state.update { current ->
+                val source = LayerSource.CustomImage(path)
+                val withImage = current.selectedLayer
+                    // A custom layer takes the image in place; a foreground or background gets it as its source
+                    // too, which is how one app's icon is replaced outright rather than covered over.
+                    ?.let { current.replaceSelectedSource(source) }
+                    ?: current
+                withImage.copy(images = current.images + (path to bitmap)).recordHistory()
+            }
+        }
+    }
+
+    /** Swaps the selected layer's source, leaving every other property of it alone. */
+    private fun IconStudioState.replaceSelectedSource(source: LayerSource): IconStudioState {
+        val layers = editing.layers.toMutableList()
+        val spec = layers.getOrNull(selected) ?: return this
+        layers[selected] = spec.copy(source = source)
+        return withEditing(IconLayerSet(layers))
+    }
+
+    /**
      * Inserts a new custom layer directly above the selected one, and selects it.
      *
-     * A **solid fill** rather than an image, because an image needs a picker and a file, which is its own slice.
-     * That is not a placeholder: a flat colour layer is the useful half on its own — it is how a legacy icon with
-     * no background of its own gets one.
+     * A **solid fill** rather than an image: a new layer needs *some* content, and a colour is the one that needs
+     * nothing from outside the app. An image is a tap away once the layer exists ([pickImage]).
      */
     fun addLayer() = _state.update { current ->
         val insertAt = (current.selected + 1).coerceIn(0, current.editing.layers.size)
@@ -181,6 +217,14 @@ class IconStudioViewModel(
     fun save() {
         val current = _state.value
         viewModelScope.launch {
+            // **Images first, recipe second.** A recipe that referred to a file which had not been written yet
+            // would render as a missing layer for as long as the gap lasted — and if the write then failed, for
+            // good. In the other order the worst case is a written file nothing refers to, which the sweep below
+            // collects.
+            current.editing.imagePaths().forEach { path ->
+                unsaved.remove(path)?.let { bitmap -> customIcons.write(path, bitmap) }
+            }
+
             when (val subject = current.subject) {
                 is StudioSubject.Global -> settingsRepository.setIconLayerSet(current.editing)
                 is StudioSubject.App -> overrideRepository.set(subject.component, current.editing)
@@ -188,8 +232,30 @@ class IconStudioViewModel(
             }
             _state.update { it.copy(dirty = false) }
             saved = current.editing
+            collectOrphanedImages()
         }
     }
+
+    /**
+     * Deletes every stored image that no recipe refers to any more.
+     *
+     * Run after a save because that is when a reference can have been *dropped* — a layer removed, an image
+     * replaced, or an edit undone past the pick that made it. Asking what is still referenced is one question with
+     * one answer; the alternative is a delete at each of those sites, where missing one leaks silently and
+     * invisibly. It reads the stores rather than this screen's state on purpose: the answer has to include every
+     * *other* app's recipe, not just the one being edited.
+     */
+    private suspend fun collectOrphanedImages() {
+        val referenced = buildSet {
+            addAll(settingsRepository.iconLayerSet.first().imagePaths())
+            overrideRepository.overrides.first().values.forEach { addAll(it.imagePaths()) }
+        }
+        customIcons.retainOnly(referenced)
+    }
+
+    /** Every custom-image path this recipe draws from. */
+    private fun IconLayerSet.imagePaths(): Set<String> =
+        layers.mapNotNull { (it.source as? LayerSource.CustomImage)?.path }.toSet()
 
     /**
      * Puts the subject back to inheriting: an app drops its own recipe and follows the global default again; the
@@ -235,6 +301,7 @@ class IconStudioViewModel(
                     label = null,
                 ).withHistoryFlags()
             }
+            loadStoredImages(stored)
             sample?.componentKey?.let(::loadArtwork)
         }
     }
@@ -256,6 +323,7 @@ class IconStudioViewModel(
             _state.update {
                 it.copy(subject = StudioSubject.App(component), editing = stored, label = label).withHistoryFlags()
             }
+            loadStoredImages(stored)
             loadArtwork(component)
         }
     }
@@ -267,6 +335,22 @@ class IconStudioViewModel(
      * why it does not hop for itself. Keyed to nothing: it runs once per subject, never per edit, since re-parsing
      * on every slider frame is the exact cost the live render path exists to avoid.
      */
+    /**
+     * Reads any custom-image layer whose artwork is on disk but not yet in memory — an app opened with a recipe
+     * that already had images in it.
+     *
+     * Additive: it never removes anything from [IconStudioState.images], so an image the user picked but has not
+     * saved survives, and undoing back to a layer keeps its artwork available rather than blanking it.
+     */
+    private fun loadStoredImages(set: IconLayerSet) {
+        val missing = set.imagePaths() - _state.value.images.keys
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            val loaded = missing.mapNotNull { path -> customIcons.read(path)?.let { path to it } }
+            if (loaded.isNotEmpty()) _state.update { it.copy(images = it.images + loaded) }
+        }
+    }
+
     private fun loadArtwork(component: ComponentKey) {
         viewModelScope.launch {
             val parsed = withContext(Dispatchers.Default) { parsedIcons.load(component) }
@@ -290,6 +374,16 @@ class IconStudioViewModel(
 
     /** What is currently persisted, so `dirty` is a comparison rather than a flag that can drift out of step. */
     private var saved: IconLayerSet = IconLayerSet.Base
+
+    /**
+     * Picked images that exist only in memory, by the path they will be written to.
+     *
+     * Not in the state, because nothing renders *from* this — the same bitmaps are in
+     * [IconStudioState.images], which is what the preview reads. This is the narrower question of which of them
+     * still owe a write, and keeping it out of the state means undo cannot rewind it: a path that has been
+     * undone past is simply never written, and the sweep tidies it if it was.
+     */
+    private val unsaved = mutableMapOf<String, Bitmap>()
 
     /** Starts history afresh at [set] — on open, and after a reset. */
     private fun resetHistory(set: IconLayerSet) {

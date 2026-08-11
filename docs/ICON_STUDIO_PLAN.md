@@ -409,9 +409,20 @@ feed the background layer is the open question.
   effect list takes a new variant with no schema change and no reshape of either renderer, so the decision costs
   only the effect itself and can be revisited whenever one of the three trades becomes acceptable — most likely by
   `minSdk` reaching 31, which retires the fork entirely.
-- **S7 — custom image layers.** The picker + crop + `CustomIconStore`, and the file lifecycle. **L1 leaked
-  orphans** when a pick was abandoned without saving (it recorded this and accepted it); the fix is to write the
-  file only at commit.
+- **S7 — custom image layers. — CODE LANDED (2026-08-11); on-device verification pending.** `CustomIconStore`
+  plus the pick, in both the studio's own layers and as a replacement for an app's foreground or background.
+  - **Nothing is written until Save**, which is the whole file-lifecycle design and the fix for the orphan leak
+    L1 recorded and accepted. Decode and write are two steps: the path is *reserved* up front so the recipe can
+    refer to an image that does not exist yet, the preview draws it from memory, and backing out leaves nothing
+    behind because nothing was created. On Save the images go down **before** the recipe — a recipe pointing at
+    an unwritten file would render as a missing layer, where a written file nothing points at is collectable.
+  - **Orphans are swept, not deleted per action.** `retainOnly` asks "what does any recipe still refer to?", which
+    is one question with one answer, against per-action deletes that have to be right at every site that can drop
+    a reference (remove, reset, undo past a pick, replace an image) and leak invisibly when one is missed. It runs
+    after a save and reads the *stores*, so it accounts for every other app's recipe rather than this screen's.
+  - **No crop screen, unlike L1.** A layer already has offset, zoom and rotation, so a crop step would be a second
+    and *destructive* way to do the same thing. Images are fitted into a transparent square on the way in instead,
+    which also means the renderers need no aspect-ratio special case and so cannot disagree about one.
 - **S8 — icon packs.** Per the section above.
 - **S9 — presets (deferred).** A named `IconLayerSet` blob; the dashboard placeholder is already its slot.
 
