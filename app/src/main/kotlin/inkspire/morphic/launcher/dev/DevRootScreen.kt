@@ -71,28 +71,29 @@ private enum class DevScreen(val label: String) {
  */
 @Composable
 fun DevRootScreen(modifier: Modifier = Modifier) {
-    var screen by remember { mutableStateOf(DevScreen.Home) }
+    var screen by remember { mutableStateOf(DevScreen.IconLayers) }
     LauncherTheme(darkTheme = true) {
         CompositionLocalProvider(LocalDragCoordinator provides rememberDragCoordinator()) {
             Box(modifier.fillMaxSize()) {
                 when (screen) {
-                    DevScreen.Home -> HomeScreen()
-                    DevScreen.Apps -> AppsScreen()
-                    // The layout is normally a user setting (data:settings); until then the harness picks it
-                    // per entry, which is also the cheapest way to eyeball two layouts side by side.
-                    DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
-                    DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
-                    DevScreen.AppsCategory -> AppsScreen(layout = AppsLayout.PAGER_WITH_CATEGORY)
-                    DevScreen.AppsCards -> AppsScreen(layout = AppsLayout.CATEGORY_CARD)
-                    DevScreen.Drag -> DragPlaygroundScreen()
-                    DevScreen.Pager -> PagerPlaygroundScreen()
-                    DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
-                    DevScreen.Surface -> SurfacePagerPlaygroundScreen()
-                    DevScreen.Grid -> GridPlaygroundScreen()
-                    DevScreen.Reflow -> ReflowPlaygroundScreen()
-                    DevScreen.ScrollGrid -> ScrollGridPlaygroundScreen()
-                    DevScreen.CategoryPager -> CategoryPagerPlaygroundScreen()
+//                    DevScreen.Home -> HomeScreen()
+//                    DevScreen.Apps -> AppsScreen()
+//                    // The layout is normally a user setting (data:settings); until then the harness picks it
+//                    // per entry, which is also the cheapest way to eyeball two layouts side by side.
+//                    DevScreen.AppsGrid -> AppsScreen(layout = AppsLayout.VERTICAL_GRID)
+//                    DevScreen.AppsPager -> AppsScreen(layout = AppsLayout.PAGER)
+//                    DevScreen.AppsCategory -> AppsScreen(layout = AppsLayout.PAGER_WITH_CATEGORY)
+//                    DevScreen.AppsCards -> AppsScreen(layout = AppsLayout.CATEGORY_CARD)
+//                    DevScreen.Drag -> DragPlaygroundScreen()
+//                    DevScreen.Pager -> PagerPlaygroundScreen()
+//                    DevScreen.PagerDrag -> PagerDragPlaygroundScreen()
+//                    DevScreen.Surface -> SurfacePagerPlaygroundScreen()
+//                    DevScreen.Grid -> GridPlaygroundScreen()
+//                    DevScreen.Reflow -> ReflowPlaygroundScreen()
+//                    DevScreen.ScrollGrid -> ScrollGridPlaygroundScreen()
+//                    DevScreen.CategoryPager -> CategoryPagerPlaygroundScreen()
                     DevScreen.IconLayers -> IconLayerPlaygroundScreen()
+                    else -> {}
                 }
                 // Theme-independent chip so it reads over either screen; label shows what tapping switches TO.
                 Text(
