@@ -170,18 +170,34 @@ The "combine" and "extract" flows (drop-to-merge, empty-container placement, mov
 **repository logic**, not entity structure — the entities just express membership + ordering + the container's
 own grid placement.
 
-## Icon feature — layer-based editor + baked display (locked 2026-07-23)
+## Icon feature — layer-based editor + baked display (locked 2026-07-23; **built 2026-08-11**)
 
 The icon system is a **layer editor** (like a drawing app) whose output is a **single flat bitmap** shown on
 every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-state, skip its flat-column churn.
+
+**This is now built, S1–S7 of [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md)** — one plan replacing L1's
+*five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
+three times inside one document, at a cost of four destructive schema bumps on one table). What is left is **icon
+packs** and **presets**; **shadows are deferred with reason** (see the effects note below). The rest of this
+section describes what exists, and flags the two places the built thing differs from what was locked here.
 
 **Source & parsing.** App icons come from the `LauncherApps` API. Each is parsed into **two permanent,
 non-deletable layers**: a **background** and a **foreground** (fg always renders above bg). Parsing never
 splits the foreground further — a legacy raster and a modern adaptive foreground both just *are* fg content
 (no glyph matting; it's unreliable). All backgrounds land in the bg layer, **even when empty** (the empty bg
 slot still exists for the user to fill).
-- **Legacy icons**: the whole bitmap → fg layer; sample edge/corner pixels and, if colour variance is low,
-  **pre-fill the bg layer with that solid colour** (L1's detection); busy/transparent edges → leave bg empty.
+- **Legacy icons**: the whole bitmap → fg layer; sample the edge ring and, if it is one flat opaque colour,
+  resolve the bg layer to it; busy/transparent edges → leave bg empty. **L1 has no implementation to port** — its
+  `parseLegacy` uses a hardcoded plate colour and the sampling never left its plan — so the thresholds are ours,
+  and building it corrected this rule's own claim. "Invisible until the foreground is shrunk" is not a property of
+  the fill, it is a property of *which icons are accepted*: a rounded legacy icon has transparent corners, so
+  painting its plate colour behind it would **square the icon off**, and a drop shadow's soft edge would fill the
+  gap the shadow leaves. So the solid-fraction threshold is **near-total (95%)** rather than a majority — those
+  cases are declined, and for the ones accepted not one pixel moves until the user moves the foreground. The
+  colour is **resolved, never written into the recipe**: the app still reads "app default", so Reset and
+  inheritance behave normally and an app that updates its artwork gets re-detected instead of keeping a frozen
+  colour. `LegacyBackground` is the pure decision (unit-tested; **the refusal tests are the ones that matter**),
+  `DrawableParser` the rasterising.
 
 **Layer content** is a small sum type, not always an image: **app-default (parsed image or colour)**,
 **custom image**, or **solid-colour fill** (a colour-only background is a `SolidFill` bg).
@@ -193,30 +209,125 @@ app *without* → filtered foreground only. The parsed monochrome layer is **sta
 that alternate fg source — it is not a third stack layer.
 
 **Editor.** fg/bg are the base; the user inserts **custom layers below bg / between fg&bg / above fg**. The
-only ordering rule is **fg stays above bg** (customs are otherwise free). Per layer:
+only ordering rule is **fg stays above bg** (customs are otherwise free), and **reorder is buttons, not drag** —
+L1 locked buttons for the right reason and then reversed itself in a later plan; a *disabled button* says which
+move is illegal before it is attempted, where a refused drag does nothing and cannot explain itself. The buttons
+are disabled by asking the model (`editing.moveUp(i) !== editing`), so they cannot drift from the rule the set
+enforces. Per layer:
 - **transform** — X/Y (in a normalized square frame), zoom, rotation.
-- **shape** — an `IconShape`, **fg & bg only**; custom layers keep their own alpha (not shaped). A shape is
-  **backed by a vector drawable** (prepared as a resource) and referenced by a stable id; the clip mask is
-  built from that drawable's silhouette, so adding a shape = drop in a drawable, no path math in code.
-- **effects/filters** — extensible (monochrome + more); do **not** hard-model these as columns.
+- **shape** — an `IconShape`, **on any layer**. *(Differs from what was locked here: this said fg & bg only,
+  with custom layers keeping their own alpha. The renderer masks whatever it is given, so the restriction would
+  have been one the UI invented — and a shaped custom layer is obviously useful, since a colour fill trimmed to a
+  circle is how a coloured disc goes behind a legacy icon.)* A shape is **backed by a vector drawable** (prepared
+  as a resource) and referenced by a stable id; the clip mask is built from that drawable's silhouette, so adding
+  a shape = drop in a drawable, no path math in code.
+- **opacity + blend mode** — `IconLayerSpec` **fields**, not effects, because they describe how a layer *joins
+  the stack* rather than what it is: every layer has both, always, with a meaningful default.
+- **effects** — a sealed list, never columns. `LayerEffect.Color` (hue → saturation → brightness → tint,
+  composed into **one** matrix, so monochrome is `saturation = 0` plus a tint rather than a variant of its own)
+  and `LayerEffect.Gradient` (two stops, angle, strength; source-atop so it colours the artwork instead of
+  covering the icon with a rectangle). **Shadows are deferred** — see below.
+- **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
 **Rendering — hybrid:**
 - **Display** (home, drawer, folders, pickers): the resolved layer set is **composited to one flat bitmap**,
   cached by `IconId(component, resolvedLayerSet, sizePx)` (value-equality key → correct invalidation for
   free), baked off the main thread. Surfaces draw one `Image`.
-- **Editor**: layers render **live** (each a Compose node — transform via `graphicsLayer`, effects via
-  colour-filter/blend) so slider drags respond instantly with no per-frame bake; a commit invalidates that
-  icon's baked entry.
+- **Editor**: layers render **live** (`IconLayerStack` — each a Compose node, transform via `graphicsLayer`,
+  effects via a colour filter and blend on a `saveLayer`) so slider drags respond instantly with no per-frame
+  bake. **A commit does *not* invalidate the baked entry**, correcting what this said: `IconId` carries the layer
+  set, so an edited icon simply *is* a different key — it misses, re-bakes, and the superseded bitmap ages out of
+  the LRU. Calling `invalidate` would also bump `generation`, whose whole job is the one input the key cannot see
+  (an app replacing its own artwork) and which recomposes every icon on screen.
 
-**Persistence — one serialized `IconLayerSet` blob, NOT flat columns.** (L1 burned four destructive DB bumps
-learning this.) A per-app override = `component` + a JSON `layerSet` blob; a global default set is the
-fallback every app inherits. Editing an app **snapshots the default and detaches** (Reset re-attaches) — no
-field-merge, no variable-length-list diffing. **Consequence for B2:** the current flat, stringly
-`IconOverrideEntity` (`shapeChoice`/`foregroundScale`/…) collapses to `component` + a `layerSet` blob when B9
-(`data:icons`) lands.
+**Two renderers is the standing hazard, and five shared things are what keep them honest.** An icon that looks
+right while being edited and wrong on every surface is a bug the editor structurally cannot show you, so the
+agreement is made of shared *things* rather than shared intentions: `ParsedIconLoader` (what the layers are),
+`IconLayerResolver` (which draw, and what each means), `LayerTransform` (where they sit), `LayerFilter` (the
+colour matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`)
+and `LayerGradient` (which way an angle runs). Only the drawing API differs, which is unavoidable and is exactly
+why those five exist. The per-layer order is **content → shape mask → gradient → composite**, the same on both
+sides for different-looking reasons — statement order in one, modifier nesting in the other. Two consequences:
+the live stack must composite **offscreen** (or a `MULTIPLY` on the bottom layer blends against the studio canvas
+rather than against nothing), and the `IconLayers` dev-harness playground draws one set both ways side by side,
+because comparing pixels needs instrumentation this project has no setup for.
 
-**Deferred:** icon packs as a layer source; skin/backing-plate (L1's separate live-Compose backdrop, distinct
-from the baked stack).
+**Shadows are deferred, and they are the one effect that is not additive.** A shadow derives from the layer's
+*finished* silhouette — after transform and after the mask, since an outer shadow must escape the shape — which
+the bake holds as a bitmap and can blur on any API, and which the live path only has as nodes. Compose's only
+blur is `RenderEffect`, **API 31+ against a `minSdk` of 26**. No way out is free: gating the effect denies it
+where the bake could manage it, `RenderEffect` makes the editor lie below 31, and rasterising re-bakes a shadowed
+layer per frame while its sliders move. Nothing waits on it, and `minSdk` reaching 31 retires the fork outright.
+
+**Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
+bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
+free pre-launch), and the global default is a fifth `data:settings` slice under `icon_layer_set` — the bare
+`IconLayerSet`, `BackdropEffect`'s shape, because the recipe *is* the whole setting. Editing an app **snapshots
+the default and detaches** (Reset re-attaches) — no field-merge, no variable-length-list diffing. Three things
+worth knowing:
+- **The model lives in `core:model.icon`**, not `core:icon` — it is pure data describing what an icon should
+  look like, where turning that into pixels is the renderer's job. Third cut of the same kind after
+  `BackdropEffect` and `DeviceConfiguration`, and what forces it is that *two* modules store a recipe and neither
+  should depend on a module that allocates bitmaps. `IconShapes` stays behind (it maps ids to `R.drawable`), and
+  the move took the serialization plugin out of `core:icon` entirely.
+- **An unreadable row is skipped, not deleted.** It falls back to the global default, which is visible and
+  fixable; deleting would throw away a recipe a later build could read. Same position `data:layout` takes on an
+  unresolvable placement. Two things reach that path — a corrupt blob, and a well-formed one describing an
+  *illegal* stack, which `IconLayerSet`'s own `init` rejects.
+- **Adding an effect is not a schema change**, which is the whole point of the sealed list: the spec gained
+  `opacity` and `blend` and the test asserting the exact stored JSON of `IconLayerSet.Base` still passes, because
+  defaults are not encoded.
+
+**Custom images: nothing is written until Save.** `CustomIconStore` splits decode from write — the path is
+*reserved* up front so the recipe can refer to an image that does not exist yet, the preview draws it from
+memory, and backing out leaves nothing behind. That is the fix for the orphan leak L1 recorded and accepted. On
+save the images go down **before** the recipe (a recipe pointing at an unwritten file renders as a missing layer;
+a written file nothing points at is collectable), and orphans are **swept** — `retainOnly` asks what any recipe
+still refers to, against per-action deletes that must be right at every site that can drop a reference and leak
+invisibly when one is missed. **No crop screen, unlike L1**: a layer already has offset, zoom and rotation, so a
+crop would be a second and destructive way to do the same thing; images are fitted into a transparent square on
+the way in, which also spares both renderers an aspect-ratio special case they could disagree about.
+
+**Deferred:** icon packs as a layer source (**next** — a pack replaces the *content* of the fg and bg layers and
+leaves every decoration layer alone, so it is one more `LayerSource` variant rather than a mode); presets (a
+named `IconLayerSet`, which the blob already stores without a schema change — the dashboard holds the slot);
+shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
+
+**The studio is a full-screen destination, and the settings pane above it is a hub.** L1's icon settings *were*
+the editor, hosted in the detail pane and built out of settings-list vocabulary, and its own docs conclude that
+was the whole problem; there is a second reason here it did not have, which is that a pane shares the screen with
+the section list on a tablet and a creative workspace cannot have half a screen. So `SettingsSection.ICONS`
+returns — the name this file has been holding back for it — as **Edit all icons / Edit specific apps / a Presets
+placeholder**, and the editing happens in `IconStudioRoute`. Reached from there, or from **"Edit icon"** on any
+app's context menu. Five things about it:
+- **`IconStudioRoute` is a sealed pair** (`Global` / `App(component?)`), not L1's mode-beside-a-nullable-component
+  — that shape can express a global route carrying an app. `App(null)` is a real state: arrive at the picker.
+- **The edited set is read once and then owned by the screen.** A live editor diverges from the store the moment
+  a slider moves, so projecting the repository flow would mean writing every frame of a drag or having the next
+  emission overwrite the user. It is the same snapshot-detach the persistence layer runs on, one layer up — and
+  it makes a freshly opened *inheriting* app correctly `dirty`, since saving is what detaches it.
+- **Undo is punctuated, and nearly free.** The live path records nothing; `commitEdit` (a slider's
+  `onValueChangeFinished`) lands one history entry per gesture, so undo steps *over* a drag rather than back
+  through a hundred frames of it. History is a `List<IconLayerSet>` and a step is an index — L1 left undo an open
+  feasibility question because its equivalent state was a bag of mutable flat fields with nothing to snapshot.
+- **Save is explicit in both modes**, departing from L1's live-committing global studio: a slice is one JSON blob,
+  so a live-committing slider rewrites the whole document per frame, and a global edit restyles every icon on the
+  device — not a thing to do continuously while someone is still deciding. The *preview* is live either way,
+  which is all "live edit is non-negotiable" ever meant.
+- **There is no "this layer / whole icon" scope split**, which L1's UI plan left as an open question. Every one of
+  its six whole-icon tools has gone elsewhere here: the tile shape became a per-layer shape (there is no
+  stack-level mask), the background is the background layer's source, theming is `AppDefaultMonochrome`, sizing is
+  `data:settings` and another screen, the skin is deferred, and a pack will be a per-layer source.
+
+**The studio is the one screen with a second blur system, and the two do not overlap.** `wallpaperBackdrop`
+samples a *pre-blurred wallpaper bitmap* by position and can only ever show the wallpaper; the studio's canvas is
+deliberately **not** the wallpaper (black / white / a checkerboard, plus the icon being edited), so it is the only
+screen whose backdrop is content the launcher itself draws and the only one that blur structurally cannot serve.
+**Haze** blurs whatever is really beneath a node, and that "no wallpaper" decision is what *guarantees* it works —
+Haze needs a real drawn node, and the `BlendMode.Src` punch every settings preview uses would leave it nothing.
+One shared `studioSurface` modifier is the material, so a new panel cannot arrive looking different; its content
+colour is **fixed white**, the one place the studio departs from the theme, because the thing behind the glass is
+a canvas the *user* switches between black and white.
 
 ## Design system (`core:designsystem`)
 
@@ -515,6 +626,16 @@ brightness question through the same system API as every other wallpaper.
   screen that needs it is built, not up front.
 - A **dev gallery** (`app` → `dev/DevGalleryScreen`) hosts every `Morphic*` component + the palette under a
   light/dark toggle; add each new component to it.
+- **`MorphicColorPicker`** (a saturation/value panel over a hue bar) has **no alpha channel**, deliberately: every
+  colour the launcher lets a user pick already sits somewhere carrying opacity, and offering a second way to set
+  it is how a colour silently loses its transparency. Its hue is held as *state* rather than re-derived from the
+  colour, which is correctness and not economy — hue is undefined at black, white and every grey, so a picker that
+  recomputed it would jump under the finger the moment the panel was dragged into a corner.
+- **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
+  follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers are named and blocked
+  rather than speculative — HOME's "Add app", the home list's "Add apps" row, and filling a folder without
+  dragging. It takes a `List<AppInfo>`, never a repository, and matches with a locale-aware `Collator` rather than
+  `lowercase().contains` — the same lesson the APPS ordering already learned.
 
 ## Feature & presentation architecture (locked 2026-07-27)
 
@@ -531,6 +652,15 @@ architecture" and drifted into monolith ViewModels (a 500-line sealed-`HomeEvent
   Bind with Koin's `viewModel { }` DSL (`org.koin.core.module.dsl.viewModel`) and inject with
   `koinViewModel<XxxViewModel>()` — this scopes the instance to the screen's `ViewModelStore` (survives
   rotation, cleared with the screen).
+  - **That last clause is only true because `NavDisplay` is given `rememberViewModelStoreNavEntryDecorator()`**,
+    and it was false for a long time. `navigation3-runtime` ships only the saveable-state decorator, so by default
+    every `NavEntry` shares the **Activity's** store: a `koinViewModel<T>()` keys on the type, so the first entry
+    to ask for a given ViewModel created it and every later entry — different destination, different arguments —
+    was handed that same instance, with `viewModelScope` outliving the screen it belonged to. It stayed invisible
+    because no ViewModel took a **per-instance parameter** until the icon studio's route; every other one reads the
+    same repositories and rebuilds the same state, so a shared instance was indistinguishable from a fresh one.
+    Supplying the decorator list **replaces** the defaults, so the saveable-state one has to be named again or
+    every entry loses its `rememberSaveable` state.
 - **Keep logic out of the composable.** The composable reads `state` (via `collectAsStateWithLifecycle()`) and
   calls methods; assembly, persistence, and optimistic state live in the ViewModel so it stays unit-testable.
 - **Reference:** [feature/home](feature/home/src/main/kotlin/inkspire/morphic/feature/home) — `HomeViewModel`
@@ -551,8 +681,11 @@ launch onto the repository; we don't.)
 ## Current status
 
 Foundations: **P0 done; P1 Core done** — `core:model` (B0), `core:common` (B1), `core:database` (B2). **B3
-`core:icon` done** (parse → layer model → render/bake → `IconRenderManager` → `LauncherIcon`; per-layer effects
-+ live editor deferred). **B6 `data:apps` partial** (LauncherApps wrapper, `AppRepository` + Room cache,
+`core:icon` done** (parse → layer model → render/bake → `IconRenderManager` → `LauncherIcon`), and since the icon
+studio it also holds the **live** render path (`IconLayerStack`) plus the shared derivations that keep the two
+honest — the layer *model* moved out to `core:model.icon` on the way. **B9 `data:icons` done** for everything but
+icon packs: `IconOverrideRepository` over the collapsed `icon_override`, and `CustomIconStore`. **B6 `data:apps`
+partial** (LauncherApps wrapper, `AppRepository` + Room cache,
 `RawIconSource`, and **categorization** — `AppCategorizer` folds a curated asset → platform
 `ApplicationInfo.category` → keyword heuristics into a `CategoryGroup` id, ported from L1 but narrowed to *one app
 in, one id out*: ordering and overrides are the category store's job, not the classifier's).
@@ -1067,7 +1200,13 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely:** **S5f-3**, the last of the effects — or anything below it, since nothing depends on S5f-3. S5f split
+**Next likely: icon packs (S8)** — the last piece of the icon studio, and the one thing the icon feature is still
+waiting on. A pack is one more `LayerSource` variant rather than a mode, so "apply a pack to everything" is setting
+the global default's fg/bg source and goes through the same commit, cache key and invalidation as any other edit.
+What has to be built with it is pack *detection* (theme-intent actions), `appfilter.xml` parsing, and — for browse
+and search — a drawable lister, which L1 never finished either.
+
+**The effects sequence below is done and is kept as the record of how S5f was split.** S5f split
 into three when it was costed, because as one slice it was `BackdropEffect` + the params slice + `Blur.kt` + a 350-line
 `Modifier.Node` + an AGSL shader + a settings section + three consumers:
 - **S5f-1 — the brightness signal. Done.** The shell's hardcoded `darkTheme` is gone; see the design-system notes. It
@@ -1272,8 +1411,10 @@ The **folder section** is the smallest and is L1's shape exactly: its `FolderSet
 and its icon controls are the whole screen, because `FolderGrid` declares no `editRange` — a folder's card is sized to
 the screen, so its rows and columns follow rather than being picked. It states the resolved page size as a fact instead,
 and states that it also governs the **category card's expansion**, which is the same `FolderOverlay` on the same grid.
-**The name `Icons` returns with the icon studio** (B9, per-app: shape, background, layers), which is what L1's `Icons`
-section actually is — not grid sizing, which L1 never kept there either.
+**The name `Icons` has returned with the icon studio** (per-app: shape, background, layers), which is what L1's
+`Icons` section actually is — not grid sizing, which L1 never kept there either. It is the **eighth** section and
+the third in Personalization, and unlike every other one it is a **hub rather than an editor**: two actions and a
+Presets placeholder, with the editing in a full-screen destination. See the icon-feature section for why.
 **The wallpaper section is the sixth, and the first that is not about a surface** — which is why the list is now two
 named groups, Personalization and Layout, as L1 had it. It is a full port of L1's `WallpaperTab` layout: a **two-page
 pager of *modes*** ("Single wallpaper" / "Wallpaper rotate") over **three browse shelves** ("My wallpapers", "Backdrops
@@ -1687,7 +1828,8 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
 - **Unbuilt verbs are absent, not disabled.** L1 showed "Rename" and "Edit icon" greyed out; the settings sections'
   own rule is that a control which changes nothing is worse than a missing one. So a home folder's menu is
   *Remove folder* alone, an APPS-pager folder and a category card get **no menu at all**, and rename returns with its
-  op, the icon studio with B9.
+  op. **"Edit icon" is no longer one of them** — it is bound at the shell like the other app commands, and routed
+  through `app` so `feature:shell` never learns the icon studio exists.
 - **What each surface adds is only what it owns**: home's *Remove* (`RemoveFromGrid`), the home list's *Remove* (its
   own order store, not a placement), an app **inside a folder** nothing — it has no placement, so a Remove row there
   would do nothing, and taking it out is the drag this menu's long-press already leads into. `data:apps` gained the
@@ -1870,7 +2012,7 @@ a question decided once, at slop.
 **Known gaps, deliberate:** the item context menu offers **nothing for a folder on the APPS pager** and nothing for
 a category card — rename and dissolve have no ops on the APPS order store, and category management is a
 `feature:settings` concern, so those long-presses show no menu at all rather than a menu of disabled rows. The
-**icon studio** (B9) and **rename** are the two verbs the menu is still owed on home. A drag ejected from APPS draws
+**rename** is the one verb the menu is still owed on home, the icon studio's "Edit icon" having landed. A drag ejected from APPS draws
 **no floating proxy** for the frames the surface takes to close: the drawer stops painting one the moment it is no longer presented
 and home starts once it is, and neither owns the gap in between (the drop itself is unaffected). The effects section's five sliders are **live again**: the context
 menu is the launcher's first frosted *panel*, so it reads the stored strength and tint and it is the first surface
