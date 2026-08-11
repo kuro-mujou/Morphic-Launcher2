@@ -191,16 +191,32 @@ is what a field is for and what a list membership is not. L1 had both as spec fi
 (all one `ColorMatrix` stage), then outer/inner shadow, then gradient overlay. The list model means each is a
 new variant and **no schema change**.
 
-## Legacy background detection (ported from L1, unchanged)
+## Legacy background detection (designed by L1, never built there)
 
-Sample the legacy bitmap's edge and corner pixels; below a colour-variance threshold, pre-fill the background
-layer with a `SolidFill` of that colour. Above it (busy, gradient or transparent edges), leave the background
-empty. **No matting** — there is no reliable way to cut a glyph out of a rasterized icon, and L1 rejected it for
-the same reason.
+Sample the legacy bitmap's edge ring; when it is one flat opaque colour, that becomes what the background layer
+resolves to. Otherwise the background stays empty. **No matting** — there is no reliable way to cut a glyph out
+of a rasterized icon, and L1 rejected it for the same reason.
 
-The fill is **a default the user can clear**, and it is invisible until the foreground is shrunk or moved — at
-which point the revealed area is already the right colour instead of transparent. That is the whole point: it
-makes "shrink the legacy logo to reveal a matching backing" work out of the box.
+**L1 has no implementation to port.** Its `parseLegacy` fills the background with a hardcoded `LEGACY_PLATE_COLOR`
+and the edge sampling never left the plan, so the thresholds here are ours.
+
+**The "invisible until the foreground moves" claim is only true if it is made true**, which is the one thing
+building this changed. A fill is safe to apply by default exactly while the foreground already covers it — and a
+rounded legacy icon does not: its corners are transparent, so painting the plate colour behind it would **square
+the icon off**, and a drop shadow's soft edge would fill in the gap the shadow leaves. Both are visible changes to
+icons nobody asked to change. So the solid-fraction threshold is near-total (95%) rather than a majority, which
+declines those cases and leaves the promise literally true for the ones it accepts. Setting a background colour by
+hand is still one tap in the studio, which is where a rounded icon's plate belongs anyway.
+
+**The colour is resolved, not written into the recipe.** It lands on `ParsedIcon.background`, so `AppDefault` on
+the background layer resolves to it; nothing is persisted and no recipe changes. Two consequences worth having:
+the app's recipe still reads "app default" (so Reset and inheritance behave normally), and an app that updates its
+artwork gets its colour re-detected rather than keeping one frozen from a previous version.
+
+The decision is split from the sampling — `LegacyBackground` is arithmetic over an `IntArray` and unit-tested
+without an emulator, where rasterising the drawable stays in `DrawableParser`. Same split as `SettingsSlice` and
+`IconLayerResolver`. The tests that matter are the **refusals**: getting one wrong does not fail loudly, it
+silently restyles an icon.
 
 ## The editor
 
@@ -347,7 +363,10 @@ feed the background layer is the open question.
   - **Every dev chip is now retired**: Settings → Icons reaches both dashboard actions and a long-press on any app
     icon reaches "Edit icon". A shortcut kept beside a real route is how two paths to one screen start behaving
     differently.
-- **S5 — legacy background detection.** Edge sampling in the parser; a pre-filled `SolidFill` background.
+- **S5 — legacy background detection. — CODE LANDED (2026-08-11); on-device verification pending.** Edge
+  sampling in the parser, resolved into the background layer rather than written into the recipe. See the section
+  above for the two things building it corrected: L1 never implemented this, and the "invisible until the
+  foreground moves" promise had to be *made* true by declining rounded and shadowed icons rather than assumed.
 - **S6 — effects, incrementally.** `opacity`/`blend` on the spec first (cheapest, highest payoff), then the
   `ColorMatrix` group, then shadows, then gradient. Each ships alone; none touches the schema.
 - **S7 — custom image layers.** The picker + crop + `CustomIconStore`, and the file lifecycle. **L1 leaked
