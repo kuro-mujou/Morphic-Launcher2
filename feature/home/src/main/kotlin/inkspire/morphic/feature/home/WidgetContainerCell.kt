@@ -1,5 +1,7 @@
 package inkspire.morphic.feature.home
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +17,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
@@ -24,17 +25,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.surface.claimSurfaceGestureWhilePressed
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
-
-/** The container's corner rounding, and the shape its frosted backdrop is clipped to. */
-private val ContainerShape = RoundedCornerShape(16.dp)
 
 /** The dots' sizes and spacing — L1's, which are chosen against a widget rather than against a page of them. */
 private val ActiveDotSize = 6.dp
@@ -59,8 +56,9 @@ private val DotsInset = 4.dp
  * whole cell is registering, so a surface pan cannot *start* here — see the modifier's KDoc for why that trade is
  * right for this one item and wrong for a plain widget.
  *
- * **An empty container gets a real "+"**, unlike an icon container's inert glyph: the flow behind it — bind a
- * widget, run the provider's configuration screen — already exists, so the button does what it says.
+ * **An empty container gets a "+"**, as an icon container does: something has to be drawn, or a cell that cannot be
+ * removed reads as a rendering fault. It runs the add flow this surface already holds — bind a widget, then the
+ * provider's configuration screen — aimed at this container rather than at the grid.
  */
 @Composable
 internal fun WidgetContainerCell(
@@ -75,9 +73,7 @@ internal fun WidgetContainerCell(
 
     Box(
         modifier = modifier
-            .fillMaxSize()
-            .clip(ContainerShape)
-            .wallpaperBackdrop(shape = ContainerShape, scrimColor = colors.surface)
+            .containerPanel()
             .claimSurfaceGestureWhilePressed()
             .then(itemGestures),
         contentAlignment = Alignment.Center,
@@ -129,6 +125,32 @@ internal fun WidgetContainerCell(
                     // finger that is changing them. L1's alignment pair exactly.
                     if (axis == WidgetContainerAxis.VERTICAL) Alignment.CenterEnd else Alignment.BottomCenter,
                 ),
+            )
+        }
+    }
+}
+
+/**
+ * A widget container as the **floating drag proxy** draws it: the same panel, with a still picture of the page that
+ * was on screen when the drag began.
+ *
+ * **It cannot be the real cell**, for `AppWidgetHostController.snapshot`'s reason one level up. A container's pages
+ * are `AppWidgetHostView`s, so re-composing it under the finger would build a *second* live instance of every
+ * widget in it — the exact thing a dragged widget's snapshot exists to avoid. What the user is carrying is the
+ * thing they were looking at, which is what a snapshot is.
+ *
+ * [snapshot] is null for an **empty** container, and for one whose page could not be captured. Then the panel is
+ * drawn on its own, which is right rather than a fallback: an empty container genuinely is an empty panel, and its
+ * "+" is deliberately left out — a button is not something to draw on a proxy that cannot be pressed.
+ */
+@Composable
+internal fun WidgetContainerProxy(snapshot: Bitmap?, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.containerPanel(), contentAlignment = Alignment.Center) {
+        if (snapshot != null) {
+            Image(
+                bitmap = snapshot.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

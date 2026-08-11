@@ -3,10 +3,8 @@ package inkspire.morphic.feature.home
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
@@ -15,11 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.container.slots
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -27,9 +23,6 @@ import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.roundToInt
-
-/** The container's corner rounding, and the shape its frosted backdrop is clipped to. */
-private val ContainerShape = RoundedCornerShape(16.dp)
 
 /**
  * How much of the container's fill the "+" of an empty one takes up — a hint at the scale of what will go in it,
@@ -74,9 +67,7 @@ internal fun IconContainerCell(
     val colors = LocalMorphicColors.current
     BoxWithConstraints(
         modifier = modifier
-            .fillMaxSize()
-            .clip(ContainerShape)
-            .wallpaperBackdrop(shape = ContainerShape, scrimColor = colors.surface)
+            .containerPanel()
             .then(itemGestures),
         contentAlignment = Alignment.Center,
     ) {

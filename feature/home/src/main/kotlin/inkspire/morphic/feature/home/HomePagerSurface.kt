@@ -920,15 +920,29 @@ internal fun HomePagerSurface(
             // The dragged *folder* still resolves by placement, but the dragged *app* cannot: once a drag has left
             // a folder the app is a member with no cell of its own, so it is looked up through [appInfo], which
             // searches folder contents too. Without that the icon vanishes the instant the folder closes.
-            val draggedFolder = state.items.firstOrNull { it.gridItem == session.item } as? HomeItem.Folder
+            // Resolved once: everything but a loose app is identified by its own grid item, since only an app can
+            // be mid-flight with no placement of its own.
+            val draggedItem = state.items.firstOrNull { it.gridItem == session.item }
+            val draggedFolder = draggedItem as? HomeItem.Folder
+            // An **icon container** is re-drawn like any other cell — its contents are icons the launcher owns, so
+            // there is nothing here it cannot paint a second time.
+            val draggedIconContainer = draggedItem as? HomeItem.IconContainer
             // A widget cannot be re-drawn the way a cell can — its content is another app's views — so the proxy
             // is a snapshot of the one on screen, taken once when the drag starts. See
             // `AppWidgetHostController.snapshot`.
             val draggedWidget = session.item as? GridItem.Widget
             val widgetShot = remember(draggedWidget) { draggedWidget?.let { widgetHost.snapshot(it.appWidgetId) } }
-            if ((draggedApp != null || draggedFolder != null || widgetShot != null) &&
-                folderHost.openFolderId == null
-            ) {
+            // A **widget container** is the same problem one level up, and the page to capture answers itself:
+            // `snapshot` returns null for a widget that is not currently composed, and a pager composes the page it
+            // is showing — so the first non-null is the page the user was looking at. Null for an empty container,
+            // which `WidgetContainerProxy` draws as the bare panel it really is.
+            val draggedWidgetContainer = draggedItem as? HomeItem.WidgetContainer
+            val containerShot = remember(draggedWidgetContainer) {
+                draggedWidgetContainer?.container?.widgetIds?.firstNotNullOfOrNull { widgetHost.snapshot(it) }
+            }
+            val hasProxy = draggedApp != null || draggedFolder != null || widgetShot != null ||
+                draggedIconContainer != null || draggedWidgetContainer != null
+            if (hasProxy && folderHost.openFolderId == null) {
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
@@ -947,6 +961,16 @@ internal fun HomePagerSurface(
                             apps = draggedFolder.apps,
                             modifier = Modifier.fillMaxSize(),
                         )
+                    } else if (draggedIconContainer != null) {
+                        // The real cell, with no click handlers passed: a proxy is a rendering that follows the
+                        // finger, and its slots are not targets — the lifted cell still owns the pointer stream.
+                        IconContainerCell(
+                            icons = draggedIconContainer.icons,
+                            arrangement = draggedIconContainer.container.arrangement,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (draggedWidgetContainer != null) {
+                        WidgetContainerProxy(snapshot = containerShot, modifier = Modifier.fillMaxSize())
                     } else if (widgetShot != null) {
                         Image(
                             bitmap = widgetShot.asImageBitmap(),
