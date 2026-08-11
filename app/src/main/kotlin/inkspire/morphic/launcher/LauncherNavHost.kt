@@ -4,7 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavKey
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import inkspire.morphic.core.navigation.HomeRoute
@@ -63,6 +65,24 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
             // Delegated to the navigator so the start destination is guarded in one place: back on HOME must fall
             // through to the system rather than pop the launcher off its own stack.
             onBack = { navigator.goBack() },
+            // **Each destination gets its own `ViewModelStore`, and without this none of them do.**
+            //
+            // `navigation3-runtime` ships only the saveable-state decorator, so by default every entry shares the
+            // *Activity's* store. A `koinViewModel<T>()` keys on the type, so the first entry to ask for a given
+            // ViewModel creates it and every later entry — a different destination, different arguments — is handed
+            // that same instance. It also means "cleared with the screen" was not true of any ViewModel here:
+            // `viewModelScope` lived as long as the Activity.
+            //
+            // Invisible until a ViewModel took a per-instance parameter, which the icon studio is the first to do:
+            // opening one app's icon and then another edited the first one, and arriving at the picker after either
+            // showed that app instead. One cause, and it was never really about the studio.
+            //
+            // Supplying this list replaces the defaults, so the saveable-state decorator has to be named again —
+            // dropping it would lose each entry's `rememberSaveable` state.
+            entryDecorators = listOf(
+                rememberSaveableStateHolderNavEntryDecorator(),
+                rememberViewModelStoreNavEntryDecorator(),
+            ),
             entryProvider = entryProvider {
                 entry<HomeRoute> {
                     // The launcher. Which edges are swipeable now comes from the surface register in

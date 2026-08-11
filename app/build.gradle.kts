@@ -92,6 +92,7 @@ dependencies {
     // Navigation 3: `core:navigation` exposes the runtime (NavKey/NavBackStack) via `api`; hosting the graph
     // additionally needs `NavDisplay`, which is the ui artifact. `app` is the only module that hosts one.
     implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.kotlinx.serialization.json)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

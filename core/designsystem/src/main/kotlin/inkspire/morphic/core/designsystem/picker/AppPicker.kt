@@ -83,7 +83,10 @@ fun AppPicker(
                 )
             }
         }
-        if (matches.isEmpty()) {
+        // **"Nothing matched" and "nothing has arrived yet" are different**, and saying the first when the second
+        // is true reads as a broken picker: an empty list with an empty query is a caller whose apps have not
+        // loaded, not a search that failed. Only a non-empty query can fail to match.
+        if (matches.isEmpty() && query.isNotEmpty()) {
             Text("No apps match “$query”", modifier = Modifier.padding(16.dp))
         }
     }
