@@ -51,13 +51,20 @@ enum class IconArrangement {
 @Serializable
 data class IconContainer(val id: Long, val arrangement: IconArrangement, val items: List<IconItem>)
 
-/** The direction widgets stack inside a [WidgetContainer]. */
+/**
+ * Which way a [WidgetContainer] is paged — **the direction the finger swipes** to reach the next widget, not a
+ * direction the widgets stack in.
+ */
 @Serializable
 enum class WidgetContainerAxis { HORIZONTAL, VERTICAL }
 
 /**
- * A grid item that groups widgets into one cell, stacked along [axis]. Holds bound widget ids only;
- * per-widget metadata is in [WidgetInfo].
+ * A grid item that groups widgets into one cell, **one shown at a time**, swiped between along [axis]. Holds bound
+ * widget ids only; per-widget metadata is in [WidgetInfo].
+ *
+ * **Paged, not stacked.** Dividing one cell's footprint between the contained widgets would shrink each of them,
+ * which is the opposite of why a user groups widgets: each still wants the whole footprint, and what the container
+ * buys back is the *cells*, by showing one widget at a time.
  */
 @Serializable
 data class WidgetContainer(val id: Long, val axis: WidgetContainerAxis, val widgetIds: List<Int>)

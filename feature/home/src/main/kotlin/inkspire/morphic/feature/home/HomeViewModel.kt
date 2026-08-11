@@ -10,7 +10,12 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.IconArrangement
+import inkspire.morphic.core.model.IconContainer
+import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.WidgetContainer
+import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.core.model.Folder
@@ -256,14 +261,21 @@ class HomeViewModel(
     private val sizing: Flow<HomeSizing> = combine(iconSizings, mainSizing, sideSizing, paddings, layout, ::HomeSizing)
 
     /**
-     * The definitions a placement resolves *through* — a folder's contents, a widget's provider and label.
+     * The definitions a placement resolves *through* — a folder's contents, a widget's provider and label, and each
+     * container's arrangement plus what it holds.
      *
      * Folded into one flow for [sizing]'s reason (`combine` takes five and the state wants more), and this is the
-     * honest pairing: both are stores of *what an item is*, where the placement tables say only where it sits. A
+     * honest grouping: all four are stores of *what an item is*, where the placement tables say only where it sits. A
      * placement whose definition is missing renders as nothing, which is what the `mapNotNull` below relies on.
      */
     private val definitions: Flow<HomeDefinitions> =
-        combine(layoutRepository.folders(), layoutRepository.widgets(), ::HomeDefinitions)
+        combine(
+            layoutRepository.folders(),
+            layoutRepository.widgets(),
+            layoutRepository.iconContainers(),
+            layoutRepository.widgetContainers(),
+            ::HomeDefinitions,
+        )
 
     val state: StateFlow<HomeState> =
         combine(
@@ -276,6 +288,8 @@ class HomeViewModel(
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = defined.folders.associateBy { it.id }
             val widgetById = defined.widgets.associateBy { it.appWidgetId }
+            val iconContainerById = defined.iconContainers.associateBy { it.id }
+            val widgetContainerById = defined.widgetContainers.associateBy { it.id }
             HomeState(
                 items = placed.mapNotNull { (item, at) ->
                     when (item) {
@@ -291,7 +305,31 @@ class HomeViewModel(
                         }
                         is GridItem.Widget ->
                             widgetById[item.appWidgetId]?.let { HomeItem.Widget(it, at.placement, at.zone) }
-                        else -> null // containers get their cells later
+                        // Both containers resolve their *contents* here too, for the folder's reason: the cell draws
+                        // them, so re-resolving per frame in the UI would put this join in the wrong layer twice.
+                        is GridItem.IconContainer -> iconContainerById[item.containerId]?.let { container ->
+                            HomeItem.IconContainer(
+                                container = container,
+                                icons = container.items.mapNotNull { member ->
+                                    when (member) {
+                                        is IconItem.App -> infoByComponent[member.component]?.let(ContainerIcon::App)
+                                        is IconItem.Folder -> folderById[member.folderId]?.let { folder ->
+                                            ContainerIcon.Folder(folder, folder.apps.mapNotNull(infoByComponent::get))
+                                        }
+                                    }
+                                },
+                                placement = at.placement,
+                                zone = at.zone,
+                            )
+                        }
+                        is GridItem.WidgetContainer -> widgetContainerById[item.containerId]?.let { container ->
+                            HomeItem.WidgetContainer(
+                                container = container,
+                                widgets = container.widgetIds.mapNotNull(widgetById::get),
+                                placement = at.placement,
+                                zone = at.zone,
+                            )
+                        }
                     }
                 },
                 layout = configured.layout,
@@ -442,6 +480,118 @@ class HomeViewModel(
             ?: return false
         applyChanges(listOf(LayoutChange.PlaceWidget(widget, at, zone)))
         return true
+    }
+
+    /**
+     * Adds [component] to icon container [containerId] — the "+" picker's commit.
+     *
+     * One op, because `AddToIconContainer` detaches the app from wherever it was as part of filing it: off the grid,
+     * out of a folder, out of another container. So the picker needs no "is it placed?" test and no removal to pair
+     * with, which is the same composition the drag path relies on.
+     */
+    fun addAppToIconContainer(containerId: Long, component: ComponentKey) {
+        applyChanges(listOf(LayoutChange.AddToIconContainer(containerId, IconItem.App(component))))
+    }
+
+    /**
+     * Files a widget the add flow has just bound into widget container [containerId].
+     *
+     * **No span and no free cell**, unlike [placeWidget]: the container already owns a placement and each of its
+     * pages fills it, so there is nothing to size and nothing that can refuse. That is why this returns nothing
+     * where its sibling returns a Boolean — there is no failure for the caller to release the id over.
+     *
+     * The op carries the whole [widget] rather than its id so the definition is written with the membership; see
+     * `LayoutChange.AddToWidgetContainer`.
+     */
+    fun addWidgetToContainer(containerId: Long, widget: WidgetInfo) {
+        applyChanges(listOf(LayoutChange.AddToWidgetContainer(containerId, widget)))
+    }
+
+    /**
+     * Takes widget container [containerId] off HOME — **with every widget inside it, and their ids**.
+     *
+     * This is [removeWidget]'s rule applied once per contained widget, and it is not optional: deleting the
+     * container row cascades its *membership* rows, but `widget_container_item` has no foreign key to the `widget`
+     * table, so each contained widget's definition and its allocated `appWidgetId` would outlive the container with
+     * nothing left pointing at them. A leak the user can neither see nor clear — the reason this is one method
+     * rather than something each caller assembles.
+     *
+     * The ids come from the container's **stored membership** rather than from its resolved [HomeItem.WidgetContainer.widgets],
+     * deliberately: a widget whose definition the store lost is exactly the one whose id most needs handing back,
+     * and it is the one that would be missing from the resolved list.
+     */
+    fun removeWidgetContainer(containerId: Long) {
+        val widgetIds = state.value.items
+            .filterIsInstance<HomeItem.WidgetContainer>()
+            .firstOrNull { it.container.id == containerId }
+            ?.container?.widgetIds
+            .orEmpty()
+        applyChanges(
+            widgetIds.map { LayoutChange.RemoveFromGrid(GridItem.Widget(it)) } +
+                LayoutChange.RemoveFromGrid(GridItem.WidgetContainer(containerId)),
+        )
+        widgetIds.forEach(widgetHost::deleteId)
+    }
+
+    /**
+     * Adds an **empty icon container** to [zone]'s grid, at the first cell a [ContainerSpan] fits.
+     *
+     * Empty is the whole of it: a container is created from the widget picker and then filled, by dragging icons in
+     * or (once there is an app picker) through its own "+". There is nothing to choose at creation, which is why this
+     * takes no items — and nothing to be optimistic about, since the id is autogenerated and the surface has no way
+     * to guess it. `applyChanges` re-syncs from the store after a structural op for exactly this case.
+     *
+     * @return false when nothing of that size fits, in which case nothing is written — [placeWidget]'s contract.
+     */
+    fun createIconContainer(zone: HomeZone, config: GridConfig): Boolean {
+        val at = freeContainerRect(zone, config) ?: return false
+        applyChanges(
+            listOf(
+                LayoutChange.CreateIconContainer(
+                    arrangement = IconArrangement.GRID,
+                    items = emptyList(),
+                    at = at,
+                    zone = zone,
+                ),
+            ),
+        )
+        return true
+    }
+
+    /**
+     * Adds an **empty widget container** to [zone]'s grid, on [createIconContainer]'s terms exactly.
+     *
+     * The default axis is horizontal because that is the direction a finger already swipes on this surface — home's
+     * own pages — so a container's pages read as a smaller instance of a gesture the user has, rather than a new one.
+     *
+     * @return false when nothing of that size fits, in which case nothing is written.
+     */
+    fun createWidgetContainer(zone: HomeZone, config: GridConfig): Boolean {
+        val at = freeContainerRect(zone, config) ?: return false
+        applyChanges(
+            listOf(
+                LayoutChange.CreateWidgetContainer(
+                    axis = WidgetContainerAxis.HORIZONTAL,
+                    widgetIds = emptyList(),
+                    at = at,
+                    zone = zone,
+                ),
+            ),
+        )
+        return true
+    }
+
+    /**
+     * The first free [ContainerSpan]-sized rect on [zone]'s grid, or null when the zone is full.
+     *
+     * Searched rather than given a cell for [placeWidget]'s reason: the picker is reached from a long-press whose
+     * position says where the *menu* opened, not where a container will fit.
+     */
+    private fun freeContainerRect(zone: HomeZone, config: GridConfig): GridPlacement? {
+        val span = ContainerSpan * config.cellMultiplier
+        val occupied = state.value.items.filter { it.zone == zone }.map { it.placement }
+        return GridOccupancy(config, occupied)
+            .findFreeRect(page = 0, row = 0, col = 0, rowSpan = span, colSpan = span)
     }
 
     /**
@@ -760,24 +910,33 @@ class HomeViewModel(
      * space, so a placement alone matches items in every zone at once.
      */
     fun mergeChanges(dragged: GridItem, targetPlacement: GridPlacement, zone: HomeZone): List<LayoutChange>? {
-        val draggedApp = (dragged as? GridItem.App)?.component ?: return null
         val target = state.value.items.firstOrNull {
             it.gridItem != dragged && it.placement == targetPlacement && it.zone == zone
         } ?: return null
+        val draggedApp = (dragged as? GridItem.App)?.component
         return when (target) {
-            // Nothing merges onto a widget: a folder holds apps, and a widget is not one. Returning null is what
-            // makes the drop fall through to an ordinary push, which is the honest outcome — the finger is over a
-            // widget's centre, and there is no collection for the app to join there.
-            is HomeItem.Widget -> null
-            is HomeItem.App -> listOf(
-                LayoutChange.CreateFolder(
-                    label = DEFAULT_FOLDER_LABEL,
-                    apps = listOf(target.info.componentKey, draggedApp),
-                    at = targetPlacement,
-                    zone = zone,
-                ),
-            )
-            is HomeItem.Folder -> listOf(LayoutChange.AddToFolder(target.folder.id, draggedApp))
+            // Nothing merges onto either kind of widget: a widget is not an app and a widget container holds only
+            // widgets, so nothing an icon drag carries can go there. Returning null is what makes the drop fall
+            // through to an ordinary push, which is the honest outcome — the finger is over something that cannot
+            // receive what it is holding. It mirrors `canMerge`, which is what stops the ring being offered at all.
+            is HomeItem.Widget, is HomeItem.WidgetContainer -> null
+            is HomeItem.App -> draggedApp?.let {
+                listOf(
+                    LayoutChange.CreateFolder(
+                        label = DEFAULT_FOLDER_LABEL,
+                        apps = listOf(target.info.componentKey, it),
+                        at = targetPlacement,
+                        zone = zone,
+                    ),
+                )
+            }
+            is HomeItem.Folder -> draggedApp?.let { listOf(LayoutChange.AddToFolder(target.folder.id, it)) }
+            // **One op is the whole move**, unlike the folder paths: `AddToIconContainer` detaches the item from
+            // wherever it was — its grid cell, its folder, another container — as part of filing it, so there is no
+            // removal to pair with it. That detach is the store keeping its own invariant rather than a courtesy to
+            // this caller; see `LayoutRepositoryImpl.detachIconItem`.
+            is HomeItem.IconContainer ->
+                dragged.asIconItem()?.let { listOf(LayoutChange.AddToIconContainer(target.container.id, it)) }
         }
     }
 
@@ -823,6 +982,15 @@ class HomeViewModel(
         val ORIENTATION = Orientation.PORTRAIT
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val DEFAULT_FOLDER_LABEL = "Folder"
+
+        /**
+         * A new container's footprint, in **visual** cells on each axis — L1's `2 * cellMultiplier`.
+         *
+         * Two rather than one because one visual cell is an app's footprint, and a group of icons drawn at an app's
+         * size is a group of smudges: the container has to be bigger than the things it holds to be worth having.
+         * It is a starting size, not a rule — a container is resized like any other placed item.
+         */
+        private const val ContainerSpan = 2
     }
 }
 
@@ -875,7 +1043,35 @@ private data class HomeSizing(
 private data class HomeDefinitions(
     val folders: List<Folder>,
     val widgets: List<WidgetInfo>,
+    val iconContainers: List<IconContainer>,
+    val widgetContainers: List<WidgetContainer>,
 )
+
+/**
+ * This item as something an **icon container** can hold, or null when it is not one of the two.
+ *
+ * The bridge between the grid's five-way [GridItem] and the container's two-way [IconItem], which exist separately
+ * because they answer different questions — "what can sit on a grid?" against "what reads as a single tappable
+ * icon?". A widget or a container is neither: it has no icon-sized representation, and a container inside a
+ * container is a grouping inside a grouping.
+ */
+private fun GridItem.asIconItem(): IconItem? = when (this) {
+    is GridItem.App -> IconItem.App(component)
+    is GridItem.Folder -> IconItem.Folder(folderId)
+    is GridItem.Widget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
+}
+
+/**
+ * The same bridge the other way — which grid item this container member *was*, so the optimistic mirror can take
+ * its placement away when it is filed into a container.
+ *
+ * Total where [asIconItem] is partial, which is the honest asymmetry: everything an icon container can hold is
+ * something that could have been on the grid, but not everything on the grid is something it can hold.
+ */
+private fun IconItem.asGridItem(): GridItem = when (this) {
+    is IconItem.App -> GridItem.App(component)
+    is IconItem.Folder -> GridItem.Folder(folderId)
+}
 
 /**
  * HOME's coordinate placements flattened into a single top-to-bottom order — **the vertical list's seed**.
@@ -909,7 +1105,14 @@ private fun Map<GridItem, PlacedItem>.withApplied(changes: List<LayoutChange>): 
             when (change) {
                 is LayoutChange.Move -> put(change.item, PlacedItem(change.to, change.zone))
                 is LayoutChange.RemoveFromGrid -> remove(change.item)
-                else -> Unit // container/folder membership ops don't move grid placements
+                // **Filing an icon into a container takes it off the grid**, and mirroring that here is what stops
+                // it being drawn twice for the frame or two the write takes: the store's `detachIconItem` deletes
+                // the placement, so without this the old cell keeps its icon until the echo arrives. The container's
+                // *contents* still wait for the store — they come from a definition flow this map knows nothing
+                // about — so the icon briefly disappears rather than briefly duplicating, which is the better of
+                // the two and the same trade `CreateFolder` already makes.
+                is LayoutChange.AddToIconContainer -> remove(change.item.asGridItem())
+                else -> Unit // the remaining membership ops don't move grid placements
             }
         }
     }

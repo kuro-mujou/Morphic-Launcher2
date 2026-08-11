@@ -55,8 +55,17 @@ sealed interface LayoutChange {
 
     /**
      * Detaches [item] from its grid cell. For a [GridItem.Folder] / [GridItem.IconContainer] /
-     * [GridItem.WidgetContainer] the now-unplaced container is destroyed; for a [GridItem.Widget] the widget is
-     * unbound. The referenced **app stays installed** — this is a layout detach, never an uninstall.
+     * [GridItem.WidgetContainer] the now-unplaced container is destroyed and its membership rows cascade with it.
+     * The referenced **app stays installed** — this is a layout detach, never an uninstall.
+     *
+     * **This drops records only; it unbinds nothing.** A [GridItem.Widget]'s definition row goes, but releasing the
+     * `appWidgetId` is an `AppWidgetHost` call and therefore `data:widgets`' job — a caller does both (see
+     * `HomeViewModel.removeWidget`).
+     *
+     * **A [GridItem.WidgetContainer] is the case that bites**, because the cascade looks complete and is not:
+     * `widget_container_item` has no foreign key to the `widget` table, so every contained widget's definition row
+     * and allocated id outlives the container with nothing left pointing at it — a leak the user can neither see
+     * nor clear. Removing a widget container means removing each widget it holds first.
      */
     data class RemoveFromGrid(val item: GridItem) : LayoutChange
 
@@ -125,7 +134,7 @@ sealed interface LayoutChange {
 
     // ── Widget containers (hold bound widgets) ───────────────────────────────────────────────────────────
 
-    /** Creates a widget container stacking [widgetIds] along [axis], placed at [at] in [zone]. */
+    /** Creates a widget container paging [widgetIds] along [axis], placed at [at] in [zone]. */
     data class CreateWidgetContainer(
         val axis: WidgetContainerAxis,
         val widgetIds: List<Int>,
@@ -133,9 +142,22 @@ sealed interface LayoutChange {
         val zone: HomeZone = HomeZone.MAIN,
     ) : LayoutChange
 
-    /** Adds bound widget [appWidgetId] to widget container [containerId]. */
-    data class AddToWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
+    /**
+     * Adds bound [widget] to widget container [containerId] — recording its definition as well as its membership.
+     *
+     * **It carries a [WidgetInfo] rather than a bare id for [PlaceWidget]'s reason, one holder over.** A membership
+     * row joins *through* the definition, so a container given an id nothing else has heard of resolves to a
+     * container holding nothing — the same unrenderable half-state a bare `Move` would produce on the grid. Taking
+     * the whole thing makes that unrepresentable instead of relying on the caller to have written the definition
+     * first. The upsert is idempotent, so the other caller — a widget dragged in off the grid, whose definition is
+     * already there — pays nothing for it and has the value to hand anyway.
+     */
+    data class AddToWidgetContainer(val containerId: Long, val widget: WidgetInfo) : LayoutChange
 
-    /** Removes widget [appWidgetId] from container [containerId] — the widget is unbound. */
+    /**
+     * Removes widget [appWidgetId] from container [containerId] — **membership only**. The widget keeps its
+     * definition row and stays bound; where it goes next is the caller's to say, so this pairs with a [Move] to put
+     * it back on the grid or an [AddToWidgetContainer] to re-home it, exactly as [RemoveFromFolder] does.
+     */
     data class RemoveFromWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
 }
