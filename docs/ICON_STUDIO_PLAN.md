@@ -367,7 +367,7 @@ feed the background layer is the open question.
   sampling in the parser, resolved into the background layer rather than written into the recipe. See the section
   above for the two things building it corrected: L1 never implemented this, and the "invisible until the
   foreground moves" promise had to be *made* true by declining rounded and shadowed icons rather than assumed.
-- **S6 — effects, incrementally. — opacity/blend + colour LANDED (2026-08-11); shadows and gradient to come.**
+- **S6 — effects. — DONE (2026-08-11) as opacity, blend, colour and gradient; shadows deferred with reason.**
   - **Opacity and blend went in *with* the colour group rather than before it**, which reverses this plan's own
     ordering, because they turn out to be one mechanism: all three are a single paint applied as the layer joins
     the stack. Splitting them would have meant building that paint twice.
@@ -394,25 +394,21 @@ feed the background layer is the open question.
   - **The per-layer order is content → shape mask → gradient → composite**, the same on both sides for
     different-looking reasons: statement order in one function, modifier nesting in the other.
 
-  ### The shadow effect is *not* additive, and that is a decision to take rather than a task to do
+  ### Shadows are deferred (decided 2026-08-11), because they are the one effect that is not additive
 
   Every other effect has been a variant plus a few lines per renderer. A shadow is not, because it derives from
   the layer's **finished silhouette** — after the transform and after the shape mask, since an outer shadow has to
   extend beyond the shape and must not be clipped by it. The baked path has that silhouette as a bitmap and can
-  blur it with `BlurMaskFilter` on any API. The live path has *nodes*, and Compose's only blur is
-  `RenderEffect`, which is **API 31+** against this project's `minSdk` of 26.
+  blur it with `BlurMaskFilter` on any API. The live path has *nodes*, and Compose's only blur is `RenderEffect`,
+  which is **API 31+** against this project's `minSdk` of 26. No option is simultaneously cheap, live, and
+  identical on every device: gating the effect on API 31+ denies it where the bake could manage it, blurring via
+  `RenderEffect` makes the editor lie below 31, and rasterising in the live path re-bakes a shadowed layer per
+  frame while its sliders move.
 
-  So there is no option that is simultaneously cheap, live, and identical on every device:
-  - **Gate the effect on API 31+** — both paths always agree, and the effect is simply not offered below it. This
-    is the codebase's own established answer: liquid glass is *hidden* below API 33 because "an effect that
-    silently comes out as a plain blur is worse than one that is not offered". Costs the feature on API 26–30
-    even though the bake could render it there.
-  - **Blur via `RenderEffect` and accept the gap** — full support everywhere, but below API 31 the *editor* shows
-    a hard-edged shadow while the icon bakes soft. That is the divergence the shared derivations exist to prevent,
-    and the editor cannot show you it is lying.
-  - **Rasterise the layer in the live path** — identical on every device, but a shadowed layer then re-bakes per
-    frame while its sliders move, which is precisely the cost the live path was built to avoid.
-  - **Defer shadows.** The effect list takes them whenever; nothing else is owed.
+  **So S6 stops at opacity, blend, colour and gradient.** Nothing else in this plan is waiting on shadows: the
+  effect list takes a new variant with no schema change and no reshape of either renderer, so the decision costs
+  only the effect itself and can be revisited whenever one of the three trades becomes acceptable — most likely by
+  `minSdk` reaching 31, which retires the fork entirely.
 - **S7 — custom image layers.** The picker + crop + `CustomIconStore`, and the file lifecycle. **L1 leaked
   orphans** when a pick was abandoned without saving (it recorded this and accepted it); the fix is to write the
   file only at commit.

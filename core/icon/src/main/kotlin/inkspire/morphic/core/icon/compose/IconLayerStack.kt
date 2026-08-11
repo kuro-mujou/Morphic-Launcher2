@@ -66,7 +66,9 @@ import inkspire.morphic.core.model.icon.IconShape
  * different-looking reasons: the bake gets it from statement order inside one function, and this path gets it from
  * which node carries which modifier. Worth checking against `IconRenderer` if either is touched.
  *
- * A **shadow** effect is the one still missing, and it is not simply additive here — see the plan's S6 note.
+ * A **shadow** effect is deliberately absent: it is the one effect that is not additive here, because it derives
+ * from the layer's finished silhouette and Compose's only blur (`RenderEffect`) is API 31+ against a `minSdk` of
+ * 26 — so it could not be made to match the bake on every device. See the plan's S6 note.
  *
  * @param icon the app's parsed layers, from `ParsedIconLoader` — the same input the bake takes.
  * @param customImage resolves a custom-image layer's stored path to a drawable. Defaults to drawing nothing, and

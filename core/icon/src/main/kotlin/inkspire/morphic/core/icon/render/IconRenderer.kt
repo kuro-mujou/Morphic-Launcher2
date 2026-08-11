@@ -38,8 +38,12 @@ import androidx.core.graphics.withMatrix
  * ([inkspire.morphic.core.icon.compose.IconLayerStack]) composes the same three into one paint for the same
  * reason, and shares [LayerFilter]'s matrix arithmetic so the two cannot disagree about a tint.
  *
- * Still deferred: shadow and gradient effects (additive `LayerEffect` variants — nothing here changes shape for
- * them), and adaptive-layer overshoot scaling (`AppDefault` layers draw to the full box; expect to tune on device).
+ * A layer's gradient overlay is applied **after its shape mask**, so it colours the shaped silhouette rather than
+ * the square it was cut from — the live path orders it the same way, by which node carries which modifier.
+ *
+ * Still deferred: a **shadow** effect (not additive — it could not be matched in the live path below API 31; see
+ * the plan's S6 note), and adaptive-layer overshoot scaling (`AppDefault` layers draw to the full box; expect to
+ * tune on device).
  */
 class IconRenderer(
     private val context: Context,
