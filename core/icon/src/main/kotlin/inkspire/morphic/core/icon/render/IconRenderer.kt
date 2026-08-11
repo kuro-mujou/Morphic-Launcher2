@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
@@ -12,6 +14,8 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
@@ -21,13 +25,18 @@ import androidx.core.graphics.withMatrix
  * Composites an [IconLayerSet] + the app's [ParsedIcon] into one square [Bitmap] of `sizePx` — the baked icon
  * shown on the home screen and other surfaces.
  *
- * Each layer is drawn into its own bitmap (so a per-layer shape mask, and later per-layer effects, can be
- * applied in isolation), then stacked bottom→top onto the output. Compositing is **synchronous and CPU/heavy**
- * (bitmap allocation + drawing); callers run it off the main thread and cache the result by `IconId`.
+ * Each layer is drawn into its own bitmap — so its transform and shape mask apply in isolation — and is then
+ * composited onto the output through one paint carrying its opacity, blend mode and colour matrix. Compositing is
+ * **synchronous and CPU/heavy** (bitmap allocation + drawing); callers run it off the main thread and cache the
+ * result by `IconId`.
  *
- * Not done yet, both deferred with reason: per-layer **effects** (the effect bag is still empty), and any
- * adaptive-layer overshoot scaling (`AppDefault` layers draw to the full box for now — expect to tune the fit
- * on device).
+ * **Why the paint is applied at the join and not while the content is drawn**: a blend mode has to mean "against
+ * everything beneath this layer", and inside the layer's own bitmap there is nothing beneath. The live path
+ * ([inkspire.morphic.core.icon.compose.IconLayerStack]) composes the same three into one paint for the same
+ * reason, and shares [LayerFilter]'s matrix arithmetic so the two cannot disagree about a tint.
+ *
+ * Still deferred: shadow and gradient effects (additive `LayerEffect` variants — nothing here changes shape for
+ * them), and adaptive-layer overshoot scaling (`AppDefault` layers draw to the full box; expect to tune on device).
  */
 class IconRenderer(
     private val context: Context,
@@ -45,10 +54,26 @@ class IconRenderer(
 
         resolver.resolve(layerSet, icon, ::decodeCustomImage).forEach { layer ->
             val layerBitmap = renderLayer(layer, sizePx)
-            canvas.drawBitmap(layerBitmap, 0f, 0f, null)
+            // Opacity, blend and colour are applied **as the layer joins the stack**, not while its content is
+            // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the
+            // one bitmap I am in". The live path composes the same three into one paint for the same reason.
+            canvas.drawBitmap(layerBitmap, 0f, 0f, compositePaint(layer.spec))
             layerBitmap.recycle()
         }
         return output
+    }
+
+    /** Alpha, blend mode and colour matrix for one layer, or `null` when it composites plainly. */
+    private fun compositePaint(spec: IconLayerSpec): Paint? {
+        val matrix = LayerFilter.colorMatrixOf(spec.color)
+        val mode = spec.blend.porterDuff()
+        if (spec.opacity == 1f && mode == null && matrix == null) return null
+
+        return Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            alpha = (spec.opacity.coerceIn(0f, 1f) * 255).toInt()
+            mode?.let { xfermode = PorterDuffXfermode(it) }
+            matrix?.let { colorFilter = ColorMatrixColorFilter(ColorMatrix(it)) }
+        }
     }
 
     /** Draws one resolved layer (content + transform, then its shape mask) into its own bitmap. */
@@ -90,4 +115,17 @@ class IconRenderer(
 
     private fun decodeCustomImage(path: String): Drawable? =
         BitmapFactory.decodeFile(path)?.toDrawable(context.resources)
+
+    /**
+     * The Porter-Duff mode for [LayerBlend], or `null` for [LayerBlend.NORMAL] — which is source-over, i.e. what a
+     * paint with no xfermode already does.
+     */
+    private fun LayerBlend.porterDuff(): PorterDuff.Mode? = when (this) {
+        LayerBlend.NORMAL -> null
+        LayerBlend.MULTIPLY -> PorterDuff.Mode.MULTIPLY
+        LayerBlend.SCREEN -> PorterDuff.Mode.SCREEN
+        LayerBlend.OVERLAY -> PorterDuff.Mode.OVERLAY
+        LayerBlend.DARKEN -> PorterDuff.Mode.DARKEN
+        LayerBlend.LIGHTEN -> PorterDuff.Mode.LIGHTEN
+    }
 }

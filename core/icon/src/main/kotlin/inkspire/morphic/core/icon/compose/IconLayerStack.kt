@@ -11,6 +11,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.TransformOrigin
@@ -24,8 +26,11 @@ import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.icon.render.IconLayerResolver
+import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.icon.render.LayerTransform
 import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.IconShape
 
 /**
@@ -44,13 +49,15 @@ import inkspire.morphic.core.model.icon.IconShape
  * than a shared intention:
  * - [IconLayerResolver] decides which layers draw and what content each one means, for both.
  * - [LayerTransform] does the offset/zoom/rotation arithmetic, for both.
+ * - [LayerFilter] does the colour-matrix arithmetic, for both — and shares the *same shape*, since Android's and
+ *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
  * - The shape mask is built from the **same** vector drawable via [IconShapes], and applied the same way — as a
  *   destination-in mask over the finished layer.
  *
  * What is *not* shared is the drawing API (Android's `Canvas` there, [DrawScope] here). That is unavoidable, and
- * it is exactly why the three above are.
+ * it is exactly why the four above are.
  *
- * Effects are not applied yet, in either path: `LayerEffect` has no variants until the effects slice.
+ * Shadow and gradient effects are still to come; they are additive `LayerEffect` variants and need no change here.
  *
  * @param icon the app's parsed layers, from `ParsedIconLoader` — the same input the bake takes.
  * @param customImage resolves a custom-image layer's stored path to a drawable. Defaults to drawing nothing, and
@@ -70,12 +77,17 @@ fun IconLayerStack(
     val resolver = remember { IconLayerResolver() }
     val layers = remember(layerSet, icon, customImage) { resolver.resolve(layerSet, icon, customImage) }
 
-    Box(modifier) {
+    // **The stack composites offscreen, and a blend mode is why.** Sibling nodes draw onto whatever canvas they
+    // are given, so without its own buffer a `MULTIPLY` on the bottom layer would multiply against the *studio
+    // canvas* — the black, white or checkerboard behind the icon — instead of against nothing. The baked path
+    // gets this for free by drawing into a fresh bitmap.
+    Box(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         layers.forEach { layer ->
-            // Two nested nodes, and the nesting is the whole trick: the mask sits **outside** the transform, so a
-            // shape stays put in the box while the content moves under it. The baked path gets the same ordering
-            // by masking after it restores the canvas matrix; here it falls out of which node carries what.
-            Box(Modifier.fillMaxSize().shapeMask(layer.spec.shape)) {
+            // Three nested nodes now, and the nesting is the whole trick. The composite (opacity / blend / colour)
+            // is **outermost**, so it applies to the finished layer and blends against the layers already drawn;
+            // the mask sits inside it but **outside the transform**, so a shape stays put in the box while the
+            // content moves under it. The baked path gets the same ordering from its draw order.
+            Box(Modifier.fillMaxSize().layerComposite(layer.spec).shapeMask(layer.spec.shape)) {
                 Canvas(
                     Modifier
                         .fillMaxSize()
@@ -110,6 +122,46 @@ private fun DrawScope.drawLayerContent(content: ParsedLayer) {
             }
         }
     }
+}
+
+/**
+ * Applies a layer's opacity, blend mode and colour matrix as it joins the stack — the live twin of
+ * `IconRenderer.compositePaint`, sharing [LayerFilter]'s arithmetic so a tint cannot come out differently here.
+ *
+ * Through `saveLayer` rather than `graphicsLayer`, because `GraphicsLayerScope` has an `alpha` but no blend mode
+ * and no colour filter; capturing the node into its own buffer and compositing *that* with one paint is the only
+ * way to get all three, and it is the same technique [shapeMask] needs one level in.
+ *
+ * A layer that composites plainly gets no modifier at all, which is the common case — an unedited icon.
+ */
+@Composable
+private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
+    val matrix = remember(spec.color) { LayerFilter.colorMatrixOf(spec.color) }
+    val blend = spec.blend.composeBlendMode()
+    if (spec.opacity == 1f && blend == null && matrix == null) return this
+
+    return this.drawWithContent {
+        drawIntoCanvas { canvas ->
+            val paint = Paint().apply {
+                alpha = spec.opacity.coerceIn(0f, 1f)
+                blend?.let { blendMode = it }
+                matrix?.let { colorFilter = ColorFilter.colorMatrix(ColorMatrix(it)) }
+            }
+            canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
+            drawContent()
+            canvas.restore()
+        }
+    }
+}
+
+/** The Compose blend mode for [LayerBlend], or `null` for `NORMAL` — which is the default source-over. */
+private fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
+    LayerBlend.NORMAL -> null
+    LayerBlend.MULTIPLY -> BlendMode.Multiply
+    LayerBlend.SCREEN -> BlendMode.Screen
+    LayerBlend.OVERLAY -> BlendMode.Overlay
+    LayerBlend.DARKEN -> BlendMode.Darken
+    LayerBlend.LIGHTEN -> BlendMode.Lighten
 }
 
 /**

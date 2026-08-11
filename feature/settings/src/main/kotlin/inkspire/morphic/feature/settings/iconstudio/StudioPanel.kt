@@ -43,6 +43,8 @@ import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
+import inkspire.morphic.core.model.icon.LayerBlend
+import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 
@@ -177,8 +179,21 @@ private fun LayerRow(
     }
 }
 
-/** Which control group is showing. Three, because the model has exactly three things to say about a layer today. */
-private enum class LayerTool(val label: String) { TRANSFORM("Transform"), SHAPE("Shape"), SOURCE("Source") }
+/** Which control group is showing. */
+private enum class LayerTool(val label: String) {
+    TRANSFORM("Transform"),
+    SHAPE("Shape"),
+    SOURCE("Source"),
+
+    /**
+     * Opacity, blend mode and recolouring together.
+     *
+     * They are **not** one thing in the model — opacity and blend are compositing fields on the spec, recolouring
+     * is a `LayerEffect` — but that distinction is about what can vary independently in storage, and a user
+     * adjusting how a layer reads colour-wise does not care which side of it a control sits on. One tab.
+     */
+    COLOR("Color"),
+}
 
 @Composable
 private fun SelectedLayerControls(
@@ -206,6 +221,7 @@ private fun SelectedLayerControls(
             LayerTool.TRANSFORM -> TransformControls(spec, onUpdate, onCommit)
             LayerTool.SHAPE -> ShapeControls(spec, onUpdate)
             LayerTool.SOURCE -> SourceControls(spec, onUpdate)
+            LayerTool.COLOR -> ColorControls(spec, onUpdate, onCommit)
         }
     }
 }
@@ -253,6 +269,101 @@ private fun TransformControls(
             onValueChangeFinished = onCommit,
         )
     }
+}
+
+/**
+ * How the layer joins the stack (opacity, blend) and how it is recoloured (tint, saturation, brightness, hue).
+ *
+ * **The recolouring controls write one `LayerEffect.Color`, never four**, via `IconLayerSpec.withColor` — which is
+ * why an all-default effect is *removed* from the list rather than stored as a row of 1s. Four separate effects
+ * would mean their order in the list silently changed the result.
+ */
+@Composable
+private fun ColorControls(
+    spec: IconLayerSpec,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val color = spec.color ?: LayerEffect.Color()
+
+    LabelledControl("Opacity  ${"%.2f".format(spec.opacity)}") {
+        MorphicSlider(
+            value = spec.opacity,
+            onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
+            valueRange = 0f..1f,
+            onValueChangeFinished = onCommit,
+        )
+    }
+    LabelledControl("Blend") {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LayerBlend.entries.toList().chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { blend ->
+                        ChoiceChip(
+                            label = blend.name.lowercase(),
+                            selected = spec.blend == blend,
+                            modifier = Modifier.fillMaxWidth(1f / row.size),
+                        ) { onUpdate { it.copy(blend = blend) } }
+                    }
+                }
+            }
+        }
+    }
+    LabelledControl("Saturation  ${"%.2f".format(color.saturation)}") {
+        MorphicSlider(
+            value = color.saturation,
+            onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
+            valueRange = 0f..2f,
+            onValueChangeFinished = onCommit,
+        )
+    }
+    LabelledControl("Brightness  ${"%.2f".format(color.brightness)}") {
+        MorphicSlider(
+            value = color.brightness,
+            onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
+            valueRange = 0.2f..2f,
+            onValueChangeFinished = onCommit,
+        )
+    }
+    LabelledControl("Hue  ${"%.0f".format(color.hueDegrees)}°") {
+        MorphicSlider(
+            value = color.hueDegrees,
+            onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
+            valueRange = 0f..360f,
+            onValueChangeFinished = onCommit,
+        )
+    }
+    LabelledControl("Tint") {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // "None" first, because a tint is the one recolouring that cannot be undone by returning a slider to
+            // the middle — without a way off, picking one would be a one-way door.
+            Swatch(argb = null, selected = color.tintArgb == null) {
+                onUpdate { it.withColor(color.copy(tintArgb = null)) }
+            }
+            FillSwatches.take(6).forEach { argb ->
+                Swatch(argb = argb, selected = color.tintArgb == argb) {
+                    onUpdate { it.withColor(color.copy(tintArgb = argb)) }
+                }
+            }
+        }
+    }
+}
+
+/** One colour dot. A null [argb] is the "no tint" dot, drawn hollow. */
+@Composable
+private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(if (argb == null) Color.Transparent else Color(argb))
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) StudioContentColor else Color.White.copy(0.3f),
+                shape = CircleShape,
+            )
+            .clickable(onClick = onClick),
+    )
 }
 
 /**
@@ -318,18 +429,9 @@ private fun SourceControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
                 // is replaced rather than a workaround that has to be unpicked.
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FillSwatches.forEach { argb ->
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(Color(argb))
-                                .border(
-                                    width = if (fill.argb == argb) 2.dp else 1.dp,
-                                    color = if (fill.argb == argb) StudioContentColor else Color.White.copy(0.3f),
-                                    shape = CircleShape,
-                                )
-                                .clickable { onUpdate { it.copy(source = LayerSource.SolidFill(argb)) } },
-                        )
+                        Swatch(argb = argb, selected = fill.argb == argb) {
+                            onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
+                        }
                     }
                 }
             }

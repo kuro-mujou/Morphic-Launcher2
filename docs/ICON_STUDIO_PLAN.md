@@ -367,8 +367,25 @@ feed the background layer is the open question.
   sampling in the parser, resolved into the background layer rather than written into the recipe. See the section
   above for the two things building it corrected: L1 never implemented this, and the "invisible until the
   foreground moves" promise had to be *made* true by declining rounded and shadowed icons rather than assumed.
-- **S6 — effects, incrementally.** `opacity`/`blend` on the spec first (cheapest, highest payoff), then the
-  `ColorMatrix` group, then shadows, then gradient. Each ships alone; none touches the schema.
+- **S6 — effects, incrementally. — opacity/blend + colour LANDED (2026-08-11); shadows and gradient to come.**
+  - **Opacity and blend went in *with* the colour group rather than before it**, which reverses this plan's own
+    ordering, because they turn out to be one mechanism: all three are a single paint applied as the layer joins
+    the stack. Splitting them would have meant building that paint twice.
+  - **The paint is applied at the join, not while the content is drawn.** A blend mode has to mean "against
+    everything beneath this layer", and inside a layer's own bitmap there is nothing beneath. The live path needs
+    one extra thing for the same reason — the whole stack composites **offscreen**, or a `MULTIPLY` on the bottom
+    layer would multiply against the studio canvas instead of against nothing.
+  - **`LayerFilter` joins the shared set**, beside `LayerTransform`: one colour-matrix derivation for both
+    renderers. It is free to share because Android's and Compose's `ColorMatrix` are each a row-major
+    `FloatArray(20)`, so neither side converts anything. Unit-tested by pushing colours through the matrices
+    rather than asserting on entries — the question is whether saturation 0 greys a pixel, not what row 1 holds.
+  - **Recolouring is one `LayerEffect.Color`, not four effects.** Hue, saturation, brightness and tint compose
+    into a single matrix in a fixed order, so four list entries would mean their *order* silently changed the
+    result — a way to be wrong this shape does not have. Monochrome is `saturation = 0` plus a tint rather than a
+    variant of its own (and is a different thing from `LayerSource.AppDefaultMonochrome`, which swaps in artwork
+    the *app* ships).
+  - **The schema promise held**: the spec gained two fields and the slice test asserting the exact stored JSON of
+    `IconLayerSet.Base` still passes, because defaults are not encoded.
 - **S7 — custom image layers.** The picker + crop + `CustomIconStore`, and the file lifecycle. **L1 leaked
   orphans** when a pick was abandoned without saving (it recorded this and accepted it); the fix is to write the
   file only at commit.

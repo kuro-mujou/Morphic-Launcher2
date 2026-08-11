@@ -7,9 +7,11 @@ import kotlinx.serialization.Serializable
  *
  * Transform values live in the icon's normalized square box: [offsetX]/[offsetY] are fractions of that box
  * (0 = centered), [zoom] is a scale (1 = the default fit, >1 zooms in), [rotation] is in degrees clockwise.
- * [shape] masks fg/bg layers to a silhouette and is ignored for custom layers (they keep their own alpha), so
- * it defaults to `null` (unshaped). [effects] is the extensible, defaulted-empty effect bag (see
- * [LayerEffect]).
+ * [shape] masks a layer to a silhouette, so it defaults to `null` (unshaped). [effects] is the extensible,
+ * defaulted-empty effect bag (see [LayerEffect]).
+ *
+ * [opacity] and [blend] are **compositing** properties rather than effects: every layer has both, always, with a
+ * meaningful default, which is what makes them fields. See [LayerBlend].
  *
  * @property visible When false the layer is skipped in the composite but kept in the set (an editor hide
  *   toggle). *(Assumption — a standard layer-editor affordance; flag if not wanted for v1.)*
@@ -24,5 +26,18 @@ data class IconLayerSpec(
     val zoom: Float = 1f,
     val rotation: Float = 0f,
     val shape: IconShape? = null,
+    val opacity: Float = 1f,
+    val blend: LayerBlend = LayerBlend.NORMAL,
     val effects: List<LayerEffect> = emptyList(),
-)
+) {
+
+    /** The layer's colour effect, or null when it has none. At most one is meaningful — see [LayerEffect.Color]. */
+    val color: LayerEffect.Color?
+        get() = effects.filterIsInstance<LayerEffect.Color>().firstOrNull()?.takeIf { !it.isIdentity }
+
+    /** Replaces (or clears) this layer's colour effect, leaving every other effect in place and in order. */
+    fun withColor(color: LayerEffect.Color?): IconLayerSpec {
+        val rest = effects.filterNot { it is LayerEffect.Color }
+        return copy(effects = if (color == null || color.isIdentity) rest else rest + color)
+    }
+}
