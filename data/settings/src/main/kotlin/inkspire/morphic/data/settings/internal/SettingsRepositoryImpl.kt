@@ -20,6 +20,7 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
@@ -71,6 +72,26 @@ private val BackdropEffectSlice = SettingsSlice(
     default = BackdropEffect.Default,
 )
 
+/**
+ * The global default icon recipe: one key, one blob.
+ *
+ * **Stored as the bare [IconLayerSet], not wrapped in a settings record** — [BackdropEffectSlice]'s shape, and for
+ * its reason: the recipe *is* the whole setting, so a wrapper would be a bag with one field. If something global
+ * about icons ever turns out not to be part of the recipe, it gets its own key rather than joining this one, which
+ * is the entire point of a slice per concern.
+ *
+ * **A malformed blob falls back to [IconLayerSet.Base] and is reported**, and this is the one slice where that path
+ * is reachable by more than corruption: the set validates its own invariants in `init` (exactly one foreground, one
+ * background, foreground above background), so a blob that decodes into an illegal stack throws there and is caught
+ * by [SettingsSlice.decode] like any other unreadable value. Falling back to the plain app-default icons is a state
+ * the user can see and fix; refusing to draw icons is not.
+ */
+private val IconLayerSetSlice = SettingsSlice(
+    name = "icon_layer_set",
+    serializer = serializer<IconLayerSet>(),
+    default = IconLayerSet.Base,
+)
+
 /** The APPS surface's chrome: one key, one blob. */
 private val AppsChromeSlice = SettingsSlice(
     name = "apps_chrome",
@@ -116,6 +137,8 @@ internal class SettingsRepositoryImpl(
 
     override val backdropEffect: Flow<BackdropEffect> = dataStore.read(BackdropEffectSlice) { it }
 
+    override val iconLayerSet: Flow<IconLayerSet> = dataStore.read(IconLayerSetSlice) { it }
+
     override val appsChrome: Flow<AppsChrome> = dataStore.read(AppsChromeSlice) { it }
 
     override suspend fun setSearchPlacement(placement: SearchPlacement) =
@@ -126,6 +149,9 @@ internal class SettingsRepositoryImpl(
     // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
     // path: it is what puts the write inside a DataStore transaction.
     override suspend fun setBackdropEffect(effect: BackdropEffect) = update(BackdropEffectSlice) { effect }
+
+    // Also ignores the old value: a layer set is replaced wholesale, never patched. See the interface.
+    override suspend fun setIconLayerSet(layerSet: IconLayerSet) = update(IconLayerSetSlice) { layerSet }
 
     override suspend fun setHomeLayout(layout: HomeLayout) =
         update(SurfaceRegisterSlice) { copy(homeLayout = layout) }

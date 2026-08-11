@@ -11,6 +11,7 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.icon.IconLayerSet
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -46,6 +47,19 @@ interface SettingsRepository {
     val backdropEffect: Flow<BackdropEffect>
 
     /**
+     * The **global default icon recipe**: the layer set every app's icon renders from until that app is edited.
+     *
+     * Emits [IconLayerSet.Base] when nothing is stored — the plain two-layer app-default set — so "no settings yet"
+     * and "the user reset everything" are the same state and no consumer special-cases either.
+     *
+     * **Per-app overrides are deliberately not here.** They are rows in `data:icons`, because there is one of them
+     * per customised app and this is a preference store, not an arrangement store — the same line `drawerOrder` and
+     * `categories` fell on the wrong side of in L1. The two meet in the composition, where an icon resolves its
+     * override or falls back to this.
+     */
+    val iconLayerSet: Flow<IconLayerSet>
+
+    /**
      * The APPS surface's chrome — the search field's placement, and which edge the category tabs sit on.
      *
      * **Read by the settings editor today and by the surface when those features land.** Neither search nor the tab bar
@@ -75,6 +89,18 @@ interface SettingsRepository {
      * sealed type trades that for making an effect unable to hold another effect's parameters, and this is the bill.
      */
     suspend fun setBackdropEffect(effect: BackdropEffect)
+
+    /**
+     * Replaces the global default icon recipe outright.
+     *
+     * A whole-value write for [setBackdropEffect]'s reason, one step further: a layer set is an **ordered list**, so
+     * there is no sparse record to patch and no stable key to patch it by — insert a layer and every index below it
+     * moves. The editor holds the whole set anyway (that is what it edits), so it writes the whole set.
+     *
+     * This is also what makes undo cheap: a set is an immutable value, so the editor's history is a list of these and
+     * a step is an index. L1 could not do that, because its equivalent state was a bag of flat fields.
+     */
+    suspend fun setIconLayerSet(layerSet: IconLayerSet)
 
     /** Sets HOME's main-area + side-zone pairing. */
     suspend fun setHomeLayout(layout: HomeLayout)
