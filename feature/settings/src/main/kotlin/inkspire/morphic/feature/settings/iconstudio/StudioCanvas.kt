@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.iconstudio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,6 +23,24 @@ import kotlin.math.min
 /** How much of the canvas's shorter side the icon's bound takes. Large enough to work in, short of edge to edge. */
 private const val IconBoundFraction = 0.62f
 
+/**
+ * How far above centre the bound sits, as a fraction of the canvas's height.
+ *
+ * **The chrome is not symmetrical, so the middle of the canvas is not the middle of what can be seen.** The top holds
+ * one row of pill buttons; the bottom holds the tool rail, the cycle row, and — whenever a section is open — a panel of
+ * up to 300dp. Centred, the icon sits under that panel exactly when the user is adjusting the layer it is drawing.
+ *
+ * **A fixed lift rather than centring in the free space**, which was the alternative and is worse: the panel's height
+ * varies by section, so the icon would jump every time the rail was tapped, and the jump would be largest for the
+ * sections with the most controls — the ones being watched most closely. A constant offset is a compromise and is meant
+ * to be: at 12% it clears the rail and the cycle row outright, and leaves an open panel overlapping only the bottom of
+ * the bound rather than most of it.
+ *
+ * Read by the layout **and** by [drawBackdrop], because the checkerboard in the two mixed modes fills this same square
+ * — the KDoc below promises the two agree, and they only do while both apply this.
+ */
+private const val IconBoundLift = 0.12f
+
 /** One square of the transparency checkerboard, at canvas scale. */
 private val CheckerSquare = 12.dp
 
@@ -30,7 +49,8 @@ private val CheckerLight = Color(0xFFBDBDBD)
 internal val CheckerDark = Color(0xFF8A8A8A)
 
 /**
- * The studio's canvas: a backdrop, and a **square bound** in the middle of it that the icon is drawn in.
+ * The studio's canvas: a backdrop, and a **square bound** the icon is drawn in — centred horizontally, and a little
+ * above centre vertically so the chrome below does not cover it ([IconBoundLift]).
  *
  * The bound is square and it **clips**, both because the real renderer works that way — an icon is composited into a
  * square bitmap — so a layer pushed past the edge here disappears exactly as it would on the home screen. An editor
@@ -65,6 +85,11 @@ fun StudioCanvas(
         Box(
             modifier = Modifier
                 .size(side.dp)
+                // Centred, then lifted clear of the chrome below — see [IconBoundLift]. An offset rather than an
+                // alignment bias because a bias scales with the *leftover* space, so the same value would move the
+                // bound further on a tablet than on a phone; this is a fraction of the canvas either way, which is
+                // what lets `drawBackdrop` reproduce it from its own size.
+                .offset(y = -maxHeight * IconBoundLift)
                 // The bound's whole job beyond holding the icon: overflow vanishes here as it would in the bake.
                 .clipToBounds(),
         ) {
@@ -96,9 +121,12 @@ private fun DrawScope.drawBackdrop(background: PreviewBackground, checkerPx: Flo
 
     // The same square the icon is drawn in. Derived here from this draw scope's own size rather than passed in,
     // which is what makes the two certain to agree: both are `IconBoundFraction` of the shorter side of the very
-    // same node.
+    // same node, centred and then lifted by `IconBoundLift` of its height.
     val side = min(size.width, size.height) * IconBoundFraction
-    val topLeft = Offset((size.width - side) / 2f, (size.height - side) / 2f)
+    val topLeft = Offset(
+        x = (size.width - side) / 2f,
+        y = (size.height - side) / 2f - size.height * IconBoundLift,
+    )
     drawCheckerboard(topLeft, Size(side, side), checkerPx)
 }
 
