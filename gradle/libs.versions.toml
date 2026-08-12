@@ -48,9 +48,10 @@ timber = "5.0.1"
 # Drag-to-reorder for LazyColumn (auto-scroll + live push)
 reorderable = "2.4.3"
 
-# Haze — real-time blur behind the Icon Studio's floating surfaces. 2.0 modular API:
-# Modifier.hazeEffect(state) { blurEffect { blurRadius = ..; colorEffects = HazeColorEffect.tint(..) } }
-haze = "2.0.0-alpha03"
+# Haze — real-time blur behind the Icon Studio's floating surfaces. 2.0 modular API, and the material comes from
+# the library rather than from a radius of ours:
+# Modifier.hazeBlur(input = HazeInput.Sources(state), style = HazeMaterials.ultraThin(tint))
+haze = "2.0.0-alpha04"
 
 # First-run coach-mark tour for the Icon Studio (icon-only tool rail).
 kmp-showcase = "0.1.0"

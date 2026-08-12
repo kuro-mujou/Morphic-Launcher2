@@ -60,4 +60,5 @@ dependencies {
     // to sample, and the transparent punch-through every settings preview uses would leave it nothing.
     implementation(libs.haze)
     implementation(libs.haze.blur)
+    implementation(libs.haze.blur.materials)
 }

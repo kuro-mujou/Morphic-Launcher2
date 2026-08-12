@@ -94,11 +94,34 @@ serve. Two consequences worth keeping straight:
   drawing-app material. Blurred checkerboard reads as a fine neutral frost, and the dark tint gives every surface
   one consistent material whichever background is chosen.
 
-**Neither dependency is new — both are already in `gradle/libs.versions.toml` and consumed by nothing**, so the
-studio is their first consumer, as L1 planned. Haze `2.0.0-alpha03`, modular (`haze` + `haze-blur` +
-`haze-blur-materials`), API `Modifier.hazeEffect(state) { blurEffect { blurRadius; colorEffects } }` over a
-`hazeSource`-marked canvas. Confirm it resolves against the pins at add-time (Kotlin 2.4.0, compose-bom
-2026.06.00, material3 1.5.0-alpha22) — the catalog comment records the API but no module has compiled against it.
+**Neither dependency is new — both were already in `gradle/libs.versions.toml` and consumed by nothing**, so the
+studio is their first consumer, as L1 planned. Haze **`2.0.0-alpha04`**, modular: `haze` + `haze-blur` +
+**`haze-blur-materials`**, all three now actually consumed by `feature:settings`.
+
+**The material comes from the library rather than from our own numbers**, which is the second cut and the one that
+looks right on device:
+
+```kotlin
+Modifier
+    .clip(shape)
+    .hazeBlur(
+        input = HazeInput.Sources(state),
+        style = HazeMaterials.ultraThin(StudioTint),
+    )
+```
+
+over a `hazeSource`-marked canvas. The first cut drove `Modifier.hazeEffect(state) { blurEffect { blurRadius;
+colorEffects } }` by hand — a radius we picked and a tint applied as a `HazeColorEffect` — and what it produced was
+a flat wash rather than glass. `HazeMaterials` is the library's own set of iOS-style materials: `ultraThin` supplies
+the radius, the tint blend *and* the noise together, so the one number left to choose is the tint colour
+(`Color.DarkGray` at 40%, which reads over both a black and a white canvas). The `blurRadius` parameter on
+`studioSurface` is **gone rather than defaulted** — a per-surface depth is exactly what "one material, so a new panel
+cannot arrive looking different" exists to prevent, and the shared radius is the material's now.
+
+Two things that went with it. `HazeInput.Sources(state)` names the input explicitly, where `hazeEffect(state)`
+implied it — the modular 2.0 API can also blur a bitmap or a snapshot, so the source is a choice now. And
+`hazeBlur` is `@ExperimentalHazeApi`, opted in at the one call site; the whole dependency is on an alpha, so this
+adds no risk the version pin does not already carry.
 
 ### One thing not taken
 
@@ -329,10 +352,20 @@ feed the background layer is the open question.
 - **S3 — editor shell + route + entry points. — CODE LANDED (2026-08-11); on-device verification pending.** Four
   parts:
   - **S3a** — Haze proven and `studioSurface` stood up. The API was read out of the published sources rather than
-    taken from L1's notes, which were a guess (that plan marks the imports "assumed" and never compiled). Two
-    decisions: the content colour is **fixed white**, the studio being the one zone whose backdrop the *user*
-    switches between black and white; and the fallback background sits **before** `hazeEffect` in the chain, so it
-    is covered by the blur rather than doubling its wash.
+    taken from L1's notes, which were a guess (that plan marks the imports "assumed" and never compiled). The
+    content colour is **fixed white**, the studio being the one zone whose backdrop the *user* switches between
+    black and white.
+
+    **Revised on device (2026-08-12): the material is `HazeMaterials.ultraThin`, not a radius and a tint we
+    chose.** The first cut composed the surface by hand — `hazeEffect { blurEffect { blurRadius; colorEffects } }`
+    over an opaque `background(StudioTint)` placed *before* it in the chain, so the wash sat behind the blur rather
+    than doubling it. That ordering was right about the mechanism and wrong about the outcome: hand-picked, it
+    read as a flat film over the canvas rather than as glass, and no radius fixed it. The library ships the
+    material — `ultraThin` carries radius, tint blend and noise as one recipe — so the only number we still own is
+    the tint colour. Two things that were load-bearing in the first cut are simply gone with it: the
+    chain-order decision above (there is no separate background to order), and `studioSurface`'s `blurRadius`
+    parameter, whose removal is the point rather than a tidy-up — a per-surface depth is what "one material, so a
+    new panel cannot arrive looking different" exists to prevent. See the blur section above for the code.
   - **S3b** — route, plain-MVVM ViewModel, canvas. The key is a **sealed pair** (`Global` / `App(component?)`)
     rather than L1's mode-plus-nullable-component, which can express a global route carrying an app.
   - **S3c** — the layer stack and per-layer transform / shape / source. Undo is **punctuated**: the live path
