@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,8 +21,14 @@ import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.data.settings.IconPreset
 
-/** How tall a panel may grow before its contents scroll. The rest of the screen is the work, and it stays visible. */
-private val PanelMaxHeight = 300.dp
+/**
+ * How tall a panel may grow. The rest of the screen is the work, and it stays visible.
+ *
+ * **The cap is on the whole panel, not on its scrolling part** — header, scroll and pinned footer together — which is
+ * what makes a footer free: pinning a row takes space from the scroll rather than adding it to the panel, so a section
+ * that grows one cannot push the canvas up behind it.
+ */
+private val PanelMaxHeight = 320.dp
 
 /**
  * Every command the studio's panels can issue, in one value.
@@ -72,6 +79,9 @@ data class StudioActions(
  * **Capped and scrolling, not sized to fit.** A section's length varies by an order of magnitude — Shape is a grid of
  * chips, Effects is nine controls — and a panel that grew to whatever its contents wanted would bury the icon at
  * exactly the moment the user was colouring it.
+ *
+ * **Three bands: header, scroll, footer.** The outer two are measured first and the scroll takes what is left of
+ * [PanelMaxHeight], which is what lets a section pin a row ([SectionFooter]) without the panel growing to fit it.
  */
 @Composable
 fun StudioToolPanel(
@@ -85,28 +95,49 @@ fun StudioToolPanel(
         modifier = modifier
             .fillMaxWidth()
             .studioSurface(hazeState, shape = RoundedCornerShape(24.dp))
+            // **The panel's own height is what animates, and it is the only thing that does.** Every reason it changes
+            // arrives here: switching to a section with more controls, adding or removing a layer, a section growing a
+            // row of its own. Animating it in one place is why the layer list no longer animates its own size — nested
+            // size animations mean the outer one chases a target that is itself still moving, which reads as lag.
+            //
+            // **Placed after `studioSurface` so the glass is drawn at the animated size**, not at the target: a
+            // modifier earlier in the chain wraps the ones after it, so the blur and the clip see what this reports.
+            // And before `heightIn`, so what is animated *towards* is already capped.
+            //
+            // **Anchored `BottomStart`, which is the half that matters for a panel at the bottom of the screen.** The
+            // default top-anchors the content, so a growing panel would hold the header still and clip the footer —
+            // hiding the pinned buttons for the length of the animation. Anchored to the bottom, the footer stays put
+            // and the panel opens upward from behind it.
+            .animateContentSize(
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                alignment = Alignment.BottomStart,
+            )
+            .heightIn(max = PanelMaxHeight)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         PanelHeader(tool = tool, spec = state.selectedLayer.takeIf { tool.actsOnLayer })
 
+        // **`weight(1f, fill = false)` is what makes the header and the footer win the space they need.** The header
+        // and footer are measured first and the scroll takes what is left, so a pinned row is subtracted from the
+        // scrollable area rather than added to the panel. `fill = false` is the half that is easy to miss: with it
+        // filling, a two-control section would stretch its scroll to the full cap and every panel would be the same
+        // height whatever it held.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = PanelMaxHeight)
+                .weight(1f, fill = false)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Exhaustive over the bar, so a new entry cannot be added without a panel to open — the same reason
             // `AppsScreen` lists its unbuilt layouts individually rather than behind an `else`.
             when (tool) {
+                // The list only — its buttons are pinned below, outside this scroll. See [SectionFooter].
                 StudioTool.LAYERS -> LayerStackRows(
                     state = state,
                     onSelectLayer = actions.selectLayer,
                     onToggleVisible = actions.toggleVisible,
-                    onMove = actions.move,
-                    onAdd = actions.addLayer,
-                    onRemove = actions.removeLayer,
                 )
 
                 // The four per-layer sections. `selectedLayer` is null only if the set were empty, which
@@ -144,6 +175,38 @@ fun StudioToolPanel(
                 StudioTool.MORE -> MoreControls(subject = state.subject, onReset = actions.reset)
             }
         }
+
+        SectionFooter(tool = tool, state = state, actions = actions)
+    }
+}
+
+/**
+ * The row a section keeps at the bottom of the panel, below the scroll — or nothing, for the sections that have none.
+ *
+ * **A footer is for controls that must not scroll away because they act on what is scrolling.** The layer stack is the
+ * case and today the only one: its buttons operate on the *selected* layer, so a deep stack would put them below the
+ * fold exactly when they are most needed, and adding a layer would push "add a layer" further out of reach.
+ *
+ * **Exhaustive rather than an `if`**, so a new section has to decide whether it has one instead of silently not — the
+ * same reason the body's `when` lists every value. Sections without a footer say `Unit` and cost nothing.
+ */
+@Composable
+private fun SectionFooter(tool: StudioTool, state: IconStudioState, actions: StudioActions) {
+    when (tool) {
+        StudioTool.LAYERS -> LayerStackActions(
+            state = state,
+            onMove = actions.move,
+            onAdd = actions.addLayer,
+            onRemove = actions.removeLayer,
+        )
+
+        StudioTool.SOURCE,
+        StudioTool.TRANSFORM,
+        StudioTool.SHAPE,
+        StudioTool.EFFECTS,
+        StudioTool.PRESETS,
+        StudioTool.MORE,
+        -> Unit
     }
 }
 

@@ -40,6 +40,15 @@ data class IconLayerSet(val layers: List<IconLayerSpec>) {
     /** The single, always-present foreground layer. */
     val foreground: IconLayerSpec get() = layers.first { it.role == LayerRole.FOREGROUND }
 
+    /**
+     * Where the foreground sits in the stack.
+     *
+     * Beside [foreground] because an editor needs the *index* — it is what a selection is — and finding it by role at
+     * each call site is the kind of small duplication that ends up disagreeing. Never `-1`: the `init` above requires
+     * exactly one.
+     */
+    val foregroundIndex: Int get() = layers.indexOfFirst { it.role == LayerRole.FOREGROUND }
+
     /** Moves the layer at [index] one step toward the top; a no-op (returns `this`) when the move is illegal. */
     fun moveUp(index: Int): IconLayerSet = swap(index, index + 1)
 

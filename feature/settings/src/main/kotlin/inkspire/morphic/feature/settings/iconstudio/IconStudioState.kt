@@ -93,6 +93,7 @@ data class IconStudioState(
     val label: String? = null,
     val background: PreviewBackground = PreviewBackground.Default,
     val selected: Int = 0,
+    val layerKeys: List<Long> = emptyList(),
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
     val dirty: Boolean = false,
@@ -106,6 +107,21 @@ data class IconStudioState(
 
     /** The layer the controls act on, or null before anything has loaded. */
     val selectedLayer: IconLayerSpec? get() = editing.layers.getOrNull(selected)
+
+    /**
+     * A stable identity for the layer at [index], for the row list to `key` on.
+     *
+     * **Why the model cannot supply this.** Animating one stack into another means Compose has to recognise a layer
+     * across the change, and nothing in [IconLayerSpec] can say so: two identical custom layers are `equals`, the
+     * index is exactly what an insert moves, and the instance is replaced on every frame of a slider drag. An id on
+     * the spec itself would be worse than any of those — it is persisted data, and it would join `equals`, so `dirty`
+     * and the history dedupe (both whole-set comparisons) would start reporting changes where the recipe is identical.
+     *
+     * So the keys live here, beside the set rather than inside it, and `IconStudioViewModel` maintains them through
+     * every mutation. Falls back to the index when they are absent — the state before anything has loaded — which
+     * degrades to unanimated rows rather than to a crash.
+     */
+    fun layerKey(index: Int): Long = layerKeys.getOrNull(index) ?: -(index.toLong() + 1)
 
     /** Whether the selected layer can be deleted — the foreground and background are permanent. */
     val canRemoveSelected: Boolean get() = selectedLayer?.role == LayerRole.CUSTOM

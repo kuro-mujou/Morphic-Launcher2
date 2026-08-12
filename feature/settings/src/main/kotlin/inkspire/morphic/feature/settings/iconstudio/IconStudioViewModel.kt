@@ -109,9 +109,19 @@ class IconStudioViewModel(
         viewModelScope.launch { settingsRepository.saveIconPreset(trimmed, set) }
     }
 
-    /** Loads [preset] into the editor. An ordinary edit: recorded in history, undoable, and not saved. */
-    fun loadPreset(preset: IconPreset) =
-        _state.update { it.withEditing(preset.layerSet).withSelectionInRange().recordHistory() }
+    /**
+     * Loads [preset] into the editor. An ordinary edit: recorded in history, undoable, and not saved.
+     *
+     * A whole new stack arrives, so its layers get **fresh keys** — nothing in it continues a layer that was there
+     * before, and reusing a key would animate an unrelated row into its place. Selection goes to the foreground for the
+     * same reason a fresh open does: the previous index means nothing in a stack the user did not build.
+     */
+    fun loadPreset(preset: IconPreset) = _state.update { current ->
+        val keys = freshKeys(preset.layerSet.layers.size)
+        current.withEditing(preset.layerSet)
+            .copy(layerKeys = keys, selected = preset.layerSet.foregroundIndex)
+            .recordHistory()
+    }
 
     /** Removes a saved preset. Does not touch anything it was applied to — a preset is a copy, not a link. */
     fun deletePreset(name: String) {
@@ -250,7 +260,16 @@ class IconStudioViewModel(
         val moved = if (up) current.editing.moveUp(current.selected) else current.editing.moveDown(current.selected)
         if (moved === current.editing) return@update current
         val destination = if (up) current.selected + 1 else current.selected - 1
-        current.withEditing(moved).copy(selected = destination).recordHistory()
+        // The keys swap with the layers, so both rows keep their identity and glide past each other rather than
+        // swapping contents in place.
+        val keys = current.layerKeys.toMutableList().apply {
+            if (current.selected in indices && destination in indices) {
+                val held = this[current.selected]
+                this[current.selected] = this[destination]
+                this[destination] = held
+            }
+        }
+        current.withEditing(moved).copy(selected = destination, layerKeys = keys).recordHistory()
     }
 
     /**
@@ -374,28 +393,58 @@ class IconStudioViewModel(
     }
 
     /**
-     * Inserts a new custom layer directly above the selected one, and selects it.
+     * Inserts a new custom layer **directly beneath** the selected one, and selects it.
+     *
+     * Beneath rather than above, and the two senses of that agree, which is what makes it the right default: inserting
+     * at the selected layer's own index puts the new layer **below it in the composite** *and* on the row directly
+     * **under it in the list**, since `LayerStackRows` draws the stack top-first. So one rule reads correctly whether
+     * the user is thinking about draw order or about what they are looking at.
+     *
+     * It also matches what a new layer is *for*. A fresh layer is an opaque fill, so above the selection it hides
+     * whatever was just being worked on; below it, it appears as a backing behind it — which is the thing people
+     * actually add a layer to do (a coloured disc behind a legacy icon is the worked example in `ShapeControls`).
      *
      * A **solid fill** rather than an image: a new layer needs *some* content, and a colour is the one that needs
      * nothing from outside the app. An image is a tap away once the layer exists ([pickImage]).
+     *
+     * Selecting the new layer is what makes the insertion visible — the highlight moves down one row onto it, which is
+     * the same "the selection follows the row" rule [removeSelected] keeps.
      */
     fun addLayer() = _state.update { current ->
-        val insertAt = (current.selected + 1).coerceIn(0, current.editing.layers.size)
+        val insertAt = current.selected.coerceIn(0, current.editing.layers.size)
         val layers = current.editing.layers.toMutableList()
         layers.add(insertAt, IconLayerSpec(role = LayerRole.CUSTOM, source = LayerSource.SolidFill(NewLayerArgb)))
-        current.withEditing(IconLayerSet(layers)).copy(selected = insertAt).recordHistory()
+        // A key of its own for the new layer; every other layer keeps the one it had, which is what lets the rows
+        // beneath it *slide* rather than being rebuilt in their new positions.
+        val keys = current.layerKeys.toMutableList().apply { add(insertAt, nextLayerKey++) }
+        current.withEditing(IconLayerSet(layers)).copy(selected = insertAt, layerKeys = keys).recordHistory()
     }
 
     /**
      * Deletes the selected layer. Custom layers only — the foreground and background are permanent, which the set
      * enforces in its own `init`, so removing one would throw rather than misbehave.
+     *
+     * **The selection stays on the same *row*, which is `selected - 1` and not `selected`.** That looks like an
+     * off-by-one and is not, so it is worth stating plainly: `LayerStackRows` draws the stack **top layer first**, the
+     * reverse of index order, because that is the order the layers are drawn on screen. So the layer that slides into
+     * the deleted one's place *on screen* is the one **below** it in the model, and keeping the index instead would
+     * move the highlight up a row onto the layer that was above — which reads as the selection jumping to a layer the
+     * user did not pick.
+     *
+     * Clamped at 0 for the one case with no row beneath it: a custom layer below the background, where the selection
+     * lands on the new bottom row.
+     *
+     * One consequence, and it is the better half of the trade: **repeated deletes no longer chain.** Landing a row
+     * down usually means landing on the foreground or background, which cannot be deleted, so the button greys out
+     * rather than staying armed over a layer the user never selected.
      */
     fun removeSelected() = _state.update { current ->
         if (!current.canRemoveSelected) return@update current
         val layers = current.editing.layers.toMutableList()
         layers.removeAt(current.selected)
+        val keys = current.layerKeys.toMutableList().apply { removeAt(current.selected) }
         current.withEditing(IconLayerSet(layers))
-            .copy(selected = current.selected.coerceAtMost(layers.lastIndex))
+            .copy(selected = (current.selected - 1).coerceAtLeast(0), layerKeys = keys)
             .recordHistory()
     }
 
@@ -403,14 +452,19 @@ class IconStudioViewModel(
     fun undo() = _state.update { current ->
         if (!current.canUndo) return@update current
         historyIndex--
-        current.copy(editing = history[historyIndex]).withHistoryFlags().withSelectionInRange()
+        current.atHistoryStep()
     }
 
     /** Steps forward again after an [undo]. */
     fun redo() = _state.update { current ->
         if (!current.canRedo) return@update current
         historyIndex++
-        current.copy(editing = history[historyIndex]).withHistoryFlags().withSelectionInRange()
+        current.atHistoryStep()
+    }
+
+    /** The recipe **and** the keys recorded at [historyIndex] — see [Step] for why undo needs both. */
+    private fun IconStudioState.atHistoryStep(): IconStudioState = history[historyIndex].let { step ->
+        copy(editing = step.set, layerKeys = step.keys).withHistoryFlags().withSelectionInRange()
     }
 
     /**
@@ -485,8 +539,7 @@ class IconStudioViewModel(
                 StudioSubject.Unchosen -> return@launch
             }
             saved = restored
-            resetHistory(restored)
-            _state.update { it.copy(editing = restored, dirty = false).withHistoryFlags().withSelectionInRange() }
+            _state.update { it.seatedOn(restored).copy(dirty = false) }
         }
     }
 
@@ -507,13 +560,11 @@ class IconStudioViewModel(
             // `saved` is what is *persisted*, which a preset-loaded session deliberately is not — so it opens
             // dirty, and Save is what applies the preset. Same shape as an inheriting app opening dirty.
             saved = settingsRepository.iconLayerSet.first()
-            resetHistory(stored)
             _state.update {
-                it.copy(
+                it.seatedOn(stored).copy(
                     subject = StudioSubject.Global(sample?.componentKey),
-                    editing = stored,
                     label = null,
-                ).withHistoryFlags()
+                )
             }
             loadStoredImages(stored)
             loadPacks()
@@ -536,17 +587,15 @@ class IconStudioViewModel(
             // shown: the studio opens on a copy of the global default, and that copy is already an unsaved change.
             // So a freshly opened inheriting app is `dirty`, correctly — saving it is what detaches it.
             saved = overrideRepository.overrides.first()[component] ?: IconLayerSet.Base
-            resetHistory(stored)
             _state.update {
-                it.copy(
+                it.seatedOn(stored).copy(
                     subject = StudioSubject.App(component),
-                    editing = stored,
                     label = label,
                     // Keyed by pack, but resolved *per app* — so anything cached here belongs to whichever app was
                     // open before. Only reachable since the studio learnt to change app without being reopened; see
                     // [shuffleSample], which clears it for the same reason.
                     packImages = emptyMap(),
-                ).withHistoryFlags()
+                )
             }
             loadStoredImages(stored)
             loadPacks()
@@ -596,9 +645,28 @@ class IconStudioViewModel(
     // The cost is one reference per recorded edit, which is why history is punctuated by `commitEdit` rather than
     // recorded per frame — see `updateSelected`.
 
+    /**
+     * One recorded step: the recipe, and the layer keys that went with it.
+     *
+     * **The keys are in history because undo has to be animatable too.** Restoring a set without them would mean
+     * regenerating identities, so every row would look new to Compose and a step back would re-assemble the whole list
+     * instead of sliding it back the way it came. They are deliberately *not* part of the comparison — [recordHistory]
+     * asks whether the recipe changed, and a key is not part of the recipe.
+     */
+    private class Step(val set: IconLayerSet, val keys: List<Long>)
+
     /** Recorded states, oldest first. Always non-empty: index 0 is what the studio opened with. */
-    private var history: List<IconLayerSet> = listOf(IconLayerSet.Base)
+    private var history: List<Step> = listOf(Step(IconLayerSet.Base, emptyList()))
     private var historyIndex = 0
+
+    /**
+     * The next unused layer key. Monotonic and never reused, which is the whole requirement — a key that came back
+     * would make Compose treat a new layer as an old one and animate it from wherever that one was.
+     */
+    private var nextLayerKey = 0L
+
+    /** Fresh keys for a whole stack — every point where a set arrives from outside rather than being edited. */
+    private fun freshKeys(count: Int): List<Long> = List(count) { nextLayerKey++ }
 
     /** What is currently persisted, so `dirty` is a comparison rather than a flag that can drift out of step. */
     private var saved: IconLayerSet = IconLayerSet.Base
@@ -614,9 +682,24 @@ class IconStudioViewModel(
     private val unsaved = mutableMapOf<String, Bitmap>()
 
     /** Starts history afresh at [set] — on open, and after a reset. */
-    private fun resetHistory(set: IconLayerSet) {
-        history = listOf(set)
+    private fun resetHistory(set: IconLayerSet, keys: List<Long>) {
+        history = listOf(Step(set, keys))
         historyIndex = 0
+    }
+
+    /**
+     * Seats a set that arrived from outside the editor — an open, a reset, a preset — with fresh keys, the foreground
+     * selected, and history restarted on it.
+     *
+     * **The foreground is the default selection, not index 0.** Every set has both permanent layers, and the
+     * background is the one at index 0 — so opening on it meant the studio always started pointed at the layer *behind*
+     * the artwork, which is not what anyone came to edit. The foreground is the app's own icon, and it is what "edit
+     * this icon" means before the user says otherwise.
+     */
+    private fun IconStudioState.seatedOn(set: IconLayerSet): IconStudioState {
+        val keys = freshKeys(set.layers.size)
+        resetHistory(set, keys)
+        return copy(editing = set, layerKeys = keys, selected = set.foregroundIndex).withHistoryFlags()
     }
 
     /**
@@ -626,8 +709,8 @@ class IconStudioViewModel(
      * branches, the states that used to be ahead describe a future that no longer follows from the present.
      */
     private fun IconStudioState.recordHistory(): IconStudioState {
-        if (editing == history[historyIndex]) return withHistoryFlags()
-        history = history.take(historyIndex + 1) + editing
+        if (editing == history[historyIndex].set) return withHistoryFlags()
+        history = history.take(historyIndex + 1) + Step(editing, layerKeys)
         historyIndex = history.lastIndex
         return withHistoryFlags()
     }
