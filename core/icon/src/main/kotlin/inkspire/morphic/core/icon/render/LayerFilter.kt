@@ -1,6 +1,7 @@
 package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.model.icon.LayerEffect
+import inkspire.morphic.core.model.icon.TintMode
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -40,12 +41,14 @@ object LayerFilter {
         if (color.saturation != 1f) matrix = matrix.then(saturationMatrix(color.saturation))
         if (color.brightness != 1f) matrix = matrix.then(scaleMatrix(color.brightness, color.brightness, color.brightness))
         color.tintArgb?.let { tint ->
+            val r = tint shr 16 and 0xFF
+            val g = tint shr 8 and 0xFF
+            val b = tint and 0xFF
             matrix = matrix.then(
-                scaleMatrix(
-                    r = (tint shr 16 and 0xFF) / 255f,
-                    g = (tint shr 8 and 0xFF) / 255f,
-                    b = (tint and 0xFF) / 255f,
-                ),
+                when (color.tintMode) {
+                    TintMode.MULTIPLY -> scaleMatrix(r = r / 255f, g = g / 255f, b = b / 255f)
+                    TintMode.SOLID -> solidMatrix(r = r.toFloat(), g = g.toFloat(), b = b.toFloat())
+                },
             )
         }
         return matrix
@@ -76,6 +79,27 @@ object LayerFilter {
         }
         return out
     }
+
+    /**
+     * Replaces the color with a constant and keeps the alpha — a flat silhouette of whatever it is applied to. This
+     * is `SRC_IN` tinting expressed as a matrix, so it stays one shared `FloatArray` for both renderers rather than
+     * a second kind of filter each would have to build its own way.
+     *
+     * **The channels are 0..255 here, not 0..1, and getting that wrong is silent.** The fifth column is a
+     * *translation*, and both graphics APIs read this array on Android's 0..255 convention
+     * (`android.graphics.ColorMatrixColorFilter`, which Compose's `ColorFilter.colorMatrix` hands straight through).
+     * Every other matrix in this file leaves that column at zero, which is why the question has not arisen before —
+     * a 0..1 value here would come out as very nearly black instead of the color asked for.
+     *
+     * Zeroing the color coefficients is also what makes this *spend* whatever composed before it: hue, saturation and
+     * brightness all act on inputs this then ignores. See [TintMode.SOLID].
+     */
+    private fun solidMatrix(r: Float, g: Float, b: Float) = floatArrayOf(
+        0f, 0f, 0f, 0f, r,
+        0f, 0f, 0f, 0f, g,
+        0f, 0f, 0f, 0f, b,
+        0f, 0f, 0f, 1f, 0f,
+    )
 
     /** Per-channel multipliers — brightness (all three equal) and tint (the tint's own channels) are both this. */
     private fun scaleMatrix(r: Float, g: Float, b: Float) = floatArrayOf(

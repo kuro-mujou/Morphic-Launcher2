@@ -524,3 +524,40 @@ without any UI; the dashboard after the studio because a hub linking to a screen
   consistent across apps, which is a real problem, but they are one more pair of fields on the spec and no part
   of the editor design above asks for them. Add them when the on-device look says they are needed — which is the
   "no model in a vacuum" rule, and cheap here because the effect list and the spec both take additive change.
+  **The on-device look is now saying so** — see the open note below, which is the same problem arriving from the
+  monochrome side. Start here when picking it back up.
+
+## Open: monochrome still does not look right on device (2026-08-12)
+
+**Status: unresolved, and the symptom is not written down yet.** The work below is committed and builds, all unit
+tests pass, but on a real device it "still does not work well" — reported without specifics, so *nothing here is a
+diagnosis*. Anyone picking this up should get the concrete symptom first (which apps, which mode, editor or home
+screen, global or per-app) rather than trusting the leads below.
+
+What landed, so it is clear what is being judged:
+- `LayerSource.AppDefaultMonochrome` means *monochrome*, with `IconLayerResolver` choosing per app between the
+  app's themed layer and a desaturated foreground. The old fallback drew the **unfiltered** foreground, so the
+  choice was a visible no-op on every app without a themed layer.
+- The control moved out of Effects and back into `SourceControls`, as a row under the tile row (fg + app-default
+  only). `LayerEffect.Color(saturation = 0)` is no longer offered as a "Monochrome" toggle.
+- `TintMode.SOLID` was added because `tintArgb` was a pure multiply and could not lift a black glyph to white.
+
+Leads, in the order I would try them:
+1. **A junk monochrome layer is not handled, and this is a real gap rather than a hunch.** The downgrade to
+   `MULTIPLY` in `IconLayerResolver.monochromeFallbackColor` fires only when `icon.monochrome == null`. An app that
+   ships something in that slot which is *not* a silhouette — colored artwork, or a full-bleed square — is
+   `hasMonochrome = true`, so `SOLID` applies to it and fills its whole alpha flat. That is precisely the "some
+   didn't make it monochrome at all" case, and it comes out as a colored blob. There is no test for it because we
+   have no such asset to hand; it needs a device with a known-bad app.
+2. **Judging the "right" fallback.** A shipped silhouette (flat, filled) and a desaturated foreground (greyscale,
+   with shading) look different *in kind*, by construction — no silhouette can be invented from a foreground whose
+   alpha is a blob, which is the same reason `LegacyBackground` refuses glyph matting. If what is wanted is that the
+   two agree, that is a different feature and L1's `foregroundUniform`/`normalize` above are the prior art.
+3. **Which renderer is wrong.** The live editor and the bake share `IconLayerResolver` and `LayerFilter`, so they
+   *should* agree; if they do not, the `IconLayers` dev-harness playground draws one set both ways side by side and
+   is the fastest way to see it. If they agree and both look wrong, it is the model or the arithmetic, not the split.
+4. **Antialiased edges under `SOLID`.** Colour matrices run on unpremultiplied colour, so partial-alpha edge pixels
+   take the flat colour at partial alpha, which should be right — but it is the kind of thing that shows as fringing
+   and has not been looked at on a screen.
+
+Nothing else in the studio depends on this being settled.

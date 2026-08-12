@@ -249,6 +249,29 @@ class IconStudioViewModel(
     }
 
     /**
+     * Switches the selected layer between the app's own artwork and its monochrome form, and back.
+     *
+     * **A command rather than a source the UI writes**, so it records history at once — the same shape
+     * [toggleSelectedVisible] and [pickPack] take, and what makes `commitEdit`'s "discrete edits record themselves"
+     * true for this one. Off returns to [LayerSource.AppDefault], because monochrome is a *refinement of* the app's
+     * own artwork rather than a peer source: there is nowhere else for turning it off to land.
+     *
+     * Guarded on the source as well as toggled by it, so calling this on a layer showing a pack or an image cannot
+     * quietly discard what is there — the UI only offers it on the app-default foreground, and this is the guard
+     * behind that one.
+     */
+    fun toggleSelectedMonochrome() {
+        updateSelected { spec ->
+            when (spec.source) {
+                LayerSource.AppDefault -> spec.copy(source = LayerSource.AppDefaultMonochrome)
+                LayerSource.AppDefaultMonochrome -> spec.copy(source = LayerSource.AppDefault)
+                else -> spec
+            }
+        }
+        commitEdit()
+    }
+
+    /**
      * Moves the selected layer one step up or down the stack, and **follows it with the selection**.
      *
      * A no-op when the move would break the foreground-above-background invariant — the set refuses it and returns
@@ -411,8 +434,10 @@ class IconStudioViewModel(
      * whatever was just being worked on; below it, it appears as a backing behind it — which is the thing people
      * actually add a layer to do (a colored disc behind a legacy icon is the worked example in `ShapeControls`).
      *
-     * A **solid fill** rather than an image: a new layer needs *some* content, and a color is the one that needs
-     * nothing from outside the app. An image is a tap away once the layer exists ([pickImage]).
+     * **Empty, not a color.** A new layer used to arrive as a mid-grey fill, which meant adding one dropped an opaque
+     * plate into the stack and changed the icon before the user had chosen anything. `LayerSource.Empty` draws nothing,
+     * so the insert is visible in the stack and invisible on the canvas — and what goes in it is the next choice, made
+     * in the Source section rather than assumed here.
      *
      * Selecting the new layer is what makes the insertion visible — the highlight moves down one row onto it, which is
      * the same "the selection follows the row" rule [removeSelected] keeps.
@@ -420,7 +445,7 @@ class IconStudioViewModel(
     fun addLayer() = _state.update { current ->
         val insertAt = current.selected.coerceIn(0, current.editing.layers.size)
         val layers = current.editing.layers.toMutableList()
-        layers.add(insertAt, IconLayerSpec(role = LayerRole.CUSTOM, source = LayerSource.SolidFill(NewLayerArgb)))
+        layers.add(insertAt, IconLayerSpec(role = LayerRole.CUSTOM, source = LayerSource.Empty))
         // A key of its own for the new layer; every other layer keeps the one it had, which is what lets the rows
         // beneath it *slide* rather than being rebuilt in their new positions.
         val keys = current.layerKeys.toMutableList().apply { add(insertAt, nextLayerKey++) }
@@ -733,9 +758,4 @@ class IconStudioViewModel(
     private fun IconStudioState.withSelectionInRange(): IconStudioState =
         copy(selected = selected.coerceIn(0, editing.layers.lastIndex.coerceAtLeast(0)))
 
-    private companion object {
-        /** A mid grey for a freshly added fill: visible against both a light and a dark canvas, and obviously a
-         *  placeholder the user is meant to change. */
-        const val NewLayerArgb: Int = 0xFF808080.toInt()
-    }
 }

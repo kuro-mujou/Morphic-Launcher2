@@ -5,8 +5,13 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.clickable
@@ -24,12 +29,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,8 +53,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
@@ -60,6 +72,7 @@ import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
+import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.data.icons.InstalledIconPack
 
 /*
@@ -284,6 +297,11 @@ private fun LayerRow(
  *
  * The gradient keeps a heading of its own inside the section: it is four controls that only make sense read together,
  * where the rest are independent.
+ *
+ * **No monochrome toggle here, deliberately.** Draining a layer of color is what Saturation does, and a toggle beside
+ * it would be a lossy alias for it — switching one off has to invent a value to return to, discarding whatever the
+ * user had. The word belongs to the *source* that swaps in the app's themed artwork, which is a different mechanism
+ * with a different result; see [SourceControls].
  */
 @Composable
 internal fun EffectsControls(
@@ -415,6 +433,26 @@ private fun ColorControls(
             argb = color.tintArgb,
             onChange = { argb -> onUpdate { it.withColor(color.copy(tintArgb = argb)) } },
         )
+    }
+
+    // **Only once a tint exists**, which is the difference between a mode and a dead control: with no tint set there
+    // is nothing for either option to do, and the pair would be two buttons that change nothing.
+    //
+    // *Shaded* keeps the layer's own light and dark and pushes it toward the color; *Solid* keeps only the shape and
+    // fills it flat. Solid is what makes app-shipped themed icons agree with each other — they arrive black, white or
+    // colored depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
+    // multiply cannot reach, since black multiplied by anything is still black. See `TintMode`.
+    if (color.tintArgb != null) {
+        LabelledControl("Tint style") {
+            MorphicSegmentedButtons(
+                options = listOf("Shaded", "Solid"),
+                selectedIndex = if (color.tintMode == TintMode.SOLID) 1 else 0,
+                onSelect = { index ->
+                    onUpdate { it.withColor(color.copy(tintMode = if (index == 1) TintMode.SOLID else TintMode.MULTIPLY)) }
+                    onCommit()
+                },
+            )
+        }
     }
 }
 
@@ -598,9 +636,16 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
  * app-artwork layers, a *named* pack drawable everywhere but the individual studio — and both arrive as a decision made
  * elsewhere rather than as a test performed here, since the ViewModel refuses behind each of them.
  *
+ * **Two ranks of control, which is what the layout says.** The tiles are the *providers* — whose artwork this is — and
+ * beneath them sit refinements of whichever is chosen: monochrome under the app's own artwork, a named drawable under
+ * a pack. Neither refinement changes the provider, so neither is a tile.
+ *
  * @param allowsFixedSource whether this layer may take a source that is the same for every app — a solid color or a
  *   custom image; see `IconStudioState.canUseFixedSource`.
+ * @param onToggleMonochrome switches the app's own artwork between its normal and monochrome forms. A command rather
+ *   than an [onUpdate] written here, so the edit records itself in history — see `IconStudioViewModel`.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SourceControls(
     spec: IconLayerSpec,
@@ -608,92 +653,217 @@ internal fun SourceControls(
     allowsFixedSource: Boolean,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onPickImage: () -> Unit,
+    onToggleMonochrome: () -> Unit,
     onPickPack: (String) -> Unit,
     onBrowsePack: ((String) -> Unit)?,
 ) {
-    LabelledControl("Source") {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (spec.role != LayerRole.CUSTOM) {
-                ChoiceRow("App default", spec.source == LayerSource.AppDefault) {
-                    onUpdate { it.copy(source = LayerSource.AppDefault) }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LabelledControl("Source") {
+            // **A flow row of tiles rather than a column of rows**, because the choices are *pictures*: an icon pack is
+            // recognised by its own artwork long before its name is read, so labelled text was asking the user to read
+            // a list where they could have looked at one. Flowing rather than scrolling sideways, so a device with six
+            // packs installed shows all six instead of hiding the last of them past an edge.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Absent on a custom layer, where it resolves to nothing: there is no "the app's custom layer".
+                if (spec.role != LayerRole.CUSTOM) {
+                    SourceTile(
+                        label = "System default",
+                        // **`AppDefaultMonochrome` reads as selected here too, and that is not a special case.**
+                        // Monochrome is a *refinement of* this source rather than a peer of it — the app's own
+                        // artwork either way — so the tile is genuinely the chosen one, and the row beneath is what
+                        // says which form of it. Tapping re-picks the plain default, which is also the way off
+                        // monochrome for anyone who does not spot the toggle.
+                        selected = spec.source == LayerSource.AppDefault ||
+                            spec.source == LayerSource.AppDefaultMonochrome,
+                        onClick = { onUpdate { it.copy(source = LayerSource.AppDefault) } },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Android,
+                            contentDescription = null,
+                            tint = StudioContentColor,
+                            modifier = Modifier.size(SourceGlyphSide),
+                        )
+                    }
                 }
-            }
-            if (spec.role == LayerRole.FOREGROUND) {
-                ChoiceRow("App monochrome", spec.source == LayerSource.AppDefaultMonochrome) {
-                    onUpdate { it.copy(source = LayerSource.AppDefaultMonochrome) }
-                }
-            }
-            // **Both of these are absent on the foreground and background of the *global* default**, where one color or
-            // one picture would stand in for every app's artwork at once. See `IconStudioState.canUseFixedSource` for
-            // the whole rule, why a custom layer is not covered by it, and where a global flat plate goes instead.
-            // Absent rather than disabled, per the settings sections' rule.
-            //
-            // **And said out loud, which two absent rows earn.** Without them the global background's Source section is
-            // a single already-selected row on a device with no icon packs — a section that does nothing, which is the
-            // state this studio keeps being mistaken for broken in. One line turns it into an explanation, and it is the
-            // only place the alternative ("add a layer") can be named at the moment it is wanted.
-            if (!allowsFixedSource) {
-                Text(
-                    text = "A color or image here would replace every app's own artwork. " +
-                        "Add a layer instead, and put it under the background.",
-                    color = StudioContentColor.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
 
-            if (allowsFixedSource) {
-                ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
-                    onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
+                // Acts on every press rather than only when unselected, because pressing it again re-picks.
+                if (allowsFixedSource) {
+                    SourceTile(
+                        label = "Custom image",
+                        selected = spec.source is LayerSource.CustomImage,
+                        onClick = onPickImage,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = StudioContentColor,
+                            modifier = Modifier.size(SourceGlyphSide),
+                        )
+                    }
                 }
-                // Tapping it again re-picks, which is why the row is a button rather than a selected state.
-                ChoiceRow(
-                    label = if (spec.source is LayerSource.CustomImage) "Custom image — change" else "Custom image",
-                    selected = spec.source is LayerSource.CustomImage,
-                    onClick = onPickImage,
-                )
-            }
 
-            // **Absent rather than disabled when no pack is installed**, per the settings sections' rule that a
-            // control which changes nothing is worse than a missing one. An empty list is the ordinary state, and
-            // it is also what a missing `<queries>` declaration would look like — see `IconPackManager`.
-            if (packs.isNotEmpty()) {
-                Text(
-                    "Icon pack",
-                    color = StudioContentColor.copy(alpha = 0.75f),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                // **One tile per pack, drawn as the pack's own launcher icon** — which `InstalledIconPack.preview`
+                // already carries, for exactly the reason its KDoc gives: packs are recognised by their artwork rather
+                // than by their name. An empty list is the ordinary state on a device with none, and it is also what a
+                // missing `<queries>` declaration looks like — see `IconPackManager`.
                 packs.forEach { pack ->
-                    ChoiceRow(
+                    SourceTile(
                         label = pack.label,
                         selected = (spec.source as? LayerSource.IconPack)?.packPackage == pack.packageName,
-                    ) { onPickPack(pack.packageName) }
-                }
-
-                // **Only when a pack is already chosen, and only for a single app.** Browsing offers a *named*
-                // drawable, which the global default would hand to every app — so `onBrowsePack` is null there
-                // and the row is absent rather than disabled.
-                val chosen = spec.source as? LayerSource.IconPack
-                if (chosen != null && onBrowsePack != null) {
-                    ChoiceRow(
-                        label = chosen.drawableName?.let { "Icon: $it — change" } ?: "Choose a different icon",
-                        selected = chosen.drawableName != null,
-                    ) { onBrowsePack(chosen.packPackage) }
-                }
-            }
-
-            // Gated with the row that chooses a fill, not shown whenever one happens to be set: a layer that may not
-            // *take* a solid color must not offer to recolor one either, or a global background stored with a fill
-            // before the rule existed would be tunable but not choosable — a control whose absence would look like a
-            // bug rather than a rule.
-            if (allowsFixedSource) {
-                (spec.source as? LayerSource.SolidFill)?.let { fill ->
-                    ColorField(argb = fill.argb) { argb ->
-                        onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
+                        onClick = { onPickPack(pack.packageName) },
+                    ) {
+                        val preview = pack.preview
+                        if (preview != null) {
+                            Image(
+                                bitmap = preview.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(SourcePackIconSide),
+                            )
+                        } else {
+                            // A pack whose own icon could not be read still has to be pickable; its label is beneath
+                            // the tile either way.
+                            Icon(
+                                imageVector = Icons.Default.Palette,
+                                contentDescription = null,
+                                tint = StudioContentColor,
+                                modifier = Modifier.size(SourceGlyphSide),
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // **Says why a tile is missing**, which its absence earns: on the global background with no packs installed the
+        // row would otherwise be a single already-selected tile — a section that does nothing, the state this studio
+        // keeps being mistaken for broken in. See `IconStudioState.canUseFixedSource` for the rule; this is also the one
+        // place the alternative can be named at the moment it is wanted.
+        if (!allowsFixedSource) {
+            Text(
+                text = "A color or image here would replace every app's own artwork. " +
+                    "Add a layer instead, and put it under the background.",
+                color = StudioContentColor.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        // **A refinement of the chosen source, not a tile of its own** — which is the whole reason it sits here rather
+        // than among them. The tiles answer "whose artwork is this?" and monochrome does not change the answer: it is
+        // still the app's. As a fourth tile it would read as a peer of a pack and an image, and it would appear on one
+        // layer only, so the row would change length as the selection moved.
+        //
+        // The shape is the pack-browse row's directly beneath: a refinement shown only while the source it refines is
+        // chosen. Foreground-only, because the platform ships one silhouette and it is for that slot — there is no
+        // "the app's monochrome background". Absent rather than disabled elsewhere, per the usual rule.
+        //
+        // **Offered whether or not this app ships a themed layer**, and it has to be: `IconLayerResolver` decides
+        // which of the two monochromes an app gets, and in the global studio that is not one answer. Draining a layer
+        // that is *not* app artwork — a pack, an image — is Saturation's job in Effects, not a second meaning here.
+        if (spec.role == LayerRole.FOREGROUND &&
+            (spec.source == LayerSource.AppDefault || spec.source == LayerSource.AppDefaultMonochrome)
+        ) {
+            ChoiceRow(
+                label = "Monochrome",
+                selected = spec.source == LayerSource.AppDefaultMonochrome,
+                onClick = onToggleMonochrome,
+            )
+        }
+
+        // **Only when a pack is already chosen, and only for a single app.** Browsing offers a *named* drawable, which
+        // the global default would hand to every app — so `onBrowsePack` is null there and the row is absent rather
+        // than disabled.
+        val chosen = spec.source as? LayerSource.IconPack
+        if (chosen != null && onBrowsePack != null) {
+            ChoiceRow(
+                label = chosen.drawableName?.let { "Icon: $it — change" } ?: "Choose a different icon",
+                selected = chosen.drawableName != null,
+            ) { onBrowsePack(chosen.packPackage) }
+        }
+
+        // **Parked here pending a home, and deliberately not a tile.** A solid fill is not artwork *from* anywhere, so
+        // it does not belong among the source kinds — the flow row answers "where do this layer's pixels come from",
+        // and a flat color answers a different question. It stays reachable meanwhile, because a colored plate beneath
+        // an icon is what a layer added empty most often becomes.
+        //
+        // TODO: move to whichever section ends up owning a layer's appearance.
+        if (allowsFixedSource) {
+            LabelledControl("Fill") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
+                        onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
+                    }
+                    // Gated with the row that chooses a fill, not shown whenever one happens to be set: a layer that
+                    // may not *take* a solid color must not offer to recolor one either.
+                    (spec.source as? LayerSource.SolidFill)?.let { fill ->
+                        ColorField(argb = fill.argb) { argb ->
+                            onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The side of a source tile — a press target in its own right, and large enough to read a pack's icon in. */
+private val SourceTileSide = 64.dp
+
+/** A source tile's corner: square with a radius, so a row of them reads as a set of chips rather than as buttons. */
+private val SourceTileCorner = 14.dp
+
+/** A glyph inside a tile, for the sources that have no artwork of their own to show. */
+private val SourceGlyphSide = 26.dp
+
+/** A pack's own launcher icon inside a tile — larger than a glyph, since it *is* the thing being chosen. */
+private val SourcePackIconSide = 36.dp
+
+/**
+ * One choice in the source row: a rounded square with something drawn in the middle of it, and its name beneath.
+ *
+ * **Labelled despite being a picture**, which is the one place this departs from "a tile is recognised by its artwork":
+ * two of the three kinds have no artwork, only a glyph, and an unlabelled glyph is the thing this studio's own notes
+ * call worse than a wordy button. A label is also how two packs with similar icons are told apart.
+ *
+ * The label sits **outside** the tile and is constrained to its width, so a long pack name wraps beneath the square
+ * rather than stretching it — every tile stays one size, which is what makes the row read as a set.
+ */
+@Composable
+private fun SourceTile(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier.width(SourceTileSide),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(SourceTileSide)
+                .clip(RoundedCornerShape(SourceTileCorner))
+                .background(Color.White.copy(alpha = if (selected) 0.22f else 0.08f))
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = StudioContentColor.copy(alpha = if (selected) 1f else 0.2f),
+                    shape = RoundedCornerShape(SourceTileCorner),
+                )
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+            content = content,
+        )
+        Text(
+            text = label,
+            color = StudioContentColor.copy(alpha = if (selected) 1f else 0.7f),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -742,6 +912,9 @@ internal val LayerRole.label: String
 /** The one-line summary of where a layer's pixels come from, shown beside its role. */
 internal val LayerSource.label: String
     get() = when (this) {
+        // What a freshly added layer says about itself, and it has to say *something*: the row is the only place an
+        // empty layer is visible at all, since it draws nothing on the canvas.
+        LayerSource.Empty -> "empty"
         LayerSource.AppDefault -> "app default"
         LayerSource.AppDefaultMonochrome -> "monochrome"
         is LayerSource.CustomImage -> "image"

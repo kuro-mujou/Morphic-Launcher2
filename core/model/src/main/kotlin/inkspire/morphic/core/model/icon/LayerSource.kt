@@ -7,11 +7,29 @@ import kotlinx.serialization.Serializable
  * Where a layer's content comes from. Persisted inside the layer set, so the [SerialName]s are a stable
  * on-disk contract — rename with care.
  *
- * A layer is one of: the parsed app icon, the app's monochrome layer, an imported image, a flat color, or an
- * installed icon pack's rendering of this app.
+ * A layer is one of: nothing yet, the parsed app icon, the app's monochrome layer, an imported image, a flat color,
+ * or an installed icon pack's rendering of this app.
  */
 @Serializable
 sealed interface LayerSource {
+
+    /**
+     * No content at all — a layer that has been added but not yet filled.
+     *
+     * **What a new custom layer starts as.** It used to start as a mid-grey [SolidFill], which is a decision the user
+     * did not make: adding a layer would drop an opaque plate into the stack and the icon would change before anything
+     * had been chosen. Empty means the insert is visible in the stack and invisible on the canvas, which is the honest
+     * split — the layer exists, and what goes in it is the next choice.
+     *
+     * Draws nothing, by the same path an icon pack that does not cover this app already takes: the resolver returns
+     * null and whatever is beneath shows through. So no renderer needed teaching.
+     *
+     * Legal on the foreground and background too, where it reads as "this layer contributes nothing" — distinct from
+     * `IconLayerSpec.visible`, which is a temporary hide the editor toggles rather than a content choice.
+     */
+    @Serializable
+    @SerialName("empty")
+    data object Empty : LayerSource
 
     /** The parsed app-icon content for this layer's role — the foreground or background from `ParsedIcon`. */
     @Serializable
@@ -19,9 +37,22 @@ sealed interface LayerSource {
     data object AppDefault : LayerSource
 
     /**
-     * The app's OS monochrome (themed-icon) layer, used *in place of* the foreground. Foreground-only, and
-     * only selectable when the app actually ships a monochrome layer — this is the "use the monochrome icon"
-     * side of the foreground source toggle (the other side is [AppDefault] with a monochrome effect applied).
+     * The app's OS monochrome (themed-icon) layer, used *in place of* the foreground. Foreground-only: the platform
+     * ships one silhouette, for that slot, so there is no "the app's monochrome background" for this to mean.
+     *
+     * **It means "monochrome", not "the themed drawable" — the renderer decides which of the two that is.** An app
+     * that ships a themed layer gets it; an app that does not gets its foreground drained of color instead. That
+     * branch is deliberately *not* the user's to make: whether an app carries one is not something they know, and in
+     * the **global** studio it is not even a single answer, since one recipe covers apps that differ. So it resolves
+     * per app in `IconLayerResolver`, exactly as [AppDefault] already does.
+     *
+     * That also corrects what this used to say — "only selectable when the app actually ships a monochrome layer",
+     * which was written before the global studio existed and cannot be honoured there. The old fallback drew the
+     * *unfiltered* foreground, making the choice a silent no-op on every app without a themed layer.
+     *
+     * Distinct from [LayerEffect.Color] with `saturation = 0`, which recolors whatever a layer already holds: this
+     * one swaps in different artwork. Both compose — a tint set on this layer still applies, and silhouette plus
+     * tint is the themed-icon recipe.
      */
     @Serializable
     @SerialName("app_default_monochrome")

@@ -1,6 +1,7 @@
 package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.model.icon.LayerEffect
+import inkspire.morphic.core.model.icon.TintMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -72,6 +73,52 @@ class LayerFilterTest {
         assertEquals(0, r)
         assertEquals(0, g)
         assertEquals(54, b)
+    }
+
+    @Test
+    fun `a solid tint replaces the color outright, which is the thing a multiply cannot do`() {
+        val matrix = LayerFilter.colorMatrixOf(
+            LayerEffect.Color(tintArgb = 0xFFFFFFFF.toInt(), tintMode = TintMode.SOLID),
+        )!!
+
+        // The case the whole mode exists for: a black themed glyph made white. Under MULTIPLY this is still black,
+        // because black times anything is black — which is why app-shipped monochrome layers could not be made to
+        // agree with each other.
+        assertEquals(Triple(255, 255, 255), apply(matrix, r = 0, g = 0, b = 0))
+        // And it is flat: two different inputs land on the same output, since only alpha survives.
+        assertEquals(Triple(255, 255, 255), apply(matrix, r = 200, g = 40, b = 90))
+    }
+
+    @Test
+    fun `a solid tint lands on the color asked for, not a near-black one`() {
+        // Pins the 0..255 translation convention. The fifth column is added to the channel directly, so a tint
+        // written on a 0..1 scale would come out as 0-or-1 of 255 — visually black, and silently so.
+        val matrix = LayerFilter.colorMatrixOf(
+            LayerEffect.Color(tintArgb = 0xFF3366CC.toInt(), tintMode = TintMode.SOLID),
+        )!!
+
+        assertEquals(Triple(0x33, 0x66, 0xCC), apply(matrix, r = 128, g = 128, b = 128))
+    }
+
+    @Test
+    fun `a solid tint spends the recoloring before it, because a flat color has no shading left`() {
+        val matrix = LayerFilter.colorMatrixOf(
+            LayerEffect.Color(
+                saturation = 0f,
+                brightness = 2f,
+                hueDegrees = 90f,
+                tintArgb = 0xFF00FF00.toInt(),
+                tintMode = TintMode.SOLID,
+            ),
+        )!!
+
+        // Not a special case in the code — it falls out of the matrix having no color coefficients to carry them.
+        assertEquals(Triple(0, 255, 0), apply(matrix, r = 10, g = 20, b = 30))
+    }
+
+    @Test
+    fun `tint mode alone changes nothing without a tint to apply`() {
+        assertNull(LayerFilter.colorMatrixOf(LayerEffect.Color(tintMode = TintMode.SOLID)))
     }
 
     @Test

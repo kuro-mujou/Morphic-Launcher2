@@ -202,11 +202,50 @@ slot still exists for the user to fill).
 **Layer content** is a small sum type, not always an image: **app-default (parsed image or color)**,
 **custom image**, or **solid-color fill** (a color-only background is a `SolidFill` bg).
 
-**Foreground monochrome.** The fg layer has **filters**, one of which is a **monochrome effect** (tints the
-fg). Separately, an app may ship a real **monochrome icon** (the OS themed-icon layer). The fg offers a
-**toggle**: an app *with* a monochrome icon → **filtered foreground** *or* **the app's monochrome icon**; an
-app *without* → filtered foreground only. The parsed monochrome layer is **stashed aside** at parse time as
-that alternate fg source — it is not a third stack layer.
+**Foreground monochrome — one control, and `IconLayerResolver` decides what it means.** An app may ship a real
+**monochrome icon** (the OS themed-icon layer), stashed aside at parse time as an alternate fg source rather than
+becoming a third stack layer. The fg offers a **toggle** for it, and **which of two mechanisms fires is resolved per
+app at render time**: an app that ships one gets it; an app that does not gets its foreground drained of color
+(`saturation = 0`, folded into the spec the resolver hands back, so both render paths get it with no change of their
+own). **This departs from what was locked here**, which said the toggle appears only for an app *with* a monochrome
+icon. That was written before the global studio, where one recipe covers apps that differ, so `hasMonochrome` has no
+single answer — and the old fallback drew the *unfiltered* foreground, making the choice a silent no-op on every app
+without a themed layer. Two consequences worth keeping straight:
+- **The two monochromes are different mechanisms and only one gets a button.** `LayerSource.AppDefaultMonochrome`
+  swaps in *different artwork*; `LayerEffect.Color(saturation = 0)` recolors *whatever a layer already holds*. The
+  source one is the toggle; the filter one is the Saturation slider, which is what it is. A "Monochrome" toggle beside
+  that slider was built and removed — it is a lossy alias (switching it off has to invent a value to return to), and
+  it would make one word mean two mechanisms visibly.
+- **It is a refinement of a source, not a source of its own** — so in `SourceControls` it is a row *under* the tile
+  row, shown only on the foreground while the app's own artwork is chosen, exactly the shape the pack "choose a
+  different icon" row already has. As a fourth tile it would read as a peer of a pack and an image, and would appear
+  on one layer only, so the row would change length as the selection moved. **The background gets neither form**: the
+  platform ships one silhouette and it is for the fg slot, so the source has nothing to resolve there, and a grey
+  plate is already the Saturation slider's. The themed *look* — flat plate behind a tinted glyph — is `SolidFill` on
+  the bg plus this layer's own tint, three controls that already exist.
+
+**`TintMode` — app-shipped themed layers do not agree with each other, and a multiply cannot fix it.** On a real
+device they arrive black, white, colored, or not a silhouette at all; the platform's contract is that **only their
+alpha is meaningful** and the consumer tints them. `LayerEffect.Color.tintArgb` was a pure multiply (`scaleMatrix`),
+and black times any tint is still black — so a black glyph could never be made white and the inconsistency was
+unreachable from the UI. `TintMode.SOLID` replaces the color and keeps the alpha, which is `SRC_IN` tinting expressed
+as a **color matrix**, so it stays one shared `FloatArray` and neither renderer learned a second kind of filter. The
+control is "Tint style: Shaded / Solid", shown only once a tint exists. Four things to know:
+- **The fifth column is a translation on a 0..255 scale, not 0..1.** Every other matrix in `LayerFilter` leaves it at
+  zero, so the question had never arisen; a 0..1 value there comes out visually black, silently. Pinned by a test.
+- **Solid spends the recoloring before it** — hue, saturation and brightness all act on channels it overwrites. That
+  falls out of the matrix having no color coefficients rather than being special-cased, and it is correct: a flat
+  color has no shading left. Those three sliders stay visible under it (the flip is one tap, and hiding three
+  controls behind a toggle makes the section jump) — the one place this file's "a control that changes nothing is
+  worse than a missing one" rule is knowingly not applied.
+- **The monochrome *fallback* downgrades SOLID to MULTIPLY, and that is the one place the renderer overrides the
+  user.** A solid tint keeps only alpha, which is right over a themed silhouette and disastrous over an ordinary
+  foreground — an adaptive foreground's alpha is usually a large blob, so the icon becomes a colored splodge. It
+  matters most globally, which is the whole point of the setting: "every icon a flat white glyph" is one edit there,
+  and without the downgrade it would silently produce blobs for every app with no themed layer. The tint is kept and
+  only its mode changes, so the chosen color still shows as a tinted greyscale.
+- **Additive, no schema change** — a defaulted field with `encodeDefaults = false` on both stores, so stored recipes
+  read back unchanged and new ones do not grow. Same deal the sealed effect list already gives new effects.
 
 **Editor.** fg/bg are the base; the user inserts **custom layers below bg / between fg&bg / above fg**. The
 only ordering rule is **fg stays above bg** (customs are otherwise free), and **reorder is buttons, not drag** —
