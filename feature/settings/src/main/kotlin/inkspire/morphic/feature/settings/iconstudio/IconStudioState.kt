@@ -19,7 +19,14 @@ import inkspire.morphic.data.settings.IconPreset
  */
 sealed interface StudioSubject {
 
-    /** Editing the global default. [sample] is the app the preview borrows artwork from; null before apps load. */
+    /**
+     * Editing the global default.
+     *
+     * @property sample the app the preview borrows artwork from; null before apps load. **Whichever app it is changes
+     *   what the edit looks like** — a legacy icon with a flat plate and an adaptive one with a transparent foreground
+     *   answer the same layer differently — so it is re-rollable rather than fixed at open;
+     *   `IconStudioViewModel.shuffleSample` is the whole of that.
+     */
     data class Global(val sample: ComponentKey? = null) : StudioSubject
 
     /** Editing one app's own recipe. */

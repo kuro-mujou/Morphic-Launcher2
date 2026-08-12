@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -89,9 +91,14 @@ fun IconStudioScreen(
 
     // One value rather than fifteen parameters down two signatures — see [StudioActions]. Remembered so the panel is
     // handed the same instance every frame; keyed on what it actually closes over, which is the ViewModel, the picker
-    // launcher, and whether browsing a pack is allowed at all.
-    val browsable = state.subject is StudioSubject.App
-    val actions = remember(viewModel, imagePicker, browsable) {
+    // launcher, and which of the two studios this is.
+    //
+    // **Two commands turn on that one fact, in opposite directions**, which is why it is one value and not two flags:
+    // browsing a pack for a *named* drawable is individual-only (a name on the global default would be handed to every
+    // app), and naming a preset is global-only (a look tuned against one app tends to contain that app — see
+    // `PresetsControls`). Both are absent rather than disabled, per the settings sections' rule.
+    val editingOneApp = state.subject is StudioSubject.App
+    val actions = remember(viewModel, imagePicker, editingOneApp) {
         StudioActions(
             selectLayer = viewModel::selectLayer,
             update = viewModel::updateSelected,
@@ -102,10 +109,8 @@ fun IconStudioScreen(
             removeLayer = viewModel::removeSelected,
             pickImage = { imagePicker.launch(imageRequest) },
             pickPack = viewModel::pickPack,
-            // Null in the global studio: a named drawable would be inherited by every app, so the affordance is
-            // absent there rather than offered and then refused.
-            browsePack = if (browsable) ({ pack: String -> viewModel.browsePack(pack) }) else null,
-            savePreset = viewModel::savePreset,
+            browsePack = if (editingOneApp) ({ pack: String -> viewModel.browsePack(pack) }) else null,
+            savePreset = viewModel::savePreset.takeUnless { editingOneApp },
             loadPreset = viewModel::loadPreset,
             deletePreset = viewModel::deletePreset,
             reset = viewModel::reset,
@@ -186,19 +191,16 @@ fun IconStudioScreen(
             // Leave, at the corner the whole app leaves from. Its own pill rather than a slot in a rail: back is not
             // an editing action, and grouping it with any of them would put "discard this session" one finger-width
             // from a tool.
-            Box(
+            StudioPillButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                hazeState = hazeState,
+                onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .uiInsetsPadding()
-                    .padding(ChromeMargin)
-                    .studioSurface(hazeState, shape = CircleShape),
-            ) {
-                StudioIconButton(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    onClick = onBack,
-                )
-            }
+                    .padding(ChromeMargin),
+            )
 
             // The session's actions, opposite the back button — history, then commit. **Corners rather than bar
             // entries, because none of them opens anything**: they act the moment they are pressed, so they must not
@@ -219,17 +221,16 @@ fun IconStudioScreen(
                     onRedo = viewModel::redo,
                 )
 
-                // Its own pill, and lit only when there is something to write — which is also how the unsaved state is
-                // visible at all: backing out discards, and a permanently-bright Save would give no hint of that.
-                // A tick rather than a floppy disk: this commits and stays, it does not export a file.
-                Box(modifier = Modifier.studioSurface(hazeState, shape = CircleShape)) {
-                    StudioIconButton(
-                        icon = Icons.Default.Check,
-                        contentDescription = "Save",
-                        enabled = state.dirty,
-                        onClick = viewModel::save,
-                    )
-                }
+                // Lit only when there is something to write — which is also how the unsaved state is visible at all:
+                // backing out discards, and a permanently-bright Save would give no hint of that. A tick rather than a
+                // floppy disk: this commits and stays, it does not export a file.
+                StudioPillButton(
+                    icon = Icons.Default.Check,
+                    contentDescription = "Save",
+                    hazeState = hazeState,
+                    enabled = state.dirty,
+                    onClick = viewModel::save,
+                )
             }
 
             // The bottom of the workspace: the tool bar, with anything floating above it in the same stack. One
@@ -245,10 +246,39 @@ fun IconStudioScreen(
                 // Provisional placement: above the bar and at the trailing end, which is out of the way of both the
                 // icon it edits and the bar's own contents. Where it finally sits is a decision for the pass that
                 // knows what else is up here.
-                BackgroundCycleButton(
-                    background = state.background,
-                    onClick = viewModel::cycleBackground,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // **One slot, and the subject decides what is in it** — which is the sum type earning its keep
+                    // rather than two buttons each checking whether they apply. Both answer the same question, "which
+                    // app am I looking at?", and they differ because the answer means different things: a global
+                    // recipe is *previewed* on an app, so any app will do and a shuffle is the fastest way through
+                    // several; an individual recipe *belongs* to one, so it is chosen.
+                    when (state.subject) {
+                        is StudioSubject.Global -> StudioPillButton(
+                            icon = Icons.Default.Casino,
+                            contentDescription = "Preview on another app",
+                            hazeState = hazeState,
+                            onClick = viewModel::shuffleSample,
+                        )
+
+                        is StudioSubject.App -> StudioPillButton(
+                            icon = Icons.Default.Apps,
+                            contentDescription = "Edit another app",
+                            hazeState = hazeState,
+                            onClick = viewModel::chooseAnotherApp,
+                        )
+
+                        // The picker is already up, so there is nothing to change to.
+                        StudioSubject.Unchosen -> Unit
+                    }
+
+                    BackgroundCycleButton(
+                        background = state.background,
+                        onClick = viewModel::cycleBackground,
+                    )
+                }
 
                 // Above the bar it belongs to, and below the cycle button, which belongs to neither. Absent rather
                 // than empty when nothing is chosen: the picker covers the screen then, and a panel editing a recipe

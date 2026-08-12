@@ -42,48 +42,39 @@ import inkspire.morphic.data.settings.IconPreset
  * Saving is likewise **independent of Save**. Naming a recipe puts it in the library and commits it nowhere, so a
  * user can build a look, keep it, and back out without applying it to anything.
  *
+ * **A preset is *made* in the global studio and only *used* in an individual one**, which is why [onSave] is nullable
+ * rather than a control that is always drawn — the same "absent rather than offered and refused" shape as
+ * `onBrowsePack`, pointed the other way. The reason is what a recipe tuned against one app tends to contain: a
+ * [inkspire.morphic.core.model.icon.LayerSource.CustomImage] is a picture of *that* app, and an icon pack's
+ * `drawableName` is a drawable chosen *for* that app. Saved as a preset, both would be carried into every other icon
+ * the look was later applied to. A global recipe has neither by construction, since it has to hold for every app —
+ * which is also what the shuffle is for.
+ *
  * A section body: no surface and no title of its own — see [StudioSections][LayerStackRows] for why those belong to
- * the host. **The text field's state stays hoisted here rather than in the screen**, deliberately: a half-typed name is
- * scoped to the panel being open, and closing the panel discarding it is the behaviour a user expects.
+ * the host.
+ *
+ * @param onSave names the current recipe, or **null** in the individual studio, where the library is read-only.
  */
 @Composable
 internal fun PresetsControls(
     presets: List<IconPreset>,
-    onSave: (String) -> Unit,
+    onSave: ((String) -> Unit)?,
     onLoad: (IconPreset) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    val nameState = rememberTextFieldState()
-    val name by remember { derivedName(nameState) }
-
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MorphicTextField(
-                state = nameState,
-                placeholder = "Name this look",
-                modifier = Modifier.fillMaxWidth(0.7f),
-            )
-            // Disabled until there is a name, because an unnamed preset is one nothing could tell from another.
-            Text(
-                text = "save",
-                color = StudioContentColor.copy(alpha = if (name.isEmpty()) 0.35f else 1f),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.14f))
-                    .clickable(enabled = name.isNotEmpty()) {
-                        onSave(name)
-                        nameState.setTextAndPlaceCursorAtEnd("")
-                    }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            )
-        }
+        onSave?.let { PresetNameRow(onSave = it) }
 
         if (presets.isEmpty()) {
             Text(
-                text = "Saved looks appear here, and in Settings → Icons.",
+                // Two different absences: with saving offered, the library is empty and this says where a preset
+                // would show up; without it, the library is empty *and* it cannot be filled from here, so the line
+                // has to say where it can.
+                text = if (onSave != null) {
+                    "Saved looks appear here, and in Settings → Icons."
+                } else {
+                    "Looks saved while editing all icons appear here, ready to apply to this app."
+                },
                 color = StudioContentColor.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -128,6 +119,44 @@ internal fun PresetsControls(
                 }
             }
         }
+    }
+}
+
+/**
+ * Naming the current recipe and putting it in the library.
+ *
+ * **Its own composable so the text field's state lives with the control that uses it**, which is what makes the field
+ * genuinely absent in the individual studio rather than merely undrawn — with the state hoisted into
+ * [PresetsControls] there would be a buffer allocated for a field that never appears. It also scopes a half-typed name
+ * to the row being on screen, which is the behaviour a user expects when they close the panel.
+ */
+@Composable
+private fun PresetNameRow(onSave: (String) -> Unit) {
+    val nameState = rememberTextFieldState()
+    val name by remember { derivedName(nameState) }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MorphicTextField(
+            state = nameState,
+            placeholder = "Name this look",
+            modifier = Modifier.fillMaxWidth(0.7f),
+        )
+        // Disabled until there is a name, because an unnamed preset is one nothing could tell from another.
+        Text(
+            text = "save",
+            color = StudioContentColor.copy(alpha = if (name.isEmpty()) 0.35f else 1f),
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.14f))
+                .clickable(enabled = name.isNotEmpty()) {
+                    onSave(name)
+                    nameState.setTextAndPlaceCursorAtEnd("")
+                }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        )
     }
 }
 

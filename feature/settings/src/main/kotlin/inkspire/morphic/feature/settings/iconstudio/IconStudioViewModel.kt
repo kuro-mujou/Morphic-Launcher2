@@ -95,8 +95,14 @@ class IconStudioViewModel(
      * **Independent of Save.** A preset is a recipe kept in a library, not a commitment to use it anywhere, so
      * naming one neither writes the global default nor detaches an app — a user can build a look, keep it, and
      * back out without applying it.
+     *
+     * **Refuses in the individual studio**, where a recipe is tuned against one app and so tends to name that app's own
+     * artwork — a custom image of it, or a pack drawable chosen for it — which a preset would then carry into every
+     * other icon it was applied to. The UI does not offer the affordance there either, so this is the guard behind the
+     * guard rather than the only one, exactly as [browsePack]'s is.
      */
     fun savePreset(name: String) {
+        if (_state.value.subject !is StudioSubject.Global) return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         val set = _state.value.editing
@@ -114,6 +120,58 @@ class IconStudioViewModel(
 
     /** Chooses the app to edit — the picker's one output, and how [StudioSubject.Unchosen] is left. */
     fun selectApp(component: ComponentKey) = openApp(component)
+
+    /**
+     * Draws a **different app** for the global studio to preview on — the answer to the question
+     * [StudioSubject.Global.sample]'s KDoc has been deferring.
+     *
+     * A global recipe is edited against one app's artwork, and which app decides what the edit *looks* like: a legacy
+     * icon with a flat plate and an adaptive icon with a transparent foreground respond to the same layer differently,
+     * so a recipe tuned against one can be wrong for the other. This is how the user checks, and it is a *shuffle*
+     * rather than a picker because the point is to see a spread, not to find a particular app.
+     *
+     * **The current sample is excluded**, so every press visibly changes something — a die that lands on the same face
+     * reads as a broken button rather than as chance.
+     *
+     * **Refuses in the individual studio.** There the app is the subject, not a stand-in for one, so re-rolling it
+     * would be editing a different app's recipe by accident. The UI shows a different button there.
+     */
+    fun shuffleSample() {
+        val subject = _state.value.subject as? StudioSubject.Global ?: return
+        viewModelScope.launch {
+            val next = appRepository.observeApps().first()
+                .filterNot { it.componentKey == subject.sample }
+                .randomOrNull()
+                ?.componentKey
+                ?: return@launch
+
+            // Pack artwork is **this app as drawn by that pack**, so it does not survive a change of app — see
+            // `packImages`. Cleared rather than merged, because the keys are the pack's and would otherwise hit and
+            // hand back the previous app's icon.
+            _state.update { it.copy(subject = StudioSubject.Global(next), packImages = emptyMap()) }
+            loadArtwork(next)
+            loadPackArtwork()
+        }
+    }
+
+    /**
+     * Goes back to the picker so a different app can be edited.
+     *
+     * **The individual studio's counterpart to the shuffle**, and deliberately not a shuffle: an app's own recipe is
+     * about *that* app, so landing on a random one would be editing something nobody asked for. `Unchosen` is already
+     * the state that shows the picker, so this is a return to it rather than a second way in.
+     *
+     * **Unsaved edits are discarded**, which is the same bargain backing out of the studio makes and the reason Save
+     * lights up: leaving an app — by any route — leaves what was not committed. The alternative, a confirm, would put a
+     * dialog in front of the one gesture a user makes while browsing.
+     */
+    fun chooseAnotherApp() {
+        if (_state.value.subject !is StudioSubject.App) return
+        viewModelScope.launch {
+            val apps = appRepository.observeApps().first()
+            _state.update { it.copy(subject = StudioSubject.Unchosen, pickable = apps, label = null) }
+        }
+    }
 
     /**
      * Advances the preview backdrop, and **remembers it** — the studio reopens on whatever it was left on.
@@ -435,8 +493,8 @@ class IconStudioViewModel(
     /**
      * Editing the global default, previewed on a real app.
      *
-     * The sample is simply the first installed app for now. It has to be *some* real app — a recipe drawn over
-     * nothing shows nothing — and which one is a question for the extras rail's shuffle, not for this.
+     * The sample opens on the first installed app, which is arbitrary and only has to be *some* real app — a recipe
+     * drawn over nothing shows nothing. Which one it stays on is [shuffleSample]'s.
      */
     private fun openGlobal(preset: String? = null) {
         viewModelScope.launch {
@@ -480,7 +538,15 @@ class IconStudioViewModel(
             saved = overrideRepository.overrides.first()[component] ?: IconLayerSet.Base
             resetHistory(stored)
             _state.update {
-                it.copy(subject = StudioSubject.App(component), editing = stored, label = label).withHistoryFlags()
+                it.copy(
+                    subject = StudioSubject.App(component),
+                    editing = stored,
+                    label = label,
+                    // Keyed by pack, but resolved *per app* — so anything cached here belongs to whichever app was
+                    // open before. Only reachable since the studio learnt to change app without being reopened; see
+                    // [shuffleSample], which clears it for the same reason.
+                    packImages = emptyMap(),
+                ).withHistoryFlags()
             }
             loadStoredImages(stored)
             loadPacks()

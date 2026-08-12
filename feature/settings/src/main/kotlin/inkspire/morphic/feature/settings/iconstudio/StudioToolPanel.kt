@@ -47,7 +47,11 @@ data class StudioActions(
     val pickPack: (String) -> Unit,
     /** Null in the global studio, where a *named* pack drawable would be inherited by every app. */
     val browsePack: ((String) -> Unit)?,
-    val savePreset: (String) -> Unit,
+    /**
+     * Null in the individual studio, where the library is read-only — the same nullable-means-absent shape as
+     * [browsePack], pointed the other way. See `PresetsControls` for why a look is made globally and only used here.
+     */
+    val savePreset: ((String) -> Unit)?,
     val loadPreset: (IconPreset) -> Unit,
     val deletePreset: (String) -> Unit,
     val reset: () -> Unit,

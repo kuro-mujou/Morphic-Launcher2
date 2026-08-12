@@ -83,6 +83,32 @@ fun StudioIconButton(
 }
 
 /**
+ * One icon button on a pill of its own — the shape every standalone action in the studio takes.
+ *
+ * Extracted at its third consumer (back, save, and the subject button), which is this codebase's usual point: two
+ * copies of `Box(studioSurface(…)) { StudioIconButton(…) }` is a coincidence, three is a component that would otherwise
+ * drift a corner or a padding at a time.
+ */
+@Composable
+fun StudioPillButton(
+    icon: ImageVector,
+    contentDescription: String,
+    hazeState: HazeState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Box(modifier = modifier.studioSurface(hazeState, shape = CircleShape)) {
+        StudioIconButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            enabled = enabled,
+            onClick = onClick,
+        )
+    }
+}
+
+/**
  * Undo and redo, as one pill of glass rather than two tiles.
  *
  * **One surface for the pair because they are one control** — a history has a direction, and two separate buttons
