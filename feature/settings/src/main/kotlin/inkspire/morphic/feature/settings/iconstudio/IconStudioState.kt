@@ -130,36 +130,49 @@ data class IconStudioState(
      * Whether the selected layer may take a **fixed** source in this studio — one whose content is the same pixels for
      * every app, rather than resolved per app.
      *
-     * **The distinction is the whole rule, and it is what divides the sources in two.** [LayerSource.AppDefault],
-     * [LayerSource.AppDefaultMonochrome] and an icon pack all *resolve per app* — each app gets its own artwork out of
-     * them, so applying one globally restyles every icon while leaving every icon still its own. A
-     * [LayerSource.CustomImage] and a [LayerSource.SolidFill] are one picture and one color; applied to the global
-     * default's **foreground or background**, they do not restyle every icon, they *replace* every icon, and an icon
-     * that no longer identifies its app has stopped being an icon.
+     * **What is being protected is that an icon still identifies its app, and only the foreground does that job.**
+     * [LayerSource.AppDefault], [LayerSource.AppDefaultMonochrome] and an icon pack all *resolve per app*, so applying
+     * one globally restyles every icon while leaving every icon still its own. A [LayerSource.CustomImage] and a
+     * [LayerSource.SolidFill] are one picture and one color — and on the global **foreground** that does not restyle
+     * every icon, it *replaces* every icon: Spotify, Gmail and Chrome all become the same flat shape, and an icon that
+     * no longer identifies its app has stopped being an icon.
      *
-     * So the two app-artwork layers take a fixed source only in the individual studio. Wanting a flat color behind every
-     * icon is a real thing to want, and the way to it globally is a **custom layer** beneath the background — which says
-     * what it means (a plate *added* under the app's artwork) rather than standing in for artwork that was there.
+     * **The background is not that, which is why it is allowed.** A flat plate under a per-app glyph leaves every icon
+     * still telling you what it is — the artwork that identifies the app is the layer *above*, untouched. That is
+     * Android's own themed-icon look (a monochrome glyph on a flat tonal plate) and most icon packs', so refusing it
+     * would forbid the commonest global look there is.
      *
-     * **A custom layer takes anything in either studio**, which is the other half: a decoration layer is *added* to
-     * every icon rather than replacing one, so a shared plate, frame or badge device-wide is a legitimate global look.
-     * What the rule turns on is which layer is being filled, not which studio alone.
+     * **This reverses the rule's earlier reach, and the reason is worth keeping.** It used to refuse the foreground and
+     * the background alike, on the grounds that both carry "the app's own artwork". That conflated the *line* (does the
+     * source resolve per app?) with the *reason* (does the icon still identify its app?). On the foreground the two
+     * coincide; on the background they come apart, and the reason is the one that matters. What it cost in practice was
+     * a monochrome device-wide look: with the background refused, the sanctioned route was a **custom layer** beneath it
+     * — which also needs the background set to [LayerSource.Empty] first, or the app's own plate covers the plate you
+     * just added. Three steps, none of them hinted at, for the look most people mean by "monochrome icons".
+     *
+     * A custom layer still takes anything in either studio, unchanged: a decoration layer is *added* to every icon
+     * rather than standing in for one.
      *
      * A property rather than a test at each site because it has **two readers that must agree**: `SourceControls` omits
      * the rows, and `IconStudioViewModel.pickImage` refuses behind it.
      *
-     * Two bounds worth knowing:
+     * Three bounds worth knowing:
+     * - **A custom *image* on the global background is now legal too**, and that is a consequence taken deliberately
+     *   rather than overlooked. It follows from the same reason — the glyph above it still identifies the app — even
+     *   though one photograph behind every icon is nearer the case this rule was written for than a flat color is. If
+     *   it should be refused, that wants stating on its own grounds (a busy plate hurts legibility) rather than being
+     *   smuggled back in under identity, which no longer supports it.
      * - **`browsePack` is stricter than this** — a *named* pack drawable is fixed content by exactly this definition, so
      *   this rule would permit one on a global custom layer, while `browsePack` refuses it everywhere but the individual
      *   studio. Left alone rather than widened to match, since nobody has asked for that affordance.
-     * - A global default that **already** carries a fixed source on one of those layers keeps drawing it: the rows are
+     * - A global default that **already** carries a fixed source on the foreground keeps drawing it: the rows are
      *   absent, so it cannot be re-picked or recolored, but "App default" is still there, so it is a state the user can
      *   leave rather than a trap.
      */
     val canUseFixedSource: Boolean
         get() = when (selectedLayer?.role) {
-            LayerRole.CUSTOM -> true
-            LayerRole.FOREGROUND, LayerRole.BACKGROUND -> subject is StudioSubject.App
+            LayerRole.CUSTOM, LayerRole.BACKGROUND -> true
+            LayerRole.FOREGROUND -> subject is StudioSubject.App
             null -> false
         }
 

@@ -302,9 +302,11 @@ class IconStudioViewModel(
      * reserved path, and drawn from memory — so backing out of the studio leaves no file behind, which is the
      * bug L1 recorded and accepted. [save] writes whatever the committed recipe still refers to.
      *
-     * **Refuses where the layer may not take one** — the foreground or background of the *global* default, since one
-     * picture there stands in for every app's own artwork. `IconStudioState.canUseFixedSource` is the whole rule and
-     * the UI omits the row by the same expression, so this is the guard behind the guard, as [browsePack]'s is.
+     * **Refuses where the layer may not take one** — the *global* default's foreground, since one picture there stands
+     * in for every app's own artwork. `IconStudioState.canUseFixedSource` is the whole rule and the UI omits the row by
+     * the same expression, so this is the guard behind the guard, as [browsePack]'s is. The global **background** is
+     * not refused: the glyph above it still identifies the app, so a shared plate restyles every icon rather than
+     * replacing it.
      *
      * Checked **before the decode**, which is the point of doing it here rather than inside the update: a refused pick
      * should not read the file, reserve a path, or leave a bitmap in [unsaved] that nothing will ever write.

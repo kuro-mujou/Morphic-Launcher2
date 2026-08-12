@@ -569,3 +569,34 @@ on-device consumer those were waiting for. Wait for someone to ask before buildi
 
 Leads 3 and 4 (the two render paths drifting; antialiased edges under `SOLID`) were never exercised and remain
 untested guesses rather than known-good.
+
+## The background half of monochrome, and the rule it collided with (2026-08-12)
+
+The fix above makes the monochrome **layer** gray. It does not make the **icon** gray: `AppDefault` on the background
+resolves to the app's own plate, so the result is a gray glyph on Spotify green. That is the same complaint arriving
+from the other side, and answering it turned out to be a question about a settings rule rather than about the renderer.
+
+**Two answers rejected first.** `AppDefaultMonochrome` as a *background* source — there is no such artwork, the
+platform ships one monochrome drawable and it is for the foreground slot, so it would resolve to nothing or to a lie.
+And the foreground toggle draining the background — cross-layer action, which breaks the one rule that lets this
+editor drop L1's "this layer / whole icon" scope question (everything acts on one layer), and which would silently
+override a background the user chose deliberately. `monochromeFallbackColor` should stay the *only* place the resolver
+overrides the user.
+
+**What was actually wrong was `IconStudioState.canUseFixedSource`.** Its *line* was "does this source resolve per
+app?"; its *reason* is "does the icon still identify its app?". On the foreground those coincide — a solid color there
+makes every icon the same flat shape. On the **background** they come apart: a shared plate under a per-app glyph
+leaves every icon still saying what it is, which is exactly Android's own themed-icon look and most icon packs'. So
+the rule was refusing the one background a monochrome look wants, and the workaround it named (a custom layer beneath
+the background) also needs the background set to `Empty` first, or the app's own plate covers the plate just added —
+three steps, none hinted at, for the commonest global look there is.
+
+The refusal now applies to the **foreground alone**. Monochrome device-wide is two obvious moves: foreground →
+Monochrome, background → a solid gray. Consequence taken deliberately: a custom *image* on the global background is
+legal too, since the same reason permits it; if that should be refused it wants stating on legibility grounds rather
+than under identity, which no longer supports it.
+
+**Still not built: a one-move monochrome look.** That is a **preset** — a named `IconLayerSet`, which S9 built and
+deliberately shipped empty, calling built-ins "a content decision rather than an engineering one". Mono foreground
+plus a flat neutral plate is exactly such a decision, and applying it is already one row that opens the studio loaded
+and dirty. No new mechanism is owed; someone has to choose the look.

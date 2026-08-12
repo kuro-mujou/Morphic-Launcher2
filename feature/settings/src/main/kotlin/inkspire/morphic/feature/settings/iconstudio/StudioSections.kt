@@ -632,9 +632,10 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
  *
  * The rest is **which studio this is**, and that is a rule about what a global edit should be *allowed* to do rather
  * than about what resolves: [allowsFixedSource] and [onBrowsePack] each gate a source that would hand one specific
- * picture or color to every app on the device. They differ in reach — a fixed source is refused only on the two
- * app-artwork layers, a *named* pack drawable everywhere but the individual studio — and both arrive as a decision made
- * elsewhere rather than as a test performed here, since the ViewModel refuses behind each of them.
+ * picture or color to every app on the device. They differ in reach — a fixed source is refused on the **foreground**
+ * alone, that being the layer which identifies the app, while a *named* pack drawable is refused everywhere but the
+ * individual studio — and both arrive as a decision made elsewhere rather than as a test performed here, since the
+ * ViewModel refuses behind each of them.
  *
  * **Two ranks of control, which is what the layout says.** The tiles are the *providers* — whose artwork this is — and
  * beneath them sit refinements of whichever is chosen: monochrome under the app's own artwork, a named drawable under
@@ -737,14 +738,19 @@ internal fun SourceControls(
             }
         }
 
-        // **Says why a tile is missing**, which its absence earns: on the global background with no packs installed the
+        // **Says why a tile is missing**, which its absence earns: on the global foreground with no packs installed the
         // row would otherwise be a single already-selected tile — a section that does nothing, the state this studio
         // keeps being mistaken for broken in. See `IconStudioState.canUseFixedSource` for the rule; this is also the one
         // place the alternative can be named at the moment it is wanted.
+        //
+        // **The foreground is the only layer that reaches this now.** It used to fire on the global background too, and
+        // the copy said "put it under the background" because that was the background's own workaround. The background
+        // takes a color directly today, so the sentence that named its workaround would now be advice to work around
+        // nothing.
         if (!allowsFixedSource) {
             Text(
                 text = "A color or image here would replace every app's own artwork. " +
-                    "Add a layer instead, and put it under the background.",
+                    "Add a custom layer instead — it decorates every icon rather than standing in for one.",
                 color = StudioContentColor.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall,
             )

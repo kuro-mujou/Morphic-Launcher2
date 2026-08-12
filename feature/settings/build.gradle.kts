@@ -61,4 +61,10 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.haze.blur)
     implementation(libs.haze.blur.materials)
+
+    // This module's first test, for `IconStudioState.canUseFixedSource` — a pure rule about which sources a layer may
+    // take, and the sort of decision this codebase tests rather than eyeballs (`CellFit`, `MenuAnchoring`,
+    // `FolderHostState`). It is worth pinning because getting it wrong is silent in both directions: too strict hides
+    // a control with no error, too loose lets one global edit replace every icon on the device.
+    testImplementation(libs.junit)
 }
