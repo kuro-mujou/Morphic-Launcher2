@@ -118,7 +118,7 @@ class IconArrangementsTest {
     }
 
     @Test
-    fun `circle centres a lone icon rather than putting it on the ring`() {
+    fun `circle centers a lone icon rather than putting it on the ring`() {
         val slot = IconArrangement.CIRCLE.slots(1, width, height).single()
         assertEquals(width / 2f, slot.x + slot.width / 2f, 0.01f)
         assertEquals(height / 2f, slot.y + slot.height / 2f, 0.01f)
@@ -128,7 +128,7 @@ class IconArrangementsTest {
     fun `circle starts at twelve o'clock`() {
         val first = IconArrangement.CIRCLE.slots(4, width, height).first()
         assertEquals(width / 2f, first.x + first.width / 2f, 0.01f)
-        assertTrue("the first icon should be above centre", first.y + first.height / 2f < height / 2f)
+        assertTrue("the first icon should be above center", first.y + first.height / 2f < height / 2f)
     }
 
     // ── Fans ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ class IconArrangementsTest {
     // ── Beehive ──────────────────────────────────────────────────────────────────────────────────────────
 
     @Test
-    fun `beehive centres its first icon`() {
+    fun `beehive centers its first icon`() {
         val slot = IconArrangement.BEEHIVE.slots(7, width, height).first()
         assertEquals(width / 2f, slot.x + slot.width / 2f, 0.01f)
         assertEquals(height / 2f, slot.y + slot.height / 2f, 0.01f)

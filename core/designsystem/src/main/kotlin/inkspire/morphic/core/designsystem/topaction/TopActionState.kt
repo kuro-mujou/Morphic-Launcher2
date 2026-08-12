@@ -117,7 +117,7 @@ fun rememberTopActionState(
         }
         if (!reached) {
             // Leaving collapses at once — the band is no longer being aimed at, and shrinking is the feedback. No
-            // dwell needs cancelling: restarting this effect cancelled whichever one was running.
+            // dwell needs canceling: restarting this effect canceled whichever one was running.
             expanded = false
             return@LaunchedEffect
         }

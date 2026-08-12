@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Behaviour spec for [FreePush], ported from L1's `SpreadPushTest` and re-expressed against [GridPlacement] /
+ * Behavior spec for [FreePush], ported from L1's `SpreadPushTest` and re-expressed against [GridPlacement] /
  * [PushResult] / [PushDirection]. Each case documents one rule of the free-grid push, so this doubles as the
  * readable reference for how home/dock make room during a drag.
  */

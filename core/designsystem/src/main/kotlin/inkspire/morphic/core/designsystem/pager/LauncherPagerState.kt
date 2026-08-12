@@ -121,7 +121,7 @@ class LauncherPagerState(
     suspend fun animateToPage(page: Int) =
         positionAnimatable.animateTo(clampIfBounded(page.toFloat()), pagerSpring)
 
-    /** Animate to the nearest page (used when releasing without a fling), then re-normalise the wrap. */
+    /** Animate to the nearest page (used when releasing without a fling), then re-normalize the wrap. */
     suspend fun settleToNearestPage() {
         val target = clampIfBounded(positionAnimatable.value.roundToInt().toFloat())
         if (positionAnimatable.value != target) positionAnimatable.animateTo(target, pagerSpring)

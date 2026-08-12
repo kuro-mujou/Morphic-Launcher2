@@ -39,7 +39,7 @@ directly rather than replaying the sequence.
 - `IconId(component, layerSet, sizePx)` — the S0 re-key, done, so value equality gives correct invalidation free.
 - `LayerEffect` is a **sealed list**, not one nullable column per effect — the explicit anti-L1 decision.
 - `IconShape` is by-id over vector drawables; all seven are in `res/drawable`.
-- `AppDefaultMonochrome` is a **foreground source**, not a third stack layer — modelled right first time.
+- `AppDefaultMonochrome` is a **foreground source**, not a third stack layer — modeled right first time.
 
 Missing, and the whole of B9:
 
@@ -126,7 +126,7 @@ adds no risk the version pin does not already carry.
 ### One thing not taken
 
 **`kmp-showcase-compose`** (also already in the catalog, also unused) — L1 needed a coach-mark tour because it
-chose icon-only tool buttons with no labels. Labelling the tools is the cheaper fix. Leave it declared and
+chose icon-only tool buttons with no labels. Labeling the tools is the cheaper fix. Leave it declared and
 unconsumed; it is there if labels prove not to be enough.
 
 ## Where the model lives — move `layer/` and `IconShape` to `core:model`
@@ -201,7 +201,7 @@ all three are structural rather than discipline:
 - **The shape mask resolves through the same `IconShapes` drawable.** The clip is built from the same vector
   silhouette in both paths; adding a shape stays "drop in a drawable".
 - **Transforms are expressed in the same normalized square box.** `IconLayerSpec`'s offsets are fractions of the
-  box and its zoom/rotation are about its centre, which is what makes `Matrix` and `graphicsLayer` agree without
+  box and its zoom/rotation are about its center, which is what makes `Matrix` and `graphicsLayer` agree without
   a conversion either side could get wrong.
 
 ## Compositing properties vs effects — opacity and blend go on the spec
@@ -238,7 +238,7 @@ the app's recipe still reads "app default" (so Reset and inheritance behave norm
 artwork gets its color re-detected rather than keeping one frozen from a previous version.
 
 The decision is split from the sampling — `LegacyBackground` is arithmetic over an `IntArray` and unit-tested
-without an emulator, where rasterising the drawable stays in `DrawableParser`. Same split as `SettingsSlice` and
+without an emulator, where rasterizing the drawable stays in `DrawableParser`. Same split as `SettingsSlice` and
 `IconLayerResolver`. The tests that matter are the **refusals**: getting one wrong does not fail loudly, it
 silently restyles an icon.
 
@@ -252,7 +252,7 @@ the exact ceremony that rotted L1's home screen into a 500-line `when(event)`.
 sample app); INDIVIDUAL edits one app's snapshot (Save / Reset). Same scaffold, differing in the preview subject
 and the commit affordance.
 
-- **Canvas.** Full-bleed, marked `hazeSource`, the icon centred in a **square bound that clips overflow** — the
+- **Canvas.** Full-bleed, marked `hazeSource`, the icon centered in a **square bound that clips overflow** — the
   same bound the real renderer scales into, so what overflows here overflows there. A background button cycles
   black / white / checkerboard / black-outside-checkerboard-inside / white-outside-checkerboard-inside.
 - **Everything else floats over it on Haze.** One `hazeState` for the screen and one shared surface modifier
@@ -283,7 +283,7 @@ for once.
 
 ## Icon packs (last, and they are a *source*, not a mode)
 
-L1 modelled a pack as a field on `IconStyle` plus a parallel resolution path in `PackAwareIconSource`. Here it is
+L1 modeled a pack as a field on `IconStyle` plus a parallel resolution path in `PackAwareIconSource`. Here it is
 one more `LayerSource` variant, selectable on **fg/bg only**:
 
 ```
@@ -334,7 +334,7 @@ feed the background layer is the open question.
   slider costs a redraw rather than a bitmap per frame. Three parts:
   - **S2a** — `LayerTransform`, the offset/zoom/rotation arithmetic as one pure type both paths use
     (`IconRenderer` via `toMatrix`). Unit-tested, and the tests pin *conventions* rather than results: an offset
-    is a fraction of the box and not a pixel count, negative Y is up, zoom and rotation pivot on the centre. None
+    is a fraction of the box and not a pixel count, negative Y is up, zoom and rotation pivot on the center. None
     of those would fail loudly if they diverged — the icon would just quietly sit somewhere else.
   - **S2b** — `ParsedIconLoader`, one answer to "what are this app's layers?", now used by `IconRenderManager`
     too. **Deliberately not cached**, and the KDoc says why: a `ParsedIcon` holds `Drawable`s, which the
@@ -412,7 +412,7 @@ feed the background layer is the open question.
   - **`LayerFilter` joins the shared set**, beside `LayerTransform`: one color-matrix derivation for both
     renderers. It is free to share because Android's and Compose's `ColorMatrix` are each a row-major
     `FloatArray(20)`, so neither side converts anything. Unit-tested by pushing colors through the matrices
-    rather than asserting on entries — the question is whether saturation 0 greys a pixel, not what row 1 holds.
+    rather than asserting on entries — the question is whether saturation 0 grays a pixel, not what row 1 holds.
   - **Recoloring is one `LayerEffect.Color`, not four effects.** Hue, saturation, brightness and tint compose
     into a single matrix in a fixed order, so four list entries would mean their *order* silently changed the
     result — a way to be wrong this shape does not have. Monochrome is `saturation = 0` plus a tint rather than a
@@ -436,7 +436,7 @@ feed the background layer is the open question.
   blur it with `BlurMaskFilter` on any API. The live path has *nodes*, and Compose's only blur is `RenderEffect`,
   which is **API 31+** against this project's `minSdk` of 26. No option is simultaneously cheap, live, and
   identical on every device: gating the effect on API 31+ denies it where the bake could manage it, blurring via
-  `RenderEffect` makes the editor lie below 31, and rasterising in the live path re-bakes a shadowed layer per
+  `RenderEffect` makes the editor lie below 31, and rasterizing in the live path re-bakes a shadowed layer per
   frame while its sliders move.
 
   **So S6 stops at opacity, blend, color and gradient.** Nothing else in this plan is waiting on shadows: the
@@ -461,7 +461,7 @@ feed the background layer is the open question.
     over a hue bar, and L1's is finally ported. It has **no alpha channel**, deliberately: every color here sits
     somewhere that already carries opacity (a layer has one, a gradient has a strength), and `LayerEffect.Color`
     already states that a tint's alpha is ignored because two ways to set one thing is one too many. Hue is held
-    as state rather than re-derived from the color, because hue is undefined at black, white and every grey — a
+    as state rather than re-derived from the color, because hue is undefined at black, white and every gray — a
     picker that recomputed it would jump under the user's finger the moment they dragged into a corner.
   - It replaced **three** near-identical swatch rows (solid fill, tint, gradient stops) with one `ColorField`.
     The swatches stayed alongside the picker rather than being replaced by it: swatches are how a color is chosen
@@ -490,7 +490,7 @@ feed the background layer is the open question.
   a `data:settings` slice, saved and loaded from the studio and listed in the dashboard slot that was held for it.
   **No schema change**, exactly as this plan predicted — a preset *is* the recipe plus a name.
   - **A slice rather than a Room table**, which is the opposite call from per-app overrides one module over. The
-    line is whether the store grows with *use of the launcher*: overrides get a row per customised app and are
+    line is whether the store grows with *use of the launcher*: overrides get a row per customized app and are
     read one at a time by every icon on screen, where presets are a handful, chosen deliberately, and read as a
     whole list. That is a document.
   - **Applying is opening the studio loaded with it, not a write.** A preset changes every icon that inherits the
@@ -549,15 +549,15 @@ Leads, in the order I would try them:
    `hasMonochrome = true`, so `SOLID` applies to it and fills its whole alpha flat. That is precisely the "some
    didn't make it monochrome at all" case, and it comes out as a colored blob. There is no test for it because we
    have no such asset to hand; it needs a device with a known-bad app.
-2. **Judging the "right" fallback.** A shipped silhouette (flat, filled) and a desaturated foreground (greyscale,
+2. **Judging the "right" fallback.** A shipped silhouette (flat, filled) and a desaturated foreground (grayscale,
    with shading) look different *in kind*, by construction — no silhouette can be invented from a foreground whose
    alpha is a blob, which is the same reason `LegacyBackground` refuses glyph matting. If what is wanted is that the
    two agree, that is a different feature and L1's `foregroundUniform`/`normalize` above are the prior art.
 3. **Which renderer is wrong.** The live editor and the bake share `IconLayerResolver` and `LayerFilter`, so they
    *should* agree; if they do not, the `IconLayers` dev-harness playground draws one set both ways side by side and
    is the fastest way to see it. If they agree and both look wrong, it is the model or the arithmetic, not the split.
-4. **Antialiased edges under `SOLID`.** Colour matrices run on unpremultiplied colour, so partial-alpha edge pixels
-   take the flat colour at partial alpha, which should be right — but it is the kind of thing that shows as fringing
+4. **Antialiased edges under `SOLID`.** Color matrices run on unpremultiplied color, so partial-alpha edge pixels
+   take the flat color at partial alpha, which should be right — but it is the kind of thing that shows as fringing
    and has not been looked at on a screen.
 
 Nothing else in the studio depends on this being settled.

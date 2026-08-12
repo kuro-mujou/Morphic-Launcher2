@@ -97,9 +97,9 @@ internal val PagerReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent
  *
  * **Dragging is MovingGap, not push.** A coordinate surface shoves occupants aside; an ordered one migrates a gap
  * through the list and lets the flow densify (see `core:designsystem/ordered`). Three zones per cell, because this
- * surface holds folders: the outer thirds insert the gap before or after the hovered entry, and the centre third is
+ * surface holds folders: the outer thirds insert the gap before or after the hovered entry, and the center third is
  * a merge ring — drop to fold the two together, or dwell to open the target and place the app at a chosen slot.
- * (The category pager, which holds no folders, reads halves instead: with nothing to merge into, a centre third
+ * (The category pager, which holds no folders, reads halves instead: with nothing to merge into, a center third
  * would be dead space where the user's aim does nothing.)
  *
  * **Folders behave exactly as they do on home**, because the lifecycle is the same `FolderHostState`: tap to open,
@@ -209,7 +209,7 @@ fun AppsPager(
             // is between targets, and moving the preview there would strobe.
             val cell = geo.cellAt(fingerInRoot) ?: return@DropPlanner PagerReorderPlan
             val slot = cell.row * config.cols + cell.col
-            // **Three zones, because this surface holds folders.** The centre third of an occupied cell is a merge
+            // **Three zones, because this surface holds folders.** The center third of an occupied cell is a merge
             // ring: dropping there folds the two together, and dwelling there opens the target to receive the app.
             // Unlike the reorder plan, a merge plan's footprint is *meaningful* — it names the hovered cell, which
             // is how the folder host resolves which folder is being aimed at (`folderIdAt` below).
@@ -227,7 +227,7 @@ fun AppsPager(
                 canMergeInto(item, over)
             ) {
                 // The gap is deliberately left where it is. Collapsing it would reflow every icon the instant the
-                // finger crossed into a centre third — including the one being aimed at, which would slide out
+                // finger crossed into a center third — including the one being aimed at, which would slide out
                 // from under the footprint that had just appeared on it.
                 mergeTarget = over
                 return@DropPlanner PlacementPlan(GridPlacement(page, cell.row, cell.col), DropIntent.MERGE)
@@ -287,7 +287,7 @@ fun AppsPager(
         val sourceFolderId = folderHost.dragSourceFolderId
 
         // 1. Released on a page while a folder is still on screen. Leaving is a deliberate dwell, so a release out
-        //    here is "never mind" — and it could not be honoured anyway: an app carried inside a folder has no slot,
+        //    here is "never mind" — and it could not be honored anyway: an app carried inside a folder has no slot,
         //    so placing it would leave it in the folder *and* on a page.
         if (folderHost.openFolderId != null) {
             folderHost.close()

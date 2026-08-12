@@ -20,7 +20,7 @@ import timber.log.Timber
 /**
  * One installed icon pack, as offered to the user.
  *
- * @property preview the pack's own launcher icon — packs are recognised by their artwork rather than their name,
+ * @property preview the pack's own launcher icon — packs are recognized by their artwork rather than their name,
  *   so a list of labels alone would be nearly unusable.
  */
 data class InstalledIconPack(

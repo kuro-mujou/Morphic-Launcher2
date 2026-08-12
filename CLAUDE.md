@@ -127,7 +127,7 @@ Key rules:
   placements, flattened by (page, row, col), so one drag in the list wrote `MoveApp(page = 0, row = i, col = 0)` for
   every app and destroyed the grid arrangement permanently. The good half of that idea survives as
   `seedIfEmpty(readingOrder(...))`, run when the pairing is first chosen: switching to the list hands the user their
-  apps in the order they already recognise, rather than a blank screen with no picker to fill it. Membership is fixed
+  apps in the order they already recognize, rather than a blank screen with no picker to fill it. Membership is fixed
   by `setOrder`, which **reconciles against what is stored** (`reconcileReportedOrder`) — the guard is in the store
   rather than at the call site, as `AppsCategoryChange.Reorder`'s is, because the caller has nothing true to
   reconcile against.
@@ -143,7 +143,7 @@ scoped **per orientation**, since the pager keeps two saved lists and an app app
 **Settled: neither category layout holds folders, so `category_item` stays keyed on `component`.** The reshape the
 pager needed is **not** owed here — no migration. The **pager** (`PAGER_WITH_CATEGORY`) has one reason: a category
 *is* the grouping, so a folder inside one would be a second, redundant one. Its pages are dragged between (carrying
-an app to another page is how it changes category) and its cells split into **halves** with no centre merge ring,
+an app to another page is how it changes category) and its cells split into **halves** with no center merge ring,
 since there is nothing to merge into — which is what `CategoryPagerPlayground` prototypes. The **card**
 (`CATEGORY_CARD`) has that reason *plus* one of its own: a card is already a folder in everything but name — a
 titled tile previewing a collection, which opens into a bounded grid — so a folder on a card nests a grouping inside
@@ -197,7 +197,7 @@ slot still exists for the user to fill).
   color is **resolved, never written into the recipe**: the app still reads "app default", so Reset and
   inheritance behave normally and an app that updates its artwork gets re-detected instead of keeping a frozen
   color. `LegacyBackground` is the pure decision (unit-tested; **the refusal tests are the ones that matter**),
-  `DrawableParser` the rasterising.
+  `DrawableParser` the rasterizing.
 
 **Layer content** is a small sum type, not always an image: **app-default (parsed image or color)**,
 **custom image**, or **solid-color fill** (a color-only background is a `SolidFill` bg).
@@ -220,7 +220,7 @@ without a themed layer. Two consequences worth keeping straight:
   row, shown only on the foreground while the app's own artwork is chosen, exactly the shape the pack "choose a
   different icon" row already has. As a fourth tile it would read as a peer of a pack and an image, and would appear
   on one layer only, so the row would change length as the selection moved. **The background gets neither form**: the
-  platform ships one silhouette and it is for the fg slot, so the source has nothing to resolve there, and a grey
+  platform ships one silhouette and it is for the fg slot, so the source has nothing to resolve there, and a gray
   plate is already the Saturation slider's. The themed *look* — flat plate behind a tinted glyph — is `SolidFill` on
   the bg plus this layer's own tint, three controls that already exist.
 
@@ -243,7 +243,7 @@ control is "Tint style: Shaded / Solid", shown only once a tint exists. Four thi
   foreground — an adaptive foreground's alpha is usually a large blob, so the icon becomes a colored splodge. It
   matters most globally, which is the whole point of the setting: "every icon a flat white glyph" is one edit there,
   and without the downgrade it would silently produce blobs for every app with no themed layer. The tint is kept and
-  only its mode changes, so the chosen color still shows as a tinted greyscale.
+  only its mode changes, so the chosen color still shows as a tinted grayscale.
 - **Additive, no schema change** — a defaulted field with `encodeDefaults = false` on both stores, so stored recipes
   read back unchanged and new ones do not grow. Same deal the sealed effect list already gives new effects.
 
@@ -295,7 +295,7 @@ because comparing pixels needs instrumentation this project has no setup for.
 *finished* silhouette — after transform and after the mask, since an outer shadow must escape the shape — which
 the bake holds as a bitmap and can blur on any API, and which the live path only has as nodes. Compose's only
 blur is `RenderEffect`, **API 31+ against a `minSdk` of 26**. No way out is free: gating the effect denies it
-where the bake could manage it, `RenderEffect` makes the editor lie below 31, and rasterising re-bakes a shadowed
+where the bake could manage it, `RenderEffect` makes the editor lie below 31, and rasterizing re-bakes a shadowed
 layer per frame while its sliders move. Nothing waits on it, and `minSdk` reaching 31 retires the fork outright.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
@@ -342,12 +342,12 @@ never learn what a pack is.
 **A pack's drawables can also be browsed**, to give one app a *named* icon rather than the one `appfilter.xml`
 assigns it. The list needs no separate "drawable lister": that file's **values** are drawable names, so browsing
 is a projection of what a pack already loads. **Individual mode only** — a named drawable on the global default
-would be inherited by every app — and the grid decodes only cells that scroll into view, cancelling on a flick,
+would be inherited by every app — and the grid decodes only cells that scroll into view, canceling on a flick,
 over a bounded LRU. **Deferred:** drawables the author mapped to no app, and `drawable.xml`'s categories; shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
 
 **Presets are a named `IconLayerSet`** — the recipe plus a name, no separate format, and stored as a
 `data:settings` slice rather than a Room table because a library is a handful of documents read whole, where
-per-app overrides are a row per customised app read one at a time. **Applying one is opening the studio loaded
+per-app overrides are a row per customized app read one at a time. **Applying one is opening the studio loaded
 with it, never a write**: a preset restyles every icon that inherits the default, which is not something to do
 from a list row with no way to look first — so the dashboard row navigates, the session opens *dirty*, and Save
 commits. A preset is a **copy, not a link**: loading is an ordinary undoable edit and deleting touches nothing it
@@ -397,14 +397,14 @@ a canvas the *user* switches between black and white.
   The Compose BOM does **not** carry the Expressive APIs, so `material3` is pinned to `1.5.0-alpha22` in the
   version catalog; opt in per-usage with `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` where the
   compiler asks.
-- **Monochrome palette.** Greyscale chrome so the wallpaper + app icons carry the color. `accent` is a
-  high-contrast greyscale *emphasis* (not a hue) — selection/active read by contrast; **red is reserved for
+- **Monochrome palette.** Grayscale chrome so the wallpaper + app icons carry the color. `accent` is a
+  high-contrast grayscale *emphasis* (not a hue) — selection/active read by contrast; **red is reserved for
   `error`** only. **Both light and dark are first-class** (dark mode is an accessibility barrier for some
   users). Semantic tokens live in [theme/MorphicColors.kt](core/designsystem/src/main/kotlin/inkspire/morphic/core/designsystem/theme/MorphicColors.kt).
 - **Theme layering + monochrome M3 bridge.** `MorphicTheme` provides our colors only (`LocalMorphicColors`).
   `LauncherTheme` = M3 base + expressive motion + `MorphicTheme`, and it feeds MaterialTheme a **monochrome
   M3 `ColorScheme` bridged from `MorphicColors`** (`MorphicColors.toM3ColorScheme(dark)`), so stock M3
-  components render greyscale *and* keep Expressive motion. Use `LauncherTheme` as the app wrapper.
+  components render grayscale *and* keep Expressive motion. Use `LauncherTheme` as the app wrapper.
 - **Build components *on* M3, restyle — go fully custom only where M3 has no equivalent.** Because the scheme
   is bridged monochrome, wrap the real M3 component and get its native Expressive motion for free:
   `MorphicButton` = the M3 button family + `ButtonDefaults.shapes()` (press shape-morph); `MorphicSlider` =
@@ -452,7 +452,7 @@ a canvas the *user* switches between black and white.
     `WallpaperManager.getWallpaperColors` already answers the question over the wallpaper that is *actually displayed*
     — another app's, or a live one, neither of which we can read as a bitmap — with no permission and no decode, and on
     API 31+ `HINT_SUPPORTS_DARK_TEXT` is literally the verdict. And `dominantColor` would have been the **wrong
-    statistic** anyway: it weights each pixel by saturation so a vivid accent beats washed-out grey, which is what an
+    statistic** anyway: it weights each pixel by saturation so a vivid accent beats washed-out gray, which is what an
     *accent* wants and the opposite of what "how bright is this?" wants. So the blur *and* the dominant color are both
     still unported, still waiting on the frosted backdrop that is their real consumer.
   - **Reading our own file is the fallback, and it is gated on proof.** Only when the system says nothing (API 26, or a
@@ -462,7 +462,7 @@ a canvas the *user* switches between black and white.
     unreadable, dark chrome over a dark one is merely dull. The cut is at relative luminance **0.179**, which is not a
     taste value — it is where the WCAG contrast ratios against black and white cross.
   - **`RotatingWallpaperService` now publishes its colors** (`onComputeColors` + `notifyColorsChanged` on each new
-    image). A live wallpaper is the one kind the system cannot analyse for itself, so a service that stays silent
+    image). A live wallpaper is the one kind the system cannot analyze for itself, so a service that stays silent
     leaves *every* consumer of `getWallpaperColors` with nothing — status-bar icon contrast included. Answering means
     our own rotating pair takes the same path as every other wallpaper instead of needing a special case that reads our
     files behind the system's back. L1's service published nothing and had no caller that missed it.
@@ -479,17 +479,17 @@ a canvas the *user* switches between black and white.
     was *which wash*. `blurStrength` is therefore total, and "nothing to sample" means one thing — `LocalBackdrop` being
     null, i.e. the launcher has no wallpaper it may read. The `@SerialName` stays `"none"`, so no stored blob moved.
   - **All four effects carry the wallpaper's hue, and that is the one deliberate exception to the monochrome palette
-    rule.** The rule makes *chrome* greyscale so the wallpaper and the icons carry the color; an effect the user picks,
+    rule.** The rule makes *chrome* grayscale so the wallpaper and the icons carry the color; an effect the user picks,
     whose whole subject is the wallpaper, is not chrome. So L1's two-stage blend is ported exactly: a **wallpaper tone**
     = `lerp(surfaceVariant, accent, 0.30)` (mode-appropriate, and desaturated here because our `surfaceVariant` is
-    grey), then light = `lerp(White, tone, 0.35)`, dark = `lerp(Black, tone, 0.35)`, and `MaterialYou` = the tone
+    gray), then light = `lerp(White, tone, 0.35)`, dark = `lerp(Black, tone, 0.35)`, and `MaterialYou` = the tone
     outright. A plain white or black film over a blurred photograph reads as dirty, which is the bad effect the 35%
     nudge exists to fix. **This reverses a call made mid-slice** — the first cut dropped the hue everywhere and left
     `MaterialYou` unrenderable, and the author reversed it; the reasoning is kept because the exception is only
     defensible if the rule it bends is stated.
   - **The accent is read from the wallpaper, not from the OS palette.** L1 used `colorScheme.primary` above API 31,
     which worked because its launcher ran a normal M3 dynamic scheme; L2 bridges a **monochrome** scheme, so that
-    expression returns grey. `WallpaperRepository.accentColor` reads it directly — `WallpaperColors.primaryColor` on
+    expression returns gray. `WallpaperRepository.accentColor` reads it directly — `WallpaperColors.primaryColor` on
     API 27+, and L1's saturation-weighted `dominantColor` over our own file below that. So **both halves of `Blur.kt`
     are now ported** after all, and for L1's own reasons.
   - **Liquid glass is a real AGSL shader** (`backdrop/LiquidGlass.kt`, API 33+): a rounded-rect SDF whose rim band
@@ -520,11 +520,11 @@ a canvas the *user* switches between black and white.
   the folder paint nothing of their own and are read against one shared sheet of blurred wallpaper sitting **above HOME
   and below whatever covers it**. A frosted *panel* still samples its own crop (`wallpaperBackdrop`) and should — that
   is what makes it read as glass sliding over the picture — but a surface that **arrives** wants the opposite, and that
-  is the whole reason this is a separate node: the content slides while the frost only *fades*. A blur travelling with
+  is the whole reason this is a separate node: the content slides while the frost only *fades*. A blur traveling with
   the content reads as a sheet of frosted plastic being carried on screen rather than as the screen frosting over.
   - **Two motions, two drivers.** `SurfacePagerState.progress` — the pan collapsed to "how far in is the other surface",
     unsigned and edge-agnostic — drives the shell's; the folder drives its own from an `Animatable` **seeded at zero**,
-    which `animateFloatAsState` cannot do: that helper initialises to its target, so an overlay composed with
+    which `animateFloatAsState` cannot do: that helper initializes to its target, so an overlay composed with
     `presenting = true` would snap in and a folder would fade out but never fade in.
   - **The frost is not tunable, and that is a design decision rather than an omission.** `BackdropEffect.fullScreenFilm`
     replaces the stored parameters with fixed ones, and the layer reads it *itself* rather than taking an effect, so no
@@ -564,7 +564,7 @@ sources-before-effects ordering was arranged around. Our rotating service active
 **capture** → always (it *is* a picture of what is displayed, and gating it on being applied would reject it forever);
 a picked image → only if `appliedSystemId` still matches the live wallpaper id; otherwise nothing, and every frosted
 surface falls back to its scrim. **That third test is where L1 kept a second copy of the file and L2 does not**: its
-`appliedSingle` was a snapshot frozen at Apply time so an edited-but-unapplied pick could not desynchronise the
+`appliedSingle` was a snapshot frozen at Apply time so an edited-but-unapplied pick could not desynchronize the
 backdrop. The id comparison does the same job without the copy *and* one more the snapshot could not — a wallpaper set
 outside the launcher makes the ids differ, where L1's snapshot went on claiming to match. It is the **same gate**
 `brightness` uses, deliberately: "is our file what is on screen" is one question, and two answers to it would drift.
@@ -658,7 +658,7 @@ brightness question through the same system API as every other wallpaper.
   finally ported: `systemBars ∪ displayCutout` — deliberately not `safeDrawing` (nothing on a launcher surface takes
   text, so reserving an IME that never appears is a permanent gap) and deliberately not `systemBars` alone (a notch is
   not a system bar). It had been written out longhand in eleven files, which is how a launcher ends up with home
-  honouring the cutout and its settings screen not. `Modifier.uiInsetsPadding(sides)` is the padding form —
+  honoring the cutout and its settings screen not. `Modifier.uiInsetsPadding(sides)` is the padding form —
   `@Composable`, not L1's deprecated `composed { }`.
   - **The bars are *content* padding, never layout padding, on any surface with a background.** The window is
     transparent under this launcher's theme (`windowShowWallpaper`), so a container that stops short of the window edge
@@ -670,7 +670,7 @@ brightness question through the same system API as every other wallpaper.
     The FAB then pads itself, since the scaffold's reservation is what normally lifts it clear. L1 zeroed the same two
     fields, on exactly the sections whose detail shows the wallpaper.
   - **Which sides is the shell's answer, not the pane's** — a pane beside another pane must not inset the edge its
-    neighbour covers, or the gap opens in the middle of the screen. So `insetSides` is a parameter on both `SettingsList`
+    neighbor covers, or the gap opens in the middle of the screen. So `insetSides` is a parameter on both `SettingsList`
     and `PunchThroughPane`: horizontal+bottom on a phone, start+bottom / end+bottom either side of the tablet divider
     (L1 passed the same two to its two-pane list). The **top** is nobody's: the app bar covers the status bar and
     `consumeWindowInsets(innerPadding)` says so, which is why the panes below can ask for every side and get nothing
@@ -689,7 +689,7 @@ brightness question through the same system API as every other wallpaper.
 - **`MorphicColorPicker`** (a saturation/value panel over a hue bar) has **no alpha channel**, deliberately: every
   color the launcher lets a user pick already sits somewhere carrying opacity, and offering a second way to set
   it is how a color silently loses its transparency. Its hue is held as *state* rather than re-derived from the
-  color, which is correctness and not economy — hue is undefined at black, white and every grey, so a picker that
+  color, which is correctness and not economy — hue is undefined at black, white and every gray, so a picker that
   recomputed it would jump under the finger the moment the panel was dragged into a corner.
 - **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
   follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers are named and blocked
@@ -828,7 +828,7 @@ home layer).
 
 **Home surface — two *pairings*, chosen in one place.** `HomeScreen` is a `when` over `HomeLayout` above shared
 wiring (the ViewModel, the device report, the state), which is deliberately `AppsScreen`'s shape and the same
-argument: both arrangements render the same apps with the same launch behaviour, so "which pairing?" is answered
+argument: both arrangements render the same apps with the same launch behavior, so "which pairing?" is answered
 once, above everything both need. The arms are **`HomePagerSurface`** (`PAGER_WITH_DOCK`) and **`HomeListSurface`**
 (`LIST_WITH_WIDGET_AREA`); the unbuilt-arm-behind-`else` trap is avoided by listing both, so a third value fails to
 compile until it is drawn. L1 answered this with a `HomeSurfaceRegistry` of `HomeSurface` implementations, each
@@ -864,7 +864,7 @@ the default `DevRootScreen` screen.
 - **Drag-to-rearrange** persists through `LayoutRepository.apply` (optimistic → no flicker; `FreeGridPlanner`
   push with directional-push + merge-ring partition, dwelled preview, edge-flip pages, trailing empty page mid-drag).
   Seed leaves a free row so a full grid stays rearrangeable.
-- **Folders.** Dropping an app on another (centre merge ring) creates a folder; folders render as a `FolderCell`
+- **Folders.** Dropping an app on another (center merge ring) creates a folder; folders render as a `FolderCell`
   (2×2 icon preview). Tapping opens `FolderOverlay` — two zones (a full-screen `SurfaceBackdropLayer` that **fades in**,
   plus a transparent bounded card sized live by `folderInnerSize` per device/orientation, inset to
   `systemBars ∪ displayCutout`), a **dense-flow pager** of the folder's ordered apps, launch on tap, in-folder
@@ -880,7 +880,7 @@ the default `DevRootScreen` screen.
   *neither half writes anything*: membership is decided **only at the drop**. It is one continuous gesture on a
   **single shared `DragCoordinator`** (home + dock + folder zones on it, planner/drop dispatch by zone, the folder
   publishes a `FolderDragDelegate`). The dwells are **equal by design** (`LeaveDwellMs` == `OPEN_FOLDER_DWELL_MS`):
-  opposite halves of one gesture, so a user who learnt one hold has learnt both.
+  opposite halves of one gesture, so a user who learned one hold has learned both.
   - **Leaving must genuinely close the folder, not hide it.** An earlier cut kept a `FolderPhase.Extracting` whose
     folder was still "open" (faded to alpha 0) and latched an `extracting` flag until the drag ended. That made every
     folder a one-shot: the folder you left could never be re-opened, and re-presenting it rendered nothing and
@@ -896,7 +896,7 @@ the default `DevRootScreen` screen.
     disagree about what leaving a folder means. Removing the second-last app **auto-dissolves** it (last app inherits
     its cell).
   - **Releasing outside the open folder cancels** (close it, write nothing). Leaving is a deliberate dwell, so a
-    release out there reads as "never mind" — and it *cannot* be honoured anyway: an app being carried inside a folder
+    release out there reads as "never mind" — and it *cannot* be honored anyway: an app being carried inside a folder
     has no grid placement, so "placing" it would leave it in the folder **and** on the grid.
 - **What the drag owes is fixed at lift: `FolderHostState.dragSourceFolderId`.** The folder a drag *started in* (null
   if it started on a grid), captured at `onDragStart` and held until release, whatever it visits in between. It answers
@@ -968,7 +968,7 @@ the default `DevRootScreen` screen.
     landscape grid — and against the **rail**, which is the transpose, so nearly every dock item would be evicted to
     home and would not come back. A grid drawn out of bounds for as long as a rotation lasts is cosmetic and reverses
     itself; the write does not. The guard becomes vacuous the day placements are stored per posture.
-- **`cellMultiplier` is a *placement* subdivision, and the snap has to honour it or it buys nothing.** HOME's three
+- **`cellMultiplier` is a *placement* subdivision, and the snap has to honor it or it buys nothing.** HOME's three
   free-placement grids (pager, dock, widget area) declare `cellMultiplier = 2`: a 4×5 grid of visible cells really is
   8×10 logical ones, and an app is a 2×2 logical footprint. The user is never shown that — they see 4×5 cells with
   one icon each — and what the subdivision buys is that an icon can come to rest **straddling** two visible cells,
@@ -978,7 +978,7 @@ the default `DevRootScreen` screen.
   onto the visual lattice — so a grid declared at 2 behaved in every observable way like one declared at 1, and the
   subdivision cost twice the occupancy bookkeeping for nothing. The `step` parameter is now **gone rather than
   defaulted**: its only ever use was that mistake, and a parameter is an invitation to repeat it. L1 resolves the
-  hovered cell at logical granularity and centres the footprint on it, which is what this now does.
+  hovered cell at logical granularity and centers the footprint on it, which is what this now does.
   - **The lattice is shown while dragging** (`gridSnapMarkers`, `core:designsystem/grid`), which is the half that
     makes the freedom legible — L1's `GridLinesCanvas`, ported: a concave-diamond marker at every **visual** cell
     corner, fading in around the dragged footprint's *edges* and out again as it leaves. Visual corners rather than
@@ -1073,9 +1073,9 @@ what each zone *holds*, and every difference below follows from that rather than
     `clear()` then an `upsert()` the clear is *observable*: the DAO's flow re-runs on that invalidation and emits an
     **empty** list, so the surface blanks mid-reorder. It is the one transaction in `data:layout`, and it is not the
     general fix its siblings still need — those should take the database and use `withTransaction`, together.
-- **The drag proxy keeps the list's left edge and follows the finger in y only.** Every other surface centres its
+- **The drag proxy keeps the list's left edge and follows the finger in y only.** Every other surface centers its
   proxy on the finger because a proxy is one cell there — roughly square, smaller than the finger's travel. A row is
-  the full width of the list, so centring it swings the whole row sideways with the thumb.
+  the full width of the list, so centering it swings the whole row sideways with the thumb.
 - **A `Column` in a `verticalScroll`, deliberately not a `LazyColumn`** — the opposite call from `AppsVerticalList`,
   for two reasons that are properties of this list rather than preferences. A lazy list disposes rows that scroll
   away, and the lifted row **owns the pointer stream driving the drag**, so auto-scrolling far enough would kill the
@@ -1088,7 +1088,7 @@ what each zone *holds*, and every difference below follows from that rather than
   instead, since the scroll gesture is the parent's. That is ordinary for a reorderable list — L1 sidestepped it with
   its library's drag *handle* — and it is the thing to change if the lift ever feels finicky, rather than a symptom
   of anything above.
-- **Not built**: the "Add apps" row (a picker), which is L1 behaviour. Without one its contents are whatever the seed
+- **Not built**: the "Add apps" row (a picker), which is L1 behavior. Without one its contents are whatever the seed
   put there — and it is the reason the list's own menu verb is *Remove* rather than a pair: an app can be taken off
   the list but there is still no way to put one back. That menu is the shared item menu with one contribution, and
   **the contribution is neither `RemoveFromGrid` nor a reorder**: this list is an order store of its own, so removing
@@ -1099,7 +1099,7 @@ what each zone *holds*, and every difference below follows from that rather than
 
 **APPS surface — one module for every layout; the vertical list is the first.** `feature:apps`
 (`inkspire.morphic.feature.apps`) is the whole surface: L1's `feature:appdrawer` + `feature:applibrary` were
-deleted, not ported, because they rendered the same apps with the same launch behaviour and differed only in
+deleted, not ported, because they rendered the same apps with the same launch behavior and differed only in
 arrangement — the model had already collapsed that into `Surface.APPS` + `AppsLayout`, and two modules made
 "drawer or library?" a question that had to be answered before, and separately from, "which layout?".
 - **`AppsScreen` is the one place a layout is chosen** — a `when` over `AppsLayout` above shared wiring (ViewModel,
@@ -1127,7 +1127,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     because a derived layout is never dragged **within** itself — so it needs no shared lattice and no published
     `GridGeometry` (a drag *out* is `EjectToHome`, which reads the finger).
 - Cells go through the shared `launcherItemGestures` contract rather than a `clickable`, so APPS cannot drift from
-  the rest of the launcher on long-press timing or slop — exactly what L1 did, hand-rolling a recogniser (plus a
+  the rest of the launcher on long-press timing or slop — exactly what L1 did, hand-rolling a recognizer (plus a
   click-suppression flag) inside its list composable. The tap-only wiring lives in one `appsItemGestures` shared by
   both layouts, so a layout can't half-wire it and there was one file to change when the menu and `EjectToHome`
   landed — both now have. **A row's touch target is its icon and its label, not the strip they sit in** — the same "visible extent"
@@ -1139,7 +1139,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   contract covers both — which is already true of the slack around a grid icon. **Both lists keep the slack free**,
   including this one — and the surface press is now what it is free *for*, with the alphabet strip and search still
   below: a
-  target narrowed once is worth more than one narrowed again later, when users have learnt the wider one.
+  target narrowed once is worth more than one narrowed again later, when users have learned the wider one.
 - **The pager is the first layout that stores an arrangement** (`AppsLayout.PAGER`, `AppsPager`) — pages of
   `LauncherGrid` in FIXED_PAGER mode at `AppsPagerGrid`'s size, drawn from `AppsOrderRepository` rather than
   re-derived. Page capacity is a UI read (device → blueprint), pushed to the VM via `setPagerGrid`, exactly as
@@ -1160,10 +1160,10 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   answer the host can't know — *"which folder does this merge plan target?"* — as a **slot** match, which is the
   ordered half of the split that lambda was built for. A merge plan's footprint is meaningful (it names the hovered
   cell) where a reorder plan's is not, which is what makes the slot resolvable. Cells are **three zones** here
-  (outer thirds insert, centre merges), unlike the folder's and the category pager's halves.
+  (outer thirds insert, center merges), unlike the folder's and the category pager's halves.
 - The pager's op set composes rather than special-cases: `RemoveFromFolder` takes an app out of membership and
   *nothing else*, so a landing pairs it with a `Move` (onto a page) or an `AddToFolder` (into another folder), and
-  one batch commits both. `CreateFolder`/`DissolveFolder` name a **neighbour** instead of a slot — "this takes that
+  one batch commits both. `CreateFolder`/`DissolveFolder` name a **neighbor** instead of a slot — "this takes that
   thing's place" — because a slot index shifts as the folded apps leave the list. `reconcileReportedOrder` moved to
   `data:layout`, beside the whole-order ops it guards, now that several surfaces owe their writes that guard.
 - Still to come on the pager: a page indicator, and an optimistic layer (a drop currently waits for the write).
@@ -1195,7 +1195,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   The widest is now `UTILITIES` at 5, deliberately: it and `SYSTEM` are where the unclassifiable goes, and a user
   expects those to be broad.
 - **A category that no longer exists cannot hold apps** — the bound on the rule above. `dropUnknownCategories`
-  unfiles anything under an unrecognised id and deletes its definition row, so the classifier can place those apps
+  unfiles anything under an unrecognized id and deletes its definition row, so the classifier can place those apps
   again. Without it a rebalance strands them: the read is driven by the definitions table, so they would render
   nowhere while still occupying a row that `syncCategoryItems` counts as filed. It is the same path a user-deleted
   category will take once `known` grows to include user-created ids (L1's `u1`/`u2` prefix is the pointer).
@@ -1234,10 +1234,10 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     Three things differ from home, all of them properties of the surface rather than choices:
     - **A drag starts inside an expansion, never on the card grid.** Home has loose apps to pick up; here every app is
       filed in exactly one category, so nothing sits *on* the surface — expansion→card *is* the whole gesture, the
-      analogue of home's folder→folder. Preview icons stay tap-only (a folder's preview tile isn't draggable per-icon
+      analog of home's folder→folder. Preview icons stay tap-only (a folder's preview tile isn't draggable per-icon
       on home either), which is also what lets the grid stay **lazy**: nothing on it owns a live pointer stream, so a
       card disposed by auto-scrolling can't kill the drag. Making previews draggable would pin the source card in
-      composition, which a lazy grid cannot honour.
+      composition, which a lazy grid cannot honor.
     - **There is no "empty cell" landing.** Off a card there is nowhere for an app to be, so the planner reports *no
       plan* and a release there is a cancel — which is why `MERGE` is the only intent this surface ever reports.
     - **Landing owes the source category nothing.** `Move` unfiles the app from every other category as part of filing
@@ -1252,7 +1252,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     which is what made the parameter free; a unit test pins that with `String` ids. **Naming is now one commit behind
     the code**: `Folder*` covers folders *and* categories, and the honest vocabulary is a *collection of apps opened
     over a surface* — a rename reaching `FolderOverlay`, `FolderDragDelegate`, `folderInnerSize`, `FolderReorder` and
-    every call site is worth one mechanical commit of its own, flagged as a TODO rather than mixed into behaviour.
+    every call site is worth one mechanical commit of its own, flagged as a TODO rather than mixed into behavior.
   - Still to come: an optimistic layer (a drop waits for the write, so a re-file lands a frame or two late — the
     `Injected` phase is what stops the app blinking out meanwhile).
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
@@ -1280,7 +1280,7 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
 - **S5f-3 — liquid glass and the effects section. Done.** The AGSL shader (see the design-system notes) and the
   seventh settings section, which is also the slice's first writer. **S5 is now complete.**
 - **S5f-4 — the full-screen frost. Done, and it was not in the plan.** APPS and the folder went transparent behind one
-  shared `SurfaceBackdropLayer`, which is what the "APPS stays opaque" note had been promising since the window learnt
+  shared `SurfaceBackdropLayer`, which is what the "APPS stays opaque" note had been promising since the window learned
   to show the wallpaper. It reshaped the model on the way through (`None` → `Plain`; every effect blurs), fixed a
   full-screen refraction rim in the folder, and left the effect *sliders* dormant — see the design-system and effects
   notes for all four. What it is still waiting on is a frosted **panel**, which is where the sliders and the rim both
@@ -1332,7 +1332,7 @@ The distinction runs all the way through: `WidgetProvider` has no id and `BoundW
   the filter sets `suppressMovementConsumption` while the view has merely handled the down, so `LauncherPager` still
   pages over a clickable widget and stops only once the widget genuinely claims. The pan was the one gesture the
   signal could not reach.
-  - **So the claim is made in reverse, and the pan learnt to wait.** The frame takes a `SurfaceGestureLock` claim at
+  - **So the claim is made in reverse, and the pan learned to wait.** The frame takes a `SurfaceGestureLock` claim at
     the **down** — on the chance the view wants the gesture — and hands it back once the view has had *its own* touch
     slop's worth of movement without asking to keep it. `surfacePagerGesture` now treats a claim at slop as *"not
     yet"*, deciding on the first event at which nothing is claiming, where it used to hand the swipe back for the
@@ -1360,7 +1360,7 @@ list's **"Add apps" picker** is the same gap seen from its own surface — witho
 grid seeded. Home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render, all the
 arrangement-owning ones drag, and every one of them can drag an app out onto HOME**; what is left is the surrounding
-behaviour: the alphabet filter strip, search, an optimistic layer for both the pager and the card (a drop waits for
+behavior: the alphabet filter strip, search, an optimistic layer for both the pager and the card (a drop waits for
 the write) + the pager's page indicator. One **mechanical** job is queued and deliberately
 unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create.
@@ -1409,7 +1409,7 @@ screen with another is not a destination. L1's *actual* mistake is still avoided
 **navigation module**, so `feature:home` could import `SettingsSection.WALLPAPER`; ours never leaves the feature.
 **The surface register is a cross, because the setting is spatial** — L1's `SurfaceRegister`, ported: HOME in the
 middle, the four edges around it, five screen-shaped cards in a plus. Which edge opens what is a fact about *where
-things are*, and the four labelled chip groups this replaced made a reader rebuild that arrangement in their head. It
+things are*, and the four labeled chip groups this replaced made a reader rebuild that arrangement in their head. It
 also reverses this section's own earlier reasoning, which is worth keeping: chips beat the segmented control because
 "an edge offers six options", and what that missed is that the **edges** were the part with a shape, not the options —
 so the options moved into a modal (`SideBindingPicker`, L1's dialog with its radio-and-plain-text body replaced by the
@@ -1452,7 +1452,7 @@ rows and the app-bar title rename with them (`SettingsSection.meta(homeLayout)`,
 - **The switch is HOME's card in the surface register** (`HomeLayoutPicker`, `SideBindingPicker`'s twin), which
   reverses that section's "HOME is not a choice, so its card does not take a tap" — true only while there was one
   pairing. The card is already two targets (body changes what is there, gear configures it); the body was simply
-  null. L1 put the same choice in its Home *section* as a scroll row of two mockup cards labelled "Classic" and
+  null. L1 put the same choice in its Home *section* as a scroll row of two mockup cards labeled "Classic" and
   "Minimalist"; those name eras of that launcher rather than what you get, and the register cross had already decided
   not to draw mockups at card size. The rule this section states — a control appears when the thing it configures
   exists — is unchanged: `transition` still has no control, because `SurfacePager` still implements only `SLIDE`. The
@@ -1532,7 +1532,7 @@ drift from the cell it is drawn over — L1 restated the cell's padding under a 
 the cell's **inner box** as well, since a guardrail larger than the cell must stop where the icon really can, not on the
 outer ring); each section
 supplies its own cell size, which is the part that cannot be shared (home divides its area, the dock divides its height
-setting, APPS branches on layout, the folder asks `folderInnerSize`); and the guardrails are **greyscale by stroke**
+setting, APPS branches on layout, the folder asks `folderInnerSize`); and the guardrails are **grayscale by stroke**
 (solid = cell, dashed = upper, dotted = lower) because L1's green/red cannot survive a palette that reserves red for
 `error`. **The wallpaper behind it is L1's trick and it has landed** — the cell box composites with `BlendMode.Src`,
 punching through the pane (`PunchThroughPane` composites the detail offscreen with `withSaveLayer`) to the window,
@@ -1568,7 +1568,7 @@ a capacity change is the sync it already runs for installs. Only the edge's *axi
 The **list** is the odd one: one lane, so it has no grid to edit and its size *is* its row height
 (`AppsListGrid.rowHeightDp`, the third way a cell gets a height — see the derive-vs-store rule in the design-system
 notes). **Its slider's bounds are the icon guardrails plus the row's own inset** (`rowHeightRangeDp`), so the icon range
-slider *governs* the row-height slider: a row shorter than `minIconDp` + padding cannot honour the smallest icon
+slider *governs* the row-height slider: a row shorter than `minIconDp` + padding cannot honor the smallest icon
 allowed, and one taller than `maxIconDp` + padding is height the largest cannot fill. So the way to ask for a taller row
 is to raise the upper guardrail. `iconPercent` is deliberately not in it — the same rule as the grid, and for the same
 reason: dividing by it inverted the control, so asking for *smaller* icons pushed the row **taller** (a 56dp row clamped
@@ -1607,9 +1607,9 @@ exactly how both constants went wrong.
 **The tile is the square, and the label is outside it** — iOS's App Library shape, reached in two corrections. The card
 was originally the square with the title *inside* it, eating into it from the top: the leftover box came out wider than
 tall, the slots sized themselves from its *height*, and the icons ended up the smallest thing on a tile whose whole job
-is to make them recognisable. Making the icon area the square fixed the icons but left the title sharing the fill, which
+is to make them recognizable. Making the icon area the square fixed the icons but left the title sharing the fill, which
 reads as a header bar rather than a label. Now the background, corner and padding are all the **tile's** and the name
-sits under it, centred — so the fill traces the icons exactly and a card is a square plus one line of text.
+sits under it, centered — so the fill traces the icons exactly and a card is a square plus one line of text.
 
 **`CardChrome` is the tile's own settings** (`core:model`, stored as a fifth `SurfaceMetrics` map keyed slot × device,
 sparse like `IconOverride`): title scale, corner radius, and the icon area's **outer** and **inner** padding. All three dp
@@ -1626,7 +1626,7 @@ wraps `IconLabelCell`, which insets by `CellPadH`/`CellPadV` and reserves a labe
 gap however far the spacing slider was dragged down: a control unable to express the thing it is named for. A slot has no
 label and no chrome; it *is* the icon's box, which is what `iconPercent = 1f` means literally here. The **overflow
 cluster** is sized by the same expression (`CategoryClusterTile`): it stands in for one of the four apps, so given the
-raw slot it stayed full-size while its neighbours shrank with the slider. It also draws **no backing plate**
+raw slot it stayed full-size while its neighbors shrank with the slider. It also draws **no backing plate**
 (`IconPreviewPlate(backing = false)`, which drops the inset with it, since the inset only exists to keep icons off the
 plate's rounded edge) — a cluster sits inside a tile that already has a fill, so a plate there is a box within a box and
 made it the one slot on the card with a visible container. A folder on a *grid* keeps its plate: loose among plain
@@ -1703,7 +1703,7 @@ old row count would be worse than one showing neither, since the row count is wh
 margins, so insetting both from one number would show a dock narrowing because the pager's slider moved (L1 passes
 `insetFraction` to its `GridPreview` and none to its `NonGridPreview`). **What is not carried is the color** — it tells add from remove by red vs
 green, which the palette forbids — and that costs nothing, because in L1 the *position already encodes the action* and
-the color was reinforcement. An earlier cut mistook the color for the signal and centred a −/+ pair on each edge
+the color was reinforcement. An earlier cut mistook the color for the signal and centered a −/+ pair on each edge
 instead; the arrangement above replaced it.
 **A grid editor shows the grid that is *drawn*, not the one in storage** — and that is what makes the icon controls under
 it move it. Both halves come out of one formula: the icon **guardrails** set the smallest usable cell, and dividing the
@@ -1752,9 +1752,9 @@ Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](d
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`
 declares its own dev-harness key, since `entryProvider` is a mapping and not a registry. `feature:shell`'s
-`LauncherShell` is the launcher — `SurfacePager` with `HomeScreen` centre and side surfaces from the register — and it
+`LauncherShell` is the launcher — `SurfacePager` with `HomeScreen` center and side surfaces from the register — and it
 owns the **launcher theme boundary**, which is why `HomeScreen`/`AppsScreen` no longer theme themselves. It also owns
-the **full-screen frost**, which `SurfacePager` takes as an `overlay` slot between the centre and the sides: not panned
+the **full-screen frost**, which `SurfacePager` takes as an `overlay` slot between the center and the sides: not panned
 with either, and driven by `SurfacePagerState.progress` (the pan collapsed to "how far in is the other surface",
 unsigned and edge-agnostic) so the content slides while the frost fades. The launcher
 boots into it; the dev harness (all playgrounds + the component gallery) is kept as a peer destination reached from a
@@ -1767,7 +1767,7 @@ to remember its own, which was indistinguishable from this while no drag crossed
 and each removed something rather than adding a layer:
 - **A `DropZone` answers for itself, end to end** — it carries its own `planner` *and* its own `onDrop`, and
   `DragCoordinator.drop()` dispatches the landing to the zone the finger came to rest in before returning. That is
-  docs/DRAG_AND_DROP_DESIGN.md §10's *"behaviour travels with the destination zone"* made structural, and it is
+  docs/DRAG_AND_DROP_DESIGN.md §10's *"behavior travels with the destination zone"* made structural, and it is
   **required** rather than tidy: an app lifted in the drawer is released by a cell in `feature:apps`, and the thing
   that must commit it is *home's* grid. It deleted the `when (zone.id)` every multi-zone surface repeated in its
   planner and its drop, and with it the `FolderDragDelegate` hand-off and the construction-order squeeze three files
@@ -1819,7 +1819,7 @@ and each removed something rather than adding a layer:
     `TOP_ACTION_SWITCH_GRACE_MS`: act → shrink away → pause → open again, offering something else.
   - **It is registered as a drop zone in *both* modes**, and in `ADD_TO_HOME` that is for the **masking** rather than
     the drop: while the finger is up there it must stop being the drawer's, or the pager's planner keeps migrating its
-    reorder gap and a release before the dwell lands the app at the top-left instead of cancelling. L1 blanked
+    reorder gap and a release before the dwell lands the app at the top-left instead of canceling. L1 blanked
     `hoverTarget`/`pendingGap` explicitly for the same reason; being the topmost zone says it structurally.
   - **Both targets are the shell's**, because the band spans every surface and the item under the finger may have been
     lifted in the drawer and never placed at all. `ShellViewModel.removeFromHome` is a plain `RemoveFromGrid`, which is
@@ -1838,7 +1838,7 @@ and each removed something rather than adding a layer:
   *Remove*, the drawer's nothing. It changed none of the drag wiring, exactly as this note predicted.
 
 **Context menus (P7) — `core:designsystem/menu`, one host at the shell.** Long-press an **item** and its menu opens
-under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine` has modelled since B4. Long-press
+under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine` has modeled since B4. Long-press
 **empty space** and the surface's own menu docks to the nearest screen edge. Ported from L1's `InlineContextMenu` +
 `ItemContextMenu` + `ContextMenuPopup`, with these differences:
 
@@ -1846,7 +1846,7 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
   `DismissMenu` — written before there was a menu, and unusable once there was: a row can only be tapped after the
   finger is off the item, so the *release* is how the user reaches the menu. It now closes on a choice, on a tap
   away, or on the drag that may follow. A **cancel** still dismisses (the pointer was taken away, not given up).
-  Nothing depended on the old behaviour: every `onDismissMenu` in the tree was `{}`, which is also why that parameter
+  Nothing depended on the old behavior: every `onDismissMenu` in the tree was `{}`, which is also why that parameter
   is gone — the contract dismisses the host itself, on `launcherItemGestures`' "wiring that cannot be forgotten
   belongs in the one place every caller already goes through" rule.
 - **It renders inline, never in a `Popup`** — L1's own conclusion, and the reason its two implementations exist. The
@@ -1854,7 +1854,7 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
   focus and can cancel the pointer stream the drag depends on.
 - **The anchor is reported by the gesture, not reconstructed by the surface.** `onShowMenu` now carries the
   rectangle the modifier is attached to — which, by the touch-target rule, *is* the item's visible extent. L1 rebuilt
-  it three ways (cell centres on the grid, an icon half-width plus a Y offset in a folder, a row's bounds in the
+  it three ways (cell centers on the grid, an icon half-width plus a Y offset in a folder, a row's bounds in the
   list) and each could drift from what was drawn. `positionInRoot() + size`, never `boundsInRoot()`, for the
   clipped-inside-a-scroller reason stated elsewhere in this file.
 - **Placement is pure and unit-tested** (`MenuAnchoring.kt`): a tall frame stacks the menu above/below and a wide one
@@ -1885,7 +1885,7 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
   rim finally have a consumer.
 - **One width for every menu** (248dp), where L1 sized each to its widest row: a row can then `fillMaxWidth`, so the
   whole row is the tap target rather than the text on it, and a menu stops changing width between icons.
-- **Unbuilt verbs are absent, not disabled.** L1 showed "Rename" and "Edit icon" greyed out; the settings sections'
+- **Unbuilt verbs are absent, not disabled.** L1 showed "Rename" and "Edit icon" grayed out; the settings sections'
   own rule is that a control which changes nothing is worse than a missing one. So a home folder's menu is
   *Remove folder* alone, an APPS-pager folder and a category card get **no menu at all**, and rename returns with its
   op. **"Edit icon" is no longer one of them** — it is bound at the shell like the other app commands, and routed
@@ -1912,7 +1912,7 @@ providers named as one thing rather than two composables a caller had to pick be
 is not decoration:
 - **An item menu points at a thing, so it sits beside it and scales out of the edge nearest it.** A surface menu
   points at nothing, so it **docks flush to whichever vertical edge the press was nearer** and slides in from it,
-  vertically centred on the finger — L1's `EdgeDockedPopupPositionProvider`. Planting it on the press point would
+  vertically centered on the finger — L1's `EdgeDockedPopupPositionProvider`. Planting it on the press point would
   claim a relationship with whatever patch of wallpaper it covered, and hugging the edge leaves that wallpaper
   visible beside it. `ResolvedAnchor` computes the side **once**, because the reveal needs it in composition and the
   placement needs it in measurement.
@@ -1922,7 +1922,7 @@ is not decoration:
   it sees presses that land on icons too (`launcherItemGestures` never consumes a down) — answered twice: the item
   is given a **head start** (`longPressTimeoutMillis` + 120ms, so which timer wins is a fact rather than a coin
   toss), and then the gesture **asks `SurfaceGestureLock`**, which is already exactly "something owns this finger".
-  L1 instead ran one root recogniser that resolved the cell and branched on `isOnIcon` — which works, but makes the
+  L1 instead ran one root recognizer that resolved the cell and branched on `isOnIcon` — which works, but makes the
   surface responsible for knowing where every item drew its icon, the very decision this codebase hands down to the
   cell's content. Asking the lock settles a case nobody wrote down for free: an open folder holds it, so pressing a
   folder's backdrop cannot open the menu of the surface underneath.
@@ -2003,7 +2003,7 @@ Five things about it are load-bearing:
   Two consequences fall out, both of which were bugs until they were answered:
   - **A claim must never be idle.** A swipe pressed against a bound the pan is already clamped at moves nothing while
     consuming the finger, which on Initial eats every forward page-swipe and downward scroll the open surface's own
-    content needs. So closing is gated on the finger genuinely travelling toward the edge the surface came in from.
+    content needs. So closing is gated on the finger genuinely traveling toward the edge the surface came in from.
   - **`launcherItemGestures` reads the finger with `positionChangedIgnoreConsumed()`**, the twin of the
     `changedToUpIgnoreConsumed` beside it. The pan claims at the platform slop (~8dp) and an item needs 20, so with
     the consumption-sensitive read a swipe begun on an icon went `Down` → `Up` with no `Move`, stayed in `Pressed`,
@@ -2036,7 +2036,7 @@ Five things about it are load-bearing:
 
 **Infinite paging is a setting again, and it is per pager.** `SurfacePaging` is the fourth slice — one sparse
 `Map<GridSlot, Boolean>`, read resolved through `SettingsRepository.pagerWraps`. Its own slice rather than a field in
-`SurfaceMetrics` because every map in that one is a *size* keyed `slot × device`, and wrapping is a behaviour with no
+`SurfaceMetrics` because every map in that one is a *size* keyed `slot × device`, and wrapping is a behavior with no
 device dimension: turning the phone on its side is not a reason for the pages to stop looping. The default lives on
 `GridBlueprint.wraps`, null meaning "not a pager whose wrapping is the user's" — the same convention `extentDp` and
 `rowHeightDp` use, and what lets `setPagerWrap` refuse a slot rather than every caller checking. Exactly three grids
@@ -2057,7 +2057,7 @@ pages are a handful of apps in a card, bounded by construction.
   layouts that do not page, which is also what both settings states carry (`wraps: Boolean?`) so a pane draws the
   control from its state rather than testing the layout a second time.
 - The one genuinely awkward consequence: `HomeMainSizing.Pager` now carries `wraps`, so a type named for sizing holds
-  a behaviour. Kept there because it is a setting only a *pager* can have — a `List` given one would be meaningless —
+  a behavior. Kept there because it is a setting only a *pager* can have — a `List` given one would be meaningless —
   and a nullable field beside the state would make exactly that expressible, which is what the sum type exists to
   prevent.
 

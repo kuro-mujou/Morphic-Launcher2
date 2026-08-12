@@ -77,7 +77,7 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
      * previews on is the first — see `IconStudioViewModel.openGlobal`).
      *
      * **It exists to hold Reset one tap deep.** Reset is the only destructive verb in the studio, so it must not sit in
-     * the corners beside Save — "commit this" and "throw my customisation away" a finger-width apart is a trap — and
+     * the corners beside Save — "commit this" and "throw my customization away" a finger-width apart is a trap — and
      * it does not deserve a bar entry of its own, where it could be pressed on the way to a tool.
      */
     MORE("More", Icons.Default.MoreHoriz),

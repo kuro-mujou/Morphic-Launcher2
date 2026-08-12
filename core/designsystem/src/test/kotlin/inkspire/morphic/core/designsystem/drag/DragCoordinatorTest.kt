@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Behaviour spec for [DragCoordinator]'s routing logic (registry hit-testing, z-order, accept-filtering, drop
+ * Behavior spec for [DragCoordinator]'s routing logic (registry hit-testing, z-order, accept-filtering, drop
  * resolution) exercised with a fake [DropPlanner] and hand-placed zones — no gestures or rendering involved.
  */
 class DragCoordinatorTest {

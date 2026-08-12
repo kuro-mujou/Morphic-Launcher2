@@ -434,7 +434,7 @@ class IconStudioViewModel(
      * whatever was just being worked on; below it, it appears as a backing behind it — which is the thing people
      * actually add a layer to do (a colored disc behind a legacy icon is the worked example in `ShapeControls`).
      *
-     * **Empty, not a color.** A new layer used to arrive as a mid-grey fill, which meant adding one dropped an opaque
+     * **Empty, not a color.** A new layer used to arrive as a mid-gray fill, which meant adding one dropped an opaque
      * plate into the stack and changed the icon before the user had chosen anything. `LayerSource.Empty` draws nothing,
      * so the insert is visible in the stack and invisible on the canvas — and what goes in it is the next choice, made
      * in the Source section rather than assumed here.
@@ -467,7 +467,7 @@ class IconStudioViewModel(
      * lands on the new bottom row.
      *
      * One consequence, and it is the better half of the trade: **repeated deletes no longer chain.** Landing a row
-     * down usually means landing on the foreground or background, which cannot be deleted, so the button greys out
+     * down usually means landing on the foreground or background, which cannot be deleted, so the button grays out
      * rather than staying armed over a layer the user never selected.
      */
     fun removeSelected() = _state.update { current ->
@@ -555,7 +555,7 @@ class IconStudioViewModel(
      * Puts the subject back to inheriting: an app drops its own recipe and follows the global default again; the
      * global default returns to the plain two-layer set.
      *
-     * The two are the same verb — "stop being customised" — pointed at different things, which is why the global
+     * The two are the same verb — "stop being customized" — pointed at different things, which is why the global
      * case is `IconLayerSet.Base` rather than something remembered: there is nothing above the global default for
      * it to fall back *to*.
      */
@@ -624,7 +624,7 @@ class IconStudioViewModel(
                     subject = StudioSubject.App(component),
                     label = label,
                     // Keyed by pack, but resolved *per app* — so anything cached here belongs to whichever app was
-                    // open before. Only reachable since the studio learnt to change app without being reopened; see
+                    // open before. Only reachable since the studio learned to change app without being reopened; see
                     // [shuffleSample], which clears it for the same reason.
                     packImages = emptyMap(),
                 )

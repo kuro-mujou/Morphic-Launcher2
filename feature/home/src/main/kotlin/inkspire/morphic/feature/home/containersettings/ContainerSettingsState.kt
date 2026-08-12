@@ -12,7 +12,7 @@ import inkspire.morphic.feature.home.ContainerIcon
  *
  * A sum type for `HomeMainSizing`'s reason, one layer over: the two containers do not configure the same thing
  * differently, they configure *different things*. An icon container has an arrangement and no axis; a widget
- * container has an axis and two behaviours and no arrangement. Neither could supply the other's value, which is
+ * container has an axis and two behaviors and no arrangement. Neither could supply the other's value, which is
  * exactly what a sealed type says and what one class with four nullable fields would not.
  */
 sealed interface ContainerSettings {
@@ -46,7 +46,7 @@ sealed interface ContainerSettings {
  * The screen's whole state.
  *
  * @property settings null until the stores answer — and **also** when the container is gone, which is a real state
- *   rather than a loading artefact: it is what the screen shows for the frame between "Remove container" and the
+ *   rather than a loading artifact: it is what the screen shows for the frame between "Remove container" and the
  *   back that follows it. The screen draws its chrome either way, so neither case flashes an error.
  * @property availableApps every installed app the container does not already hold, in label order — what the "Add
  *   apps" picker offers. Empty for a widget container, which has no app picker; resolving it there would be work

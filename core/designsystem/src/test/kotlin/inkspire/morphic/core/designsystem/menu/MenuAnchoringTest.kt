@@ -51,24 +51,24 @@ class MenuAnchoringTest {
     }
 
     @Test
-    fun `a stacked menu sits below the item, centred on it, one gap away`() {
+    fun `a stacked menu sits below the item, centered on it, one gap away`() {
         val offset = menuOffsetFor(item(150, 200), menu, portraitFrame, MenuPlacement.BELOW, gap)
-        // Centred: the item's centre is x = 200 and the menu is 200 wide, so its left edge lands at 100 — inside
+        // Centered: the item's center is x = 200 and the menu is 200 wide, so its left edge lands at 100 — inside
         // the frame, so nothing is clamped. Vertically it starts one gap under the item's bottom edge (300).
         assertEquals(IntOffset(100, 308), offset)
     }
 
     @Test
-    fun `a menu beside the item is vertically centred on it`() {
+    fun `a menu beside the item is vertically centered on it`() {
         val offset = menuOffsetFor(item(100, 100), menu, landscapeFrame, MenuPlacement.RIGHT, gap)
-        // One gap right of the item's right edge; centred on its middle (y = 150) → top at 0, clamped to 58.
+        // One gap right of the item's right edge; centered on its middle (y = 150) → top at 0, clamped to 58.
         assertEquals(208, offset.x)
         assertEquals(58, offset.y)
     }
 
     @Test
     fun `a menu that would overhang the frame is pushed back inside it`() {
-        // An item hard against the right edge: centring the menu on it would put its right edge past the frame.
+        // An item hard against the right edge: centering the menu on it would put its right edge past the frame.
         val offset = menuOffsetFor(item(240, 200), menu, portraitFrame, MenuPlacement.BELOW, gap)
         assertEquals(portraitFrame.right - menu.width - gap, offset.x)
         assertTrue("stays inside the frame", offset.x >= portraitFrame.left + gap)
@@ -97,10 +97,10 @@ class MenuAnchoringTest {
     }
 
     @Test
-    fun `a docked menu hugs its edge and centres vertically on the press`() {
+    fun `a docked menu hugs its edge and centers vertically on the press`() {
         val left = dockedMenuOffsetFor(IntOffset(120, 500), menu, portraitFrame, MenuDock.LEFT, gap)
         assertEquals(portraitFrame.left + gap, left.x)
-        // Centred on the press: 500 - 300/2.
+        // Centered on the press: 500 - 300/2.
         assertEquals(350, left.y)
 
         val right = dockedMenuOffsetFor(IntOffset(300, 500), menu, portraitFrame, MenuDock.RIGHT, gap)

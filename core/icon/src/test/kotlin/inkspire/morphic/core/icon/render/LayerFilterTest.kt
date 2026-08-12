@@ -10,8 +10,8 @@ import org.junit.Test
 /**
  * What the color matrices actually do to a pixel.
  *
- * Asserting on the matrix *entries* would pin the implementation rather than the behaviour, so these push colors
- * through instead: the question is whether "saturation 0" greys a pixel, not whether row 1 column 2 holds 0.715.
+ * Asserting on the matrix *entries* would pin the implementation rather than the behavior, so these push colors
+ * through instead: the question is whether "saturation 0" grays a pixel, not whether row 1 column 2 holds 0.715.
  * That also makes them readable as a description of the effects, which matters because **two renderers share this
  * arithmetic** and a change here moves both at once.
  */
@@ -34,7 +34,7 @@ class LayerFilterTest {
     }
 
     @Test
-    fun `zero saturation greys a color toward its luminance`() {
+    fun `zero saturation grays a color toward its luminance`() {
         val matrix = LayerFilter.colorMatrixOf(LayerEffect.Color(saturation = 0f))!!
 
         val (r, g, b) = apply(matrix, r = 255, g = 0, b = 0)
@@ -54,7 +54,7 @@ class LayerFilterTest {
 
     @Test
     fun `a tint pushes channels toward it while keeping the layer's own shading`() {
-        // Pure red tint: green and blue are scaled to nothing, red is untouched — and a mid-grey stays mid, which
+        // Pure red tint: green and blue are scaled to nothing, red is untouched — and a mid-gray stays mid, which
         // is the "keeps its shading" half. A flat silhouette would come out fully saturated instead.
         val matrix = LayerFilter.colorMatrixOf(LayerEffect.Color(tintArgb = 0xFFFF0000.toInt()))!!
 
@@ -69,7 +69,7 @@ class LayerFilterTest {
 
         val (r, g, b) = apply(matrix, r = 255, g = 0, b = 0)
 
-        // Greyed first, then cast entirely into the blue channel.
+        // Grayed first, then cast entirely into the blue channel.
         assertEquals(0, r)
         assertEquals(0, g)
         assertEquals(54, b)
@@ -135,7 +135,7 @@ class LayerFilterTest {
 
     @Test
     fun `order is hue then saturation then brightness then tint, so each control means its name`() {
-        // The observable consequence of the order: greying happens before the tint, so a tinted greyscale keeps its
+        // The observable consequence of the order: graying happens before the tint, so a tinted grayscale keeps its
         // luminance. Were the tint applied first, saturation would then flatten the tint back out and the control
         // would appear to do nothing.
         val matrix = LayerFilter.colorMatrixOf(

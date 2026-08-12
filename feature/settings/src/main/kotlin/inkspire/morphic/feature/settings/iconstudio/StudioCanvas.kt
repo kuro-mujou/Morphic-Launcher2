@@ -24,13 +24,13 @@ import kotlin.math.min
 private const val IconBoundFraction = 0.62f
 
 /**
- * How far above centre the bound sits, as a fraction of the canvas's height.
+ * How far above center the bound sits, as a fraction of the canvas's height.
  *
  * **The chrome is not symmetrical, so the middle of the canvas is not the middle of what can be seen.** The top holds
  * one row of pill buttons; the bottom holds the tool rail, the cycle row, and — whenever a section is open — a panel of
- * up to 300dp. Centred, the icon sits under that panel exactly when the user is adjusting the layer it is drawing.
+ * up to 300dp. Centered, the icon sits under that panel exactly when the user is adjusting the layer it is drawing.
  *
- * **A fixed lift rather than centring in the free space**, which was the alternative and is worse: the panel's height
+ * **A fixed lift rather than centering in the free space**, which was the alternative and is worse: the panel's height
  * varies by section, so the icon would jump every time the rail was tapped, and the jump would be largest for the
  * sections with the most controls — the ones being watched most closely. A constant offset is a compromise and is meant
  * to be: at 12% it clears the rail and the cycle row outright, and leaves an open panel overlapping only the bottom of
@@ -44,13 +44,13 @@ private const val IconBoundLift = 0.12f
 /** One square of the transparency checkerboard, at canvas scale. */
 private val CheckerSquare = 12.dp
 
-/** The checkerboard's two greys — mid-toned, so they read against both a black and a white surround. */
+/** The checkerboard's two grays — mid-toned, so they read against both a black and a white surround. */
 private val CheckerLight = Color(0xFFBDBDBD)
 internal val CheckerDark = Color(0xFF8A8A8A)
 
 /**
- * The studio's canvas: a backdrop, and a **square bound** the icon is drawn in — centred horizontally, and a little
- * above centre vertically so the chrome below does not cover it ([IconBoundLift]).
+ * The studio's canvas: a backdrop, and a **square bound** the icon is drawn in — centered horizontally, and a little
+ * above center vertically so the chrome below does not cover it ([IconBoundLift]).
  *
  * The bound is square and it **clips**, both because the real renderer works that way — an icon is composited into a
  * square bitmap — so a layer pushed past the edge here disappears exactly as it would on the home screen. An editor
@@ -78,14 +78,14 @@ fun StudioCanvas(
         contentAlignment = Alignment.Center,
     ) {
         // A fraction of **this node**, not of the screen. The two matter differently here: the canvas is what the
-        // icon is centred in, and it is not always the window — the rails inset it, and a tablet gives it a
+        // icon is centered in, and it is not always the window — the rails inset it, and a tablet gives it a
         // different share again. It is also what lets `drawBackdrop` derive the same square from its own draw-time
         // size and be certain the two agree, rather than sharing a number and hoping.
         val side = min(maxWidth.value, maxHeight.value) * IconBoundFraction
         Box(
             modifier = Modifier
                 .size(side.dp)
-                // Centred, then lifted clear of the chrome below — see [IconBoundLift]. An offset rather than an
+                // Centered, then lifted clear of the chrome below — see [IconBoundLift]. An offset rather than an
                 // alignment bias because a bias scales with the *leftover* space, so the same value would move the
                 // bound further on a tablet than on a phone; this is a fraction of the canvas either way, which is
                 // what lets `drawBackdrop` reproduce it from its own size.
@@ -121,7 +121,7 @@ private fun DrawScope.drawBackdrop(background: PreviewBackground, checkerPx: Flo
 
     // The same square the icon is drawn in. Derived here from this draw scope's own size rather than passed in,
     // which is what makes the two certain to agree: both are `IconBoundFraction` of the shorter side of the very
-    // same node, centred and then lifted by `IconBoundLift` of its height.
+    // same node, centered and then lifted by `IconBoundLift` of its height.
     val side = min(size.width, size.height) * IconBoundFraction
     val topLeft = Offset(
         x = (size.width - side) / 2f,

@@ -11,7 +11,7 @@ import kotlin.math.sin
  * which is exactly how the two would come to disagree about which way 90° runs.
  *
  * **The convention is clockwise from straight down**, so 0° is the top-to-bottom gradient a user expects by
- * default and 90° runs left-to-right. Both endpoints sit on the box's edge through its centre, so the gradient
+ * default and 90° runs left-to-right. Both endpoints sit on the box's edge through its center, so the gradient
  * spans the whole layer at every angle rather than being foreshortened as it turns.
  */
 object LayerGradient {

@@ -47,7 +47,7 @@ import inkspire.morphic.core.model.HomeEdge
 import kotlinx.coroutines.launch
 
 /**
- * Live explorer for the surface-swipe spec. HOME sits centre; a simulated layout sits off each edge. **Tap a
+ * Live explorer for the surface-swipe spec. HOME sits center; a simulated layout sits off each edge. **Tap a
  * side surface** to cycle it through the six layout kinds, **tap HOME** to cycle its three kinds — the finger
  * policy each edge gets is recomputed and shown (and the surface is tinted by its close policy).
  *

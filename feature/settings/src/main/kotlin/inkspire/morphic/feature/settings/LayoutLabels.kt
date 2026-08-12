@@ -12,7 +12,7 @@ import inkspire.morphic.core.model.HomeLayout
  * here when a second screen needed them; the register's picker is the third.
  *
  * Here rather than on the enum, which is the reason both copies gave: `core:model` stays free of display strings and of
- * localisation, the same way `Category` carries an id and the UI resolves the name.
+ * localization, the same way `Category` carries an id and the UI resolves the name.
  *
  * The names describe the **arrangement a user sees** rather than the enum constant — L1 called the same four
  * "Minimalist", "Classic", "Paged" and "Grouped", which named its own history more than the layouts.

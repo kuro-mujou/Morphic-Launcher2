@@ -29,7 +29,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 enum class MorphicButtonStyle { Filled, Tonal, Outlined, Text, Elevated }
 
 /**
- * The in-house labelled button. Built **on** the M3 button family (which renders monochrome via the bridged
+ * The in-house labeled button. Built **on** the M3 button family (which renders monochrome via the bridged
  * ColorScheme), so it gets the full Expressive press motion — including the pressed-shape morph — for free
  * via `ButtonDefaults.shapes()`. [style] selects the M3 emphasis variant. Put any leading icon in [content].
  */

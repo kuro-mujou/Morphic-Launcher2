@@ -137,7 +137,7 @@ is the same argument `WidgetCell` makes for naming an unresolvable widget.
 
 - **Widget container**: a real "+" button, opening the existing `rememberWidgetAddFlow`. This one works today.
 - **Icon container**: a "+" **glyph on the plate, not a tap target** — inert, saying "drag an app here". Its
-  spec'd behaviour is to open an *app picker*, and there is no app picker in the launcher (see §5). A row that
+  spec'd behavior is to open an *app picker*, and there is no app picker in the launcher (see §5). A row that
   does nothing is worse than a missing one, so it must not be tappable until the picker exists.
 
 ### 2f. The widget container's swipe will be eaten, and needs the lock
@@ -245,7 +245,7 @@ at creation today, so slice 3 adds `SetWidgetContainerAxis` (and a `WidgetContai
 - `WidgetPlacementDao` — confirm a delete-by-`appWidgetId` exists for §1c; add it if not.
 - `LauncherPager` is **horizontal only** (it measures `pageWidth` from `constraints.maxWidth` and drives
   `state.pageSize` from it). A vertical container pager needs foundation's `VerticalPager`, which is also what the
-  widget picker's detail pane already uses. Do not try to generalise `LauncherPager` for this — it carries the
+  widget picker's detail pane already uses. Do not try to generalize `LauncherPager` for this — it carries the
   launcher's edge-flip and drag machinery, none of which a container's pages want.
 - A **folder inside an icon container** has no grid placement, so home's folder-open path must still find it. Check
   `folderHost.open` and the `presentedFolder` lookup, which today match on placement + zone.

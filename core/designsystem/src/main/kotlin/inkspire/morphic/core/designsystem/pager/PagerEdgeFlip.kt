@@ -27,11 +27,11 @@ private enum class FlipEdge { LEFT, RIGHT }
  * which leaves the edge dwell as the only way to change pages mid-drag.
  *
  * **Settling is the whole subtlety.** Moving off the edge changes this effect's key and so cancels it — and
- * cancelling inside `animateToPage` stops the animation exactly where it is, parking the pager between two pages
+ * canceling inside `animateToPage` stops the animation exactly where it is, parking the pager between two pages
  * with both half on screen. Nothing else would finish the job: swipe is gated off, and the loop that would have
- * continued is the thing that was cancelled. So "no edge" is an explicit branch that settles to the nearest page,
+ * continued is the thing that was canceled. So "no edge" is an explicit branch that settles to the nearest page,
  * not an early return. It is a no-op when the pager is already on a boundary ([LauncherPagerState.settleToNearestPage]
- * compares before animating), and `Animatable`'s mutator mutex makes the hand-off from the cancelled animation safe.
+ * compares before animating), and `Animatable`'s mutator mutex makes the hand-off from the canceled animation safe.
  *
  * That bug shipped in three hand-rolled copies of this loop — home's paged main area, the APPS pager, and the
  * pager-drag harness — and had to be fixed in each. This is those three collapsed into one.

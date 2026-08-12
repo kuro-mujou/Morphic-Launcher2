@@ -92,7 +92,7 @@ data class DropZone(
 On each move the coordinator hit-tests the finger against all zones (highest `z` whose bounds contain the point
 and whose `accepts` passes), then asks **that zone's** planner for a `PlacementPlan`. **No zone owns the drag.**
 
-**Behaviour travels with the zone, and that is now literal.** `planner` and `onDrop` began life on the *surface*,
+**Behavior travels with the zone, and that is now literal.** `planner` and `onDrop` began life on the *surface*,
 dispatched by a `when (zone.id)` that each multi-zone surface repeated. That held only while a drag could never leave
 the surface it started on. It can now — an app lifted in the APPS drawer is released by a cell in `feature:apps` and
 has to be committed by **home's** grid — and the releasing surface knows nothing about placements. So the zone
@@ -233,7 +233,7 @@ sealed interface CellIntent { data class Push(val dir: PushDirection); object Me
     gesture rather than in taste: a drag's push direction is part of what the user said (it comes from the
     sub-zone the finger entered), and a refusal is undone by moving the finger one cell over — where a resize
     says nothing about direction at all. It claims an **area**, so the items inside it just need to be somewhere
-    else, and refusing an expansion because a neighbour cannot slide sideways while half the grid is empty is
+    else, and refusing an expansion because a neighbor cannot slide sideways while half the grid is empty is
     the wrong answer. Relocation moves one occupant into space that is already free and never cascades.
 - **`MovingGap`** (APPS pager, folder) — all items are **1×1**. Lifting an item leaves **one visible gap** on its
   page; the grid splits into left-list `[0..i-1]` and right-list `[i+1..end]`. Dragging toward one list disables
@@ -264,8 +264,8 @@ the `PlacementPlan`** — so it can never lie about the outcome (L1's 3×-Spread
 | Push  | debug tint (dev only) | `plan.intent == Push` |
 
 **Positioning — half-cell hysteresis.** The target cell is the **dragged item's own snapped position**, not the
-cell under the finger: take the item's top-left (its proxy is finger-centred) and **round** to the nearest cell.
-Rounding gives free hysteresis — the footprint holds still until the item has travelled half a cell, then steps
+cell under the finger: take the item's top-left (its proxy is finger-centered) and **round** to the nearest cell.
+Rounding gives free hysteresis — the footprint holds still until the item has traveled half a cell, then steps
 one cell in the drag direction — so it never jitters cell-to-cell on small movements. The top-left is clamped so
 a multi-cell footprint stays on the grid. (This is a surface-geometry rule, so every real surface applies it,
 not just the dev harness.)

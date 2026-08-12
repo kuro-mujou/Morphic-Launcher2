@@ -127,7 +127,7 @@ class ContainerSettingsViewModel(
     /**
      * Takes [item] out of the icon container — **membership only, so it goes nowhere**.
      *
-     * That is the honest behaviour and worth stating: the app is not put back on the home grid, because the grid
+     * That is the honest behavior and worth stating: the app is not put back on the home grid, because the grid
      * has no cell reserved for it and inventing one is a placement decision this screen has no business making. It
      * stays installed and in the drawer, exactly as removing a folder leaves its apps.
      */

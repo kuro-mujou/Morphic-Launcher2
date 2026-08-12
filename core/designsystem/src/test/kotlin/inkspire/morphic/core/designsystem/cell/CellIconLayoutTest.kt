@@ -21,19 +21,19 @@ class CellIconLayoutTest {
     private val gap = 4.dp
 
     @Test
-    fun `with a label the icon is centred above the cell's own centre`() {
+    fun `with a label the icon is centered above the cell's own center`() {
         // A 90 × 140 cell: 132dp of content, of which the label block takes 20 (gap + row), leaving a 112dp icon area
-        // that the 48dp guardrail caps. The group is 48 + 4 + 16 = 68 tall, centred in the 132 → top at 4 + 32 = 36.
+        // that the 48dp guardrail caps. The group is 48 + 4 + 16 = 68 tall, centered in the 132 → top at 4 + 32 = 36.
         val layout = cellIconLayout(cellWidth = 90.dp, cellHeight = 140.dp, metrics = metrics, labelHeight = labelHeight)
 
         assertEquals(48.dp, layout.iconSize)
         assertEquals(labelHeight, layout.labelHeight)
         assertEquals(60.dp, layout.iconCenterY)
-        assertTrue("a labelled cell's icon must sit above the cell centre", layout.iconCenterY < 140.dp / 2)
+        assertTrue("a labeled cell's icon must sit above the cell center", layout.iconCenterY < 140.dp / 2)
     }
 
     @Test
-    fun `with no label the icon is centred in the cell and the label block disappears`() {
+    fun `with no label the icon is centered in the cell and the label block disappears`() {
         val bare = metrics.copy(showLabel = false)
 
         val layout = cellIconLayout(cellWidth = 90.dp, cellHeight = 140.dp, metrics = bare, labelHeight = labelHeight)
@@ -73,21 +73,21 @@ class CellIconLayoutTest {
         val bare = metrics.copy(showLabel = false)
 
         // A short cell, so the height is what binds: 40 − 8 = 32, with no label block to subtract.
-        val labelled = cellIconLayout(90.dp, 40.dp, metrics, labelHeight).iconBound
+        val labeled = cellIconLayout(90.dp, 40.dp, metrics, labelHeight).iconBound
         val bareBound = cellIconLayout(90.dp, 40.dp, bare, labelHeight).iconBound
 
-        assertEquals(12.dp, labelled)
+        assertEquals(12.dp, labeled)
         assertEquals(32.dp, bareBound)
     }
 
     @Test
-    fun `a guardrail larger than the cell overflows a labelled cell's icon area but not its clamp`() {
-        // The labelled branch clamps to the icon area, so a 48dp floor in a tiny cell reports the area, not the floor.
+    fun `a guardrail larger than the cell overflows a labeled cell's icon area but not its clamp`() {
+        // The labeled branch clamps to the icon area, so a 48dp floor in a tiny cell reports the area, not the floor.
         val floor = metrics.copy(minIconDp = 48.dp, maxIconDp = 48.dp)
-        val labelled = cellIconLayout(90.dp, 40.dp, floor, labelHeight)
+        val labeled = cellIconLayout(90.dp, 40.dp, floor, labelHeight)
 
         val iconArea = 40.dp - padV * 2 - gap - labelHeight
-        assertEquals(iconArea, labelled.iconSize)
+        assertEquals(iconArea, labeled.iconSize)
     }
 
     @Test

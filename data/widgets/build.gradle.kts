@@ -9,7 +9,7 @@ android {
 dependencies {
     implementation(projects.core.common) // AppDispatchers + Koin (api-exposed)
 
-    // `Drawable.toBitmap()`, for rasterising a provider's preview — the platform hands one back as a Drawable and
+    // `Drawable.toBitmap()`, for rasterizing a provider's preview — the platform hands one back as a Drawable and
     // the picker draws a bitmap. The same dependency `data:apps` takes for shortcut icons.
     implementation(libs.androidx.core.ktx)
     implementation(libs.timber) // another app's preview drawable can fail to inflate, and one must not empty the list

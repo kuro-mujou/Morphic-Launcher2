@@ -29,8 +29,8 @@ private val SwatchSide = 34.dp
 private val SwatchCheckerSquare = 4.dp
 
 /**
- * The swatch's outline, and **the reason it is grey rather than [StudioContentColor]**: it is drawn over a swatch the
- * user can cycle to white, and white-on-white is no border at all. The checkerboard's own dark grey is reused for
+ * The swatch's outline, and **the reason it is gray rather than [StudioContentColor]**: it is drawn over a swatch the
+ * user can cycle to white, and white-on-white is no border at all. The checkerboard's own dark gray is reused for
  * exactly the property its declaration claims — mid-toned enough to read against both a black and a white surround —
  * so the one color in the studio that has to survive both extremes is not chosen twice.
  */
@@ -69,7 +69,7 @@ fun BackgroundCycleButton(
  * thing a swatch must not be — a picture of something else.
  *
  * **The two mixed modes are drawn as two triangles rather than as a square within a square.** On the canvas the
- * checkerboard fills the icon's *bound*, a square centred in a much larger area; shrinking that arrangement into 34dp
+ * checkerboard fills the icon's *bound*, a square centered in a much larger area; shrinking that arrangement into 34dp
  * would leave a checkered speck inside a border, indistinguishable between the two mixes. A diagonal split gives each
  * half the same weight, so what the tile shows is the *pairing* — flat surround plus transparency — which is what the
  * mode actually is.

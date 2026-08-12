@@ -61,7 +61,7 @@ private const val AXIS_EPSILON = 0.001f
  *
  * **The question is asked once, at slop, and the answer stands for the whole gesture.** A finger that crosses slop
  * while the content can still scroll belongs to the content until it lifts — scrolling a list to the bottom and
- * carrying straight on does *not* start panning; a second swipe from the bottom does. That is L1's behaviour too, and
+ * carrying straight on does *not* start panning; a second swipe from the bottom does. That is L1's behavior too, and
  * it is the honest limit of a hand-off decided by a claim rather than by leftover-delta plumbing: continuing would
  * mean real `nestedScroll` and a scroll connection on every surface. Two fingers skip the question entirely.
  *

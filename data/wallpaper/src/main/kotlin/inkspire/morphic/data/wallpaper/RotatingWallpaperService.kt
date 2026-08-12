@@ -124,7 +124,7 @@ class RotatingWallpaperService : WallpaperService() {
         /**
          * What colors this wallpaper is made of, for anything that has to sit legibly on top of it.
          *
-         * **A live wallpaper is the only one the system cannot analyse for itself** — there is no bitmap to read, only
+         * **A live wallpaper is the only one the system cannot analyze for itself** — there is no bitmap to read, only
          * a surface being drawn to — so a service that does not answer this leaves every consumer of
          * `WallpaperManager.getWallpaperColors` with nothing: the status-bar icon contrast, any themed-icon palette,
          * and (the reason it is here) the launcher's own `WallpaperRepository.brightness`. Answering it means the

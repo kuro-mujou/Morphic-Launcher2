@@ -56,7 +56,7 @@ object GridReflow {
     /**
      * Settles [placements] against [config], re-homing anything that no longer fits.
      *
-     * @param overflow what to do with an item that finds no room; defaults to the paged behaviour, since only a
+     * @param overflow what to do with an item that finds no room; defaults to the paged behavior, since only a
      *   single-page grid has the problem [Overflow.EVICT] answers.
      */
     fun <K> reflow(

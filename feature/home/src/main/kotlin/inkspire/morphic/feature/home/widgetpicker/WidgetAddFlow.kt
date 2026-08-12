@@ -35,7 +35,7 @@ private const val NoPendingId = AppWidgetManager.INVALID_APPWIDGET_ID
  * ```
  *
  * **Every path that does not end at [onBound] gives the id back.** An allocated `appWidgetId` outlives this
- * process, so a declined bind, a cancelled configuration screen, or a placement with nowhere to go would each
+ * process, so a declined bind, a canceled configuration screen, or a placement with nowhere to go would each
  * otherwise leak a widget the user can neither see nor remove. That is what makes [onBound]'s return value part
  * of the contract rather than a convenience.
  *

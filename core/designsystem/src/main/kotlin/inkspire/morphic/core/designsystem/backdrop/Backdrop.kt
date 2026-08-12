@@ -129,7 +129,7 @@ fun Modifier.wallpaperBackdrop(
  * **Two blends, and both matter.** The raw accent is a full-saturation color lifted out of a photograph; washing a
  * surface in it directly reads as a colored filter rather than as glass. Blending it [ACCENT_BLEND] of the way from
  * the mode's own `surfaceVariant` keeps it *mode-appropriate* — dark in dark, light in light — while still carrying
- * the hue. That is L1's `materialYouTone`, and in L2 the surface it starts from is greyscale, so what comes out is a
+ * the hue. That is L1's `materialYouTone`, and in L2 the surface it starts from is grayscale, so what comes out is a
  * desaturated version of the wallpaper's color rather than a second hue mixed in.
  *
  * Falls back to `surfaceVariant` when nothing could be read, which makes every wash below plain white or black.
@@ -185,11 +185,11 @@ private fun saturationFilterOf(effect: BackdropEffect): ColorFilter? {
 }
 
 /**
- * Maps a screen-space rectangle onto the sub-rectangle of a bitmap that covers it, centre-cropped.
+ * Maps a screen-space rectangle onto the sub-rectangle of a bitmap that covers it, center-cropped.
  *
  * The bitmap is normally already this screen's shape (`setImage` scales it there), which makes this close to a plain
  * scale — but not always: a stored image outlives a fold, a rotation, or a different device restoring a backup, and
- * the centre-crop is what keeps those from stretching. It is the same mapping the wallpaper itself is drawn with, so a
+ * the center-crop is what keeps those from stretching. It is the same mapping the wallpaper itself is drawn with, so a
  * frosted crop lines up with the wallpaper around it.
  *
  * Returns the identity for a degenerate input rather than dividing by zero — one frame before measurement.

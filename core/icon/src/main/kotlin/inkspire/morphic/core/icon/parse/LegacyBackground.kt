@@ -8,12 +8,12 @@ package inkspire.morphic.core.icon.parse
  * foreground in the studio, at which point the revealed area is transparent — when for many older icons ("a logo on
  * a solid colored plate") the *right* color was sitting in the artwork all along.
  *
- * Pure on purpose: rasterising the drawable and reading its border is Android's job and lives in [DrawableParser],
- * while everything interesting here — the thresholds, and therefore the behaviour — is arithmetic over an
+ * Pure on purpose: rasterizing the drawable and reading its border is Android's job and lives in [DrawableParser],
+ * while everything interesting here — the thresholds, and therefore the behavior — is arithmetic over an
  * `IntArray` and can be unit-tested without an emulator. Same split as `SettingsSlice` (rules without DataStore)
  * and `IconLayerResolver` (resolution without file I/O).
  *
- * **No matting, ever.** There is no reliable way to cut a glyph out of a rasterised icon — alpha matting breaks on
+ * **No matting, ever.** There is no reliable way to cut a glyph out of a rasterized icon — alpha matting breaks on
  * gradients, shadows and anti-aliasing — so the foreground keeps the whole bitmap, color included, and this only
  * decides what sits behind it. L1's plan reached the same conclusion and rejected the alternative explicitly.
  */

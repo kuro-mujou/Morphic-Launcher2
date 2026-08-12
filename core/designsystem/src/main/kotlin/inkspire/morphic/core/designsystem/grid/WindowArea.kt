@@ -23,7 +23,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
  * Subtracting the dock is one caller's arithmetic on the result, not part of measuring a window.
  *
  * @param insets what the surface will not draw into — normally `systemBars ∪ displayCutout`, which is what every
- *   surface here applies. Passed rather than read, because *which* insets a surface honours is the surface's business.
+ *   surface here applies. Passed rather than read, because *which* insets a surface honors is the surface's business.
  */
 @Composable
 fun usableWindowArea(insets: WindowInsets): GridArea {

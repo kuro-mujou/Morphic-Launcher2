@@ -50,7 +50,7 @@ interface LayoutRepository {
     /**
      * Applies [changes] to [orientation]'s layout as one unit — the single write path. [orientation] scopes
      * *which* per-orientation tables are touched, so the same command list can be replayed into either
-     * orientation. Ordering is honoured: earlier changes are visible to later ones in the batch.
+     * orientation. Ordering is honored: earlier changes are visible to later ones in the batch.
      */
     suspend fun apply(orientation: Orientation, changes: List<LayoutChange>)
 }

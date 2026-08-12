@@ -77,7 +77,7 @@ object CardChromeRanges {
 
     /**
      * Both paddings share one window, and it is small on purpose: these inset a tile whose whole job is to show four
-     * recognisable icons, so a padding competing with the icons for room is the failure mode. The icon guardrails,
+     * recognizable icons, so a padding competing with the icons for room is the failure mode. The icon guardrails,
      * not this, are what a user reaches for to make icons bigger.
      */
     val PaddingDp: IntRange = 0..24
@@ -131,7 +131,7 @@ enum class GridSlot {
      *
      * A list is a **one-lane scrolling grid**, which is why it belongs in this enum rather than beside it: it draws
      * icon cells and therefore needs its own icon sizing, and "each grid config gets an independent icon config" is
-     * the rule that makes that automatic. (L1 modelled its list layout the same way — a profile of one column.)
+     * the rule that makes that automatic. (L1 modeled its list layout the same way — a profile of one column.)
      */
     APPS_LIST,
 
@@ -213,7 +213,7 @@ object IconSizingRanges {
       * across a phone — legal arithmetic that nothing could be tapped in. 24 is also the number L1 wrote down for this
       * (`MIN_CELL_DP`, "minimum comfortable grid cell size (press-area floor)") and then never used anywhere.
       *
-      * **The ceiling is 120dp, which is a judgement rather than a derivation**, so here is the reasoning: at the default
+      * **The ceiling is 120dp, which is a judgment rather than a derivation**, so here is the reasoning: at the default
       * fraction the upper guardrail *is* the icon size, so it has to reach far enough for a tablet cell to be filled
       * (~150dp inner at eight columns) while keeping the 24–48 default legible on the track. 120 also stays clear of the
       * one place a bound can misbehave — the *lower* thumb drives the cell floor, and 120 + a cell's padding still
@@ -462,7 +462,7 @@ val DockGrid = GridBlueprint(
  * where a drawer holds all of them, so density is worth less here and reach is worth more. And its order is **stored**
  * (`home_list_item`) rather than derived A–Z: the whole point of this layout is that the user arranges it.
  *
- * L1 modelled the same list as *a view of the home placements*, flattened by (page, row, col) — which is why
+ * L1 modeled the same list as *a view of the home placements*, flattened by (page, row, col) — which is why
  * reordering it wrote `MoveApp(page = 0, row = index, col = 0)` for every app and destroyed the grid arrangement
  * underneath. Two stores is what stops one layout scrambling the other; the flattening survives only as the *seed*
  * (see `HomeListRepository`), which is the part of L1's idea worth keeping.
@@ -573,7 +573,7 @@ val AppsScrollGrid = GridBlueprint(
  *
  * **No folders live here.** That is a property of the layout, not a gap: a category *is* the grouping, so a folder
  * inside one would be a second, redundant one. It has a direct consequence for the drag partition — with nothing
- * to merge into, a hovered cell splits into **halves** (gap before / gap after) and there is no centre merge ring,
+ * to merge into, a hovered cell splits into **halves** (gap before / gap after) and there is no center merge ring,
  * unlike every coordinate surface. Prototyped in the `CategoryPagerPlayground` harness.
  *
  * Not the [AppsLayout.CATEGORY_CARD] grid: a card is a small fixed preview of a category rather than a full page of
@@ -695,7 +695,7 @@ val AppsCardGrid = GridBlueprint(
     // guardrail rather than the hand-picked constant it replaced.
     //
     // `showLabel = false` because the slots carry no labels — a card is a thumbnail of a category, and four
-    // ellipsised words would eat the room the icons need. It is the same statement `AppsListGrid` makes with
+    // ellipsized words would eat the room the icons need. It is the same statement `AppsListGrid` makes with
     // `showIcon`, from the other side, and it is what hides the two text controls in the section.
     icon = IconSizing(showLabel = false),
     card = CardChrome(),

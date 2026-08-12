@@ -44,10 +44,10 @@ import inkspire.morphic.core.model.ComponentKey
  *   leaves no height to reserve.
  * @param rowHeight how tall each row is — resolved from the same blueprint and the same overrides, and the reason the
  *   icon controls above it do anything at all: until it was stored, a 56dp row clamped every icon to 40dp whatever
- *   the guardrails said. Clamped below to the heights the current guardrails can honour, exactly as the vertical grid
+ *   the guardrails said. Clamped below to the heights the current guardrails can honor, exactly as the vertical grid
  *   clamps its column count: a height chosen before the guardrails moved would otherwise draw an icon outside them.
  *
- * Deliberately **not** here yet, all of it L1 behaviour worth rebuilding rather than porting: the alphabet filter
+ * Deliberately **not** here yet, all of it L1 behavior worth rebuilding rather than porting: the alphabet filter
  * strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing helpers into the same file as
  * the list — three concerns in one composable), search, and drag-out-to-home.
  */
@@ -66,7 +66,7 @@ fun AppsVerticalList(
     // on a wrap-content group), so it narrows with the margin for free — the visible extent *is* the target, and
     // there is nothing to keep in step by hand.
     val contentPadding = appsContentPadding(horizontalPadding)
-    // **The stored height, clamped to what this row can honour** — the list's counterpart of the vertical grid's column
+    // **The stored height, clamped to what this row can honor** — the list's counterpart of the vertical grid's column
     // fit, and the read half of the coupling the settings section's slider is bounded by. With icons on that means the
     // guardrails, which can move after a height was chosen: a row shorter than the smallest allowed icon would draw it
     // smaller than the user permitted. With icons off it means the label, since a row cannot be shorter than its own

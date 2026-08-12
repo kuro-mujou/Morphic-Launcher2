@@ -23,7 +23,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * a preview, a dev harness) is exactly as on-screen as its host, and the permissive value is what every such caller
  * behaved as before this existed.
  *
- * `compositionLocalOf`, not `staticCompositionLocalOf`, unlike its two neighbours here — this one actually changes,
+ * `compositionLocalOf`, not `staticCompositionLocalOf`, unlike its two neighbors here — this one actually changes,
  * twice per pan, and the static variant recomposes the **whole** subtree below the provider on any change rather than
  * just its readers. A handful of readers is what this has; a screenful of cells is what that would cost.
  */
@@ -40,7 +40,7 @@ val LocalSurfacePresented = compositionLocalOf { true }
  * and that is the whole of this interface.
  *
  * Compare L1's `HomeDragBridge`, which had to pass the app, the finger position in window space and a grab offset,
- * because its side surfaces owned their own recognisers and its `CrossPager` stopped delivering events to either
+ * because its side surfaces owned their own recognizers and its `CrossPager` stopped delivering events to either
  * subtree as it collapsed — so the finger had to be re-tracked from scratch at the common ancestor.
  *
  * Two callers, both in `feature:apps`, and the difference between them is *when* they call it: the derived layouts

@@ -32,7 +32,7 @@ import kotlin.math.abs
 
 /**
  * Standalone test screen for the custom [LauncherPager] — separate from the drag harness. Swipe between pages;
- * toggle **infinite** wrap on/off (watch the edge behaviour change) and the per-page **transform** (a scale +
+ * toggle **infinite** wrap on/off (watch the edge behavior change) and the per-page **transform** (a scale +
  * fade parallax). Confirms: only real pages exist (no Int.MAX), wrap works both directions, bounded stops at
  * the ends, and fling/settle land on a page.
  */

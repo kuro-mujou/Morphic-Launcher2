@@ -91,7 +91,7 @@ private const val MenuMaxHeightFraction = 0.6f
  *
  * **It is the launcher's first frosted panel.** `wallpaperBackdrop` with `refracts = true`, so — unlike the
  * full-screen sheet behind an arriving surface — this one is a *lens*: it has edges of its own for liquid glass to
- * bend light at, and it honours the user's chosen effect and its strength. Those sliders have been dormant since
+ * bend light at, and it honors the user's chosen effect and its strength. Those sliders have been dormant since
  * the effects section landed precisely because no panel existed to read them.
  *
  * @param anchor what the menu belongs to — an item's bounds, or the point an empty-space long-press landed on.

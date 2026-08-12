@@ -10,13 +10,13 @@ import kotlinx.serialization.Serializable
  * What sits behind one edge of HOME — the surface, **plus the configuration that only that surface has**.
  *
  * **A sealed type rather than a `Surface` value, so illegal bindings cannot be written down.** Two things were wrong
- * with storing the plain enum: `Surface.HOME` is the centre and can never be a side (`LauncherShell` had to answer
+ * with storing the plain enum: `Surface.HOME` is the center and can never be a side (`LauncherShell` had to answer
  * that with a runtime `error()`), and the APPS surface needs an [AppsLayout] that no other surface would want. One
  * variant per bindable surface answers both — the layout lives on the binding that needs it, and a HOME binding has
  * no variant to write.
  *
  * That the sealed hierarchy has a single variant today is not premature: `Surface` has exactly two values and one of
- * them is the centre. It grows when a second side surface does, and each new surface brings its own config with it
+ * them is the center. It grows when a second side surface does, and each new surface brings its own config with it
  * rather than widening a shared record.
  *
  * **Why the layout is per binding, not per surface.** The same surface can be reached from different edges, and the

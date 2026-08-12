@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Behaviour spec for [reconcileReportedOrder] — the guard that keeps a reorder from *dropping* members the UI could
+ * Behavior spec for [reconcileReportedOrder] — the guard that keeps a reorder from *dropping* members the UI could
  * not render. Every whole-order op (`ReorderFolder`, [AppsCategoryChange.Reorder]) replaces order wholesale, so this
  * function is the only thing between a UI-filtered report and a lost member.
  */

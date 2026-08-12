@@ -82,7 +82,7 @@ enum class TopActionTarget {
  * thresholds and its own copy of the band. Here one band spans both, because the shell is above both surfaces; the
  * mode is a parameter and the timing difference between them lives in one state holder.
  *
- * **Color.** [TopActionMode.ADD_TO_HOME] is `accent`, the palette's greyscale emphasis. [TopActionMode.DELETE] is
+ * **Color.** [TopActionMode.ADD_TO_HOME] is `accent`, the palette's grayscale emphasis. [TopActionMode.DELETE] is
  * `error` — the one hue the palette reserves, and this is what it is reserved *for*: an action that destroys
  * something. L1 used red for delete and green for add; the green goes, the red stays, and it stays because it is
  * carrying meaning rather than decoration.
@@ -117,7 +117,7 @@ fun TopActionZone(
         label = "topActionColor",
     )
     // The label color has to follow the band's own, not `onAccent` for both: the DELETE band is `error`, and
-    // greyscale-on-accent over red is the wrong contrast pair. Each token names the content its own surface takes.
+    // grayscale-on-accent over red is the wrong contrast pair. Each token names the content its own surface takes.
     val onBase by animateColorAsState(
         targetValue = when (mode) {
             TopActionMode.ADD_TO_HOME -> colors.onAccent

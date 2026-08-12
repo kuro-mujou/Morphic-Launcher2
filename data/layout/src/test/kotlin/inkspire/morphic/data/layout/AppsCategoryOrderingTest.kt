@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Behaviour spec for the APPS category arrangement — one dense list per category, no capacity.
+ * Behavior spec for the APPS category arrangement — one dense list per category, no capacity.
  *
  * Much shorter than `AppsPagerPagingTest` because the store is much simpler: nothing cascades, nothing compacts,
  * and there is no orientation. What is left is where an app lands and, more importantly, **when the classifier is

@@ -9,7 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Behaviour spec for [AppCategorizer] — the first-run guess at where an app belongs.
+ * Behavior spec for [AppCategorizer] — the first-run guess at where an app belongs.
  *
  * The interesting part is the **priority chain**, because each step is a weaker guess than the one before and the
  * order is the whole design: a curated fact beats a platform declaration beats a keyword hunch. These pin that

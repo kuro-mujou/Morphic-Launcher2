@@ -36,7 +36,7 @@ enum class PreviewBackground {
     WHITE_WITH_CHECKER,
     ;
 
-    /** The next background in the cycle, wrapping — the whole of the control's behaviour. */
+    /** The next background in the cycle, wrapping — the whole of the control's behavior. */
     fun next(): PreviewBackground = entries[(ordinal + 1) % entries.size]
 
     /** Whether the area *inside* the icon bound shows the transparency checkerboard. */
@@ -51,7 +51,7 @@ enum class PreviewBackground {
      *
      * Read from the backdrop's *surround*, not its bound: the bound is a square in the middle of the canvas and never
      * reaches the bars, so both `_WITH_CHECKER` values take the color of the flat area around it.
-     * [CHECKERBOARD] counts as light — its two greys both swallow a white glyph.
+     * [CHECKERBOARD] counts as light — its two grays both swallow a white glyph.
      *
      * Named for what the user sees, unlike the platform's `isAppearanceLightStatusBars`, which names the *background*
      * the icons are being asked to contrast. Getting that inversion wrong is invisible in code and obvious on screen.

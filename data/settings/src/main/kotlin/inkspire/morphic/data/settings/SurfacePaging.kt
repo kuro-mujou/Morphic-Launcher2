@@ -9,8 +9,8 @@ import kotlinx.serialization.Serializable
  *
  * The fourth settings slice. Its own rather than a field in [SurfaceMetrics], because that slice is per-grid
  * *metrics* — every map in it is a size, and every one is keyed `slot × device` because a size is something a posture
- * can change. Wrapping is neither: it is a behaviour, and turning the phone on its side is not a reason for the pages
- * to stop looping. Folding it in would have meant a map shaped unlike its neighbours living under a name that says
+ * can change. Wrapping is neither: it is a behavior, and turning the phone on its side is not a reason for the pages
+ * to stop looping. Folding it in would have meant a map shaped unlike its neighbors living under a name that says
  * "metrics".
  *
  * **Slot-keyed, where L1 had a single global flag.** L1's `pager.infiniteScroll` was one boolean read by home's pager

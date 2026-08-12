@@ -14,11 +14,11 @@ import timber.log.Timber
  * **It is a handle, not a command**: [id] means something only to [packageName] under [userSerial], and only
  * for as long as the app keeps publishing it. So a stored one would go stale silently — these are read fresh
  * each time a menu opens and thrown away when it closes, which is why nothing here is persisted and why this
- * lives in `data:apps` rather than in `core:model` (it carries a rasterised [Bitmap], too).
+ * lives in `data:apps` rather than in `core:model` (it carries a rasterized [Bitmap], too).
  *
  * @property userSerial the profile the shortcut belongs to, carried for the same reason [ComponentKey] carries
  *   one: starting a work-profile app's shortcut under the personal user silently does nothing.
- * @property icon the shortcut's own icon, already rasterised at the device's density, or null when the platform
+ * @property icon the shortcut's own icon, already rasterized at the device's density, or null when the platform
  *   would not give us one. Deliberately *not* run through `core:icon` — a shortcut icon is the app's badge-and-glyph
  *   composition and is not one of our layer stacks to restyle.
  */
@@ -64,7 +64,7 @@ interface AppShortcuts {
  *
  * The dispatcher hop is here rather than in the wrapper, matching [AppRepositoryImpl]: the wrapper stays a thin,
  * synchronous platform pass-through and each caller layer decides where its work runs. Reading shortcuts loads and
- * rasterises an icon per entry, so it is emphatically not main-thread work.
+ * rasterizes an icon per entry, so it is emphatically not main-thread work.
  *
  * `internal` so only Koin constructs it — consumers depend on the [AppShortcuts] interface.
  */

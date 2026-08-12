@@ -19,7 +19,7 @@ import org.koin.androidx.compose.koinViewModel
  * **The HOME surface — and the one place its layout is chosen.**
  *
  * A `when` over [HomeLayout] above shared wiring, which is deliberately `AppsScreen`'s shape and for the same
- * reason: the two layouts render the same apps with the same launch behaviour and differ only in arrangement, so
+ * reason: the two layouts render the same apps with the same launch behavior and differ only in arrangement, so
  * "which layout?" must be answered once, above everything both of them need. Everything above the `when` — the
  * ViewModel, the device report, the state — is shared, so switching layout reloads nothing and cannot leave the two
  * disagreeing about what HOME's contents are.
@@ -73,7 +73,7 @@ fun HomeScreen(
  * beside one. The shell owns the *question* (it is the only layer that sees both sides of an edge) and each feature
  * owns its own answer — which is what `SurfaceBinding` means by "set by the shell from the layout on each side".
  *
- * The **side zone is not modelled here**, and that is a deliberate simplification rather than an oversight: a
+ * The **side zone is not modeled here**, and that is a deliberate simplification rather than an oversight: a
  * vertical swipe that starts inside the dock or the widget area is not over the list at all, but the report is one
  * answer for the whole surface. L1 made the same simplification, and refining it would mean the report knowing which
  * region the finger is in — a per-zone answer for a gesture that is decided once, at slop.

@@ -17,7 +17,7 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
  * The conventions this pins down, all of which are choices rather than facts:
  * - **Offsets are fractions of the box**, not pixels — so a set moved 10% left looks the same at every bake size.
  * - **Positive [translateYPx] is down**, matching both Android's canvas and Compose's.
- * - **Zoom and rotation are about the box's centre**, not its origin, so an item scales in place.
+ * - **Zoom and rotation are about the box's center**, not its origin, so an item scales in place.
  * - **[rotationDegrees] is clockwise.**
  */
 data class LayerTransform(
@@ -39,7 +39,7 @@ data class LayerTransform(
     /**
      * The same transform as an Android [Matrix], for the baked path.
      *
-     * Order matters and mirrors the field order: scale about the centre, then rotate about the centre, then
+     * Order matters and mirrors the field order: scale about the center, then rotate about the center, then
      * translate. Compose's `graphicsLayer` composes its scale, rotation and translation the same way about
      * `TransformOrigin.Center`, which is what lets the live path consume this without converting anything.
      */

@@ -75,7 +75,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
 /**
- * The launcher itself: **HOME in the centre, side surfaces off its edges**, panned between by a swipe.
+ * The launcher itself: **HOME in the center, side surfaces off its edges**, panned between by a swipe.
  *
  * This is the real version of what `app/dev/SurfacePagerPlaygroundScreen` prototyped. That harness proved the gesture
  * and the finger-policy table against *simulated* surfaces — colored boxes standing in for layouts that didn't exist.
@@ -173,7 +173,7 @@ fun LauncherShell(
                 // `feature:settings`', and `app` is the only layer that knows where a verb goes.
                 onEditIcon = onEditIcon,
                 onUninstall = viewModel::uninstall,
-                // Rasterised icons become `ImageBitmap` here rather than in the ViewModel, which deliberately deals
+                // Rasterized icons become `ImageBitmap` here rather than in the ViewModel, which deliberately deals
                 // in platform bitmaps — the same line `ShellState.backdropImage` draws.
                 loadShortcuts = { component ->
                     viewModel.shortcuts(component).map { shortcut ->
@@ -384,7 +384,7 @@ private fun TopActionOverlay(
         // **Registered whenever the band is open, in either mode** — and in ADD_TO_HOME that is for the masking
         // rather than for the drop. While the finger is up here it must stop being the drawer's: otherwise the
         // pager's own planner keeps migrating its reorder gap toward the top-left, and a release before the dwell
-        // completes lands the app there instead of cancelling. Being the topmost zone is what stops that, and it is
+        // completes lands the app there instead of canceling. Being the topmost zone is what stops that, and it is
         // L1's rule too — its drawer explicitly blanked `hoverTarget` and `pendingGap` while over the top bar.
         enabled = state.expanded,
         // The shell sits in no slot, so `LocalSurfacePresented` would be its default `true`; the real condition is
@@ -433,7 +433,7 @@ private fun rememberBackdropState(image: Bitmap?, accent: Int?, windowSize: IntS
  * The drag-toolkit [SurfaceBinding] for a stored [SideBinding] — its content, and the one-finger policy each way.
  *
  * **The `when` is exhaustive over a sealed type, so there is no invalid case to handle.** An earlier cut mapped the
- * `Surface` enum here and needed `error("HOME is the centre surface and cannot be bound to $edge")` for a state the
+ * `Surface` enum here and needed `error("HOME is the center surface and cannot be bound to $edge")` for a state the
  * type system should have refused; making the stored binding a sealed hierarchy with one variant per *bindable*
  * surface deleted that branch. Adding a side surface now fails to compile here until someone says what swiping to it
  * shows — which is the intent the runtime throw was only approximating.
@@ -443,7 +443,7 @@ private fun rememberBackdropState(image: Bitmap?, accent: Int?, windowSize: IntS
  * leave HOME, the side surface's own layout decides whether one can come back. `SurfaceBinding` says as much — "set by
  * the shell from the layout on each side".
  *
- * **Each side names its own scroll behaviour, and one rule turns that into the policy.** `HomeLayout.scrollAxes` and
+ * **Each side names its own scroll behavior, and one rule turns that into the policy.** `HomeLayout.scrollAxes` and
  * `AppsLayout.scrollAxes` are declared in the modules that draw those layouts; [ScrollAxes.oneFingerSwipe] is the
  * whole derivation — a bounded scroller on the edge's axis means `AT_EDGE`, an infinite one `NEVER`, nothing on the
  * axis `ALWAYS`. That expression is the surface-pager playground's table, promoted from private demo code once the

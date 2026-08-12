@@ -55,7 +55,7 @@ class CellFitTest {
     @Test
     fun `the icon fraction does not change how many cells fit`() {
         // **The property the whole file turns on.** `iconPercent` scales the icon *within* the guardrails — an icon
-        // asked for 30% of a cell too small to honour that is drawn at minIconDp, which fits by construction. So the
+        // asked for 30% of a cell too small to honor that is drawn at minIconDp, which fits by construction. So the
         // percent cannot make a cell unusable, and it must not move a grid's bounds.
         //
         // Getting this wrong is not academic: the earlier `minIcon / percent` floor made a 28dp guardrail at 30% demand
@@ -74,11 +74,11 @@ class CellFitTest {
         val withLabel = metrics.copy(showLabel = true)
 
         val bare = minCellHeightDp(metrics, labelHeight)
-        val labelled = minCellHeightDp(withLabel, labelHeight)
+        val labeled = minCellHeightDp(withLabel, labelHeight)
 
         // LabelGap is 4dp, so a 16dp label row adds 20dp — and nothing when labels are off, even though the height is
         // still passed in.
-        assertEquals(20f, labelled - bare, 0.01f)
+        assertEquals(20f, labeled - bare, 0.01f)
         assertEquals(bare, minCellHeightDp(metrics, labelHeightDp = 999f), 0.01f)
     }
 
@@ -297,7 +297,7 @@ class CellFitTest {
 
     @Test
     fun `a scrolling grid's column fit respects its floor and never reports zero`() {
-        // Its blueprint's minimum wins on an area too narrow to honour it, exactly as the editable range's floor does —
+        // Its blueprint's minimum wins on an area too narrow to honor it, exactly as the editable range's floor does —
         // and a grid with no editor at all still gets one column rather than none.
         assertEquals(AppsScrollGrid.editRange!!.minCols, AppsScrollGrid.fitCols(30f, cols = 4, metrics = metrics))
         assertEquals(AppsScrollGrid.editRange!!.minCols, AppsScrollGrid.fitCols(360f, cols = 0, metrics = metrics))
@@ -323,7 +323,7 @@ class CellFitTest {
         // Both of a card's own paddings raise that floor too, so widening either can take a lane away.
         val padded = cardMinCell(metrics, CardChrome(outerPaddingDp = 12, innerPaddingDp = 8))
         assertEquals(bare.widthDp + 32f, padded.widthDp)
-        // Its blueprint's own minimum still wins on an area too narrow to honour it, as for every other grid.
+        // Its blueprint's own minimum still wins on an area too narrow to honor it, as for every other grid.
         assertEquals(AppsCardGrid.editRange!!.minCols, AppsCardGrid.fitCols(50f, cols = 4, min = padded))
     }
 
@@ -392,7 +392,7 @@ class CellFitTest {
 
         assertEquals(4, config.visualCols)
         assertEquals(3, config.visualRows)
-        // And the same clamp-on-read every other grid gets: a count the area cannot hold is reduced, not honoured.
+        // And the same clamp-on-read every other grid gets: a count the area cannot hold is reduced, not honored.
         val squeezed = WidgetAreaGrid.fitGridConfig(GridArea(360f, 100f), cols = 4, rows = 9, min = WidgetMinCell)
         assertEquals(2, squeezed.visualRows)
     }

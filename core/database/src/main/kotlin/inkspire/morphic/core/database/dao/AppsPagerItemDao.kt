@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
  * Reads and writes the APPS-pager arrangement ([AppsPagerItemEntity]) — one list per orientation, each row an
  * app or a folder at an explicit page + slot.
  *
- * Deletes come in two flavours because the row identifies its entry by *one of two* columns; a single
+ * Deletes come in two flavors because the row identifies its entry by *one of two* columns; a single
  * `deleteByItem` would have to take both and null one out, which reads worse than two honest queries. Deleting a
  * folder's *definition* needs neither: the entity's foreign key cascades its slot away.
  */

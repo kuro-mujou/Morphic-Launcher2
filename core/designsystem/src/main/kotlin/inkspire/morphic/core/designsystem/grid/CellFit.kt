@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
+import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.CategoryPreviewCols
 import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.CellPadV
@@ -47,7 +47,7 @@ import kotlin.math.floor
  * a grid whose rows flow needs the second, and sharing one file is what keeps them describing the same cell.
  *
  * Pure arithmetic over `Float` dp, with a `@Composable` facade for the one input that needs a type scale (the label
- * row's height) — the same split `folderInnerSize` uses, and for the same reason: the interesting behaviour should be
+ * row's height) — the same split `folderInnerSize` uses, and for the same reason: the interesting behavior should be
  * checkable without an emulator.
  */
 
@@ -82,7 +82,7 @@ val WidgetMinCell = MinCell(widthDp = 48f, heightDp = 48f)
  * The floor for a grid of **tiles** — the narrowest APPS category card that can still draw its preview.
  *
  * **Derived, where this was a flat number picked by eye.** A card's preview is [CategoryPreviewCols]² slots, so the
- * narrowest card that honours the user's own guardrail is `CategoryPreviewCols × minIconDp`, plus the gap between the
+ * narrowest card that honors the user's own guardrail is `CategoryPreviewCols × minIconDp`, plus the gap between the
  * slots and the padding around them. That is exactly the inversion [minCellWidthDp] performs for an icon cell —
  * `minIconDp + padding` — applied to a tile holding four icons instead of one, and it became available the moment the
  * card grid started declaring icon sizing.
@@ -130,7 +130,7 @@ data class GridBounds(val maxCols: Int, val maxRows: Int?)
  *
  * **[IconMetrics.iconPercent] is deliberately absent, and that is the correction.** The percent scales the icon
  * *within* the guardrails; it cannot make a cell unusable. An earlier cut divided by it — asking instead "how wide must
- * a cell be for the percent to be honoured un-clamped" — which coupled the two the wrong way round: at 30% a 28dp
+ * a cell be for the percent to be honored un-clamped" — which coupled the two the wrong way round: at 30% a 28dp
  * guardrail demanded a 101dp column, so *shrinking* the icons reported that **fewer** columns fit. Nothing was
  * overflowing there; the icon was simply clamped up to its floor and drew at a larger fraction of the cell than asked.
  *
@@ -221,7 +221,7 @@ fun GridBlueprint.boundsIn(area: GridArea, metrics: IconMetrics, labelHeightDp: 
  * Null when the grid has no editor at all (a folder's, a list's), which is the same question
  * `SettingsRepository.updateGrid` refuses a write for.
  *
- * **The ceiling is never below the floor.** On an area too small to honour `minCols`, the floor wins: a blueprint's
+ * **The ceiling is never below the floor.** On an area too small to honor `minCols`, the floor wins: a blueprint's
  * minimum is its own promise that the grid is usable at that size, and offering an empty range would leave the editor
  * with nothing to show. The clamp is here, once, rather than at each call site as L1 left it ("callers apply their own
  * minimum").

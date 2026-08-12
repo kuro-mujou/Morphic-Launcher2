@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Behaviour spec for [GridReflow], ported from L1's `GridReflowTest` onto the single-map API. String keys
+ * Behavior spec for [GridReflow], ported from L1's `GridReflowTest` onto the single-map API. String keys
  * stand in for whatever identity the caller keys by (`GridItem` in production).
  */
 class GridReflowTest {

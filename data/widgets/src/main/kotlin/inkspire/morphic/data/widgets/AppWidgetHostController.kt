@@ -37,11 +37,11 @@ data class BoundWidget(
  * How small a provider says it can still be drawn — the **floor** on a resize.
  *
  * **`resizeMode` is deliberately not here, and that is a product decision.** A provider also declares which axes
- * it will allow to be resized, and this launcher does not honour it: providers under-declare constantly (a great
+ * it will allow to be resized, and this launcher does not honor it: providers under-declare constantly (a great
  * many ship `resizeMode="none"` and resize perfectly well), so gating on it mostly denies the user a size the
  * widget could have drawn. Every widget is resizable here.
  *
- * The minimums *are* honoured, because they are a different claim: an axis declaration is about permission, where
+ * The minimums *are* honored, because they are a different claim: an axis declaration is about permission, where
  * a minimum is about whether the layout can render at all below that size. Letting a widget be squeezed to
  * nothing would break the thing the user is trying to keep.
  *
@@ -63,7 +63,7 @@ data class WidgetResizeRules(
  *
  * **An allocated id is a resource, not a value.** It survives this process, and a widget whose id is allocated but
  * never placed is a leak the user cannot see or clear. Every path that abandons the add flow therefore calls
- * [deleteId] — a declined bind, a cancelled configuration screen, a grid with no room. That is why the flow that
+ * [deleteId] — a declined bind, a canceled configuration screen, a grid with no room. That is why the flow that
  * drives this reads as a chain of "or give the id back".
  *
  * **[startListening] is bound to the launcher being on screen.** The host only receives provider updates while it

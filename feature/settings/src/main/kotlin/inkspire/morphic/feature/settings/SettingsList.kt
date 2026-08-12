@@ -95,7 +95,7 @@ internal fun SettingsList(
 /**
  * One row.
  *
- * Selection reads by **contrast rather than hue** — the palette is greyscale by design, so a selected row takes the
+ * Selection reads by **contrast rather than hue** — the palette is grayscale by design, so a selected row takes the
  * accent as its background where L1 used `secondaryContainer`. A plain `clickable`, as everywhere in settings: the
  * shared `launcherItemGestures` contract exists so *launcher surfaces* cannot drift on long-press timing, and settings
  * is ordinary app chrome that should behave like the platform.

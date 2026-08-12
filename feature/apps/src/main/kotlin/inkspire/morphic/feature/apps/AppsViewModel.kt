@@ -259,7 +259,7 @@ class AppsViewModel(
     /**
      * The category card's resolved tile chrome for the reported device — its corner, title scale and two paddings.
      *
-     * One value rather than a map, unlike its neighbours: exactly one APPS grid draws tiles, so a slot key would have
+     * One value rather than a map, unlike its neighbors: exactly one APPS grid draws tiles, so a slot key would have
      * four meaningless entries. `GridSlot.APPS_CARD` is written out at the one call site instead, which is the same
      * choice [listRowHeight] makes for the one grid that declares a row height.
      */
@@ -395,7 +395,7 @@ class AppsViewModel(
      * **This becomes the page capacity**, so it is the number the store is paginated against and the number a drop's
      * slot is computed from; see [pagerFit] for why the clamp cannot stay in the UI. The screen owns the call because
      * the fit needs a measured area and the current type scale, neither of which a state holder has — the same division
-     * of labour as `DockViewModel.setHeight`, and the same one every `CellFit` caller follows.
+     * of labor as `DockViewModel.setHeight`, and the same one every `CellFit` caller follows.
      *
      * **Only ever called with a fit of the *stored* grid**, never of a blueprint fallback: paginating against a
      * placeholder would write pages nobody chose and then rewrite them. Idempotent, so the surface may report on every
@@ -484,7 +484,7 @@ class AppsViewModel(
      * Takes the target by **identity**, so nothing here re-derives it from a position. The caller resolved which
      * entry the finger was on against what was actually on screen, and a slot index would have thrown that away —
      * the page renders a gap-shifted order during a drag, so the same index names different entries to the two
-     * sides. It is the same reason `AppsPagerChange.CreateFolder` names a neighbour rather than a slot.
+     * sides. It is the same reason `AppsPagerChange.CreateFolder` names a neighbor rather than a slot.
      */
     private fun mergeInto(target: IconItem, dragged: ComponentKey): List<AppsPagerChange> = when (target) {
         is IconItem.App -> listOf(AppsPagerChange.CreateFolder(DEFAULT_FOLDER_LABEL, target.component, dragged))

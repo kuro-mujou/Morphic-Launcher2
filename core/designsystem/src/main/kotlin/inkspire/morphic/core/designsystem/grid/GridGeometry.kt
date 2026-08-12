@@ -24,7 +24,7 @@ data class GridGeometry(
     val rows: Int,
 ) {
     /**
-     * The footprint's top-left [Cell] for a [colSpan]×[rowSpan] item whose proxy is centred on the finger —
+     * The footprint's top-left [Cell] for a [colSpan]×[rowSpan] item whose proxy is centered on the finger —
      * the item's own top-left rounded to the nearest cell (half-cell hysteresis), clamped onto the grid.
      *
      * **It snaps to the logical lattice, always, and that is the whole point of a sub-divided grid.** On a

@@ -93,7 +93,7 @@ sealed interface LayoutChange {
 
     // ── Folders (hold apps only) ─────────────────────────────────────────────────────────────────────────
 
-    /** Creates a folder of [apps] labelled [label] and places it at [at] in [zone]. */
+    /** Creates a folder of [apps] labeled [label] and places it at [at] in [zone]. */
     data class CreateFolder(
         val label: String,
         val apps: List<ComponentKey>,
@@ -162,7 +162,7 @@ sealed interface LayoutChange {
     data class RemoveFromWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
 
     /**
-     * Sets widget container [containerId]'s three settings — how it is paged, and the two behaviours that page it
+     * Sets widget container [containerId]'s three settings — how it is paged, and the two behaviors that page it
      * without being asked.
      *
      * **All three together, where [SetIconContainerArrangement] sets one.** That is not inconsistency: an icon

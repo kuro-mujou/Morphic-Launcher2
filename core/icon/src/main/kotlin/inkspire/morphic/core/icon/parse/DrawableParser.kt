@@ -39,7 +39,7 @@ class DrawableParser {
      * The flat color behind a legacy icon, recovered from the artwork's own border, or `null` when there is not
      * one to recover.
      *
-     * Rasterises the drawable small and hands its border ring to [LegacyBackground]. **Small on purpose**: this
+     * Rasterizes the drawable small and hands its border ring to [LegacyBackground]. **Small on purpose**: this
      * runs on every parse, and the question — "is this edge one flat color?" — is answered as well by a
      * thumbnail as by the full icon, at a fraction of the allocation. A `ColorDrawable` is answered without
      * drawing anything, since its edge is its color by definition.

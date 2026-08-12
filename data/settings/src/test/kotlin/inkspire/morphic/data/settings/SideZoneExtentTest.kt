@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The side-zone extent rules: the same sparse, shrink-back storage its neighbours use, on the metric that is a
+ * The side-zone extent rules: the same sparse, shrink-back storage its neighbors use, on the metric that is a
  * measurement rather than a count.
  *
  * Pure data, so no DataStore. The positivity check and the "is this grid even a strip?" check live in the repository

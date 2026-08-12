@@ -35,7 +35,7 @@ private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
  * this chrome, on the extract-at-the-second-consumer rule. It stays in `feature:home` rather than moving to
  * `core:designsystem` because both consumers are here; it moves when a third surface elsewhere wants one.
  *
- * **The modality is one claim, and it buys two behaviours.** `SurfaceGestureLock` is the launcher's answer to "does
+ * **The modality is one claim, and it buys two behaviors.** `SurfaceGestureLock` is the launcher's answer to "does
  * something on screen own the finger?", so holding it means `SurfacePager` will not slide another surface in from
  * under an open sheet, and `surfaceMenuGestures` stands down so a long-press on the scrim cannot open the menu of
  * the surface buried behind. The declarative form, because the reason is a piece of state — this composable being

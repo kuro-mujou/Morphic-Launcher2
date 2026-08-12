@@ -29,7 +29,7 @@ import kotlin.time.Duration.Companion.milliseconds
 /**
  * Attaches the launcher's item-gesture contract to a composable, driving the shared [ItemGestureMachine] and
  * reporting its effects through these callbacks. One modifier per draggable item, on every surface, so the
- * behaviour is identical everywhere (docs/DRAG_AND_DROP_DESIGN.md §5) — the antidote to L1's four divergent
+ * behavior is identical everywhere (docs/DRAG_AND_DROP_DESIGN.md §5) — the antidote to L1's four divergent
  * per-surface recognizers.
  *
  * This is the thin I/O shell over the pure machine: it races the [ItemGestureConfig.longPressTimeoutMillis]
@@ -57,7 +57,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param onBeginDrag lift into a drag; the finger is at the given root position.
  * @param onDragTo the drag moved to the given root position.
  * @param onDrop release the drag.
- * @param onCancelDrag the gesture was cancelled mid-drag.
+ * @param onCancelDrag the gesture was canceled mid-drag.
  */
 @SuppressLint("ReturnFromAwaitPointerEventScope", "MultipleAwaitPointerEventScopes")
 fun Modifier.launcherItemGestures(
@@ -82,7 +82,7 @@ fun Modifier.launcherItemGestures(
     val surfaceLock = LocalSurfaceGestureLock.current
 
     // **Taking the menu down is the contract's, not the caller's.** Every path that ends a menu — a drag lifting
-    // out of it, a cancelled gesture — is decided by the machine, so wiring it here means no surface can forget
+    // out of it, a canceled gesture — is decided by the machine, so wiring it here means no surface can forget
     // it and leave a menu hanging over a drag in flight. Same reasoning as the surface lock above: wiring that
     // cannot be forgotten belongs in the one place every caller already goes through. There was, correspondingly,
     // an `onDismissMenu` parameter, and every call site in the tree passed `{}`.
@@ -119,7 +119,7 @@ fun Modifier.launcherItemGestures(
              * `positionInRoot() + size`, never `boundsInRoot()`: that call clips to every ancestor, so an item
              * inside a scroller that is half off the top reports half of itself and one below the fold reports an
              * empty rectangle. A menu anchored to an empty rect would silently jump to the corner. (The same rule
-             * the APPS category card learnt the hard way — see CLAUDE.md.)
+             * the APPS category card learned the hard way — see CLAUDE.md.)
              */
             fun anchorInRoot(): Rect {
                 val c = coordinates ?: return Rect.Zero
@@ -160,7 +160,7 @@ fun Modifier.launcherItemGestures(
                     val pointerId: PointerId = down.id
                     var local = down.position
                     // A claim must not outlive the gesture that took it. Every machine path does release it, but a
-                    // cancelled `pointerInput` coroutine (the node leaving the tree mid-drag) takes none of them, and
+                    // canceled `pointerInput` coroutine (the node leaving the tree mid-drag) takes none of them, and
                     // a leaked claim would lock the surface swipe for the rest of the session.
                     try {
                         perform(machine.onEvent(ItemGestureEvent.Down), local)

@@ -7,11 +7,11 @@ import kotlin.math.roundToInt
 /** Side of the square [dominantColor] reduces an image to before weighing it. L1's 32. */
 private const val ACCENT_GRID = 32
 
-/** Added to every pixel's chroma weight, so a fully greyscale wallpaper averages instead of dividing by zero. */
-private const val GREY_FLOOR = 8.0
+/** Added to every pixel's chroma weight, so a fully grayscale wallpaper averages instead of dividing by zero. */
+private const val GRAY_FLOOR = 8.0
 
 /** What [dominantColor] returns when there is nothing at all to weigh. */
-private const val NEUTRAL_GREY = 0xFF808080.toInt()
+private const val NEUTRAL_GRAY = 0xFF808080.toInt()
 
 /**
  * L1's `Blur.kt`, both halves: the downscale-then-box-blur a frosted surface samples, and the representative color
@@ -24,7 +24,7 @@ private const val NEUTRAL_GREY = 0xFF808080.toInt()
  * separate them from their only caller to satisfy a sentence written about a module that no longer holds it.
  *
  * **The two functions read the same image and must not be confused for each other**, which is the trap S5f-1 nearly
- * walked into: [dominantColor] is deliberately **saturation-weighted** so a vivid accent beats washed-out grey, which
+ * walked into: [dominantColor] is deliberately **saturation-weighted** so a vivid accent beats washed-out gray, which
  * is right for "what color is this wallpaper?" and wrong for "how bright is it?". The brightness signal therefore has
  * its own unweighted luminance mean in the repository rather than reusing this.
  */
@@ -62,13 +62,13 @@ internal fun downscaleAndBlur(source: Bitmap, downscale: Int, radius: Int, passe
  * A representative accent color (ARGB) for [source] — what `BackdropEffect.MaterialYou` washes a frosted surface in.
  *
  * **A saturation-weighted average, not a plain one**, and that is the whole trick: a plain mean of a photograph is
- * mud, because every colorful pixel is dragged toward the grey majority. Weighting each pixel by its own chroma
+ * mud, because every colorful pixel is dragged toward the gray majority. Weighting each pixel by its own chroma
  * (`max - min` of its channels) lets a vivid minority carry the result, which is what "the wallpaper's color" means
- * to a person looking at it. The `+ 8` floor keeps a fully greyscale image from dividing by zero and lets it average
+ * to a person looking at it. The `+ 8` floor keeps a fully grayscale image from dividing by zero and lets it average
  * normally.
  *
  * Over a 32×32 downscale, because a representative color needs no more resolution than that and the cost is then a
- * thousand additions. Mid-grey when there is nothing to weigh at all.
+ * thousand additions. Mid-gray when there is nothing to weigh at all.
  *
  * **Only needed below API 27, or when a live wallpaper publishes no colors.** Above that, `WallpaperColors` answers
  * the same question about the wallpaper *actually displayed* — including another app's, which we cannot read — so this
@@ -86,13 +86,13 @@ internal fun dominantColor(source: Bitmap): Int {
         val r = (p ushr 16) and 0xFF
         val g = (p ushr 8) and 0xFF
         val b = p and 0xFF
-        val weight = (maxOf(r, g, b) - minOf(r, g, b)) + GREY_FLOOR
+        val weight = (maxOf(r, g, b) - minOf(r, g, b)) + GRAY_FLOOR
         sumR += r * weight
         sumG += g * weight
         sumB += b * weight
         sumW += weight
     }
-    if (sumW <= 0.0) return NEUTRAL_GREY
+    if (sumW <= 0.0) return NEUTRAL_GRAY
     val r = (sumR / sumW).roundToInt().coerceIn(0, 0xFF)
     val g = (sumG / sumW).roundToInt().coerceIn(0, 0xFF)
     val b = (sumB / sumW).roundToInt().coerceIn(0, 0xFF)

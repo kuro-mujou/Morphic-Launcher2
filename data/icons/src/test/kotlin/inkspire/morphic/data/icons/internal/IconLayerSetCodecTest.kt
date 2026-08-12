@@ -19,7 +19,7 @@ import org.junit.Test
  */
 class IconLayerSetCodecTest {
 
-    private val customised = IconLayerSet(
+    private val customized = IconLayerSet(
         listOf(
             IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.SolidFill(argb = -0x10000)),
             IconLayerSpec(
@@ -33,7 +33,7 @@ class IconLayerSetCodecTest {
 
     @Test
     fun `a recipe survives a round trip`() {
-        assertEquals(customised, IconLayerSetCodec.decode(IconLayerSetCodec.encode(customised)))
+        assertEquals(customized, IconLayerSetCodec.decode(IconLayerSetCodec.encode(customized)))
     }
 
     @Test

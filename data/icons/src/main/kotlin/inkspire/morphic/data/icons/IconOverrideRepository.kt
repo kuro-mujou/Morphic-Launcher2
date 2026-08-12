@@ -18,14 +18,14 @@ import kotlinx.coroutines.flow.Flow
  * three model revisions and four destructive schema bumps arriving at this same answer. The tradeoff it accepts is
  * real and is the one every launcher makes: an individually-edited app does **not** inherit later global changes.
  *
- * **Why this is not a `data:settings` slice**, when the global default is one: there is a row per customised app, so
+ * **Why this is not a `data:settings` slice**, when the global default is one: there is a row per customized app, so
  * this is a keyed store that grows with use, and a preference blob is neither. It is the same line `drawerOrder` and
  * `categories` fell on the wrong side of in L1.
  */
 interface IconOverrideRepository {
 
     /**
-     * Every detached app, with the recipe it renders from. Emits an empty map when nothing has been customised.
+     * Every detached app, with the recipe it renders from. Emits an empty map when nothing has been customized.
      *
      * A map rather than a per-app query because that is how it is consumed: one composition-local for the whole
      * launcher, read by every icon on screen. A row whose stored recipe cannot be decoded is **omitted**, so the app

@@ -224,7 +224,7 @@ interface WallpaperRepository {
      * writing down. The first is that `WallpaperManager.getWallpaperColors` already answers this: the OS computes it
      * over the real wallpaper, with no permission and no decode, and `HINT_SUPPORTS_DARK_TEXT` is literally the
      * question. The second is that `dominantColor` would be the *wrong statistic* even as a fallback — it is a
-     * saturation-weighted average, deliberately biased so a vivid accent beats washed-out grey, which is what an
+     * saturation-weighted average, deliberately biased so a vivid accent beats washed-out gray, which is what an
      * *accent* wants and the opposite of what "is this bright?" wants. Those are separate readings of one image, and
      * the blur half of `Blur.kt` still has no consumer until the frosted backdrop lands.
      */
@@ -241,7 +241,7 @@ interface WallpaperRepository {
      *
      * **Not `MaterialTheme.colorScheme.primary`, which is how L1 got this above API 31.** L1's launcher ran a normal
      * M3 dynamic scheme, so its primary *was* a wallpaper-derived hue. L2 feeds MaterialTheme a **monochrome** scheme
-     * bridged from `MorphicColors`, so the same expression here returns grey — the dynamic-color route is closed by
+     * bridged from `MorphicColors`, so the same expression here returns gray — the dynamic-color route is closed by
      * a decision made long before this, and reading the wallpaper directly is what is left.
      */
     val accentColor: Flow<Int?>
@@ -258,10 +258,10 @@ interface WallpaperRepository {
      * Copies [uri] into this module's own storage as the wallpaper image: the [crop] region of it, scaled to
      * [outWidth] × [outHeight].
      *
-     * **The rectangle is the caller's**, which is the change S5c made. This used to centre-crop, as a stand-in for a
+     * **The rectangle is the caller's**, which is the change S5c made. This used to center-crop, as a stand-in for a
      * chooser that did not exist; now the crop screen passes the region the user framed, and there is nothing left
      * here that invents one. A caller with genuinely nothing to say passes [NormalizedCropRect.Full] — that is not the
-     * old behaviour under a new name, since keeping the whole image *stretches* it to the output rather than filling
+     * old behavior under a new name, since keeping the whole image *stretches* it to the output rather than filling
      * it, which is why nothing does that today.
      *
      * Storing a cropped, screen-sized file at all (rather than the original) is what makes the stored file the thing
@@ -317,7 +317,7 @@ interface WallpaperRepository {
      * 4. Otherwise null.
      *
      * **Step 3 is where L1 kept a second copy of the file and this does not.** Its `appliedSingle` was a snapshot
-     * frozen at Apply time so that picking a new image without applying it did not desynchronise the backdrop from the
+     * frozen at Apply time so that picking a new image without applying it did not desynchronize the backdrop from the
      * real wallpaper. The id comparison answers the same question without the copy, and answers one more that the
      * snapshot could not: a wallpaper set *outside* the launcher makes the ids differ, where L1's snapshot went on
      * claiming to match. It is the same gate [brightness] uses, deliberately — "is our image what is on screen" should

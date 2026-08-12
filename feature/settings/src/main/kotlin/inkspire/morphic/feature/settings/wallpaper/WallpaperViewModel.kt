@@ -151,7 +151,7 @@ class WallpaperViewModel(
      * Takes [crop] of [uri] as the [orientation] half of the rotating pair, stored at [outWidth] × [outHeight].
      *
      * The sibling of [chooseImage] and deliberately not a flag on it: they write different files, and the one they
-     * write is not a variation on a shared behaviour but the whole of what distinguishes them. The size is the *target*
+     * write is not a variation on a shared behavior but the whole of what distinguishes them. The size is the *target*
      * orientation's screen rather than the current one — a landscape half is stored landscape-shaped while the phone is
      * held upright, which is what [CropTarget] works out for the crop screen.
      *
@@ -191,7 +191,7 @@ class WallpaperViewModel(
      * Waits for the next image to appear in the gallery — the capture screen's cue that a screenshot was taken.
      *
      * Suspends until one arrives and returns it, so the caller reads as the sequence it is: hide the launcher, wait,
-     * import. Null only if the flow completes without emitting, which it does not do on its own — a cancelled wait
+     * import. Null only if the flow completes without emitting, which it does not do on its own — a canceled wait
      * (the screen left) unwinds as a cancellation instead.
      */
     suspend fun awaitCapture(): Uri? = wallpaperRepository.newGalleryImages().firstOrNull()

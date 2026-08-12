@@ -105,7 +105,7 @@ fun WallpaperCropScreen(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    // Start filling the viewport, centred — the state the user would otherwise have to reach by hand, and the only one
+    // Start filling the viewport, centered — the state the user would otherwise have to reach by hand, and the only one
     // in which nothing is missing. Re-run when either input changes, since the image arrives after the first layout.
     val current = image
     LaunchedEffect(current, viewport) {
@@ -126,9 +126,9 @@ fun WallpaperCropScreen(
             if (current != null) {
                 Box(
                     modifier = Modifier
-                        // The target's shape, centred — which is `fillMaxSize` for a slot shaped like this screen, and
+                        // The target's shape, centered — which is `fillMaxSize` for a slot shaped like this screen, and
                         // a letterboxed band for the one that is not. `aspectRatio` picks the larger dimension it can
-                        // honour, so the frame is always as big as the screen allows.
+                        // honor, so the frame is always as big as the screen allows.
                         .align(Alignment.Center)
                         .fillMaxSize(FRAME_FRACTION)
                         .aspectRatio(frameRatio)

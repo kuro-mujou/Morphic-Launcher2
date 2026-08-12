@@ -43,7 +43,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * How long each widget is shown for when the container rotates itself.
  *
  * A placeholder in the "don't invent a dimension nothing owns yet" sense — it is not a setting anyone owns, and the
- * screen offers the behaviour as a switch rather than a duration. Five seconds is long enough to read a clock or a
+ * screen offers the behavior as a switch rather than a duration. Five seconds is long enough to read a clock or a
  * forecast and short enough that the second widget is discovered rather than waited for.
  */
 private const val AutoRotateIntervalMs = 5_000L
@@ -58,7 +58,7 @@ private val DotsInset = 4.dp
  * One placed **widget container** — several widgets sharing a cell, **one shown at a time**, swiped between along
  * the container's [axis].
  *
- * **Paged, not stacked**, which is `WidgetContainer`'s own correction and L1's actual behaviour: dividing the cell
+ * **Paged, not stacked**, which is `WidgetContainer`'s own correction and L1's actual behavior: dividing the cell
  * between the contained widgets would shrink each of them, and a user groups widgets to buy *cells* back, not to
  * make each widget smaller. So every page fills the container and the dots say how many there are.
  *
@@ -111,7 +111,7 @@ internal fun WidgetContainerCell(
         // otherwise fight over one finger while an item is being carried across the screen.
         val userScrollEnabled = !coordinator.isDragging
 
-        // **Both behaviours are scoped to the launcher being resumed**, which is not tidiness in either case.
+        // **Both behaviors are scoped to the launcher being resumed**, which is not tidiness in either case.
         // Auto-rotate would otherwise animate a container nobody is looking at, for as long as the process lives;
         // and "on return" *is* a resume, so `repeatOnLifecycle` is not a wrapper round the reset but the whole of
         // it — the block runs again each time home comes back, which is exactly the event being described.
@@ -121,7 +121,7 @@ internal fun WidgetContainerCell(
                 lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                     while (true) {
                         delay(AutoRotateIntervalMs.milliseconds)
-                        // Skipped rather than cancelled while a drag is in flight: the pager is already refusing
+                        // Skipped rather than canceled while a drag is in flight: the pager is already refusing
                         // the finger then, and a container that shuffled under a dragged icon would move the drop
                         // target out from under it.
                         if (!coordinator.isDragging) {

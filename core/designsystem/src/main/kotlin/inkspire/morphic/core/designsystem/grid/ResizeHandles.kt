@@ -36,7 +36,7 @@ enum class ResizeHandle(
  *
  * Which axes may move and how small the item may get are decisions above this layer, so they are passed in. The
  * launcher's current answer for widgets is "both axes, always": a provider's `resizeMode` is deliberately not
- * honoured, because providers under-declare it constantly (see `WidgetResizeRules` in `data:widgets`). The
+ * honored, because providers under-declare it constantly (see `WidgetResizeRules` in `data:widgets`). The
  * single-axis case is still expressible, and drawn correctly — a `horizontal = false` frame shows two pills and no
  * corners — so the policy can change without this changing.
  *
@@ -57,13 +57,13 @@ fun handlesFor(bounds: ResizeBounds): List<ResizeHandle> = ResizeHandle.entries.
 }
 
 /**
- * Where a handle's centre sits within the frame `[left, top, right, bottom]`, pulled [inset] px *inward*.
+ * Where a handle's center sits within the frame `[left, top, right, bottom]`, pulled [inset] px *inward*.
  *
- * Inward rather than on the edge for two reasons L1 found the hard way: the frame is clipped, so a glyph centred
+ * Inward rather than on the edge for two reasons L1 found the hard way: the frame is clipped, so a glyph centered
  * on the boundary loses half its touch target, and a handle on the screen's own edge competes with the system's
  * back gesture.
  */
-fun handleCentre(
+fun handleCenter(
     handle: ResizeHandle,
     left: Float,
     top: Float,

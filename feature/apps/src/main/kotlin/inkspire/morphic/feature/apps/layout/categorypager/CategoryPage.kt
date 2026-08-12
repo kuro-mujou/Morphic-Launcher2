@@ -137,7 +137,7 @@ internal fun CategoryPage(
     // **Geometry comes from the scroll viewport and the scroll offset — never from the grid's own
     // `onGloballyPositioned`.** Scrolling moves the grid's global position through its *parent's* placement without
     // re-running the grid's own layout, so that callback does not reliably re-fire and the origin it published goes
-    // stale. The failure is quiet and very recognisable: with a stale origin at offset `S0` and a real offset `S`, a
+    // stale. The failure is quiet and very recognizable: with a stale origin at offset `S0` and a real offset `S`, a
     // finger at `y` resolves to a cell that draws at `y - (S - S0)` — so the drop footprint sits a *fixed* distance
     // from the finger, tracks it row for row while dragging, and snaps into place the moment the content returns
     // to `S0`.

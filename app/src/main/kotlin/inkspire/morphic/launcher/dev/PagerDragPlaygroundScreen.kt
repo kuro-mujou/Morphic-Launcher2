@@ -101,7 +101,7 @@ fun PagerDragPlaygroundScreen(modifier: Modifier = Modifier) {
 
         val pagerState = rememberLauncherPagerState(pageCount = { PAGES }, infiniteScroll = { false })
 
-        // One zone = the viewport; the footprint's page is whichever page is currently centred.
+        // One zone = the viewport; the footprint's page is whichever page is currently centered.
         val planner = remember {
             DropPlanner { item, fingerInRoot ->
                 val geo = geometry ?: return@DropPlanner null

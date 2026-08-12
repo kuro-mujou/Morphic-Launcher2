@@ -17,7 +17,7 @@ import inkspire.morphic.core.model.IconItem
  * *how big a page is* via [AppsOrderRepository.applyPager], mirroring how [LayoutChange] leaves orientation to
  * [LayoutRepository.apply]. That is what lets the same command replay into either saved list.
  *
- * **Two ops name a neighbour instead of a slot**, and deliberately: [CreateFolder] and [DissolveFolder] both mean
+ * **Two ops name a neighbor instead of a slot**, and deliberately: [CreateFolder] and [DissolveFolder] both mean
  * "this thing takes that thing's place". Expressing them as a slot number would make the caller compute an index
  * that shifts underneath it as the folded apps leave the list — a bug that is invisible until two apps happen to
  * share a page. Naming the entry instead is immune to it.
@@ -35,7 +35,7 @@ sealed interface AppsPagerChange {
     data class Move(val item: IconItem, val toPage: Int, val toSlot: Int) : AppsPagerChange
 
     /**
-     * Fold [dragged] onto [target] into a new folder labelled [label] — the merge-ring drop.
+     * Fold [dragged] onto [target] into a new folder labeled [label] — the merge-ring drop.
      *
      * The folder holds `[target, dragged]` in that order (the app that was already there first, as home's
      * `mergeChanges` does) and **inherits [target]'s slot**; both apps leave the pager, since an app lives in one
@@ -53,7 +53,7 @@ sealed interface AppsPagerChange {
      * Take [item] off the pager. It is not deleted — something else now holds it (a folder), which is why this is
      * separate from any notion of removing the app itself.
      *
-     * The analogue of HOME's `LayoutChange.RemoveFromGrid`, and needed for the same reason: an entry joining a
+     * The analog of HOME's `LayoutChange.RemoveFromGrid`, and needed for the same reason: an entry joining a
      * folder has to stop occupying a slot, and "joined a folder" and "left the pager" are two stores. Leaving it
      * implicit is what let an app sit in a folder *and* on a page at the same time.
      */

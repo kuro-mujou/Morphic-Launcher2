@@ -78,9 +78,9 @@ private val CategoryReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropInte
  * another are one operation with a different destination — which is why the store needs a single `Move` op and this
  * file needs no separate "change category" path. Carrying an app to the next page *is* changing its category.
  *
- * **No folders live here**, so cells split into **halves** (insert before / after) with no centre merge ring. A
+ * **No folders live here**, so cells split into **halves** (insert before / after) with no center merge ring. A
  * category is already the grouping; a folder inside one would be a second, redundant one, and with nothing to merge
- * into a centre third would be dead space where the user's aim does nothing. That is the one structural difference
+ * into a center third would be dead space where the user's aim does nothing. That is the one structural difference
  * from the APPS pager's drag — this is that, minus the merge branch and minus the page-capacity cascade.
  *
  * **SCROLL_GRID, unlike `AppsVerticalGrid`** — which renders every installed app and therefore uses a

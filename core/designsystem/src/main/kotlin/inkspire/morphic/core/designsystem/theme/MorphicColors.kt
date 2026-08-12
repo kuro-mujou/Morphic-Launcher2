@@ -14,8 +14,8 @@ import androidx.compose.ui.graphics.Color
  * Semantic color roles for the in-house design system. A token names a color by *purpose*, not value, so a
  * `Morphic*` component reads role names and works unchanged under either scheme.
  *
- * The palette is deliberately **monochrome** — greyscale chrome that stays out of the way so the wallpaper
- * and app icons carry the color. [accent] is a high-contrast greyscale *emphasis* (not a hue), so selected
+ * The palette is deliberately **monochrome** — grayscale chrome that stays out of the way so the wallpaper
+ * and app icons carry the color. [accent] is a high-contrast grayscale *emphasis* (not a hue), so selected
  * and active states read by contrast; the only real color is [error] (a red variant), reserved for
  * destructive / validation cases. State variants (pressed / hover / disabled) are alpha or overlay modifiers
  * on these roles, not extra roles. Both a [Light] and a [Dark] scheme exist — dark mode is an accessibility

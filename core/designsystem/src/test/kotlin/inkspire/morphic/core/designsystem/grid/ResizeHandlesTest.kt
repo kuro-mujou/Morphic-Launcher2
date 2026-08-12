@@ -109,12 +109,12 @@ class ResizeHandlesTest {
 
     @Test
     fun `a handle sits inside the frame, on the edges it moves`() {
-        val centre = handleCentre(ResizeHandle.TOP_RIGHT, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = 10f)
-        assertEquals(90f, centre.x)
-        assertEquals(10f, centre.y)
+        val center = handleCenter(ResizeHandle.TOP_RIGHT, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = 10f)
+        assertEquals(90f, center.x)
+        assertEquals(10f, center.y)
 
-        // An edge handle is centred on the axis it does not move.
-        val bottom = handleCentre(ResizeHandle.BOTTOM, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = 10f)
+        // An edge handle is centered on the axis it does not move.
+        val bottom = handleCenter(ResizeHandle.BOTTOM, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = 10f)
         assertEquals(50f, bottom.x)
         assertEquals(190f, bottom.y)
     }

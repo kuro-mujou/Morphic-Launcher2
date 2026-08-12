@@ -30,7 +30,7 @@ object LayerFilter {
      *
      * Applied in a fixed order — **hue, then saturation, then brightness, then tint** — which is the order that
      * makes each control mean what its name says. Hue first because rotating a color wheel is meaningless once
-     * saturation has flattened it to grey; tint last because it is the one that decides the final cast, and
+     * saturation has flattened it to gray; tint last because it is the one that decides the final cast, and
      * anything after it would undo that.
      */
     fun colorMatrixOf(color: LayerEffect.Color?): FloatArray? {
@@ -109,7 +109,7 @@ object LayerFilter {
         0f, 0f, 0f, 1f, 0f,
     )
 
-    /** Luminance-preserving saturation: 0 is greyscale, 1 unchanged, above 1 oversaturated. */
+    /** Luminance-preserving saturation: 0 is grayscale, 1 unchanged, above 1 oversaturated. */
     private fun saturationMatrix(saturation: Float): FloatArray {
         val inv = 1f - saturation
         val r = LumR * inv

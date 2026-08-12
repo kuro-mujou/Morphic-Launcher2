@@ -38,7 +38,7 @@ class WidgetSpanTest {
     @Test
     fun `a widget larger than the grid is offered at the largest span that fits`() {
         // Clamping down rather than returning null: the picker should show a size that could be placed, and the
-        // provider's minimum is a request rather than a requirement the grid has to honour.
+        // provider's minimum is a request rather than a requirement the grid has to honor.
         assertEquals(WidgetSpan(8, 10), spanFor(5_000, 5_000))
     }
 

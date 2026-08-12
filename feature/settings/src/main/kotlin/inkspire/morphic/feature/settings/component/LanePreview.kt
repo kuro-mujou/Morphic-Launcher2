@@ -79,7 +79,7 @@ internal fun LanePreview(rowHeightDp: Float, areaWidthDp: Float, insetFraction: 
     }
 }
 
-/** Chrome that reads as present. Greyscale, like everything else these editors draw. */
+/** Chrome that reads as present. Grayscale, like everything else these editors draw. */
 @Composable
 internal fun previewInk(): Color = LocalMorphicColors.current.contentMuted.copy(alpha = 0.45f)
 

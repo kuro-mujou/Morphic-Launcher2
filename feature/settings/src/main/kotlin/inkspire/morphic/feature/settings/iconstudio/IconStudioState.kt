@@ -111,7 +111,7 @@ data class IconStudioState(
     /**
      * A stable identity for the layer at [index], for the row list to `key` on.
      *
-     * **Why the model cannot supply this.** Animating one stack into another means Compose has to recognise a layer
+     * **Why the model cannot supply this.** Animating one stack into another means Compose has to recognize a layer
      * across the change, and nothing in [IconLayerSpec] can say so: two identical custom layers are `equals`, the
      * index is exactly what an insert moves, and the instance is replaced on every frame of a slider drag. An id on
      * the spec itself would be worse than any of those — it is persisted data, and it would join `equals`, so `dirty`

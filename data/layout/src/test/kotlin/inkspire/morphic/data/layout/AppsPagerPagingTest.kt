@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Behaviour spec for the APPS pager's arrangement maths — the rules a user feels as "my apps stayed where I put
+ * Behavior spec for the APPS pager's arrangement maths — the rules a user feels as "my apps stayed where I put
  * them". Pure lists, no Room, mirroring how `FreeGridPlanner` and `FreePush` are tested.
  *
  * Items are written as single letters for legibility; `pages("ab", "cd")` is two pages of two apps.

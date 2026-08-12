@@ -103,7 +103,7 @@ private val PageChromeHeight = 128.dp
  * makes them read as **alternatives** — only one of them is ever the wallpaper — which a vertical list of two groups
  * does not say.
  *
- * **The pieces L2 keeps, because they are behaviour rather than look:**
+ * **The pieces L2 keeps, because they are behavior rather than look:**
  * - **A capture cannot be applied.** It is a picture *of* the wallpaper, taken for the effects to sample, so the
  *   repository declines it and the page says so on its status line instead of offering a dead button.
  * - **The rotating pair is applied by the *system's* chooser**, never silently — the platform insists the user confirm
@@ -368,7 +368,7 @@ private fun WallpaperModePage(
 }
 
 /**
- * The single mode's picture, at the screen's shape, centred in the page's preview band.
+ * The single mode's picture, at the screen's shape, centered in the page's preview band.
  *
  * [ratio] rather than filling the band is the one place this departs from L1's drawing, and the reason is that the
  * stored file is *already* cropped to this screen (`WallpaperRepository.setImage`) — so a band-shaped preview would
@@ -412,7 +412,7 @@ private fun PreviewTile(
 /**
  * One orientation of the rotating pair: its picture if it has one, a "+" if it does not, and a tap to replace it.
  *
- * Shaped like the orientation it stands for — which is what tells the two apart at a glance, where L1 labelled two
+ * Shaped like the orientation it stands for — which is what tells the two apart at a glance, where L1 labeled two
  * equal rectangles. Tapping a filled slot re-picks rather than opening a menu: there are two things one could do to a
  * slot, and "clear" is not worth a menu when choosing another image is the common one and clearing leaves the pair
  * half-configured anyway.
@@ -659,7 +659,7 @@ private fun loadInstalledLiveWallpapers(context: Context, exclude: ComponentName
     val collator = Collator.getInstance()
     return resolved.mapNotNull { info ->
         val component = ComponentName(info.serviceInfo.packageName, info.serviceInfo.name)
-        // Filtered before the `WallpaperInfo` parse and the thumbnail load, not after: there is no point rasterising
+        // Filtered before the `WallpaperInfo` parse and the thumbnail load, not after: there is no point rasterizing
         // a preview for a card that will not be drawn.
         if (component == exclude) return@mapNotNull null
         runCatching {
@@ -673,7 +673,7 @@ private fun loadInstalledLiveWallpapers(context: Context, exclude: ComponentName
     }.sortedWith { a, b -> collator.compare(a.label, b.label) }
 }
 
-/** Rasterises a thumbnail that is not already a bitmap — a vector or shape drawable shipped as the preview. */
+/** Rasterizes a thumbnail that is not already a bitmap — a vector or shape drawable shipped as the preview. */
 private fun Drawable.toImageBitmap(): ImageBitmap {
     if (this is BitmapDrawable) {
         bitmap?.let { return it.asImageBitmap() }

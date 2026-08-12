@@ -33,7 +33,7 @@ data class AppsChrome(
          * **Search hidden, which is where this departs from L1** — its `SearchPosition` defaults to `TOP`.
          *
          * The reason is that the APPS surface does not render a search field yet, and neither pager renders a tab bar:
-         * both are settings the *editor preview* honours today and the surface will honour when those features land.
+         * both are settings the *editor preview* honors today and the surface will honor when those features land.
          * A default of `Pinned(TOP)` would therefore draw every APPS preview with a search bar the launcher has not
          * got, which is the one thing a preview must not do. Flipping this to L1's default is a one-line change on the
          * day search ships, and until then the default is the state that matches what is actually drawn.

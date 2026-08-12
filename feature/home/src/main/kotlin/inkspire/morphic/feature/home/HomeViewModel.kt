@@ -62,7 +62,7 @@ import kotlinx.coroutines.launch
  * there is deliberately no sealed-intent/reducer layer, which is ceremony this small surface does not need.
  *
  * As an [androidx.lifecycle.ViewModel] it is scoped to the hosting screen's `ViewModelStore`, so it survives
- * configuration changes (rotation) and its [viewModelScope] coroutines are cancelled automatically when the
+ * configuration changes (rotation) and its [viewModelScope] coroutines are canceled automatically when the
  * screen is finally gone — the reason to use the framework type rather than a hand-rolled singleton.
  *
  * **Optimistic placements, over a store that is followed rather than sampled.** The durable store is Room via
@@ -613,7 +613,7 @@ class HomeViewModel(
      * Commits a resize: [item] takes the cells [to], and whatever it now overlaps is pushed aside.
      *
      * @return false when [planResize] cannot make room, in which case **nothing is written** — the overlay is
-     *   already drawing that rectangle as refused, and committing a partial push would move neighbours for a
+     *   already drawing that rectangle as refused, and committing a partial push would move neighbors for a
      *   resize that never happened.
      */
     fun resizeItem(item: GridItem, to: GridPlacement, zone: HomeZone, config: GridConfig): Boolean {
@@ -824,7 +824,7 @@ class HomeViewModel(
      *
      * **Dropped back on its own folder is a no-op.** The folder is still sitting on the grid throughout the drag, so
      * its merge ring is a natural "put it back" — and the app is still a member, since nothing is written until the
-     * drop, so there is genuinely nothing to do. Recognising that here keeps it one no-op instead of an add-and-remove
+     * drop, so there is genuinely nothing to do. Recognizing that here keeps it one no-op instead of an add-and-remove
      * pair that cancel out. (Dwelling on that same ring re-opens the folder instead, which is how the app is put back
      * at a *chosen* slot.)
      */
@@ -1064,7 +1064,7 @@ private fun IconItem.asGridItem(): GridItem = when (this) {
  *
  * L1's own derivation (page, then row, then column), and the one part of its "the list *is* the grid" model worth
  * keeping: it is what makes switching to the list layout hand the user their apps in the arrangement they already
- * recognise. Where L1 read this live and wrote back through it, here it runs once, into the list's own store.
+ * recognize. Where L1 read this live and wrote back through it, here it runs once, into the list's own store.
  *
  * Only [HomeZone.MAIN] and only apps: the dock keeps its own contents across a layout change (it is simply not drawn
  * on the other one), and a folder has no row in a list that holds apps only.

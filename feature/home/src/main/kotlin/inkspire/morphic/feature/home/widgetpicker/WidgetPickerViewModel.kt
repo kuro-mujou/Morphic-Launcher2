@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 /**
  * What the widget picker renders.
  *
- * @property groups the installed widgets by app, or **null while the catalogue is still being read** — which is a
+ * @property groups the installed widgets by app, or **null while the catalog is still being read** — which is a
  *   different thing from an empty list and is drawn differently: null is a spinner, empty is a device with no
  *   widgets on it. Collapsing the two would show "no widgets" for the second or so the read takes.
  */
@@ -26,7 +26,7 @@ data class WidgetPickerState(val groups: List<WidgetProviderGroup>? = null)
  * which is what L1 did — puts a platform read inside composition and re-runs it on every recomposition key change.
  *
  * **The read happens once, in `init`, and the result is kept.** Scoped to the host screen's `ViewModelStore`, so
- * closing and reopening the sheet shows the catalogue immediately rather than spinning again. What that trades away
+ * closing and reopening the sheet shows the catalog immediately rather than spinning again. What that trades away
  * is freshness: a widget installed while the launcher is open will not appear until the screen is recreated. That
  * is the right way round for now — the picker is opened deliberately and briefly, and `data:apps`' package listener
  * exists to keep the *app* cache live, not this. When it matters, this becomes a flow off the same signal.

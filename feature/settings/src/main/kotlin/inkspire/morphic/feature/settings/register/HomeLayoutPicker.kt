@@ -34,7 +34,7 @@ private val RadioGap = 12.dp
  *
  * **Each row carries a second line**, which the side picker's do not, and the reason is that a pairing is two zones
  * while a side binding is one arrangement: "List with a widget area" names half of what changes, so the subtitle names
- * the rest. L1's equivalent was a scroll row of two mockup cards labelled "Classic" and "Minimalist" — names for eras
+ * the rest. L1's equivalent was a scroll row of two mockup cards labeled "Classic" and "Minimalist" — names for eras
  * of that launcher rather than descriptions of what you get, and the mockups are the thing the register cross already
  * decided not to draw at card size.
  *

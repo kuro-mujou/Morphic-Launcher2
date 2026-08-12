@@ -73,7 +73,7 @@ private val RowGap = 8.dp
  *
  * **The editor shows what home will draw, not what is in storage** — so changing the icon size below recalculates it.
  * On the pager that is the row and column counts; on the list it is the row height, clamped to what the guardrails can
- * honour. Either way the clamp is **applied, never written back**: shrink the icons again and the fifth row (or the
+ * honor. Either way the clamp is **applied, never written back**: shrink the icons again and the fifth row (or the
  * taller row) comes back, because nothing wrote the clamp down. L1 did write it — a `LaunchedEffect` right here,
  * firing on every cause — so an icon tweak permanently destroyed a count that had nothing to do with icons, and only
  * while this screen happened to be open. The one write that reduces home's counts belongs to the side zone's extent
@@ -269,7 +269,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
  * widget area beside them at its real share of the screen.
  *
  * **The slider's bounds are the icon guardrails plus the row's own inset** (`rowHeightRange`), which is what makes the
- * icon range slider *govern* this one: a row shorter than `minIconDp` + padding cannot honour the smallest icon
+ * icon range slider *govern* this one: a row shorter than `minIconDp` + padding cannot honor the smallest icon
  * allowed, and one taller than `maxIconDp` + padding is height the largest cannot fill. So the way to ask for a taller
  * row is to raise the upper guardrail. With icons off the range changes shape — the floor becomes the label's own
  * height and the ceiling opens up — because both ends would otherwise describe an icon that is not there. This is the

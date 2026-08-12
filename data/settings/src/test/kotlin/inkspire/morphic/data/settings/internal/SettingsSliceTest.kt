@@ -44,7 +44,7 @@ class SettingsSliceTest {
 
     @Test
     fun `an unreadable blob falls back to the defaults rather than throwing`() {
-        // The behaviour a corrupt store must have: recoverable, not fatal. (It is also logged — see `decode`.)
+        // The behavior a corrupt store must have: recoverable, not fatal. (It is also logged — see `decode`.)
         assertEquals(SurfaceRegister.Default, slice.decode("{ not json"))
         assertEquals(SurfaceRegister.Default, slice.decode(""))
     }

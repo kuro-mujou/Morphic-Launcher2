@@ -420,7 +420,7 @@ private data class CellPos(val row: Int, val col: Int)
 
 // ── Cells + demo data ────────────────────────────────────────────────────────────────────────────────────
 
-/** A single app cell: a colored tile labelled with its category initial + index. */
+/** A single app cell: a colored tile labeled with its category initial + index. */
 @Composable
 private fun AppTile(label: String, modifier: Modifier = Modifier) {
     Box(

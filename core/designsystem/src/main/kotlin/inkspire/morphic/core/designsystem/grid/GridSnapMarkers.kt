@@ -71,7 +71,7 @@ fun Modifier.gridSnapMarkers(
         val visualCellH = cellH * config.cellMultiplier
         if (visualCellW <= 0f || visualCellH <= 0f) return@drawBehind
 
-        // Half the dragged footprint, so the falloff below measures from its edge and not from its centre.
+        // Half the dragged footprint, so the falloff below measures from its edge and not from its center.
         val itemHalfW = span.colSpan * cellW / 2f
         val itemHalfH = span.rowSpan * cellH / 2f
         val buffer = max(visualCellW, visualCellH) * BufferCells
@@ -89,7 +89,7 @@ fun Modifier.gridSnapMarkers(
                 if (distance >= buffer) continue
 
                 // Eased rather than linear (L1's 1.5 power), so markers hold their brightness near the item and
-                // drop away quickly at the edge of the field instead of leaving a wide grey haze.
+                // drop away quickly at the edge of the field instead of leaving a wide gray haze.
                 val alpha = (1f - distance / buffer).coerceIn(0f, 1f).pow(1.5f)
                 if (alpha <= MinVisibleAlpha) continue
                 drawSnapMarker(Offset(x, y), markerPx, color.copy(alpha = alpha))
@@ -107,7 +107,7 @@ fun Modifier.gridSnapMarkers(
 data class GridSpan(val colSpan: Int, val rowSpan: Int)
 
 /**
- * One marker: a diamond with **concave** sides, drawn as four quadratic curves pulled toward the centre.
+ * One marker: a diamond with **concave** sides, drawn as four quadratic curves pulled toward the center.
  *
  * L1's shape exactly. A plain diamond or a dot reads as content — something placed on the grid — where the pinched
  * star reads as a registration mark, which is what it is.
@@ -116,7 +116,7 @@ private fun DrawScope.drawSnapMarker(center: Offset, size: Float, color: Color) 
     val half = size / 2f
     val path = Path().apply {
         moveTo(center.x, center.y - half)
-        // Every curve's control point is the centre itself, which is what pulls the edges inward.
+        // Every curve's control point is the center itself, which is what pulls the edges inward.
         quadraticTo(center.x, center.y, center.x + half, center.y)
         quadraticTo(center.x, center.y, center.x, center.y + half)
         quadraticTo(center.x, center.y, center.x - half, center.y)

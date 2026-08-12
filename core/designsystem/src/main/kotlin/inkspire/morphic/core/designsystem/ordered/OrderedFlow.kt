@@ -46,7 +46,7 @@ fun GridGeometry.cellFractionY(fingerInRoot: Offset): Float {
  *
  * A surface that holds no folders (a folder's own grid, the category pager) has nothing to merge into and reads
  * [cellFractionX] instead, splitting each cell into halves. That is not a lesser version of this: with no merge
- * target, a centre third would be dead space where the user's aim does nothing.
+ * target, a center third would be dead space where the user's aim does nothing.
  */
 enum class Third { LEFT, CENTER, RIGHT }
 

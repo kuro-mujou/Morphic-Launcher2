@@ -34,7 +34,7 @@ class RowHeightTest {
     @Test
     fun `the icon fraction does not move either end`() {
         // **The property this range exists in its current form for.** The fraction scales the icon *within* the
-        // guardrails, so it cannot change which heights are honourable. An earlier cut divided both ends by it, which
+        // guardrails, so it cannot change which heights are honorable. An earlier cut divided both ends by it, which
         // inverted the control: asking for a smaller icon raised the floor and pushed the row *taller* — a 56dp row
         // clamped up to 72dp for wanting 50% icons.
         val base = rowHeightRangeDp(metrics, labelHeight)

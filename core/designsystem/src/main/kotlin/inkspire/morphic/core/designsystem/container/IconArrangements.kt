@@ -70,9 +70,9 @@ private fun gridSlots(count: Int, width: Float, height: Float): List<Arrangement
 /**
  * Icons evenly spaced round a ring, starting at twelve o'clock and going clockwise.
  *
- * The icon size is the smaller of a fixed share of the radius and 90% of the **chord** between neighbours, which is
+ * The icon size is the smaller of a fixed share of the radius and 90% of the **chord** between neighbors, which is
  * what keeps a crowded ring from overlapping itself: the chord shrinks as the count grows, so the icons do too. A
- * single icon has no neighbour and therefore no chord, so it is centred at its own size instead.
+ * single icon has no neighbor and therefore no chord, so it is centered at its own size instead.
  */
 private fun circleSlots(count: Int, width: Float, height: Float): List<ArrangementSlot> {
     val cx = width / 2f
@@ -147,7 +147,7 @@ private val BeehiveDirections = arrayOf(1 to 0, 1 to -1, 0 to -1, -1 to 0, -1 to
  * Icons packed as a honeycomb: one in the middle, then complete hexagonal rings outward.
  *
  * Coordinates are generated in axial (q, r) form — walk ring `k` by starting at `(-k, k)` and taking `k` steps in
- * each of the six [BeehiveDirections] — then converted to pixel centres by the standard pointy-top hex projection.
+ * each of the six [BeehiveDirections] — then converted to pixel centers by the standard pointy-top hex projection.
  * The whole cloud is then scaled to fit the box, which is what makes the result independent of how many rings it
  * took: eight icons and eighty both fill the container, at different icon sizes.
  */
@@ -179,7 +179,7 @@ private fun beehiveSlots(count: Int, width: Float, height: Float): List<Arrangem
         maxAbsY = maxOf(maxAbsY, abs(y))
     }
 
-    // Scale so the outermost centre plus half an icon lands exactly on the box edge, on whichever axis binds first.
+    // Scale so the outermost center plus half an icon lands exactly on the box edge, on whichever axis binds first.
     val iconUnit = sqrt3 * 0.8f
     val scale = minOf(
         (width / 2f) / (maxAbsX + iconUnit / 2f),

@@ -75,7 +75,7 @@ interface LauncherAppsWrapper {
     fun showAppDetails(component: ComponentKey)
 
     /**
-     * The enabled shortcuts [component]'s package publishes, in the app's own rank order, with icons rasterised
+     * The enabled shortcuts [component]'s package publishes, in the app's own rank order, with icons rasterized
      * at the device density.
      *
      * **Empty is the answer whenever we may not ask**: the platform grants shortcut access only to the *active*
@@ -130,7 +130,7 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
         }
 
     /**
-     * Held for one number: the density to rasterise shortcut icons at. Retaining the application context's
+     * Held for one number: the density to rasterize shortcut icons at. Retaining the application context's
      * [android.content.res.Resources] keeps the "resolved services only, never the Context" rule of this class —
      * it is not a view context and cannot leak an activity — while still reading the *current* density rather
      * than one frozen at construction.

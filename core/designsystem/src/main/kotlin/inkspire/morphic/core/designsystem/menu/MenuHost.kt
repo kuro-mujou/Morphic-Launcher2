@@ -22,7 +22,7 @@ import inkspire.morphic.core.model.ComponentKey
  *
  * @property anchor an item's visible extent, or the point an empty-space long-press landed on. For an item it is
  *   reported by `launcherItemGestures` from the very node the finger was on, which is why no surface has to
- *   reconstruct it — L1 rebuilt that rectangle three separate ways (cell centres on the grid, an icon half-width
+ *   reconstruct it — L1 rebuilt that rectangle three separate ways (cell centers on the grid, an icon half-width
  *   plus a Y offset in a folder, a row's bounds in the list) and each could drift from what was drawn.
  * @property title the item's name, shown as a header. **Null for a surface menu**, which has no header at all —
  *   L1's empty-space menu had none either, and there is no honest title for "the home screen" that is not just a
@@ -77,7 +77,7 @@ class LauncherMenuHost(
      * Opens the menu for an **app**: its shortcuts, then App info, Edit icon, [surfaceActions], and Uninstall.
      *
      * The order is L1's, and the middle is where a surface's own verbs go — after the ones that describe or
-     * customise the app and before the one that destroys it, so the destructive row is never the one a mis-tap
+     * customize the app and before the one that destroys it, so the destructive row is never the one a mis-tap
      * lands on next to "Remove". **Edit icon sits beside App info** because both are about the app itself wherever
      * it is showing, unlike a surface's verbs, which are about this particular placement of it.
      */

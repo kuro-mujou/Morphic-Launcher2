@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.ImageBitmap
  * @param icon artwork belonging to whatever the row *represents*, drawn untinted — an app shortcut's own icon
  *   today, and nothing else. The launcher's own verbs carry no icon: "App info" and "Uninstall" are words, and a
  *   glyph beside each would compete with the one piece of real artwork in the menu. **An [ImageBitmap] rather than
- *   an `ImageVector`** because the only source is already rasterised, and because `core:designsystem` carries no
+ *   an `ImageVector`** because the only source is already rasterized, and because `core:designsystem` carries no
  *   material-icons dependency (see `TopActionZone`, which draws its three marks by hand for the same reason). L1
  *   carried both as two nullable fields of which one was ever meaningful.
  * @param enabled a disabled row is drawn muted and does not respond. For a verb that exists but cannot apply right

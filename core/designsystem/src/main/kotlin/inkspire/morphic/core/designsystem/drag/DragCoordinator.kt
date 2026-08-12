@@ -159,7 +159,7 @@ class DragCoordinator {
         return outcome
     }
 
-    /** Abandons the drag with no drop (e.g. the gesture was cancelled). */
+    /** Abandons the drag with no drop (e.g. the gesture was canceled). */
     fun cancel() {
         session = null
     }

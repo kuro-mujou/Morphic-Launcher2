@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
  *  - the M3 **Expressive motion engine** (`motionScheme = MotionScheme.expressive()`), so animations use
  *    expressive spring choreography — we keep M3's motion;
  *  - a **monochrome M3 [androidx.compose.material3.ColorScheme]** bridged from [MorphicColors] (see
- *    [toM3ColorScheme]), so stock Material components (Button, Slider, Switch, dialogs…) render greyscale
+ *    [toM3ColorScheme]), so stock Material components (Button, Slider, Switch, dialogs…) render grayscale
  *    while keeping that motion — this is what lets us build components *on* M3 and only restyle color;
  *  - the same [MorphicColors] via [MorphicTheme] / [LocalMorphicColors], for our bespoke components (2D pad,
  *    segmented control, text-field ring) that read named roles directly.

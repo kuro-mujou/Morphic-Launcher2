@@ -20,7 +20,7 @@ import kotlin.math.roundToInt
 /**
  * The HOME surface plus the side surfaces off its edges, panned between by a swipe.
  *
- * HOME sits in the centre; each entry in [sideContent] is a [SurfaceBinding] parked just off the matching
+ * HOME sits in the center; each entry in [sideContent] is a [SurfaceBinding] parked just off the matching
  * [HomeEdge], off-screen until swiped in. A swipe from an edge slides HOME aside and the side surface in; a
  * swipe back returns to HOME (also handled by the system back button). Which edges are swipeable is exactly
  * [sideContent]'s keys — an edge with no entry can't be opened — and each binding's [SurfaceBinding.swipe]
@@ -58,7 +58,7 @@ import kotlin.math.roundToInt
  *   either. The frost a side surface is read against lives here (`SurfaceBackdropLayer`): it has to cover HOME, be
  *   covered by what arrives, and — the reason it cannot be a modifier on either — move differently from both, since
  *   the content slides while the frost merely fades. Empty by default, which is what the harness passes.
- * @param center the HOME surface, always present in the centre.
+ * @param center the HOME surface, always present in the center.
  */
 @Composable
 fun SurfacePager(

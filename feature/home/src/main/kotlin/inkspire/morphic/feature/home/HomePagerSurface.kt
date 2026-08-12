@@ -198,7 +198,7 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * uninterrupted gesture, the drop reports *which* zone it landed in, and [homeZoneOf] turns that into the [HomeZone]
  * the `Move` writes. The coordinator is provided by `feature:shell` now, which extends exactly that property across
  * the *surface* boundary: an app lifted in the APPS drawer lands here through the same hit-test, with no hand-off and
- * no second recogniser — the structural fix for L1's `HomeDragBridge`. The open folder is simply another zone on it.
+ * no second recognizer — the structural fix for L1's `HomeDragBridge`. The open folder is simply another zone on it.
  *
  * This screen keeps only what is home-specific: a [DropPlanner] **per zone** (that zone's geometry and occupants —
  * the planning itself is shared, see [planCoordinateDrop]), what a landing in one of its grids *writes*
@@ -206,7 +206,7 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * overlay, and the tap→launch wiring; the grids, gestures, dwelled preview, and edge-flip live in
  * [CoordinateDragPager] / [CoordinateDragGrid], and the folder-interaction lifecycle in [FolderHostState].
  * Dropping an app onto another
- * (finger in its centre ring) **merges** them into a folder; folders render as a [FolderCell] and tapping one opens
+ * (finger in its center ring) **merges** them into a folder; folders render as a [FolderCell] and tapping one opens
  * a [FolderOverlay]. A tap on an app launches it (via [HomeViewModel.launch]) through the gesture layer's `onOpen`,
  * so cells carry no click handler of their own.
  *
@@ -501,7 +501,7 @@ internal fun HomePagerSurface(
         val landingApp = (outcome.item as? GridItem.App)?.component
         val sourceFolderId = landingApp?.let(viewModel::folderHolding)
         // 1. Released on a grid while a folder is still on screen. Leaving a folder is a deliberate dwell, so a
-        //    release out here is "never mind": write nothing. It could not be honoured anyway — an app being carried
+        //    release out here is "never mind": write nothing. It could not be honored anyway — an app being carried
         //    inside a folder has no grid placement, so *placing* it would leave it in the folder **and** on the grid.
         if (folderHost.openFolderId != null) {
             folderHost.close()
@@ -512,7 +512,7 @@ internal fun HomePagerSurface(
         //    folder or carried in from another surface. It is placed and removed from the folder in one batch,
         //    including onto a merge ring, which is how it moves straight into another folder (or combines with an
         //    app to make one) in a single gesture. Dropped back on its own folder this is a no-op, which
-        //    `mergeExtractedApp` recognises.
+        //    `mergeExtractedApp` recognizes.
         if (sourceFolderId != null && landingApp != null) {
             if (plan.intent == DropIntent.MERGE) {
                 viewModel.mergeExtractedApp(sourceFolderId, landingApp, plan.footprint, zone)
@@ -612,7 +612,7 @@ internal fun HomePagerSurface(
                 anchor = anchor,
                 actions = buildList {
                     // **Every widget is offered a resize**, whatever its `resizeMode` says — see
-                    // `WidgetResizeRules` for why that declaration is not honoured. What the provider *is*
+                    // `WidgetResizeRules` for why that declaration is not honored. What the provider *is*
                     // believed about is how small it can be drawn, which is a live read of it rather than
                     // anything the layout stores. A widget the platform can no longer describe gets no row,
                     // because there is nothing to bound the drag with.
@@ -974,7 +974,7 @@ internal fun HomePagerSurface(
                             // The app landed in this folder at its chosen slot. `from` is the folder that *holds*
                             // it — the folder-to-folder move, committed as one batch; null when it came off a grid
                             // instead, and this folder itself when the drag left and came back, which `addToFolder`
-                            // recognises as the plain reorder it is. Membership rather than
+                            // recognizes as the plain reorder it is. Membership rather than
                             // `dragSourceFolderId` for `commitLanding`'s reason: an app carried in from the APPS
                             // drawer may already be in one of home's folders without the drag having started there.
                             viewModel.addToFolder(
@@ -1149,7 +1149,7 @@ private fun geometryFor(zone: HomeZone, main: GridGeometry?, dock: GridGeometry?
  * thing the grid can express.
  */
 private fun WidgetResizeRules.asResizeBounds(geometry: GridGeometry): ResizeBounds = ResizeBounds(
-    // Both axes always: the provider's `resizeMode` is not honoured here — see `WidgetResizeRules`.
+    // Both axes always: the provider's `resizeMode` is not honored here — see `WidgetResizeRules`.
     horizontal = true,
     vertical = true,
     minColSpan = if (geometry.cellW > 0f) ceil(minWidthPx / geometry.cellW).toInt().coerceAtLeast(1) else 1,

@@ -20,7 +20,7 @@ import kotlinx.serialization.Serializable
  * `IconStudioRoute` and `WallpaperCropRoute` are: `entryProvider` is a mapping, not a registry.
  *
  * **A sealed pair rather than an id beside a kind flag**, which is `IconStudioRoute`'s correction: the two
- * containers share no settings at all — one has an arrangement, the other an axis and two behaviours — so a single
+ * containers share no settings at all — one has an arrangement, the other an axis and two behaviors — so a single
  * key carrying both would be a state where half the fields are always meaningless.
  */
 @Serializable
@@ -34,7 +34,7 @@ sealed interface ContainerSettingsRoute : NavKey {
     @SerialName("container_settings_icon")
     data class Icon(override val containerId: Long) : ContainerSettingsRoute
 
-    /** A widget container: what it holds, which way it pages, and the two behaviours that page it unasked. */
+    /** A widget container: what it holds, which way it pages, and the two behaviors that page it unasked. */
     @Serializable
     @SerialName("container_settings_widget")
     data class Widget(override val containerId: Long) : ContainerSettingsRoute

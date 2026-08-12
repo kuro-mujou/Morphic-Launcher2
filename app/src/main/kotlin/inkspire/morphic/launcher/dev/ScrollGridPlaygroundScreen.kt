@@ -94,7 +94,7 @@ fun ScrollGridPlaygroundScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** A single grid cell: a colored tile labelled with its 1-based index. */
+/** A single grid cell: a colored tile labeled with its 1-based index. */
 @Composable
 private fun Cell(label: String, modifier: Modifier = Modifier) {
     Box(

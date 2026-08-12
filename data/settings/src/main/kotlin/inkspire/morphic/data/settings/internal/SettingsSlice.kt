@@ -26,7 +26,7 @@ private val SettingsJson = Json {
  *
  * **Deliberately free of DataStore.** Everything here is a pure function of a `String?`, so the encode/decode rules —
  * including what happens to a corrupt blob — are unit-testable without Android or Robolectric. That is the same reason
- * `data:layout` keeps its paging and ordering arithmetic in plain files: the interesting behaviour should not need an
+ * `data:layout` keeps its paging and ordering arithmetic in plain files: the interesting behavior should not need an
  * emulator to check. L1's equivalent was a 693-line `Preferences.kt` welded to `MutablePreferences`, and it is the one
  * file in its settings module with no tests at all.
  *
@@ -48,7 +48,7 @@ internal class SettingsSlice<T>(
      * Reads [stored], falling back to [default] when it is absent or unreadable.
      *
      * **A failed decode is logged, not swallowed.** L1's `runCatching{}.getOrNull()` meant a corrupt blob silently
-     * reverted a user's settings with no way to find out why. Falling back is still the right behaviour — refusing to
+     * reverted a user's settings with no way to find out why. Falling back is still the right behavior — refusing to
      * start because one preference is malformed would be worse — but it is a bug worth seeing, so it is reported.
      */
     fun decode(stored: String?): T {

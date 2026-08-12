@@ -112,7 +112,7 @@ class CustomIconStore(
         return sample
     }
 
-    /** [source] centred in a transparent [ImageSize] square, scaled to fit; returned as-is if it already fits. */
+    /** [source] centered in a transparent [ImageSize] square, scaled to fit; returned as-is if it already fits. */
     private fun squared(source: Bitmap): Bitmap {
         val scale = ImageSize.toFloat() / max(source.width, source.height)
         val width = (source.width * scale).roundToInt().coerceAtLeast(1)

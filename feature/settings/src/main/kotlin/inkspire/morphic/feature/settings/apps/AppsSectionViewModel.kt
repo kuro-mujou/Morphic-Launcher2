@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 /**
  * The grid this layout draws.
  *
- * **A layout is what the user recognises; a [GridSlot] is what the store is keyed by.** The chips name layouts because
+ * **A layout is what the user recognizes; a [GridSlot] is what the store is keyed by.** The chips name layouts because
  * that is the choice a user has already made (per home edge, in the surface register), and every control below then
  * addresses that layout's grid. L1 did the same and made the same distinction: its drawer detail edited
  * `drawer.profile(layout)`, the profile of whichever layout was selected.
@@ -172,7 +172,7 @@ class AppsSectionViewModel(
                         settingsRepository.horizontalPadding(current.slot, configuration),
                         // Seven sources against `combine`'s five, so the three that are **not keyed by the selected
                         // grid** are grouped: the chrome slice is one value for the whole surface, wrapping is a
-                        // behaviour, and the card's tile chrome belongs to one fixed slot. The four above all follow
+                        // behavior, and the card's tile chrome belongs to one fixed slot. The four above all follow
                         // whichever layout's chip is selected.
                         combine(
                             settingsRepository.appsChrome,
@@ -315,7 +315,7 @@ class AppsSectionViewModel(
      * which had one global flag whose only control lived in the *Home* screen. The two pagers on this surface are
      * different questions: pages of loose apps and pages that *are* categories.
      *
-     * No device, because wrapping is a behaviour rather than a size; and guarded by `pagerSlot`, so a stale press
+     * No device, because wrapping is a behavior rather than a size; and guarded by `pagerSlot`, so a stale press
      * while a non-paging chip is selected writes nothing rather than reaching a repository that would throw.
      */
     fun setWraps(value: Boolean) {

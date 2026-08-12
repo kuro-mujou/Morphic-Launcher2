@@ -15,7 +15,7 @@ import inkspire.morphic.core.model.GridItem
  * handoff (docs/DRAG_AND_DROP_DESIGN.md §4).
  *
  * **A zone answers for itself, end to end.** It says what it accepts, what a hover over it would do ([planner]),
- * and what to write when a drag lands on it ([onDrop]) — the design doc's §10 rule, *behaviour always travels with
+ * and what to write when a drag lands on it ([onDrop]) — the design doc's §10 rule, *behavior always travels with
  * the destination zone*, made structural. Both lambdas used to live on the surface instead, dispatched by a
  * `when (zone.id)`, which was workable only while a drag could never leave the surface it started on. It can now: an
  * app lifted in the APPS drawer is released by a cell in `feature:apps`, and the thing that has to commit it is

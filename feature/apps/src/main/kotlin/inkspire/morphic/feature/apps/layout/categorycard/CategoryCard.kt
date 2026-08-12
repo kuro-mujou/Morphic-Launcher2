@@ -70,7 +70,7 @@ import inkspire.morphic.feature.apps.AppsCategory
  *   between the preview slots. Every one of them starts at zero; see `CardChrome`.
  * @param metrics the resolved icon sizing of a **preview slot**, which is `GridSlot.APPS_CARD`'s own. A slot is sized
  *   to be an icon, so `iconPercent` means it literally here, and the blueprint declares `showLabel = false` because
- *   four ellipsised words at this size would eat the room the icons need to be recognisable.
+ *   four ellipsized words at this size would eat the room the icons need to be recognizable.
  * @param shadowed true while a dragged app is aimed at this card — drawn as a [DropIntent.MERGE] drop shadow over the
  *   whole card, the same affordance a folder's merge ring gets, because dropping here does the same thing.
  * @param onRelease a preview icon released the finger; it only ends the drag, since the landing belongs to whichever
@@ -197,10 +197,10 @@ private fun PreviewSlot(
 }
 
 /**
- * A **category's** tap contract — the launcher's one item-gesture recogniser with only "open" connected.
+ * A **category's** tap contract — the launcher's one item-gesture recognizer with only "open" connected.
  *
  * Separate from [appsItemGestures] rather than reusing it, though the two do the same thing today: that one is the
- * *app* contract, and its empty slots are an app's unfinished behaviours (the app options menu, drag-out-to-home).
+ * *app* contract, and its empty slots are an app's unfinished behaviors (the app options menu, drag-out-to-home).
  * Neither means anything for a category, whose long-press belongs to a different unbuilt feature. Sharing them would
  * make one of the two wrong the moment either is filled in.
  */

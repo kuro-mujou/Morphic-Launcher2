@@ -37,7 +37,7 @@ import inkspire.morphic.core.model.CardChrome
  * Public because two very different callers count on the same number — the APPS surface, which decides from it which
  * apps are shown and which fall into the overflow cluster, and `CellFit`, which inverts it into the narrowest card an
  * icon guardrail allows. A card that drew a different number of slots than the fit assumed would offer lane counts it
- * could not honour.
+ * could not honor.
  */
 const val CategoryPreviewCols = 2
 
@@ -64,7 +64,7 @@ val CategoryCardSpacing = 12.dp
  *
  * That padding insets the *icon area* within the tile, and is allowed to reach zero so the four slots sit flush
  * against it. The title is outside the tile entirely now, so it needs an inset of its own or a long name would run to
- * the very edge of the lane and touch its neighbour. Small, because the label is centred and ellipsised anyway.
+ * the very edge of the lane and touch its neighbor. Small, because the label is centered and ellipsized anyway.
  */
 private val TitleInset = 4.dp
 
@@ -88,9 +88,9 @@ const val CardAlpha = 0.10f
  * **The tile is the square, and the label is outside it** — iOS's App Library shape, and the second correction to this
  * layout. The card was originally the square, with the title *inside* eating into it from the top: the leftover box came
  * out wider than tall, the slots sized themselves from its *height*, and the icons ended up the smallest thing on a tile
- * whose whole job is to make them recognisable. Making the icon area the square fixed the icons but left the title
+ * whose whole job is to make them recognizable. Making the icon area the square fixed the icons but left the title
  * sharing the fill, which reads as a header bar rather than as a label. Now the background, the corner and the padding
- * are all the **tile's**, and the name sits under it centred on nothing — so the fill traces the icons exactly, and the
+ * are all the **tile's**, and the name sits under it centered on nothing — so the fill traces the icons exactly, and the
  * card as a whole is a portrait rectangle: a square plus one line of text.
  *
  * **Everything [chrome] carries starts at zero.** A card with no override is a square-cornered rectangle whose icons
@@ -229,7 +229,7 @@ fun <T> categoryOverflowCluster(apps: List<T>): List<T>? {
  *
  * **Sized exactly like [CategoryPreviewIcon]**, and that is the whole point of it being a function rather than a
  * plate built at each call site: it stands in for one of the four apps, so it has to be the size the other three
- * resolved to. Given the raw slot instead it stayed full-size while its neighbours shrank with the icon slider,
+ * resolved to. Given the raw slot instead it stayed full-size while its neighbors shrank with the icon slider,
  * which read as the cluster ignoring the setting rather than as the one tile that is not an app.
  */
 @Composable
@@ -247,7 +247,7 @@ fun CategoryClusterTile(
             modifier = itemGestures,
             // **No plate here.** A cluster sits inside a tile that already has a fill, so a second rounded backing is
             // a box within a box — and it made this the one slot on the card with a visible container while its three
-            // neighbours were bare icons. Without it the four mini-icons fill the cluster edge to edge, which is what
+            // neighbors were bare icons. Without it the four mini-icons fill the cluster edge to edge, which is what
             // makes it read as "more of the same" rather than as a different kind of thing.
             backing = false,
         )

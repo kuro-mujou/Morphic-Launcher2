@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Behaviour spec for [FolderHostState] — the collection-interaction lifecycle a surface hosts.
+ * Behavior spec for [FolderHostState] — the collection-interaction lifecycle a surface hosts.
  *
  * The cases below are written from the gesture they belong to, because that is what the state machine is for: one
  * uninterrupted drag can open a folder, leave it, and open another (or the same one again), and the thing that has to
@@ -118,7 +118,7 @@ class FolderHostStateTest {
     }
 
     @Test
-    fun `a drag cancelled after leaving does not re-open the folder`() {
+    fun `a drag canceled after leaving does not re-open the folder`() {
         // Leaving was deliberate (a full dwell), so an abandoned gesture rests where the user put it: nothing was
         // written, the app is still in the folder, and the folder is shut.
         val host = host()

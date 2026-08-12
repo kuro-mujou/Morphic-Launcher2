@@ -59,7 +59,7 @@ sealed interface LayerEffect {
      * them would mean four list entries whose *order* silently changed the result, which is a way to be wrong that
      * this shape simply does not have.
      *
-     * **Monochrome is this, not a variant of its own**: `saturation = 0` with a [tintArgb] is a tinted greyscale,
+     * **Monochrome is this, not a variant of its own**: `saturation = 0` with a [tintArgb] is a tinted grayscale,
      * which is what L1's monochrome fallback computed. Note that is a different thing from
      * [LayerSource.AppDefaultMonochrome], which swaps in artwork the *app* ships; this recolors whatever is there.
      *
@@ -67,7 +67,7 @@ sealed interface LayerEffect {
      *   ignored — [IconLayerSpec] already has opacity, and two ways to set one thing is one too many.
      * @property tintMode how [tintArgb] is applied. Defaults to [TintMode.MULTIPLY], which is what a tint has
      *   always meant here, so every stored recipe reads back unchanged.
-     * @property saturation 0 is greyscale, 1 unchanged, above 1 oversaturated.
+     * @property saturation 0 is grayscale, 1 unchanged, above 1 oversaturated.
      * @property brightness a plain multiplier on the color channels; 1 is unchanged.
      * @property hueDegrees rotation around the color wheel, 0 unchanged.
      */

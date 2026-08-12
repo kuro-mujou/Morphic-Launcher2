@@ -8,7 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The library's two operations, and the one judgement call in them: saving over a name replaces rather than
+ * The library's two operations, and the one judgment call in them: saving over a name replaces rather than
  * duplicating.
  *
  * Worth pinning because the alternative fails quietly — two presets with one name look identical in a list, and

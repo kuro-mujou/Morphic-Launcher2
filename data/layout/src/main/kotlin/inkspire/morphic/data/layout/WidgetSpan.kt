@@ -10,7 +10,7 @@ import kotlin.math.ceil
  * **In logical cells, like every other span in the placement engine.** A home grid is sub-divided
  * (`GridConfig.cellMultiplier`), so an app occupies a 2×2 logical footprint rather than one cell; a widget is
  * measured against the same lattice, which is what lets [FreeGridPlanner] treat it as an ordinary occupant with no
- * special case. Turning it back into the "3 × 2" a *user* would recognise is a division by the multiplier, and
+ * special case. Turning it back into the "3 × 2" a *user* would recognize is a division by the multiplier, and
  * [visualLabel] is the one place that happens.
  *
  * Ported from L1's `WidgetSpan`, with the arguments folded into the [GridConfig] the caller already has rather

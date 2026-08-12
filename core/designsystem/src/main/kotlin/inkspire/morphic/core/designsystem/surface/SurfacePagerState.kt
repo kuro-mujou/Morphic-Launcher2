@@ -120,7 +120,7 @@ class SurfacePagerState {
         }
 
     /**
-     * **How far from HOME the pan has travelled, `0f..1f`** — 0 resting on HOME, 1 with a side surface fully open.
+     * **How far from HOME the pan has traveled, `0f..1f`** — 0 resting on HOME, 1 with a side surface fully open.
      *
      * The scalar the two axes collapse to, because only one of them is ever non-zero: a pan is toward one edge, and
      * `max` picks whichever without the caller having to know which. What reads it is anything that should *appear*

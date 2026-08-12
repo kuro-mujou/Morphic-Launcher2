@@ -62,7 +62,7 @@ private val CellCorner = 3.dp
  * The shapes the mockup will take, whatever the real screen is.
  *
  * A ratio outside these is a window we do not draw well — a freeform split, a very wide foldable — and a preview
- * stretched to match would be less recognisable as a screen than a clamped one. L1 clamps the same pair.
+ * stretched to match would be less recognizable as a screen than a clamped one. L1 clamps the same pair.
  */
 private const val MIN_PREVIEW_RATIO = 0.35f
 private const val MAX_PREVIEW_RATIO = 2.5f
@@ -117,12 +117,12 @@ internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val 
  * the preview's own extent so a button sits at the corner it acts on. The top-left − takes the left column and is
  * directly above it; the right rail's lower + adds a row at the bottom and is beside it.
  *
- * **An earlier cut here centred a −/+ pair on each edge instead**, on the grounds that L1 tells add from remove by
- * color (red / green) and this codebase's palette cannot — greyscale chrome, red reserved for `error`. The premise
+ * **An earlier cut here centered a −/+ pair on each edge instead**, on the grounds that L1 tells add from remove by
+ * color (red / green) and this codebase's palette cannot — grayscale chrome, red reserved for `error`. The premise
  * was right and the conclusion was wrong: in L1 the *position already encodes the action*, top/left removing and
  * bottom/right adding, so the color was reinforcement rather than the signal. Taking the arrangement and dropping
  * the color keeps everything the palette forbids and nothing it doesn't, and the glyphs carry what is left. The
- * flash in the preview stays greyscale for the same reason.
+ * flash in the preview stays grayscale for the same reason.
  *
  * **The mockup is a fixed size per posture, not a fraction of the pane** — see the four numbers in the body, which
  * are L1's. A settings pane is half a tablet and the whole of a phone, so a fraction gave a different preview in
@@ -221,7 +221,7 @@ internal fun GridEditor(
         // *Neither* — the framed preview alone. A list has one lane and a declared row height, so there is no count to
         // press; what it needs is somewhere to *see* the height its slider sets.
         //
-        // An earlier cut centred a −/+ pair on each edge, reasoning that a greyscale palette cannot tell add from
+        // An earlier cut centered a −/+ pair on each edge, reasoning that a grayscale palette cannot tell add from
         // remove by color as L1's red/green does. The premise was right, the conclusion wrong: in L1 the *position*
         // encodes the action, so the color was reinforcement. The arrangement is kept and the color is not.
         val framedPreview: @Composable () -> Unit = {
@@ -365,7 +365,7 @@ private fun CompanionZone(modifier: Modifier) {
  * last index lands on the near edge instead of the far one. That is L1's trick and it is a good one: it means one
  * drawing path animates all four edges instead of four cases.
  *
- * **Greyscale, not red/green.** An added line flashes to `accent`; a removed one fades out as it collapses. The
+ * **Grayscale, not red/green.** An added line flashes to `accent`; a removed one fades out as it collapses. The
  * palette is monochrome by design and reserves red for `error`, which a user removing a row is not — and the collapse
  * already says "going away" without a color needing to.
  */
@@ -469,7 +469,7 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
 /**
  * One square edge button.
  *
- * Deliberately not a `MorphicButton`: that is a labelled M3 button with its own minimum touch size and shape morph,
+ * Deliberately not a `MorphicButton`: that is a labeled M3 button with its own minimum touch size and shape morph,
  * and eight of them around a preview would swamp it. This is a plain square, which is what L1 used too — the part
  * worth keeping from its version.
  */
@@ -478,7 +478,7 @@ private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Box(
         // The inset is L1's, and it is load-bearing now that the buttons sit at the preview's corners rather than
-        // centred on its edges: without it the outermost pair touches the very ends of the row and the group reads as
+        // centered on its edges: without it the outermost pair touches the very ends of the row and the group reads as
         // wider than the screen it is describing.
         modifier = Modifier
             .padding(ButtonGap)

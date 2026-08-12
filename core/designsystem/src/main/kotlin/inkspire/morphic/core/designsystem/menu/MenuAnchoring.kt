@@ -24,7 +24,7 @@ sealed interface MenuAnchor {
      * A **place**: where the finger was when a long-press landed on empty space, in root coordinates.
      *
      * The menu docks flush to whichever vertical screen edge that half of the screen is nearer and slides in from
-     * it, vertically centred on the press so the rows land under the thumb — L1's `EdgeDockedPopupPositionProvider`.
+     * it, vertically centered on the press so the rows land under the thumb — L1's `EdgeDockedPopupPositionProvider`.
      * **The reason it docks rather than sitting at the point** is that there is nothing there to point at: an item
      * menu must be beside its icon, but a surface menu describes the *surface*, so planting it on an arbitrary patch
      * of wallpaper would claim a relationship with whatever it happens to cover — and hugging the edge leaves the
@@ -44,7 +44,7 @@ fun menuDockFor(position: IntOffset, frame: IntRect): MenuDock =
     if (position.x < frame.left + frame.width / 2) MenuDock.LEFT else MenuDock.RIGHT
 
 /**
- * Where to place a menu of [menuSize] docked to [dock], vertically centred on the press at [position], inside
+ * Where to place a menu of [menuSize] docked to [dock], vertically centered on the press at [position], inside
  * [frame] with [gapPx] clear of every edge.
  *
  * Horizontally it is pinned, not clamped: a docked menu is *meant* to touch its edge, so there is one x for each
@@ -79,16 +79,16 @@ fun dockedMenuOffsetFor(
  * "which of the four", not "which axis, then which way".
  */
 enum class MenuPlacement {
-    /** Under the item, horizontally centred on it. */
+    /** Under the item, horizontally centered on it. */
     BELOW,
 
-    /** Over the item, horizontally centred on it. */
+    /** Over the item, horizontally centered on it. */
     ABOVE,
 
-    /** To the item's right, vertically centred on it. */
+    /** To the item's right, vertically centered on it. */
     RIGHT,
 
-    /** To the item's left, vertically centred on it. */
+    /** To the item's left, vertically centered on it. */
     LEFT,
 }
 
@@ -109,11 +109,11 @@ enum class MenuPlacement {
  */
 fun menuPlacementFor(anchor: IntRect, frame: IntRect): MenuPlacement =
     if (frame.height >= frame.width) {
-        val anchorCentreY = (anchor.top + anchor.bottom) / 2
-        if (anchorCentreY < frame.top + frame.height / 2) MenuPlacement.BELOW else MenuPlacement.ABOVE
+        val anchorCenterY = (anchor.top + anchor.bottom) / 2
+        if (anchorCenterY < frame.top + frame.height / 2) MenuPlacement.BELOW else MenuPlacement.ABOVE
     } else {
-        val anchorCentreX = (anchor.left + anchor.right) / 2
-        if (anchorCentreX < frame.left + frame.width / 2) MenuPlacement.RIGHT else MenuPlacement.LEFT
+        val anchorCenterX = (anchor.left + anchor.right) / 2
+        if (anchorCenterX < frame.left + frame.width / 2) MenuPlacement.RIGHT else MenuPlacement.LEFT
     }
 
 /**
@@ -164,7 +164,7 @@ fun menuOffsetFor(
  * It is the edge nearest the anchor: a menu below its item scales up from its own top edge, one to the left from
  * its right edge.
  *
- * **Known limit, accepted**: the cross-axis is pinned to the centre, so a menu that [menuOffsetFor] had to *clamp*
+ * **Known limit, accepted**: the cross-axis is pinned to the center, so a menu that [menuOffsetFor] had to *clamp*
  * sideways (an item near the screen's edge) grows from a point a little off the item. Correcting it needs the
  * menu's measured size, which is not known until it has been laid out — a frame later than the animation starts.
  * L1 had the same limit for the same reason and it is invisible in practice, since the clamp is small compared to

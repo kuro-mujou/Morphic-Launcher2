@@ -129,7 +129,7 @@ class ShellViewModel(
      * **[component]'s own shortcuts** — the item menu's first stage.
      *
      * Suspending and *not* launched on [viewModelScope], deliberately: the read belongs to the menu that asked for
-     * it, so it is called from the menu's own composition and cancelled when the menu closes. Scoping it to the
+     * it, so it is called from the menu's own composition and canceled when the menu closes. Scoping it to the
      * screen would keep a read alive for a menu that is no longer on screen and deliver an answer nobody wants.
      * Empty when the launcher is not the active home app — see [AppShortcuts], which owns that rule.
      */

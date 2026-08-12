@@ -16,7 +16,7 @@ dependencies {
     implementation(projects.data.layout) // LayoutRepository + FreeGridPlanner (coordinate placement engine)
     // Resolved per-zone icon sizing: the pager's and the dock's blueprints, with the user's overrides merged in.
     implementation(projects.data.settings)
-    // The widget picker's catalogue, and the AppWidgetHost that binds and draws what it offers.
+    // The widget picker's catalog, and the AppWidgetHost that binds and draws what it offers.
     implementation(projects.data.widgets)
     // `LauncherIcon`, for an icon container's slots. Drawn directly rather than through a designsystem cell because
     // a container's *arrangement* decides how big each icon is — see `IconContainerCell`.

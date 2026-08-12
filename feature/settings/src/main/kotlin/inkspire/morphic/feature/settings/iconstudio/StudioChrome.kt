@@ -171,7 +171,7 @@ fun StudioToolBar(
  * It does **not** apply `uiInsetsPadding` itself. The bar and whatever floats above it are one stack in the caller's
  * `Column`, and insetting each separately would inset the gap between them twice.
  *
- * @param content laid out in a centred row; a rail of [StudioIconButton]s is what this is shaped for.
+ * @param content laid out in a centered row; a rail of [StudioIconButton]s is what this is shaped for.
  */
 @Composable
 fun StudioBottomBar(

@@ -16,7 +16,7 @@ sealed interface LayerSource {
     /**
      * No content at all — a layer that has been added but not yet filled.
      *
-     * **What a new custom layer starts as.** It used to start as a mid-grey [SolidFill], which is a decision the user
+     * **What a new custom layer starts as.** It used to start as a mid-gray [SolidFill], which is a decision the user
      * did not make: adding a layer would drop an opaque plate into the stack and the icon would change before anything
      * had been chosen. Empty means the insert is visible in the stack and invisible on the canvas, which is the honest
      * split — the layer exists, and what goes in it is the next choice.
@@ -47,7 +47,7 @@ sealed interface LayerSource {
      * per app in `IconLayerResolver`, exactly as [AppDefault] already does.
      *
      * That also corrects what this used to say — "only selectable when the app actually ships a monochrome layer",
-     * which was written before the global studio existed and cannot be honoured there. The old fallback drew the
+     * which was written before the global studio existed and cannot be honored there. The old fallback drew the
      * *unfiltered* foreground, making the choice a silent no-op on every app without a themed layer.
      *
      * Distinct from [LayerEffect.Color] with `saturation = 0`, which recolors whatever a layer already holds: this

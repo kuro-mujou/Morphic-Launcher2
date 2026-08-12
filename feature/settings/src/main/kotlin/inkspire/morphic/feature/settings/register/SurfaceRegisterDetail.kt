@@ -35,7 +35,7 @@ private val CrossGap = 20.dp
  * effect on HOME immediately with nothing to apply or confirm.
  *
  * **It is a cross, because the setting is spatial** ([SurfaceRegisterCross]) — L1's `SurfaceRegister`, ported. Which
- * edge opens what is a fact about *where things are*, and the four labelled chip groups this replaced made the reader
+ * edge opens what is a fact about *where things are*, and the four labeled chip groups this replaced made the reader
  * rebuild that arrangement in their head from a list. Five cards in a plus simply are it.
  *
  * **The cross replaced chips, which had replaced a segmented control**, and the reason chips won then is the reason
@@ -45,7 +45,7 @@ private val CrossGap = 20.dp
  *
  * **HOME's pairing is offered here now, and `transition` still is not.** The rule stated here has not changed — a
  * control for a setting that changes nothing teaches the user the app is broken, so each appears when the thing it
- * configures exists. `HomeScreen` renders both pairings, so the centre card is live; `SurfacePager` still implements
+ * configures exists. `HomeScreen` renders both pairings, so the center card is live; `SurfacePager` still implements
  * only `SLIDE`, so the transition stays out. (L1 offered both from this screen, and its presets from here too.)
  *
  * **Two pickers, both hoisted**, rather than one per slot: *which* slot is being filled is this screen's state, so at

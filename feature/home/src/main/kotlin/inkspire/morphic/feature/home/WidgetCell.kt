@@ -60,7 +60,7 @@ private val WidgetShape = RoundedCornerShape(12.dp)
  *
  * **A widget that will not resolve draws its [label] instead** — its provider uninstalled, or an id the platform no
  * longer knows. Naming it rather than drawing nothing is deliberate: an empty cell that cannot be removed reads as
- * a rendering fault, where a labelled one invites the long-press that removes it.
+ * a rendering fault, where a labeled one invites the long-press that removes it.
  */
 @Composable
 internal fun WidgetCell(
@@ -90,7 +90,7 @@ internal fun WidgetCell(
     // no longer yours". AOSP's Launcher3 does the same thing from a `CheckLongPressHelper`; this reads the two
     // launcher-wide signals instead, so there is no second long-press timer to keep in step with ours.
     //
-    // Cancelling on *any* open menu or *any* drag is deliberately broad: if this widget is not the one being
+    // Canceling on *any* open menu or *any* drag is deliberately broad: if this widget is not the one being
     // touched, a cancel is a no-op on it, and the alternative is plumbing "is it me?" through a modifier that is
     // opaque by design.
     val menuHost = LocalMenuHost.current

@@ -177,7 +177,7 @@ class DockViewModel(
      * A cell is `extent ÷ count`, so shrinking the strip can leave the stored count describing cells too small to draw
      * an icon in. Rather than leave storage holding a grid the dock will never draw, that count comes down to
      * [maxCells] — the last line is given up so the survivors keep their size, which is the dock rule the settings plan
-     * states and the behaviour L1 has.
+     * states and the behavior L1 has.
      *
      * **Which count that is, is [edge]'s to say**: a bottom strip's height divides into *rows*, a rail's width into
      * *columns*. The other axis is untouched, and one step out the same is true of home — a bottom dock takes height

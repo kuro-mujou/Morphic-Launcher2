@@ -11,7 +11,7 @@ import org.junit.Test
  * [SettingsSliceTest] covers the codec's general rules; what is specific here is that this is the only slice stored as a
  * **bare enum**, so its blob is a single JSON string and that string is the constant's own name. Two consequences are
  * worth pinning rather than discovering: every value must survive the trip (nothing is silently unserializable), and an
- * unrecognised name — which is what a *renamed* value looks like to an older or newer build — must fall back to the
+ * unrecognized name — which is what a *renamed* value looks like to an older or newer build — must fall back to the
  * default rather than throw.
  */
 class IconStudioBackgroundSliceTest {
@@ -36,11 +36,11 @@ class IconStudioBackgroundSliceTest {
 
     /**
      * The exposure of storing a bare enum: the stored form is the constant's name, so renaming a value orphans whatever
-     * users had chosen. Falling back is the right behaviour — it is visible and one tap from fixed — and this pins that
+     * users had chosen. Falling back is the right behavior — it is visible and one tap from fixed — and this pins that
      * it is a fall back rather than a crash.
      */
     @Test
-    fun `an unrecognised backdrop falls back to the default`() {
+    fun `an unrecognized backdrop falls back to the default`() {
         assertEquals(PreviewBackground.Default, slice.decode("\"BLACK_WITH_GLITTER\""))
     }
 

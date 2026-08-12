@@ -40,7 +40,7 @@ private val ChipPaddingV = 8.dp
  *
  * The switch is a stock M3 [Switch] rather than a `MorphicSwitch`, and that is the design-system rule rather than a
  * shortcut: components are built *on* M3 and restyled, and since `LauncherTheme` feeds MaterialTheme a monochrome
- * `ColorScheme` bridged from `MorphicColors`, a stock M3 control already renders greyscale and keeps its Expressive
+ * `ColorScheme` bridged from `MorphicColors`, a stock M3 control already renders grayscale and keeps its Expressive
  * motion. A fully custom one is reserved for controls M3 lacks.
  */
 
@@ -56,7 +56,7 @@ internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier)
     )
 }
 
-/** A labelled on/off row. */
+/** A labeled on/off row. */
 @Composable
 internal fun SettingsSwitchRow(
     title: String,
@@ -188,7 +188,7 @@ internal fun SettingsCommitRangeSlider(
     }
 }
 
-/** One mutually-exclusive choice. Selection reads by contrast, not hue — the palette is greyscale by design. */
+/** One mutually-exclusive choice. Selection reads by contrast, not hue — the palette is grayscale by design. */
 @Composable
 internal fun SettingsChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current

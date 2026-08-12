@@ -101,7 +101,7 @@ Large; port per-component as feature screens need them, not up front. Groups:
 
 ### B5 — `core:navigation` — `Navigator`, `Routes` (small; depends on `core:model` surfaces, G4).
 
-### B6 — `data:apps` — installed-app source + categorisation (depends on model, common)
+### B6 — `data:apps` — installed-app source + categorization (depends on model, common)
 - `AppRepository`(+`Impl`), `LauncherAppsWrapper`, `AppShortcut`, `mapper/AppInfoMappers`, `applist/AppListPipeline`.
 - category ✅: `AppCategorizer`, `CategoryHeuristics`, `CategoryMapping`, `AssetCategoryMapping` (+ the curated
   `assets/app_categories.json`, 188 packages) — done, with the two fixes L1's `POST_FIX_CLEANUP_PLAN` targeted
@@ -167,9 +167,9 @@ this entry, which is only the summary.
       an app from the full installed-app list).
 - Geometry ⚠️: `GridOccupancy`, `PlacementResolver`, `GridReflow`, `GridEdit`, `DockGridEdit`, `WidgetSpan`.
 - 🔧 FLOW engine (`FlowReflow`, `SpreadPush`, `PushPath`): Launcher 1's `FLOW_TO_DRAWER_PLAN` **drops FLOW from
-  home**. Decide up front whether L2 even ports these, or moves the packed-grid behaviour straight to the drawer.
+  home**. Decide up front whether L2 even ports these, or moves the packed-grid behavior straight to the drawer.
 - 🔧 `GridEdit` vs `DockGridEdit` are near-duplicate edge-edit passes — unify into one edge-edit operation
-  parameterised by `GridBlueprint` (this is the very code that started this whole cleanup).
+  parameterized by `GridBlueprint` (this is the very code that started this whole cleanup).
 
 ### B9 — `data:icons` — icon packs + overrides (depends on `core:icon`, database)
 - `IconOverrideRepository`(+`IconOverrideMapper`), `CustomIconStore`, `SkinImageStore`, `IconInspector`,

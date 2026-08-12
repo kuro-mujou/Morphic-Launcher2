@@ -17,13 +17,13 @@ enum class BackdropBlurTone { LIGHT, DARK }
  *
  * Each variant carries only the tunables that effect actually uses — folding the former separate
  * `WallpaperEffect` enum and flat `WallpaperEffectParams` bag into one type, so an effect can never hold
- * another effect's parameters. All strengths are normalised `0..1`; each effect maps them to its own units
+ * another effect's parameters. All strengths are normalized `0..1`; each effect maps them to its own units
  * (blur radius, overlay alpha, refraction px, …). Defaults reproduce the baseline look.
  *
  * **Serialized polymorphically, with short stable names.** It is stored as a `data:settings` slice, so the
  * discriminator ends up in a user's blob; the default would be the fully-qualified class name, which a rename would
  * silently invalidate. `@SerialName` pins it to the concept instead. An unreadable blob falls back to [Default] with a
- * log, which is `SettingsSlice`'s existing behaviour and the reason a retired variant needs no migration.
+ * log, which is `SettingsSlice`'s existing behavior and the reason a retired variant needs no migration.
  *
  * **Every variant blurs; what they differ in is the *wash* over that blur.** That is the model the full-screen
  * backdrop layer forced, and it is the honest one: a surface floating over the wallpaper has to occlude what is
@@ -67,14 +67,14 @@ sealed interface BackdropEffect {
      * A blur washed in the **wallpaper's own primary color** — the one effect whose subject is that color.
      *
      * **The deliberate exception to the monochrome palette rule**, and worth stating as one. That rule makes chrome
-     * greyscale *so that* the wallpaper and the app icons carry the color, which reads as an argument against a
+     * grayscale *so that* the wallpaper and the app icons carry the color, which reads as an argument against a
      * wallpaper-hued wash — but it is a rule about chrome the user did not ask for, and this is an effect they pick.
      * The color it takes is the wallpaper's, so it is the wallpaper carrying the color rather than the theme
      * inventing one.
      *
      * **Not the OS dynamic palette, which is how L1 got this above API 31.** L1's launcher ran a normal M3 dynamic
      * scheme, so `colorScheme.primary` *was* a wallpaper-derived hue; L2 feeds MaterialTheme a **monochrome** scheme
-     * bridged from `MorphicColors`, so the same expression returns grey. `WallpaperRepository.accentColor` reads the
+     * bridged from `MorphicColors`, so the same expression returns gray. `WallpaperRepository.accentColor` reads the
      * wallpaper directly instead, on every API. [Blur] carries the same hue at lower strength — see `tintOf`.
      *
      * @property strength Blur amount, `0..1`.

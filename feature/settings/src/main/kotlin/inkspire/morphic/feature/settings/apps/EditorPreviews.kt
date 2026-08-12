@@ -47,14 +47,14 @@ private const val TabCount = 4
  *
  * L1 fills its editor's `preview` slot the same way — a `ClassicGridEditPreview` (search bar + reflective cells) for
  * its plain grid, a `GroupedGridEditPreview` (header + tab row + reflective cells) for its category pager. This is
- * that pair generalised to L2's five layouts and driven by [chrome] rather than by constants.
+ * that pair generalized to L2's five layouts and driven by [chrome] rather than by constants.
  *
  * **Which lattice each layout gets is the FIXED_PAGER / SCROLL_GRID split, not a style choice.** A pager really does
  * divide its page evenly, so [GridPreview] is exact for it; a scrolling grid's cell height is *derived* from its
  * width, so only [ReflectivePreview] shows the shape the surface will actually draw — and only it makes adding a
  * column visibly gain rows.
  *
- * **Two pieces of chrome are stored and previewed before the surface honours them.** Search is unbuilt in
+ * **Two pieces of chrome are stored and previewed before the surface honors them.** Search is unbuilt in
  * `feature:apps`, and neither pager draws a tab bar (the category pager draws a per-page header instead). `AppsChrome`
  * exists anyway, so what is drawn here is a real preference — see that type for why its search default is `Hidden`
  * where L1's is `TOP`.

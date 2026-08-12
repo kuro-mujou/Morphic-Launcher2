@@ -101,9 +101,9 @@ private fun IconLayerSpec.resolveLayer(
  *
  * It matters most in the **global** studio, which is the whole point of that setting — "make every icon a flat white
  * glyph" is one edit there, and without this it would silently produce blobs for every app without a themed layer.
- * Downgrading gives those apps a greyscale icon instead, which is the same answer they got before a tint was involved.
+ * Downgrading gives those apps a grayscale icon instead, which is the same answer they got before a tint was involved.
  *
- * The tint is *kept*, only its mode changes: a multiply over greyscale is the tinted-greyscale recipe, so the color
+ * The tint is *kept*, only its mode changes: a multiply over grayscale is the tinted-grayscale recipe, so the color
  * the user picked still shows.
  */
 private fun IconLayerSpec.monochromeFallbackColor(): LayerEffect.Color =

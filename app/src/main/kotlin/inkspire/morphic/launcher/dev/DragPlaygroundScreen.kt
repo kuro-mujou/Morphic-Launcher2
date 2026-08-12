@@ -705,7 +705,7 @@ private fun GridGeometry.mergeRadius(rect: GridPlacement): Float =
 
 /**
  * True when the finger sits in the **inner merge ring** of the item occupying [rect] — a single circle at the
- * item's centre. The whole item is one target, so a multi-cell item has exactly one ring (§6a).
+ * item's center. The whole item is one target, so a multi-cell item has exactly one ring (§6a).
  */
 private fun GridGeometry.inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
     val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)

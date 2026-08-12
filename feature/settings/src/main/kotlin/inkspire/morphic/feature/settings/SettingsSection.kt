@@ -129,7 +129,7 @@ internal data class SettingsGroup(val header: String?, val sections: List<Settin
  * **Two groups now that the wallpaper has landed**, which is what the note here promised: the sections that describe a
  * *surface* are L1's "Layout" group, and "Personalization" is the one holding what a launcher looks like rather than
  * how it is arranged. It has one row today and the rest of L1's — theme, effects, and the icon studio — join it as they
- * are built. The headers appear together because a single unlabelled run needed none.
+ * are built. The headers appear together because a single unlabeled run needed none.
  *
  * Order follows L1's: the register first (it decides what the others are *for*), then a section per surface, with
  * folders last — a folder is drawn over a surface rather than being one.

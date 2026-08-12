@@ -40,8 +40,8 @@ private val HueStops = listOf(
  * a tint's alpha is ignored because "two ways to set one thing is one too many". An alpha slider here would be
  * that second way, and a color that silently loses its transparency is worse than one that never offered it.
  *
- * **Hue is kept as state rather than re-derived from [argb] each time**, which is not an optimisation but a
- * correctness point: hue is undefined at black, white and every pure grey, so a picker that recomputed it would
+ * **Hue is kept as state rather than re-derived from [argb] each time**, which is not an optimization but a
+ * correctness point: hue is undefined at black, white and every pure gray, so a picker that recomputed it would
  * lose track of where the user was the moment they dragged the panel into a corner — and the hue bar would jump
  * to red under their finger. The conversion runs the other way instead, and only re-seeds when [argb] is changed
  * from outside.

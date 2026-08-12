@@ -6,11 +6,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Behaviour spec for the MovingGap primitives — the reorder model every ordered surface shares.
+ * Behavior spec for the MovingGap primitives — the reorder model every ordered surface shares.
  *
  * They went untested while they were `internal` helpers of one file; making them the shared, generic contract two
  * surfaces depend on is the point at which "the folder still feels right on device" stops being enough evidence.
- * Items are plain strings, which is also the cheapest proof that the generalisation is real.
+ * Items are plain strings, which is also the cheapest proof that the generalization is real.
  */
 class OrderedFlowTest {
 
@@ -126,7 +126,7 @@ class OrderedFlowTest {
 
     @Test
     fun `thirds are read within the hovered cell, not across the grid`() {
-        // x = 25f is the middle of column 2 — a centre third, not a "right of the whole row".
+        // x = 25f is the middle of column 2 — a center third, not a "right of the whole row".
         assertEquals(Third.CENTER, geometry.thirdInCell(Offset(x = 25f, y = 5f)))
     }
 

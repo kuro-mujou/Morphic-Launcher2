@@ -80,7 +80,7 @@ private val CardGridZoneId = ZoneId("apps-category-cards")
 
 /**
  * The plan reported for a hover over any card: **merge**, because that is what dropping on a card does — it folds the
- * app into that collection, exactly as a folder's centre ring does.
+ * app into that collection, exactly as a folder's center ring does.
  *
  * The footprint is a token, unread: which card is being aimed at lives in this surface's own state
  * ([AppsCategoryCard]'s `hoveredCategoryId`), because a card is not a cell in a lattice anyone else could name. The
@@ -129,14 +129,14 @@ private val DragProxySize = 72.dp
  * Three things differ from home, and all three are properties of *this* surface rather than choices:
  * - **A drag starts inside an expansion, or on a card's own preview icons.** The second half reverses this file's
  *   first cut, which kept previews tap-only on the grounds that making them draggable "would pin the source card in
- *   composition — which a lazy grid cannot honour". That was true, and the answer was to stop being lazy (see the
+ *   composition — which a lazy grid cannot honor". That was true, and the answer was to stop being lazy (see the
  *   grid below) rather than to withhold the gesture: a preview icon is the only part of a card that names one app, so
  *   it is the only place a re-file can start without opening the category first. The header and the overflow cluster
  *   still open; the empty slots and padding still stay free.
  * - **There is no "empty cell" landing.** Off a card there is nowhere for an app to be, so the planner reports no plan
  *   at all and a release there is a cancel. That is why the only intent this surface ever reports is
  *   [DropIntent.MERGE]. It also means a *held* finger almost always has a target: where home's post-leave dwell only
- *   catches the small centre ring of a cell that happens to hold a folder, here nearly every point is a card, so
+ *   catches the small center ring of a cell that happens to hold a folder, here nearly every point is a card, so
  *   holding still after leaving an expansion will open whatever is beneath. That is the shared machine's rule, not a
  *   local one — moving the finger to another card restarts the dwell, and moving off the cards cancels it.
  * - **Landing owes nothing to the category the app came from.** `AppsCategoryChange.Move` unfiles the app from every
@@ -149,7 +149,7 @@ private val DragProxySize = 72.dp
  * home's grid. The app keeps its category — being on home and being filed here are independent.
  *
  * **Releasing outside an open expansion cancels** (it closes, nothing is written). Leaving is a deliberate dwell, so a
- * release out there reads as "never mind" — and the drag has no landing to honour anyway.
+ * release out there reads as "never mind" — and the drag has no landing to honor anyway.
  *
  * **Two tap targets per card and no overlap between them**, which is the "an item's touch target is its visible
  * extent" rule applied to a container: the preview icons launch, and the **header row** plus the **overflow cluster**

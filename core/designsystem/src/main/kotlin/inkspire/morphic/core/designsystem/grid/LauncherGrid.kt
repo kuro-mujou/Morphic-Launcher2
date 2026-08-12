@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
  * separation is what lets home, dock, folders and the pager share this single component.
  *
  * **Free placement, not packing.** Unlike a first-fit/auto-packing grid (the `MosaicGrid` reference), placements
- * are honoured verbatim — coordinates are exact and **gaps are allowed** (an empty cell stays empty). The caller
+ * are honored verbatim — coordinates are exact and **gaps are allowed** (an empty cell stays empty). The caller
  * owns collision-freedom; the grid trusts its input.
  *
  * **Two sizing modes, selected by [cellHeight].** Cell *width* is always a fraction of the (bounded) viewport

@@ -103,7 +103,7 @@ fun IconLayerPlaygroundScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            LabelledIcon("Baked", Modifier.weight(1f)) {
+            LabeledIcon("Baked", Modifier.weight(1f)) {
                 // Explicitly passed, so the playground is unaffected by whatever global default or per-app
                 // override happens to be stored — the comparison is between renderers, not between recipes.
                 LauncherIcon(
@@ -114,7 +114,7 @@ fun IconLayerPlaygroundScreen(modifier: Modifier = Modifier) {
                     layerSet = layerSet,
                 )
             }
-            LabelledIcon("Live", Modifier.weight(1f)) {
+            LabeledIcon("Live", Modifier.weight(1f)) {
                 LiveIcon(component = component, layerSet = layerSet, loader = loader)
             }
         }
@@ -172,13 +172,13 @@ private fun LiveIcon(
 
 /** One captioned square cell, so both sides are measured identically and any size difference is visible. */
 @Composable
-private fun LabelledIcon(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun LabeledIcon(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                // A mid grey behind both: a shape mask that failed to clip is invisible against black if the
+                // A mid gray behind both: a shape mask that failed to clip is invisible against black if the
                 // artwork is dark, and invisible against white if it is light.
                 .background(Color(0xFF505050)),
         ) {

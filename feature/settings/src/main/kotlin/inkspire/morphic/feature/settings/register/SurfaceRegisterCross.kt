@@ -68,7 +68,7 @@ private val GearGlyph = 18.dp
  * **The surface register as a cross: HOME in the middle, and the four edges around it.**
  *
  * The port of L1's `SurfaceRegister`, and the reason this section is worth a component rather than a list of controls:
- * the setting *is* spatial. Which edge opens what is a fact about where things are, and the four labelled chip groups
+ * the setting *is* spatial. Which edge opens what is a fact about where things are, and the four labeled chip groups
  * this replaced made the reader rebuild that arrangement in their head — where five cards laid out in a plus simply
  * are it.
  *
@@ -87,11 +87,11 @@ private val GearGlyph = 18.dp
  * **HOME is a choice too, now that there are two of it.** Its card takes a tap like the four around it, and for the
  * same reason theirs do: the body *changes what is there* and the gear *configures what is there already*. That
  * reverses an earlier note here ("HOME is not a choice, so its card does not take a tap — L1's rule"), which was true
- * only while `PAGER_WITH_DOCK` was the only pairing — L1's own centre card was inert for exactly that reason, and it
+ * only while `PAGER_WITH_DOCK` was the only pairing — L1's own center card was inert for exactly that reason, and it
  * put its two-way choice in the Home *section* instead. Here the register is where "what is HOME" is answered, which
  * is what this section's own KDoc had reserved the spot for.
  *
- * @param homeLayout HOME's current pairing; the centre card is named for it.
+ * @param homeLayout HOME's current pairing; the center card is named for it.
  * @param bindings the register's current per-edge bindings; a missing edge is unbound.
  * @param onPick opens the slot picker for an edge. The picker itself is hoisted to the section, so at most one is ever
  *   composed whatever the cross is doing.
@@ -180,7 +180,7 @@ private fun SideSlot(
 }
 
 /**
- * The centre: HOME, named for the pairing it is drawing.
+ * The center: HOME, named for the pairing it is drawing.
  *
  * In `accent` where the sides are plain, since it is the fixed point the others are arranged around — L1 used
  * `primaryContainer` for the same distinction. Two targets like every filled side slot: the body swaps the pairing,

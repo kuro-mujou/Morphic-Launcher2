@@ -344,12 +344,12 @@ internal class SettingsRepositoryImpl(
     override suspend fun setHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?) {
         // Clamped to the declared range rather than left to the caller, which is `updateGrid`'s treatment and not
         // `setDockExtent`'s. The difference is that both of a padding's bounds are static facts: zero is "no margin",
-        // and the ceiling is a judgement about how much of a grid may be given away — neither needs a measured screen.
+        // and the ceiling is a judgment about how much of a grid may be given away — neither needs a measured screen.
         val clamped = dp?.coerceIn(HorizontalPaddingRange.first, HorizontalPaddingRange.last)
         update(SurfaceMetricsSlice) { withHorizontalPadding(slot, device, clamped) }
     }
 
-    // Resolved for every wrappable grid at once — see the interface for why this one is a map where its neighbours
+    // Resolved for every wrappable grid at once — see the interface for why this one is a map where its neighbors
     // are per-slot reads. Mapping over [WrappableGrids] rather than over what is stored is what makes the promise
     // "an entry for every pager, always" hold on a fresh install, where the blob is empty.
     override val pagerWraps: Flow<Map<GridSlot, Boolean>> = dataStore.read(SurfacePagingSlice) { paging ->

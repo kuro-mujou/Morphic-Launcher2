@@ -52,7 +52,7 @@ data class IconOverride(
  *
  * Sparse for [IconOverride]'s reason, which applies here with an edge: three of these four default to zero, so a
  * resolved-value store would be indistinguishable from "the user asked for zero" and a later change to a default
- * could never reach anyone who had touched a neighbouring slider.
+ * could never reach anyone who had touched a neighboring slider.
  */
 @Serializable
 data class CardOverride(
@@ -82,7 +82,7 @@ data class CardOverride(
  * time a user touched the other axis, and a later change to that default would then stop reaching them.
  *
  * **A row override is ignored on a scrolling grid**, whatever is stored. Rows there are however many the content
- * reaches, so a fixed count is not a preference the surface could honour — see [resolveAgainst], which keeps that
+ * reaches, so a fixed count is not a preference the surface could honor — see [resolveAgainst], which keeps that
  * decision in one place rather than trusting every reader to check the blueprint's sizing.
  */
 @Serializable

@@ -92,7 +92,7 @@ internal fun IconSizingControls(
     // **Neither text control is offered where the cells carry no text**, which the slot already knows: a list row *is*
     // its label, so hiding it would leave nothing (the mirror of the switch above rather than an inconsistency), and a
     // category card's preview slots have no label to hide — the blueprint says so with `showLabel = false`, because
-    // four ellipsised words at thumbnail size would eat the room the icons need. `AppRowCell` and `CategoryCardFace`
+    // four ellipsized words at thumbnail size would eat the room the icons need. `AppRowCell` and `CategoryCardFace`
     // each say the same from their own side, which is why neither has to be told.
     //
     // A card *does* have text: its title. That is card chrome rather than cell sizing, and its control lives with the

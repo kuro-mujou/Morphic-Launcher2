@@ -31,7 +31,7 @@ private val RowPadV = 8.dp
 private val IconLabelGap = 16.dp
 
 /**
- * **The row heights the icon guardrails can honour**, in dp — the inverse of [AppRowCell]'s own sizing, and what a
+ * **The row heights the icon guardrails can honor**, in dp — the inverse of [AppRowCell]'s own sizing, and what a
  * row-height control offers.
  *
  * A row's height is the one cell dimension a user sets outright (a list is one lane, so nothing derives it), and
@@ -43,8 +43,8 @@ private val IconLabelGap = 16.dp
  * (`CellFit.minCellWidthDp`), and deliberately so: one rule for how an icon's limits bound the cell around it.
  *
  * **`iconPercent` is not in it, and that is what keeps the pair of controls from fighting.** The fraction scales the
- * icon *within* the guardrails, so it cannot change which heights are honourable. An earlier cut divided both ends by
- * it — "how tall must the row be for the fraction to be honoured un-clamped" — which inverted the control: asking for
+ * icon *within* the guardrails, so it cannot change which heights are honorable. An earlier cut divided both ends by
+ * it — "how tall must the row be for the fraction to be honored un-clamped" — which inverted the control: asking for
  * a *smaller* icon (a lower percent) raised the floor and so pushed the row **taller**, clamping a 56dp row up to 72dp.
  * That is the same inversion `CellFit` had on the grid axes, from the same division.
  *
@@ -88,7 +88,7 @@ fun rowHeightRangeDp(metrics: IconMetrics, labelHeightDp: Float): ClosedFloating
  * **The row height a stored value actually produces** under [metrics] — the list's `CellFit.fitCols`.
  *
  * The same read-side clamp every other stored dimension gets, and it is what makes the coupling above safe to have: the
- * guardrails can move under a height that was chosen before them, and the list draws the honoured value rather than
+ * guardrails can move under a height that was chosen before them, and the list draws the honored value rather than
  * the stored one. Nothing is written, so widening the guardrails again brings the user's height back — including across
  * the icon switch, since turning icons off widens the range rather than moving the value.
  *
@@ -180,15 +180,15 @@ private const val DEFAULT_LINE_HEIGHT_RATIO = 1.2f
  * other axis. The consequence is the one the grid already relies on: a list now leaves room for a press-and-hold
  * aimed at the *surface*, which is what a home list needs for its own options menu.
  *
- * The bill, worth knowing because it is a real behaviour change: a tap on that blank width no longer launches the
+ * The bill, worth knowing because it is a real behavior change: a tap on that blank width no longer launches the
  * app either, since a tap and a long-press are one contract. That matches a grid cell, where the slack around an
  * icon launches nothing.
  *
- * **[metrics] is honoured except for `showLabel`, and the exception is structural rather than an omission.** A row
+ * **[metrics] is honored except for `showLabel`, and the exception is structural rather than an omission.** A row
  * *is* its label — the icon is an adornment beside it — so a row with no label would not be a row at all, and the
- * settings section correspondingly does not offer that switch for a list. `showIcon` is honoured, because dropping
+ * settings section correspondingly does not offer that switch for a list. `showIcon` is honored, because dropping
  * the icon leaves exactly the pure-text list it promises (L1 offered the same toggle, gated on its `listMode` flag).
- * `labelScale` is honoured too: it multiplies the row's text as it multiplies a grid cell's, which is what makes the
+ * `labelScale` is honored too: it multiplies the row's text as it multiplies a grid cell's, which is what makes the
  * text-size control mean the same thing wherever it appears.
  */
 @Composable

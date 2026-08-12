@@ -139,7 +139,7 @@ class GridSizeViewModel(
                     settingsRepository.horizontalPadding(slot, configuration),
                     settingsRepository.pagerWraps,
                 ) { main, icon, sideExtentDp, padding, wraps ->
-                    // The only field here that is *not* keyed by the device: wrapping is a behaviour, so it is read
+                    // The only field here that is *not* keyed by the device: wrapping is a behavior, so it is read
                     // straight off the resolved map. `pagerSlot` is what turns "this pairing has no pager" into the
                     // null the screen reads as "draw no control".
                     GridSizeState(homeLayout, main, icon, sideExtentDp, padding, homeLayout.pagerSlot?.let { wraps[it] })
@@ -239,7 +239,7 @@ class GridSizeViewModel(
      * Turns the main pager's page wrapping on or off.
      *
      * **The one write on this screen that is not keyed by device**, which is why it takes no `configuration`: whether
-     * pages loop is a behaviour, and turning the phone on its side is not a reason for it to change.
+     * pages loop is a behavior, and turning the phone on its side is not a reason for it to change.
      *
      * Guarded by `pagerSlot` rather than by the layout, so a stale press on the list pairing writes nothing — the same
      * shape as [edit]'s guard, and for the same reason: the screen draws no control there, but a press that arrives

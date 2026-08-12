@@ -66,7 +66,7 @@ private val StateKey = stringPreferencesKey("wallpaper_state")
  * **Every read and write goes through one `edit`**, which is the one thing L1's version got structurally wrong: its
  * `WallpaperRepositoryImpl` read the whole settings object, modified it, and wrote it back *outside* any transaction —
  * a lost update whenever two of its own operations overlapped (picking an image while an apply was still finishing).
- * `updateState` below does the read-modify-write *inside* `edit`, where DataStore serialises it.
+ * `updateState` below does the read-modify-write *inside* `edit`, where DataStore serializes it.
  *
  * **All of it on the IO dispatcher**, because all of it is files: decoding a picked image, writing a JPEG, and handing a
  * bitmap to `WallpaperManager` are each capable of taking hundreds of milliseconds.
@@ -345,11 +345,11 @@ internal class WallpaperRepositoryImpl(
      * Mean relative luminance over a tiny downscale of [source].
      *
      * **Per-pixel luminance averaged, not the luminance of an averaged color** — the two differ because luminance is
-     * gamma-expanded, and a picture that is half black and half white is a mid-grey by the second reading while the
+     * gamma-expanded, and a picture that is half black and half white is a mid-gray by the second reading while the
      * first correctly reports it as the borderline case it is.
      *
      * Deliberately *not* `Blur.kt`'s `dominantColor`, which the port plan expected to be reused here: that one weights
-     * each pixel by saturation so a vivid accent beats washed-out grey, which is exactly right for picking an accent
+     * each pixel by saturation so a vivid accent beats washed-out gray, which is exactly right for picking an accent
      * and exactly wrong for asking how bright something is.
      */
     private fun meanLuminance(source: Bitmap): Double {
@@ -542,7 +542,7 @@ internal class WallpaperRepositoryImpl(
          * How much smaller the backdrop is than the wallpaper — the decode step and the blur's own downscale.
          *
          * Two reductions rather than one because they buy different things: the decode step keeps a screen-sized JPEG
-         * from being fully materialised, and the blur's downscale is what makes the passes cheap. A backdrop is
+         * from being fully materialized, and the blur's downscale is what makes the passes cheap. A backdrop is
          * upscaled at draw time regardless, so the resolution lost here is resolution the blur was about to destroy.
          */
         const val BACKDROP_SAMPLE_STEP = 2

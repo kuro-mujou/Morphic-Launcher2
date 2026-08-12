@@ -24,7 +24,7 @@ val LocalIconLayerSet = staticCompositionLocalOf { IconLayerSet.Base }
 
 /**
  * The apps that have been **detached** from [LocalIconLayerSet] and render from a recipe of their own, provided by
- * `app` from `data:icons`. Empty until something is customised, which is what makes the plain case free.
+ * `app` from `data:icons`. Empty until something is customized, which is what makes the plain case free.
  *
  * **A map rather than a per-icon lookup**, because every icon on screen asks this question and a `Flow` per cell
  * would be hundreds of collectors. `static` for the same reason [LocalIconLayerSet] is: reads are the hot path here

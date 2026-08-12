@@ -21,7 +21,7 @@ data class IconPreset(
  *
  * **A settings slice rather than a Room table**, which is the opposite call from per-app overrides one module
  * over, and the line between them is whether the store grows *with use of the launcher*. Overrides get a row per
- * customised app and are read one at a time by every icon on screen; presets are a handful, chosen deliberately,
+ * customized app and are read one at a time by every icon on screen; presets are a handful, chosen deliberately,
  * and read as a whole list whenever the library is shown. That is a document, and a document is a slice.
  *
  * **Built-in curated presets are deliberately absent.** L1 planned to ship some, and that is a content decision —

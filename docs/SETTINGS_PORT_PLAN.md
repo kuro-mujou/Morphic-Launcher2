@@ -245,13 +245,13 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
     repository's module" was written when the wallpaper lived *inside* `data:settings` — image processing genuinely has
     no business in a preferences store. `data:wallpaper` is the opposite case: it exists because it decodes bitmaps,
     and `cropAndScale` plus the sampled decode are in the file next door, so moving these somewhere abstract would
-    separate them from their only caller to honour a sentence about a module that no longer holds it. `dominantColor`
+    separate them from their only caller to honor a sentence about a module that no longer holds it. `dominantColor`
     ships too, as `accentColor`'s API-26 fallback — see S5f-2 for why the hue is kept.
   - **Revised at S5f-1: the brightness signal does not need it, and neither half is ported yet.** The line below said
     the shell's `darkTheme` was waiting on the dominant-color half. It was not.
     `WallpaperManager.getWallpaperColors` answers the question over the wallpaper *actually displayed* — no permission,
     no decode, and on API 31+ `HINT_SUPPORTS_DARK_TEXT` is the verdict itself — while `dominantColor` is a
-    **saturation-weighted** average, built so a vivid accent beats washed-out grey. That is what an accent wants and
+    **saturation-weighted** average, built so a vivid accent beats washed-out gray. That is what an accent wants and
     the opposite of what brightness wants, so reusing it would have been a wrong answer wearing a reused name. Both
     halves of `Blur.kt` now wait on their real consumer, the frosted backdrop (S5f-2).
 
@@ -296,7 +296,7 @@ every phase ends with something visibly working on device, and no slice is writt
       is never drawn smaller than it and a cell overflows exactly when the guardrail exceeds its inner width.
       `iconPercent` scales *within* the guardrails and cannot make a cell unusable, so it has no business in the floor.
       L1's `scrollingMaxColumns` divided by it (which is a different question — "how wide must a cell be for the percent
-      to be honoured un-clamped" — and answers this one backwards: at 30% a 28dp guardrail demands a 101dp column, so
+      to be honored un-clamped" — and answers this one backwards: at 30% a 28dp guardrail demands a 101dp column, so
       *shrinking* the icons reports fewer columns); L1's `gridMaxima`, the one behind its home editor, left the percent
       out correctly but used the raw guardrail as the whole cell, forgetting the inset. L2 is now L1's home formula plus
       the padding it was missing, with a test pinning that the fraction moves no bound.
@@ -310,7 +310,7 @@ every phase ends with something visibly working on device, and no slice is writt
   - [x] **S4d — the rows/cols editor.** `GridReflow.edit(edge, add)` (the op, 6 tests), `settleDock` (the two-zone
         rule both dock callers share, 5 tests), one `GridEditor` composable — a screen-shaped preview with a − / +
         pair on each editable edge — and the **Home grid** section. The dock moved onto the same editor, so L1's
-        `HomeGridEditor` + `DockGridEditor` (two ~220-line near-copies) are one component parameterised by which half
+        `HomeGridEditor` + `DockGridEditor` (two ~220-line near-copies) are one component parameterized by which half
         of the preview holds the lattice. `usableWindowArea` is the single measurement of the screen, replacing
         L1's `homeGridArea(window, insets, dockVisible, dockThickness)`: subtracting the dock is one caller's
         arithmetic on the result, not part of measuring a window. (It began as settings-only and moved to
@@ -336,7 +336,7 @@ every phase ends with something visibly working on device, and no slice is writt
       APPS grid is ordered or derived, so the flow re-densifies and there is nothing to displace. The row-height
       slider's range is derived from the icon guardrails (`rowHeightRangeDp`) rather than stated: **its bounds are the
       guardrail range shifted by the row's own inset**, so the icon range slider governs it — a row shorter than
-      `minIconDp` + padding cannot honour the smallest icon allowed, and one taller than `maxIconDp` + padding is height
+      `minIconDp` + padding cannot honor the smallest icon allowed, and one taller than `maxIconDp` + padding is height
       the largest cannot fill. `iconPercent` is out of it for the reason S4h took it out of the grid formulas (dividing
       by it inverted the control), and a stored height outside the range is clamped on read (`fitRowHeightDp`, in the
       list and in the slider alike) rather than written down. **With `showIcon = false` neither guardrail applies**, so
@@ -418,7 +418,7 @@ every phase ends with something visibly working on device, and no slice is writt
       cell — thirteen rows in a 320dp dock, fifteen columns across a phone — legal arithmetic nothing could be tapped
       in. `IconSizingRanges.IconDp` now starts at **24**, which is the number L1 wrote down for exactly this
       (`MIN_CELL_DP`, "press-area floor") and then never used.
-    - **The ceiling is 120dp and is a judgement**, stated as one on `IconDp`: far enough for a tablet cell to be filled
+    - **The ceiling is 120dp and is a judgment**, stated as one on `IconDp`: far enough for a tablet cell to be filled
       at the default fraction, near enough to keep 24–48 legible on the track, and low enough that even the *lower*
       thumb at maximum leaves a 360dp phone two columns rather than none.
     Visible consequence to expect on device: home icons were drawing at 72dp (88% of an 82dp inner bound, capped by the
@@ -445,7 +445,7 @@ every phase ends with something visibly working on device, and no slice is writt
       the fitted grid, the dock divides its *height setting* by its rows, APPS branches on layout (a row for the list),
       and the folder asks `folderInnerSize` — the same sizer the overlay lays out with, since a folder's cell comes from
       a card, not a division.
-    - **Two deliberate departures.** The guardrails are **greyscale** (solid = cell, dashed = upper, dotted = lower, with
+    - **Two deliberate departures.** The guardrails are **grayscale** (solid = cell, dashed = upper, dotted = lower, with
       the caption naming them), because L1 colored them green and red and this palette reserves red for `error` — the
       same rule that put the grid editor's buttons on the edge they affect. And there is **no wallpaper behind it**: L1
       punched through to the live wallpaper (`BlendMode.Src` over a transparent window, the whole pane composited into an
@@ -497,7 +497,7 @@ every phase ends with something visibly working on device, and no slice is writt
         ratio, replacing `fillMaxWidth(0.62f)` — a settings pane is half a tablet and all of a phone, so a fraction
         gave a different preview in each.
     - **L1's three button arrangements**, including the columns-only rails and the no-button frame. The earlier cut
-        centred a −/+ pair per edge, on the grounds that a greyscale palette cannot tell add from remove by color;
+        centered a −/+ pair per edge, on the grounds that a grayscale palette cannot tell add from remove by color;
         the premise was right and the conclusion wrong, since in L1 the *position* encodes the action and the color
         was reinforcement.
     - **A `preview` slot with a mockup per APPS layout** — `ReflectivePreview` (cells at their derived aspect,
@@ -512,7 +512,7 @@ every phase ends with something visibly working on device, and no slice is writt
       561-LOC `WallpaperTab`, a crop screen, a capture screen, a live-wallpaper service and an effects tab), which is
       more than one slice can carry, so it is broken up by **what a user can do when it lands**:
   - [x] **S5a — the module, and the static image it owns.** `data:wallpaper`: its own DataStore blob, a JPEG under
-        `filesDir/wallpaper`, decode-and-sample from a `Uri`, centre-crop and scale to the screen, and
+        `filesDir/wallpaper`, decode-and-sample from a `Uri`, center-crop and scale to the screen, and
         `WallpaperManager.setBitmap` on HOME / LOCK / BOTH. Three decisions worth keeping straight:
     - **It keeps its own bookkeeping**, rather than "borrowing settings to persist path pointers" as the section below
       originally said it would. S0 had already ruled that L1's `appliedSingle` / `singleDirty` /
@@ -547,7 +547,7 @@ every phase ends with something visibly working on device, and no slice is writt
     - **Reversed after S5e, at the author's call: the whole of L1's layout is now ported.** The section is a two-page
       mode pager over the three shelves, which is what S5b's vertical had flattened. See S5g below.
   - [x] **S5c — the crop screen.** L1's pan/zoom over the decoded bitmap, passing a `NormalizedCropRect` so `setImage`
-        stops centre-cropping — the stand-in that slice's KDoc called a stand-in is now gone, and nothing in the module
+        stops center-cropping — the stand-in that slice's KDoc called a stand-in is now gone, and nothing in the module
         invents a rectangle. Separate because L1 keeps it a separate screen too, and it is the **first destination a
         feature module declares** (`WallpaperCropRoute` in `feature:settings`, mapped by `app`) — the pattern
         `LauncherRoute`'s KDoc blesses and L1 got wrong by putting every route in its navigation module.
@@ -558,7 +558,7 @@ every phase ends with something visibly working on device, and no slice is writt
     - L1's arithmetic is kept exactly: the cover scale as both the starting scale and the pinch floor, the
         centroid-anchored zoom, and the offset clamp. Together they make the image impossible to frame badly — no gap,
         and no crop outside the picture — which is worth more than any chrome a crop screen could grow.
-    - `decodePreview` is finally read, which is what it was built for; `cropAndScale` replaces `centreCropTo` and
+    - `decodePreview` is finally read, which is what it was built for; `cropAndScale` replaces `centerCropTo` and
         clamps each edge against the opposite one, so a rectangle a rounding error out of range yields a small crop
         rather than an exception out of `Bitmap.createBitmap`.
     - **Not carried:** L1's `forRotate`/`landscape` pair, which pinned the activity's orientation while framing the
@@ -639,13 +639,13 @@ every phase ends with something visibly working on device, and no slice is writt
       saturation-weighted statistic that would have answered a different question. Taking this piece first is what
       surfaced that — the alternative was porting 112 LOC of image processing to be used wrongly by its first caller.
     - **Ask the system; read our own file only with proof.** The fallback (API 26, or a live wallpaper publishing no
-      colors) is gated on `appliedSystemId` still equalling the live wallpaper id — the second job `WallpaperState`
+      colors) is gated on `appliedSystemId` still equaling the live wallpaper id — the second job `WallpaperState`
       reserved that field for, now doing it. Without the gate, "we have an image stored" would be treated as evidence
       about a wallpaper another app set. Otherwise `DARK`: the old hardcoded value, and the safer miss.
     - **The cut is at relative luminance 0.179**, where the WCAG contrast ratios against black and white cross — a
       derivation rather than a taste value.
     - **`RotatingWallpaperService` publishes its colors** (`onComputeColors` + `notifyColorsChanged`). A live
-      wallpaper is the one kind the system cannot analyse for itself, so a silent service starves every consumer of
+      wallpaper is the one kind the system cannot analyze for itself, so a silent service starves every consumer of
       `getWallpaperColors`, status-bar icon contrast included. Answering it means our own pair takes the same path as
       every other wallpaper instead of a special case reading our files behind the system's back. L1's published
       nothing, and had no caller that noticed.
@@ -657,7 +657,7 @@ every phase ends with something visibly working on device, and no slice is writt
       property, so the one question every consumer asks it is not a `when` re-written per caller. See the note in
       "Target shape" above — this is the worked example of a `core:model` type meeting its first caller.
     - **All four effects carry the wallpaper's hue — the deliberate exception to the monochrome palette rule.** That
-      rule makes *chrome* greyscale so the wallpaper and the icons carry the color; an effect the user selects, whose
+      rule makes *chrome* grayscale so the wallpaper and the icons carry the color; an effect the user selects, whose
       subject is the wallpaper, is not chrome. L1's two-stage blend is ported exactly: a wallpaper tone of
       `lerp(surfaceVariant, accent, 0.30)`, then `lerp(White|Black, tone, 0.35)` for the blurs and the tone outright
       for Material You. The 35% nudge is not decoration — a neutral film over a blurred photograph reads as dirty, and
@@ -665,7 +665,7 @@ every phase ends with something visibly working on device, and no slice is writt
       left `MaterialYou` unrenderable on palette grounds, and the author reversed it mid-slice.
     - **Both halves of `Blur.kt` crossed, and the accent does not come from the OS palette.** L1 read
       `colorScheme.primary` above API 31, which worked because its launcher ran a normal M3 dynamic scheme; L2 bridges
-      a **monochrome** scheme, so that expression returns grey and the dynamic-color route is closed by a decision
+      a **monochrome** scheme, so that expression returns gray and the dynamic-color route is closed by a decision
       made long before this. `accentColor` reads the wallpaper instead — `WallpaperColors.primaryColor` on API 27+,
       `dominantColor` over our own file below it. Note the trap S5f-1 nearly walked into: `dominantColor` is
       saturation-weighted, so it is the right statistic for "what color?" and the wrong one for "how bright?".
@@ -676,7 +676,7 @@ every phase ends with something visibly working on device, and no slice is writt
       sources-before-effects reordering was for. Rotating active → that orientation's half; a capture → always, since
       it *is* a picture of what is displayed; a picked image → only while `appliedSystemId` matches the live wallpaper
       id; otherwise nothing. **That third test replaces L1's `appliedSingle` snapshot** — a whole second copy of the
-      file, kept so an unapplied pick could not desynchronise the backdrop — and it answers one more question the
+      file, kept so an unapplied pick could not desynchronize the backdrop — and it answers one more question the
       snapshot could not: a wallpaper set outside the launcher makes the ids differ, where the snapshot went on
       claiming to match. Same gate `brightness` uses, so the two readings cannot drift.
     - **A flow, where L1 re-read on recomposition.** Two of those four answers change with no action from us (the
@@ -765,7 +765,7 @@ fallback, not a setting.**
    dock's cell size directly. This is the same inverse `resolveBounds` already implements — `minCellWidthDp` /
    `minCellHeightDp` in `core:designsystem/grid/CellFit.kt`.
 3. **Both counts are stored and edited; the height *bounds* the rows.** *(Revised twice: it first said both axes were
-   derived from the extent, then that rows alone were. Neither survived contact with the behaviour.)* A cell is
+   derived from the extent, then that rows alone were. Neither survived contact with the behavior.)* A cell is
    `height ÷ rows`, so the height caps how many rows are usable rather than replacing them. `DockGrid.editRange`
    gives both axes a minimum, the editor offers both, and **+ a row is enabled only while another row would still
    leave cells at least the smallest usable height**. Deriving rows read as an editor missing half its buttons;

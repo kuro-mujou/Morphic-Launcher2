@@ -27,7 +27,7 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** How far from a handle's centre a press still grabs it. Generous, because the glyphs are small. L1's 28dp. */
+/** How far from a handle's center a press still grabs it. Generous, because the glyphs are small. L1's 28dp. */
 private val HandleHitRadius = 28.dp
 
 /** How far inside the frame a handle sits, and the least frame it leaves either side of one. L1's pair. */
@@ -183,34 +183,34 @@ fun ResizeOverlay(
         )
 
         handlesFor(bounds).forEach { handle ->
-            val centre = handleCentre(handle, frame.left, frame.top, frame.right, frame.bottom, inset)
-            if (handle.isCorner) drawCornerArrow(handle, centre, accent) else drawEdgePill(handle, centre, accent)
+            val center = handleCenter(handle, frame.left, frame.top, frame.right, frame.bottom, inset)
+            if (handle.isCorner) drawCornerArrow(handle, center, accent) else drawEdgePill(handle, center, accent)
         }
     }
 }
 
 /** A corner grip: a rounded triangle pointing out of the corner it drags. */
-private fun DrawScope.drawCornerArrow(handle: ResizeHandle, centre: Offset, color: Color) {
+private fun DrawScope.drawCornerArrow(handle: ResizeHandle, center: Offset, color: Color) {
     val half = CornerArm.toPx() / 2f
     val sx = if (handle.movesLeft) -1f else 1f
     val sy = if (handle.movesTop) -1f else 1f
     val path = Path().apply {
-        moveTo(centre.x + sx * half, centre.y + sy * half)
-        lineTo(centre.x - sx * half, centre.y + sy * half)
-        lineTo(centre.x + sx * half, centre.y - sy * half)
+        moveTo(center.x + sx * half, center.y + sy * half)
+        lineTo(center.x - sx * half, center.y + sy * half)
+        lineTo(center.x + sx * half, center.y - sy * half)
         close()
     }
     drawPath(path, color)
 }
 
 /** An edge grip: a pill lying along the edge it drags — wide on a horizontal edge, tall on a vertical one. */
-private fun DrawScope.drawEdgePill(handle: ResizeHandle, centre: Offset, color: Color) {
+private fun DrawScope.drawEdgePill(handle: ResizeHandle, center: Offset, color: Color) {
     val horizontal = handle.movesTop || handle.movesBottom
     val width = if (horizontal) PillLong.toPx() else PillShort.toPx()
     val height = if (horizontal) PillShort.toPx() else PillLong.toPx()
     drawRoundRect(
         color = color,
-        topLeft = Offset(centre.x - width / 2f, centre.y - height / 2f),
+        topLeft = Offset(center.x - width / 2f, center.y - height / 2f),
         size = Size(width, height),
         cornerRadius = CornerRadius(PillShort.toPx() / 2f),
     )
@@ -233,10 +233,10 @@ private data class ResizeFrame(val left: Float, val top: Float, val right: Float
         point.x in left..right && point.y in top..bottom
 
     fun distanceTo(handle: ResizeHandle, point: Offset, insetPx: Float, marginPx: Float): Float {
-        val centre = handleCentre(handle, left, top, right, bottom, handleInset(insetPx, marginPx))
+        val center = handleCenter(handle, left, top, right, bottom, handleInset(insetPx, marginPx))
         // Manhattan distance, as L1 used: it is only ever compared against itself and against a square hit
         // radius, so the square root would buy nothing.
-        return abs(centre.x - point.x) + abs(centre.y - point.y)
+        return abs(center.x - point.x) + abs(center.y - point.y)
     }
 }
 

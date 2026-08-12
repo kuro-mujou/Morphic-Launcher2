@@ -196,7 +196,7 @@ private fun ListPane(
         )
 
         if (groups == null) {
-            // Still reading the catalogue. Distinct from an empty list, which is a real answer — see
+            // Still reading the catalog. Distinct from an empty list, which is a real answer — see
             // [WidgetPickerState.groups].
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = colors.content)

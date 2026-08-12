@@ -14,7 +14,7 @@ import androidx.compose.ui.graphics.graphicsLayer
  * **A sibling in the stack, not a modifier on the content, and that is the whole reason it exists.** A frosted
  * surface could always sample its own crop ([wallpaperBackdrop]), and for a small panel that is right — it slides
  * over the wallpaper like glass. But a surface that *arrives* wants the opposite: the APPS content should slide up
- * while the frost stays still and simply appears, because a blur that travelled with the content would read as a
+ * while the frost stays still and simply appears, because a blur that traveled with the content would read as a
  * sheet of frosted plastic being carried on screen rather than as the screen itself frosting over. Two motions, so
  * two nodes — [alpha] here, translation on the pane.
  *

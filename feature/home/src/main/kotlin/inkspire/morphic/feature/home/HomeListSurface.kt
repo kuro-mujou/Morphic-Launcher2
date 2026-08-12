@@ -139,7 +139,7 @@ private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.R
  * It is also what makes the drag geometry the documented one: `scrollState.value` is snapshot state, so a stable
  * viewport anchor minus the scroll offset republishes the content origin every frame for free.
  *
- * Not built, all of it L1 behaviour: the "Add apps" row (a picker), the long-press item menu, and removing an app
+ * Not built, all of it L1 behavior: the "Add apps" row (a picker), the long-press item menu, and removing an app
  * from the list. Without a picker, the list's contents are what [HomeViewModel] seeded from the grid.
  *
  * @param device reported by [HomeScreen], which is the layer that can read the window.
@@ -177,7 +177,7 @@ internal fun HomeListSurface(
     }
 
     // The list's row height is the *setting* and the icon is a fraction of it — the reverse of a grid, and the whole
-    // of what a one-lane layout has to be told. Clamped on read to what the current guardrails can honour
+    // of what a one-lane layout has to be told. Clamped on read to what the current guardrails can honor
     // (`fitRowHeight`), never written back, exactly as the grids clamp their counts.
     val listMetrics = state.metricsFor(GridSlot.HOME_LIST)
     val storedRowHeight = (state.main as? HomeMainSizing.List)?.rowHeightDp
@@ -501,9 +501,9 @@ internal fun HomeListSurface(
         // Gated on this being the surface on screen: the coordinator is the launcher's, so `session` is non-null
         // while the user drags inside the APPS drawer too, and home must not paint a second icon under that finger.
         if (presented && proxyApp != null && finger != null && viewport != Rect.Zero) {
-            // **Pinned to the list's own left edge, following the finger only in y.** Every other surface centres its
+            // **Pinned to the list's own left edge, following the finger only in y.** Every other surface centers its
             // proxy on the finger because its proxy is one cell — roughly square, and smaller than the finger's
-            // travel. A row is the full width of the list, so centring it horizontally would swing the whole row
+            // travel. A row is the full width of the list, so centering it horizontally would swing the whole row
             // sideways with the thumb and leave it hanging off one edge. What a row can meaningfully be dragged
             // *along* is the one axis it has.
             FloatingDragIcon(

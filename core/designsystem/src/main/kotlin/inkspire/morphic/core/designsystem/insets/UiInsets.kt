@@ -15,7 +15,7 @@ private val AllSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
 
 /**
  * **System bars ∪ display cutout** — the area a surface must not draw its content into, and the one this launcher
- * honours everywhere.
+ * honors everywhere.
  *
  * Deliberately **not** `WindowInsets.safeDrawing`, which also reserves the keyboard: nothing on a launcher surface
  * takes text, so padding for an IME that will never appear would leave a permanent gap. Equally deliberately not
@@ -24,19 +24,19 @@ private val AllSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
  *
  * Ported from L1's `uiInsets`, which L2 had not carried: the same expression was instead written out longhand in
  * eleven files (home, all five APPS layouts, the folder overlay, four settings sections), which is how a launcher ends
- * up with one surface honouring the cutout and its settings screen not.
+ * up with one surface honoring the cutout and its settings screen not.
  */
 val uiInsets: WindowInsets
     @Composable get() = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
 /**
- * Pads by [uiInsets] on [sides], honouring whatever an ancestor has already consumed.
+ * Pads by [uiInsets] on [sides], honoring whatever an ancestor has already consumed.
  *
  * `@Composable` rather than L1's `composed { }` — that factory is deprecated, defeats modifier reuse, and was only
  * ever needed because [uiInsets] has to be read in composition.
  *
  * @param sides which edges to reserve. Rarely all of them: a pane beside another pane must not inset the edge its
- *   neighbour already covers, and a screen with a top app bar has had its top edge covered by that bar.
+ *   neighbor already covers, and a screen with a top app bar has had its top edge covered by that bar.
  */
 @Composable
 fun Modifier.uiInsetsPadding(sides: WindowInsetsSides = AllSides): Modifier =

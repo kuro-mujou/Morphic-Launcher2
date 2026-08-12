@@ -14,7 +14,7 @@ import org.junit.Test
  * What a dock resize does to the items in it: keep what fits, spill the rest onto home, and **never delete**.
  *
  * The rule has two callers with different triggers — the home surface re-fitting after a height change, and the dock
- * settings editor applying an edge edit — so these pin the behaviour they share rather than either one's plumbing.
+ * settings editor applying an edge edit — so these pin the behavior they share rather than either one's plumbing.
  * L1's equivalent dropped what would not fit (`droppedApps`/`droppedFolders`/`droppedWidgets`, for the caller to
  * delete), which is the outcome most worth having a test against.
  */

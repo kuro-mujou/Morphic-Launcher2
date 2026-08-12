@@ -110,7 +110,7 @@ sealed interface FolderPhase<out Id : Any> {
  * TODO(naming): "folder" in these names is now one of two cases (the other is an APPS category). The honest vocabulary
  *  is a *collection of apps opened over a surface*, which is what this and [FolderOverlay] both actually model — but
  *  renaming reaches `FolderOverlay`, `FolderDragDelegate`, `folderInnerSize`, `FolderReorder` and every call site in
- *  home and `feature:apps`. Worth one mechanical commit of its own; deliberately not mixed into a behaviour change.
+ *  home and `feature:apps`. Worth one mechanical commit of its own; deliberately not mixed into a behavior change.
  */
 @Stable
 class FolderHostState<Id : Any> {

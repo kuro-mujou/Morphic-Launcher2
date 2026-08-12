@@ -45,7 +45,7 @@ internal const val PUSH_DWELL_MS = 200L
  * `HomeScreen` and the dev harness's `GridSurface` so there is one implementation to reason about.
  *
  * **What stays with the caller — deliberately.** Three things differ per surface, so they are inputs, not baked
- * in: the **placement rules** ([planner] and [onLand] — merge/push behaviour and what to write, which travel with
+ * in: the **placement rules** ([planner] and [onLand] — merge/push behavior and what to write, which travel with
  * the zone), the **drag overlay** (the floating proxy + drop shadow; drawn once at the root, and for a multi-zone
  * surface it spans zones), and the **cell content** ([itemContent]). This composable owns only the per-zone grid +
  * gestures + dwelled preview.

@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
  * A tap launches; a long-press-and-move **ejects the app onto HOME**.
  *
  * **Why go through the contract for what used to be just a tap.** A `clickable` would be one line — and would give
- * these surfaces their own recogniser with their own long-press timing and slop, drifting from the rest of the
- * launcher. That is precisely L1's defect (four parallel recognisers, 350ms vs 500ms long-press), and a list or grid
+ * these surfaces their own recognizer with their own long-press timing and slop, drifting from the rest of the
+ * launcher. That is precisely L1's defect (four parallel recognizers, 350ms vs 500ms long-press), and a list or grid
  * of apps is where a user most notices the difference, since they alternate between it and home constantly.
  *
  * ## Eject on lift, not on reaching a target

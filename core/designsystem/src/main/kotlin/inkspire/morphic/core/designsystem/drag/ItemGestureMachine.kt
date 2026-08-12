@@ -36,7 +36,7 @@ sealed interface ItemGestureEffect {
     data object ShowMenu : ItemGestureEffect
 
     /**
-     * Take the context menu back down — a drag has started from it, or the gesture was cancelled. Deliberately
+     * Take the context menu back down — a drag has started from it, or the gesture was canceled. Deliberately
      * **not** emitted when the finger simply lifts: see [ItemGesturePhase.MenuOpen].
      */
     data object DismissMenu : ItemGestureEffect
@@ -111,7 +111,7 @@ internal val ItemGesturePhase.ownsFinger: Boolean
  *
  * Keeping the decision logic here — pure, deterministic, unit-tested — is the deliberate fix for L1, where
  * four separate recognizers each re-implemented long-press/slop/tap-suppression with different constants and
- * drifted out of sync. One machine, one [ItemGestureConfig], identical behaviour everywhere.
+ * drifted out of sync. One machine, one [ItemGestureConfig], identical behavior everywhere.
  *
  * The long-press *timer* lives in the modifier (a coroutine race); the machine just receives
  * [ItemGestureEvent.LongPress] and ignores it once the gesture has already moved on. Not thread-safe — drive

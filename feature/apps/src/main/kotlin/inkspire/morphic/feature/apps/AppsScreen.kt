@@ -49,7 +49,7 @@ import org.koin.androidx.compose.koinViewModel
  *
  * **This is the one place a layout is chosen**, and the reason this module exists as a single `feature:apps`
  * rather than L1's split `feature:appdrawer` + `feature:applibrary`. Those two modules were the same collection
- * of the same apps with the same launch behaviour, differing only in arrangement — so they duplicated the data
+ * of the same apps with the same launch behavior, differing only in arrangement — so they duplicated the data
  * wiring, and the "drawer or library?" question had to be answered *before* the layout question, twice. The model
  * already collapsed that (`Surface.APPS` + [AppsLayout], "the layout alone decides the look"); this is the code
  * catching up. A new layout is a new file under `layout/` and a new arm below, with nothing else to touch.
@@ -248,7 +248,7 @@ fun AppsScreen(
  * since a swipe back to HOME crosses this surface's own content.
  *
  * The twin of `HomeLayout.scrollAxes`, and the reason both exist rather than one table in the shell: the shell owns
- * the question and each feature owns its answer, so a new layout declares its own scroll behaviour in the module
+ * the question and each feature owns its answer, so a new layout declares its own scroll behavior in the module
  * that draws it. The `when` is exhaustive, so a sixth [AppsLayout] cannot be added without saying what it scrolls —
  * the same rule the render `when` above enforces.
  *
@@ -296,7 +296,7 @@ private fun AppsState.colsFor(slot: GridSlot, device: DeviceConfiguration): Int 
 /**
  * The list's resolved row height, or its blueprint's until the store answers.
  *
- * Needs no device, unlike its neighbours: a row height is a physical size rather than a count, so the blueprint
+ * Needs no device, unlike its neighbors: a row height is a physical size rather than a count, so the blueprint
  * declares one value and an override may differ it per configuration — the same shape the dock's height has.
  */
 private val AppsState.rowHeight: Dp

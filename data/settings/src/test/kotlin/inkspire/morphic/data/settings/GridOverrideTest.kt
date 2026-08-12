@@ -46,7 +46,7 @@ class GridOverrideTest {
     @Test
     fun `a scrolling grid ignores a stored row count`() {
         // Rows there are however many the content reaches, so a fixed count is not a preference the surface could
-        // honour. Decided in `resolveAgainst` rather than trusted to every reader.
+        // honor. Decided in `resolveAgainst` rather than trusted to every reader.
         val metrics = SurfaceMetrics.Default
             .withGridOverride(GridSlot.APPS_SCROLL, phone) { copy(cols = 5, rows = 9) }
 

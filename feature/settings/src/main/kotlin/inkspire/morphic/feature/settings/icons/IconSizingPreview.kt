@@ -41,7 +41,7 @@ private val CaptionGap = 6.dp
  */
 private const val CELL_FIT = 0.94f
 
-/** Dash and dot patterns for the two guardrail outlines, in px. Greyscale needs *shape* to tell them apart. */
+/** Dash and dot patterns for the two guardrail outlines, in px. Grayscale needs *shape* to tell them apart. */
 private val DashPattern = floatArrayOf(9f, 7f)
 private val DotPattern = floatArrayOf(2f, 6f)
 
@@ -63,7 +63,7 @@ private val DotPattern = floatArrayOf(2f, 6f)
  * - **The geometry is asked for, not copied.** L1 restated the cell's padding and label gap as `PREVIEW_CELL_PAD_DP` /
  *   `PREVIEW_LABEL_GAP_DP` under a "keep in sync" comment; this asks `cellIconLayout` where the icon is, so the guides
  *   cannot drift from the cell they are drawn over.
- * - **Greyscale, distinguished by stroke.** L1 colored the guardrails green (upper) and red (lower). This palette is
+ * - **Grayscale, distinguished by stroke.** L1 colored the guardrails green (upper) and red (lower). This palette is
  *   monochrome and reserves red for `error`, so the cell is a **solid** outline, the upper guardrail **dashed** and the
  *   lower **dotted**, with the caption naming them. The same rule that made the grid editor's add/remove buttons sit on
  *   the edge they affect rather than being told apart by color.
@@ -71,7 +71,7 @@ private val DotPattern = floatArrayOf(2f, 6f)
  *   wherever it draws nothing it *clears* the pane instead of covering it; the pane is an offscreen layer over a window
  *   that shows the wallpaper (`PunchThroughPane` in `SettingsScreen`, and `windowShowWallpaper` in `app`'s theme), so
  *   what is revealed is the real wallpaper. It is worth the machinery for the reason L1 gave: an icon is judged against
- *   what it will sit on, and a grey panel is not that.
+ *   what it will sit on, and a gray panel is not that.
  *
  * @param app the sample to draw, or null while the app cache is still loading — the preview then shows its outlines
  *   alone, which is still the useful half (the sizes are what is being edited).
@@ -167,13 +167,13 @@ private fun CellPreview(app: AppInfo?, metrics: IconMetrics, cellWidth: Dp, cell
         ) {
             if (app != null) AppCell(app = app, metrics = metrics)
             Canvas(Modifier.fillMaxSize()) {
-                val centre = Offset(size.width / 2f, layout.iconCenterY.toPx())
+                val center = Offset(size.width / 2f, layout.iconCenterY.toPx())
                 fun square(edge: Dp, effect: PathEffect?) {
                     val px = edge.toPx()
                     if (px <= 0f) return
                     drawRect(
                         color = colors.accent,
-                        topLeft = Offset(centre.x - px / 2f, centre.y - px / 2f),
+                        topLeft = Offset(center.x - px / 2f, center.y - px / 2f),
                         size = Size(px, px),
                         style = Stroke(width = GuideStrokeDp.toPx(), pathEffect = effect),
                     )

@@ -34,7 +34,7 @@ internal fun List<List<IconItem>>.flatItems(): List<IconItem> = flatten()
  *
  * **Empty pages are dropped, including middle ones.** A page with nothing on it is not a place: the user cannot
  * scroll past it meaningfully and cannot delete it except by dragging something in and out again. Hard boundaries
- * are about moves not disturbing neighbours, not about preserving blanks.
+ * are about moves not disturbing neighbors, not about preserving blanks.
  */
 internal fun normalizePages(pages: List<List<IconItem>>, perPage: Int): List<List<IconItem>> {
     require(perPage > 0) { "perPage must be > 0, got $perPage" }

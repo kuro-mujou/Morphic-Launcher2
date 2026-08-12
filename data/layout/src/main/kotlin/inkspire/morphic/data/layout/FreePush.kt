@@ -33,13 +33,13 @@ sealed interface PushResult<out K> {
  * Makes room on a **free-placement** grid (home, dock) for a dragged item that has landed on a target
  * [GridPlacement], by shoving whatever it overlaps out of the way. This is the live push run on every hover
  * while dragging: the caller supplies the current occupants and where the drag would land, and gets back the
- * occupant moves needed (or [PushResult.Blocked] if the drop can't be honoured).
+ * occupant moves needed (or [PushResult.Blocked] if the drop can't be honored).
  *
  * Ported from L1's `SpreadPush` (which was sound — the rot was in the UI layer that called it three times).
  * Refactors applied: `GridRect`/`AppPosition` collapsed to [GridPlacement]; `Pair<Int, Int>` deltas replaced
  * by [PushDirection]; the nullable-map return replaced by [PushResult]; the unused `PushPath` type dropped.
  *
- * Behaviour (locked in [docs/DRAG_AND_DROP_DESIGN.md] §6b, "Cascade, error at edge"):
+ * Behavior (locked in [docs/DRAG_AND_DROP_DESIGN.md] §6b, "Cascade, error at edge"):
  * - Each overlapped occupant is shoved off the footprint. Preference order is [preferred] first (the direction
  *   derived from *which sub-zone* of the target cell the finger entered — "hover the top → push down"), then
  *   the remaining directions ordered by nearest exit edge.
@@ -66,7 +66,7 @@ object FreePush {
      *   what the user said — it comes from the sub-zone of the cell the finger entered — so an item flying across
      *   the screen would answer a question nobody asked, and a refusal is undone by moving the finger a cell
      *   over. A *resize* says nothing about direction at all: the user is claiming an area, and the items in it
-     *   simply need to be somewhere else, so refusing an expansion because the neighbour cannot slide *sideways*
+     *   simply need to be somewhere else, so refusing an expansion because the neighbor cannot slide *sideways*
      *   while half the screen is empty is the wrong answer. Hence: drags cascade, resizes relocate.
      */
     fun <K> push(
@@ -169,7 +169,7 @@ object FreePush {
      * A new home for [rect] when no direction could clear it: the **nearest free space on the grid** that its
      * spans fit in, or null when the grid genuinely has nowhere left.
      *
-     * "Nearest" is Manhattan distance between top-left corners — the same spans, so corner distance and centre
+     * "Nearest" is Manhattan distance between top-left corners — the same spans, so corner distance and center
      * distance agree — which keeps the item as close to where the user last saw it as the grid allows. Ties are
      * broken by the row-major scan: topmost, then leftmost, which reads as "it went up out of the way" rather
      * than as an arbitrary jump.

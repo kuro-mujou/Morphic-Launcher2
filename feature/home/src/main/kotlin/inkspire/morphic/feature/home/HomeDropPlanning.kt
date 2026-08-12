@@ -29,7 +29,7 @@ import kotlin.math.abs
  *
  * The rule, unchanged from the single-zone version:
  * - the footprint is [span] logical cells, snapped to the **logical** lattice;
- * - if the finger is over an occupant, that occupant's cell partitions into a centre merge ring plus four push
+ * - if the finger is over an occupant, that occupant's cell partitions into a center merge ring plus four push
  *   triangles — the ring merges into a folder, a triangle picks which way the occupant is shoved;
  * - otherwise the free-grid engine pushes whatever the footprint lands on.
  *
@@ -41,7 +41,7 @@ import kotlin.math.abs
  * launcher subdivides at all. Passing `step = span` here rounded the top-left back onto the visual lattice, which
  * made a grid declared at `cellMultiplier = 2` behave in every observable way like one declared at 1: the
  * subdivision cost twice the occupancy bookkeeping and bought nothing. `step = 1` is what L1 does — it resolves
- * the hovered cell at logical granularity and centres the footprint on it.
+ * the hovered cell at logical granularity and centers the footprint on it.
  *
  * @param geo the zone's measured geometry, as published by its grid — the same cells the user can see.
  * @param config the zone's logical dimensions; `cellMultiplier` is the visual-cell span.
@@ -108,11 +108,11 @@ internal fun canMerge(dragged: GridItem, target: GridItem): Boolean {
 internal fun GridPlacement.covers(cell: Cell): Boolean =
     cell.row in row until rowEndExclusive && cell.col in col until colEndExclusive
 
-/** Radius (px) of the merge ring at the centre of the item occupying [rect], scaled by its smaller side. */
+/** Radius (px) of the merge ring at the center of the item occupying [rect], scaled by its smaller side. */
 private fun GridGeometry.mergeRadius(rect: GridPlacement): Float =
     MERGE_INNER_RADIUS * minOf(rect.colSpan * cellW, rect.rowSpan * cellH)
 
-/** True when the finger sits in the inner merge ring of the item occupying [rect] — one circle at its centre. */
+/** True when the finger sits in the inner merge ring of the item occupying [rect] — one circle at its center. */
 internal fun GridGeometry.inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
     val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)
     val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellH)

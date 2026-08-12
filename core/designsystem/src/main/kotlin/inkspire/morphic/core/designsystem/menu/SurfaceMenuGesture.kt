@@ -41,7 +41,7 @@ private const val SurfaceMenuMarginMs = 120L
  *    (or category expansion) already holds the lock, so pressing its backdrop cannot open the menu of the surface
  *    buried underneath it.
  *
- * L1 had no equivalent because its home ran a **single root recogniser** that resolved the cell under the finger and
+ * L1 had no equivalent because its home ran a **single root recognizer** that resolved the cell under the finger and
  * branched (`isOnIcon` → the item menu, otherwise the surface menu). That works, but it makes the surface responsible
  * for knowing where every item drew its icon — and this codebase deliberately hands that decision down to the cell's
  * content instead. Asking "did anything claim the finger?" needs no geometry at all, which is why it can be one

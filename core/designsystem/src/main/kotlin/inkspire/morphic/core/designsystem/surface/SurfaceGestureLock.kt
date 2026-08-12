@@ -17,7 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
  * panning to another surface.
  *
  * A count rather than a flag, because the claimants are independent and can overlap: an item can be held down with
- * its menu up *inside* an open folder, and each half has to be able to let go without cancelling the other's claim.
+ * its menu up *inside* an open folder, and each half has to be able to let go without canceling the other's claim.
  * Nothing reads *why* it is locked, only that it is, which is what keeps the set of reasons open — the item options
  * menu (P7) joins by claiming, with no change here or in [SurfacePager].
  *

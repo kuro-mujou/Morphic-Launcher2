@@ -27,7 +27,7 @@ internal val CellPadV = 4.dp
 internal val LabelGap = 4.dp
 
 /**
- * A grid-cell label: single line, ellipsised, sized by [IconMetrics.labelScale].
+ * A grid-cell label: single line, ellipsized, sized by [IconMetrics.labelScale].
  *
  * TODO(launcher wallpaper-adaptive UI): [color] defaults to white + a drop shadow so it stays legible over a
  *  dark-ish wallpaper. When the wallpaper-brightness subsystem lands, feed the adaptive content tint (black on
@@ -67,12 +67,12 @@ internal fun CellLabel(
 }
 
 /**
- * Shared cell body for grid items (apps, folders). Without a label the icon is centred in the whole cell.
+ * Shared cell body for grid items (apps, folders). Without a label the icon is centered in the whole cell.
  *
  * With a label the icon is *sized* from the leftover area (cell minus the label row + gap, as if the label sat
  * at the bottom) so a tall cell never inflates it; the icon + gap + label are then *placed* as one packed
- * group centred in the cell, so the label stays close under the icon instead of drifting to the bottom edge.
- * Since the group's height is ≤ the cell by construction (icon capped at the leftover), centring can't push
+ * group centered in the cell, so the label stays close under the icon instead of drifting to the bottom edge.
+ * Since the group's height is ≤ the cell by construction (icon capped at the leftover), centering can't push
  * the label past the cell bound. [icon] receives the resolved size.
  *
  * **Two extents, deliberately different.** The cell is what the icon is *measured against* — sizing reads the
@@ -84,7 +84,7 @@ internal fun CellLabel(
  * is what keeps a press-and-hold on a *full* page of icons available for the home's own options menu.
  *
  * The group wraps its content in both axes, so its width is `max(icon, label)` — capped at the cell's inner width
- * because the label is single-line and ellipsised, which is exactly the visible bounding box.
+ * because the label is single-line and ellipsized, which is exactly the visible bounding box.
  *
  * @param itemGestures the item-gesture modifier from the enclosing draggable cell (see
  *   [inkspire.morphic.core.designsystem.grid.LauncherDragCell]). Defaults to none, which is right for a
@@ -113,7 +113,7 @@ fun IconLabelCell(
         val labelHeight = cellLabelHeight(metrics)
         val iconArea = (maxHeight - CellPadV * 2 - LabelGap - labelHeight).coerceAtLeast(0.dp)
         val iconDp = metrics.resolveIconSize(availW, iconArea).coerceAtMost(iconArea)
-        // Outer box centres the group in the cell; the group itself wraps content and carries the gestures.
+        // Outer box centers the group in the cell; the group itself wraps content and carries the gestures.
         Box(modifier = padding, contentAlignment = Alignment.Center) {
             Column(
                 modifier = itemGestures,

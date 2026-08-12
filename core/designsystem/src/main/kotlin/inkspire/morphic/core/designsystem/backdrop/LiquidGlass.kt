@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
  * The rounded-rect "liquid glass" lens, as AGSL.
  *
  * **Attribution, carried over from L1 and not to be dropped.** The refraction maths — the rounded-rect SDF and its
- * analytic gradient, the circular `circleMap` falloff confined to a rim band of `refractionHeight` with the centre
+ * analytic gradient, the circular `circleMap` falloff confined to a rim band of `refractionHeight` with the center
  * passing straight through, and the chromatic-aberration split — is adapted from Kyant's
  * [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass), Apache-2.0.
  *
@@ -71,7 +71,7 @@ half4 main(float2 coord) {
 
     half4 col;
     if (-sd >= refractionHeight) {
-        // Centre: pass straight through (just the blurred backdrop).
+        // Center: pass straight through (just the blurred backdrop).
         col = sampleAt(coord);
     } else {
         sd = min(sd, 0.0);
@@ -126,7 +126,7 @@ internal class LiquidGlass {
      *
      * @param src the crop of [image] behind this box, in bitmap px — the same rectangle the blur path draws, which is
      *   what makes switching effects not shift the picture.
-     * @param refractionHeightPx how far in from the rim the lens band reaches; the centre inside it is undistorted.
+     * @param refractionHeightPx how far in from the rim the lens band reaches; the center inside it is undistorted.
      * @param refractionAmountPx how far the rim pulls its sample. Passed **negated**: pulling inward along the outward
      *   normal is what magnifies the background, i.e. what makes it read as a lens rather than a dent.
      */

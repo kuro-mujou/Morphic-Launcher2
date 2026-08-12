@@ -14,7 +14,7 @@ import android.graphics.Bitmap
  * @property component the provider's own component, which is what a later slice binds an allocated id to. Carried
  *   now rather than added later because it is the entry's identity — two widgets from one app differ by it and by
  *   nothing else that is guaranteed unique.
- * @property preview the artwork the app publishes for this widget, already rasterised at the device density, or
+ * @property preview the artwork the app publishes for this widget, already rasterized at the device density, or
  *   null when it publishes neither a preview nor an icon. A [Bitmap] in a data model for `AppShortcut`'s reason:
  *   it is someone else's artwork, read fresh for a sheet that is about to be shown and thrown away when it closes.
  * @property minWidthPx the smallest size the provider says it can be drawn at, in pixels — what the picker turns
@@ -36,7 +36,7 @@ data class WidgetProvider(
  * *application's* label, which is a `PackageManager` read — a second platform lookup per row — and this module is
  * already the boundary that owns those. Doing it in the UI is how a composable ends up holding a `PackageManager`.
  *
- * It is also a fact about the catalogue rather than a choice about presentation: a widget belongs to the app that
+ * It is also a fact about the catalog rather than a choice about presentation: a widget belongs to the app that
  * ships it whether or not anything draws it in sections.
  */
 data class WidgetProviderGroup(

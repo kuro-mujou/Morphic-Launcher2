@@ -239,7 +239,7 @@ private fun PanelHeader(tool: StudioTool, spec: IconLayerSpec?) {
  *
  * **Reset says what it will do to *this* subject**, because it is the same verb pointed at two different things — an
  * app stops having its own recipe and inherits the global default again; the global default goes back to plain app
- * icons. A row labelled "Reset" alone would be asking the user to guess which.
+ * icons. A row labeled "Reset" alone would be asking the user to guess which.
  */
 @Composable
 private fun MoreControls(subject: StudioSubject, onReset: () -> Unit) {

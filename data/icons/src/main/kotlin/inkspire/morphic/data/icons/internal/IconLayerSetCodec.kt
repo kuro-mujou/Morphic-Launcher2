@@ -8,7 +8,7 @@ import timber.log.Timber
  * How a per-app [IconLayerSet] becomes the string in `icon_override.layerSet`, and back.
  *
  * Kept a plain object with no Room and no Android in sight, for the reason `data:settings` keeps `SettingsSlice`
- * free of DataStore: the interesting behaviour — what happens to a blob that cannot be read — is then testable
+ * free of DataStore: the interesting behavior — what happens to a blob that cannot be read — is then testable
  * without an emulator.
  *
  * **The rules deliberately match `data:settings`' slice codec**, because both stores serialize *the same type*:

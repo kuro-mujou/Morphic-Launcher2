@@ -21,7 +21,7 @@ import org.junit.Test
 class HomeResizeTest {
 
     private val widget = GridItem.Widget(appWidgetId = 7)
-    private val neighbour: GridItem = GridItem.App(ComponentKey(packageName = "com.example", className = "Main"))
+    private val neighbor: GridItem = GridItem.App(ComponentKey(packageName = "com.example", className = "Main"))
     private val grid = GridConfig(rows = 4, cols = 4)
     private val at = GridPlacement(page = 0, row = 0, col = 0, rowSpan = 1, colSpan = 1)
 
@@ -40,7 +40,7 @@ class HomeResizeTest {
 
     @Test
     fun `an accepted candidate becomes the frame, with the push it costs`() {
-        val pushed = mapOf(neighbour to GridPlacement(page = 0, row = 2, col = 0))
+        val pushed = mapOf(neighbor to GridPlacement(page = 0, row = 2, col = 0))
         val candidate = at.copy(colSpan = 2)
 
         val resolved = session().resolving(candidate, grid) { pushed }
@@ -61,7 +61,7 @@ class HomeResizeTest {
     @Test
     fun `a candidate the planner blocks leaves the frame exactly where it was`() {
         val held = at.copy(colSpan = 2)
-        val pushed = mapOf(neighbour to GridPlacement(page = 0, row = 2, col = 0))
+        val pushed = mapOf(neighbor to GridPlacement(page = 0, row = 2, col = 0))
 
         val resolved = session(placement = held, moves = pushed).resolving(at.copy(colSpan = 3), grid) { null }
 
@@ -81,10 +81,10 @@ class HomeResizeTest {
     @Test
     fun `the previewed cells are the frame's for the resized item and the plan's for everyone else`() {
         val pushed = GridPlacement(page = 0, row = 3, col = 0)
-        val resize = session(placement = at.copy(colSpan = 2), moves = mapOf(neighbour to pushed))
+        val resize = session(placement = at.copy(colSpan = 2), moves = mapOf(neighbor to pushed))
 
         assertEquals(at.copy(colSpan = 2), resize.previewOf(widget))
-        assertEquals(pushed, resize.previewOf(neighbour))
+        assertEquals(pushed, resize.previewOf(neighbor))
         assertEquals(null, resize.previewOf(GridItem.Folder(folderId = 1)))
     }
 }

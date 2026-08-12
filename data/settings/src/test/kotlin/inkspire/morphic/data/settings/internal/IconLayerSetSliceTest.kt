@@ -30,7 +30,7 @@ class IconLayerSetSliceTest {
     )
 
     /** A set exercising every part of the shape: a custom layer, a non-default source, a shape, and transforms. */
-    private val customised = IconLayerSet(
+    private val customized = IconLayerSet(
         listOf(
             IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.SolidFill(argb = 0xFF2196F3.toInt())),
             IconLayerSpec(
@@ -50,15 +50,15 @@ class IconLayerSetSliceTest {
     )
 
     @Test
-    fun `a customised set survives a round trip`() {
-        assertEquals(customised, slice.decode(slice.encode(customised)))
+    fun `a customized set survives a round trip`() {
+        assertEquals(customized, slice.decode(slice.encode(customized)))
     }
 
     @Test
     fun `layer order survives, because a layer's index is what places it in the stack`() {
-        val decoded = slice.decode(slice.encode(customised))
+        val decoded = slice.decode(slice.encode(customized))
 
-        assertEquals(customised.layers.map { it.role }, decoded.layers.map { it.role })
+        assertEquals(customized.layers.map { it.role }, decoded.layers.map { it.role })
     }
 
     @Test

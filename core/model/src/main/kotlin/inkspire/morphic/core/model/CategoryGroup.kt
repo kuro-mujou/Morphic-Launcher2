@@ -44,7 +44,7 @@ fun CategoryGroup.toCategory(): Category = Category(id = name, name = displayNam
 /**
  * True for a built-in group id — a category the user may rename but not create or delete.
  *
- * Also the test for whether a *stored* category id is still recognised: an id that is neither one of these nor
+ * Also the test for whether a *stored* category id is still recognized: an id that is neither one of these nor
  * user-created no longer exists, so nothing may stay filed under it (see `AppsOrderRepository.syncCategories`).
  * User-created ids will need their own marker when the management UI arrives; L1 solved that with an id prefix
  * (`u1`, `u2`, …), which keeps the two id spaces apart without needing a column.

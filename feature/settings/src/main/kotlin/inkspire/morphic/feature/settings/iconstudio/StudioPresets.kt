@@ -128,7 +128,7 @@ internal fun PresetsControls(
  * **Its own composable so the text field's state lives with the control that uses it**, which is what makes the field
  * genuinely absent in the individual studio rather than merely undrawn — with the state hoisted into
  * [PresetsControls] there would be a buffer allocated for a field that never appears. It also scopes a half-typed name
- * to the row being on screen, which is the behaviour a user expects when they close the panel.
+ * to the row being on screen, which is the behavior a user expects when they close the panel.
  */
 @Composable
 private fun PresetNameRow(onSave: (String) -> Unit) {

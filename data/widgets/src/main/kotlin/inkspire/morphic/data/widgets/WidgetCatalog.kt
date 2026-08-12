@@ -15,12 +15,12 @@ import java.text.Collator
  * Every app widget installed on the device, grouped under the app that publishes it — the picker's whole input.
  *
  * **A live read, deliberately not a cache.** The app *list* is mirrored into Room because every surface resolves
- * items through it and it has to survive process death; a widget catalogue is read once when a sheet opens and
+ * items through it and it has to survive process death; a widget catalog is read once when a sheet opens and
  * discarded when it closes, so caching it would mean keeping preview bitmaps for widgets nobody is looking at and
  * inventing an invalidation rule for a question that is cheap to re-ask. Same reasoning as `AppShortcuts` in
  * `data:apps`, and the same shape: a suspending read with no flow behind it.
  *
- * **This module is only the catalogue today.** Allocating an `appWidgetId`, binding it to a provider and hosting
+ * **This module is only the catalog today.** Allocating an `appWidgetId`, binding it to a provider and hosting
  * the resulting view are an `AppWidgetHost`'s job and arrive with the slice that can actually draw a widget; this
  * one needs no host at all, which is why there isn't one yet. `AppWidgetManager` answers "what could be added?" on
  * its own.
@@ -35,7 +35,7 @@ interface WidgetCatalog {
      * ordering and the live-wallpaper shelf make: raw UTF-16 comparison puts every accented label after `Z`, so a
      * Vietnamese or French device gets a list that breaks into two alphabets.
      *
-     * Blocking work (a `PackageManager` lookup and a rasterised preview per widget) is moved off the caller's
+     * Blocking work (a `PackageManager` lookup and a rasterized preview per widget) is moved off the caller's
      * thread here, since there is exactly one caller shape — a sheet about to be shown.
      */
     suspend fun installed(): List<WidgetProviderGroup>
@@ -61,7 +61,7 @@ internal class DefaultWidgetCatalog(
     private val packageManager: PackageManager = appContext.packageManager
 
     /**
-     * The density previews are rasterised at, read per call rather than frozen at construction — the same reason
+     * The density previews are rasterized at, read per call rather than frozen at construction — the same reason
      * the launcher-apps wrapper keeps `Resources` for its shortcut icons.
      */
     private val resources = appContext.resources
@@ -128,7 +128,7 @@ internal class DefaultWidgetCatalog(
     }.onFailure { Timber.w(it, "No preview for widget %s", provider.flattenToShortString()) }.getOrNull()
 
     private companion object {
-        /** What a drawable with no intrinsic size is rasterised at. L1's number. */
+        /** What a drawable with no intrinsic size is rasterized at. L1's number. */
         const val PreviewFallbackPx = 256
     }
 }

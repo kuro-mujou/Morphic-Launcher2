@@ -54,7 +54,7 @@ interface SettingsRepository {
      * and "the user reset everything" are the same state and no consumer special-cases either.
      *
      * **Per-app overrides are deliberately not here.** They are rows in `data:icons`, because there is one of them
-     * per customised app and this is a preference store, not an arrangement store — the same line `drawerOrder` and
+     * per customized app and this is a preference store, not an arrangement store — the same line `drawerOrder` and
      * `categories` fell on the wrong side of in L1. The two meet in the composition, where an icon resolves its
      * override or falls back to this.
      */

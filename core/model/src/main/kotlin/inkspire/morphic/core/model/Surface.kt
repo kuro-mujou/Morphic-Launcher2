@@ -48,7 +48,7 @@ enum class HomeEdge {
 
 /**
  * The composition of the [Surface.HOME] surface. The main area's layout and its companion side zone are
- * coupled, so only these combinations are valid — modelling them as one enum makes any other pairing
+ * coupled, so only these combinations are valid — modeling them as one enum makes any other pairing
  * unrepresentable.
  *
  * - [PAGER_WITH_DOCK]: the main area is a horizontal pager of grids; its side zone is a [HomeZone.DOCK].

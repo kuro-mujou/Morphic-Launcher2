@@ -99,7 +99,7 @@ fun SettingsScreen(
     onOpenDevHarness: (() -> Unit)? = null,
 ) {
     val twoPane = currentDeviceConfiguration().isTablet
-    // **Seeded from the route, and only from the *first* arrival** — `rememberSaveable`'s initialiser runs once, so
+    // **Seeded from the route, and only from the *first* arrival** — `rememberSaveable`'s initializer runs once, so
     // a deep link chooses where settings opens and everything after that is the user's navigation within it. That is
     // the right shape for an argument that describes an arrival rather than a state to be kept in step.
     var selected by rememberSaveable { mutableStateOf(initialSection) }

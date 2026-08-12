@@ -95,8 +95,8 @@ private val FolderZoneId = ZoneId("folder")
  *
  * Deliberately long — and **exactly** the dwell that *opens* a folder mid-drag (`OPEN_FOLDER_DWELL_MS`), because the
  * two are opposite halves of the same gesture: one hold takes the app in, the same hold takes it out again, and a
- * user who has learnt one has learnt both. A short dwell here made the folder feel like it was ejecting apps by
- * accident: the outer zone is most of the screen, so merely travelling across the card's edge on the way to another
+ * user who has learned one has learned both. A short dwell here made the folder feel like it was ejecting apps by
+ * accident: the outer zone is most of the screen, so merely traveling across the card's edge on the way to another
  * cell was enough to trigger it.
  */
 private const val LeaveDwellMs = 1000L
@@ -211,7 +211,7 @@ fun FolderOverlay(
                 val g = gridState.value
                 val ps = (g.cols * g.rows).coerceAtLeast(1)
                 // Off the grid → hold the current gap; on a cell → migrate the gap toward it. Two-zone: a folder
-                // holds no folders, so a cell splits into halves with no centre merge third to read.
+                // holds no folders, so a cell splits into halves with no center merge third to read.
                 val cell = geo.cellAt(fingerInRoot) ?: return FolderReorderPlan
                 val flatSlot = flatSlotOf(cell.row, cell.col, g.cols, pagerState.currentPage, ps)
                 gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
@@ -236,7 +236,7 @@ fun FolderOverlay(
     //
     // **The zone carries the folder's own hover and drop.** They used to be routed here by the host surface, whose
     // planner had a `zone.id != mine` branch handing over to the published delegate and whose drop had a matching
-    // one; both were the same statement — *this zone's behaviour is the folder's* — said in the surface instead of
+    // one; both were the same statement — *this zone's behavior is the folder's* — said in the surface instead of
     // in the zone. The delegate stays for what genuinely crosses the boundary: the host still needs `commitReorder`
     // to be reachable, because an app injected from outside commits through the host's own write path.
     val bounds = innerBounds
@@ -310,7 +310,7 @@ fun FolderOverlay(
     // itself, not on the alpha, and the drop shadow and proxy below flip instantly because they belong to the drag
     // rather than to the presentation.
     // **An `Animatable` seeded at zero, not `animateFloatAsState`** — and the difference is the whole feature. That
-    // helper initialises to its *target*, so an overlay composed with `presenting = true` would snap in at full
+    // helper initializes to its *target*, so an overlay composed with `presenting = true` would snap in at full
     // strength and only ever animate on a later change: a folder would fade out but never fade in. Starting at zero
     // and animating toward the flag gives the entrance as well, and costs a pointer holder nothing (composed at
     // `false`, it starts at zero and stays there).

@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Behaviour spec for [FreeGridPlanner] — how a resolved hover becomes a [inkspire.morphic.core.model.PlacementPlan].
+ * Behavior spec for [FreeGridPlanner] — how a resolved hover becomes a [inkspire.morphic.core.model.PlacementPlan].
  * Confirms each [DropIntent] and that the plan's [moves] mirror what [FreePush] returned.
  */
 class FreeGridPlannerTest {

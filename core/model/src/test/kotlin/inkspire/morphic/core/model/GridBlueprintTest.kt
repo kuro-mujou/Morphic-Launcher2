@@ -76,7 +76,7 @@ class GridBlueprintTest {
 
     @Test
     fun `a scrolling grid has no fixed row count and a paged one does`() {
-        // Not new behaviour — but it is the precondition `toGridConfig` throws on, and the icon/grid resolvers now
+        // Not new behavior — but it is the precondition `toGridConfig` throws on, and the icon/grid resolvers now
         // read these blueprints per slot, so it is worth pinning that the two sizings stay distinguishable by data.
         GridBlueprints.values.forEach { blueprint ->
             val rows = blueprint.defaults.values.map { it.rows }

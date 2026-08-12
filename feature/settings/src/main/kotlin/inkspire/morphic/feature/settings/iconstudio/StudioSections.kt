@@ -169,7 +169,7 @@ internal fun LayerStackActions(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Disabled rather than hidden, because *which* move is illegal is the information: a greyed arrow says
+            // Disabled rather than hidden, because *which* move is illegal is the information: a grayed arrow says
             // "the foreground cannot go below its background" before the move is attempted, where a vanished button
             // says nothing and a refused drag says nothing twice.
             StudioIconButton(
@@ -335,7 +335,7 @@ internal fun TransformControls(
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
-    LabelledControl("Position") {
+    LabeledControl("Position") {
         Morphic2DPad(
             x = spec.offsetX,
             y = spec.offsetY,
@@ -346,7 +346,7 @@ internal fun TransformControls(
             modifier = Modifier.fillMaxWidth().size(140.dp),
         )
     }
-    LabelledControl("Zoom  ${"%.2f".format(spec.zoom)}") {
+    LabeledControl("Zoom  ${"%.2f".format(spec.zoom)}") {
         MorphicSlider(
             value = spec.zoom,
             onValueChange = { value -> onUpdate { it.copy(zoom = value) } },
@@ -354,7 +354,7 @@ internal fun TransformControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("Rotation  ${"%.0f".format(spec.rotation)}°") {
+    LabeledControl("Rotation  ${"%.0f".format(spec.rotation)}°") {
         MorphicSlider(
             value = spec.rotation,
             onValueChange = { value -> onUpdate { it.copy(rotation = value) } },
@@ -379,7 +379,7 @@ private fun ColorControls(
 ) {
     val color = spec.color ?: LayerEffect.Color()
 
-    LabelledControl("Opacity  ${"%.2f".format(spec.opacity)}") {
+    LabeledControl("Opacity  ${"%.2f".format(spec.opacity)}") {
         MorphicSlider(
             value = spec.opacity,
             onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
@@ -387,7 +387,7 @@ private fun ColorControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("Blend") {
+    LabeledControl("Blend") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             LayerBlend.entries.toList().chunked(3).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -402,7 +402,7 @@ private fun ColorControls(
             }
         }
     }
-    LabelledControl("Saturation  ${"%.2f".format(color.saturation)}") {
+    LabeledControl("Saturation  ${"%.2f".format(color.saturation)}") {
         MorphicSlider(
             value = color.saturation,
             onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
@@ -410,7 +410,7 @@ private fun ColorControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("Brightness  ${"%.2f".format(color.brightness)}") {
+    LabeledControl("Brightness  ${"%.2f".format(color.brightness)}") {
         MorphicSlider(
             value = color.brightness,
             onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
@@ -418,7 +418,7 @@ private fun ColorControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("Hue  ${"%.0f".format(color.hueDegrees)}°") {
+    LabeledControl("Hue  ${"%.0f".format(color.hueDegrees)}°") {
         MorphicSlider(
             value = color.hueDegrees,
             onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
@@ -426,7 +426,7 @@ private fun ColorControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("Tint") {
+    LabeledControl("Tint") {
         // Clearable because a tint is the one recoloring that cannot be undone by returning a slider to its
         // middle — without a way off, picking one would be a one-way door.
         ClearableColorField(
@@ -443,7 +443,7 @@ private fun ColorControls(
     // colored depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
     // multiply cannot reach, since black multiplied by anything is still black. See `TintMode`.
     if (color.tintArgb != null) {
-        LabelledControl("Tint style") {
+        LabeledControl("Tint style") {
             MorphicSegmentedButtons(
                 options = listOf("Shaded", "Solid"),
                 selectedIndex = if (color.tintMode == TintMode.SOLID) 1 else 0,
@@ -473,7 +473,7 @@ private fun GradientControls(
     // than jumping to arbitrary values the moment strength leaves zero.
     val gradient = spec.gradient ?: LayerEffect.Gradient(strength = 0f)
 
-    LabelledControl("Strength  ${"%.2f".format(gradient.strength)}") {
+    LabeledControl("Strength  ${"%.2f".format(gradient.strength)}") {
         MorphicSlider(
             value = gradient.strength,
             onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
@@ -481,7 +481,7 @@ private fun GradientControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("Angle  ${"%.0f".format(gradient.angleDegrees)}°") {
+    LabeledControl("Angle  ${"%.0f".format(gradient.angleDegrees)}°") {
         MorphicSlider(
             value = gradient.angleDegrees,
             onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
@@ -489,12 +489,12 @@ private fun GradientControls(
             onValueChangeFinished = onCommit,
         )
     }
-    LabelledControl("From") {
+    LabeledControl("From") {
         ColorField(argb = gradient.startArgb) { argb ->
             onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
         }
     }
-    LabelledControl("To") {
+    LabeledControl("To") {
         ColorField(argb = gradient.endArgb) { argb ->
             onUpdate { it.withGradient(gradient.copy(endArgb = argb)) }
         }
@@ -601,7 +601,7 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  */
 @Composable
 internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
-    LabelledControl("Shape") {
+    LabeledControl("Shape") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // "None" first and always reachable: unshaped is what every icon renders as today, so it has to be a
             // choice rather than a state you can only get back to by undoing.
@@ -658,9 +658,9 @@ internal fun SourceControls(
     onBrowsePack: ((String) -> Unit)?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LabelledControl("Source") {
+        LabeledControl("Source") {
             // **A flow row of tiles rather than a column of rows**, because the choices are *pictures*: an icon pack is
-            // recognised by its own artwork long before its name is read, so labelled text was asking the user to read
+            // recognized by its own artwork long before its name is read, so labeled text was asking the user to read
             // a list where they could have looked at one. Flowing rather than scrolling sideways, so a device with six
             // packs installed shows all six instead of hiding the last of them past an edge.
             FlowRow(
@@ -706,7 +706,7 @@ internal fun SourceControls(
                 }
 
                 // **One tile per pack, drawn as the pack's own launcher icon** — which `InstalledIconPack.preview`
-                // already carries, for exactly the reason its KDoc gives: packs are recognised by their artwork rather
+                // already carries, for exactly the reason its KDoc gives: packs are recognized by their artwork rather
                 // than by their name. An empty list is the ordinary state on a device with none, and it is also what a
                 // missing `<queries>` declaration looks like — see `IconPackManager`.
                 packs.forEach { pack ->
@@ -790,7 +790,7 @@ internal fun SourceControls(
         //
         // TODO: move to whichever section ends up owning a layer's appearance.
         if (allowsFixedSource) {
-            LabelledControl("Fill") {
+            LabeledControl("Fill") {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
                         onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
@@ -823,8 +823,8 @@ private val SourcePackIconSide = 36.dp
 /**
  * One choice in the source row: a rounded square with something drawn in the middle of it, and its name beneath.
  *
- * **Labelled despite being a picture**, which is the one place this departs from "a tile is recognised by its artwork":
- * two of the three kinds have no artwork, only a glyph, and an unlabelled glyph is the thing this studio's own notes
+ * **Labeled despite being a picture**, which is the one place this departs from "a tile is recognized by its artwork":
+ * two of the three kinds have no artwork, only a glyph, and an unlabeled glyph is the thing this studio's own notes
  * call worse than a wordy button. A label is also how two packs with similar icons are told apart.
  *
  * The label sits **outside** the tile and is constrained to its width, so a long pack name wraps beneath the square
@@ -867,7 +867,7 @@ private fun SourceTile(
     }
 }
 
-/** The quick-pick palette behind every [ColorField] — greys plus the primaries, with the picker for the rest. */
+/** The quick-pick palette behind every [ColorField] — grays plus the primaries, with the picker for the rest. */
 private val FillSwatches = listOf(
     0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0xFF808080.toInt(),
     0xFFE53935.toInt(), 0xFF1E88E5.toInt(), 0xFF43A047.toInt(),
@@ -875,7 +875,7 @@ private val FillSwatches = listOf(
 )
 
 @Composable
-private fun LabelledControl(label: String, content: @Composable () -> Unit) {
+private fun LabeledControl(label: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, color = StudioContentColor.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium)
         content()

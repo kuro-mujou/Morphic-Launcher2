@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Behaviour spec for [ItemGestureMachine] — one test per branch of the launcher's gesture contract
+ * Behavior spec for [ItemGestureMachine] — one test per branch of the launcher's gesture contract
  * (docs/DRAG_AND_DROP_DESIGN.md §5). Slop is 10px, so an offset of 20 is "past slop" and 5 is a wobble.
  */
 class ItemGestureMachineTest {
@@ -98,7 +98,7 @@ class ItemGestureMachineTest {
     }
 
     @Test
-    fun `cancelling with the menu open dismisses it`() {
+    fun `canceling with the menu open dismisses it`() {
         val m = machine()
         m.onEvent(ItemGestureEvent.Down)
         m.onEvent(ItemGestureEvent.LongPress)
