@@ -5,7 +5,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Turns a layer's [LayerEffect.Color] into the 4×5 colour matrix that applies it.
+ * Turns a layer's [LayerEffect.Color] into the 4×5 color matrix that applies it.
  *
  * **One derivation for two renderers**, [LayerTransform]'s reason exactly: the baked path and the live editor use
  * different graphics APIs, and an icon that is tinted one way while being edited and another on the home screen is
@@ -25,10 +25,10 @@ object LayerFilter {
     private const val LumB = 0.072f
 
     /**
-     * The colour matrix for [color], or `null` when it would change nothing.
+     * The color matrix for [color], or `null` when it would change nothing.
      *
      * Applied in a fixed order — **hue, then saturation, then brightness, then tint** — which is the order that
-     * makes each control mean what its name says. Hue first because rotating a colour wheel is meaningless once
+     * makes each control mean what its name says. Hue first because rotating a color wheel is meaningless once
      * saturation has flattened it to grey; tint last because it is the one that decides the final cast, and
      * anything after it would undo that.
      */
@@ -62,7 +62,7 @@ object LayerFilter {
      * This matrix applied first, then [next] — the composition order the names in [colorMatrixOf] read in.
      *
      * The fifth column is a translation rather than a coefficient, so it accumulates [next]'s own offset instead of
-     * multiplying through. Getting that backwards is silent: colours come out subtly shifted rather than wrong.
+     * multiplying through. Getting that backwards is silent: colors come out subtly shifted rather than wrong.
      */
     private fun FloatArray.then(next: FloatArray): FloatArray {
         val out = FloatArray(20)

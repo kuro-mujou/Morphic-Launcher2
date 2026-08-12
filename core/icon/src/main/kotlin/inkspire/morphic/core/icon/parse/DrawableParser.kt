@@ -17,7 +17,7 @@ import androidx.core.graphics.createBitmap
  * An [AdaptiveIconDrawable] contributes its own foreground and background (and, on Android 13+, its optional
  * monochrome layer). Any other drawable is a **legacy** icon: the whole drawable becomes the foreground and there
  * is no background of its own — we never try to cut a glyph out of a flat legacy bitmap (unreliable). For those,
- * [LegacyBackground] may recover a background *colour* from the artwork's own edge; see [legacyBackground].
+ * [LegacyBackground] may recover a background *color* from the artwork's own edge; see [legacyBackground].
  */
 class DrawableParser {
 
@@ -36,13 +36,13 @@ class DrawableParser {
     }
 
     /**
-     * The flat colour behind a legacy icon, recovered from the artwork's own border, or `null` when there is not
+     * The flat color behind a legacy icon, recovered from the artwork's own border, or `null` when there is not
      * one to recover.
      *
      * Rasterises the drawable small and hands its border ring to [LegacyBackground]. **Small on purpose**: this
-     * runs on every parse, and the question — "is this edge one flat colour?" — is answered as well by a
+     * runs on every parse, and the question — "is this edge one flat color?" — is answered as well by a
      * thumbnail as by the full icon, at a fraction of the allocation. A `ColorDrawable` is answered without
-     * drawing anything, since its edge is its colour by definition.
+     * drawing anything, since its edge is its color by definition.
      */
     private fun legacyBackground(drawable: Drawable): ParsedLayer? {
         if (drawable is ColorDrawable) return null // already the foreground; a plate behind it would be the same.
@@ -80,7 +80,7 @@ class DrawableParser {
         /** Enough resolution to tell a flat plate from a picture, and small enough to be free. */
         const val SampleSize = 32
 
-        /** How deep the sampled border is — ~9% in from each edge, which is where a plate colour is if there is one. */
+        /** How deep the sampled border is — ~9% in from each edge, which is where a plate color is if there is one. */
         const val RingWidth = 3
     }
 }

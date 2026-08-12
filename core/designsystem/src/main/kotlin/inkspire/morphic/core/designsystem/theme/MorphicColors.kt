@@ -11,12 +11,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * Semantic colour roles for the in-house design system. A token names a colour by *purpose*, not value, so a
+ * Semantic color roles for the in-house design system. A token names a color by *purpose*, not value, so a
  * `Morphic*` component reads role names and works unchanged under either scheme.
  *
  * The palette is deliberately **monochrome** — greyscale chrome that stays out of the way so the wallpaper
- * and app icons carry the colour. [accent] is a high-contrast greyscale *emphasis* (not a hue), so selected
- * and active states read by contrast; the only real colour is [error] (a red variant), reserved for
+ * and app icons carry the color. [accent] is a high-contrast greyscale *emphasis* (not a hue), so selected
+ * and active states read by contrast; the only real color is [error] (a red variant), reserved for
  * destructive / validation cases. State variants (pressed / hover / disabled) are alpha or overlay modifiers
  * on these roles, not extra roles. Both a [Light] and a [Dark] scheme exist — dark mode is an accessibility
  * barrier for some users, so light is a first-class peer, not an afterthought.
@@ -94,7 +94,7 @@ val LocalMorphicColors = staticCompositionLocalOf { MorphicColors.Dark }
 
 /**
  * Provides the [MorphicColors] scheme for [darkTheme] (defaults to the system setting). Wrap design-system
- * content so `Morphic*` components resolve their colours from [LocalMorphicColors].
+ * content so `Morphic*` components resolve their colors from [LocalMorphicColors].
  */
 @Composable
 fun MorphicTheme(
@@ -109,7 +109,7 @@ fun MorphicTheme(
  * Bridges this monochrome palette to an M3 [ColorScheme], so stock Material components (Button, Slider,
  * Switch, dialogs…) render monochrome *and* keep their Expressive motion — instead of showing M3's default
  * purple. [dark] only seeds the handful of roles we don't map. This is what lets us build components *on* M3
- * and merely restyle their colour, rather than rebuilding each from scratch.
+ * and merely restyle their color, rather than rebuilding each from scratch.
  */
 fun MorphicColors.toM3ColorScheme(dark: Boolean): ColorScheme {
     val base = if (dark) darkColorScheme() else lightColorScheme()

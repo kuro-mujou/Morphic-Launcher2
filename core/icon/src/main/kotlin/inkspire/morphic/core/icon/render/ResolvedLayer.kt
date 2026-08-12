@@ -4,7 +4,7 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.icon.parse.ParsedLayer
 
 /**
- * One layer after its [IconLayerSpec.source] has been resolved to concrete [content] (a colour or a drawable),
+ * One layer after its [IconLayerSpec.source] has been resolved to concrete [content] (a color or a drawable),
  * paired with the [spec] that says how to draw it. This is what the compositor consumes: the "what pixels"
  * is decided, leaving only the "how" (transform / shape / effects).
  *

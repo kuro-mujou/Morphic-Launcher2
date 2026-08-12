@@ -76,7 +76,7 @@ private const val FrameAlpha = 0.5f
  *
  * @param placement the frame's current cells, in the grid [geometry] describes — **the last thing the grid
  *   accepted**, which is why a drag past what is possible leaves the frame still and merely turns it red.
- * @param refused draws the frame in the error colour: the last thing [onResize] asked for could not be given.
+ * @param refused draws the frame in the error color: the last thing [onResize] asked for could not be given.
  *   The host decides, because it is the only thing that knows whether the request left the grid or collided with
  *   occupants that cannot be pushed clear — this overlay knows nothing about either.
  * @param onResize a handle moved: here is the candidate placement, in logical cells.

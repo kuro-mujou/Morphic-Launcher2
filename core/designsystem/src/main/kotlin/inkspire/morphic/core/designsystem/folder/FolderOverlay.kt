@@ -376,7 +376,7 @@ fun FolderOverlay(
                     Box(
                         Modifier
                             .size(innerSize)
-                            // The outline is always in the chain and switches *colour*, so this chain stays
+                            // The outline is always in the chain and switches *color*, so this chain stays
                             // structurally stable across the drag flip — the same rule the backdrop above follows,
                             // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
                             // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.

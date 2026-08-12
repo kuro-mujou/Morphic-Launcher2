@@ -252,7 +252,7 @@ private fun MenuSurface(
             .heightIn(max = maxHeight)
             .clip(MenuShape)
             // The scrim is what the panel falls back to with no wallpaper to sample, so it must be opaque enough
-            // to read a menu against on its own — the theme's elevated surface, which is exactly that colour.
+            // to read a menu against on its own — the theme's elevated surface, which is exactly that color.
             .wallpaperBackdrop(shape = MenuShape, scrimColor = colors.surfaceElevated)
             .padding(vertical = 4.dp),
     ) {
@@ -273,7 +273,7 @@ private fun MenuSurface(
 /**
  * One tappable row.
  *
- * **Colours come from the theme, where L1 hardcoded `Color.White` throughout.** The launcher's light/dark input is
+ * **Colors come from the theme, where L1 hardcoded `Color.White` throughout.** The launcher's light/dark input is
  * the *wallpaper's* brightness, so a menu over a bright wallpaper is drawn on a light panel — and white-on-white
  * would be the one place in the launcher that ignored the signal the whole theme is built on.
  */
@@ -288,7 +288,7 @@ private fun MenuRow(action: MenuAction, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         // Drawn as it was published, never tinted: an app's shortcut icon is its own artwork, and flattening it
-        // to the menu's content colour would make every app's shortcuts look alike.
+        // to the menu's content color would make every app's shortcuts look alike.
         action.icon?.let { icon ->
             Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(12.dp))

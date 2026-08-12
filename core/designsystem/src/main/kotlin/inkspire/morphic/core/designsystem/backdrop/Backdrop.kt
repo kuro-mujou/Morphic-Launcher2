@@ -51,7 +51,7 @@ import kotlin.math.roundToInt
  *   on purpose: it is upscaled at draw time, and a blur has no detail left to lose.
  * @property screenToBitmap maps a rectangle in **screen** coordinates onto the matching sub-rectangle of [image] — see
  *   [screenToBitmapMapping] for why it is screen and not window coordinates.
- * @property tintColor the wallpaper's representative colour, which every wash is blended toward — see
+ * @property tintColor the wallpaper's representative color, which every wash is blended toward — see
  *   [wallpaperTone]. `Color.Unspecified` when it could not be read, which makes the washes plain white and black.
  */
 class BackdropState(
@@ -64,7 +64,7 @@ class BackdropState(
  * The backdrop every frosted surface samples, or null when there is nothing to sample.
  *
  * Null is the normal state, not an error: the launcher only has a wallpaper to sample once the user has given it one
- * (see `WallpaperRepository.loadBackdrop`), and every consumer falls back to its own flat colour. Provided at the
+ * (see `WallpaperRepository.loadBackdrop`), and every consumer falls back to its own flat color. Provided at the
  * **launcher shell**, which is the same zone boundary the theme is applied at and for the same reason — the settings
  * graph is a different surface with different rules. L1 provided it inside its `HomeScreen`, which is why its settings
  * feature needed a second provider of its own to get the same effect.
@@ -91,7 +91,7 @@ val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> { BackdropEff
  * **Falls back to [scrimColor] whenever there is nothing to sample** — which now means exactly one thing, no
  * backdrop provided. That is why the parameter is not optional: a frosted surface has to be *opaque enough to read
  * against* on a device where the launcher has never been given a wallpaper, and the caller is the only one who knows
- * what that colour is. (It used to mean two things, the other being an effect of `None`; every effect blurs now, so
+ * what that color is. (It used to mean two things, the other being an effect of `None`; every effect blurs now, so
  * that half is gone.)
  *
  * @param effect overrides the global [LocalBackdropEffect] for this one surface. Null follows the global choice, which
@@ -124,13 +124,13 @@ fun Modifier.wallpaperBackdrop(
 }
 
 /**
- * The wallpaper's colour, softened against the current surface tone — the base every wash is built from.
+ * The wallpaper's color, softened against the current surface tone — the base every wash is built from.
  *
- * **Two blends, and both matter.** The raw accent is a full-saturation colour lifted out of a photograph; washing a
- * surface in it directly reads as a coloured filter rather than as glass. Blending it [ACCENT_BLEND] of the way from
+ * **Two blends, and both matter.** The raw accent is a full-saturation color lifted out of a photograph; washing a
+ * surface in it directly reads as a colored filter rather than as glass. Blending it [ACCENT_BLEND] of the way from
  * the mode's own `surfaceVariant` keeps it *mode-appropriate* — dark in dark, light in light — while still carrying
  * the hue. That is L1's `materialYouTone`, and in L2 the surface it starts from is greyscale, so what comes out is a
- * desaturated version of the wallpaper's colour rather than a second hue mixed in.
+ * desaturated version of the wallpaper's color rather than a second hue mixed in.
  *
  * Falls back to `surfaceVariant` when nothing could be read, which makes every wash below plain white or black.
  */
@@ -149,10 +149,10 @@ private fun wallpaperTone(): Color {
 fun backdropTint(effect: BackdropEffect = LocalBackdropEffect.current): Color = tintOf(effect, wallpaperTone())
 
 /**
- * The wash for [effect], over a backdrop whose wallpaper colour is [tone].
+ * The wash for [effect], over a backdrop whose wallpaper color is [tone].
  *
  * **All three washes carry the wallpaper's hue, which is L1's design and was worth arguing about.** A plain white or
- * black film over a blurred photograph reads as dirty — the wash fights the colours under it instead of sitting in
+ * black film over a blurred photograph reads as dirty — the wash fights the colors under it instead of sitting in
  * them — so L1 nudges white and black [LIGHT_DARK_TINT_HUE] of the way toward the wallpaper tone, and Material You
  * uses that tone outright. The design system's monochrome rule is about *chrome*, and this is the deliberate
  * exception: an effect the user picks, whose whole subject is the wallpaper.
@@ -166,13 +166,13 @@ private fun tintOf(effect: BackdropEffect, tone: Color): Color = when (effect) {
     }
     is BackdropEffect.MaterialYou -> tone.copy(alpha = effect.tint)
     // No wash either, and for a different reason from `Plain`'s: glass tints nothing, it *refracts* and it lifts
-    // saturation (`BackdropEffect.saturation`). A film of colour over it would be the one thing that stops it
+    // saturation (`BackdropEffect.saturation`). A film of color over it would be the one thing that stops it
     // reading as glass.
     is BackdropEffect.LiquidGlass -> Color.Transparent
 }
 
 /**
- * The colour filter a sampled crop is drawn through, or null when the effect leaves colour alone.
+ * The color filter a sampled crop is drawn through, or null when the effect leaves color alone.
  *
  * Only liquid glass raises saturation, which is what gives a full-screen sheet of it a look of its own once the rim
  * has nowhere to be — see [BackdropEffect.saturation]. A `ColorMatrix` rather than a shader, so it works on every API
@@ -437,7 +437,7 @@ private class BackdropNode(
  * How far the wallpaper's accent is blended in from the mode's surface tone — L1's `MATERIAL_YOU_ACCENT_BLEND`.
  *
  * Middle-low on purpose: enough that the hue is unmistakable, little enough that the result stays a *surface* rather
- * than a colour filter, and mode-appropriate because it starts from `surfaceVariant`.
+ * than a color filter, and mode-appropriate because it starts from `surfaceVariant`.
  */
 private const val ACCENT_BLEND = 0.3f
 
@@ -446,7 +446,7 @@ private const val ACCENT_BLEND = 0.3f
  * `LIGHT_DARK_TINT_HUE`.
  *
  * Kept low so "light blur" and "dark blur" stay clearly light and dark while losing the dirty look a neutral film has
- * over a coloured photograph. Material You is the same idea with the dial at 1.
+ * over a colored photograph. Material You is the same idea with the dial at 1.
  */
 private const val LIGHT_DARK_TINT_HUE = 0.35f
 

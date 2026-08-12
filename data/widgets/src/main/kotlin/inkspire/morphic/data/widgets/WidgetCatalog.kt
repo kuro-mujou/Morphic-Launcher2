@@ -115,7 +115,7 @@ internal class DefaultWidgetCatalog(
      * apps ship an icon and no preview, and a blank tile in the picker is indistinguishable from a broken one.
      *
      * Sized from the drawable's intrinsic dimensions where it has them and from [PreviewFallbackPx] where it does
-     * not (a plain colour has none), because `toBitmap()` throws rather than guessing. Every step is guarded: this
+     * not (a plain color has none), because `toBitmap()` throws rather than guessing. Every step is guarded: this
      * is another app's drawable being inflated in our process, and one bad provider must not empty the picker.
      */
     private fun AppWidgetProviderInfo.preview(densityDpi: Int): Bitmap? = runCatching {

@@ -16,7 +16,7 @@ import dev.chrisbanes.haze.blur.materials.HazeMaterials
 /** The dark wash over the blur. Enough to carry white text over a white canvas, light enough to stay glass. */
 private val StudioTint = Color.DarkGray.copy(alpha = 0.4f)
 
-/** The colour every studio surface draws its text and icons in — see [studioSurface] for why it is fixed. */
+/** The color every studio surface draws its text and icons in — see [studioSurface] for why it is fixed. */
 val StudioContentColor = Color.White
 
 /**
@@ -29,20 +29,20 @@ val StudioContentColor = Color.White
  * translucent rectangles.
  *
  * **The material is the library's, not a radius of ours.** `HazeMaterials.ultraThin` carries the blur radius, the tint
- * blend and the noise as one recipe, so the only number left to choose is the tint colour. An earlier cut composed
- * those by hand — a radius we picked, with the tint as a colour effect over an opaque background — and it read as a
+ * blend and the noise as one recipe, so the only number left to choose is the tint color. An earlier cut composed
+ * those by hand — a radius we picked, with the tint as a color effect over an opaque background — and it read as a
  * flat film rather than as glass. There is deliberately **no `blurRadius` parameter**: a per-surface depth is exactly
  * what the paragraph above exists to prevent.
  *
  * **Why this is Haze and not `wallpaperBackdrop`.** The launcher's own blur samples a pre-blurred *wallpaper*
  * bitmap by position — right for a surface sliding over the picture, and only ever able to show the wallpaper. The
- * studio canvas is deliberately not the wallpaper: it is a flat colour or a checkerboard, plus the icon being
+ * studio canvas is deliberately not the wallpaper: it is a flat color or a checkerboard, plus the icon being
  * edited. So this is the one screen whose backdrop is content the launcher itself draws, which `wallpaperBackdrop`
  * structurally cannot serve. Haze blurs whatever is actually beneath the node, live.
  *
- * **The content colour is fixed white, which is the one place the studio departs from the theme.** Everywhere else
+ * **The content color is fixed white, which is the one place the studio departs from the theme.** Everywhere else
  * chrome follows wallpaper brightness or the system. Here the thing behind the glass is a canvas the *user* sets to
- * black or white at will, so a theme-derived colour would be unreadable half the time; a dark wash heavy enough to
+ * black or white at will, so a theme-derived color would be unreadable half the time; a dark wash heavy enough to
  * carry white over either is the only setting that is always legible.
  *
  * Requires a node upstream marked `Modifier.hazeSource(state)` with the same [state], which is what

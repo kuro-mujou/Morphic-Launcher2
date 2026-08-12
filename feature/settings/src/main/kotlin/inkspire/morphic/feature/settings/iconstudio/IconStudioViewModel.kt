@@ -402,9 +402,9 @@ class IconStudioViewModel(
      *
      * It also matches what a new layer is *for*. A fresh layer is an opaque fill, so above the selection it hides
      * whatever was just being worked on; below it, it appears as a backing behind it — which is the thing people
-     * actually add a layer to do (a coloured disc behind a legacy icon is the worked example in `ShapeControls`).
+     * actually add a layer to do (a colored disc behind a legacy icon is the worked example in `ShapeControls`).
      *
-     * A **solid fill** rather than an image: a new layer needs *some* content, and a colour is the one that needs
+     * A **solid fill** rather than an image: a new layer needs *some* content, and a color is the one that needs
      * nothing from outside the app. An image is a tap away once the layer exists ([pickImage]).
      *
      * Selecting the new layer is what makes the insertion visible — the highlight moves down one row onto it, which is

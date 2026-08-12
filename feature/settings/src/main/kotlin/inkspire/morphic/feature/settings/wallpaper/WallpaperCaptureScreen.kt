@@ -61,7 +61,7 @@ private enum class CapturePhase {
  *
  * **A capture is a picture of the wallpaper, not a wallpaper** — the stored image is marked
  * `WallpaperSource.CAPTURED` and the repository declines to apply it. It exists because a **live** wallpaper cannot be
- * read as a bitmap any other way, which is what the frosted backdrop and the dominant-colour signal will need (S5f).
+ * read as a bitmap any other way, which is what the frosted backdrop and the dominant-color signal will need (S5f).
  * That its only consumer is not built yet is deliberate and recorded in the plan.
  *
  * **The window already shows the wallpaper**, so this screen only has to get out of its way: the launcher's theme

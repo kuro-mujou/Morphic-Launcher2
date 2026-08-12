@@ -33,12 +33,12 @@ private val HueStops = listOf(
 )
 
 /**
- * Pick a colour: a saturation/value panel over a hue bar.
+ * Pick a color: a saturation/value panel over a hue bar.
  *
- * **Deliberately no alpha channel.** Every colour this launcher lets a user pick sits somewhere that already has
+ * **Deliberately no alpha channel.** Every color this launcher lets a user pick sits somewhere that already has
  * its own opacity — an icon layer has one, a gradient has a strength — and `LayerEffect.Color` says outright that
  * a tint's alpha is ignored because "two ways to set one thing is one too many". An alpha slider here would be
- * that second way, and a colour that silently loses its transparency is worse than one that never offered it.
+ * that second way, and a color that silently loses its transparency is worse than one that never offered it.
  *
  * **Hue is kept as state rather than re-derived from [argb] each time**, which is not an optimisation but a
  * correctness point: hue is undefined at black, white and every pure grey, so a picker that recomputed it would
@@ -46,7 +46,7 @@ private val HueStops = listOf(
  * to red under their finger. The conversion runs the other way instead, and only re-seeds when [argb] is changed
  * from outside.
  *
- * @param argb the current colour. Its alpha is ignored on the way in and always opaque on the way out.
+ * @param argb the current color. Its alpha is ignored on the way in and always opaque on the way out.
  */
 @Composable
 fun MorphicColorPicker(
@@ -59,7 +59,7 @@ fun MorphicColorPicker(
 
     var hsv by remember { mutableStateOf(argb.toHsv()) }
     // Re-seed only on a change this picker did not make, so dragging never fights the value coming back in — the
-    // same in-and-out shape the sliders use, and the reason the comparison is on the *colour* rather than the HSV.
+    // same in-and-out shape the sliders use, and the reason the comparison is on the *color* rather than the HSV.
     LaunchedEffect(argb) { if (hsv.toArgb() != argb) hsv = argb.toHsv() }
 
     fun update(next: FloatArray) {
@@ -154,8 +154,8 @@ private fun HueBar(hue: Float, onChange: (Float) -> Unit, outline: Color) {
 
 private val KnobStroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
 
-/** `[hue, saturation, value]` for this packed colour; alpha is dropped. */
+/** `[hue, saturation, value]` for this packed color; alpha is dropped. */
 private fun Int.toHsv(): FloatArray = FloatArray(3).also { AndroidColor.colorToHSV(this, it) }
 
-/** The opaque packed colour for `[hue, saturation, value]`. */
+/** The opaque packed color for `[hue, saturation, value]`. */
 private fun FloatArray.toArgb(): Int = AndroidColor.HSVToColor(this)

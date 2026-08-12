@@ -20,7 +20,7 @@ import org.koin.android.ext.android.inject
  * surfaces — belongs to [LauncherNavHost] and below.
  *
  * That split is deliberate and is the fix for L1, whose equivalent grew to 204 lines of `setContent`: nav wiring,
- * wallpaper-colour loading, icon-cache invalidation, six composition locals and the `Navigator` implementation, all in
+ * wallpaper-color loading, icon-cache invalidation, six composition locals and the `Navigator` implementation, all in
  * one lambda. An Activity is the worst place to keep any of it, because none of it can be reached from a test or a
  * preview.
  *

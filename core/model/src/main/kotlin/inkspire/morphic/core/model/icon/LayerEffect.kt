@@ -20,7 +20,7 @@ import kotlinx.serialization.Serializable
 sealed interface LayerEffect {
 
     /**
-     * Recolouring, as one colour matrix: hue rotation, then saturation, then brightness, then an optional [tintArgb].
+     * Recoloring, as one color matrix: hue rotation, then saturation, then brightness, then an optional [tintArgb].
      *
      * One variant rather than four because they compose into a single matrix and are applied in one pass — splitting
      * them would mean four list entries whose *order* silently changed the result, which is a way to be wrong that
@@ -28,14 +28,14 @@ sealed interface LayerEffect {
      *
      * **Monochrome is this, not a variant of its own**: `saturation = 0` with a [tintArgb] is a tinted greyscale,
      * which is what L1's monochrome fallback computed. Note that is a different thing from
-     * [LayerSource.AppDefaultMonochrome], which swaps in artwork the *app* ships; this recolours whatever is there.
+     * [LayerSource.AppDefaultMonochrome], which swaps in artwork the *app* ships; this recolors whatever is there.
      *
-     * @property tintArgb multiplies each channel by the tint's, so the layer is pushed toward that colour while
+     * @property tintArgb multiplies each channel by the tint's, so the layer is pushed toward that color while
      *   keeping its own shading. Null leaves the channels alone. The tint's own alpha is ignored — [IconLayerSpec]
      *   already has opacity, and two ways to set one thing is one too many.
      * @property saturation 0 is greyscale, 1 unchanged, above 1 oversaturated.
-     * @property brightness a plain multiplier on the colour channels; 1 is unchanged.
-     * @property hueDegrees rotation around the colour wheel, 0 unchanged.
+     * @property brightness a plain multiplier on the color channels; 1 is unchanged.
+     * @property hueDegrees rotation around the color wheel, 0 unchanged.
      */
     @Serializable
     @SerialName("color")
@@ -52,13 +52,13 @@ sealed interface LayerEffect {
     }
 
     /**
-     * A two-stop linear gradient painted **over the layer and clipped to it** — source-atop, so it colours the
+     * A two-stop linear gradient painted **over the layer and clipped to it** — source-atop, so it colors the
      * artwork rather than covering the icon with a rectangle.
      *
      * @property angleDegrees the direction the gradient runs, clockwise from "straight down". 0 is top-to-bottom.
-     * @property strength how strongly it is laid over the layer; 0 is invisible, 1 fully replaces the colour. A
+     * @property strength how strongly it is laid over the layer; 0 is invisible, 1 fully replaces the color. A
      *   separate knob from the stops' own alpha because it is the one a user reaches for, and having to dilute two
-     *   colours by hand to soften a gradient is the sort of thing that makes a control feel broken.
+     *   colors by hand to soften a gradient is the sort of thing that makes a control feel broken.
      */
     @Serializable
     @SerialName("gradient")

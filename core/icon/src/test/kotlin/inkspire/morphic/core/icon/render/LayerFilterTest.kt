@@ -7,16 +7,16 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * What the colour matrices actually do to a pixel.
+ * What the color matrices actually do to a pixel.
  *
- * Asserting on the matrix *entries* would pin the implementation rather than the behaviour, so these push colours
+ * Asserting on the matrix *entries* would pin the implementation rather than the behaviour, so these push colors
  * through instead: the question is whether "saturation 0" greys a pixel, not whether row 1 column 2 holds 0.715.
  * That also makes them readable as a description of the effects, which matters because **two renderers share this
  * arithmetic** and a change here moves both at once.
  */
 class LayerFilterTest {
 
-    /** Applies a 4×5 colour matrix to an RGB triple the way a graphics pipeline does, and clamps as one would. */
+    /** Applies a 4×5 color matrix to an RGB triple the way a graphics pipeline does, and clamps as one would. */
     private fun apply(matrix: FloatArray, r: Int, g: Int, b: Int): Triple<Int, Int, Int> {
         fun channel(row: Int): Int {
             val value = matrix[row * 5] * r + matrix[row * 5 + 1] * g +
@@ -33,7 +33,7 @@ class LayerFilterTest {
     }
 
     @Test
-    fun `zero saturation greys a colour toward its luminance`() {
+    fun `zero saturation greys a color toward its luminance`() {
         val matrix = LayerFilter.colorMatrixOf(LayerEffect.Color(saturation = 0f))!!
 
         val (r, g, b) = apply(matrix, r = 255, g = 0, b = 0)
@@ -75,7 +75,7 @@ class LayerFilterTest {
     }
 
     @Test
-    fun `a full turn of hue returns a colour to itself`() {
+    fun `a full turn of hue returns a color to itself`() {
         val matrix = LayerFilter.colorMatrixOf(LayerEffect.Color(hueDegrees = 360f))!!
 
         val (r, g, b) = apply(matrix, r = 200, g = 60, b = 30)

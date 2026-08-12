@@ -29,7 +29,7 @@ import androidx.core.graphics.withMatrix
  * shown on the home screen and other surfaces.
  *
  * Each layer is drawn into its own bitmap — so its transform and shape mask apply in isolation — and is then
- * composited onto the output through one paint carrying its opacity, blend mode and colour matrix. Compositing is
+ * composited onto the output through one paint carrying its opacity, blend mode and color matrix. Compositing is
  * **synchronous and CPU/heavy** (bitmap allocation + drawing); callers run it off the main thread and cache the
  * result by `IconId`.
  *
@@ -38,7 +38,7 @@ import androidx.core.graphics.withMatrix
  * ([inkspire.morphic.core.icon.compose.IconLayerStack]) composes the same three into one paint for the same
  * reason, and shares [LayerFilter]'s matrix arithmetic so the two cannot disagree about a tint.
  *
- * A layer's gradient overlay is applied **after its shape mask**, so it colours the shaped silhouette rather than
+ * A layer's gradient overlay is applied **after its shape mask**, so it colors the shaped silhouette rather than
  * the square it was cut from — the live path orders it the same way, by which node carries which modifier.
  *
  * Still deferred: a **shadow** effect (not additive — it could not be matched in the live path below API 31; see
@@ -72,7 +72,7 @@ class IconRenderer(
 
         resolver.resolve(layerSet, icon, ::decodeCustomImage, packImage).forEach { layer ->
             val layerBitmap = renderLayer(layer, sizePx)
-            // Opacity, blend and colour are applied **as the layer joins the stack**, not while its content is
+            // Opacity, blend and color are applied **as the layer joins the stack**, not while its content is
             // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the
             // one bitmap I am in". The live path composes the same three into one paint for the same reason.
             canvas.drawBitmap(layerBitmap, 0f, 0f, compositePaint(layer.spec))
@@ -81,7 +81,7 @@ class IconRenderer(
         return output
     }
 
-    /** Alpha, blend mode and colour matrix for one layer, or `null` when it composites plainly. */
+    /** Alpha, blend mode and color matrix for one layer, or `null` when it composites plainly. */
     private fun compositePaint(spec: IconLayerSpec): Paint? {
         val matrix = LayerFilter.colorMatrixOf(spec.color)
         val mode = spec.blend.porterDuff()
@@ -105,7 +105,7 @@ class IconRenderer(
 
         // Shape is fixed in the box (it does not move with the content), so mask after restoring the matrix.
         layer.spec.shape?.let { applyShapeMask(canvas, it, sizePx) }
-        // After the mask, so a gradient colours the shaped silhouette rather than the square it was cut from.
+        // After the mask, so a gradient colors the shaped silhouette rather than the square it was cut from.
         layer.spec.gradient?.let { applyGradient(canvas, it, sizePx) }
         return bitmap
     }
@@ -116,7 +116,7 @@ class IconRenderer(
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(x0, y0, x1, y1, gradient.startArgb, gradient.endArgb, Shader.TileMode.CLAMP)
             // SRC_ATOP is what makes this an overlay rather than a rectangle: it keeps the layer's own alpha, so
-            // the gradient colours the artwork and stops at its edge.
+            // the gradient colors the artwork and stops at its edge.
             xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
             alpha = (gradient.strength.coerceIn(0f, 1f) * 255).toInt()
         }

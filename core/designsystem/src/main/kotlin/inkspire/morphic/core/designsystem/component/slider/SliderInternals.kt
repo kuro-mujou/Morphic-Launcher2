@@ -25,7 +25,7 @@ private val ThumbDiameter = 18.dp
 private val ThumbActive = 22.dp
 
 /**
- * The shared monochrome slider thumb: a circle in the `thumb` colour that springs larger on press / drag /
+ * The shared monochrome slider thumb: a circle in the `thumb` color that springs larger on press / drag /
  * focus via the Expressive motion spring. Used for the single [MorphicSlider] and for each thumb of
  * [MorphicRangeSlider], so both feel identical.
  */

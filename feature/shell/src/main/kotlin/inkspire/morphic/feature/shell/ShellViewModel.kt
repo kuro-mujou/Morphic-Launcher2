@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
  *   honestly claim is on screen — see `WallpaperRepository.backdrop`. An `android.graphics.Bitmap` and not an
  *   `ImageBitmap` on purpose: the conversion is a Compose concern, and a state holder that returns Compose graphics
  *   types is one step from doing composition work.
- * @property backdropAccent the wallpaper's representative colour as ARGB, which every frosted wash is blended toward.
+ * @property backdropAccent the wallpaper's representative color as ARGB, which every frosted wash is blended toward.
  *   Null when unreadable, which makes the washes plain white and black. Separate from [backdropImage] because it has a
  *   separate source — the system usually answers it without any image being read at all.
  */

@@ -323,7 +323,7 @@ private fun SettingsDetail(
  *   punched hole and would be exactly what the hole revealed.
  * - **Overscroll is off** for everything inside. A stretch re-composites the scrolling content into its own layer
  *   mid-gesture, and the punch stops reaching the window for as long as it does — the hole fills with the pane's
- *   colour and springs back. L1 hit this and disabled it the same way; it is the one part of the recipe that reads
+ *   color and springs back. L1 hit this and disabled it the same way; it is the one part of the recipe that reads
  *   like superstition until you see it happen.
  *
  * The port of L1's `IconDetailPortrait` / `IconDetailLandscape` scaffolds, minus their reason for existing: those were
@@ -333,7 +333,7 @@ private fun SettingsDetail(
  * **Separately from the punch: the pane reaches the window edge and insets its own content.** It used to be the other
  * way round — the scaffold reserved the system bars, so the pane stopped above the navigation bar and the strip it
  * left showed the wallpaper through the transparent window, which is the one place the punch was never meant to reach.
- * Nothing but this pane knows what colour that strip should be, so nothing but this pane can paint it. L1 did the same
+ * Nothing but this pane knows what color that strip should be, so nothing but this pane can paint it. L1 did the same
  * with `contentPadding` on its `LazyColumn`, which additionally lets content scroll under the bar; that is not
  * available here, because a pane owns its own scroller and most of them are a plain `Column`.
  *

@@ -247,7 +247,7 @@ fun AppRowCell(
                 Text(
                     text = app.label,
                     style = labelStyle,
-                    // The theme's content colour, not the grid label's white-on-wallpaper: a list is read against
+                    // The theme's content color, not the grid label's white-on-wallpaper: a list is read against
                     // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
                     color = colors.content,
                     maxLines = 1,

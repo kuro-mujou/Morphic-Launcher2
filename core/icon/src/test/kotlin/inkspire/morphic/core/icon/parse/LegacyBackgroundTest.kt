@@ -19,16 +19,16 @@ class LegacyBackgroundTest {
     private fun ring(size: Int = 100, pixel: Int) = IntArray(size) { pixel }
 
     @Test
-    fun `a flat opaque edge yields its own colour`() {
+    fun `a flat opaque edge yields its own color`() {
         val blue = argb(255, 30, 120, 200)
 
         assertEquals(blue, LegacyBackground.detectFill(ring(pixel = blue)))
     }
 
     @Test
-    fun `near-identical pixels average to one colour, so antialiasing does not defeat it`() {
+    fun `near-identical pixels average to one color, so antialiasing does not defeat it`() {
         val pixels = IntArray(100) { index ->
-            // A plate that is one colour give or take a couple of levels, as a real bitmap is after compression.
+            // A plate that is one color give or take a couple of levels, as a real bitmap is after compression.
             argb(255, 100 + index % 3, 100 + index % 3, 100 + index % 3)
         }
 
@@ -36,7 +36,7 @@ class LegacyBackgroundTest {
 
         assertEquals(255, fill ushr 24 and 0xFF)
         // 34 pixels at 100 and 33 each at 101 and 102 sum to 10099, which is 100 after integer division — the mean
-        // is truncated, not rounded, and one level of drift on a plate colour is not worth carrying a Float for.
+        // is truncated, not rounded, and one level of drift on a plate color is not worth carrying a Float for.
         assertEquals(100, fill shr 16 and 0xFF)
     }
 

@@ -8,7 +8,7 @@ import org.junit.Test
  * What each backdrop *means*, pinned per value.
  *
  * The three predicates here are read by three different drawing paths — the canvas's backdrop, the cycle button's
- * swatch, and the system bars' icon colour — and every one of them is a judgement about the same five values that
+ * swatch, and the system bars' icon color — and every one of them is a judgement about the same five values that
  * nothing else can check. A wrong entry is invisible in code and obvious only on the one backdrop it affects, which is
  * exactly the kind of thing worth a table.
  *
@@ -44,7 +44,7 @@ class PreviewBackgroundTest {
     }
 
     /**
-     * The bars sit over the *surround*, so a mix follows the colour it is named for — and the bare checkerboard counts
+     * The bars sit over the *surround*, so a mix follows the color it is named for — and the bare checkerboard counts
      * as light, since a white glyph is lost on both of its greys.
      */
     @Test

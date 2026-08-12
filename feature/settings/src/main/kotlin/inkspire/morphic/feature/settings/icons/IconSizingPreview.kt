@@ -63,10 +63,10 @@ private val DotPattern = floatArrayOf(2f, 6f)
  * - **The geometry is asked for, not copied.** L1 restated the cell's padding and label gap as `PREVIEW_CELL_PAD_DP` /
  *   `PREVIEW_LABEL_GAP_DP` under a "keep in sync" comment; this asks `cellIconLayout` where the icon is, so the guides
  *   cannot drift from the cell they are drawn over.
- * - **Greyscale, distinguished by stroke.** L1 coloured the guardrails green (upper) and red (lower). This palette is
+ * - **Greyscale, distinguished by stroke.** L1 colored the guardrails green (upper) and red (lower). This palette is
  *   monochrome and reserves red for `error`, so the cell is a **solid** outline, the upper guardrail **dashed** and the
  *   lower **dotted**, with the caption naming them. The same rule that made the grid editor's add/remove buttons sit on
- *   the edge they affect rather than being told apart by colour.
+ *   the edge they affect rather than being told apart by color.
  * - **The wallpaper behind it is L1's own trick, and it is back.** The cell box composites with `BlendMode.Src`, so
  *   wherever it draws nothing it *clears* the pane instead of covering it; the pane is an offscreen layer over a window
  *   that shows the wallpaper (`PunchThroughPane` in `SettingsScreen`, and `windowShowWallpaper` in `app`'s theme), so
@@ -120,7 +120,7 @@ internal fun IconSizingPreview(
         }
 
         // The numbers behind the picture, and the legend for the two dashes. Both belong here rather than in the
-        // outlines: the palette cannot colour-code them, and a user reading "24–48" beside a 48dp square can see at a
+        // outlines: the palette cannot color-code them, and a user reading "24–48" beside a 48dp square can see at a
         // glance that the upper bound is what is binding.
         val layout = cellIconLayout(cellWidth, cellHeight, metrics)
         Text(

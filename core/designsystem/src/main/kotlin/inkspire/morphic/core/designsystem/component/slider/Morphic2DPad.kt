@@ -28,7 +28,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * [onValueChangeFinished] on release. Built for the icon editor's offset (transform) tool.
  *
  * Consumes the Expressive motion engine: the knob springs larger while pressed (a size cue only; the knob
- * position tracks the finger 1:1). Colours come from [LocalMorphicColors] — the knob is drawn as an accent
+ * position tracks the finger 1:1). Colors come from [LocalMorphicColors] — the knob is drawn as an accent
  * disc with a contrasting core so it stays visible on the monochrome pad in both schemes.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.Flow
  * - **Arrangement** — which app sits where — is `data:layout`'s (Room). L1 kept `drawerOrder`, `drawerPages`,
  *   `categories` and `categoryAssignments` in the settings blob, hand-encoded into strings with control-char
  *   separators, and paid for it in every read.
- * - **Derived or cached state** — a dominant colour, a "dirty" marker, the id of the wallpaper currently applied to
+ * - **Derived or cached state** — a dominant color, a "dirty" marker, the id of the wallpaper currently applied to
  *   the system. Recompute or cache it; do not persist it as if the user chose it.
  * - **Wallpaper bitmaps and files** — `data:wallpaper`'s (B7b). It depends on this repository to persist its
  *   *pointers*, which is not the same as living here.

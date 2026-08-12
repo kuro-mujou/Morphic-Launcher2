@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * no `UNDO` or `SAVE` value: a bar of mixed kinds would make its entries mean two different things, and the user would
  * have to know which before pressing one.
  *
- * **The order is the order the work happens in.** Pick the layer, decide what it is made of, place it, mask it, colour
+ * **The order is the order the work happens in.** Pick the layer, decide what it is made of, place it, mask it, color
  * it — then the library and the leftovers. A tool rail read left to right is a reasonable first guess at a workflow, so
  * it may as well be the right one.
  *
@@ -51,14 +51,14 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
     SHAPE("Shape", Icons.Default.Hexagon),
 
     /**
-     * How the layer reads: opacity, blend mode, recolouring (hue / saturation / brightness / tint) and the gradient
+     * How the layer reads: opacity, blend mode, recoloring (hue / saturation / brightness / tint) and the gradient
      * overlay.
      *
      * **This is the one deliberate merge, and the model is what justifies it.** `LayerEffect.Color` and
      * `LayerEffect.Gradient` are two variants of one sealed list — and the deferred shadow will be a third — so an
      * entry per variant would mean the bar grew every time that list did. Opacity and blend join them despite being
      * spec *fields* rather than effects, for the reason the controls' own KDoc gives: that distinction is about what
-     * can vary independently in storage, and someone adjusting how a layer reads colour-wise does not care which side
+     * can vary independently in storage, and someone adjusting how a layer reads color-wise does not care which side
      * of it a control sits on.
      */
     EFFECTS("Effects", Icons.Default.Palette),

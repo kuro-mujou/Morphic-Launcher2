@@ -260,7 +260,7 @@ private val OneFingerSwipe.hint: String
         OneFingerSwipe.NEVER -> "2-finger only"
     }
 
-/** Colour a surface by its close policy so the table is readable at a glance. */
+/** Color a surface by its close policy so the table is readable at a glance. */
 private val OneFingerSwipe.tint: Color
     get() = when (this) {
         OneFingerSwipe.ALWAYS -> Color(0xFF3F7D6E)   // free one finger

@@ -73,7 +73,7 @@ import org.koin.androidx.compose.koinViewModel
  *
  * A port of L1's `WidgetPickerSheet`, keeping its two-pane shape: a list of apps that slides left to a detail pane
  * for the one chosen, and back again. What differs from L1 is the house rules rather than taste:
- * - **Colours come from the theme.** L1 hardcoded `Color.White` throughout, which over a bright wallpaper is the
+ * - **Colors come from the theme.** L1 hardcoded `Color.White` throughout, which over a bright wallpaper is the
  *   one surface ignoring the brightness signal the whole launcher theme is built on.
  * - **The sheet itself is [LauncherBottomSheet]** — the frosted panel, the scrim, the modality claim and `uiInsets`
  *   all live there, extracted when the icon container's app picker became the second thing wanting exactly this

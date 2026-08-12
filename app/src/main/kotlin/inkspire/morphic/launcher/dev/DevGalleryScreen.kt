@@ -228,7 +228,7 @@ private fun Swatch(name: String, color: Color, colors: MorphicColors) {
     }
 }
 
-/** Role name → colour, in a stable display order, for the palette listing. */
+/** Role name → color, in a stable display order, for the palette listing. */
 private fun colorRoles(c: MorphicColors): List<Pair<String, Color>> = listOf(
     "background" to c.background,
     "surface" to c.surface,

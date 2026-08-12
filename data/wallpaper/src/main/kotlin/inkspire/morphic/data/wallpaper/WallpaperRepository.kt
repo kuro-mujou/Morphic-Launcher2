@@ -202,7 +202,7 @@ object WallpaperFiles {
  *
  * **All three of L1's sources are here — picked, captured and the rotating pair** — and the half that *reads* them has
  * started: [brightness] is the first, and it is the one reading that needs no image processing at all. Still absent:
- * - **the blur and the dominant colour** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
+ * - **the blur and the dominant color** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
  *   need L1's `Blur.kt` image processing, which the plan already says belongs beside the graphics code rather than in a
  *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
  *   sample?", and answering that once against every source beats re-answering it per source.
@@ -231,7 +231,7 @@ interface WallpaperRepository {
     val brightness: Flow<WallpaperBrightness>
 
     /**
-     * The wallpaper's **representative colour** as ARGB, or null when it cannot be read — what
+     * The wallpaper's **representative color** as ARGB, or null when it cannot be read — what
      * `BackdropEffect.MaterialYou` washes a frosted surface in.
      *
      * The third reading of "what is displayed", beside [brightness] and [backdrop], and it takes the same two-step:
@@ -241,7 +241,7 @@ interface WallpaperRepository {
      *
      * **Not `MaterialTheme.colorScheme.primary`, which is how L1 got this above API 31.** L1's launcher ran a normal
      * M3 dynamic scheme, so its primary *was* a wallpaper-derived hue. L2 feeds MaterialTheme a **monochrome** scheme
-     * bridged from `MorphicColors`, so the same expression here returns grey — the dynamic-colour route is closed by
+     * bridged from `MorphicColors`, so the same expression here returns grey — the dynamic-color route is closed by
      * a decision made long before this, and reading the wallpaper directly is what is left.
      */
     val accentColor: Flow<Int?>
@@ -303,7 +303,7 @@ interface WallpaperRepository {
 
     /**
      * The wallpaper a frosted surface should sample, pre-blurred at [strength] and downscaled — or **null when there is
-     * nothing we can honestly claim is behind the chrome**, which every consumer renders as its own flat colour.
+     * nothing we can honestly claim is behind the chrome**, which every consumer renders as its own flat color.
      *
      * **This is the "which image do I sample?" question the whole slice order was arranged around**, and it is answered
      * once here against all three sources rather than per effect:

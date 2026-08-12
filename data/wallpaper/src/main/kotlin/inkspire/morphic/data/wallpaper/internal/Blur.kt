@@ -14,7 +14,7 @@ private const val GREY_FLOOR = 8.0
 private const val NEUTRAL_GREY = 0xFF808080.toInt()
 
 /**
- * L1's `Blur.kt`, both halves: the downscale-then-box-blur a frosted surface samples, and the representative colour
+ * L1's `Blur.kt`, both halves: the downscale-then-box-blur a frosted surface samples, and the representative color
  * `BackdropEffect.MaterialYou` tints itself with.
  *
  * **Where it lives is a correction to the port plan.** That said `Blur.kt` "belongs beside the graphics/icon code, in
@@ -25,7 +25,7 @@ private const val NEUTRAL_GREY = 0xFF808080.toInt()
  *
  * **The two functions read the same image and must not be confused for each other**, which is the trap S5f-1 nearly
  * walked into: [dominantColor] is deliberately **saturation-weighted** so a vivid accent beats washed-out grey, which
- * is right for "what colour is this wallpaper?" and wrong for "how bright is it?". The brightness signal therefore has
+ * is right for "what color is this wallpaper?" and wrong for "how bright is it?". The brightness signal therefore has
  * its own unweighted luminance mean in the repository rather than reusing this.
  */
 
@@ -59,18 +59,18 @@ internal fun downscaleAndBlur(source: Bitmap, downscale: Int, radius: Int, passe
 }
 
 /**
- * A representative accent colour (ARGB) for [source] — what `BackdropEffect.MaterialYou` washes a frosted surface in.
+ * A representative accent color (ARGB) for [source] — what `BackdropEffect.MaterialYou` washes a frosted surface in.
  *
  * **A saturation-weighted average, not a plain one**, and that is the whole trick: a plain mean of a photograph is
- * mud, because every colourful pixel is dragged toward the grey majority. Weighting each pixel by its own chroma
- * (`max - min` of its channels) lets a vivid minority carry the result, which is what "the wallpaper's colour" means
+ * mud, because every colorful pixel is dragged toward the grey majority. Weighting each pixel by its own chroma
+ * (`max - min` of its channels) lets a vivid minority carry the result, which is what "the wallpaper's color" means
  * to a person looking at it. The `+ 8` floor keeps a fully greyscale image from dividing by zero and lets it average
  * normally.
  *
- * Over a 32×32 downscale, because a representative colour needs no more resolution than that and the cost is then a
+ * Over a 32×32 downscale, because a representative color needs no more resolution than that and the cost is then a
  * thousand additions. Mid-grey when there is nothing to weigh at all.
  *
- * **Only needed below API 27, or when a live wallpaper publishes no colours.** Above that, `WallpaperColors` answers
+ * **Only needed below API 27, or when a live wallpaper publishes no colors.** Above that, `WallpaperColors` answers
  * the same question about the wallpaper *actually displayed* — including another app's, which we cannot read — so this
  * is the fallback rather than the primary path. L1 used it the same way, for the same API reason.
  */

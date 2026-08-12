@@ -89,7 +89,7 @@ import kotlin.math.roundToInt
  *   flow densifies only on drop (§6b MovingGap).
  *
  * One [DragCoordinator] hit-tests every zone; the planner dispatches on the destination zone's model. Cross
- * zone drags carry the item source→dest. Items are fake colour tiles. Toggle coordinate-zone guides via the
+ * zone drags carry the item source→dest. Items are fake color tiles. Toggle coordinate-zone guides via the
  * "zones" label.
  */
 @Composable
@@ -670,7 +670,7 @@ private fun DrawScope.arrow(color: Color, from: Offset, to: Offset, width: Float
     drawLine(color, to, b2, width)
 }
 
-/** A fake app tile standing in for an app icon: a coloured rounded box (span-sized by the caller). */
+/** A fake app tile standing in for an app icon: a colored rounded box (span-sized by the caller). */
 @Composable
 private fun ItemTile(item: GridItem, modifier: Modifier = Modifier) {
     Box(

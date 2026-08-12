@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The tone of a frosted [BackdropEffect.Blur] — which colour its translucent overlay leans toward.
+ * The tone of a frosted [BackdropEffect.Blur] — which color its translucent overlay leans toward.
  *
  * - [LIGHT]: a white overlay; frosts toward light.
  * - [DARK]: a black overlay; frosts toward dark.
@@ -38,7 +38,7 @@ sealed interface BackdropEffect {
      *
      * **Named for what it does, not for what it lacks.** It was `None`, from a model in which the effect decided
      * whether a surface sampled the wallpaper *at all*; under the current one every variant blurs and the effect
-     * chooses the wash, so "none" would have meant "it still blurs, but no colour" — the kind of name that reads as
+     * chooses the wash, so "none" would have meant "it still blurs, but no color" — the kind of name that reads as
      * a bug six months on. The `@SerialName` deliberately stays `"none"`: it is a discriminator in a user's stored
      * blob, and this is a rename rather than a change of meaning to anything already saved.
      *
@@ -64,12 +64,12 @@ sealed interface BackdropEffect {
     ) : BackdropEffect
 
     /**
-     * A blur washed in the **wallpaper's own primary colour** — the one effect whose subject is that colour.
+     * A blur washed in the **wallpaper's own primary color** — the one effect whose subject is that color.
      *
      * **The deliberate exception to the monochrome palette rule**, and worth stating as one. That rule makes chrome
-     * greyscale *so that* the wallpaper and the app icons carry the colour, which reads as an argument against a
+     * greyscale *so that* the wallpaper and the app icons carry the color, which reads as an argument against a
      * wallpaper-hued wash — but it is a rule about chrome the user did not ask for, and this is an effect they pick.
-     * The colour it takes is the wallpaper's, so it is the wallpaper carrying the colour rather than the theme
+     * The color it takes is the wallpaper's, so it is the wallpaper carrying the color rather than the theme
      * inventing one.
      *
      * **Not the OS dynamic palette, which is how L1 got this above API 31.** L1's launcher ran a normal M3 dynamic
@@ -133,10 +133,10 @@ sealed interface BackdropEffect {
         }
 
     /**
-     * How much the sampled wallpaper's colour is boosted, as a saturation multiplier — `1f` for no change.
+     * How much the sampled wallpaper's color is boosted, as a saturation multiplier — `1f` for no change.
      *
      * Only [LiquidGlass] raises it, and that is what gives a full-screen sheet of it a look of its own once the rim
-     * is gone: a box blur alone leaves colours muddy, and pushing saturation back up is what reads as glass. The
+     * is gone: a box blur alone leaves colors muddy, and pushing saturation back up is what reads as glass. The
      * ceiling is a drawing decision rather than a preference, so it lives here with the parameter it scales and not
      * in the shader that was its first consumer.
      */
@@ -190,7 +190,7 @@ sealed interface BackdropEffect {
 
         /**
          * [MaterialYou]'s, which is higher because its wash *is* the effect: a hue at the blurs' alpha reads as a
-         * tinted blur rather than as a coloured sheet, which is the whole thing the variant is for.
+         * tinted blur rather than as a colored sheet, which is the whole thing the variant is for.
          */
         private const val FULL_SCREEN_HUE_TINT = 0.45f
 
@@ -206,7 +206,7 @@ sealed interface BackdropEffect {
          *
          * It costs nothing where there is nothing to sample: the backdrop is null until the user has given the
          * launcher an image (see `WallpaperRepository.backdrop`), and every frosted surface falls back to its own
-         * flat colour until then. A fresh install therefore looks exactly as it did before this landed.
+         * flat color until then. A fresh install therefore looks exactly as it did before this landed.
          */
         val Default: BackdropEffect = Blur(tone = BackdropBlurTone.DARK, strength = 0.5f, tint = 0.28f)
     }

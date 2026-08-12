@@ -186,21 +186,21 @@ non-deletable layers**: a **background** and a **foreground** (fg always renders
 splits the foreground further — a legacy raster and a modern adaptive foreground both just *are* fg content
 (no glyph matting; it's unreliable). All backgrounds land in the bg layer, **even when empty** (the empty bg
 slot still exists for the user to fill).
-- **Legacy icons**: the whole bitmap → fg layer; sample the edge ring and, if it is one flat opaque colour,
+- **Legacy icons**: the whole bitmap → fg layer; sample the edge ring and, if it is one flat opaque color,
   resolve the bg layer to it; busy/transparent edges → leave bg empty. **L1 has no implementation to port** — its
-  `parseLegacy` uses a hardcoded plate colour and the sampling never left its plan — so the thresholds are ours,
+  `parseLegacy` uses a hardcoded plate color and the sampling never left its plan — so the thresholds are ours,
   and building it corrected this rule's own claim. "Invisible until the foreground is shrunk" is not a property of
   the fill, it is a property of *which icons are accepted*: a rounded legacy icon has transparent corners, so
-  painting its plate colour behind it would **square the icon off**, and a drop shadow's soft edge would fill the
+  painting its plate color behind it would **square the icon off**, and a drop shadow's soft edge would fill the
   gap the shadow leaves. So the solid-fraction threshold is **near-total (95%)** rather than a majority — those
   cases are declined, and for the ones accepted not one pixel moves until the user moves the foreground. The
-  colour is **resolved, never written into the recipe**: the app still reads "app default", so Reset and
+  color is **resolved, never written into the recipe**: the app still reads "app default", so Reset and
   inheritance behave normally and an app that updates its artwork gets re-detected instead of keeping a frozen
-  colour. `LegacyBackground` is the pure decision (unit-tested; **the refusal tests are the ones that matter**),
+  color. `LegacyBackground` is the pure decision (unit-tested; **the refusal tests are the ones that matter**),
   `DrawableParser` the rasterising.
 
-**Layer content** is a small sum type, not always an image: **app-default (parsed image or colour)**,
-**custom image**, or **solid-colour fill** (a colour-only background is a `SolidFill` bg).
+**Layer content** is a small sum type, not always an image: **app-default (parsed image or color)**,
+**custom image**, or **solid-color fill** (a color-only background is a `SolidFill` bg).
 
 **Foreground monochrome.** The fg layer has **filters**, one of which is a **monochrome effect** (tints the
 fg). Separately, an app may ship a real **monochrome icon** (the OS themed-icon layer). The fg offers a
@@ -217,15 +217,15 @@ enforces. Per layer:
 - **transform** — X/Y (in a normalized square frame), zoom, rotation.
 - **shape** — an `IconShape`, **on any layer**. *(Differs from what was locked here: this said fg & bg only,
   with custom layers keeping their own alpha. The renderer masks whatever it is given, so the restriction would
-  have been one the UI invented — and a shaped custom layer is obviously useful, since a colour fill trimmed to a
-  circle is how a coloured disc goes behind a legacy icon.)* A shape is **backed by a vector drawable** (prepared
+  have been one the UI invented — and a shaped custom layer is obviously useful, since a color fill trimmed to a
+  circle is how a colored disc goes behind a legacy icon.)* A shape is **backed by a vector drawable** (prepared
   as a resource) and referenced by a stable id; the clip mask is built from that drawable's silhouette, so adding
   a shape = drop in a drawable, no path math in code.
 - **opacity + blend mode** — `IconLayerSpec` **fields**, not effects, because they describe how a layer *joins
   the stack* rather than what it is: every layer has both, always, with a meaningful default.
 - **effects** — a sealed list, never columns. `LayerEffect.Color` (hue → saturation → brightness → tint,
   composed into **one** matrix, so monochrome is `saturation = 0` plus a tint rather than a variant of its own)
-  and `LayerEffect.Gradient` (two stops, angle, strength; source-atop so it colours the artwork instead of
+  and `LayerEffect.Gradient` (two stops, angle, strength; source-atop so it colors the artwork instead of
   covering the icon with a rectangle). **Shadows are deferred** — see below.
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
@@ -234,7 +234,7 @@ enforces. Per layer:
   cached by `IconId(component, resolvedLayerSet, sizePx)` (value-equality key → correct invalidation for
   free), baked off the main thread. Surfaces draw one `Image`.
 - **Editor**: layers render **live** (`IconLayerStack` — each a Compose node, transform via `graphicsLayer`,
-  effects via a colour filter and blend on a `saveLayer`) so slider drags respond instantly with no per-frame
+  effects via a color filter and blend on a `saveLayer`) so slider drags respond instantly with no per-frame
   bake. **A commit does *not* invalidate the baked entry**, correcting what this said: `IconId` carries the layer
   set, so an edited icon simply *is* a different key — it misses, re-bakes, and the superseded bitmap ages out of
   the LRU. Calling `invalidate` would also bump `generation`, whose whole job is the one input the key cannot see
@@ -244,7 +244,7 @@ enforces. Per layer:
 right while being edited and wrong on every surface is a bug the editor structurally cannot show you, so the
 agreement is made of shared *things* rather than shared intentions: `ParsedIconLoader` (what the layers are),
 `IconLayerResolver` (which draw, and what each means), `LayerTransform` (where they sit), `LayerFilter` (the
-colour matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`)
+color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`)
 and `LayerGradient` (which way an angle runs). Only the drawing API differs, which is unavoidable and is exactly
 why those five exist. The per-layer order is **content → shape mask → gradient → composite**, the same on both
 sides for different-looking reasons — statement order in one, modifier nesting in the other. Two consequences:
@@ -347,7 +347,7 @@ screen whose backdrop is content the launcher itself draws and the only one that
 **Haze** blurs whatever is really beneath a node, and that "no wallpaper" decision is what *guarantees* it works —
 Haze needs a real drawn node, and the `BlendMode.Src` punch every settings preview uses would leave it nothing.
 One shared `studioSurface` modifier is the material, so a new panel cannot arrive looking different; its content
-colour is **fixed white**, the one place the studio departs from the theme, because the thing behind the glass is
+color is **fixed white**, the one place the studio departs from the theme, because the thing behind the glass is
 a canvas the *user* switches between black and white.
 
 ## Design system (`core:designsystem`)
@@ -358,11 +358,11 @@ a canvas the *user* switches between black and white.
   The Compose BOM does **not** carry the Expressive APIs, so `material3` is pinned to `1.5.0-alpha22` in the
   version catalog; opt in per-usage with `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` where the
   compiler asks.
-- **Monochrome palette.** Greyscale chrome so the wallpaper + app icons carry the colour. `accent` is a
+- **Monochrome palette.** Greyscale chrome so the wallpaper + app icons carry the color. `accent` is a
   high-contrast greyscale *emphasis* (not a hue) — selection/active read by contrast; **red is reserved for
   `error`** only. **Both light and dark are first-class** (dark mode is an accessibility barrier for some
   users). Semantic tokens live in [theme/MorphicColors.kt](core/designsystem/src/main/kotlin/inkspire/morphic/core/designsystem/theme/MorphicColors.kt).
-- **Theme layering + monochrome M3 bridge.** `MorphicTheme` provides our colours only (`LocalMorphicColors`).
+- **Theme layering + monochrome M3 bridge.** `MorphicTheme` provides our colors only (`LocalMorphicColors`).
   `LauncherTheme` = M3 base + expressive motion + `MorphicTheme`, and it feeds MaterialTheme a **monochrome
   M3 `ColorScheme` bridged from `MorphicColors`** (`MorphicColors.toM3ColorScheme(dark)`), so stock M3
   components render greyscale *and* keep Expressive motion. Use `LauncherTheme` as the app wrapper.
@@ -392,7 +392,7 @@ a canvas the *user* switches between black and white.
   styled field is too opinionated about focus/label/indicator; the primitive gives full focus control — our
   own `onFocusChanged` state, the focus ring, placeholder-behind-field, and clearing focus when the IME is
   dismissed (`WindowInsets.isImeVisible`).
-- **Settings vs launcher colour = one theme, two "is-dark" inputs** (not two palettes). Settings feeds
+- **Settings vs launcher color = one theme, two "is-dark" inputs** (not two palettes). Settings feeds
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a **wallpaper-brightness**
   signal (chrome must contrast the wallpaper — bright wallpaper → Light scheme/black tint, dark → Dark/white).
   Apply the theme per **zone boundary** (launcher shell vs settings graph), not per nav destination; a nested
@@ -409,20 +409,20 @@ a canvas the *user* switches between black and white.
     in L1, which has no luminance analysis anywhere and themes from the system's dark mode. `LauncherShell` reads
     `WallpaperRepository.brightness` and the hardcoded `darkTheme = true` is gone.
   - **It asks the system before it reads anything, and it did not need `Blur.kt`.** The plan had it waiting on the
-    dominant-colour half of L1's `Blur.kt`; both halves of that assumption were wrong.
+    dominant-color half of L1's `Blur.kt`; both halves of that assumption were wrong.
     `WallpaperManager.getWallpaperColors` already answers the question over the wallpaper that is *actually displayed*
     — another app's, or a live one, neither of which we can read as a bitmap — with no permission and no decode, and on
     API 31+ `HINT_SUPPORTS_DARK_TEXT` is literally the verdict. And `dominantColor` would have been the **wrong
     statistic** anyway: it weights each pixel by saturation so a vivid accent beats washed-out grey, which is what an
-    *accent* wants and the opposite of what "how bright is this?" wants. So the blur *and* the dominant colour are both
+    *accent* wants and the opposite of what "how bright is this?" wants. So the blur *and* the dominant color are both
     still unported, still waiting on the frosted backdrop that is their real consumer.
   - **Reading our own file is the fallback, and it is gated on proof.** Only when the system says nothing (API 26, or a
-    live wallpaper publishing no colours) *and* `appliedSystemId` still equals the live wallpaper id — i.e. nothing has
+    live wallpaper publishing no colors) *and* `appliedSystemId` still equals the live wallpaper id — i.e. nothing has
     replaced ours since we set it, which is the second job that field's KDoc reserved it for. Otherwise `DARK`, which
     is both the old hardcoded value and the safer miss: light chrome over an unexpectedly bright wallpaper is
     unreadable, dark chrome over a dark one is merely dull. The cut is at relative luminance **0.179**, which is not a
     taste value — it is where the WCAG contrast ratios against black and white cross.
-  - **`RotatingWallpaperService` now publishes its colours** (`onComputeColors` + `notifyColorsChanged` on each new
+  - **`RotatingWallpaperService` now publishes its colors** (`onComputeColors` + `notifyColorsChanged` on each new
     image). A live wallpaper is the one kind the system cannot analyse for itself, so a service that stays silent
     leaves *every* consumer of `getWallpaperColors` with nothing — status-bar icon contrast included. Answering means
     our own rotating pair takes the same path as every other wallpaper instead of needing a special case that reads our
@@ -440,7 +440,7 @@ a canvas the *user* switches between black and white.
     was *which wash*. `blurStrength` is therefore total, and "nothing to sample" means one thing — `LocalBackdrop` being
     null, i.e. the launcher has no wallpaper it may read. The `@SerialName` stays `"none"`, so no stored blob moved.
   - **All four effects carry the wallpaper's hue, and that is the one deliberate exception to the monochrome palette
-    rule.** The rule makes *chrome* greyscale so the wallpaper and the icons carry the colour; an effect the user picks,
+    rule.** The rule makes *chrome* greyscale so the wallpaper and the icons carry the color; an effect the user picks,
     whose whole subject is the wallpaper, is not chrome. So L1's two-stage blend is ported exactly: a **wallpaper tone**
     = `lerp(surfaceVariant, accent, 0.30)` (mode-appropriate, and desaturated here because our `surfaceVariant` is
     grey), then light = `lerp(White, tone, 0.35)`, dark = `lerp(Black, tone, 0.35)`, and `MaterialYou` = the tone
@@ -473,7 +473,7 @@ a canvas the *user* switches between black and white.
     the need it answered is now gone as well, since `Plain` still blurs and no effect leaves a surface unfrosted. Those
     two panels are still what the effect sliders and the glass rim are waiting for.
   - **The scrim is a required fallback, not a decoration.** With no backdrop — which is the state until the user gives
-    the launcher an image — every frosted surface draws its own flat colour, and only the caller knows what that is.
+    the launcher an image — every frosted surface draws its own flat color, and only the caller knows what that is.
     The folder passes `Color.Black` (its title and labels are white by construction); the shell's layer passes the
     theme's own background, which is exactly what APPS painted before. **It is now the one thing that means "nothing to
     sample"** — it used to mean that *or* an effect of `None`, and every effect blurs now.
@@ -514,7 +514,7 @@ sample?", and answering that once against every source beats re-answering it per
 `NormalizedCropRect` and the screen passes the region the user framed, against the viewport it also passes as the size
 to store at, so the rectangle and the result share one coordinate space. **The reading half is `brightness`,
 `accentColor` and `backdrop`** — the three questions anything drawing over the wallpaper has: how bright is it, what
-colour is it, and what does it look like blurred. All three share one change signal and one "is our file what is on
+color is it, and what does it look like blurred. All three share one change signal and one "is our file what is on
 screen?" gate, deliberately, because three answers that could disagree about *which image* they read would be worse
 than any one of them being slightly off. Each also asks the system before it decodes anything: `getWallpaperColors`
 answers the first two over the wallpaper *actually displayed*, and `Blur.kt`'s `dominantColor` is only the API-26
@@ -539,7 +539,7 @@ whether ours ended up active; `WallpaperManager.wallpaperInfo` is the answer, so
 reconciler, where L1 stored `appliedMode` and needed `reconcileLiveWallpaper` to repair it. And the crop screen frames
 the landscape half **letterboxed** rather than pinning the activity's orientation as L1 did, which it can afford because
 the frame decides the *shape* while the target screen decides the *resolution*. And the service **publishes its
-colours**, which L1's did not — see the design-system note above; it is what lets the rotating pair answer the
+colors**, which L1's did not — see the design-system note above; it is what lets the rotating pair answer the
 brightness question through the same system API as every other wallpaper.
 - **Horizontal padding is width the grid does not get, and it goes *above* whatever publishes geometry** (S4g). Every
   grid has a `horizontalPaddingDp` on its blueprint (0 by default) with a per-slot × device override, and all seven
@@ -641,16 +641,16 @@ brightness question through the same system API as every other wallpaper.
     `isNavigationBarContrastEnforced` off on API 29+ — `enableEdgeToEdge` leaves it on, and it lets the system paint a
     translucent scrim over the wallpaper. L1 did both, in that order, in that place.
 - **Packaging discipline (unlike L1):** `component/` holds *only* the generic `Morphic*` UI primitives;
-  colours/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
+  colors/theme live in `theme/`; launcher-specific icon cells (`AppCell`/`IconMetrics`) get their own
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
 - **Port per-consumer.** L1's `core:designsystem` is ~50 files / 5.4k LOC — pull a group only when the
   screen that needs it is built, not up front.
 - A **dev gallery** (`app` → `dev/DevGalleryScreen`) hosts every `Morphic*` component + the palette under a
   light/dark toggle; add each new component to it.
 - **`MorphicColorPicker`** (a saturation/value panel over a hue bar) has **no alpha channel**, deliberately: every
-  colour the launcher lets a user pick already sits somewhere carrying opacity, and offering a second way to set
-  it is how a colour silently loses its transparency. Its hue is held as *state* rather than re-derived from the
-  colour, which is correctness and not economy — hue is undefined at black, white and every grey, so a picker that
+  color the launcher lets a user pick already sits somewhere carrying opacity, and offering a second way to set
+  it is how a color silently loses its transparency. Its hue is held as *state* rather than re-derived from the
+  color, which is correctness and not economy — hue is undefined at black, white and every grey, so a picker that
   recomputed it would jump under the finger the moment the panel was dragged into a corner.
 - **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
   follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers are named and blocked
@@ -1662,9 +1662,9 @@ editable range, the caption and the icon preview's cell height together — a pr
 old row count would be worse than one showing neither, since the row count is what the height decides.
 **A grid's horizontal margin insets the lattice only, never the companion zone**: home's pager and dock store separate
 margins, so insetting both from one number would show a dock narrowing because the pager's slider moved (L1 passes
-`insetFraction` to its `GridPreview` and none to its `NonGridPreview`). **What is not carried is the colour** — it tells add from remove by red vs
+`insetFraction` to its `GridPreview` and none to its `NonGridPreview`). **What is not carried is the color** — it tells add from remove by red vs
 green, which the palette forbids — and that costs nothing, because in L1 the *position already encodes the action* and
-the colour was reinforcement. An earlier cut mistook the colour for the signal and centred a −/+ pair on each edge
+the color was reinforcement. An earlier cut mistook the color for the signal and centred a −/+ pair on each edge
 instead; the arrangement above replaced it.
 **A grid editor shows the grid that is *drawn*, not the one in storage** — and that is what makes the icon controls under
 it move it. Both halves come out of one formula: the icon **guardrails** set the smallest usable cell, and dividing the
@@ -1840,7 +1840,7 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
     case sibling hit-testing genuinely does not cover is a press already **down** when an overlay appears, since a
     pointer keeps the hit path it was assigned at DOWN — but that is the gesture that opened the menu, which is
     supposed to keep running.
-- **Colours come from the theme and the panel is frosted.** L1 hardcoded `Color.White` throughout, which would be the
+- **Colors come from the theme and the panel is frosted.** L1 hardcoded `Color.White` throughout, which would be the
   one place in the launcher ignoring the wallpaper-brightness signal the whole theme is built on. `wallpaperBackdrop`
   with `refracts = true` makes this **the first frosted panel**, so the effects section's sliders and liquid glass's
   rim finally have a consumer.

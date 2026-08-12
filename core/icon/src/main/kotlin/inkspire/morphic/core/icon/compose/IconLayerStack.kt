@@ -53,7 +53,7 @@ import inkspire.morphic.core.model.icon.IconShape
  * than a shared intention:
  * - [IconLayerResolver] decides which layers draw and what content each one means, for both.
  * - [LayerTransform] does the offset/zoom/rotation arithmetic, for both.
- * - [LayerFilter] does the colour-matrix arithmetic, for both — and shares the *same shape*, since Android's and
+ * - [LayerFilter] does the color-matrix arithmetic, for both — and shares the *same shape*, since Android's and
  *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
  * - [LayerGradient] decides which way an angle runs, for both.
  * - The shape mask is built from the **same** vector drawable via [IconShapes], and applied the same way — as a
@@ -99,7 +99,7 @@ fun IconLayerStack(
     // gets this for free by drawing into a fresh bitmap.
     Box(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         layers.forEach { layer ->
-            // Three nested nodes now, and the nesting is the whole trick. The composite (opacity / blend / colour)
+            // Three nested nodes now, and the nesting is the whole trick. The composite (opacity / blend / color)
             // is **outermost**, so it applies to the finished layer and blends against the layers already drawn;
             // the mask sits inside it but **outside the transform**, so a shape stays put in the box while the
             // content moves under it. The baked path gets the same ordering from its draw order.
@@ -141,11 +141,11 @@ private fun DrawScope.drawLayerContent(content: ParsedLayer) {
 }
 
 /**
- * Applies a layer's opacity, blend mode and colour matrix as it joins the stack — the live twin of
+ * Applies a layer's opacity, blend mode and color matrix as it joins the stack — the live twin of
  * `IconRenderer.compositePaint`, sharing [LayerFilter]'s arithmetic so a tint cannot come out differently here.
  *
  * Through `saveLayer` rather than `graphicsLayer`, because `GraphicsLayerScope` has an `alpha` but no blend mode
- * and no colour filter; capturing the node into its own buffer and compositing *that* with one paint is the only
+ * and no color filter; capturing the node into its own buffer and compositing *that* with one paint is the only
  * way to get all three, and it is the same technique [shapeMask] needs one level in.
  *
  * A layer that composites plainly gets no modifier at all, which is the common case — an unedited icon.
@@ -167,7 +167,7 @@ private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
             canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
             drawContent()
             // Inside the layer, so source-atop has the layer's own pixels as its destination — which is what makes
-            // the gradient colour the artwork instead of covering the icon with a rectangle. The same isolation the
+            // the gradient color the artwork instead of covering the icon with a rectangle. The same isolation the
             // saveLayer already provides for the blend mode, doing a second job.
             gradient?.let { drawGradientOverlay(it) }
             canvas.restore()

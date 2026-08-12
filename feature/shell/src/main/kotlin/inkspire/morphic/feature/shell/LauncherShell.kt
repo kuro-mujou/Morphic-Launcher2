@@ -78,7 +78,7 @@ import org.koin.compose.koinInject
  * The launcher itself: **HOME in the centre, side surfaces off its edges**, panned between by a swipe.
  *
  * This is the real version of what `app/dev/SurfacePagerPlaygroundScreen` prototyped. That harness proved the gesture
- * and the finger-policy table against *simulated* surfaces — coloured boxes standing in for layouts that didn't exist.
+ * and the finger-policy table against *simulated* surfaces — colored boxes standing in for layouts that didn't exist.
  * They all exist now, so the boxes are the real screens; the playground stays in the dev harness as the regression
  * test for the gesture itself.
  *

@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  * Where a layer's content comes from. Persisted inside the layer set, so the [SerialName]s are a stable
  * on-disk contract — rename with care.
  *
- * A layer is one of: the parsed app icon, the app's monochrome layer, an imported image, a flat colour, or an
+ * A layer is one of: the parsed app icon, the app's monochrome layer, an imported image, a flat color, or an
  * installed icon pack's rendering of this app.
  */
 @Serializable
@@ -56,7 +56,7 @@ sealed interface LayerSource {
         val drawableName: String? = null,
     ) : LayerSource
 
-    /** A flat colour fill; [argb] is a packed ARGB colour (e.g. a solid background for a legacy icon). */
+    /** A flat color fill; [argb] is a packed ARGB color (e.g. a solid background for a legacy icon). */
     @Serializable
     @SerialName("solid_fill")
     data class SolidFill(val argb: Int) : LayerSource

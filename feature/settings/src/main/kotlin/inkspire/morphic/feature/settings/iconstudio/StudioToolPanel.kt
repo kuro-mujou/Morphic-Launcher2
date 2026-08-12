@@ -78,7 +78,7 @@ data class StudioActions(
  *
  * **Capped and scrolling, not sized to fit.** A section's length varies by an order of magnitude — Shape is a grid of
  * chips, Effects is nine controls — and a panel that grew to whatever its contents wanted would bury the icon at
- * exactly the moment the user was colouring it.
+ * exactly the moment the user was coloring it.
  *
  * **Three bands: header, scroll, footer.** The outer two are measured first and the scroll takes what is left of
  * [PanelMaxHeight], which is what lets a section pin a row ([SectionFooter]) without the panel growing to fit it.

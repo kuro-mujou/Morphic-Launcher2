@@ -40,7 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
  *
  * **[scrimColor] is still required, and still for one reason**: a launcher that has never been given a wallpaper has
  * nothing to sample, and the content above still has to be readable. It is the caller's because only the caller knows
- * what colour its surface is.
+ * what color its surface is.
  *
  * @param alpha how present the frost is, `0f..1f`, read at draw time — a lambda so a pan can drive it without
  *   recomposing this. At `0f` it is invisible but still composed, which is what lets it fade rather than appear.

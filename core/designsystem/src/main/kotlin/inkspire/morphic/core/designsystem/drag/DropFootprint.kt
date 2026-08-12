@@ -27,7 +27,7 @@ import inkspire.morphic.core.model.DropIntent
  * Positioning is the surface's job: it places this over the target cell using its own cell geometry. This
  * component only renders the box, filling whatever bounds [modifier] gives it.
  *
- * The four painted states, in the monochrome palette (only [DropIntent.INVALID] uses real colour — red — since
+ * The four painted states, in the monochrome palette (only [DropIntent.INVALID] uses real color — red — since
  * that is the reserved error hue):
  * - [DropIntent.PLACE] — a quiet accent wash: "drops here".
  * - [DropIntent.MERGE] — a stronger accent that **expands** slightly, signalling a combine.
@@ -38,7 +38,7 @@ import inkspire.morphic.core.model.DropIntent
  * **[DropIntent.REORDER] paints the slot the item will occupy** — the gap an ordered surface has opened for it.
  * It reads like [DropIntent.PLACE] on purpose: both promise "it lands here", and the only difference is how the
  * surface got there (a reflowed gap rather than a chosen cell). They are separate branches so the two can diverge
- * later without a caller having to lie about its intent to borrow a colour.
+ * later without a caller having to lie about its intent to borrow a color.
  *
  * **[DropIntent.REMOVE] is the one intent that paints nothing**, and it is not a return to that earlier cut: this
  * plan has no target cell to name, because taking an item off the launcher puts it nowhere. What signals the drop is
@@ -52,7 +52,7 @@ import inkspire.morphic.core.model.DropIntent
  * decides *where* to paint — for a reorder that is the gap, which lives in the surface's own state and not in the
  * plan, whose footprint stays a meaningless token for this intent.
  *
- * State changes animate (colour + the merge expansion) so the shadow morphs rather than jumps as the finger
+ * State changes animate (color + the merge expansion) so the shadow morphs rather than jumps as the finger
  * crosses zones.
  */
 @Composable

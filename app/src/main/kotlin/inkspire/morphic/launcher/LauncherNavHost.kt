@@ -44,7 +44,7 @@ private data object DevHarnessRoute : NavKey
  * key → screen mapping.
  *
  * **This is the whole of navigation, in one small file.** L1's equivalent lived inside a 204-line
- * `MainActivity.setContent` mixed with wallpaper-colour loading, icon-cache invalidation and six
+ * `MainActivity.setContent` mixed with wallpaper-color loading, icon-cache invalidation and six
  * `CompositionLocalProvider`s, with the navigator as an anonymous object in the middle of it. Here the Activity only
  * provides what it owns (the icon render manager) and calls this; the navigator itself is
  * [rememberLauncherNavigator], in the module that owns navigation.

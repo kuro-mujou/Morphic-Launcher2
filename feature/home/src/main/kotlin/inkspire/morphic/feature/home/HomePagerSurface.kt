@@ -130,7 +130,7 @@ private const val WidgetContainerTitle = "Widget container"
  * @property moves where each pushed occupant would go — the **live preview**, and half of what a commit writes.
  *   Emptied by a commit, since the pushed cells are then the stored ones.
  * @property refused the last request was out of the grid, or needed room the planner could not clear. Drawn in
- *   the error colour.
+ *   the error color.
  */
 internal data class HomeResize(
     val item: GridItem,

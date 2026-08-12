@@ -31,11 +31,11 @@ data class IconLayerSpec(
     val effects: List<LayerEffect> = emptyList(),
 ) {
 
-    /** The layer's colour effect, or null when it has none. At most one is meaningful — see [LayerEffect.Color]. */
+    /** The layer's color effect, or null when it has none. At most one is meaningful — see [LayerEffect.Color]. */
     val color: LayerEffect.Color?
         get() = effects.filterIsInstance<LayerEffect.Color>().firstOrNull()?.takeIf { !it.isIdentity }
 
-    /** Replaces (or clears) this layer's colour effect, leaving every other effect in place and in order. */
+    /** Replaces (or clears) this layer's color effect, leaving every other effect in place and in order. */
     fun withColor(color: LayerEffect.Color?): IconLayerSpec {
         val rest = effects.filterNot { it is LayerEffect.Color }
         return copy(effects = if (color == null || color.isIdentity) rest else rest + color)

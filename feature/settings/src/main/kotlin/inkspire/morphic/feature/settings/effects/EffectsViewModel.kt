@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
  * The chooser's vocabulary — one row per thing a user can pick, which is **not** one per model variant.
  *
  * `BackdropEffect.Blur` is one variant with a `tone`, because light and dark share every parameter and differ in a
- * colour; but "Light blur" and "Dark blur" are two things to pick between, exactly as they were in L1's flat enum. So
+ * color; but "Light blur" and "Dark blur" are two things to pick between, exactly as they were in L1's flat enum. So
  * the split lives here, in the section that draws the chips, rather than being pushed back into the model.
  *
  * **This is not the stored enum coming back.** What is persisted is still the sealed `BackdropEffect`; this exists for

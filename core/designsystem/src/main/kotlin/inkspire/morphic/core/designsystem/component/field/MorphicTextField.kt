@@ -43,7 +43,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * [TextFieldDecorator] — not M3's `TextField` — so text + selection survive configuration changes, and we own
  * the focus visuals: no floating label or baseline indicator fighting our styling. Focus is tracked into our
  * own [onFocusChanged] state; the container shows the focus ring (the red `error` ring when [isError]); the
- * placeholder sits behind the field until there's text; the cursor uses the accent (or error) colour; and
+ * placeholder sits behind the field until there's text; the cursor uses the accent (or error) color; and
  * focus is dropped when the keyboard is dismissed. Icon slots are composables, so this pulls in no icon dep.
  *
  * This is the settings field; the launcher-surface field (frosted, wallpaper-adaptive) is deferred.

@@ -99,10 +99,10 @@ fun StudioCanvas(
 }
 
 /**
- * Paints the backdrop: a flat colour, a checkerboard, or a flat colour with the checkerboard confined to the icon's
+ * Paints the backdrop: a flat color, a checkerboard, or a flat color with the checkerboard confined to the icon's
  * bound.
  *
- * The mixed modes are the useful ones and the reason this is not just two colours — they show an icon's own
+ * The mixed modes are the useful ones and the reason this is not just two colors — they show an icon's own
  * transparency *and* how its silhouette reads against a dark or light surround at the same time, which is the pair
  * of questions actually being asked while shaping a layer.
  */

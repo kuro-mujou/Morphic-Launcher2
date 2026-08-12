@@ -126,16 +126,16 @@ this entry, which is only the summary.
 ### B7b — `data:wallpaper` — wallpaper source, crop, and system apply (depends on model, common) — 🟡 first cut done
 - `WallpaperRepository`(+`Impl`) ⚠️ — a bitmap/file/`WallpaperManager` service: decode + crop + scale from a `Uri`,
   own JPEGs under `filesDir/wallpaper/`, set the system wallpaper on HOME/LOCK/BOTH, load the backdrop blur and the
-  dominant colour.
+  dominant color.
 - ✅ **All three sources are built** (S5a–S5e in the settings plan): the module and its own one-key DataStore; the
   picked image with a crop screen and the system apply on HOME/LOCK/BOTH; the capture (an effect-only source that
   `apply` declines); and the **rotating pair** with `RotatingWallpaperService`, declared in this module's manifest so the
   renderer travels with the files it renders. What is left of B7b is the half that *reads* them — the blur and the
-  dominant colour, below.
+  dominant color, below.
 - 🔧 It does **not** depend on `data:settings`, which is a correction to the line this heading used to carry. L1 kept its
   `WallpaperState` in the settings blob; B7 already refused that as bookkeeping rather than preference, so the module owns
   its own store. The **effect params** are the genuinely preference-shaped half and stay in `data:settings`.
-- 🔧 L1's `internal/Blur.kt` (raw `IntArray` box-blur + saturation-weighted dominant colour) is image processing, not
+- 🔧 L1's `internal/Blur.kt` (raw `IntArray` box-blur + saturation-weighted dominant color) is image processing, not
   wallpaper *or* settings — land it beside the graphics/icon code, not in either repository's module. Still to do; it is
   what the effects, the frosted backdrop and the brightness signal all wait on.
 - Blocks the launcher's **wallpaper-brightness** theme input, which `feature:shell` currently hardcodes to dark — and

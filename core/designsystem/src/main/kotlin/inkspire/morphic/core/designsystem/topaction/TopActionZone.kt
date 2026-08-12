@@ -82,7 +82,7 @@ enum class TopActionTarget {
  * thresholds and its own copy of the band. Here one band spans both, because the shell is above both surfaces; the
  * mode is a parameter and the timing difference between them lives in one state holder.
  *
- * **Colour.** [TopActionMode.ADD_TO_HOME] is `accent`, the palette's greyscale emphasis. [TopActionMode.DELETE] is
+ * **Color.** [TopActionMode.ADD_TO_HOME] is `accent`, the palette's greyscale emphasis. [TopActionMode.DELETE] is
  * `error` — the one hue the palette reserves, and this is what it is reserved *for*: an action that destroys
  * something. L1 used red for delete and green for add; the green goes, the red stays, and it stays because it is
  * carrying meaning rather than decoration.
@@ -90,7 +90,7 @@ enum class TopActionTarget {
  * @param mode what the band offers, or null when there is nothing to offer — no drag, or a drag of something the
  *   band cannot take. Null draws nothing at all, so a hidden band cannot swallow a touch.
  * @param expanded whether the band has committed to being a target. Collapsed it is exactly the status-bar inset
- *   deep; both the height and the colour animate, so neither state change is a jump cut mid-gesture.
+ *   deep; both the height and the color animate, so neither state change is a jump cut mid-gesture.
  * @param showUninstall whether to split the expanded band into Remove | Uninstall. False for anything that is not an
  *   app (a folder has no package), and always false in [TopActionMode.ADD_TO_HOME].
  * @param hoveredTarget which half the finger is over, drawn lit. Null in [TopActionMode.ADD_TO_HOME], whose single
@@ -116,7 +116,7 @@ fun TopActionZone(
         },
         label = "topActionColor",
     )
-    // The label colour has to follow the band's own, not `onAccent` for both: the DELETE band is `error`, and
+    // The label color has to follow the band's own, not `onAccent` for both: the DELETE band is `error`, and
     // greyscale-on-accent over red is the wrong contrast pair. Each token names the content its own surface takes.
     val onBase by animateColorAsState(
         targetValue = when (mode) {
@@ -194,8 +194,8 @@ private enum class TopActionGlyph { PLUS, CROSS, BIN }
  * A dimmed target is still perfectly readable — the point of the two halves is that you can see *both* options and
  * choose, so the unhovered one must not disappear.
  *
- * @param content the band's own content colour, passed in rather than read from the palette here: which one is right
- *   depends on which surface colour the band is painted in, and only the caller knows the mode.
+ * @param content the band's own content color, passed in rather than read from the palette here: which one is right
+ *   depends on which surface color the band is painted in, and only the caller knows the mode.
  */
 @Composable
 private fun Target(
@@ -210,7 +210,7 @@ private fun Target(
         label = "topActionTargetTint",
     )
     // The lit half also gets a wash behind it, so which one is armed reads from the corner of the eye rather than
-    // from a contrast difference between two labels. Struck from the content colour rather than a literal white, so
+    // from a contrast difference between two labels. Struck from the content color rather than a literal white, so
     // it lightens a dark-on-light band and darkens a light-on-dark one instead of always doing the first.
     val wash by animateColorAsState(
         targetValue = if (highlighted) content.copy(alpha = 0.16f) else Color.Transparent,

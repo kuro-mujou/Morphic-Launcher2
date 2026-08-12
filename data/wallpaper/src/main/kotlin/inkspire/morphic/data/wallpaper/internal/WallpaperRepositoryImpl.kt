@@ -257,10 +257,10 @@ internal class WallpaperRepositoryImpl(
         ComponentName(appContext, RotatingWallpaperService::class.java)
 
     /**
-     * A tick each time the system's wallpaper colours change, plus one on subscription so the first resolve happens.
+     * A tick each time the system's wallpaper colors change, plus one on subscription so the first resolve happens.
      *
-     * `Unit` rather than the colours themselves: the resolve below re-reads them anyway (it also needs the wallpaper
-     * *id*, which this callback does not carry), and a flow of colours would tempt a caller into using them without
+     * `Unit` rather than the colors themselves: the resolve below re-reads them anyway (it also needs the wallpaper
+     * *id*, which this callback does not carry), and a flow of colors would tempt a caller into using them without
      * the fallback chain. Below API 27 there is no listener to register, so this is the subscription tick alone and
      * the state flow beside it carries the updates.
      */
@@ -295,12 +295,12 @@ internal class WallpaperRepositoryImpl(
     }
 
     /**
-     * The wallpaper's representative colour: the system's primary if it has one, else our own file's.
+     * The wallpaper's representative color: the system's primary if it has one, else our own file's.
      *
      * The same two-step [resolveBrightness] takes, and deliberately so — three readings of "what is displayed" that
      * disagreed about *which image* they were reading would be worse than any one of them being slightly off. The
-     * orientation passed to [backdropSourcePath] is portrait because a colour is not per-orientation in any meaningful
-     * sense; a rotating pair whose two halves have different accents is a wallpaper whose colour is genuinely
+     * orientation passed to [backdropSourcePath] is portrait because a color is not per-orientation in any meaningful
+     * sense; a rotating pair whose two halves have different accents is a wallpaper whose color is genuinely
      * ambiguous, and picking one beats flickering between them on every rotation.
      */
     private suspend fun resolveAccent(state: WallpaperState): Int? {
@@ -310,7 +310,7 @@ internal class WallpaperRepositoryImpl(
         return dominantColor(bitmap)
     }
 
-    /** `WallpaperColors.primaryColor` — the most-represented colour of whatever is on screen. Null below API 27. */
+    /** `WallpaperColors.primaryColor` — the most-represented color of whatever is on screen. Null below API 27. */
     private fun systemAccent(): Int? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
         val manager = WallpaperManager.getInstance(appContext)
@@ -323,11 +323,11 @@ internal class WallpaperRepositoryImpl(
      *
      * **Preferred over anything we could compute**, because it is computed over what is *actually displayed* — another
      * app's wallpaper, or a live one, neither of which we can read as a bitmap at all. It needs no permission and no
-     * decode. Null below API 27, and null for a live wallpaper whose service publishes no colours (ours does — see
+     * decode. Null below API 27, and null for a live wallpaper whose service publishes no colors (ours does — see
      * [RotatingWallpaperService]).
      *
      * On API 31+ the OS also states its verdict directly: `HINT_SUPPORTS_DARK_TEXT` *is* the question this method
-     * asks, decided with area-weighted analysis rather than a single colour, so it wins where it exists. The getter
+     * asks, decided with area-weighted analysis rather than a single color, so it wins where it exists. The getter
      * arrived in 31 even though the constant dates from 27, which is the only reason for the second branch.
      */
     private fun systemBrightness(manager: WallpaperManager): WallpaperBrightness? {
@@ -344,7 +344,7 @@ internal class WallpaperRepositoryImpl(
     /**
      * Mean relative luminance over a tiny downscale of [source].
      *
-     * **Per-pixel luminance averaged, not the luminance of an averaged colour** — the two differ because luminance is
+     * **Per-pixel luminance averaged, not the luminance of an averaged color** — the two differ because luminance is
      * gamma-expanded, and a picture that is half black and half white is a mid-grey by the second reading while the
      * first correctly reports it as the borderline case it is.
      *

@@ -239,7 +239,7 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
     than preferences, and a module that owns the files may as well own the pointers to them — so `data:wallpaper` has its
     own one-key DataStore and no settings dependency at all. The **effect params** are the part that is genuinely a
     preference, and they stay in `data:settings` (S5f).
-- **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-colour extraction. Pure image processing;
+- **`internal/Blur.kt` (112 LOC)** — raw `IntArray` box-blur and dominant-color extraction. Pure image processing;
   belongs beside the graphics/icon code, in neither repository's module.
   - **Revised again at S5f-2: both halves live in `data:wallpaper`.** "Beside the graphics code, in neither
     repository's module" was written when the wallpaper lived *inside* `data:settings` — image processing genuinely has
@@ -248,7 +248,7 @@ Nav3 makes a key cheap, so the back stack does all of it for free. Consequences 
     separate them from their only caller to honour a sentence about a module that no longer holds it. `dominantColor`
     ships too, as `accentColor`'s API-26 fallback — see S5f-2 for why the hue is kept.
   - **Revised at S5f-1: the brightness signal does not need it, and neither half is ported yet.** The line below said
-    the shell's `darkTheme` was waiting on the dominant-colour half. It was not.
+    the shell's `darkTheme` was waiting on the dominant-color half. It was not.
     `WallpaperManager.getWallpaperColors` answers the question over the wallpaper *actually displayed* — no permission,
     no decode, and on API 31+ `HINT_SUPPORTS_DARK_TEXT` is the verdict itself — while `dominantColor` is a
     **saturation-weighted** average, built so a vivid accent beats washed-out grey. That is what an accent wants and
@@ -446,7 +446,7 @@ every phase ends with something visibly working on device, and no slice is writt
       and the folder asks `folderInnerSize` — the same sizer the overlay lays out with, since a folder's cell comes from
       a card, not a division.
     - **Two deliberate departures.** The guardrails are **greyscale** (solid = cell, dashed = upper, dotted = lower, with
-      the caption naming them), because L1 coloured them green and red and this palette reserves red for `error` — the
+      the caption naming them), because L1 colored them green and red and this palette reserves red for `error` — the
       same rule that put the grid editor's buttons on the edge they affect. And there is **no wallpaper behind it**: L1
       punched through to the live wallpaper (`BlendMode.Src` over a transparent window, the whole pane composited into an
       offscreen layer, overscroll disabled because a stretch breaks the punch), which needs `data:wallpaper` — the one
@@ -497,8 +497,8 @@ every phase ends with something visibly working on device, and no slice is writt
         ratio, replacing `fillMaxWidth(0.62f)` — a settings pane is half a tablet and all of a phone, so a fraction
         gave a different preview in each.
     - **L1's three button arrangements**, including the columns-only rails and the no-button frame. The earlier cut
-        centred a −/+ pair per edge, on the grounds that a greyscale palette cannot tell add from remove by colour;
-        the premise was right and the conclusion wrong, since in L1 the *position* encodes the action and the colour
+        centred a −/+ pair per edge, on the grounds that a greyscale palette cannot tell add from remove by color;
+        the premise was right and the conclusion wrong, since in L1 the *position* encodes the action and the color
         was reinforcement.
     - **A `preview` slot with a mockup per APPS layout** — `ReflectivePreview` (cells at their derived aspect,
         clipped at the fold) for the scrolling grids, the even lattice for the pagers and the card grid, header + tabs
@@ -639,12 +639,12 @@ every phase ends with something visibly working on device, and no slice is writt
       saturation-weighted statistic that would have answered a different question. Taking this piece first is what
       surfaced that — the alternative was porting 112 LOC of image processing to be used wrongly by its first caller.
     - **Ask the system; read our own file only with proof.** The fallback (API 26, or a live wallpaper publishing no
-      colours) is gated on `appliedSystemId` still equalling the live wallpaper id — the second job `WallpaperState`
+      colors) is gated on `appliedSystemId` still equalling the live wallpaper id — the second job `WallpaperState`
       reserved that field for, now doing it. Without the gate, "we have an image stored" would be treated as evidence
       about a wallpaper another app set. Otherwise `DARK`: the old hardcoded value, and the safer miss.
     - **The cut is at relative luminance 0.179**, where the WCAG contrast ratios against black and white cross — a
       derivation rather than a taste value.
-    - **`RotatingWallpaperService` publishes its colours** (`onComputeColors` + `notifyColorsChanged`). A live
+    - **`RotatingWallpaperService` publishes its colors** (`onComputeColors` + `notifyColorsChanged`). A live
       wallpaper is the one kind the system cannot analyse for itself, so a silent service starves every consumer of
       `getWallpaperColors`, status-bar icon contrast included. Answering it means our own pair takes the same path as
       every other wallpaper instead of a special case reading our files behind the system's back. L1's published
@@ -657,7 +657,7 @@ every phase ends with something visibly working on device, and no slice is writt
       property, so the one question every consumer asks it is not a `when` re-written per caller. See the note in
       "Target shape" above — this is the worked example of a `core:model` type meeting its first caller.
     - **All four effects carry the wallpaper's hue — the deliberate exception to the monochrome palette rule.** That
-      rule makes *chrome* greyscale so the wallpaper and the icons carry the colour; an effect the user selects, whose
+      rule makes *chrome* greyscale so the wallpaper and the icons carry the color; an effect the user selects, whose
       subject is the wallpaper, is not chrome. L1's two-stage blend is ported exactly: a wallpaper tone of
       `lerp(surfaceVariant, accent, 0.30)`, then `lerp(White|Black, tone, 0.35)` for the blurs and the tone outright
       for Material You. The 35% nudge is not decoration — a neutral film over a blurred photograph reads as dirty, and
@@ -665,10 +665,10 @@ every phase ends with something visibly working on device, and no slice is writt
       left `MaterialYou` unrenderable on palette grounds, and the author reversed it mid-slice.
     - **Both halves of `Blur.kt` crossed, and the accent does not come from the OS palette.** L1 read
       `colorScheme.primary` above API 31, which worked because its launcher ran a normal M3 dynamic scheme; L2 bridges
-      a **monochrome** scheme, so that expression returns grey and the dynamic-colour route is closed by a decision
+      a **monochrome** scheme, so that expression returns grey and the dynamic-color route is closed by a decision
       made long before this. `accentColor` reads the wallpaper instead — `WallpaperColors.primaryColor` on API 27+,
       `dominantColor` over our own file below it. Note the trap S5f-1 nearly walked into: `dominantColor` is
-      saturation-weighted, so it is the right statistic for "what colour?" and the wrong one for "how bright?".
+      saturation-weighted, so it is the right statistic for "what color?" and the wrong one for "how bright?".
     - **`Blur.kt` went into `data:wallpaper`, not "beside the graphics code".** That instruction was written when the
       wallpaper lived inside `data:settings`, where image processing had no business; `data:wallpaper` exists *because*
       it decodes bitmaps, and `cropAndScale` is in the file next door. See the revised note above.

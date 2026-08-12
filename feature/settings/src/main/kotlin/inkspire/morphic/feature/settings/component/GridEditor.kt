@@ -118,10 +118,10 @@ internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val 
  * directly above it; the right rail's lower + adds a row at the bottom and is beside it.
  *
  * **An earlier cut here centred a −/+ pair on each edge instead**, on the grounds that L1 tells add from remove by
- * colour (red / green) and this codebase's palette cannot — greyscale chrome, red reserved for `error`. The premise
+ * color (red / green) and this codebase's palette cannot — greyscale chrome, red reserved for `error`. The premise
  * was right and the conclusion was wrong: in L1 the *position already encodes the action*, top/left removing and
- * bottom/right adding, so the colour was reinforcement rather than the signal. Taking the arrangement and dropping
- * the colour keeps everything the palette forbids and nothing it doesn't, and the glyphs carry what is left. The
+ * bottom/right adding, so the color was reinforcement rather than the signal. Taking the arrangement and dropping
+ * the color keeps everything the palette forbids and nothing it doesn't, and the glyphs carry what is left. The
  * flash in the preview stays greyscale for the same reason.
  *
  * **The mockup is a fixed size per posture, not a fraction of the pane** — see the four numbers in the body, which
@@ -222,8 +222,8 @@ internal fun GridEditor(
         // press; what it needs is somewhere to *see* the height its slider sets.
         //
         // An earlier cut centred a −/+ pair on each edge, reasoning that a greyscale palette cannot tell add from
-        // remove by colour as L1's red/green does. The premise was right, the conclusion wrong: in L1 the *position*
-        // encodes the action, so the colour was reinforcement. The arrangement is kept and the colour is not.
+        // remove by color as L1's red/green does. The premise was right, the conclusion wrong: in L1 the *position*
+        // encodes the action, so the color was reinforcement. The arrangement is kept and the color is not.
         val framedPreview: @Composable () -> Unit = {
             Box(
                 modifier = Modifier
@@ -367,7 +367,7 @@ private fun CompanionZone(modifier: Modifier) {
  *
  * **Greyscale, not red/green.** An added line flashes to `accent`; a removed one fades out as it collapses. The
  * palette is monochrome by design and reserves red for `error`, which a user removing a row is not — and the collapse
- * already says "going away" without a colour needing to.
+ * already says "going away" without a color needing to.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -381,7 +381,7 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
     var flashAdd by remember { mutableStateOf(true) }
     // The last press already animated. **A count can change without a press** — committing a larger minimum icon size
     // re-fits the grid under the editor — and without this the pending edit would be replayed, flashing the edge of
-    // whichever button was touched last and colouring a removal as an add. One nonce, consumed once.
+    // whichever button was touched last and coloring a removal as an add. One nonce, consumed once.
     var flashedNonce by remember { mutableIntStateOf(0) }
     val flash = remember { Animatable(0f) }
     val flashSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()

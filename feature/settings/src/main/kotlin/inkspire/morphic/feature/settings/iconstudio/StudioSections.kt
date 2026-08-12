@@ -70,7 +70,7 @@ import inkspire.morphic.data.icons.InstalledIconPack
  * looks like, and the host can rearrange them (a side rail in landscape) without touching one.
  *
  * There is no "this layer / whole icon" scope toggle, and that is a simplification the model earned rather than a
- * decision taken here. L1's editor mixed per-layer tools (transform, colour, shadow) with whole-icon ones (icon shape,
+ * decision taken here. L1's editor mixed per-layer tools (transform, color, shadow) with whole-icon ones (icon shape,
  * background, theming, size, skin, pack) in one flat row, and its UI plan left the split as an open question. In L2
  * every one of those whole-icon tools has already gone somewhere else: the tile shape became a *per-layer* shape (there
  * is no stack-level mask), the background is the background layer's source, theming is `AppDefaultMonochrome` on the
@@ -196,7 +196,7 @@ internal fun LayerStackActions(
  *   the selected one it was inserted beneath. Only genuinely new rows get it: without that test the list would
  *   re-assemble itself every time the Layers panel was opened.
  * - **Selection** — the wash fades rather than switching, because add and remove both *move* the selection and a
- *   highlight that appears somewhere new in one frame is easy to miss. An effects spec, since only a colour changes.
+ *   highlight that appears somewhere new in one frame is easy to miss. An effects spec, since only a color changes.
  *
  * The one thing not animated is a row **leaving**: it is gone from the stack the moment remove is pressed, so there is
  * nothing left to fade. Keeping it would mean holding a deleted layer in state until an animation said so, which is a
@@ -276,7 +276,7 @@ private fun LayerRow(
 }
 
 /**
- * How the layer reads: opacity and blend, recolouring, and the gradient overlay.
+ * How the layer reads: opacity and blend, recoloring, and the gradient overlay.
  *
  * **One section rather than the two tabs this used to be**, because the model already groups them — `LayerEffect.Color`
  * and `LayerEffect.Gradient` are variants of one sealed list, and the deferred shadow will be a third. Splitting them
@@ -347,9 +347,9 @@ internal fun TransformControls(
 }
 
 /**
- * How the layer joins the stack (opacity, blend) and how it is recoloured (tint, saturation, brightness, hue).
+ * How the layer joins the stack (opacity, blend) and how it is recolored (tint, saturation, brightness, hue).
  *
- * **The recolouring controls write one `LayerEffect.Color`, never four**, via `IconLayerSpec.withColor` — which is
+ * **The recoloring controls write one `LayerEffect.Color`, never four**, via `IconLayerSpec.withColor` — which is
  * why an all-default effect is *removed* from the list rather than stored as a row of 1s. Four separate effects
  * would mean their order in the list silently changed the result.
  */
@@ -409,7 +409,7 @@ private fun ColorControls(
         )
     }
     LabelledControl("Tint") {
-        // Clearable because a tint is the one recolouring that cannot be undone by returning a slider to its
+        // Clearable because a tint is the one recoloring that cannot be undone by returning a slider to its
         // middle — without a way off, picking one would be a one-way door.
         ClearableColorField(
             argb = color.tintArgb,
@@ -422,7 +422,7 @@ private fun ColorControls(
  * The gradient overlay's two stops, its direction and how strongly it is laid on.
  *
  * **Strength doubles as the on/off switch**: at zero the effect is identity and `withGradient` drops it from the
- * list entirely, so there is no separate toggle to disagree with the slider. That is the same shape the colour
+ * list entirely, so there is no separate toggle to disagree with the slider. That is the same shape the color
  * controls have — an effect at its defaults is simply not stored.
  */
 @Composable
@@ -464,28 +464,28 @@ private fun GradientControls(
 }
 
 /**
- * Choosing a colour: quick swatches, and a full picker one tap away.
+ * Choosing a color: quick swatches, and a full picker one tap away.
  *
- * **One component for all four colours in this editor** — a solid fill, a tint, and a gradient's two stops. They
+ * **One component for all four colors in this editor** — a solid fill, a tint, and a gradient's two stops. They
  * were three near-identical swatch rows before the picker existed, which is exactly the shape that drifts: L1 has
  * a whole file of near-copies for the same reason.
  *
- * The swatches stay rather than being replaced by the picker. They are how a colour is chosen *quickly* and the
+ * The swatches stay rather than being replaced by the picker. They are how a color is chosen *quickly* and the
  * picker is how one is chosen *exactly*, and an editor that made every black require a drag across a saturation
  * panel would be slower for the common case in exchange for precision nobody wanted there.
  *
- * @param clearable whether "no colour" is a choice. False for a fill or a gradient stop, which must be *some*
- *   colour; true for a tint, which is an effect a user has to be able to get back off.
+ * @param clearable whether "no color" is a choice. False for a fill or a gradient stop, which must be *some*
+ *   color; true for a tint, which is an effect a user has to be able to get back off.
  */
 @Composable
 private fun ColorField(argb: Int, modifier: Modifier = Modifier, onChange: (Int) -> Unit) =
     ColorFieldBody(argb, modifier, clearable = false) { picked -> picked?.let(onChange) }
 
 /**
- * [ColorField] where *no colour* is one of the choices.
+ * [ColorField] where *no color* is one of the choices.
  *
  * A separate function rather than a `clearable` flag on one, because the flag would not change the **type**: a
- * caller that must have a colour would still be handed a nullable one and have to decide what to do with a null
+ * caller that must have a color would still be handed a nullable one and have to decide what to do with a null
  * that cannot happen. Two signatures make each call site say which it is, and the shared body is the same either
  * way.
  */
@@ -508,7 +508,7 @@ private fun ColorFieldBody(
             FillSwatches.take(if (clearable) 6 else 7).forEach { swatch ->
                 Swatch(argb = swatch, selected = argb == swatch) { onChange(swatch) }
             }
-            // The way to a colour that is not on the row. Shows the current one, so it doubles as the readout.
+            // The way to a color that is not on the row. Shows the current one, so it doubles as the readout.
             Box(
                 modifier = Modifier
                     .size(28.dp)
@@ -528,7 +528,7 @@ private fun ColorFieldBody(
         if (picking) {
             MorphicColorPicker(
                 // Black when there is nothing yet: the picker has to start somewhere, and it is the one value a
-                // user reading the panel will not mistake for a colour that was already chosen.
+                // user reading the panel will not mistake for a color that was already chosen.
                 argb = argb ?: 0xFF000000.toInt(),
                 onArgbChange = onChange,
             )
@@ -536,7 +536,7 @@ private fun ColorFieldBody(
     }
 }
 
-/** One colour dot. A null [argb] is the "no tint" dot, drawn hollow. */
+/** One color dot. A null [argb] is the "no tint" dot, drawn hollow. */
 @Composable
 private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
     Box(
@@ -558,8 +558,8 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  *
  * **Offered on every layer, including custom ones**, which differs from L1: it shaped only the foreground and left
  * custom images to their own alpha. The renderer here masks whatever it is given, so the restriction would be one
- * the UI invented — and a shaped custom layer is an obviously useful thing (a colour fill trimmed to a circle is
- * how you put a coloured disc behind a legacy icon).
+ * the UI invented — and a shaped custom layer is an obviously useful thing (a color fill trimmed to a circle is
+ * how you put a colored disc behind a legacy icon).
  */
 @Composable
 internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
@@ -613,7 +613,7 @@ internal fun SourceControls(
                     onUpdate { it.copy(source = LayerSource.AppDefaultMonochrome) }
                 }
             }
-            ChoiceRow("Solid colour", spec.source is LayerSource.SolidFill) {
+            ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
                 onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
             }
             // Offered on *every* layer, foreground and background included — replacing an app's own artwork is
@@ -711,6 +711,6 @@ internal val LayerSource.label: String
         LayerSource.AppDefault -> "app default"
         LayerSource.AppDefaultMonochrome -> "monochrome"
         is LayerSource.CustomImage -> "image"
-        is LayerSource.SolidFill -> "solid colour"
+        is LayerSource.SolidFill -> "solid color"
         is LayerSource.IconPack -> "icon pack"
     }

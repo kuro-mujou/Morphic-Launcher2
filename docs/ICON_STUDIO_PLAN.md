@@ -90,7 +90,7 @@ serve. Two consequences worth keeping straight:
   construction, so the hazard cannot arise.
 - **There is plenty to blur, which is the part that is easy to get wrong on paper.** Judging it by the
   *background* alone suggests otherwise — a blurred flat black returns flat black. But the canvas's main content
-  is the **hero icon**, at full size, and the panels overlap it; frosting its colours is precisely the
+  is the **hero icon**, at full size, and the panels overlap it; frosting its colors is precisely the
   drawing-app material. Blurred checkerboard reads as a fine neutral frost, and the dark tint gives every surface
   one consistent material whichever background is chosen.
 
@@ -113,7 +113,7 @@ Modifier
 over a `hazeSource`-marked canvas. The first cut drove `Modifier.hazeEffect(state) { blurEffect { blurRadius;
 colorEffects } }` by hand — a radius we picked and a tint applied as a `HazeColorEffect` — and what it produced was
 a flat wash rather than glass. `HazeMaterials` is the library's own set of iOS-style materials: `ultraThin` supplies
-the radius, the tint blend *and* the noise together, so the one number left to choose is the tint colour
+the radius, the tint blend *and* the noise together, so the one number left to choose is the tint color
 (`Color.DarkGray` at 40%, which reads over both a black and a white canvas). The `blurRadius` parameter on
 `studioSurface` is **gone rather than defaulted** — a per-surface depth is exactly what "one material, so a new panel
 cannot arrive looking different" exists to prevent, and the shared radius is the material's now.
@@ -188,7 +188,7 @@ signal — the key does the work, which is what that key was built for.
 
 The hybrid is already locked in CLAUDE.md: **display bakes to one flat bitmap; the editor renders live.** Only
 the bake path exists. The live path is a new composable — each resolved layer as a Compose node, transform via
-`graphicsLayer`, effects via colour filter / blend, shape via a clip — so a slider drag responds per frame with
+`graphicsLayer`, effects via color filter / blend, shape via a clip — so a slider drag responds per frame with
 no bake, and a commit invalidates that icon's baked entry.
 
 **The real risk is the two drifting**, and it is worth naming because it is silent: an icon that looks right in
@@ -217,7 +217,7 @@ new variant and **no schema change**.
 
 ## Legacy background detection (designed by L1, never built there)
 
-Sample the legacy bitmap's edge ring; when it is one flat opaque colour, that becomes what the background layer
+Sample the legacy bitmap's edge ring; when it is one flat opaque color, that becomes what the background layer
 resolves to. Otherwise the background stays empty. **No matting** — there is no reliable way to cut a glyph out
 of a rasterized icon, and L1 rejected it for the same reason.
 
@@ -226,16 +226,16 @@ and the edge sampling never left the plan, so the thresholds here are ours.
 
 **The "invisible until the foreground moves" claim is only true if it is made true**, which is the one thing
 building this changed. A fill is safe to apply by default exactly while the foreground already covers it — and a
-rounded legacy icon does not: its corners are transparent, so painting the plate colour behind it would **square
+rounded legacy icon does not: its corners are transparent, so painting the plate color behind it would **square
 the icon off**, and a drop shadow's soft edge would fill in the gap the shadow leaves. Both are visible changes to
 icons nobody asked to change. So the solid-fraction threshold is near-total (95%) rather than a majority, which
-declines those cases and leaves the promise literally true for the ones it accepts. Setting a background colour by
+declines those cases and leaves the promise literally true for the ones it accepts. Setting a background color by
 hand is still one tap in the studio, which is where a rounded icon's plate belongs anyway.
 
-**The colour is resolved, not written into the recipe.** It lands on `ParsedIcon.background`, so `AppDefault` on
+**The color is resolved, not written into the recipe.** It lands on `ParsedIcon.background`, so `AppDefault` on
 the background layer resolves to it; nothing is persisted and no recipe changes. Two consequences worth having:
 the app's recipe still reads "app default" (so Reset and inheritance behave normally), and an app that updates its
-artwork gets its colour re-detected rather than keeping one frozen from a previous version.
+artwork gets its color re-detected rather than keeping one frozen from a previous version.
 
 The decision is split from the sampling — `LegacyBackground` is arithmetic over an `IntArray` and unit-tested
 without an emulator, where rasterising the drawable stays in `DrawableParser`. Same split as `SettingsSlice` and
@@ -353,7 +353,7 @@ feed the background layer is the open question.
   parts:
   - **S3a** — Haze proven and `studioSurface` stood up. The API was read out of the published sources rather than
     taken from L1's notes, which were a guess (that plan marks the imports "assumed" and never compiled). The
-    content colour is **fixed white**, the studio being the one zone whose backdrop the *user* switches between
+    content color is **fixed white**, the studio being the one zone whose backdrop the *user* switches between
     black and white.
 
     **Revised on device (2026-08-12): the material is `HazeMaterials.ultraThin`, not a radius and a tint we
@@ -362,7 +362,7 @@ feed the background layer is the open question.
     than doubling it. That ordering was right about the mechanism and wrong about the outcome: hand-picked, it
     read as a flat film over the canvas rather than as glass, and no radius fixed it. The library ships the
     material — `ultraThin` carries radius, tint blend and noise as one recipe — so the only number we still own is
-    the tint colour. Two things that were load-bearing in the first cut are simply gone with it: the
+    the tint color. Two things that were load-bearing in the first cut are simply gone with it: the
     chain-order decision above (there is no separate background to order), and `studioSurface`'s `blurRadius`
     parameter, whose removal is the point rather than a tidy-up — a per-surface depth is what "one material, so a
     new panel cannot arrive looking different" exists to prevent. See the blur section above for the code.
@@ -401,19 +401,19 @@ feed the background layer is the open question.
   sampling in the parser, resolved into the background layer rather than written into the recipe. See the section
   above for the two things building it corrected: L1 never implemented this, and the "invisible until the
   foreground moves" promise had to be *made* true by declining rounded and shadowed icons rather than assumed.
-- **S6 — effects. — DONE (2026-08-11) as opacity, blend, colour and gradient; shadows deferred with reason.**
-  - **Opacity and blend went in *with* the colour group rather than before it**, which reverses this plan's own
+- **S6 — effects. — DONE (2026-08-11) as opacity, blend, color and gradient; shadows deferred with reason.**
+  - **Opacity and blend went in *with* the color group rather than before it**, which reverses this plan's own
     ordering, because they turn out to be one mechanism: all three are a single paint applied as the layer joins
     the stack. Splitting them would have meant building that paint twice.
   - **The paint is applied at the join, not while the content is drawn.** A blend mode has to mean "against
     everything beneath this layer", and inside a layer's own bitmap there is nothing beneath. The live path needs
     one extra thing for the same reason — the whole stack composites **offscreen**, or a `MULTIPLY` on the bottom
     layer would multiply against the studio canvas instead of against nothing.
-  - **`LayerFilter` joins the shared set**, beside `LayerTransform`: one colour-matrix derivation for both
+  - **`LayerFilter` joins the shared set**, beside `LayerTransform`: one color-matrix derivation for both
     renderers. It is free to share because Android's and Compose's `ColorMatrix` are each a row-major
-    `FloatArray(20)`, so neither side converts anything. Unit-tested by pushing colours through the matrices
+    `FloatArray(20)`, so neither side converts anything. Unit-tested by pushing colors through the matrices
     rather than asserting on entries — the question is whether saturation 0 greys a pixel, not what row 1 holds.
-  - **Recolouring is one `LayerEffect.Color`, not four effects.** Hue, saturation, brightness and tint compose
+  - **Recoloring is one `LayerEffect.Color`, not four effects.** Hue, saturation, brightness and tint compose
     into a single matrix in a fixed order, so four list entries would mean their *order* silently changed the
     result — a way to be wrong this shape does not have. Monochrome is `saturation = 0` plus a tint rather than a
     variant of its own (and is a different thing from `LayerSource.AppDefaultMonochrome`, which swaps in artwork
@@ -422,7 +422,7 @@ feed the background layer is the open question.
     `IconLayerSet.Base` still passes, because defaults are not encoded.
   - **The gradient overlay landed next**, and was genuinely additive as predicted: a `LayerEffect.Gradient`
     variant, `LayerGradient` joining the shared set (which way an angle runs is pure convention, and therefore
-    exactly what two renderers drift on), and source-atop in both paths so it colours the artwork rather than
+    exactly what two renderers drift on), and source-atop in both paths so it colors the artwork rather than
     covering the icon with a rectangle. Its **strength doubles as the on/off switch** — at zero the effect is
     identity and is dropped from the list, so there is no toggle to disagree with the slider.
   - **The per-layer order is content → shape mask → gradient → composite**, the same on both sides for
@@ -439,7 +439,7 @@ feed the background layer is the open question.
   `RenderEffect` makes the editor lie below 31, and rasterising in the live path re-bakes a shadowed layer per
   frame while its sliders move.
 
-  **So S6 stops at opacity, blend, colour and gradient.** Nothing else in this plan is waiting on shadows: the
+  **So S6 stops at opacity, blend, color and gradient.** Nothing else in this plan is waiting on shadows: the
   effect list takes a new variant with no schema change and no reshape of either renderer, so the decision costs
   only the effect itself and can be revisited whenever one of the three trades becomes acceptable — most likely by
   `minSdk` reaching 31, which retires the fork entirely.
@@ -457,14 +457,14 @@ feed the background layer is the open question.
   - **No crop screen, unlike L1.** A layer already has offset, zoom and rotation, so a crop step would be a second
     and *destructive* way to do the same thing. Images are fitted into a transparent square on the way in instead,
     which also means the renderers need no aspect-ratio special case and so cannot disagree about one.
-  - **The colour picker landed with it** (`MorphicColorPicker`, `core:designsystem`) — a saturation/value panel
-    over a hue bar, and L1's is finally ported. It has **no alpha channel**, deliberately: every colour here sits
+  - **The color picker landed with it** (`MorphicColorPicker`, `core:designsystem`) — a saturation/value panel
+    over a hue bar, and L1's is finally ported. It has **no alpha channel**, deliberately: every color here sits
     somewhere that already carries opacity (a layer has one, a gradient has a strength), and `LayerEffect.Color`
     already states that a tint's alpha is ignored because two ways to set one thing is one too many. Hue is held
-    as state rather than re-derived from the colour, because hue is undefined at black, white and every grey — a
+    as state rather than re-derived from the color, because hue is undefined at black, white and every grey — a
     picker that recomputed it would jump under the user's finger the moment they dragged into a corner.
   - It replaced **three** near-identical swatch rows (solid fill, tint, gradient stops) with one `ColorField`.
-    The swatches stayed alongside the picker rather than being replaced by it: swatches are how a colour is chosen
+    The swatches stayed alongside the picker rather than being replaced by it: swatches are how a color is chosen
     *quickly*, the picker how one is chosen *exactly*, and making every black require a drag across a panel would
     have been slower for the common case in exchange for precision nobody wanted there.
 - **S8 — icon packs. — CODE LANDED (2026-08-11); on-device verification pending.** `IconPackManager` (theme-intent

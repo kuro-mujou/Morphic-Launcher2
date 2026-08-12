@@ -32,7 +32,7 @@ private val SwatchCheckerSquare = 4.dp
  * The swatch's outline, and **the reason it is grey rather than [StudioContentColor]**: it is drawn over a swatch the
  * user can cycle to white, and white-on-white is no border at all. The checkerboard's own dark grey is reused for
  * exactly the property its declaration claims — mid-toned enough to read against both a black and a white surround —
- * so the one colour in the studio that has to survive both extremes is not chosen twice.
+ * so the one color in the studio that has to survive both extremes is not chosen twice.
  */
 private val SwatchBorder = CheckerDark
 
@@ -63,7 +63,7 @@ fun BackgroundCycleButton(
 /**
  * A tile painted as [background] would paint the canvas.
  *
- * **Made of the canvas's own parts**, which is the whole of its correctness: the flat colour comes from the same
+ * **Made of the canvas's own parts**, which is the whole of its correctness: the flat color comes from the same
  * `WHITE*`-or-black rule `drawBackdrop` applies, and the checkerboard is that function's own
  * [drawCheckerboard] at a smaller square. A swatch that drew its own approximation of a backdrop would be the one
  * thing a swatch must not be — a picture of something else.
@@ -96,7 +96,7 @@ fun BackgroundSwatch(
                 }
 
                 // The same expression `drawBackdrop` uses — the flat half of a mixed mode is its *surround*, which is
-                // the colour the mode is named for.
+                // the color the mode is named for.
                 val base = when (background) {
                     PreviewBackground.WHITE, PreviewBackground.WHITE_WITH_CHECKER -> Color.White
                     else -> Color.Black
@@ -104,7 +104,7 @@ fun BackgroundSwatch(
                 drawRect(base)
                 if (!background.checkersInsideBound) return@drawBehind
 
-                // Split top-left → bottom-right; the checkerboard takes the lower-left half and the flat colour keeps
+                // Split top-left → bottom-right; the checkerboard takes the lower-left half and the flat color keeps
                 // the upper-right. Which half is which is arbitrary, but it is fixed here so every swatch agrees.
                 val lowerLeft = Path().apply {
                     moveTo(0f, 0f)

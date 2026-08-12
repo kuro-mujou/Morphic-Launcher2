@@ -122,7 +122,7 @@ class RotatingWallpaperService : WallpaperService() {
         }
 
         /**
-         * What colours this wallpaper is made of, for anything that has to sit legibly on top of it.
+         * What colors this wallpaper is made of, for anything that has to sit legibly on top of it.
          *
          * **A live wallpaper is the only one the system cannot analyse for itself** — there is no bitmap to read, only
          * a surface being drawn to — so a service that does not answer this leaves every consumer of

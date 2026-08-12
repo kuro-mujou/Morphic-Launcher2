@@ -50,7 +50,7 @@ enum class PreviewBackground {
      * Whether the system bars should draw their icons **dark** over this backdrop.
      *
      * Read from the backdrop's *surround*, not its bound: the bound is a square in the middle of the canvas and never
-     * reaches the bars, so both `_WITH_CHECKER` values take the colour of the flat area around it.
+     * reaches the bars, so both `_WITH_CHECKER` values take the color of the flat area around it.
      * [CHECKERBOARD] counts as light — its two greys both swallow a white glyph.
      *
      * Named for what the user sees, unlike the platform's `isAppearanceLightStatusBars`, which names the *background*
@@ -66,7 +66,7 @@ enum class PreviewBackground {
          *
          * The one backdrop that answers the question a fresh recipe raises — *where is this icon actually transparent?*
          * — without also asserting a light or dark surround the user has not asked about. It is also the neutral
-         * choice: the two flat colours and the two mixes each pick a side, and picking one as a default would make
+         * choice: the two flat colors and the two mixes each pick a side, and picking one as a default would make
          * every icon look right or wrong for a reason the studio invented.
          *
          * **One declaration, read by both the state and the settings slice**, so the value the screen shows before

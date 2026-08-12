@@ -83,7 +83,7 @@ fun GridPlaygroundScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** One demo tile: a coloured, span-filling box labelled with its name and span. */
+/** One demo tile: a colored, span-filling box labelled with its name and span. */
 @Composable
 private fun GridTile(label: String, span: String, modifier: Modifier = Modifier) {
     Box(

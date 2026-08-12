@@ -206,7 +206,7 @@ internal fun WidgetContainerProxy(snapshot: Bitmap?, modifier: Modifier = Modifi
 /**
  * The page indicator, laid out along the container's [axis].
  *
- * Colours come from the theme rather than being hardcoded white as L1's are — a launcher whose whole chrome is
+ * Colors come from the theme rather than being hardcoded white as L1's are — a launcher whose whole chrome is
  * driven by the wallpaper-brightness signal cannot have one component opting out of it.
  */
 @Composable

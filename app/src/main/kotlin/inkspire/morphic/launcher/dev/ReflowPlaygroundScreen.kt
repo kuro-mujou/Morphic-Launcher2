@@ -119,7 +119,7 @@ fun ReflowPlaygroundScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** A single reflowed cell: a coloured tile labelled with its 1-based order index. */
+/** A single reflowed cell: a colored tile labelled with its 1-based order index. */
 @Composable
 private fun Cell(label: String, modifier: Modifier = Modifier) {
     Box(
