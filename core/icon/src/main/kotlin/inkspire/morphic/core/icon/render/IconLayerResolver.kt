@@ -77,9 +77,11 @@ private fun IconLayerSpec.resolveLayer(
         // recoloring: a tint the user set survives, and silhouette-plus-tint is the themed-icon recipe.
         null -> ResolvedLayer(icon.foreground, withColor(monochromeFallbackColor()))
 
-        // The app ships one: draw it as it is. Typically a solid-alpha silhouette meant to be tinted, which is what
-        // this layer's own tint control is for — so nothing is applied on its behalf here.
-        else -> ResolvedLayer(mono, this)
+        // The app ships one — and it is drained too, which is the arm this used to get wrong by handing the artwork
+        // straight through. The themed-icon slot is *meant* to hold a silhouette, but it is only a convention and a
+        // fair number of apps put full-color artwork in it. Those came out colored while every other icon in the set
+        // had gone gray, so the one app that shipped the slot correctly-looking was the one that stood out.
+        else -> ResolvedLayer(mono, withColor(monochromeColor()))
     }
 
     is LayerSource.SolidFill -> ResolvedLayer(ParsedLayer.Color(src.argb), this)
@@ -91,13 +93,37 @@ private fun IconLayerSpec.resolveLayer(
 }
 
 /**
- * The recoloring for a monochrome layer on an app that ships **no** themed artwork: the layer's own color effect,
- * drained of saturation.
+ * The recoloring **every** [LayerSource.AppDefaultMonochrome] layer takes: the layer's own color effect with the
+ * saturation drained out of it.
  *
- * **And downgraded from [TintMode.SOLID], which is the one thing here that overrides the user.** A solid tint keeps
- * only alpha, which is exactly right over a themed silhouette and disastrous over an ordinary foreground: an adaptive
- * foreground's alpha is usually a large blob, so the icon would come out as a featureless colored splodge. The two are
- * the same setting reaching two different kinds of artwork, and only this layer knows which one it just handed back.
+ * **The word is the specification, and it is one word.** "Monochrome" means the icon goes gray — that is what a user
+ * selecting it is asking for, and it has to be true whichever of the two artworks answered the source, or the setting
+ * means one thing on some apps and another on the rest. Draining here rather than at either call site is what makes
+ * that structural: the branch above chooses *content*, and neither arm gets to choose whether the result is gray.
+ *
+ * **Which corrects the arm that shipped the app's own themed layer untouched.** The reasoning was that the themed slot
+ * holds a solid-alpha silhouette meant to be tinted, so nothing needed applying — true of the slot's *intent* and not
+ * of what is in it. It is a convention with no enforcement, and enough apps ship full-color artwork there that the
+ * result was the reverse of the feature: switch the whole device to monochrome and those apps stayed in color, so they
+ * became the only icons standing out.
+ *
+ * Drained rather than flattened with [TintMode.SOLID] deliberately — a solid fill would make every app's glyph agree
+ * exactly, but it is also what turns a non-silhouette into a featureless blob, and it is available as a tint whenever
+ * that is what someone wants. Grayscale is the reading of the word that is safe on artwork we cannot inspect. What it
+ * does not equalize is *lightness*: a desaturated color icon lands in mid-gray where a proper silhouette is flat white
+ * or black. That is L1's `foregroundUniform`/`normalize` question and is deliberately still open.
+ */
+private fun IconLayerSpec.monochromeColor(): LayerEffect.Color =
+    (color ?: LayerEffect.Color()).copy(saturation = 0f)
+
+/**
+ * [monochromeColor] plus the one thing the **fallback** needs on top of it: [TintMode.SOLID] downgraded to
+ * [TintMode.MULTIPLY]. The only place this resolver overrides the user.
+ *
+ * A solid tint keeps only alpha, which is exactly right over a themed silhouette and disastrous over an ordinary
+ * foreground: an adaptive foreground's alpha is usually a large blob, so the icon would come out as a featureless
+ * colored splodge. The two are the same setting reaching two different kinds of artwork, and only this layer knows
+ * which one it just handed back.
  *
  * It matters most in the **global** studio, which is the whole point of that setting — "make every icon a flat white
  * glyph" is one edit there, and without this it would silently produce blobs for every app without a themed layer.
@@ -107,4 +133,4 @@ private fun IconLayerSpec.resolveLayer(
  * the user picked still shows.
  */
 private fun IconLayerSpec.monochromeFallbackColor(): LayerEffect.Color =
-    (color ?: LayerEffect.Color()).copy(saturation = 0f, tintMode = TintMode.MULTIPLY)
+    monochromeColor().copy(tintMode = TintMode.MULTIPLY)

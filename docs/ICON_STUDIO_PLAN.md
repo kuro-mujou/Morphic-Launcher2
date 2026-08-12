@@ -524,40 +524,48 @@ without any UI; the dashboard after the studio because a hub linking to a screen
   consistent across apps, which is a real problem, but they are one more pair of fields on the spec and no part
   of the editor design above asks for them. Add them when the on-device look says they are needed — which is the
   "no model in a vacuum" rule, and cheap here because the effect list and the spec both take additive change.
-  **The on-device look is now saying so** — see the open note below, which is the same problem arriving from the
-  monochrome side. Start here when picking it back up.
+  **The on-device look has now half-said so** — see the resolved note below. Monochrome's *color* inconsistency was
+  a resolver bug and is fixed; what is left over is a *lightness* inconsistency, which is exactly what these two
+  flags address and the first real consumer they have had. Still wait to be asked: gray-but-uneven is a far smaller
+  complaint than the one that has been fixed, and may not be one at all.
 
-## Open: monochrome still does not look right on device (2026-08-12)
+## Resolved: monochrome left some apps in color (2026-08-12)
 
-**Status: unresolved, and the symptom is not written down yet.** The work below is committed and builds, all unit
-tests pass, but on a real device it "still does not work well" — reported without specifics, so *nothing here is a
-diagnosis*. Anyone picking this up should get the concrete symptom first (which apps, which mode, editor or home
-screen, global or per-app) rather than trusting the leads below.
+**Status: fixed in the resolver, pending on-device confirmation.** The symptom was captured the next day and it was
+none of the four leads this section originally listed — which is the reason the note insisted on getting it before
+trusting them, and worth keeping as the record of that having been the right call.
 
-What landed, so it is clear what is being judged:
-- `LayerSource.AppDefaultMonochrome` means *monochrome*, with `IconLayerResolver` choosing per app between the
-  app's themed layer and a desaturated foreground. The old fallback drew the **unfiltered** foreground, so the
-  choice was a visible no-op on every app without a themed layer.
-- The control moved out of Effects and back into `SourceControls`, as a row under the tile row (fg + app-default
-  only). `LayerEffect.Color(saturation = 0)` is no longer offered as a "Monochrome" toggle.
-- `TintMode.SOLID` was added because `tintArgb` was a pure multiply and could not lift a black glyph to white.
+**The symptom, in the author's words.** Swapping in the app's themed layer worked. Draining a legacy or
+themed-less icon to grayscale worked. What did not: *"it can't filter the monochrome layer from those apps that
+have a real monochrome layer. Some apps provide the monochrome icon with color, not grayscale, and it causes
+inconsistency with other icons."* Plus the semantic point that decides the fix — *"the word monochrome means we make
+the icon go grayscale, and I believe most users understand it the same way, so having an icon with color is not
+correct here."* Seen in the **global** studio, which is where it is worst.
 
-Leads, in the order I would try them:
-1. **A junk monochrome layer is not handled, and this is a real gap rather than a hunch.** The downgrade to
-   `MULTIPLY` in `IconLayerResolver.monochromeFallbackColor` fires only when `icon.monochrome == null`. An app that
-   ships something in that slot which is *not* a silhouette — colored artwork, or a full-bleed square — is
-   `hasMonochrome = true`, so `SOLID` applies to it and fills its whole alpha flat. That is precisely the "some
-   didn't make it monochrome at all" case, and it comes out as a colored blob. There is no test for it because we
-   have no such asset to hand; it needs a device with a known-bad app.
-2. **Judging the "right" fallback.** A shipped silhouette (flat, filled) and a desaturated foreground (grayscale,
-   with shading) look different *in kind*, by construction — no silhouette can be invented from a foreground whose
-   alpha is a blob, which is the same reason `LegacyBackground` refuses glyph matting. If what is wanted is that the
-   two agree, that is a different feature and L1's `foregroundUniform`/`normalize` above are the prior art.
-3. **Which renderer is wrong.** The live editor and the bake share `IconLayerResolver` and `LayerFilter`, so they
-   *should* agree; if they do not, the `IconLayers` dev-harness playground draws one set both ways side by side and
-   is the fastest way to see it. If they agree and both look wrong, it is the model or the arithmetic, not the split.
-4. **Antialiased edges under `SOLID`.** Color matrices run on unpremultiplied color, so partial-alpha edge pixels
-   take the flat color at partial alpha, which should be right — but it is the kind of thing that shows as fringing
-   and has not been looked at on a screen.
+**So the feature inverted itself on exactly the apps that supported it.** Switch the device to monochrome and every
+app *without* a themed layer went obediently gray, while the apps that had bothered to ship one stayed in full
+color — leaving them the only icons standing out.
 
-Nothing else in the studio depends on this being settled.
+**The fix is one rule applied on both arms: `AppDefaultMonochrome` guarantees gray.** `saturation = 0` was being
+applied only to the fallback; the themed arm handed the app's artwork through untouched, reasoning that the slot
+holds a silhouette meant to be tinted. That is true of the slot's *intent* and not of its contents — it is a
+convention with no enforcement. `monochromeColor()` is now the shared drain and `monochromeFallbackColor()` is that
+plus the `SOLID`→`MULTIPLY` downgrade, so the fallback reads as a delta on the general rule rather than as the only
+place any rule is applied. Both render paths get it free, the drain being in the resolver they share.
+
+**`IconLayerResolverTest` is new, and it is the first test of `resolve` itself.** Plain JVM, no emulator: every layer
+in it is a `ParsedLayer.Color`, so no `Drawable` is ever built. Reverting the one arm fails four of its seven while
+the two fallback tests keep passing — which is the shape of the bug stated as a test result.
+
+What this did **not** need, against the original leads: no silhouette-purity detection (lead 1), no renderer
+comparison (lead 3), no edge analysis (lead 4). Lead 1's colored-blob case is also largely defused as a side effect —
+a `SOLID` tint over junk artwork still flattens it, but that now only happens when the user sets a tint themselves.
+
+**Still open, and genuinely a different feature: lightness.** A desaturated color icon lands in mid-gray where a
+proper silhouette is flat white or black, so the set is now consistently *gray* without being consistently *light*.
+Nothing can invent a silhouette from a foreground whose alpha is a blob — the same reason `LegacyBackground` refuses
+glyph matting — so if the two are to agree, that is L1's `foregroundUniform`/`normalize` above, and this is the
+on-device consumer those were waiting for. Wait for someone to ask before building it.
+
+Leads 3 and 4 (the two render paths drifting; antialiased edges under `SOLID`) were never exercised and remain
+untested guesses rather than known-good.

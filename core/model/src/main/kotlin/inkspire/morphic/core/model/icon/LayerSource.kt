@@ -50,9 +50,15 @@ sealed interface LayerSource {
      * which was written before the global studio existed and cannot be honored there. The old fallback drew the
      * *unfiltered* foreground, making the choice a silent no-op on every app without a themed layer.
      *
+     * **Whichever branch it takes, the result is gray** — the renderer drains the saturation of the app's own themed
+     * artwork exactly as it drains the foreground's. The themed slot is *meant* to hold a silhouette, but that is a
+     * convention with no enforcement and a fair number of apps ship full-color artwork in it; passing those through
+     * untouched inverted the feature, since switching everything to monochrome left precisely those apps in color and
+     * so made them the icons that stood out.
+     *
      * Distinct from [LayerEffect.Color] with `saturation = 0`, which recolors whatever a layer already holds: this
-     * one swaps in different artwork. Both compose — a tint set on this layer still applies, and silhouette plus
-     * tint is the themed-icon recipe.
+     * one swaps in different artwork *and* guarantees it is gray. Both still compose — a tint set on this layer
+     * applies after the drain, and silhouette plus tint is the themed-icon recipe.
      */
     @Serializable
     @SerialName("app_default_monochrome")
