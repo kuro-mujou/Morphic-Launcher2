@@ -146,6 +146,9 @@ fun StudioToolPanel(
                     SourceControls(
                         spec = spec,
                         packs = state.packs,
+                        // The state's, not the actions': it depends on the *selected layer* as well as on the studio,
+                        // so it changes as the selection moves and cannot be fixed when the actions are built.
+                        allowsFixedSource = state.canUseFixedSource,
                         onUpdate = actions.update,
                         onPickImage = actions.pickImage,
                         onPickPack = actions.pickPack,

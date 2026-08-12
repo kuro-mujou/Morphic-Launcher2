@@ -586,16 +586,26 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
 /**
  * Where the layer's content comes from.
  *
- * Which options are offered depends on the layer's [LayerRole], because the model says so:
- * [LayerSource.AppDefault] is meaningless on a custom layer (there is no "the app's custom layer" to resolve), and
- * [LayerSource.AppDefaultMonochrome] is the foreground's alternate artwork and nowhere else's. Offering either
- * where it resolves to nothing would be a control that silently does nothing — which this codebase treats as worse
- * than a missing one.
+ * **Which options are offered turns on two things, and they are different in kind.** Most of it is the layer's
+ * [LayerRole], because the model says so: [LayerSource.AppDefault] is meaningless on a custom layer (there is no "the
+ * app's custom layer" to resolve), and [LayerSource.AppDefaultMonochrome] is the foreground's alternate artwork and
+ * nowhere else's. Offering either where it resolves to nothing would be a control that silently does nothing — which
+ * this codebase treats as worse than a missing one.
+ *
+ * The rest is **which studio this is**, and that is a rule about what a global edit should be *allowed* to do rather
+ * than about what resolves: [allowsFixedSource] and [onBrowsePack] each gate a source that would hand one specific
+ * picture or color to every app on the device. They differ in reach — a fixed source is refused only on the two
+ * app-artwork layers, a *named* pack drawable everywhere but the individual studio — and both arrive as a decision made
+ * elsewhere rather than as a test performed here, since the ViewModel refuses behind each of them.
+ *
+ * @param allowsFixedSource whether this layer may take a source that is the same for every app — a solid color or a
+ *   custom image; see `IconStudioState.canUseFixedSource`.
  */
 @Composable
 internal fun SourceControls(
     spec: IconLayerSpec,
     packs: List<InstalledIconPack>,
+    allowsFixedSource: Boolean,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onPickImage: () -> Unit,
     onPickPack: (String) -> Unit,
@@ -613,17 +623,35 @@ internal fun SourceControls(
                     onUpdate { it.copy(source = LayerSource.AppDefaultMonochrome) }
                 }
             }
-            ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
-                onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
+            // **Both of these are absent on the foreground and background of the *global* default**, where one color or
+            // one picture would stand in for every app's artwork at once. See `IconStudioState.canUseFixedSource` for
+            // the whole rule, why a custom layer is not covered by it, and where a global flat plate goes instead.
+            // Absent rather than disabled, per the settings sections' rule.
+            //
+            // **And said out loud, which two absent rows earn.** Without them the global background's Source section is
+            // a single already-selected row on a device with no icon packs — a section that does nothing, which is the
+            // state this studio keeps being mistaken for broken in. One line turns it into an explanation, and it is the
+            // only place the alternative ("add a layer") can be named at the moment it is wanted.
+            if (!allowsFixedSource) {
+                Text(
+                    text = "A color or image here would replace every app's own artwork. " +
+                        "Add a layer instead, and put it under the background.",
+                    color = StudioContentColor.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
-            // Offered on *every* layer, foreground and background included — replacing an app's own artwork is
-            // what makes this more than decoration, and the renderer draws an image wherever it is put. Tapping
-            // it again re-picks, which is why the row is a button rather than a selected state.
-            ChoiceRow(
-                label = if (spec.source is LayerSource.CustomImage) "Custom image — change" else "Custom image",
-                selected = spec.source is LayerSource.CustomImage,
-                onClick = onPickImage,
-            )
+
+            if (allowsFixedSource) {
+                ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
+                    onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
+                }
+                // Tapping it again re-picks, which is why the row is a button rather than a selected state.
+                ChoiceRow(
+                    label = if (spec.source is LayerSource.CustomImage) "Custom image — change" else "Custom image",
+                    selected = spec.source is LayerSource.CustomImage,
+                    onClick = onPickImage,
+                )
+            }
 
             // **Absent rather than disabled when no pack is installed**, per the settings sections' rule that a
             // control which changes nothing is worse than a missing one. An empty list is the ordinary state, and
@@ -654,9 +682,15 @@ internal fun SourceControls(
                 }
             }
 
-            (spec.source as? LayerSource.SolidFill)?.let { fill ->
-                ColorField(argb = fill.argb) { argb ->
-                    onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
+            // Gated with the row that chooses a fill, not shown whenever one happens to be set: a layer that may not
+            // *take* a solid color must not offer to recolor one either, or a global background stored with a fill
+            // before the rule existed would be tunable but not choosable — a control whose absence would look like a
+            // bug rather than a rule.
+            if (allowsFixedSource) {
+                (spec.source as? LayerSource.SolidFill)?.let { fill ->
+                    ColorField(argb = fill.argb) { argb ->
+                        onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
+                    }
                 }
             }
         }

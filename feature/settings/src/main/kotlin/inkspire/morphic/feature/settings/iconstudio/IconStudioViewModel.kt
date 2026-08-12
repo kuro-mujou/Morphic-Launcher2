@@ -273,25 +273,32 @@ class IconStudioViewModel(
     }
 
     /**
-     * Imports [uri] as the selected layer's artwork, or as a new layer when the selection cannot take one.
+     * Imports [uri] as the selected layer's artwork.
      *
      * **Nothing is written to disk here.** The image is decoded, kept in [IconStudioState.images] under a
      * reserved path, and drawn from memory — so backing out of the studio leaves no file behind, which is the
      * bug L1 recorded and accepted. [save] writes whatever the committed recipe still refers to.
+     *
+     * **Refuses where the layer may not take one** — the foreground or background of the *global* default, since one
+     * picture there stands in for every app's own artwork. `IconStudioState.canUseFixedSource` is the whole rule and
+     * the UI omits the row by the same expression, so this is the guard behind the guard, as [browsePack]'s is.
+     *
+     * Checked **before the decode**, which is the point of doing it here rather than inside the update: a refused pick
+     * should not read the file, reserve a path, or leave a bitmap in [unsaved] that nothing will ever write.
      */
     fun pickImage(uri: Uri) {
+        if (!_state.value.canUseFixedSource) return
         viewModelScope.launch {
             val bitmap = customIcons.decode(uri) ?: return@launch
             val path = customIcons.reservePath()
             unsaved[path] = bitmap
 
             _state.update { current ->
+                // Re-checked inside the update, because the selection can move between the picker opening and the
+                // image coming back — and the rule is about *which layer* is selected, not only which studio this is.
+                // The bitmap is still kept: it is already decoded, and `images` is what the preview reads.
                 val source = LayerSource.CustomImage(path)
-                val withImage = current.selectedLayer
-                    // A custom layer takes the image in place; a foreground or background gets it as its source
-                    // too, which is how one app's icon is replaced outright rather than covered over.
-                    ?.let { current.replaceSelectedSource(source) }
-                    ?: current
+                val withImage = if (current.canUseFixedSource) current.replaceSelectedSource(source) else current
                 withImage.copy(images = current.images + (path to bitmap)).recordHistory()
             }
         }

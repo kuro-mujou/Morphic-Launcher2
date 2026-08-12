@@ -127,6 +127,43 @@ data class IconStudioState(
     val canRemoveSelected: Boolean get() = selectedLayer?.role == LayerRole.CUSTOM
 
     /**
+     * Whether the selected layer may take a **fixed** source in this studio — one whose content is the same pixels for
+     * every app, rather than resolved per app.
+     *
+     * **The distinction is the whole rule, and it is what divides the sources in two.** [LayerSource.AppDefault],
+     * [LayerSource.AppDefaultMonochrome] and an icon pack all *resolve per app* — each app gets its own artwork out of
+     * them, so applying one globally restyles every icon while leaving every icon still its own. A
+     * [LayerSource.CustomImage] and a [LayerSource.SolidFill] are one picture and one color; applied to the global
+     * default's **foreground or background**, they do not restyle every icon, they *replace* every icon, and an icon
+     * that no longer identifies its app has stopped being an icon.
+     *
+     * So the two app-artwork layers take a fixed source only in the individual studio. Wanting a flat color behind every
+     * icon is a real thing to want, and the way to it globally is a **custom layer** beneath the background — which says
+     * what it means (a plate *added* under the app's artwork) rather than standing in for artwork that was there.
+     *
+     * **A custom layer takes anything in either studio**, which is the other half: a decoration layer is *added* to
+     * every icon rather than replacing one, so a shared plate, frame or badge device-wide is a legitimate global look.
+     * What the rule turns on is which layer is being filled, not which studio alone.
+     *
+     * A property rather than a test at each site because it has **two readers that must agree**: `SourceControls` omits
+     * the rows, and `IconStudioViewModel.pickImage` refuses behind it.
+     *
+     * Two bounds worth knowing:
+     * - **`browsePack` is stricter than this** — a *named* pack drawable is fixed content by exactly this definition, so
+     *   this rule would permit one on a global custom layer, while `browsePack` refuses it everywhere but the individual
+     *   studio. Left alone rather than widened to match, since nobody has asked for that affordance.
+     * - A global default that **already** carries a fixed source on one of those layers keeps drawing it: the rows are
+     *   absent, so it cannot be re-picked or recolored, but "App default" is still there, so it is a state the user can
+     *   leave rather than a trap.
+     */
+    val canUseFixedSource: Boolean
+        get() = when (selectedLayer?.role) {
+            LayerRole.CUSTOM -> true
+            LayerRole.FOREGROUND, LayerRole.BACKGROUND -> subject is StudioSubject.App
+            null -> false
+        }
+
+    /**
      * Whether the selected layer can move up / down the stack.
      *
      * Asked of the model rather than re-derived, so the buttons are disabled by exactly the rule the set enforces:
