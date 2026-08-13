@@ -44,12 +44,18 @@ class IconLayerResolverTest {
     )
 
     /** A set whose foreground is monochrome, carrying [color] as that layer's own color effect. */
-    private fun monochromeSet(color: LayerEffect.Color? = null) = IconLayerSet(
+    /**
+     * @param normalize stated by the tests that are about the *fit*, since it is off by default — leaving it out
+     *   there would let them keep passing while asserting nothing. The colour tests want it off, which is also what
+     *   an unconfigured recipe looks like.
+     */
+    private fun monochromeSet(color: LayerEffect.Color? = null, normalize: Boolean = false) = IconLayerSet(
         listOf(
             IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.Empty),
             IconLayerSpec(
                 role = LayerRole.FOREGROUND,
                 source = LayerSource.AppDefaultMonochrome,
+                normalize = normalize,
                 effects = listOfNotNull(color),
             ),
         ),
@@ -261,6 +267,9 @@ class IconLayerResolverTest {
                     IconLayerSpec(
                         role = LayerRole.FOREGROUND,
                         source = LayerSource.AppDefault,
+                        // Stated rather than defaulted: normalization is off by default, and a test of the fit that
+                        // silently stopped applying one would keep passing while asserting nothing.
+                        normalize = true,
                         zoom = 1.4f,
                         rotation = degrees,
                     ),
@@ -286,6 +295,7 @@ class IconLayerResolverTest {
                 IconLayerSpec(
                     role = LayerRole.FOREGROUND,
                     source = LayerSource.AppDefault,
+                    normalize = true,
                     zoom = 1.6f,
                     offsetX = 0.1f,
                     offsetY = -0.2f,
@@ -336,7 +346,7 @@ class IconLayerResolverTest {
             monochrome = ParsedLayer.Image(StubDrawable(), metrics = metrics(0.2f)),
         )
 
-        val resolved = resolveForeground(monochromeSet(), icon)
+        val resolved = resolveForeground(monochromeSet(normalize = true), icon)
 
         // 1 / 0.2 — its own bounds. The foreground's would have given 1.25 and left it a fifth of the size.
         assertEquals(5f, resolved.spec.zoom, 0.001f)
@@ -351,7 +361,7 @@ class IconLayerResolverTest {
             monochrome = null,
         )
 
-        assertEquals(2f, resolveForeground(monochromeSet(), icon).spec.zoom, 0.001f)
+        assertEquals(2f, resolveForeground(monochromeSet(normalize = true), icon).spec.zoom, 0.001f)
     }
 
     /**

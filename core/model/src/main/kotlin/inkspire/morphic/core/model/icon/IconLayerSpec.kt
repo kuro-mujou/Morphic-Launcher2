@@ -15,15 +15,21 @@ import kotlinx.serialization.Serializable
  *
  * @property visible When false the layer is skipped in the composite but kept in the set (an editor hide
  *   toggle). *(Assumption — a standard layer-editor affordance; flag if not wanted for v1.)*
- * @property normalize Whether this icon is resized so it covers about as much of its box as every other icon. Apps
- *   author at wildly different sizes — some fill their whole canvas, some leave a wide margin — and nothing in the
- *   platform enforces otherwise, so left alone a home screen is visibly uneven.
+ * @property normalize Whether this layer's artwork is resized so it covers about as much of its box as every other
+ *   icon's. Apps author at wildly different sizes — some fill their whole canvas, some leave a wide margin — and
+ *   nothing in the platform enforces otherwise, so left alone a home screen is visibly uneven.
  *
- *   **Read from the foreground and applied to the whole icon.** It is the app's-own-artwork toggle, and an icon has
- *   one size rather than one per layer: `IconLayerResolver` derives a single factor from the icon's visible extent
- *   and applies it to every drawn layer together, so the composition is untouched and only the overall size changes.
- *   Scaling the foreground alone was the earlier version, and it was invisible on any icon with a plate — the glyph
- *   moved inside a background that did not.
+ *   **Off by default.** It rewrites how every app's icon looks, which is a change to make because someone asked for
+ *   it rather than one to arrive with: an unconfigured launcher draws each app's artwork the size its author drew
+ *   it. Turning it on is one tap in the studio's Source panel, and one edit on the global default reaches every app.
+ *   It defaulted *on* until this was reversed, so stored recipes that never mentioned it — the field is not written
+ *   when it matches the default — read back as off. That is the intended effect and needs no migration; a recipe
+ *   that had it explicitly off still does.
+ *
+ *   **Foreground only.** `IconLayerResolver` measures whatever *this* layer resolved to and rescales that layer
+ *   alone; a background is never resized, because a plate changes what sits behind the artwork rather than how large
+ *   the artwork should be — so an app comes out the same size whether its background is drawn or switched off. An
+ *   intermediate version applied one factor to every layer at once and this note used to describe it.
  */
 @Serializable
 data class IconLayerSpec(
@@ -37,7 +43,7 @@ data class IconLayerSpec(
     val shape: IconShape? = null,
     val opacity: Float = 1f,
     val blend: LayerBlend = LayerBlend.NORMAL,
-    val normalize: Boolean = true,
+    val normalize: Boolean = false,
     val effects: List<LayerEffect> = emptyList(),
 ) {
 
