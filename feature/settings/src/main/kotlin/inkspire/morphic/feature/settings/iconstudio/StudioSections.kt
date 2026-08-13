@@ -20,8 +20,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Delete
@@ -60,6 +69,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -791,28 +802,118 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  * custom images to their own alpha. The renderer here masks whatever it is given, so the restriction would be one
  * the UI invented — and a shaped custom layer is an obviously useful thing (a color fill trimmed to a circle is
  * how you put a colored disc behind a legacy icon).
+ *
+ * **A shape is shown, not named.** This was a grid of text chips, which asks the user to read "rounded_square" and
+ * picture it — for the one control on this screen whose entire subject is what something looks like. Every other
+ * chooser here already draws its subject (the source tiles are a pack's own artwork, the swatches are the colors), and
+ * this is that rule reaching the last section that broke it. The ids are gone from the UI entirely; they stay what
+ * `IconShapes` maps and what is written to disk.
+ *
+ * **Paged, with a grid on each page, because this list is about to get long.** Seven built-ins fit one page today, so
+ * the pager shows no dots and never scrolls — the arrangement is here for the shape set that is coming, and building
+ * it now means the layout does not have to be reconsidered when it arrives. Adding shapes past a page's capacity adds
+ * a page rather than growing the panel, which is what keeps the section a fixed height inside a panel that is already
+ * capped and scrolling: **paging horizontally is how this avoids a vertical scroller inside a vertical scroller**,
+ * which is the arrangement that makes a drag ambiguous.
  */
 @Composable
 internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
+    // **`null` is the first cell rather than a row above the grid.** "No shape" is a choice among the same set — the
+    // one every layer starts on — so it belongs in the set, and a full-width row above a grid is exactly the
+    // settings-list vocabulary this screen exists not to be.
+    val pages = remember { (listOf<IconShape?>(null) + IconShapes.All).chunked(ShapesPerPage) }
+    val pagerState = rememberPagerState { pages.size }
+
     LabeledControl("Shape") {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            // "None" first and always reachable: unshaped is what every icon renders as today, so it has to be a
-            // choice rather than a state you can only get back to by undoing.
-            ChoiceRow(label = "None", selected = spec.shape == null) { onUpdate { it.copy(shape = null) } }
-            IconShapes.All.chunked(4).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { shape ->
-                        ChoiceChip(
-                            label = shape.id.replace('_', ' '),
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            HorizontalPager(
+                state = pagerState,
+                pageSpacing = 8.dp,
+                modifier = Modifier.height(ShapePagerHeight),
+            ) { page ->
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(ShapeColumns),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // No `key`: the pages are built once and never reorder, so there is no identity to preserve —
+                    // and the one cell with no shape has no id to key on without inventing a sentinel.
+                    items(pages[page]) { shape ->
+                        ShapeTile(
+                            shape = shape,
                             selected = spec.shape == shape,
-                            modifier = Modifier.fillMaxWidth(1f / row.size),
-                        ) { onUpdate { it.copy(shape = shape) } }
+                            onClick = { onUpdate { it.copy(shape = shape) } },
+                        )
                     }
                 }
             }
+
+            // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
+            if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
         }
     }
 }
+
+/**
+ * One shape, drawn at the size it is offered in.
+ *
+ * The silhouette is the shape's own vector, tinted — the same drawable the renderer builds its clip mask from, so what
+ * is on the tile and what lands on the icon cannot disagree. [IconShapes.drawableResOrNull] returning null is a stale
+ * persisted id rather than a state to design for, and it falls through to the same mark `null` uses.
+ */
+@Composable
+private fun ShapeTile(shape: IconShape?, selected: Boolean, onClick: () -> Unit) {
+    val resource = shape?.let(IconShapes::drawableResOrNull)
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = if (selected) 0.22f else 0.06f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = resource?.let { painterResource(it) } ?: rememberVectorPainter(Icons.Default.Block),
+            // The id is the honest description even though it is no longer drawn: it is what this shape is called
+            // everywhere else, and a screen reader has nothing else to go on once the label is a picture.
+            contentDescription = shape?.id?.replace('_', ' ') ?: "No shape",
+            tint = StudioContentColor.copy(alpha = if (resource == null) 0.5f else 1f),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(ShapeTileInset),
+        )
+    }
+}
+
+/** Which page of a pager is showing. Not a control — pressing one is not offered, since swiping is the gesture. */
+@Composable
+private fun PagerDots(current: Int, count: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        repeat(count) { index ->
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(StudioContentColor.copy(alpha = if (index == current) 1f else 0.3f)),
+            )
+        }
+    }
+}
+
+/** Four across, two rows down: eight to a page, which is exactly the seven built-ins plus "no shape" today. */
+private const val ShapeColumns = 4
+private const val ShapesPerPage = 8
+
+/** Two rows of tiles at the width four columns leaves, plus the gap between them. */
+private val ShapePagerHeight = 168.dp
+
+/** Keeps the silhouette clear of the tile's own rounded corners. */
+private val ShapeTileInset = 12.dp
+
 
 /**
  * Where the layer's content comes from.
