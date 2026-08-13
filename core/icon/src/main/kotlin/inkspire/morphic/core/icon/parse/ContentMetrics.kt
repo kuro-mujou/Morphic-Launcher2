@@ -13,6 +13,10 @@ package inkspire.morphic.core.icon.parse
  * Pure arithmetic over an `IntArray`, split from the rasterizing that feeds it, so it is unit-testable without an
  * emulator. Same split as [LegacyBackground], and for the same reason: the *decision* is the part worth pinning.
  *
+ * **What is scanned is a raster of the layer, not the layer itself** — `DrawableParser` renders each measured
+ * drawable to a bitmap the size of the icon box and measures that. So artwork painted outside the box is already
+ * clipped before it gets here, exactly as both renderers clip it, and these fractions are always 0..1.
+ *
  * @property left the ink's edges as fractions of the canvas, 0..1.
  */
 data class ContentMetrics(

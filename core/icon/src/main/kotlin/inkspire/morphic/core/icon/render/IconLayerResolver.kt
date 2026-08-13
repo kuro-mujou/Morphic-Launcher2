@@ -80,9 +80,15 @@ private data class IconFit(val scale: Float, val offsetX: Float, val offsetY: Fl
  * measurement, and where the artwork sits *within* the box is the per-layer zoom's job — one global edit moves every
  * app's artwork together, which is exactly the control a shared size makes possible.
  *
- * Two properties fall out rather than being enforced: it can only ever **grow** artwork, since bounds cannot exceed
- * the canvas they were measured in, and it can never **overflow**, since filling the box exactly is what it computes.
- * Earlier versions needed an explicit cap against overflow this shape cannot produce.
+ * Two properties fall out rather than being enforced: it can only ever **grow** artwork, since the raster it is
+ * measured from *is* the box and ink cannot exceed it, and it can never **overflow**, since filling the box exactly
+ * is what it computes. Earlier versions needed an explicit cap against overflow this shape cannot produce.
+ *
+ * **And the measurement is of a raster, which is what makes one scale correct at every size.** A drawable is free to
+ * look different at different sizes — absolute padding does exactly that — so a fraction measured once could not be
+ * right for both a drawer cell and the studio's much larger preview, and the same icon came out correct in one and
+ * overflowing in the other. `DrawableParser` renders each measured layer to a bitmap first; a bitmap scales
+ * proportionally, so its ink fraction is a property of the artwork again rather than of the box it lands in.
  *
  * **Centered**, because scaling happens about the box's middle: artwork sitting off-center is displaced further the
  * more it is enlarged, so the correcting translate carries the same factor that displaced it.

@@ -16,7 +16,10 @@ import org.koin.dsl.module
  * the live render path starts from the same parsed layers the bake does, which is what stops the two drifting.
  */
 val iconModule = module {
-    single { DrawableParser() }
+    // `Resources` because the parser rasterizes what it measures — see `DrawableParser.rasterized`. Only the
+    // density on the produced `BitmapDrawable` comes from it, and both renderers set bounds explicitly, so it is
+    // the app's rather than anything the icon carries.
+    single { DrawableParser(get<Context>().resources) }
     single { ParsedIconLoader(get(), get()) }
     single { IconRenderer(get<Context>()) }
     // `getOrNull` for the pack seam: `data:icons` binds it, and a build or a test without that module still

@@ -19,6 +19,11 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
 
+    // Diagnostics for the size measurement, which is the one thing here that cannot be seen from its output: a
+    // wrong scale looks like a wrong icon, and every cause of one looks like every other. Debug builds only —
+    // `LauncherApplication` plants the tree.
+    implementation(libs.timber)
+
     // The one thing in this module that is pure arithmetic — and the one thing two renderers have to agree on.
     testImplementation(libs.junit)
 }

@@ -43,5 +43,8 @@ class ParsedIconLoader(
      * @param densityDpi the density to load at; `0` means the device's own.
      */
     fun load(component: ComponentKey, densityDpi: Int = 0): ParsedIcon? =
-        rawIconSource.loadIcon(component, densityDpi)?.let(parser::parse)
+        // The package is passed for the size diagnostics only — never read for a decision, which is why the parser
+        // takes it as a nullable label rather than a `ComponentKey`. Without it every measurement line in the log
+        // would be anonymous, and finding the one app that renders wrong is the whole exercise.
+        rawIconSource.loadIcon(component, densityDpi)?.let { parser.parse(it, component.packageName) }
 }

@@ -37,3 +37,8 @@ Thumbs.db
 *.jks
 *.keystore
 keystore.properties
+
+# Captured logcat — the icon-measurement diagnostics are dumped here while chasing a sizing bug
+# (see docs/ICON_SIZE_PLAN.md). One device's output, never a shared artifact.
+icon-measure.txt
+*.logcat

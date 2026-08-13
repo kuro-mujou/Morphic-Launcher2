@@ -215,14 +215,68 @@ here, and why the two earlier attempts to pick one were the wrong shape.
   box") broke the requirement outright: the same app has to resolve to the same size whether its background is on or
   off.
 
-## 7. Open: some icons are still wrong (2026-08-13)
+## 7. Found: the sample size was too small for drawables with absolute padding (2026-08-13)
 
-**Unverified, and the symptom is not captured.** Most icons are correct on device; the author reported some still
-failing and had to stop before recording which. *Nothing here is a diagnosis* — get the concrete cases first (which
-apps, adaptive or legacy, themed or not, and whether the artwork is too large, too small, or off-center) rather than
-working from the list below.
+**Diagnosed from a log, not from reasoning** — and worth reading as a case for building the instrumentation §7 kept
+saying was optional. Four hypotheses were argued over three rounds (bleed, the alpha floor, an inverted render, the
+bounds latching onto the glyph's holes) and *every one of them was wrong*. One line of `IconMeasure` output settled
+it in seconds:
 
-Where I would look, in order:
+```
+com.reddit.frontpage foreground  BitmapDrawable -> side=0.531 box=[0.23,0.25,0.77,0.72] coverage=15.2% scale=1.88
+com.reddit.frontpage monochrome  InsetDrawable  -> side=0.125 box=[0.44,0.44,0.56,0.56] coverage=1.0%  scale=8.00
+```
+
+**The cause.** `ContentSampleSize` was a flat 64px, resting on the assumption that "what fraction of the box is ink"
+is scale-invariant. It is not, for any drawable carrying **absolute** padding. Reddit ships its themed layer as an
+`InsetDrawable` whose insets are dp — the ordinary way to ship a glyph with a margin — so it subtracts the same 28px
+a side whatever bounds it is handed. In a 64px box that leaves 8px of artwork: `side = 8/64 = 0.125`, and the fit
+dutifully magnified the icon **eight times**. The three tells are all in that line — the wrapper class, a perfectly
+symmetric box, and a side that is a clean pixel fraction.
+
+**Why it was invisible.** At real render size the same insets are the margin their author intended, so the icon drew
+perfectly whenever normalize was off (the author's first screenshot). Measure and render disagreed about the same
+drawable, and only the measurement was wrong.
+
+**The first fix — measure at `intrinsicWidth`, clamped (96..192) — was right but insufficient, and the way it failed
+is the real lesson.** The log confirmed it worked as far as it went:
+
+```
+monochrome InsetDrawable -> side=0.406 coverage=7.5% scale=2.46 sample=192px intrinsic=354px
+```
+
+`scale` 8.00 → 2.46. But the icon was then **correct in the drawer and overflowing in the studio**. Solving
+`side = f × (1 − 2i/B)` across the two samples (64px→0.125, 192px→0.406) gives `i ≈ 25px` and `f ≈ 0.55`: the ink
+fraction is a function of the box size. A larger box makes a fixed inset matter less, so the artwork covers
+proportionally more of it — and the studio's preview is several hundred pixels where a drawer cell is under two
+hundred. **One measured scale cannot be correct at two render sizes**, so picking a better sample size only moved
+which size was right.
+
+**The fix that closes it: rasterize what is measured.** `DrawableParser.rasterized` renders each measured layer to a
+bitmap of the box and stores *that* as the layer's content. A `BitmapDrawable` scales proportionally, so its ink
+fraction is a property of the artwork again — measurement matches render, and both renderers match each other, at
+every size. It generalizes past `InsetDrawable` to anything with fixed padding, which is the point: the three
+failures here were all one shape, *measured under conditions the renderer does not reproduce*, and this removes the
+shape rather than another instance of it.
+
+Three consequences worth knowing:
+- **It chooses a canonical appearance** — the one at `sampleBoxSize`. That mostly washes out under normalization
+  (the artwork is rescaled to fill the box anyway) and matters when it is off, which is why the clamp sits near the
+  size an icon is really displayed at.
+- **Rasterized at `RasterOversample`× resolution via a canvas scale, not larger bounds**, so the appearance stays the
+  box's while the pixels are captured at twice it. Without that the studio preview would be visibly soft.
+- **The bleed headroom is gone with it.** It was added for a case that turned out not to exist (this one looked like
+  bleed and was not), and the raster clips at the box exactly as both renderers already do — so there is no
+  regression, only an unproven feature not gained. `ContentMetrics` fractions are 0..1 again and the fit only grows.
+
+**Not verified on device.** The check is the studio and the grid showing the same app at the same size.
+
+**Not Reddit-specific.** Any inset-based themed layer, and anything with fixed padding, measured wrong the same way —
+so expect several of the remaining bad icons to come right at once.
+
+### Still open
+
+The leads below are unchanged and were *not* what bit here, so they remain untested guesses:
 
 1. **Artwork with a stray pixel or a faint edge element.** The bounds are a rectangle around *everything* above the
    alpha floor, so one dot in a corner makes the measured box far larger than the artwork looks, and the icon comes
@@ -236,6 +290,13 @@ Where I would look, in order:
 4. **Legacy icons with a detected plate.** `LegacyBackground` fills the background layer, the artwork is grown to
    the box over it, and a full-bleed legacy bitmap over its own plate may double up oddly.
 
-**Deliberately still not built:** a way to *see* this. There is no harness, by the author's call, so every check is
-by eye on the real home screen — which is how all four earlier failures were found late. If diagnosing §7 turns
-painful, that is the thing to reconsider first.
+**And a way to see it now exists**, which reverses this section's own "deliberately not built". `DrawableParser`
+logs one `IconMeasure` line per measured layer — bounds, **coverage**, the resulting scale, and the sample size —
+and dumps an ASCII silhouette of what was actually drawn whenever a measurement is implausibly small. Coverage is
+the discriminator and is deliberately *not* on `ContentMetrics`, which dropped it on purpose so nothing can make a
+decision from it: a solid glyph is 30–60%, while a stub reads at 1%. Debug builds only, behind `Timber.treeCount`
+checked before any string is built.
+
+It is still not a harness — no side-by-side, no golden images — and the remaining leads above may yet want one. But
+the specific thing this section asked for, "a way to see what the measurement saw", is answered, and it paid for
+itself on the first icon it was pointed at.

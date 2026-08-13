@@ -193,6 +193,20 @@ class IconLayerResolverTest {
     }
 
     /**
+     * Artwork is rarely centered in its own canvas, so the recentring has to carry the same factor that displaced
+     * it, or a grown icon fills the box while sitting off in a corner.
+     */
+    @Test
+    fun `off-center artwork is recentered as it grows`() {
+        val resolved = resolveForeground(appDefaultSet(), bareIcon(metrics(0.5f, center = 0.7f)))
+
+        val scale = resolved.spec.zoom
+        // The ink's center at 0.7 is displaced to 0.5 + 0.2 * scale by scaling about the box's middle; the offset
+        // has to be exactly what returns it, so the two cancel.
+        assertEquals(0.5f, 0.5f + 0.2f * scale + resolved.spec.offsetX, 0.001f)
+    }
+
+    /**
      * **The background makes no difference to the mechanism**, which is the rule rather than a detail: a plate
      * changes what sits behind the artwork, not how large the artwork should be. So the same app resolves to the
      * same size whether its background is drawn or switched off, and toggling one leaves the picture where it is.
