@@ -107,18 +107,30 @@ class IconPackManager(
     }
 
     /**
-     * Every drawable [packPackage] maps to some app, for browsing.
+     * Every drawable [packPackage] offers, for browsing — **its own catalog first, then whatever else it maps.**
      *
-     * **Taken from the `appfilter.xml` this pack has already parsed**, whose values *are* drawable names — so the
-     * "drawable lister" a browser was thought to need turns out to be a projection of data the pack loads anyway.
-     * What that misses is drawables the author shipped but mapped to nothing (generic shapes, alternates) and the
-     * category grouping a `drawable.xml` carries; both are additive later and neither blocks browsing.
+     * Two sources, because between them they are the whole pack and neither is enough alone:
+     * - **`drawable.xml`** is the author's browsable list, and the only place a drawable **mapped to no app** appears —
+     *   generic shapes, alternates, spares. A pack's own "browse icons" screen is built from this file, which is what
+     *   this browser is. Kept **in the author's order**, since it is curated (grouped by category, alternates beside
+     *   what they vary).
+     * - **`appfilter.xml`'s values** are the icons assigned to some app. Mostly a subset of the catalog, but a pack that
+     *   ships no `drawable.xml` at all has nothing else to offer, and one whose catalog is out of date with its mapping
+     *   would otherwise hide the icons it actually uses. Appended **sorted**, since a mapping is a hash with no order to
+     *   keep.
      *
-     * Sorted by name because there is no other order available — a pack's mapping is a hash, and the names are
-     * what search works on.
+     * This used to be the appfilter projection alone, on the reasoning that its values *are* drawable names so no
+     * separate lister was needed. True as far as it went, and it went one file short: it could only ever show icons the
+     * author had already spoken for.
+     *
+     * **Filtered to what the pack really ships.** An authored list can name a drawable that is not in the APK, and a
+     * browser cell for one is a permanent blank the user can tap; `getIdentifier` is a hash lookup, so checking every
+     * name costs nothing next to decoding one.
      */
     suspend fun drawableNames(packPackage: String): List<String> = withContext(dispatchers.io) {
-        load(packPackage)?.componentDrawable?.values?.distinct()?.sorted().orEmpty()
+        val pack = load(packPackage) ?: return@withContext emptyList()
+        val mappedOnly = (pack.componentDrawable.values.toSet() - pack.catalog.toSet()).sorted()
+        (pack.catalog + mappedOnly).distinct().filter(pack::has)
     }
 
     /**
@@ -144,12 +156,17 @@ class IconPackManager(
             .onFailure { Timber.w(it, "Icon pack %s could not be read", packPackage) }
             .getOrNull() ?: return null
 
-        LoadedPack(packPackage, resources, parseAppFilter(packPackage, resources)).also { loaded = it }
+        LoadedPack(
+            packageName = packPackage,
+            resources = resources,
+            componentDrawable = parseAppFilter(packPackage, resources),
+            catalog = parseDrawableCatalog(packPackage, resources),
+        ).also { loaded = it }
     }
 
     /** The `component → drawable name` mapping, or an empty map when the pack has none we can read. */
     private fun parseAppFilter(packPackage: String, resources: Resources): Map<String, String> {
-        val parser = openAppFilter(packPackage, resources) ?: return emptyMap()
+        val parser = openPackXml(packPackage, resources, "appfilter") ?: return emptyMap()
         val map = mutableMapOf<String, String>()
         runCatching {
             var event = parser.eventType
@@ -166,19 +183,58 @@ class IconPackManager(
     }
 
     /**
-     * The pack's `appfilter`, as a resource if it has one and from its assets otherwise.
+     * Every drawable the pack **offers for browsing**, in the author's own order.
      *
-     * Both, because packs disagree: some ship it compiled into `res/xml`, others as a raw asset. L1 tried the
-     * same two in the same order.
+     * **This is the half `appfilter.xml` cannot answer.** That file maps components to drawables, so its values are
+     * only the icons the author *assigned to an app* — a pack's generic shapes, alternates and spares are mapped to
+     * nothing and appear nowhere in it. `drawable.xml` is the de-facto file that lists them: what a pack's own "browse
+     * icons" screen is built from, which is exactly what this browser is.
+     *
+     * **Order is preserved rather than sorted**, unlike the appfilter projection, and the difference is real: a mapping
+     * is a hash with no order to keep, where this list is authored — grouped by `<category>`, alternates next to the
+     * icon they vary. Sorting it alphabetically would throw away the one piece of curation a pack ships.
+     *
+     * `icon_pack` is tried as a second name because packs disagree about which of the two they ship; the item shape is
+     * identical, so one parser reads either.
      */
-    private fun openAppFilter(packPackage: String, resources: Resources): XmlPullParser? {
-        val xmlId = resources.getIdentifier("appfilter", "xml", packPackage)
+    private fun parseDrawableCatalog(packPackage: String, resources: Resources): List<String> {
+        val parser = openPackXml(packPackage, resources, "drawable")
+            ?: openPackXml(packPackage, resources, "icon_pack")
+            ?: return emptyList()
+
+        val names = mutableListOf<String>()
+        runCatching {
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG && parser.name == "item") {
+                    // `<category title="…"/>` tags are skipped rather than read: grouping is a presentation decision the
+                    // browser has not made yet, and a flat list is what it draws today. The categories stay available
+                    // here whenever it wants them — this is the file that carries them.
+                    parser.getAttributeValue(null, "drawable")
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let(names::add)
+                }
+                event = parser.next()
+            }
+        }.onFailure { Timber.w(it, "drawable list parse failed for %s", packPackage) }
+        return names
+    }
+
+    /**
+     * One of the pack's XML files by [name], as a resource if it has one and from its assets otherwise.
+     *
+     * Both, because packs disagree: some ship them compiled into `res/xml`, others as raw assets. L1 tried the
+     * same two in the same order, for `appfilter` alone — the [name] parameter is what lets the drawable catalog
+     * reuse the lookup instead of repeating it.
+     */
+    private fun openPackXml(packPackage: String, resources: Resources, name: String): XmlPullParser? {
+        val xmlId = resources.getIdentifier(name, "xml", packPackage)
         if (xmlId != 0) return runCatching { resources.getXml(xmlId) }.getOrNull()
 
         return runCatching {
             val assets = context.createPackageContext(packPackage, 0).assets
             XmlPullParserFactory.newInstance().newPullParser().apply {
-                setInput(assets.open("appfilter.xml"), "UTF-8")
+                setInput(assets.open("$name.xml"), "UTF-8")
             }
         }.getOrNull()
     }
@@ -187,7 +243,13 @@ class IconPackManager(
         val packageName: String,
         val resources: Resources,
         val componentDrawable: Map<String, String>,
+        val catalog: List<String>,
     ) {
+
+        /** Whether the pack really ships a drawable of this name — an authored list can name one that is not there. */
+        fun has(drawableName: String): Boolean =
+            resources.getIdentifier(drawableName, "drawable", packageName) != 0
+
         /** The pack's drawable of this name, or `null` when it does not have one under it. */
         fun resolve(drawableName: String): Drawable? {
             val id = resources.getIdentifier(drawableName, "drawable", packageName)
