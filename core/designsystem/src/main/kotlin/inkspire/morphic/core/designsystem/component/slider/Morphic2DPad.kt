@@ -23,9 +23,20 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
- * A 2-D control pad — edit X and Y at once by dragging the knob. Value increases right (X) and up (Y). The
- * caller sets the size via [modifier] (square recommended). Live [onValueChange] while dragging;
- * [onValueChangeFinished] on release. Built for the icon editor's offset (transform) tool.
+ * A 2-D control pad — edit X and Y at once by dragging the knob. The caller sets the size via [modifier]
+ * (square recommended). Live [onValueChange] while dragging; [onValueChangeFinished] on release. Built for the
+ * icon editor's offset (transform) tool.
+ *
+ * **Value increases right and *down*, which is the canvas convention and not a maths-class one.** This pad is a
+ * miniature of the thing being positioned, so the knob sits where the content goes: drag it up and the value
+ * falls, which is what moves artwork up. That reverses what this used to say and do — it reported *up* as
+ * increasing, so the icon studio's pad moved artwork the wrong way vertically while being right horizontally,
+ * and the axis it disagreed with was the one belonging to its only real consumer (`IconLayerSpec.offsetY` is
+ * positive-down, as `LayerTransform` and its test both state).
+ *
+ * Fixed here rather than by negating at the call site: a component whose documented convention contradicts what
+ * it is for will catch the next caller out too, and the inversion bought nothing — without it the knob's
+ * position simply *is* the value.
  *
  * Consumes the Expressive motion engine: the knob springs larger while pressed (a size cue only; the knob
  * position tracks the finger 1:1). Colors come from [LocalMorphicColors] — the knob is drawn as an accent
@@ -72,7 +83,8 @@ fun Morphic2DPad(
                             val w = (size.width - 2 * kn).coerceAtLeast(1f)
                             val h = (size.height - 2 * kn).coerceAtLeast(1f)
                             val fx = ((px - kn) / w).coerceIn(0f, 1f)
-                            val fy = 1f - ((py - kn) / h).coerceIn(0f, 1f)
+                            // No inversion: down is positive, so the finger's position *is* the fraction.
+                            val fy = ((py - kn) / h).coerceIn(0f, 1f)
                             currentOnChange(
                                 xRange.start + spanOf(xRange) * fx,
                                 yRange.start + spanOf(yRange) * fy,
@@ -105,7 +117,7 @@ fun Morphic2DPad(
         val w = (size.width - 2 * kn).coerceAtLeast(0f)
         val h = (size.height - 2 * kn).coerceAtLeast(0f)
         val knobX = kn + w * fractionOf(x, xRange)
-        val knobY = kn + h * (1f - fractionOf(y, yRange))
+        val knobY = kn + h * fractionOf(y, yRange)
         val cx = size.width / 2f
         val cy = size.height / 2f
         val hairline = 1.dp.toPx()

@@ -160,7 +160,8 @@ private fun PadDemo() {
     var y by remember { mutableStateOf(0f) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Morphic 2D pad — drag the knob (X →, Y ↑)",
+            // Y ↓, the canvas convention: the knob sits where the content it positions goes. See `Morphic2DPad`.
+            "Morphic 2D pad — drag the knob (X →, Y ↓)",
             color = colors.contentMuted,
             style = MaterialTheme.typography.labelMedium,
         )
