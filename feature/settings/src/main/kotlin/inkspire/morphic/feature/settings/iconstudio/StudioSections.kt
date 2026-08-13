@@ -655,6 +655,7 @@ internal fun SourceControls(
     packs: List<InstalledIconPack>,
     allowsFixedSource: Boolean,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
     onPickImage: () -> Unit,
     onToggleMonochrome: () -> Unit,
     onToggleNormalize: () -> Unit,
@@ -678,11 +679,22 @@ internal fun SourceControls(
                         // **`AppDefaultMonochrome` reads as selected here too, and that is not a special case.**
                         // Monochrome is a *refinement of* this source rather than a peer of it — the app's own
                         // artwork either way — so the tile is genuinely the chosen one, and the row beneath is what
-                        // says which form of it. Tapping re-picks the plain default, which is also the way off
-                        // monochrome for anyone who does not spot the toggle.
+                        // says which form of it.
                         selected = spec.source == LayerSource.AppDefault ||
                             spec.source == LayerSource.AppDefaultMonochrome,
-                        onClick = { onUpdate { it.copy(source = LayerSource.AppDefault) } },
+                        // **Which is why pressing it while it is already chosen does nothing.** Writing `AppDefault`
+                        // unconditionally would drop the monochrome refinement, and a tile that quietly resets a
+                        // control belonging to the row beneath it is the worst kind of side effect — the tile looked
+                        // selected before the press and looks selected after, so nothing on screen says what changed.
+                        // Turning monochrome off is the toggle's job, and it is one row away.
+                        onClick = {
+                            if (spec.source != LayerSource.AppDefault &&
+                                spec.source != LayerSource.AppDefaultMonochrome
+                            ) {
+                                onUpdate { it.copy(source = LayerSource.AppDefault) }
+                                onCommit()
+                            }
+                        },
                     ) {
                         Icon(
                             imageVector = Icons.Default.Android,
@@ -799,10 +811,36 @@ internal fun SourceControls(
         // than disabled.
         val chosen = spec.source as? LayerSource.IconPack
         if (chosen != null && onBrowsePack != null) {
-            ChoiceRow(
-                label = chosen.drawableName?.let { "Icon: $it — change" } ?: "Choose a different icon",
-                selected = chosen.drawableName != null,
-            ) { onBrowsePack(chosen.packPackage) }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ChoiceChip(
+                    label = chosen.drawableName?.let { "Icon: $it — change" } ?: "Choose a different icon",
+                    selected = chosen.drawableName != null,
+                    modifier = Modifier.weight(1f),
+                ) { onBrowsePack(chosen.packPackage) }
+
+                // **The way back out of a named drawable, and it needs to be a control rather than a trick.** Clearing
+                // the name lets the pack's own `appfilter.xml` decide again — which re-picking the pack tile also does,
+                // as a side effect of `pickPack` writing a name-less source. That is not something a user can be
+                // expected to work out: nothing about a tile that is already selected suggests pressing it undoes
+                // something else.
+                //
+                // **A chip, not an icon button**, because this row is made of chips and everything else in the section
+                // is text on the same wash — a lone glyph at the end of a text row reads as chrome rather than as one
+                // of the choices. It is also the honest form here: "reset" is a word, where the arrow-in-a-circle that
+                // usually means it is one of the least specific glyphs there is.
+                //
+                // Present only once there is a name to clear, so it is never a button that does nothing — and beside
+                // the row it undoes rather than somewhere in the section, since what it reverts is *that* choice.
+                if (chosen.drawableName != null) {
+                    ChoiceChip(label = "Reset", selected = false) {
+                        onUpdate { it.copy(source = LayerSource.IconPack(chosen.packPackage)) }
+                        onCommit()
+                    }
+                }
+            }
         }
 
         // **Parked here pending a home, and deliberately not a tile.** A solid fill is not artwork *from* anywhere, so
@@ -816,12 +854,14 @@ internal fun SourceControls(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
                         onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
+                        onCommit()
                     }
                     // Gated with the row that chooses a fill, not shown whenever one happens to be set: a layer that
                     // may not *take* a solid color must not offer to recolor one either.
                     (spec.source as? LayerSource.SolidFill)?.let { fill ->
                         ColorField(argb = fill.argb) { argb ->
                             onUpdate { it.copy(source = LayerSource.SolidFill(argb)) }
+                            onCommit()
                         }
                     }
                 }

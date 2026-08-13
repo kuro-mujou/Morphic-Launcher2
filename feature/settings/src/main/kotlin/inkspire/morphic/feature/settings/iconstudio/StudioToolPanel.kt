@@ -152,6 +152,10 @@ fun StudioToolPanel(
                         // so it changes as the selection moves and cannot be fixed when the actions are built.
                         allowsFixedSource = state.canUseFixedSource,
                         onUpdate = actions.update,
+                        // Every source change is discrete — there is no gesture to punctuate — so each records at once
+                        // and undo steps over it. `onUpdate` alone is the *live* path, which deliberately records
+                        // nothing; a section that only ever makes discrete edits needs both.
+                        onCommit = actions.commit,
                         onPickImage = actions.pickImage,
                         onToggleMonochrome = actions.toggleMonochrome,
                         onToggleNormalize = actions.toggleNormalize,
