@@ -25,7 +25,10 @@ import org.koin.dsl.module
 val iconsModule = module {
     single<IconOverrideRepository> { IconOverrideRepositoryImpl(get(), get()) }
     single { CustomIconStore(get<Context>(), get()) }
-    single { IconPackManager(get<Context>(), get()) }
+    // `RawIconSource` is bound by `data:apps`, and is here so a pack can compose its own fallback treatment over the
+    // app's icon for an app it does not theme — see `IconPackManager.drawable`. No Gradle dependency comes with it:
+    // the interface is `core:icon`'s, which this module already has.
+    single { IconPackManager(get<Context>(), get(), get()) }
     single<IconPackImages> {
         val packs = get<IconPackManager>()
         IconPackImages { pack, component, name -> runBlocking { packs.drawable(pack, component, name) } }

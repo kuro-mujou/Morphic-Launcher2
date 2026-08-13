@@ -17,7 +17,12 @@ import inkspire.morphic.core.model.ComponentKey
 fun interface IconPackImages {
 
     /**
-     * [component]'s artwork from [packPackage], or `null` when that pack does not cover the app.
+     * [component]'s artwork from [packPackage] — the drawable the pack maps to it, or the pack's own treatment for an
+     * app it does not theme (its plate, with the app's icon shrunk inside).
+     *
+     * `null` means the pack has **neither**, which is a narrower statement than "does not cover this app": the caller
+     * reads it as "this pack has nothing to say here" and leaves the app's own artwork on the layer, rather than
+     * dropping the layer and deleting the icon.
      *
      * @param drawableName one specific drawable, when the user has browsed the pack and chosen; `null` lets the
      *   pack's own mapping decide which drawable belongs to [component].

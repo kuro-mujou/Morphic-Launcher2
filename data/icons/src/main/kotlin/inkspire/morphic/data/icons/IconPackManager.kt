@@ -9,7 +9,10 @@ import android.util.LruCache
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.icon.source.RawIconSource
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.data.icons.internal.PackFallback
+import inkspire.morphic.data.icons.internal.composePackFallback
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -56,6 +59,7 @@ data class InstalledIconPack(
 class IconPackManager(
     private val context: Context,
     private val dispatchers: AppDispatchers,
+    private val rawIcons: RawIconSource,
 ) {
 
     private val packageManager = context.packageManager
@@ -88,11 +92,16 @@ class IconPackManager(
     }
 
     /**
-     * [component]'s artwork from [packPackage], or `null` when the pack does not cover that app.
+     * [component]'s artwork from [packPackage] — its mapped drawable, or the pack's own treatment for an app it does
+     * not theme. `null` only when the pack has neither.
      *
-     * **Null is the ordinary case, not a failure**: no pack themes every app, and coverage of a few hundred is
-     * typical. The caller draws nothing for that layer, which leaves the app's own icon showing through from
-     * whatever is beneath — the same outcome L1 reached by falling back to the default icon.
+     * **A miss is the ordinary case, not a failure**: no pack themes every app, and coverage of a few hundred is
+     * typical. What a pack does about that is [PackFallback] — its plate, its stencil, its overlay and how far to
+     * shrink the app's own icon — which is part of `appfilter.xml`'s own spec rather than a launcher's invention, and
+     * is what every other launcher applies. See `composePackFallback`.
+     *
+     * Null therefore means "this pack has nothing to say about this app at all", and the resolver answers it by
+     * leaving the app's own artwork alone.
      */
     suspend fun drawable(
         packPackage: String,
@@ -102,8 +111,8 @@ class IconPackManager(
         val pack = load(packPackage) ?: return@withContext null
         // An explicit name wins outright: it is the user having browsed the pack and chosen, which is a stronger
         // statement than the pack author's own mapping and must not be second-guessed by it.
-        val name = drawableName ?: pack.componentDrawable[component.appFilterKey()] ?: return@withContext null
-        pack.resolve(name)
+        val name = drawableName ?: pack.componentDrawable[component.appFilterKey()]
+        name?.let(pack::resolve) ?: pack.fallbackFor(component)
     }
 
     /**
@@ -156,31 +165,78 @@ class IconPackManager(
             .onFailure { Timber.w(it, "Icon pack %s could not be read", packPackage) }
             .getOrNull() ?: return null
 
+        val appFilter = parseAppFilter(packPackage, resources)
         LoadedPack(
             packageName = packPackage,
             resources = resources,
-            componentDrawable = parseAppFilter(packPackage, resources),
+            componentDrawable = appFilter.componentDrawable,
+            // Resolved against what the APK really contains, once, here — see `PackFallback.retainingShipped` for the
+            // half-themed drawer that comes of trusting the declaration.
+            fallback = appFilter.fallback.retainingShipped {
+                resources.getIdentifier(it, "drawable", packPackage) != 0
+            },
             catalog = parseDrawableCatalog(packPackage, resources),
         ).also { loaded = it }
     }
 
-    /** The `component → drawable name` mapping, or an empty map when the pack has none we can read. */
-    private fun parseAppFilter(packPackage: String, resources: Resources): Map<String, String> {
-        val parser = openPackXml(packPackage, resources, "appfilter") ?: return emptyMap()
+    /** Everything `appfilter.xml` says: which drawable each app gets, and what to do about the apps it misses. */
+    private class AppFilter(val componentDrawable: Map<String, String>, val fallback: PackFallback)
+
+    /**
+     * Reads `appfilter.xml` — **both halves of it**, in one pass.
+     *
+     * The `<item>` mapping is the half this always read. The other is the four fallback tags, which are declared once
+     * near the top of the file and describe what to draw for an app the mapping does not name: `<iconback>` (one or
+     * more plates, `img1`…`imgN`), `<iconmask>`, `<iconupon>` and `<scale factor>`. Ignoring them is why an unthemed
+     * app came out as a bare plate — see [PackFallback].
+     *
+     * `<item>` is matched wherever it appears, including inside the `<old>` block packs use for retired component
+     * names. That is deliberate: a later entry overwrites an earlier one, so a current mapping always wins, and an old
+     * one is only consulted for an app nothing newer speaks for — which is what that block is for.
+     */
+    private fun parseAppFilter(packPackage: String, resources: Resources): AppFilter {
+        val parser = openPackXml(packPackage, resources, "appfilter")
+            ?: return AppFilter(emptyMap(), PackFallback(emptyList(), null, null, DefaultFallbackScale))
+
         val map = mutableMapOf<String, String>()
+        val backs = mutableListOf<String>()
+        var mask: String? = null
+        var upon: String? = null
+        var scale = DefaultFallbackScale
+
         runCatching {
             var event = parser.eventType
             while (event != XmlPullParser.END_DOCUMENT) {
-                if (event == XmlPullParser.START_TAG && parser.name == "item") {
-                    val component = parser.getAttributeValue(null, "component")
-                    val drawable = parser.getAttributeValue(null, "drawable")
-                    if (component != null && drawable != null) map[component] = drawable
+                if (event == XmlPullParser.START_TAG) {
+                    when (parser.name) {
+                        "item" -> {
+                            val component = parser.getAttributeValue(null, "component")
+                            val drawable = parser.getAttributeValue(null, "drawable")
+                            if (component != null && drawable != null) map[component] = drawable
+                        }
+                        // `img1`, `img2`, … — read by *shape* rather than by counting up to a fixed limit, since the
+                        // count is the author's and LineX White alone ships 24.
+                        "iconback" -> backs += parser.imgAttributes()
+                        "iconmask" -> mask = parser.imgAttributes().firstOrNull()
+                        "iconupon" -> upon = parser.imgAttributes().firstOrNull()
+                        "scale" -> scale = parser.getAttributeValue(null, "factor")
+                            ?.toFloatOrNull()
+                            ?.takeIf { it > 0f }
+                            ?: scale
+                    }
                 }
                 event = parser.next()
             }
         }.onFailure { Timber.w(it, "appfilter parse failed for %s", packPackage) }
-        return map
+
+        return AppFilter(map, PackFallback(backs, mask, upon, scale))
     }
+
+    /** Every `imgN` on the current tag, in the author's order. */
+    private fun XmlPullParser.imgAttributes(): List<String> =
+        (0 until attributeCount)
+            .filter { getAttributeName(it).startsWith("img") }
+            .mapNotNull { getAttributeValue(it)?.takeIf(String::isNotBlank) }
 
     /**
      * Every drawable the pack **offers for browsing**, in the author's own order.
@@ -239,12 +295,33 @@ class IconPackManager(
         }.getOrNull()
     }
 
-    private class LoadedPack(
+    private inner class LoadedPack(
         val packageName: String,
         val resources: Resources,
         val componentDrawable: Map<String, String>,
+        val fallback: PackFallback,
         val catalog: List<String>,
     ) {
+
+        /**
+         * The pack's treatment of an app it does not theme, or `null` when it ships none.
+         *
+         * **The app's own icon is read here rather than passed in**, which is what keeps this out of every caller's
+         * signature: the seam `core:icon` declares for exactly this artwork is [RawIconSource], and asking it costs
+         * one platform lookup on a path that only runs for apps the pack missed.
+         */
+        fun fallbackFor(component: ComponentKey): Drawable? {
+            if (fallback.isEmpty) return null
+            val base = rawIcons.loadIcon(component) ?: return null
+            return composePackFallback(
+                base = base,
+                back = fallback.backFor(component.packageName)?.let(::resolve),
+                mask = fallback.mask?.let(::resolve),
+                upon = fallback.upon?.let(::resolve),
+                scale = fallback.scale,
+                resources = context.resources,
+            )
+        }
 
         /** Whether the pack really ships a drawable of this name — an authored list can name one that is not there. */
         fun has(drawableName: String): Boolean =
@@ -281,6 +358,15 @@ class IconPackManager(
 
         /** Roughly a few screens of a browser grid at [PreviewPx] — enough that scrolling back is free. */
         const val PreviewCacheEntries = 300
+
+        /**
+         * How far a pack shrinks an app's own icon into its plate when it declares no `<scale>`.
+         *
+         * A pack that ships plates and forgets the factor still has to put the icon *inside* one, so 1.0 would be the
+         * one value guaranteed wrong. LineX White declares 0.5; this is a little more generous, since a pack silent
+         * about it is more likely to have a thin frame than a thick one.
+         */
+        const val DefaultFallbackScale = 0.7f
     }
 }
 

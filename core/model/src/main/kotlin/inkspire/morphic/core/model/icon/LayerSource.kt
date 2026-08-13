@@ -78,8 +78,11 @@ sealed interface LayerSource {
      * recipe. Either way, **every decoration layer the user added is untouched** — a pack only ever occupies the
      * slot it was put in.
      *
-     * Resolves to nothing when the pack does not cover this app, which is ordinary rather than exceptional: no
-     * pack themes everything. The layer then draws nothing and whatever is beneath shows through.
+     * **An app the pack does not cover is ordinary rather than exceptional** — no pack themes everything, and coverage
+     * of a few hundred is typical — so there are two answers before "nothing", in this order. A pack that ships the
+     * `appfilter.xml` fallback art (a plate, a stencil, an overlay, a scale) gets its own treatment composed over the
+     * app's icon, which is what makes an unthemed app still look like part of the set. A pack that ships none leaves
+     * the app's **own artwork** on that layer, untouched. Only a pack that cannot be read at all resolves to nothing.
      *
      * @property drawableName one specific drawable in the pack, or `null` to let its `appfilter.xml` decide which
      *   one belongs to this app. **Only meaningful for a single app**: the global default is inherited by every
