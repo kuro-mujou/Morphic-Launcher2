@@ -15,6 +15,15 @@ import kotlinx.serialization.Serializable
  *
  * @property visible When false the layer is skipped in the composite but kept in the set (an editor hide
  *   toggle). *(Assumption — a standard layer-editor affordance; flag if not wanted for v1.)*
+ * @property normalize Whether this icon is resized so it covers about as much of its box as every other icon. Apps
+ *   author at wildly different sizes — some fill their whole canvas, some leave a wide margin — and nothing in the
+ *   platform enforces otherwise, so left alone a home screen is visibly uneven.
+ *
+ *   **Read from the foreground and applied to the whole icon.** It is the app's-own-artwork toggle, and an icon has
+ *   one size rather than one per layer: `IconLayerResolver` derives a single factor from the icon's visible extent
+ *   and applies it to every drawn layer together, so the composition is untouched and only the overall size changes.
+ *   Scaling the foreground alone was the earlier version, and it was invisible on any icon with a plate — the glyph
+ *   moved inside a background that did not.
  */
 @Serializable
 data class IconLayerSpec(
@@ -28,6 +37,7 @@ data class IconLayerSpec(
     val shape: IconShape? = null,
     val opacity: Float = 1f,
     val blend: LayerBlend = LayerBlend.NORMAL,
+    val normalize: Boolean = true,
     val effects: List<LayerEffect> = emptyList(),
 ) {
 

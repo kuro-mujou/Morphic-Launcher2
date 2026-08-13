@@ -35,11 +35,85 @@ class IconLayerResolver {
         icon: ParsedIcon,
         customImage: (path: String) -> Drawable?,
         packImage: (packPackage: String, drawableName: String?) -> Drawable? = { _, _ -> null },
-    ): List<ResolvedLayer> =
-        layerSet.layers
+    ): List<ResolvedLayer> {
+        val drawn = layerSet.layers
             .filter { it.visible }
             .mapNotNull { spec -> spec.resolveLayer(icon, customImage, packImage) }
+
+        // **Every app's artwork ends up the same size, and nothing about the icon changes that.** The fit reads each
+        // layer's own opaque bounds against the box — it does not consult the background, is not affected by turning
+        // one off, and never resizes one.
+        return drawn.map { it.normalized() }
+    }
 }
+
+/** One layer's normalization: a scale about the box's center, and the translate that recenters what it moved. */
+private data class IconFit(val scale: Float, val offsetX: Float, val offsetY: Float)
+
+/**
+ * The layer with its artwork scaled to the size every app's artwork is drawn at, or unchanged when there is nothing
+ * to do.
+ *
+ * **The measurement comes from the content this layer actually resolved to, which is the correction that made the
+ * themed layer right.** An earlier cut measured `ParsedIcon.foreground` and applied the result to whichever layer
+ * held the foreground role — fine until an app ships a themed icon, where the artwork drawn is its *monochrome*
+ * silhouette and that has bounds of its own. It was scaled by a factor measured from a different picture, silently
+ * and only on the apps that support theming.
+ *
+ * **The artwork is its opaque pixels, and nothing else.** An app's foreground is mostly transparency: the canvas it
+ * is drawn on says nothing about how big the picture on it is, and two apps drawing the same logo at half the scale
+ * of each other are indistinguishable until the transparent margin is thrown away. So the ink's bounds are scanned
+ * ([ContentMetrics]) and *those* are scaled to the box, whoever made the app and whatever convention they followed.
+ *
+ * **What is measured is exactly what is normalized**, and that is what keeps the scope right without a list of
+ * special cases: the parser measures the app's **own** artwork — its foreground and its themed layer — and nothing
+ * else, so a pack drawable, an imported image and a flat fill arrive with no metrics and are left alone by
+ * construction. Somebody chose those deliberately; there is nothing to correct.
+ *
+ * **The background is not consulted, and that is the rule rather than an oversight.** Whether a plate is drawn, or
+ * turned off in the studio, changes what sits *behind* the artwork and not how large the artwork should be — so the
+ * same app resolves to the same size either way, and a user toggling the background sees the picture stay put. The
+ * role check is kept even though a background carries no metrics to begin with: "the background is never resized" is
+ * too load-bearing to rest on a parser detail one file away.
+ *
+ * There is **no tuning value here**. Matching sizes is a statement about geometry, so the scale falls out of the
+ * measurement, and where the artwork sits *within* the box is the per-layer zoom's job — one global edit moves every
+ * app's artwork together, which is exactly the control a shared size makes possible.
+ *
+ * Two properties fall out rather than being enforced: it can only ever **grow** artwork, since bounds cannot exceed
+ * the canvas they were measured in, and it can never **overflow**, since filling the box exactly is what it computes.
+ * Earlier versions needed an explicit cap against overflow this shape cannot produce.
+ *
+ * **Centered**, because scaling happens about the box's middle: artwork sitting off-center is displaced further the
+ * more it is enlarged, so the correcting translate carries the same factor that displaced it.
+ */
+private fun ResolvedLayer.normalized(): ResolvedLayer {
+    if (!spec.normalize || spec.role != LayerRole.FOREGROUND) return this
+    val metrics = (content as? ParsedLayer.Image)?.metrics ?: return this
+    if (metrics.longestSide <= 0f) return this
+
+    val scale = 1f / metrics.longestSide
+    return copy(
+        spec = spec.scaledBy(
+            IconFit(
+                scale = scale,
+                offsetX = -(metrics.centerX - 0.5f) * scale,
+                offsetY = -(metrics.centerY - 0.5f) * scale,
+            ),
+        ),
+    )
+}
+
+/**
+ * [fit] applied on top of whatever the user set — **multiplying** their zoom and **adding** to their offset, so the
+ * Transform controls still read 1.0 and 0 on an untouched layer and still mean "relative to how this icon normally
+ * sits". That is also what lets the target be a neutral midpoint rather than a guess that has to be right.
+ */
+private fun IconLayerSpec.scaledBy(fit: IconFit): IconLayerSpec = copy(
+    zoom = zoom * fit.scale,
+    offsetX = offsetX + fit.offsetX,
+    offsetY = offsetY + fit.offsetY,
+)
 
 /**
  * One spec against one app: the content its [LayerSource] points at, paired with the spec to draw it by — or `null`
@@ -91,6 +165,7 @@ private fun IconLayerSpec.resolveLayer(
     is LayerSource.IconPack ->
         packImage(src.packPackage, src.drawableName)?.let { ResolvedLayer(ParsedLayer.Image(it), this) }
 }
+
 
 /**
  * The recoloring **every** [LayerSource.AppDefaultMonochrome] layer takes: the layer's own color effect with the

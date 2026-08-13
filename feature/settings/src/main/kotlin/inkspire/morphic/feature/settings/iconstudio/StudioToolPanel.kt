@@ -52,6 +52,7 @@ data class StudioActions(
     val removeLayer: () -> Unit,
     val pickImage: () -> Unit,
     val toggleMonochrome: () -> Unit,
+    val toggleNormalize: () -> Unit,
     val pickPack: (String) -> Unit,
     /** Null in the global studio, where a *named* pack drawable would be inherited by every app. */
     val browsePack: ((String) -> Unit)?,
@@ -153,6 +154,7 @@ fun StudioToolPanel(
                         onUpdate = actions.update,
                         onPickImage = actions.pickImage,
                         onToggleMonochrome = actions.toggleMonochrome,
+                        onToggleNormalize = actions.toggleNormalize,
                         onPickPack = actions.pickPack,
                         onBrowsePack = actions.browsePack,
                     )

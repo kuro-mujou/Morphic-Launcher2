@@ -17,6 +17,13 @@ sealed interface ParsedLayer {
     /** A flat color fill (e.g. an adaptive icon's solid background). [argb] is a packed ARGB color. */
     data class Color(val argb: Int) : ParsedLayer
 
-    /** Pixels drawn from [drawable] — a bitmap, vector, adaptive sub-layer, or any other drawable type. */
-    data class Image(val drawable: Drawable) : ParsedLayer
+    /**
+     * Pixels drawn from [drawable] — a bitmap, vector, adaptive sub-layer, or any other drawable type.
+     *
+     * @property metrics how much of its canvas this drawable covers, for normalization — or `null` when it was not
+     *   measured (the **background**, which is deliberately left alone) or when there was nothing to measure.
+     *   Carried here rather than on [ParsedIcon] because it is a property of *this drawable*, which is what lets the
+     *   foreground and the themed layer each have their own without the resolver asking which it is holding.
+     */
+    data class Image(val drawable: Drawable, val metrics: ContentMetrics? = null) : ParsedLayer
 }

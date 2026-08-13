@@ -24,13 +24,17 @@ class DrawableParser {
     fun parse(drawable: Drawable): ParsedIcon = when (drawable) {
         is AdaptiveIconDrawable -> ParsedIcon(
             // getForeground()/getBackground() are nullable in the SDK; fall back / stay legacy if absent.
-            foreground = (drawable.foreground ?: drawable).toParsedLayer(),
+            foreground = (drawable.foreground ?: drawable).toParsedLayer(measured = true),
+            // **The background is deliberately not measured, and not normalized.** Its ink legitimately covers the
+            // whole canvas — that is what a plate is — so a measurement would say "full" and mean nothing. Leaving
+            // it untouched is also a decision rather than an omission: with no mask, rescaling a plate would crop it
+            // to a square, which is a visible change nobody asked for.
             background = drawable.background?.toParsedLayer(),
-            monochrome = drawable.monochromeOrNull()?.toParsedLayer(),
+            monochrome = drawable.monochromeOrNull()?.toParsedLayer(measured = true),
         )
 
         else -> ParsedIcon(
-            foreground = drawable.toParsedLayer(),
+            foreground = drawable.toParsedLayer(measured = true),
             background = legacyBackground(drawable),
         )
     }
@@ -90,7 +94,31 @@ private fun AdaptiveIconDrawable.monochromeOrNull(): Drawable? =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) monochrome else null
 
 /** A [ColorDrawable] becomes a flat [ParsedLayer.Color]; every other drawable becomes an [ParsedLayer.Image]. */
-private fun Drawable.toParsedLayer(): ParsedLayer = when (this) {
+private fun Drawable.toParsedLayer(measured: Boolean = false): ParsedLayer = when (this) {
     is ColorDrawable -> ParsedLayer.Color(color)
-    else -> ParsedLayer.Image(this)
+    else -> ParsedLayer.Image(this, metrics = if (measured) measureContent(this) else null)
 }
+
+/**
+ * How much of its canvas [drawable] covers, or null if it is empty.
+ *
+ * Rasterized at [ContentSampleSize] rather than at the icon's real size: the question is "what fraction of this
+ * canvas is ink", and a thumbnail answers it to well under a percent for a fraction of the allocation. L1 measured
+ * at full size, scanning every pixel of a full bitmap on every bake; that accuracy is invisible and the cost is not.
+ */
+private fun measureContent(drawable: Drawable): ContentMetrics? {
+    val bitmap = createBitmap(ContentSampleSize, ContentSampleSize)
+    try {
+        // Bounds are set rather than trusted: a drawable carries whatever the last renderer left on it.
+        drawable.setBounds(0, 0, ContentSampleSize, ContentSampleSize)
+        drawable.draw(Canvas(bitmap))
+        val pixels = IntArray(ContentSampleSize * ContentSampleSize)
+        bitmap.getPixels(pixels, 0, ContentSampleSize, 0, 0, ContentSampleSize, ContentSampleSize)
+        return ContentMetrics.of(pixels, ContentSampleSize)
+    } finally {
+        bitmap.recycle()
+    }
+}
+
+/** Fine enough to place an edge and an area to well under a percent, small enough to be free on every parse. */
+private const val ContentSampleSize = 64

@@ -109,6 +109,7 @@ fun IconStudioScreen(
             removeLayer = viewModel::removeSelected,
             pickImage = { imagePicker.launch(imageRequest) },
             toggleMonochrome = viewModel::toggleSelectedMonochrome,
+            toggleNormalize = viewModel::toggleSelectedNormalize,
             pickPack = viewModel::pickPack,
             browsePack = if (editingOneApp) ({ pack: String -> viewModel.browsePack(pack) }) else null,
             savePreset = viewModel::savePreset.takeUnless { editingOneApp },

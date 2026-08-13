@@ -643,6 +643,8 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
  *
  * @param allowsFixedSource whether this layer may take a source that is the same for every app — a solid color or a
  *   custom image; see `IconStudioState.canUseFixedSource`.
+ * @param onToggleNormalize turns [IconLayerSpec.normalize] on or off — whether the app's artwork is resized so
+ *   every icon covers about the same amount of its box. Beside monochrome because both refine the app's own artwork.
  * @param onToggleMonochrome switches the app's own artwork between its normal and monochrome forms. A command rather
  *   than an [onUpdate] written here, so the edit records itself in history — see `IconStudioViewModel`.
  */
@@ -655,6 +657,7 @@ internal fun SourceControls(
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onPickImage: () -> Unit,
     onToggleMonochrome: () -> Unit,
+    onToggleNormalize: () -> Unit,
     onPickPack: (String) -> Unit,
     onBrowsePack: ((String) -> Unit)?,
 ) {
@@ -775,6 +778,19 @@ internal fun SourceControls(
                 label = "Monochrome",
                 selected = spec.source == LayerSource.AppDefaultMonochrome,
                 onClick = onToggleMonochrome,
+            )
+
+            // **The other refinement of the app's own artwork, so it sits here rather than under Transform.** It
+            // ends up multiplying the layer's zoom, but what it decides is *how to read the artwork this source just
+            // chose* — a question only this panel is asking. Under Transform it would sit beside a zoom slider it
+            // silently scales, and the two would read as rivals.
+            //
+            // Foreground-only, matching where `normalized` applies: the background is deliberately left alone, and a
+            // pack, an image or a fill was placed by somebody on purpose.
+            ChoiceRow(
+                label = "Normalize size",
+                selected = spec.normalize,
+                onClick = onToggleNormalize,
             )
         }
 

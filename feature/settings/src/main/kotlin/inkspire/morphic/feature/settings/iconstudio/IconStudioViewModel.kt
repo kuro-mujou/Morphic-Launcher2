@@ -260,6 +260,19 @@ class IconStudioViewModel(
      * quietly discard what is there — the UI only offers it on the app-default foreground, and this is the guard
      * behind that one.
      */
+    /**
+     * Turns size normalization on or off for the selected layer — see [IconLayerSpec.normalize].
+     *
+     * A command for [toggleSelectedMonochrome]'s reason, and it sits beside it in the Source panel for the same one:
+     * both refine *the app's own artwork* rather than choosing whose artwork it is. Unguarded on the source, unlike
+     * that one, because the field is inert everywhere it does not apply — the resolver consults it only on the
+     * foreground's app-artwork arms — so a stray call changes a value nothing reads.
+     */
+    fun toggleSelectedNormalize() {
+        updateSelected { spec -> spec.copy(normalize = !spec.normalize) }
+        commitEdit()
+    }
+
     fun toggleSelectedMonochrome() {
         updateSelected { spec ->
             when (spec.source) {
