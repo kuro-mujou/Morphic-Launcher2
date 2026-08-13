@@ -9,6 +9,9 @@ import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Turns an [IconLayerSet] + the [ParsedIcon] for one app into the ordered, concrete layers the compositor
@@ -47,8 +50,6 @@ class IconLayerResolver {
     }
 }
 
-/** One layer's normalization: a scale about the box's center, and the translate that recenters what it moved. */
-private data class IconFit(val scale: Float, val offsetX: Float, val offsetY: Float)
 
 /**
  * The layer with its artwork scaled to the size every app's artwork is drawn at, or unchanged when there is nothing
@@ -90,36 +91,48 @@ private data class IconFit(val scale: Float, val offsetX: Float, val offsetY: Fl
  * overflowing in the other. `DrawableParser` renders each measured layer to a bitmap first; a bitmap scales
  * proportionally, so its ink fraction is a property of the artwork again rather than of the box it lands in.
  *
- * **Centered**, because scaling happens about the box's middle: artwork sitting off-center is displaced further the
- * more it is enlarged, so the correcting translate carries the same factor that displaced it.
+ * **Centered against the transform that is actually applied, which is the whole subtlety here.** Everything scales
+ * and rotates about the *box's* middle, so artwork whose ink sits off-center is thrown further off the more it is
+ * enlarged or turned — and the translate that corrects that has to be computed from the **final** zoom and rotation,
+ * not from the normalization's own factor.
+ *
+ * Getting that wrong is what made the zoom slider misbehave: the correction was `-(inkCenter - 0.5) * fit`, which
+ * cancels the displacement only while the total scale *is* `fit`. Multiply the user's zoom in and a residual
+ * `(inkCenter - 0.5) * fit * (zoom - 1)` is left over, so the artwork slid off center as the slider moved, in the
+ * direction it had been off-center in the source — which reads exactly like scaling about the artwork instead of
+ * about the box. It was invisible at zoom 1, where the residual is zero, i.e. everywhere until someone dragged it.
+ *
+ * So the fold is not "a fit composed with the user's transform" but one transform resolved once: the user's zoom
+ * multiplies the fit, and the recentring is derived from that product and then **rotated the way the renderer will
+ * rotate it** (`LayerTransform` orders scale → rotate → translate about the box center, so a translate computed
+ * before the rotation must be turned to match). The user's own offset is added on top and so still means "relative
+ * to where this icon normally sits".
  */
 private fun ResolvedLayer.normalized(): ResolvedLayer {
     if (!spec.normalize || spec.role != LayerRole.FOREGROUND) return this
     val metrics = (content as? ParsedLayer.Image)?.metrics ?: return this
     if (metrics.longestSide <= 0f) return this
 
-    val scale = 1f / metrics.longestSide
+    // The zoom the renderer will really apply — the user's, on top of the fit.
+    val zoom = spec.zoom / metrics.longestSide
+
+    // What that zoom does to the ink's center, negated: the distance the translate has to make up.
+    val correctionX = -(metrics.centerX - 0.5f) * zoom
+    val correctionY = -(metrics.centerY - 0.5f) * zoom
+
+    // Turned into the rotated frame, because the rotation happens between the scale and the translate.
+    val radians = spec.rotation * PI.toFloat() / 180f
+    val cos = cos(radians)
+    val sin = sin(radians)
+
     return copy(
-        spec = spec.scaledBy(
-            IconFit(
-                scale = scale,
-                offsetX = -(metrics.centerX - 0.5f) * scale,
-                offsetY = -(metrics.centerY - 0.5f) * scale,
-            ),
+        spec = spec.copy(
+            zoom = zoom,
+            offsetX = spec.offsetX + correctionX * cos - correctionY * sin,
+            offsetY = spec.offsetY + correctionX * sin + correctionY * cos,
         ),
     )
 }
-
-/**
- * [fit] applied on top of whatever the user set — **multiplying** their zoom and **adding** to their offset, so the
- * Transform controls still read 1.0 and 0 on an untouched layer and still mean "relative to how this icon normally
- * sits". That is also what lets the target be a neutral midpoint rather than a guess that has to be right.
- */
-private fun IconLayerSpec.scaledBy(fit: IconFit): IconLayerSpec = copy(
-    zoom = zoom * fit.scale,
-    offsetX = offsetX + fit.offsetX,
-    offsetY = offsetY + fit.offsetY,
-)
 
 /**
  * One spec against one app: the content its [LayerSource] points at, paired with the spec to draw it by — or `null`

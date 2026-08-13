@@ -193,17 +193,110 @@ class IconLayerResolverTest {
     }
 
     /**
+     * Where the ink's center ends up once the renderer has applied [ResolvedLayer.spec] — `LayerTransform`'s order,
+     * in fractions of the box: scale about the box's middle, rotate about it, then translate.
+     *
+     * Written out here rather than asserted piecemeal because **the whole class of bug in this area is a correction
+     * that cancels under one transform and not another**, which only shows up when the composition is evaluated end
+     * to end. Asserting on the offset alone is what let the zoom bug through.
+     */
+    private fun inkCenterAfter(resolved: ResolvedLayer, sourceCenter: Float): Pair<Float, Float> {
+        val spec = resolved.spec
+        val dx = (sourceCenter - 0.5f) * spec.zoom
+        val dy = (sourceCenter - 0.5f) * spec.zoom
+        val radians = spec.rotation * Math.PI.toFloat() / 180f
+        val cos = kotlin.math.cos(radians)
+        val sin = kotlin.math.sin(radians)
+        return Pair(
+            0.5f + (dx * cos - dy * sin) + spec.offsetX,
+            0.5f + (dx * sin + dy * cos) + spec.offsetY,
+        )
+    }
+
+    /**
      * Artwork is rarely centered in its own canvas, so the recentring has to carry the same factor that displaced
      * it, or a grown icon fills the box while sitting off in a corner.
      */
     @Test
     fun `off-center artwork is recentered as it grows`() {
-        val resolved = resolveForeground(appDefaultSet(), bareIcon(metrics(0.5f, center = 0.7f)))
+        val (x, y) = inkCenterAfter(
+            resolveForeground(appDefaultSet(), bareIcon(metrics(0.5f, center = 0.7f))),
+            sourceCenter = 0.7f,
+        )
 
-        val scale = resolved.spec.zoom
-        // The ink's center at 0.7 is displaced to 0.5 + 0.2 * scale by scaling about the box's middle; the offset
-        // has to be exactly what returns it, so the two cancel.
-        assertEquals(0.5f, 0.5f + 0.2f * scale + resolved.spec.offsetX, 0.001f)
+        assertEquals(0.5f, x, 0.001f)
+        assertEquals(0.5f, y, 0.001f)
+    }
+
+    /**
+     * **The zoom slider bug, stated as a test.** The recentring used to be computed from the fit alone, which cancels
+     * the displacement only while the total scale *is* the fit — so at any other zoom a residual
+     * `(inkCenter - 0.5) * fit * (zoom - 1)` was left over and the artwork slid off center as the slider moved, in
+     * whichever direction it had been off-center in the source. Reverting the fix leaves this failing at every zoom
+     * but 1.0, which is why the old assertion (offset only, at the default zoom) never caught it.
+     */
+    @Test
+    fun `off-center artwork stays centered at every zoom, not just the default`() {
+        for (zoom in listOf(0.2f, 0.5f, 1f, 1.5f, 2f)) {
+            val (x, y) = inkCenterAfter(
+                resolveForeground(appDefaultSet(zoom = zoom), bareIcon(metrics(0.5f, center = 0.7f))),
+                sourceCenter = 0.7f,
+            )
+
+            assertEquals("zoom $zoom drifted horizontally", 0.5f, x, 0.001f)
+            assertEquals("zoom $zoom drifted vertically", 0.5f, y, 0.001f)
+        }
+    }
+
+    /**
+     * The same hazard one control over: the renderer rotates *between* the scale and the translate, so a correction
+     * computed in the unrotated frame is turned along with the artwork and stops pointing where it has to.
+     */
+    @Test
+    fun `off-center artwork stays centered when rotated`() {
+        for (degrees in listOf(0f, 45f, 90f, 180f, 270f)) {
+            val set = IconLayerSet(
+                listOf(
+                    IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.AppDefault),
+                    IconLayerSpec(
+                        role = LayerRole.FOREGROUND,
+                        source = LayerSource.AppDefault,
+                        zoom = 1.4f,
+                        rotation = degrees,
+                    ),
+                ),
+            )
+
+            val (x, y) = inkCenterAfter(
+                resolveForeground(set, bareIcon(metrics(0.5f, center = 0.7f))),
+                sourceCenter = 0.7f,
+            )
+
+            assertEquals("rotation $degrees drifted horizontally", 0.5f, x, 0.001f)
+            assertEquals("rotation $degrees drifted vertically", 0.5f, y, 0.001f)
+        }
+    }
+
+    /** The user's own offset still means what it says: it moves the centered result, rather than being consumed. */
+    @Test
+    fun `the user's offset still displaces the centered artwork`() {
+        val set = IconLayerSet(
+            listOf(
+                IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.AppDefault),
+                IconLayerSpec(
+                    role = LayerRole.FOREGROUND,
+                    source = LayerSource.AppDefault,
+                    zoom = 1.6f,
+                    offsetX = 0.1f,
+                    offsetY = -0.2f,
+                ),
+            ),
+        )
+
+        val (x, y) = inkCenterAfter(resolveForeground(set, bareIcon(metrics(0.5f, center = 0.7f))), 0.7f)
+
+        assertEquals(0.6f, x, 0.001f)
+        assertEquals(0.3f, y, 0.001f)
     }
 
     /**
