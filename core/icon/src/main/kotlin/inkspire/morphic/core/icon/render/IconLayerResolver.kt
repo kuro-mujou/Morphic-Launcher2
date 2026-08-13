@@ -30,8 +30,9 @@ class IconLayerResolver {
      * that decides what each source *means*, rather than a copy of that decision in each renderer.
      *
      * @param customImage decodes a [LayerSource.CustomImage] path to a drawable; returns `null` if missing.
-     * @param packImage draws this app from an installed icon pack; `null` when the pack does not cover it, which
-     *   is ordinary rather than exceptional.
+     * @param packImage draws this app from an installed icon pack — its mapped drawable, or the pack's own fallback
+     *   treatment for an app it does not theme. `null` only when the pack has neither, and the layer then resolves to
+     *   the app's own artwork rather than to nothing.
      */
     fun resolve(
         layerSet: IconLayerSet,
@@ -137,7 +138,7 @@ private fun ResolvedLayer.normalized(): ResolvedLayer {
 /**
  * One spec against one app: the content its [LayerSource] points at, paired with the spec to draw it by — or `null`
  * when there is nothing to draw. `AppDefault` is meaningless on a custom layer, so that combination resolves to
- * nothing, as does an [LayerSource.Empty] layer and a pack that does not cover this app.
+ * nothing, as does an [LayerSource.Empty] layer.
  *
  * **It returns a spec as well as content because one source rewrites it** — see the monochrome arm. Every other arm
  * hands back the spec it was given.
@@ -151,11 +152,7 @@ private fun IconLayerSpec.resolveLayer(
     // same way, so both render paths already handle it.
     LayerSource.Empty -> null
 
-    LayerSource.AppDefault -> when (role) {
-        LayerRole.FOREGROUND -> icon.foreground
-        LayerRole.BACKGROUND -> icon.background
-        LayerRole.CUSTOM -> null
-    }?.let { ResolvedLayer(it, this) }
+    LayerSource.AppDefault -> appArtwork(icon)?.let { ResolvedLayer(it, this) }
 
     // **The one source whose meaning depends on what the app shipped, and deciding it here is the point.** Whether an
     // app carries a themed-icon layer is not something the user knows, and in the *global* studio it is not even one
@@ -181,8 +178,31 @@ private fun IconLayerSpec.resolveLayer(
 
     is LayerSource.CustomImage -> customImage(src.path)?.let { ResolvedLayer(ParsedLayer.Image(it), this) }
 
-    is LayerSource.IconPack ->
-        packImage(src.packPackage, src.drawableName)?.let { ResolvedLayer(ParsedLayer.Image(it), this) }
+    // **A pack that does not cover this app falls back to the app's own artwork, not to nothing.**
+    //
+    // Dropping the layer looks like the conservative answer and is the destructive one: on the *foreground* it
+    // deletes the glyph, so an unthemed app under a pack came out as a bare background plate with no icon on it —
+    // worse than having applied no pack at all. Coverage of a few hundred apps is typical, so this is the common
+    // case rather than the edge, and it is the same fallback L1 reached by returning the default icon.
+    //
+    // **Most packs never reach this**, because a pack shipping `iconback` art has its own answer for an app it does
+    // not theme, composed one layer down in `IconPackManager` — the treatment every other launcher applies. This is
+    // what happens when a pack ships none: the app keeps its own icon, untouched.
+    is LayerSource.IconPack -> packImage(src.packPackage, src.drawableName)
+        ?.let { ResolvedLayer(ParsedLayer.Image(it), this) }
+        ?: appArtwork(icon)?.let { ResolvedLayer(it, this) }
+}
+
+/**
+ * The app's own parsed content for this layer's role, or null where there is none to have.
+ *
+ * Shared by [LayerSource.AppDefault] and by a pack layer that misses, which is what makes "a pack falls back to the
+ * app's own artwork" literally the same resolution rather than a second one written to match.
+ */
+private fun IconLayerSpec.appArtwork(icon: ParsedIcon): ParsedLayer? = when (role) {
+    LayerRole.FOREGROUND -> icon.foreground
+    LayerRole.BACKGROUND -> icon.background
+    LayerRole.CUSTOM -> null
 }
 
 

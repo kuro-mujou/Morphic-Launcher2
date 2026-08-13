@@ -430,6 +430,45 @@ class IconLayerResolverTest {
 
         assertNull(resolved.firstOrNull { it.spec.role == LayerRole.BACKGROUND })
     }
+
+    /**
+     * **The one place a miss must not be treated like an empty layer.** Dropping the layer deletes the app's glyph, so
+     * an app the pack does not theme came out as a bare background plate — worse than applying no pack at all. Most
+     * packs never reach this, having their own fallback art composed a layer down; this is the answer when they ship
+     * none.
+     */
+    @Test
+    fun `a pack that has nothing for this app leaves the app's own artwork on the layer`() {
+        val set = IconLayerSet(
+            listOf(
+                IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.Empty),
+                IconLayerSpec(role = LayerRole.FOREGROUND, source = LayerSource.IconPack("com.example.pack")),
+            ),
+        )
+        val app = bareIcon(metrics(1f))
+
+        val resolved = resolver.resolve(set, app, customImage = { null }, packImage = { _, _ -> null })
+            .single { it.spec.role == LayerRole.FOREGROUND }
+
+        assertEquals(app.foreground, resolved.content)
+    }
+
+    /** And a pack that *does* answer still wins — the fallback is a fallback, not a merge. */
+    @Test
+    fun `a pack that answers is drawn instead of the app's artwork`() {
+        val set = IconLayerSet(
+            listOf(
+                IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.Empty),
+                IconLayerSpec(role = LayerRole.FOREGROUND, source = LayerSource.IconPack("com.example.pack")),
+            ),
+        )
+        val fromPack = StubDrawable()
+
+        val resolved = resolver.resolve(set, bareIcon(metrics(1f)), customImage = { null }) { _, _ -> fromPack }
+            .single { it.spec.role == LayerRole.FOREGROUND }
+
+        assertEquals(fromPack, (resolved.content as ParsedLayer.Image).drawable)
+    }
 }
 
 /**
