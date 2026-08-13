@@ -157,27 +157,20 @@ fun StudioColorPickerPanel(
             // **The hex is a field, not a readout.** It is the only exact way in — dragging a saturation panel cannot
             // hit a color a designer handed you as six digits — and it is the only exact way *out*, which is why it was
             // worth showing even before it could be typed into.
-            //
-            // **The weight goes on a box around it, not on the field**, and getting that wrong is silent: this
-            // component applies the caller's modifier to its *inner* container (see its KDoc — the modifier styles the
-            // visible container, the field node above only carries focus), so a `weight` handed to it never reaches
-            // this `Row`. The field then measured the full width and pushed Done off the edge.
-            Box(Modifier.weight(1f)) {
-                MorphicTextField(
-                    state = hexField,
-                    placeholder = "#RRGGBB",
-                    isError = hexRejected(hexField.text.toString()),
-                    keyboardOptions = KeyboardOptions(
-                        // Hex is written in upper case here, and the digits are ASCII either way — so the keyboard
-                        // opens on the characters that can actually be typed rather than on a word-shaped one.
-                        capitalization = KeyboardCapitalization.Characters,
-                        autoCorrectEnabled = false,
-                        keyboardType = KeyboardType.Ascii,
-                        imeAction = ImeAction.Done,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            MorphicTextField(
+                state = hexField,
+                placeholder = "#RRGGBB",
+                isError = hexRejected(hexField.text.toString()),
+                keyboardOptions = KeyboardOptions(
+                    // Hex is written in upper case here, and the digits are ASCII either way — so the keyboard opens
+                    // on the characters that can actually be typed rather than on a word-shaped one.
+                    capitalization = KeyboardCapitalization.Characters,
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Ascii,
+                    imeAction = ImeAction.Done,
+                ),
+                modifier = Modifier.weight(1f),
+            )
             ChoiceChip(label = "Done", selected = false, onClick = onDone)
         }
 

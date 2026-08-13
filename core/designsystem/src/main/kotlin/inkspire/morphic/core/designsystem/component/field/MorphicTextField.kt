@@ -46,6 +46,13 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * placeholder sits behind the field until there's text; the cursor uses the accent (or error) color; and
  * focus is dropped when the keyboard is dismissed. Icon slots are composables, so this pulls in no icon dep.
  *
+ * **[modifier] goes on the outermost node, so layout modifiers work** — `weight`, `width`, `padding`, the ordinary
+ * contract every composable in this module keeps. It used to be applied to the styled container *inside* the
+ * decorator, which reads harmlessly (that container is what a caller wants to size) and is not: a `weight` there is
+ * attached to a node the parent `Row` never sees, so the parent measures the field at whatever width it asks for and
+ * the modifier does **nothing** — silently, with the siblings pushed out of the row as the only symptom. Sizing still
+ * reaches the container, because [BasicTextField] propagates its minimum constraints into the decoration.
+ *
  * This is the settings field; the launcher-surface field (frosted, wallpaper-adaptive) is deferred.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -83,7 +90,7 @@ fun MorphicTextField(
 
     BasicTextField(
         state = state,
-        modifier = Modifier.onFocusChanged { focused = it.isFocused },
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
         enabled = enabled,
         textStyle = textStyle,
         lineLimits = lineLimits,
@@ -92,8 +99,9 @@ fun MorphicTextField(
         cursorBrush = SolidColor(if (isError) colors.error else colors.accent),
         decorator = TextFieldDecorator { innerTextField ->
             Row(
-                // The caller's modifier styles the visible container; the field node above only carries focus.
-                modifier = modifier
+                // Styling only — the caller's modifier is on the field node above, and this container inherits its
+                // width from there. See the KDoc for why it is not applied here.
+                modifier = Modifier
                     .clip(shape)
                     .background(colors.surfaceElevated)
                     .border(1.5.dp, ring, shape)
