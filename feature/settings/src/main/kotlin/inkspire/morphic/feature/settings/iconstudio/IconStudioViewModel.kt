@@ -61,6 +61,9 @@ class IconStudioViewModel(
 
     private val _state = MutableStateFlow(IconStudioState())
 
+    /** Where a fill lands on a layer that has never held one — see [pickSolidFill]. */
+    private val DefaultFillArgb = 0xFF000000.toInt()
+
     val state: StateFlow<IconStudioState> = _state.asStateFlow()
 
     init {
@@ -249,18 +252,6 @@ class IconStudioViewModel(
     }
 
     /**
-     * Switches the selected layer between the app's own artwork and its monochrome form, and back.
-     *
-     * **A command rather than a source the UI writes**, so it records history at once — the same shape
-     * [toggleSelectedVisible] and [pickPack] take, and what makes `commitEdit`'s "discrete edits record themselves"
-     * true for this one. Off returns to [LayerSource.AppDefault], because monochrome is a *refinement of* the app's
-     * own artwork rather than a peer source: there is nowhere else for turning it off to land.
-     *
-     * Guarded on the source as well as toggled by it, so calling this on a layer showing a pack or an image cannot
-     * quietly discard what is there — the UI only offers it on the app-default foreground, and this is the guard
-     * behind that one.
-     */
-    /**
      * Turns size normalization on or off for the selected layer — see [IconLayerSpec.normalize].
      *
      * A command for [toggleSelectedMonochrome]'s reason, and it sits beside it in the Source panel for the same one:
@@ -273,6 +264,21 @@ class IconStudioViewModel(
         commitEdit()
     }
 
+    /**
+     * Switches the selected layer between the app's own artwork and its monochrome form, and back.
+     *
+     * **A command rather than a source the UI writes**, so it records history at once — the same shape
+     * [toggleSelectedVisible] and [pickPack] take, and what makes `commitEdit`'s "discrete edits record themselves"
+     * true for this one. Off returns to [LayerSource.AppDefault], because monochrome is a *refinement of* the app's
+     * own artwork rather than a peer source: there is nowhere else for turning it off to land.
+     *
+     * Guarded on the source as well as toggled by it, so calling this on a layer showing a pack or an image cannot
+     * quietly discard what is there — the UI only offers it on the app-default foreground, and this is the guard
+     * behind that one.
+     *
+     * Either direction is remembered ([foregroundMonochrome]), so *off* survives a trip through another source
+     * exactly as *on* does — the memory is the last form the layer had, not a latch that only ever turns on.
+     */
     fun toggleSelectedMonochrome() {
         updateSelected { spec ->
             when (spec.source) {
@@ -280,6 +286,53 @@ class IconStudioViewModel(
                 LayerSource.AppDefaultMonochrome -> spec.copy(source = LayerSource.AppDefault)
                 else -> spec
             }
+        }
+        commitEdit()
+    }
+
+    /**
+     * Points the selected layer back at the app's own artwork — the "System default" tile.
+     *
+     * **A command rather than a source the UI writes, because *which* app-default form to return to is the
+     * ViewModel's to know.** On the foreground it restores [foregroundMonochrome]: leaving the app's own artwork for a
+     * pack or an image and coming back lands on the form the layer was in, instead of silently dropping the refinement
+     * the row beneath the tiles controls. A tile that quietly resets a control one row away is the worst kind of side
+     * effect — the tile looks selected before the press and after it, so nothing on screen says what changed.
+     *
+     * On the background there is no monochrome to restore, so it is plain [LayerSource.AppDefault]; the refinement is
+     * foreground-only, the platform shipping one silhouette and it being for that slot.
+     *
+     * Pressing it while the layer already shows that form writes an identical set, which `recordHistory` dedupes away
+     * — so it is a no-op without needing a guard of its own.
+     */
+    fun pickAppDefault() {
+        updateSelected { spec ->
+            val monochrome = spec.role == LayerRole.FOREGROUND && foregroundMonochrome
+            spec.copy(source = if (monochrome) LayerSource.AppDefaultMonochrome else LayerSource.AppDefault)
+        }
+        commitEdit()
+    }
+
+    /**
+     * Fills the selected layer with a flat color — the "Solid color" row.
+     *
+     * **Returns to the color that layer was last filled with** ([layerFills]), for [pickAppDefault]'s reason applied to
+     * a value rather than to a form: leaving a fill for a pack or an image and coming back should land where it was,
+     * not on black. Black is only where a fill *arrives* on a layer that has never had one — the one value nobody
+     * mistakes for a color that was already chosen, so the swatch row below reads as the next step.
+     *
+     * **A no-op when the layer already shows a fill**, so pressing the row twice cannot throw away the color under it.
+     * Guarded rather than left to `recordHistory`'s dedupe, because this one would write a *different* set.
+     *
+     * Refuses where the layer may not take a fixed source, behind the same rule that omits the row — see [pickImage].
+     */
+    fun pickSolidFill() {
+        val current = _state.value
+        if (!current.canUseFixedSource) return
+        val remembered = current.layerKeys.getOrNull(current.selected)?.let(layerFills::get)
+        updateSelected { spec ->
+            if (spec.source is LayerSource.SolidFill) spec
+            else spec.copy(source = LayerSource.SolidFill(remembered ?: DefaultFillArgb))
         }
         commitEdit()
     }
@@ -511,7 +564,7 @@ class IconStudioViewModel(
 
     /** The recipe **and** the keys recorded at [historyIndex] — see [Step] for why undo needs both. */
     private fun IconStudioState.atHistoryStep(): IconStudioState = history[historyIndex].let { step ->
-        copy(editing = step.set, layerKeys = step.keys).withHistoryFlags().withSelectionInRange()
+        withEditing(step.set).copy(layerKeys = step.keys).withHistoryFlags().withSelectionInRange()
     }
 
     /**
@@ -746,7 +799,7 @@ class IconStudioViewModel(
     private fun IconStudioState.seatedOn(set: IconLayerSet): IconStudioState {
         val keys = freshKeys(set.layers.size)
         resetHistory(set, keys)
-        return copy(editing = set, layerKeys = keys, selected = set.foregroundIndex).withHistoryFlags()
+        return withEditing(set).copy(layerKeys = keys, selected = set.foregroundIndex).withHistoryFlags()
     }
 
     /**
@@ -762,9 +815,81 @@ class IconStudioViewModel(
         return withHistoryFlags()
     }
 
-    /** Applies a new recipe without recording it — the live path; see [updateSelected]. */
-    private fun IconStudioState.withEditing(set: IconLayerSet): IconStudioState =
-        copy(editing = set, dirty = set != saved)
+    /**
+     * Applies a new recipe without recording it — the live path; see [updateSelected].
+     *
+     * **Every recipe change passes through here, which is what makes [noteMonochromeForm] a rule rather than a habit.**
+     * [seatedOn] and [atHistoryStep] were routed through it for that — an open, a preset and an undo now remember what
+     * a source pick remembers, without each of them having to say so. Both recompute `dirty` immediately afterwards,
+     * so passing through costs them nothing.
+     */
+    private fun IconStudioState.withEditing(set: IconLayerSet): IconStudioState {
+        noteMonochromeForm(set)
+        noteFillColors()
+        return copy(editing = set, dirty = set != saved)
+    }
+
+    /**
+     * Whether the foreground was last showing the **monochrome** form of the app's own artwork.
+     *
+     * **Editor memory, not part of the recipe** — which is why it is a field here rather than in the state, beside
+     * [saved] and [unsaved] for their reason: nothing renders from it. What it buys is that leaving the app's own
+     * artwork for a pack or an image and coming back does not turn monochrome off behind the user's back. Monochrome is
+     * a *refinement of* that source rather than a peer of it, so returning to the source returns to the form it was in;
+     * without the memory the round trip is a hidden reset. See [pickAppDefault], its one reader.
+     *
+     * **One flag rather than one per layer**, because the refinement is foreground-only and a set has exactly one
+     * foreground — `IconLayerSet`'s own `init` requires it.
+     */
+    private var foregroundMonochrome = false
+
+    /**
+     * Keeps [foregroundMonochrome] on the last app-default form the foreground actually had.
+     *
+     * **Recorded on arrival rather than captured on departure**, which is what makes a single hook enough: every path
+     * that can set a source — a tile, the toggle, a preset, an open, a reset, an undo — hands the resulting set to
+     * [withEditing], so none of them has to remember to save anything first. Any other source leaves the flag alone,
+     * which is the whole point: that is precisely the trip the memory exists to survive.
+     */
+    private fun noteMonochromeForm(set: IconLayerSet) {
+        when (set.foreground.source) {
+            LayerSource.AppDefaultMonochrome -> foregroundMonochrome = true
+            LayerSource.AppDefault -> foregroundMonochrome = false
+            else -> Unit
+        }
+    }
+
+    /**
+     * The color each layer was last filled with, by its layer key — [foregroundMonochrome]'s counterpart for a value
+     * that is per layer rather than per role, and read by [pickSolidFill].
+     *
+     * **Keyed rather than indexed, because an index is exactly what an insert moves.** `IconStudioState.layerKeys` is
+     * the identity that already survives every reorder and insert (see its KDoc for why the model cannot carry one),
+     * so this rides on it.
+     *
+     * **Nothing is ever evicted, and it cannot go stale**: keys come from a monotonic counter that never reuses a
+     * value, so an entry left behind by a deleted layer — or by a whole stack a preset replaced — is unreadable rather
+     * than wrong. What it costs is one `Int` per layer that has ever held a fill, for the life of the screen.
+     */
+    private val layerFills = mutableMapOf<Long, Int>()
+
+    /**
+     * Records every layer's current fill color, from the state **being replaced**.
+     *
+     * **This reads the receiver, not the incoming set, and that is the whole reason it is correct here.** A key belongs
+     * to a layer by *position*, and the two lists only agree on the state that already holds both — during a structural
+     * edit `withEditing` is handed new layers while the receiver still carries the old keys, so pairing the *new* set
+     * with them would file a color under its neighbor's identity.
+     *
+     * Capturing on departure loses nothing, because leaving a fill is itself an edit: the tile, the pack and the image
+     * all pass through here, so the last color a layer showed is recorded on the way out.
+     */
+    private fun IconStudioState.noteFillColors() {
+        editing.layers.forEachIndexed { index, spec ->
+            val fill = spec.source as? LayerSource.SolidFill ?: return@forEachIndexed
+            layerKeys.getOrNull(index)?.let { key -> layerFills[key] = fill.argb }
+        }
+    }
 
     private fun IconStudioState.withHistoryFlags(): IconStudioState =
         copy(canUndo = historyIndex > 0, canRedo = historyIndex < history.lastIndex, dirty = editing != saved)

@@ -6,11 +6,19 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -18,7 +26,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.core.graphics.drawable.toDrawable
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,6 +96,10 @@ fun IconStudioScreen(
     // which tool is open, and neither does undo, so it stays out of the ViewModel.
     var tool by remember { mutableStateOf<StudioTool?>(null) }
 
+    // The full color picker is hosted here rather than where it is asked for, and takes the tool panel's slot when it
+    // is up. See [StudioColorPickerHost] for why a control cannot render inside the section that opens it.
+    val colorPicker = remember { StudioColorPickerHost() }
+
     val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) viewModel.pickImage(uri)
@@ -108,6 +124,8 @@ fun IconStudioScreen(
             addLayer = viewModel::addLayer,
             removeLayer = viewModel::removeSelected,
             pickImage = { imagePicker.launch(imageRequest) },
+            pickAppDefault = viewModel::pickAppDefault,
+            pickSolidFill = viewModel::pickSolidFill,
             toggleMonochrome = viewModel::toggleSelectedMonochrome,
             toggleNormalize = viewModel::toggleSelectedNormalize,
             pickPack = viewModel::pickPack,
@@ -240,6 +258,11 @@ fun IconStudioScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    // The bottom chrome is the only thing on this screen a keyboard can cover, and the color picker's
+                    // hex field is the only thing that raises one — so the whole stack rides above it rather than the
+                    // panel alone, which would have left the rail underneath the keys. Zero when no keyboard is up, so
+                    // it costs the other panels nothing.
+                    .imePadding()
                     .uiInsetsPadding()
                     .padding(ChromeMargin),
                 horizontalAlignment = Alignment.End,
@@ -285,19 +308,103 @@ fun IconStudioScreen(
                 // Above the bar it belongs to, and below the cycle button, which belongs to neither. Absent rather
                 // than empty when nothing is chosen: the picker covers the screen then, and a panel editing a recipe
                 // with no subject would be editing nothing.
-                tool?.takeIf { state.subject !is StudioSubject.Unchosen }?.let { open ->
-                    StudioToolPanel(
-                        tool = open,
-                        state = state,
-                        actions = actions,
-                        hazeState = hazeState,
-                    )
+                //
+                // **One panel at a time, which is why the color picker is an arm of this and not a layer over it** —
+                // see [StudioColorPickerPanel]. The section that opened it is among the controls it would otherwise
+                // cover, and two sheets of glass stack taller than the canvas they float on.
+                //
+                // **It grows out from behind the rail and retreats the same way**, which is the one motion that matches
+                // where it comes from: the rail is what opened it, so a panel appearing on the spot would read as
+                // unrelated to the button that was pressed.
+                //
+                // **Fade, size and a short slide — all three.** Fade-and-size alone was tried, on the argument that the
+                // growth already carries the panel up so a translation repeats it, and it was reversed at the author's
+                // call: the slide is what gives the panel somewhere to come *from*. Growth alone reads as a box being
+                // unmasked in place; the offset makes it move. It is deliberately a sixth of the height, small enough
+                // to be a lead-in to the growth rather than a journey of its own.
+                //
+                // **`contentKey` is what keeps switching *tools* from being a transition at all.** The target carries
+                // the tool so the content can draw it, but the key is only which *kind* of panel this is — so Source →
+                // Effects updates the panel in place and its own `animateContentSize` handles the height, exactly as
+                // [StudioToolPanel] says it should. Keying on the tool itself would cross-fade two panels and take
+                // that away.
+                //
+                // **The slot's *size* animates as well, because it is what everything above it stands on.** The pair of
+                // buttons is next in this bottom-anchored column, so the slot's height is their position: with the size
+                // snapping, they jumped to the open height before the panel had drawn and stayed up there until after it
+                // had gone. `SizeTransform` makes the panel grow from behind the rail and the buttons ride it.
+                //
+                // It does not collide with [StudioToolPanel]'s own `animateContentSize`, which is the hazard that KDoc
+                // names, because the two are never running at once: a tool switch shares a `contentKey`, so no
+                // transition starts and the container simply follows the height the panel is animating; and a panel
+                // arriving is freshly composed, so it has no previous height of its own to animate from.
+                val picking = colorPicker.request
+                val open = tool?.takeIf { state.subject !is StudioSubject.Unchosen }
+                // Read out here because `transitionSpec` is not a composable lambda — the motion scheme is, so it
+                // cannot be reached from inside it.
+                val slide = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
+                val fade = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+                val resize = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+                AnimatedContent(
+                    targetState = picking to open,
+                    contentKey = { (request, panel) ->
+                        when {
+                            request != null -> PanelSlot.COLOR
+                            panel != null -> PanelSlot.TOOLS
+                            else -> PanelSlot.NONE
+                        }
+                    },
+                    transitionSpec = {
+                        val enter = fadeIn(fade) + slideInVertically(slide) { it / 6 }
+                        val exit = fadeOut(fade) + slideOutVertically(slide) { it / 6 }
+                        enter togetherWith exit using SizeTransform { _, _ -> resize }
+                    },
+                    // Bottom-anchored, so a slot that is not yet its full height keeps its lower edge against the rail
+                    // and opens *upward*. Top-aligned — the default — would pin the panel's head where it will end up
+                    // and grow it downward over the rail, which is the opposite of coming out from behind it.
+                    contentAlignment = Alignment.BottomCenter,
+                    label = "studio panel",
+                    // The outgoing panel is composed with the state it was opened on, which is what lets a closing
+                    // picker keep drawing its request after `colorPicker.request` is already null.
+                ) { (request, panel) ->
+                    when {
+                        request != null -> StudioColorPickerPanel(
+                            request = request,
+                            hazeState = hazeState,
+                            onDone = colorPicker::close,
+                        )
+
+                        panel != null ->
+                            // Provided at the one consumer rather than at the screen root: the sections are the only
+                            // things that ask for a color, and the host is what they ask.
+                            CompositionLocalProvider(LocalStudioColorPicker provides colorPicker) {
+                                StudioToolPanel(
+                                    tool = panel,
+                                    state = state,
+                                    actions = actions,
+                                    hazeState = hazeState,
+                                )
+                            }
+
+                        else -> Unit
+                    }
                 }
+                // Outside the transition, so it is bound to the picker being *open* rather than to whichever panel is
+                // still on screen — a handler inside would linger for the length of the exit. Declared after the
+                // screen's own handler, so back closes the picker before it leaves the studio, which is the same
+                // layering the pack browser below relies on.
+                if (picking != null) BackHandler { colorPicker.close() }
 
                 StudioToolBar(
                     hazeState = hazeState,
                     selected = tool,
-                    onSelect = { tool = it },
+                    // Choosing a tool closes the picker, so the rail always opens what it says it opens. Without it a
+                    // press would swap the bar's highlight and leave the color panel sitting there — the one way this
+                    // screen could show a selection that is not what is on screen.
+                    onSelect = {
+                        colorPicker.close()
+                        tool = it
+                    },
                 )
             }
 
@@ -333,3 +440,12 @@ fun IconStudioScreen(
         }
     }
 }
+
+/**
+ * What kind of thing is in the panel slot above the tool rail — the *transition's* vocabulary, not the screen's.
+ *
+ * It exists so a panel swap is animated per kind rather than per value: every tool is one `TOOLS`, so moving between
+ * sections updates the panel in place and only opening, closing, or swapping in the color picker is a transition. See
+ * the `AnimatedContent` above.
+ */
+private enum class PanelSlot { NONE, TOOLS, COLOR }

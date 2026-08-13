@@ -61,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
-import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
@@ -538,7 +537,7 @@ private fun ColorFieldBody(
     clearable: Boolean = false,
     onChange: (Int?) -> Unit,
 ) {
-    var picking by remember { mutableStateOf(false) }
+    val picker = LocalStudioColorPicker.current
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -547,29 +546,25 @@ private fun ColorFieldBody(
                 Swatch(argb = swatch, selected = argb == swatch) { onChange(swatch) }
             }
             // The way to a color that is not on the row. Shows the current one, so it doubles as the readout.
+            //
+            // **It opens the picker elsewhere rather than unfolding it here**, which is the whole of
+            // `StudioColorPickerHost`: a saturation panel inside this scrolling section filled it and swallowed
+            // every drag over it, so the section could not be scrolled past the control the user had just opened.
             Box(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
                     .background(argb?.let { Color(it) } ?: Color.Transparent)
-                    .border(
-                        width = if (picking) 2.dp else 1.dp,
-                        color = if (picking) StudioContentColor else Color.White.copy(0.3f),
-                        shape = CircleShape,
-                    )
-                    .clickable { picking = !picking },
+                    .border(width = 1.dp, color = Color.White.copy(0.3f), shape = CircleShape)
+                    .clickable {
+                        // Black when there is nothing yet: the picker has to start somewhere, and it is the one
+                        // value a user reading the panel will not mistake for a color that was already chosen.
+                        picker.open(argb ?: 0xFF000000.toInt(), onChange)
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Text("+", color = StudioContentColor, style = MaterialTheme.typography.labelSmall)
             }
-        }
-        if (picking) {
-            MorphicColorPicker(
-                // Black when there is nothing yet: the picker has to start somewhere, and it is the one value a
-                // user reading the panel will not mistake for a color that was already chosen.
-                argb = argb ?: 0xFF000000.toInt(),
-                onArgbChange = onChange,
-            )
         }
     }
 }
@@ -647,6 +642,10 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
  *   every icon covers about the same amount of its box. Beside monochrome because both refine the app's own artwork.
  * @param onToggleMonochrome switches the app's own artwork between its normal and monochrome forms. A command rather
  *   than an [onUpdate] written here, so the edit records itself in history — see `IconStudioViewModel`.
+ * @param onPickAppDefault chooses the app's own artwork, in whichever form this layer was last showing it. A command
+ *   for a second reason on top of that one: the form is remembered by the ViewModel, so this panel cannot write it.
+ * @param onPickSolidFill fills the layer with a flat color, returning to the one it last held. A command for
+ *   [onPickAppDefault]'s reason exactly, pointed at a value instead of a form.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -657,6 +656,8 @@ internal fun SourceControls(
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
     onPickImage: () -> Unit,
+    onPickAppDefault: () -> Unit,
+    onPickSolidFill: () -> Unit,
     onToggleMonochrome: () -> Unit,
     onToggleNormalize: () -> Unit,
     onPickPack: (String) -> Unit,
@@ -682,19 +683,11 @@ internal fun SourceControls(
                         // says which form of it.
                         selected = spec.source == LayerSource.AppDefault ||
                             spec.source == LayerSource.AppDefaultMonochrome,
-                        // **Which is why pressing it while it is already chosen does nothing.** Writing `AppDefault`
-                        // unconditionally would drop the monochrome refinement, and a tile that quietly resets a
-                        // control belonging to the row beneath it is the worst kind of side effect — the tile looked
-                        // selected before the press and looks selected after, so nothing on screen says what changed.
-                        // Turning monochrome off is the toggle's job, and it is one row away.
-                        onClick = {
-                            if (spec.source != LayerSource.AppDefault &&
-                                spec.source != LayerSource.AppDefaultMonochrome
-                            ) {
-                                onUpdate { it.copy(source = LayerSource.AppDefault) }
-                                onCommit()
-                            }
-                        },
+                        // **Which is also why the tile does not write a source itself.** Coming back from a pack or an
+                        // image has to land on the form the layer was left in, and only the ViewModel remembers that —
+                        // see `IconStudioViewModel.pickAppDefault`. Writing `AppDefault` here would drop the refinement
+                        // the row beneath controls, with the tile looking identical before and after the press.
+                        onClick = onPickAppDefault,
                     ) {
                         Icon(
                             imageVector = Icons.Default.Android,
@@ -753,24 +746,12 @@ internal fun SourceControls(
             }
         }
 
-        // **Says why a tile is missing**, which its absence earns: on the global foreground with no packs installed the
-        // row would otherwise be a single already-selected tile — a section that does nothing, the state this studio
-        // keeps being mistaken for broken in. See `IconStudioState.canUseFixedSource` for the rule; this is also the one
-        // place the alternative can be named at the moment it is wanted.
+        // **The global foreground's missing tiles are left unexplained**, deliberately. The copy that used to sit here
+        // named the alternative (add a custom layer) at the moment it was wanted, which is the argument for a note —
+        // but it was four lines of prose in a panel of tiles and sliders, and it appeared on the layer a user opens the
+        // global studio on, so it was the first thing on the busiest section. `IconStudioState.canUseFixedSource` is
+        // still the rule; what is gone is stating it here.
         //
-        // **The foreground is the only layer that reaches this now.** It used to fire on the global background too, and
-        // the copy said "put it under the background" because that was the background's own workaround. The background
-        // takes a color directly today, so the sentence that named its workaround would now be advice to work around
-        // nothing.
-        if (!allowsFixedSource) {
-            Text(
-                text = "A color or image here would replace every app's own artwork. " +
-                    "Add a custom layer instead — it decorates every icon rather than standing in for one.",
-                color = StudioContentColor.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-
         // **A refinement of the chosen source, not a tile of its own** — which is the whole reason it sits here rather
         // than among them. The tiles answer "whose artwork is this?" and monochrome does not change the answer: it is
         // still the app's. As a fourth tile it would read as a peer of a pack and an image, and it would appear on one
@@ -852,10 +833,10 @@ internal fun SourceControls(
         if (allowsFixedSource) {
             LabeledControl("Fill") {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ChoiceRow("Solid color", spec.source is LayerSource.SolidFill) {
-                        onUpdate { it.copy(source = LayerSource.SolidFill(FillSwatches.first())) }
-                        onCommit()
-                    }
+                    // **A command, for the "System default" tile's two reasons at once**: pressing it while a fill is
+                    // already chosen must not throw away the color underneath, and returning to a fill must land on
+                    // the color this layer last held — which only the ViewModel remembers. See `pickSolidFill`.
+                    ChoiceRow("Solid color", spec.source is LayerSource.SolidFill, onPickSolidFill)
                     // Gated with the row that chooses a fill, not shown whenever one happens to be set: a layer that
                     // may not *take* a solid color must not offer to recolor one either.
                     (spec.source as? LayerSource.SolidFill)?.let { fill ->
@@ -929,11 +910,31 @@ private fun SourceTile(
     }
 }
 
-/** The quick-pick palette behind every [ColorField] — grays plus the primaries, with the picker for the rest. */
+/**
+ * The quick-pick palette behind every [ColorField] — neutrals, then hues, with the picker for everything else.
+ *
+ * **Material 3 tonal values rather than the saturated primaries this used to hold.** Those were Material *2*'s 600
+ * level (`E53935`, `1E88E5`, `43A047`, `FDD835`) — the sRGB primaries barely darkened, which is exactly the look M3
+ * replaced: a plate that loud competes with the artwork sitting on it instead of backing it. These are **tone 40** of
+ * an M3 tonal palette, the level the `primary` role takes in a light scheme — deep enough to carry a white or
+ * monochrome glyph, low enough in chroma to read as a surface. `6750A4` is M3's own baseline primary.
+ *
+ * **They are literals because the launcher's own scheme cannot supply them, and that is a trap worth stating.**
+ * `MaterialTheme.colorScheme` here is the **monochrome** bridge (see `MorphicColors.toM3ColorScheme`), so reaching for
+ * `colorScheme.primary` to get "the M3 purple" returns gray — correctly, since our chrome is grayscale so the
+ * wallpaper and the icons carry the color.
+ *
+ * **A red among them does not breach that palette rule**, which reserves red for `error`: the rule is about *chrome*,
+ * and these are content a user paints an icon with — the same exception the backdrop effects take in carrying the
+ * wallpaper's hue.
+ *
+ * Ordered neutrals-first because the row is trimmed from the end: seven fit beside the picker, six when a "no color"
+ * swatch takes the first slot, so the last entry is the one a tint's row drops.
+ */
 private val FillSwatches = listOf(
-    0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0xFF808080.toInt(),
-    0xFFE53935.toInt(), 0xFF1E88E5.toInt(), 0xFF43A047.toInt(),
-    0xFFFDD835.toInt(), 0xFF8E24AA.toInt(),
+    0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0xFF79747E.toInt(),
+    0xFF6750A4.toInt(), 0xFF415F91.toInt(), 0xFF386A20.toInt(),
+    0xFF8F4C38.toInt(),
 )
 
 @Composable
@@ -950,7 +951,7 @@ internal fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Text(
         text = label,
         color = StudioContentColor,

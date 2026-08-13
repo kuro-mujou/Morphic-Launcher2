@@ -51,6 +51,8 @@ data class StudioActions(
     val addLayer: () -> Unit,
     val removeLayer: () -> Unit,
     val pickImage: () -> Unit,
+    val pickAppDefault: () -> Unit,
+    val pickSolidFill: () -> Unit,
     val toggleMonochrome: () -> Unit,
     val toggleNormalize: () -> Unit,
     val pickPack: (String) -> Unit,
@@ -157,6 +159,8 @@ fun StudioToolPanel(
                         // nothing; a section that only ever makes discrete edits needs both.
                         onCommit = actions.commit,
                         onPickImage = actions.pickImage,
+                        onPickAppDefault = actions.pickAppDefault,
+                        onPickSolidFill = actions.pickSolidFill,
                         onToggleMonochrome = actions.toggleMonochrome,
                         onToggleNormalize = actions.toggleNormalize,
                         onPickPack = actions.pickPack,
