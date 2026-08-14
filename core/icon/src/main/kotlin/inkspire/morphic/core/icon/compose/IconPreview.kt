@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
@@ -22,7 +21,6 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.render.IconRenderer
 import inkspire.morphic.core.model.icon.IconLayerSet
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlin.math.roundToInt
@@ -82,14 +80,14 @@ fun IconPreview(
  *
  * ## Draft first, then full — which is the throttle *and* the resolution split, in one mechanism
  *
- * Every new recipe is baked twice: once **downscaled**, immediately, and then once at full size. [collectLatest]
- * cancels an in-flight collector the moment a newer recipe arrives, so during a drag the draft keeps landing and the
- * full-size bake is cancelled before it starts — and when the finger stops, nothing newer arrives and the full-size
- * one completes and replaces it.
+ * Every new recipe is baked twice: once **downscaled**, immediately, and then once at full size. The bake runs in a
+ * `LaunchedEffect` keyed on the recipe, so a newer one cancels the older outright — during a drag the draft keeps
+ * landing and the full-size bake is cancelled before it starts, and when the finger stops nothing newer arrives and
+ * the full-size one completes and replaces it.
  *
  * **This is what "settled" actually means, rather than a proxy for it.** The plan proposed threading a
  * gesture-in-flight signal down from the studio (`onUpdate` without `onCommit`); building it showed none is needed,
- * because "no newer recipe has arrived" *is* the condition, and [collectLatest] already knows it. One mechanism
+ * because "no newer recipe has arrived" *is* the condition, and a keyed effect already knows it. One mechanism
  * decides both what to skip and what resolution to skip it at, so the two cannot disagree.
  *
  * **No timer and no queue.** A drag emits far more frames than any bake can service; conflating them is the whole
@@ -118,25 +116,32 @@ private fun BakedIconPreview(
         // Square, from the width — the same quantity every other derivation in the render package reads the box by.
         val sizePx = constraints.maxWidth
 
+        val request = Request(icon, layerSet, sizePx, customImage, packImage)
         var baked by remember { mutableStateOf<ImageBitmap?>(null) }
 
-        // Keyed on nothing that changes per recipe: the flow below is what carries those, so the collector is not
-        // restarted — restarting it would cancel the in-flight bake *and* lose the draft-then-full sequencing.
-        LaunchedEffect(renderer, customImage, packImage) {
-            snapshotFlow { Request(icon, layerSet, sizePx) }.collectLatest { request ->
-                if (request.sizePx <= 0) return@collectLatest
+        // **The request is the key, and the restart is the throttle.** `LaunchedEffect` cancels the running coroutine
+        // when its key changes, which is exactly the conflation this needs: a newer recipe kills the bake in flight
+        // and starts its own. `Request` is a data class, so a recomposition that changes nothing compares equal and
+        // nothing restarts.
+        //
+        // **This was a `snapshotFlow` + `collectLatest` and did not work**, which is worth keeping written down: that
+        // block read `layerSet` and `sizePx` as plain captured parameters, and `snapshotFlow` only re-runs its block
+        // when *snapshot state* it read is invalidated. Having read none, it emitted once and never again — so the
+        // preview baked whatever recipe was current when the icon first fell back and then sat there. The rule is
+        // that a `snapshotFlow` over captured values is a one-shot; keying an effect needs no such care.
+        LaunchedEffect(renderer, request) {
+            if (request.sizePx !in 1..MaxBakePx) return@LaunchedEffect
 
-                val draftPx = (request.sizePx * DraftScale).roundToInt().coerceAtLeast(MinDraftPx)
-                // Only worth a first pass while it is meaningfully cheaper — on a thumbnail the draft *is* the
-                // full size, and baking twice would be two bakes for one picture.
-                if (draftPx < request.sizePx) {
-                    baked = renderer.bake(request, draftPx, customImage, packImage)
-                    // The suspension point cancellation needs to be observed at: without it a newly arrived recipe
-                    // would not stop the full-size bake below from starting.
-                    yield()
-                }
-                baked = renderer.bake(request, request.sizePx, customImage, packImage)
+            val draftPx = (request.sizePx * DraftScale).roundToInt().coerceAtLeast(MinDraftPx)
+            // Only worth a first pass while it is meaningfully cheaper — on a thumbnail the draft *is* the full
+            // size, and baking twice would be two bakes for one picture.
+            if (draftPx < request.sizePx) {
+                baked = renderer.bake(request, draftPx)
+                // The suspension point cancellation is observed at: without it a newly arrived recipe would not stop
+                // the full-size bake below from starting.
+                yield()
             }
+            baked = renderer.bake(request, request.sizePx)
         }
 
         Canvas(Modifier.fillMaxSize()) {
@@ -146,23 +151,35 @@ private fun BakedIconPreview(
 }
 
 /**
- * What a bake is *of* — the three inputs that change what comes out, as one value.
+ * What a bake is *of* — everything that changes what comes out, as one value.
  *
- * A holder rather than three `snapshotFlow` reads, so the flow emits once per meaningful change instead of three
- * times per frame in which any of them moved. Equality is the point: [IconLayerSet] is a data class all the way
- * down, so a recipe that came back to a value it already had produces no new emission at all.
+ * **The two image lambdas are in here deliberately.** They are `remember`ed by the studio against the images it has
+ * decoded, so their identity changes exactly when those arrive — and a picked image whose bytes land *after* the
+ * recipe naming it would otherwise never be baked in, leaving a missing layer that nothing would ever redraw.
+ *
+ * A holder rather than several `snapshotFlow` reads, so the flow emits once per meaningful change rather than once
+ * per input that moved. Equality is the point: [IconLayerSet] is a data class all the way down, so a recipe dragged
+ * back to a value it already had produces no emission at all.
  */
-private data class Request(val icon: ParsedIcon, val layerSet: IconLayerSet, val sizePx: Int)
+private data class Request(
+    val icon: ParsedIcon,
+    val layerSet: IconLayerSet,
+    val sizePx: Int,
+    val customImage: (path: String) -> Drawable?,
+    val packImage: (packPackage: String, drawableName: String?) -> Drawable?,
+)
 
 /** Composites [request] at [sizePx], off the main thread. */
-private suspend fun IconRenderer.bake(
-    request: Request,
-    sizePx: Int,
-    customImage: (path: String) -> Drawable?,
-    packImage: (packPackage: String, drawableName: String?) -> Drawable?,
-): ImageBitmap = withContext(Dispatchers.Default) {
-    render(request.icon, request.layerSet, sizePx, packImage, customImage).asImageBitmap()
-}
+private suspend fun IconRenderer.bake(request: Request, sizePx: Int): ImageBitmap =
+    withContext(Dispatchers.Default) {
+        render(
+            icon = request.icon,
+            layerSet = request.layerSet,
+            sizePx = sizePx,
+            packImage = request.packImage,
+            customImage = request.customImage,
+        ).asImageBitmap()
+    }
 
 /**
  * Draws the baked bitmap over the whole node, scaled if it is a draft.
@@ -191,3 +208,13 @@ private const val DraftScale = 0.25f
 
 /** Below this a draft has no detail left to judge, so there is nothing to gain by going smaller. */
 private const val MinDraftPx = 48
+
+/**
+ * A bound on what will be allocated, against an unbounded constraint.
+ *
+ * `BoxWithConstraints` reports `Constraints.Infinity` for a width nothing has bounded — inside a horizontal
+ * scroller, say — and a bitmap of that side is an immediate out-of-memory rather than a slow preview. No studio
+ * surface is unbounded today; this is the guard for the one that is not, since the failure is fatal and silent
+ * about its cause.
+ */
+private const val MaxBakePx = 4096
