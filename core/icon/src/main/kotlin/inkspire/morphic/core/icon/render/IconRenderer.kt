@@ -15,6 +15,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.icon.IconShape
+import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
@@ -132,23 +133,30 @@ class IconRenderer(
         // so it costs one bitmap. Keeping that visible here is the point: it is the honest cost of the pipeline,
         // and the shape every effect added later has to declare itself against.
         for (effect in layer.spec.activeEffects) {
-            when (effect) {
-                is LayerEffect.Gradient -> applyGradient(canvas, effect, sizePx)
-
-                is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)?.let { matrix ->
-                    val filtered = createBitmap(sizePx, sizePx)
-                    Canvas(filtered).drawBitmap(
-                        bitmap,
-                        0f,
-                        0f,
-                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
-                        },
-                    )
-                    bitmap.recycle()
-                    bitmap = filtered
-                    canvas = Canvas(bitmap)
+            val matrix = when (effect) {
+                is LayerEffect.Gradient -> {
+                    applyGradient(canvas, effect, sizePx)
+                    null
                 }
+
+                is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
+                // Null for an id this build does not know, which then draws nothing rather than failing.
+                is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
+            }
+
+            if (matrix != null) {
+                val filtered = createBitmap(sizePx, sizePx)
+                Canvas(filtered).drawBitmap(
+                    bitmap,
+                    0f,
+                    0f,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
+                    },
+                )
+                bitmap.recycle()
+                bitmap = filtered
+                canvas = Canvas(bitmap)
             }
         }
         return bitmap

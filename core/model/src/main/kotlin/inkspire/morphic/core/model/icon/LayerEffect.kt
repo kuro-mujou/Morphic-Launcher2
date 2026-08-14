@@ -148,4 +148,30 @@ sealed interface LayerEffect {
         /** A shader drawn source-atop, which both paths can do at any API. */
         override val drawsLive: Boolean get() = true
     }
+
+    /**
+     * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
+     * this is a fixed vocabulary rather than curated content.
+     *
+     * **A whole matrix rather than the four numbers [Color] exposes**, which is the point of having both: the
+     * sliders are for adjusting *this* icon, a filter is a look somebody authored that no combination of hue,
+     * saturation, brightness and tint can reach — the channel mixing a sepia needs, or the lifted blacks of a matte
+     * grade. They compose, and their order in the list decides which acts on which.
+     *
+     * @property filter the id. An unknown one resolves to no matrix and the effect draws nothing, so a recipe from
+     *   a later build degrades rather than failing.
+     */
+    @Serializable
+    @SerialName("filter")
+    data class Filter(
+        val filter: IconFilter,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** No id, nothing to look up. An id this build does not know is caught by the renderer, not here. */
+        override val isIdentity: Boolean get() = filter.id.isBlank()
+
+        /** A colour matrix, which both paths already share through `LayerFilter`'s own machinery. */
+        override val drawsLive: Boolean get() = true
+    }
 }

@@ -2,7 +2,11 @@ package inkspire.morphic.feature.settings.iconstudio
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,13 +43,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
+import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconFilter
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.TintMode
@@ -81,7 +92,17 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
 
     /** The two-stop overlay laid over the artwork. */
     GRADIENT("Gradient", Icons.Default.Gradient),
+
+    /** One of the built-in colour looks — see `IconFilters`. */
+    FILTER("Filter", Icons.Default.PhotoFilter),
     ;
+
+    /**
+     * Whether this entry configures a `LayerEffect` rather than a spec field — which is exactly the entries that
+     * get a switch, since `enabled` is the effect's. [OPACITY] and [BLEND] are always in play and their "off" is
+     * their default value.
+     */
+    val ownsEffect: Boolean get() = this != OPACITY && this != BLEND
 
     /**
      * The stored effect this entry owns, or null when it configures spec fields instead — or when the effect has
@@ -94,6 +115,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         OPACITY, BLEND -> null
         COLOR -> spec.effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
         GRADIENT -> spec.effects.filterIsInstance<LayerEffect.Gradient>().firstOrNull()
+        FILTER -> spec.effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
     /**
@@ -115,6 +137,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         // which means an effect switched off reads as inactive, and correctly so: it is not doing anything.
         COLOR -> spec.activeEffects.any { it is LayerEffect.Color }
         GRADIENT -> spec.activeEffects.any { it is LayerEffect.Gradient }
+        FILTER -> spec.activeEffects.any { it is LayerEffect.Filter }
     }
 }
 
@@ -175,6 +198,7 @@ internal fun EffectsControls(
                 EffectSlice.BLEND -> BlendControls(spec, onUpdate, onCommit)
                 EffectSlice.COLOR -> ColorControls(spec, onUpdate, onCommit)
                 EffectSlice.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
+                EffectSlice.FILTER -> FilterControls(spec, onUpdate, onCommit)
             }
         }
     }
@@ -342,7 +366,7 @@ private fun EffectHeader(
         )
 
         // Only where there is a `LayerEffect` to carry the flag — see [EffectSlice].
-        if (slice == EffectSlice.COLOR || slice == EffectSlice.GRADIENT) {
+        if (slice.ownsEffect) {
             val stored = slice.storedEffect(spec)
             MorphicSwitch(
                 checked = stored?.enabled == true,
@@ -352,6 +376,7 @@ private fun EffectHeader(
                     onUpdate { current ->
                         when (slice) {
                             EffectSlice.COLOR -> current.color?.let { current.withColor(it.copy(enabled = on)) }
+                            EffectSlice.FILTER -> current.filter?.let { current.withFilter(it.copy(enabled = on)) }
                             else -> current.gradient?.let { current.withGradient(it.copy(enabled = on)) }
                         } ?: current
                     }
@@ -490,6 +515,140 @@ private fun ColorControls(
         }
     }
 }
+
+/**
+ * The built-in colour looks: a category to narrow by, then the looks in it.
+ *
+ * **Two levels, because a flat list of seventeen named swatches is a wall.** The category row is presentation and
+ * nothing more — a stored recipe holds an id and has never heard of a category — so regrouping the table later
+ * costs nothing and breaks no saved icon.
+ *
+ * **A swatch shows the look, not the icon.** Every other chooser in this studio draws its own subject, and a
+ * filter's subject is what it does to colour — so each tile is a fixed reference gradient with that filter's matrix
+ * over it. Previewing on the *icon* would have been the obvious alternative and is worse twice over: seventeen live
+ * previews of the real stack is seventeen bakes, and an icon that happens to be black tells you nothing about a
+ * warm grade. The reference strip is the same for every tile, so the tiles differ only by what the filter did.
+ *
+ * **"None" is the first tile rather than a clear button**, the shape the shape chooser settled on: unfiltered is a
+ * choice among the same set — the one every layer starts on — not an escape from having chosen.
+ */
+@Composable
+private fun FilterControls(
+    spec: IconLayerSpec,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val selected = spec.filter?.filter
+    // Opens on the selected filter's own category, so returning to the panel lands where the look came from
+    // rather than at the top — `ca40030`'s rule, one control over.
+    var category by rememberSaveable {
+        mutableStateOf(selected?.let { IconFilters.entryOrNull(it)?.category } ?: IconFilters.Category.entries.first())
+    }
+
+    fun choose(filter: IconFilter?) {
+        onUpdate { it.withFilter(filter?.let { id -> LayerEffect.Filter(id) }) }
+        onCommit()
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LabeledControl("Style") {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                IconFilters.Category.entries.forEach { entry ->
+                    ChoiceChip(label = entry.label, selected = category == entry) { category = entry }
+                }
+            }
+        }
+
+        LabeledControl(category.label) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(FilterTileGap),
+            ) {
+                FilterTile(
+                    label = "None",
+                    matrix = null,
+                    selected = selected == null,
+                    onClick = { choose(null) },
+                )
+                IconFilters.inCategory(category).forEach { entry ->
+                    FilterTile(
+                        label = entry.label,
+                        matrix = entry.matrix,
+                        selected = selected == entry.filter,
+                        onClick = { choose(entry.filter) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One look: the reference gradient under this filter's matrix, named underneath.
+ *
+ * A null [matrix] is the "None" tile and draws the reference untouched, which is what makes it comparable — the
+ * other tiles are that same strip, changed.
+ */
+@Composable
+private fun FilterTile(label: String, matrix: FloatArray?, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(FilterTileWidth)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(FilterSwatchHeight)
+                .clip(RoundedCornerShape(8.dp))
+                .then(
+                    if (selected) {
+                        Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(8.dp))
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            drawRect(
+                brush = Brush.linearGradient(FilterReferenceStops),
+                colorFilter = matrix?.let { ColorFilter.colorMatrix(ColorMatrix(it.copyOf())) },
+            )
+        }
+        Text(
+            text = label,
+            color = StudioContentColor.copy(alpha = if (selected) 1f else 0.7f),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+        )
+    }
+}
+
+/**
+ * What every swatch is a picture of.
+ *
+ * Chosen to span the axes a colour matrix moves things along — a warm end, a neutral middle and a cool end, with
+ * enough saturation to show a desaturating look and enough range to show a contrast one. A single flat colour
+ * would leave half the table looking identical.
+ */
+private val FilterReferenceStops = listOf(
+    Color(0xFFFFB25E),
+    Color(0xFFFF5F6D),
+    Color(0xFF7A5CFF),
+    Color(0xFF2ED8C3),
+)
+
+private val FilterTileWidth = 72.dp
+private val FilterSwatchHeight = 48.dp
+private val FilterTileGap = 8.dp
 
 /**
  * The gradient overlay's two stops, its direction and how strongly it is laid on.

@@ -22,9 +22,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.core.graphics.withMatrix
+import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
@@ -51,24 +51,27 @@ import inkspire.morphic.core.model.icon.LayerEffect
  * ## Staying honest with the baked path
  *
  * Two renderers is a real hazard — an icon that looks right while being edited and wrong on every surface is a bug
- * the editor structurally cannot show you. Five things make the paths agree, and each is a shared *thing* rather
+ * the editor structurally cannot show you. Six things make the paths agree, and each is a shared *thing* rather
  * than a shared intention:
  * - [IconLayerResolver] decides which layers draw and what content each one means, for both.
  * - [LayerTransform] does the offset/zoom/rotation arithmetic, for both.
  * - [LayerFilter] does the color-matrix arithmetic, for both — and shares the *same shape*, since Android's and
  *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
+ * - [IconFilters] is the table of built-in looks both paths resolve an id through, so a filter is one authored
+ *   matrix rather than two that drifted. It composes from the same builders `LayerFilter` does.
  * - [LayerGradient] decides which way an angle runs, for both.
  * - [ShapeMask] decides where the silhouette sits, for both. The mask itself is built from the **same** vector
  *   drawable via [IconShapes] and applied the same way — as a destination-in mask over the finished layer — but
  *   *where* it lands stopped being "the box" the moment a shape could be anchored to the artwork, and that is
- *   arithmetic, so it went the way the other four did rather than being written twice.
+ *   arithmetic, so it went the way the others did rather than being written twice.
  *
  * What is *not* shared is the drawing API (Android's `Canvas` there, [DrawScope] here). That is unavoidable, and
- * it is exactly why the five above are.
+ * it is exactly why the six above are.
  *
- * **The per-layer order is content → shape mask → gradient → composite**, and it is the same on both sides for
- * different-looking reasons: the bake gets it from statement order inside one function, and this path gets it from
- * which node carries which modifier. Worth checking against `IconRenderer` if either is touched.
+ * **The per-layer order is content → shape mask → effects in list order → composite**, and it is the same on both
+ * sides for different-looking reasons: the bake gets it from statement order inside one loop, and this path gets it
+ * from folding the **reversed** list into nested modifiers. Worth checking against `IconRenderer` if either is
+ * touched — see [layerEffects] for why the reversal is the subtle half.
  *
  * A **shadow** effect is deliberately absent: it is the one effect that is not additive here, because it derives
  * from the layer's finished silhouette and Compose's only blur (`RenderEffect`) is API 31+ against a `minSdk` of
@@ -199,8 +202,17 @@ private fun Modifier.layerEffects(spec: IconLayerSpec): Modifier {
 /** One effect as a draw modifier. Exhaustive, so a new variant cannot be added without a live answer or a bake. */
 @Composable
 private fun effectModifier(effect: LayerEffect): Modifier = when (effect) {
-    is LayerEffect.Color -> {
-        val matrix = remember(effect) { LayerFilter.colorMatrixOf(effect) }
+    // Two effects, one drawing: both resolve to a colour matrix over everything drawn so far, and only where the
+    // matrix comes from differs — composed from four sliders, or looked up by id.
+    is LayerEffect.Color, is LayerEffect.Filter -> {
+        val matrix = remember(effect) {
+            when (effect) {
+                is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
+                // Null for an id this build does not know, which then draws nothing rather than failing.
+                is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
+                else -> null
+            }
+        }
         if (matrix == null) {
             Modifier
         } else {

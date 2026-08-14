@@ -106,4 +106,14 @@ data class IconLayerSpec(
         val rest = effects.filterNot { it is LayerEffect.Gradient }
         return copy(effects = if (gradient == null || gradient.isIdentity) rest else rest + gradient)
     }
+
+    /** The layer's colour-look filter, or null when it has none. */
+    val filter: LayerEffect.Filter?
+        get() = effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()?.takeIf { !it.isIdentity }
+
+    /** Replaces (or clears) this layer's filter, leaving every other effect in place and in order. */
+    fun withFilter(filter: LayerEffect.Filter?): IconLayerSpec {
+        val rest = effects.filterNot { it is LayerEffect.Filter }
+        return copy(effects = if (filter == null || filter.isIdentity) rest else rest + filter)
+    }
 }
