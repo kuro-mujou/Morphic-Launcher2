@@ -51,7 +51,43 @@ data class IconLayerSpec(
     val effects: List<LayerEffect> = emptyList(),
 ) {
 
-    /** The layer's color effect, or null when it has none. At most one is meaningful — see [LayerEffect.Color]. */
+    /**
+     * The effects that actually draw, **in the order they are applied** — which is the order of [effects] itself.
+     *
+     * **This is the layer's pipeline, and the list order being real is new.** Both renderers used to read
+     * [color] and [gradient] by name and apply them in a sequence they each hardcoded, so [effects] was a bag whose
+     * order meant nothing. That is survivable at two effects and wrong at thirteen: a pattern over a glow is not a
+     * glow over a pattern, so the order has to be the user's rather than the renderer's.
+     *
+     * **One consequence worth knowing.** The hardcoded sequence applied the gradient and *then* the color matrix,
+     * because the matrix rode on the paint that joined the layer to the stack. A stored recipe whose list happens to
+     * read `[Color, Gradient]` — which is what setting a tint before a gradient produced — now renders in that order
+     * instead, so its tint no longer recolors its gradient. Nothing has shipped, and the alternative is a canonical
+     * order that no reorder control could ever override.
+     *
+     * Filtering here rather than in each renderer is what keeps "disabled" and "does nothing" from being answered
+     * twice: [LayerEffect.enabled] is the user's switch, [LayerEffect.isIdentity] is the effect saying it would
+     * paint nothing.
+     */
+    val activeEffects: List<LayerEffect>
+        get() = effects.filter { it.enabled && !it.isIdentity }
+
+    /**
+     * Whether the **live** render path can draw every effect on this layer, or whether the studio must preview it
+     * from the bake. False if any single active effect says so — an effect that cannot be drawn cannot be skipped,
+     * since a preview missing one effect is a preview that lies.
+     */
+    val drawsLive: Boolean
+        get() = activeEffects.all { it.drawsLive }
+
+    /**
+     * The layer's color effect, or null when it has none. At most one is meaningful — see [LayerEffect.Color].
+     *
+     * **These named accessors are the *editor's* view, and [activeEffects] is the *renderers'*.** The split is
+     * deliberate now that the two can disagree: this one deliberately ignores [LayerEffect.enabled], because a
+     * panel has to show you the sliders of an effect you switched off — that is what switching off rather than
+     * deleting is for. Anything deciding what to *draw* must read [activeEffects] instead.
+     */
     val color: LayerEffect.Color?
         get() = effects.filterIsInstance<LayerEffect.Color>().firstOrNull()?.takeIf { !it.isIdentity }
 

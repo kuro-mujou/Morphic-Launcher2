@@ -53,6 +53,40 @@ enum class TintMode {
 sealed interface LayerEffect {
 
     /**
+     * Whether this effect draws at all. **Off is not the same as absent**, which is the whole reason it exists: an
+     * effect with five parameters and a color is something a user tunes and then wants to *compare against*, and
+     * removing it from the list to switch it off would throw that tuning away. Absent from the list means never
+     * configured; present and `false` means set up and silenced.
+     *
+     * Persisted, and defaulted true — with `encodeDefaults = false` on both icon stores, an effect nobody switched
+     * off costs nothing on disk and every recipe written before this existed reads back unchanged.
+     */
+    val enabled: Boolean
+
+    /**
+     * True when this would not change a single pixel, so both renderers can skip it and the editor can tell a
+     * configured effect from a default one.
+     *
+     * On the interface rather than per variant because [IconLayerSpec.activeEffects] filters the whole list at
+     * once — before this it was two identically-named properties that no shared code could reach.
+     */
+    val isIdentity: Boolean
+
+    /**
+     * Whether the **live** render path can draw this effect, or whether the studio has to preview the layer from
+     * its bake instead.
+     *
+     * **Not persisted** — it is a property of what we can implement, not of the icon — which is why it is a body
+     * `get()` on each variant rather than a constructor parameter. The bake has no such flag because it has no
+     * such limit: it owns a software bitmap, so a blur is a `BlurMaskFilter` and a displacement is arithmetic over
+     * an `IntArray`, at every API level.
+     *
+     * Declared here so that adding an effect *forces* the question to be answered once, in the model, instead of
+     * each renderer guessing. See `docs/ICON_EFFECTS_PLAN.md` §2.
+     */
+    val drawsLive: Boolean
+
+    /**
      * Recoloring, as one color matrix: hue rotation, then saturation, then brightness, then an optional [tintArgb].
      *
      * One variant rather than four because they compose into a single matrix and are applied in one pass — splitting
@@ -79,11 +113,14 @@ sealed interface LayerEffect {
         val brightness: Float = 1f,
         val hueDegrees: Float = 0f,
         val tintMode: TintMode = TintMode.MULTIPLY,
+        override val enabled: Boolean = true,
     ) : LayerEffect {
 
-        /** True when this would not change a single pixel, so the renderers can skip building a filter. */
-        val isIdentity: Boolean
+        override val isIdentity: Boolean
             get() = tintArgb == null && saturation == 1f && brightness == 1f && hueDegrees == 0f
+
+        /** A color matrix, which both paths already share through `LayerFilter`. */
+        override val drawsLive: Boolean get() = true
     }
 
     /**
@@ -102,9 +139,13 @@ sealed interface LayerEffect {
         val endArgb: Int = 0xFF000000.toInt(),
         val angleDegrees: Float = 0f,
         val strength: Float = 1f,
+        override val enabled: Boolean = true,
     ) : LayerEffect {
 
-        /** True when it would paint nothing, which is the only way a gradient is a no-op. */
-        val isIdentity: Boolean get() = strength <= 0f
+        /** Painting nothing is the only way a gradient is a no-op. */
+        override val isIdentity: Boolean get() = strength <= 0f
+
+        /** A shader drawn source-atop, which both paths can do at any API. */
+        override val drawsLive: Boolean get() = true
     }
 }

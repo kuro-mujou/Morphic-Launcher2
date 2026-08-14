@@ -82,23 +82,35 @@ class IconRenderer(
         return output
     }
 
-    /** Alpha, blend mode and color matrix for one layer, or `null` when it composites plainly. */
+    /**
+     * Alpha and blend mode for one layer, or `null` when it composites plainly.
+     *
+     * **The color matrix used to ride here and now does not.** Recoloring is an effect, so it belongs in the layer's
+     * own pipeline where its position relative to the other effects is the user's; opacity and blend stay because
+     * they describe how the finished layer *joins the stack*, which is not something an effect can be ordered
+     * against. Moving it changes nothing on a layer that only recolors — a color filter is per-pixel, so filtering
+     * into the buffer and then compositing gives the same pixels as compositing through the filter.
+     */
     private fun compositePaint(spec: IconLayerSpec): Paint? {
-        val matrix = LayerFilter.colorMatrixOf(spec.color)
         val mode = spec.blend.porterDuff()
-        if (spec.opacity == 1f && mode == null && matrix == null) return null
+        if (spec.opacity == 1f && mode == null) return null
 
         return Paint(Paint.ANTI_ALIAS_FLAG).apply {
             alpha = (spec.opacity.coerceIn(0f, 1f) * 255).toInt()
             mode?.let { xfermode = PorterDuffXfermode(it) }
-            matrix?.let { colorFilter = ColorMatrixColorFilter(ColorMatrix(it)) }
         }
     }
 
-    /** Draws one resolved layer (content + transform, then its shape mask) into its own bitmap. */
+    /**
+     * Draws one resolved layer into its own bitmap: content, transform, shape mask, then its effects **in order**.
+     *
+     * The order is `IconLayerSpec.activeEffects`' order, which is the list's, which is the user's. The live path
+     * expresses the same sequence by nesting modifiers in reverse — see `IconLayerStack`, and expect to check both
+     * if either is touched.
+     */
     private fun renderLayer(layer: ResolvedLayer, sizePx: Int): Bitmap {
-        val bitmap = createBitmap(sizePx, sizePx)
-        val canvas = Canvas(bitmap)
+        var bitmap = createBitmap(sizePx, sizePx)
+        var canvas = Canvas(bitmap)
 
         canvas.withMatrix(LayerTransform.of(layer.spec, sizePx).toMatrix(sizePx)) {
             drawContent(canvas, layer.content, sizePx)
@@ -110,8 +122,35 @@ class IconRenderer(
         layer.spec.shape?.let {
             applyShapeMask(canvas, it, sizePx, ShapeMask.matrixOf(layer.spec, layer.content, sizePx))
         }
-        // After the mask, so a gradient colors the shaped silhouette rather than the square it was cut from.
-        layer.spec.gradient?.let { applyGradient(canvas, it, sizePx) }
+
+        // **Effects come after the mask**, so one colors or covers the shaped silhouette rather than the square it
+        // was cut from — which is what made a gradient an overlay rather than a rectangle, and holds for every
+        // effect that follows it.
+        //
+        // **Two kinds, and the difference is a buffer.** An *overlay* paints onto what is already there and needs
+        // nothing; a *filter* transforms pixels that have already been drawn, which a canvas cannot do in place —
+        // so it costs one bitmap. Keeping that visible here is the point: it is the honest cost of the pipeline,
+        // and the shape every effect added later has to declare itself against.
+        for (effect in layer.spec.activeEffects) {
+            when (effect) {
+                is LayerEffect.Gradient -> applyGradient(canvas, effect, sizePx)
+
+                is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)?.let { matrix ->
+                    val filtered = createBitmap(sizePx, sizePx)
+                    Canvas(filtered).drawBitmap(
+                        bitmap,
+                        0f,
+                        0f,
+                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
+                        },
+                    )
+                    bitmap.recycle()
+                    bitmap = filtered
+                    canvas = Canvas(bitmap)
+                }
+            }
+        }
         return bitmap
     }
 

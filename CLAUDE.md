@@ -311,11 +311,37 @@ agreement is made of shared *things* rather than shared intentions: `ParsedIconL
 color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`),
 `LayerGradient` (which way an angle runs) and `ShapeMask` (where the silhouette sits — which stopped being "the
 box" the moment `ShapeAnchor` existed, and so became arithmetic rather than a constant). Only the drawing API
-differs, which is unavoidable and is exactly why those six exist. The per-layer order is **content → shape mask → gradient → composite**, the same on both
-sides for different-looking reasons — statement order in one, modifier nesting in the other. Two consequences:
-the live stack must composite **offscreen** (or a `MULTIPLY` on the bottom layer blends against the studio canvas
-rather than against nothing), and the `IconLayers` dev-harness playground draws one set both ways side by side,
-because comparing pixels needs instrumentation this project has no setup for.
+differs, which is unavoidable and is exactly why those six exist. The per-layer order is **content → shape mask →
+effects, in list order → composite**, the same on both sides for different-looking reasons — statement order in
+one, modifier nesting in the other. Two consequences: the live stack must composite **offscreen** (or a `MULTIPLY`
+on the bottom layer blends against the studio canvas rather than against nothing), and the `IconLayers` dev-harness
+playground draws one set both ways side by side, because comparing pixels needs instrumentation this project has no
+setup for.
+- **`effects` is a pipeline now, not a bag, and that is what makes room for more than two.** Both renderers used to
+  read `spec.color` and `spec.gradient` *by name* and apply them in a sequence each hardcoded — gradient into the
+  layer, color matrix onto the paint that joined it to the stack — so the list's order meant nothing. They now walk
+  `IconLayerSpec.activeEffects` front to back. **The live path folds the reversed list**, because a modifier written
+  earlier *wraps* the ones after it, so the first effect has to end up innermost; getting that backwards still draws
+  an icon, just a differently-colored one, on the one axis neither renderer can check against the other.
+  `LayerEffectPipelineTest` pins the order and the filtering.
+  - **What stayed on the composite is what an effect cannot be ordered against**: opacity and blend, which describe
+    how the finished layer *meets the layers beneath it*. Moving the color matrix off it changes nothing for a layer
+    that only recolors — a color filter is per-pixel, so filtering into the buffer and then compositing is the same
+    pixels as compositing through the filter.
+  - **Two kinds of effect, and the difference is a buffer.** An *overlay* (gradient) paints onto what is there; a
+    *filter* (color) transforms pixels already drawn, which a canvas cannot do in place, so it costs one bitmap in
+    the bake and one `saveLayer` in the live path. Every effect added has to say which it is.
+  - **`enabled` is the user's switch, `isIdentity` the effect's own "I would paint nothing", and both are filtered
+    in `activeEffects`** so no renderer asks either question twice. `enabled` is persisted and defaults true, so with
+    `encodeDefaults = false` an effect nobody switched off costs nothing on disk. **`drawsLive` is not persisted** —
+    it says whether the *live* path can draw the effect at all, and a layer with any effect that cannot falls back to
+    previewing from its bake (the bake has no such limit at any API). The named `spec.color`/`spec.gradient`
+    accessors remain the **editor's** view and deliberately ignore `enabled`, since a panel must show the sliders of
+    an effect you switched off.
+  - **One behavior change, accepted:** a stored recipe whose list reads `[Color, Gradient]` — what setting a tint
+    before a gradient produced — now renders in that order, so its tint no longer recolors its gradient. Nothing has
+    shipped, and the alternative is a canonical order no reorder control could override. Full plan for the thirteen
+    effects this unblocks: [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
 
 **Shadows are deferred, and they are the one effect that is not additive.** A shadow derives from the layer's
 *finished* silhouette — after transform and after the mask, since an outer shadow must escape the shape — which

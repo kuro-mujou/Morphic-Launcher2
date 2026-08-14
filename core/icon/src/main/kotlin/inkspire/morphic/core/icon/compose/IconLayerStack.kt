@@ -107,7 +107,7 @@ fun IconLayerStack(
             // is **outermost**, so it applies to the finished layer and blends against the layers already drawn;
             // the mask sits inside it but **outside the transform**, so a shape stays put in the box while the
             // content moves under it. The baked path gets the same ordering from its draw order.
-            Box(Modifier.fillMaxSize().layerComposite(layer.spec).shapeMask(layer)) {
+            Box(Modifier.fillMaxSize().layerComposite(layer.spec).layerEffects(layer.spec).shapeMask(layer)) {
                 Canvas(
                     Modifier
                         .fillMaxSize()
@@ -145,35 +145,85 @@ private fun DrawScope.drawLayerContent(content: ParsedLayer) {
 }
 
 /**
- * Applies a layer's opacity, blend mode and color matrix as it joins the stack — the live twin of
- * `IconRenderer.compositePaint`, sharing [LayerFilter]'s arithmetic so a tint cannot come out differently here.
+ * Applies a layer's opacity and blend mode as it joins the stack — the live twin of `IconRenderer.compositePaint`.
  *
- * Through `saveLayer` rather than `graphicsLayer`, because `GraphicsLayerScope` has an `alpha` but no blend mode
- * and no color filter; capturing the node into its own buffer and compositing *that* with one paint is the only
- * way to get all three, and it is the same technique [shapeMask] needs one level in.
+ * Through `saveLayer` rather than `graphicsLayer`, because `GraphicsLayerScope` has an `alpha` but no blend mode;
+ * capturing the node into its own buffer and compositing *that* with one paint is the only way to get both, and it
+ * is the same technique [shapeMask] and [layerEffects] each need one level in.
+ *
+ * **The color matrix and the gradient used to live here and are now effects**, so that where they sit relative to
+ * each other is the user's rather than this function's. What is left is exactly what an effect cannot be ordered
+ * against: how the finished layer meets the layers beneath it.
  *
  * A layer that composites plainly gets no modifier at all, which is the common case — an unedited icon.
  */
 @Composable
 private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
-    val matrix = remember(spec.color) { LayerFilter.colorMatrixOf(spec.color) }
     val blend = spec.blend.composeBlendMode()
-    val gradient = spec.gradient
-    if (spec.opacity == 1f && blend == null && matrix == null && gradient == null) return this
+    if (spec.opacity == 1f && blend == null) return this
 
     return this.drawWithContent {
         drawIntoCanvas { canvas ->
             val paint = Paint().apply {
                 alpha = spec.opacity.coerceIn(0f, 1f)
                 blend?.let { blendMode = it }
-                matrix?.let { colorFilter = ColorFilter.colorMatrix(ColorMatrix(it)) }
             }
             canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
             drawContent()
-            // Inside the layer, so source-atop has the layer's own pixels as its destination — which is what makes
-            // the gradient color the artwork instead of covering the icon with a rectangle. The same isolation the
-            // saveLayer already provides for the blend mode, doing a second job.
-            gradient?.let { drawGradientOverlay(it) }
+            canvas.restore()
+        }
+    }
+}
+
+/**
+ * The layer's effect pipeline — the live twin of the `for` loop in `IconRenderer.renderLayer`.
+ *
+ * **Built in reverse, and that is the whole subtlety.** A modifier written earlier in a chain *wraps* the ones
+ * after it, so it draws around them — the outermost modifier is the last thing applied. The bake applies
+ * `activeEffects` front to back as plain statements; to get the same sequence here the first effect has to end up
+ * **innermost**, which is what folding the reversed list produces. Get it backwards and the icon is still an icon,
+ * just a differently-colored one, on the one axis neither renderer can check against the other.
+ *
+ * Each effect takes its own `saveLayer` rather than sharing one. That is not tidiness: a filter has to see the
+ * pixels every earlier effect produced, and source-atop has to have them as its destination, so the isolation is
+ * what makes the pipeline a pipeline instead of four things painted on the same sheet.
+ */
+@Composable
+private fun Modifier.layerEffects(spec: IconLayerSpec): Modifier {
+    val effects = spec.activeEffects
+    if (effects.isEmpty()) return this
+
+    return effects.reversed().fold(this) { chain, effect -> chain.then(effectModifier(effect)) }
+}
+
+/** One effect as a draw modifier. Exhaustive, so a new variant cannot be added without a live answer or a bake. */
+@Composable
+private fun effectModifier(effect: LayerEffect): Modifier = when (effect) {
+    is LayerEffect.Color -> {
+        val matrix = remember(effect) { LayerFilter.colorMatrixOf(effect) }
+        if (matrix == null) {
+            Modifier
+        } else {
+            Modifier.drawWithContent {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(
+                        bounds = Rect(0f, 0f, size.width, size.height),
+                        paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(matrix)) },
+                    )
+                    drawContent()
+                    canvas.restore()
+                }
+            }
+        }
+    }
+
+    is LayerEffect.Gradient -> Modifier.drawWithContent {
+        drawIntoCanvas { canvas ->
+            // Its own layer, so source-atop's destination is what the pipeline has drawn so far and nothing else —
+            // which is what makes the gradient color the artwork instead of covering the icon with a rectangle.
+            canvas.saveLayer(bounds = Rect(0f, 0f, size.width, size.height), paint = Paint())
+            drawContent()
+            drawGradientOverlay(effect)
             canvas.restore()
         }
     }
