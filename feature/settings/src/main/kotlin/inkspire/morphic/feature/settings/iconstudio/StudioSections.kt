@@ -74,20 +74,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
-import inkspire.morphic.core.model.icon.LayerBlend
-import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.ShapeAnchor
-import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.data.icons.InstalledIconPack
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -303,37 +299,6 @@ private fun LayerRow(
             )
         }
     }
-}
-
-/**
- * How the layer reads: opacity and blend, recoloring, and the gradient overlay.
- *
- * **One section rather than the two tabs this used to be**, because the model already groups them — `LayerEffect.Color`
- * and `LayerEffect.Gradient` are variants of one sealed list, and the deferred shadow will be a third. Splitting them
- * across bar entries would mean the rail grew every time that list did. See [StudioTool.EFFECTS].
- *
- * The gradient keeps a heading of its own inside the section: it is four controls that only make sense read together,
- * where the rest are independent.
- *
- * **No monochrome toggle here, deliberately.** Draining a layer of color is what Saturation does, and a toggle beside
- * it would be a lossy alias for it — switching one off has to invent a value to return to, discarding whatever the
- * user had. The word belongs to the *source* that swaps in the app's themed artwork, which is a different mechanism
- * with a different result; see [SourceControls].
- */
-@Composable
-internal fun EffectsControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
-    onCommit: () -> Unit,
-) {
-    ColorControls(spec, onUpdate, onCommit)
-    Text(
-        text = "Gradient",
-        color = StudioContentColor,
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.padding(top = 4.dp),
-    )
-    GradientControls(spec, onUpdate, onCommit)
 }
 
 /**
@@ -574,143 +539,6 @@ private val PadSide = 140.dp
 private val NudgeSlot = 40.dp
 
 /**
- * How the layer joins the stack (opacity, blend) and how it is recolored (tint, saturation, brightness, hue).
- *
- * **The recoloring controls write one `LayerEffect.Color`, never four**, via `IconLayerSpec.withColor` — which is
- * why an all-default effect is *removed* from the list rather than stored as a row of 1s. Four separate effects
- * would mean their order in the list silently changed the result.
- */
-@Composable
-private fun ColorControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
-    onCommit: () -> Unit,
-) {
-    val color = spec.color ?: LayerEffect.Color()
-
-    LabeledControl("Opacity  ${"%.2f".format(spec.opacity)}") {
-        MorphicSlider(
-            value = spec.opacity,
-            onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
-            valueRange = 0f..1f,
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Blend") {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            LayerBlend.entries.toList().chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { blend ->
-                        ChoiceChip(
-                            label = blend.name.lowercase(),
-                            selected = spec.blend == blend,
-                            modifier = Modifier.fillMaxWidth(1f / row.size),
-                        ) { onUpdate { it.copy(blend = blend) } }
-                    }
-                }
-            }
-        }
-    }
-    LabeledControl("Saturation  ${"%.2f".format(color.saturation)}") {
-        MorphicSlider(
-            value = color.saturation,
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
-            valueRange = 0f..2f,
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Brightness  ${"%.2f".format(color.brightness)}") {
-        MorphicSlider(
-            value = color.brightness,
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
-            valueRange = 0.2f..2f,
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Hue  ${"%.0f".format(color.hueDegrees)}°") {
-        MorphicSlider(
-            value = color.hueDegrees,
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
-            valueRange = 0f..360f,
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Tint") {
-        // Clearable because a tint is the one recoloring that cannot be undone by returning a slider to its
-        // middle — without a way off, picking one would be a one-way door.
-        ClearableColorField(
-            argb = color.tintArgb,
-            onChange = { argb -> onUpdate { it.withColor(color.copy(tintArgb = argb)) } },
-        )
-    }
-
-    // **Only once a tint exists**, which is the difference between a mode and a dead control: with no tint set there
-    // is nothing for either option to do, and the pair would be two buttons that change nothing.
-    //
-    // *Shaded* keeps the layer's own light and dark and pushes it toward the color; *Solid* keeps only the shape and
-    // fills it flat. Solid is what makes app-shipped themed icons agree with each other — they arrive black, white or
-    // colored depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
-    // multiply cannot reach, since black multiplied by anything is still black. See `TintMode`.
-    if (color.tintArgb != null) {
-        LabeledControl("Tint style") {
-            MorphicSegmentedButtons(
-                options = listOf("Shaded", "Solid"),
-                selectedIndex = if (color.tintMode == TintMode.SOLID) 1 else 0,
-                onSelect = { index ->
-                    onUpdate { it.withColor(color.copy(tintMode = if (index == 1) TintMode.SOLID else TintMode.MULTIPLY)) }
-                    onCommit()
-                },
-            )
-        }
-    }
-}
-
-/**
- * The gradient overlay's two stops, its direction and how strongly it is laid on.
- *
- * **Strength doubles as the on/off switch**: at zero the effect is identity and `withGradient` drops it from the
- * list entirely, so there is no separate toggle to disagree with the slider. That is the same shape the color
- * controls have — an effect at its defaults is simply not stored.
- */
-@Composable
-private fun GradientControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
-    onCommit: () -> Unit,
-) {
-    // Seeded at zero strength when absent, so the sliders show a coherent gradient before it is turned on rather
-    // than jumping to arbitrary values the moment strength leaves zero.
-    val gradient = spec.gradient ?: LayerEffect.Gradient(strength = 0f)
-
-    LabeledControl("Strength  ${"%.2f".format(gradient.strength)}") {
-        MorphicSlider(
-            value = gradient.strength,
-            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
-            valueRange = 0f..1f,
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Angle  ${"%.0f".format(gradient.angleDegrees)}°") {
-        MorphicSlider(
-            value = gradient.angleDegrees,
-            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
-            valueRange = 0f..360f,
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("From") {
-        ColorField(argb = gradient.startArgb) { argb ->
-            onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
-        }
-    }
-    LabeledControl("To") {
-        ColorField(argb = gradient.endArgb) { argb ->
-            onUpdate { it.withGradient(gradient.copy(endArgb = argb)) }
-        }
-    }
-}
-
-/**
  * Choosing a color: quick swatches, and a full picker one tap away.
  *
  * **One component for all four colors in this editor** — a solid fill, a tint, and a gradient's two stops. They
@@ -725,7 +553,7 @@ private fun GradientControls(
  *   color; true for a tint, which is an effect a user has to be able to get back off.
  */
 @Composable
-private fun ColorField(argb: Int, modifier: Modifier = Modifier, onChange: (Int) -> Unit) =
+internal fun ColorField(argb: Int, modifier: Modifier = Modifier, onChange: (Int) -> Unit) =
     ColorFieldBody(argb, modifier, clearable = false) { picked -> picked?.let(onChange) }
 
 /**
@@ -737,7 +565,7 @@ private fun ColorField(argb: Int, modifier: Modifier = Modifier, onChange: (Int)
  * way.
  */
 @Composable
-private fun ClearableColorField(argb: Int?, modifier: Modifier = Modifier, onChange: (Int?) -> Unit) =
+internal fun ClearableColorField(argb: Int?, modifier: Modifier = Modifier, onChange: (Int?) -> Unit) =
     ColorFieldBody(argb, modifier, clearable = true, onChange = onChange)
 
 @Composable
@@ -1344,7 +1172,7 @@ private val FillSwatches = listOf(
 )
 
 @Composable
-private fun LabeledControl(label: String, content: @Composable () -> Unit) {
+internal fun LabeledControl(label: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, color = StudioContentColor.copy(alpha = 0.75f), style = MaterialTheme.typography.labelMedium)
         content()
