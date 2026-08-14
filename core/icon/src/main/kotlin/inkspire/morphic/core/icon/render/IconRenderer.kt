@@ -47,9 +47,14 @@ import androidx.core.graphics.withMatrix
  * A layer's effects are applied **after its shape mask**, so an overlay colors the shaped silhouette rather than
  * the square it was cut from — the live path orders it the same way, by which node carries which modifier.
  *
- * Still deferred: a **shadow** effect (not additive — it could not be matched in the live path below API 31; see
- * the plan's S6 note), and adaptive-layer overshoot scaling (`AppDefault` layers draw to the full box; expect to
- * tune on device).
+ * **This path has no API restrictions, and that is the fact the effects plan turns on.** It owns a software bitmap,
+ * so a blur is a `BlurMaskFilter` and a displacement is arithmetic over an `IntArray` at every API level — where the
+ * live path's only blur is API 31+ and its only per-pixel route API 33+. So the six effects still to come (glow,
+ * drop shadow, pixelate, ripple, grain, progressive blur) land *here* first, and the studio previews from this
+ * rather than gating them. See `docs/ICON_EFFECTS_PLAN.md` §7.
+ *
+ * Still deferred: adaptive-layer overshoot scaling (`AppDefault` layers draw to the full box; expect to tune on
+ * device).
  */
 class IconRenderer(
     private val context: Context,

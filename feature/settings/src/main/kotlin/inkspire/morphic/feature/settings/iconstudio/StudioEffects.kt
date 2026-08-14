@@ -126,8 +126,9 @@ internal sealed interface EffectTarget {
  * [OPACITY] and [BLEND] are fields — always in play, with their "off" being their default value — so there is
  * nothing to enable. Every effect the plan adds is 1:1 and takes a switch for free.
  *
- * The deferred **shadow** is the next entry, and it costs one value here plus its controls — which is the whole
- * point of the grid over a column, since a column would have gained another block of sliders instead.
+ * The six effects still to come cost one value here each plus their controls — which is the whole point of the grid
+ * over a column, since a column would have gained six more blocks of sliders instead. They are also the six that
+ * need the bake-backed preview, so the next one added is the first to answer `drawsLive` false.
  */
 internal enum class EffectSlice(val label: String, val icon: ImageVector) {
 
@@ -295,14 +296,16 @@ internal fun EffectsControls(
 /**
  * The entries, [EffectColumns] across and paged.
  *
- * **Paged for the shape chooser's reason, and here the list really is about to get long.** Four entries fit one row
- * today; the plan adds eleven. Paging horizontally is what keeps this section a fixed height however many arrive —
- * the alternative is a vertical scroller inside the panel's own vertical scroller, which makes every drag
- * ambiguous. So adding an effect adds a *page* eventually, never height.
+ * **Paged for the shape chooser's reason, and the list has since grown into it.** A layer now offers eight entries
+ * — exactly one full page — and the plan adds six more, so the next effect is what opens page two. Paging
+ * horizontally is what keeps this section a fixed height however many arrive; the alternative is a vertical
+ * scroller inside the panel's own vertical scroller, which makes every drag ambiguous. So adding an effect adds a
+ * *page* eventually, never height.
  *
- * **The height is derived, and from the fullest page rather than from the page capacity.** A page holds up to
- * [EffectRows] rows, but today's single page uses one — sizing to the capacity would reserve an empty row under
- * four tiles. Same derive-versus-store rule the shape pager follows, one question further on.
+ * **The height is derived, and from the fullest page rather than from the page capacity.** They coincide for a
+ * layer now that the entries exactly fill a page — but the **composite** offers six, so its page is a row shorter,
+ * and sizing to the capacity would leave it a row of nothing. Same derive-versus-store rule the shape pager
+ * follows, one question further on.
  */
 @Composable
 private fun EffectGrid(target: EffectTarget, onOpen: (EffectSlice) -> Unit) {

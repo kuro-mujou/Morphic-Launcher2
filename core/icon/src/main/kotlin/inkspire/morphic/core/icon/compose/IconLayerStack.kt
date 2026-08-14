@@ -60,10 +60,12 @@ import inkspire.morphic.core.model.icon.LayerEffect
  * ## Staying honest with the baked path
  *
  * Two renderers is a real hazard — an icon that looks right while being edited and wrong on every surface is a bug
- * the editor structurally cannot show you. Six things make the paths agree, and each is a shared *thing* rather
+ * the editor structurally cannot show you. Nine things make the paths agree, and each is a shared *thing* rather
  * than a shared intention:
  * - [IconLayerResolver] decides which layers draw and what content each one means, for both.
- * - [LayerTransform] does the offset/zoom/rotation arithmetic, for both.
+ * - [LayerTransform] does the offset/zoom/rotation arithmetic **and hands back the matrix**, for both — which is
+ *   what retired the one question the two could not have answered the same way, since Compose's `cameraDistance`
+ *   and `android.graphics.Camera`'s z are not in the same units.
  * - [LayerFilter] does the color-matrix arithmetic, for both — and shares the *same shape*, since Android's and
  *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
  * - [IconFilters] is the table of built-in looks both paths resolve an id through, so a filter is one authored
@@ -74,18 +76,29 @@ import inkspire.morphic.core.model.icon.LayerEffect
  *   drawable via [IconShapes] and applied the same way — as a destination-in mask over the finished layer — but
  *   *where* it lands stopped being "the box" the moment a shape could be anchored to the artwork, and that is
  *   arithmetic, so it went the way the others did rather than being written twice.
+ * - [LayerPattern] decides a tile's pixel size, the matrix that turns it, and how a stencil becomes coloured marks.
+ * - [LayerExtrude] decides how many copies a slab is made of and how far apart they sit.
+ * - [LayerChromatic] decides which channel leads and which trails.
+ *
+ * **The last three are worth reading as a group, because the pattern repeats.** An effect earns a derivation
+ * exactly when its two implementations would differ in something *invisible*: a tile at half the intended scale is
+ * still a texture, an extrusion of twelve copies instead of forty is still an extrusion, and a red fringe on the
+ * left is as plausible as one on the right. None of those fail, and none look wrong until the editor and the home
+ * screen are seen together.
  *
  * What is *not* shared is the drawing API (Android's `Canvas` there, [DrawScope] here). That is unavoidable, and
- * it is exactly why the six above are.
+ * it is exactly why the nine above are.
  *
  * **The per-layer order is content → shape mask → effects in list order → composite**, and it is the same on both
  * sides for different-looking reasons: the bake gets it from statement order inside one loop, and this path gets it
  * from folding the **reversed** list into nested modifiers. Worth checking against `IconRenderer` if either is
  * touched — see [layerEffects] for why the reversal is the subtle half.
  *
- * A **shadow** effect is deliberately absent: it is the one effect that is not additive here, because it derives
- * from the layer's finished silhouette and Compose's only blur (`RenderEffect`) is API 31+ against a `minSdk` of
- * 26 — so it could not be made to match the bake on every device. See the plan's S6 note.
+ * **Six effects are deliberately absent** — glow, drop shadow, pixelate, ripple, grain and progressive blur — and
+ * they are the ones this path structurally cannot reach: Compose's only blur (`RenderEffect`) is API 31+ and its
+ * only per-pixel route (AGSL) is API 33+, against a `minSdk` of 26. The bake can draw all six at every API, so the
+ * answer is not to gate them but to preview from the bake when one is present, which is what
+ * [inkspire.morphic.core.model.icon.LayerEffect.drawsLive] exists to signal. See `docs/ICON_EFFECTS_PLAN.md` §7.
  *
  * @param icon the app's parsed layers, from `ParsedIconLoader` — the same input the bake takes.
  * @param customImage resolves a custom-image layer's stored path to a drawable. Defaults to drawing nothing, and

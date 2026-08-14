@@ -1,8 +1,8 @@
 # Icon effects — expansion plan
 
-Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from other icon studio app`), whose
-filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
-before any of them can land, and the order to build them in.
+Drawn from captures of another icon studio (`~/Downloads/effect from other icon studio app` — twelve files, named by
+hash rather than by effect; the thirteenth, drop shadow, was never captured). This plan is **what each one actually
+needs from our two renderers**, what has to change before any of them can land, and the order to build them in.
 
 Status: **slices 0–7 done — all of tier 1** (see §5). Everything remaining (Glow, Drop shadow, Pixelate, Ripple,
 Grain, Progressive blur) waits on **slice 8, the bake-backed preview**, which Extrude has already given a second
@@ -407,20 +407,24 @@ with every other layer hidden rather than through a new path.
 
 ## 6. Open questions
 
-- **Incremental or collapse** (§2). The one decision that changes the shape of the codebase rather than the size of
-  the feature list. Answer it at slice 7.
 - **How stale may the preview get before it needs to say so?** The threshold at which a "working" hint appears is a
   number nobody can pick from a desk; it wants measuring on the slowest device to hand, against the heaviest effect
-  (progressive blur at full radius).
-- **Does a configured-but-switched-off effect still mark its tile?** Three states exist once `enabled` does — never
-  configured, configured and off, on — and the grid currently has two. Marking "on" only is the simple reading and
-  loses the difference between the first two; a third treatment is cheap but is one more thing on a small tile.
-  Worth settling when the switch lands, not before.
+  (progressive blur at full radius). §7 builds the preview without one and leaves the hint for that measurement.
+- **How far down does a gesture bake?** The same shape of question, and the same answer: §7 states the mechanism and
+  leaves the fraction as the one number to tune on device.
+- **Does the composite want a transform of its own?** Perspective is a layer's, so tilting a whole icon means tilting
+  each of its layers. Raised by slice 5 and not answered — it is the same question the whole-icon *effects* answered
+  yes to, pointed at a different tool.
 
 ### Settled
 
 - **Incremental, not collapse** (§2). The live path stays; `drawsLive` on each effect variant is what keeps the
-  choice from drifting.
+  choice from drifting. Confirmed at slice 7 as the plan asked: all of tier 1 landed with both paths intact, and the
+  six shared derivations grew to eight rather than the two paths growing apart.
+- **A configured-but-switched-off effect reads as inactive**, and the grid has two states rather than three. A tile
+  marks itself from `activeEffects`, which is the renderers' own list — so "is this doing anything to my icon?" is
+  answered by exactly the thing that decides whether it draws. The lost distinction (never configured versus
+  configured and off) is recoverable by opening the entry, where the switch says which.
 - **The bake-backed preview is accepted** (§2) — downscaled and throttled during a gesture, not a spinner.
 - **Filters are engineering, not content** (§3a). A fixed table, `IconShapes`' exact shape, our own names.
 - **The layer rail replaces the Layers section** (§4a). The effect list stays a 4-column grid in the Effects panel.
@@ -429,3 +433,75 @@ with every other layer hidden rather than through a new path.
   is drawn** and which is tiled at a scale and angle. Sharing one library would mean every entry answering both
   questions, and half of each list would be nonsense in the other role. They share the *pipeline* — drop a drawable
   in, add an id, id is the on-disk contract, unknown id degrades quietly — which is the part worth copying.
+
+---
+
+## 7. Slice 8 — the bake-backed preview
+
+All six remaining effects wait on this and nothing else, so it is worth designing before it is built. §2 settled
+*that* the bake backs the preview; this is *how*, and the decisions it turns on.
+
+### What falls back: the whole icon, never one layer
+
+§2 says "the studio previews that **layer** from its baked bitmap". That is the wrong granularity, and the reason is
+the hazard this whole document is arranged around.
+
+A per-layer fallback means a **hybrid stack** — one layer from a bitmap, the rest drawn live around it — and the two
+halves then have to agree about geometry *at a seam inside a single icon*. That is the two-renderer problem in its
+worst form: not two whole pictures that can be compared side by side, but one picture assembled from both, where a
+drift shows as a misalignment nobody can attribute. Whole-icon fallback keeps the paths as two complete pictures,
+which is what the `IconLayers` dev-harness playground already exists to compare.
+
+It also costs nothing. The bake renders a whole set either way, and its expense is the *effect* rather than the layer
+count — so per-layer buys responsiveness on the layers that were never the slow part.
+
+So: **`IconLayerSet.drawsLive` is the one question the canvas asks**, and it is `layers.all { it.drawsLive } &&
+effects.drawLive`.
+
+**`IconLayerSpec.drawsLive` keeps a real job**, which is worth saying because it looks vestigial after that. A layer
+*tile* in the rail solos one layer, so it falls back on that layer's own effects — a glow on the foreground makes the
+canvas and the foreground's tile bake, and leaves the background's tile live. One property, two scopes, each asking
+about what it actually draws.
+
+### Where it lives: one composable that chooses
+
+A new `core:icon/compose` entry point — `IconPreview` or similar — picking between `IconLayerStack` and a baked
+`Image`. **Not inside `IconLayerStack`**, which is the live path by definition and would otherwise need a renderer, a
+scope and a cache; and **not at the three studio call sites**, because a call site that forgot to ask is a call site
+that silently lies.
+
+### Throttling is `collectLatest`, not a timer
+
+§2 asks for "re-bake on a trailing interval and drop what it cannot keep up with". That is exactly what a
+`MutableStateFlow<IconLayerSet>` collected with `collectLatest` does: a new value cancels the in-flight bake and
+starts the current one, so the work conflates instead of queueing. No interval to pick, and no queue to bound.
+
+**It must not go through `IconRenderManager`'s cache.** That cache is keyed on the resolved set, which is precisely
+what changes every frame of a drag — so the preview would evict every real icon on the device within a second or two
+of sliding. The studio wants its own single-slot state, and the coalescing and concurrency cap `IconRenderManager`
+provides are not what this needs either: there is one bake in flight, by construction.
+
+### Resolution: the studio already has the punctuation
+
+§2 proposes downscaling "while a gesture is in flight", which normally needs a gesture-start signal the studio does
+not emit. It does not need one: `onUpdate` without `onCommit` **is** a gesture in flight. So every live edit
+schedules a **downscaled** bake and every `commitEdit` schedules a **full-size** one — the same punctuation that
+already decides what undo steps over, used for a second thing it happens to answer exactly.
+
+The fraction is the one number to measure on device (§6).
+
+### What tier 2 and tier 3 will share
+
+Worth naming now, because both groups are three effects that are one mechanism each:
+
+- **Glow and Drop shadow are the same effect twice** — a blurred copy of the finished silhouette, placed behind, one
+  centred and spread, the other offset. `Bitmap.extractAlpha(paint, offset)` with a `BlurMaskFilter` is the whole of
+  it and needs no bitmap arithmetic at all. Expect a `LayerShadow` deriving the blur radius, spread and offset for
+  both. Note the box blur in `data:wallpaper`'s `Blur.kt` is **not** reachable from `core:icon` — wrong direction —
+  so `BlurMaskFilter` is the route rather than a choice.
+- **Pixelate, Ripple and Grain are one loop with three answers.** Each is a resampling: for every output pixel, which
+  input pixel does it read? Pixelate quantises the coordinate, Ripple displaces it by a sinusoid, Grain by noise. So
+  one `IntArray` pass over `getPixels`/`setPixels` and one `sample(x, y) -> (srcX, srcY)` per effect, which is the
+  shared derivation to build with the first of them rather than after the third.
+- **Progressive blur is last for a reason**: it is a blur *and* a mask ramp, so it is the only one that needs both
+  mechanisms and the only one with no cheap approximation.

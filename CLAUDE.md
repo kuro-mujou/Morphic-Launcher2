@@ -183,7 +183,8 @@ plan is **icon packs** and **presets**. The studio has since outgrown it: a seco
 tier 1** — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
 **Gloss**, **perspective**, **Pattern**, **Extrude** and **Chromatic split**, plus **whole-icon effects**, which that
 plan had not noticed it needed.
-**Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
+The **six remaining effects are all blocked on one mechanism** — the bake-backed preview — which is also what
+un-defers the shadows this file has been holding back since B3; see that note below. The rest of
 this section describes what exists, and flags the places the built thing differs from what was locked here.
 
 **Source & parsing.** App icons come from the `LauncherApps` API. Each is parsed into **two permanent,
@@ -298,10 +299,11 @@ enforces. Per layer:
 - **effects** — a sealed list, never columns, and an **ordered pipeline** rather than a bag (see the pipeline note
   below). `LayerEffect.Color` (hue → saturation → brightness → tint, composed into **one** matrix, so monochrome is
   `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` and `LayerEffect.Gloss` (light
-  spilling across the layer, and light struck across it with an edge — see the notes below) and
-  `LayerEffect.Filter` (one of the built-in looks, by id). Ten more are planned —
-  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — of which **shadows are deferred** until the bake backs
-  the preview; see below.
+  spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
+  `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
+  displaced) and `LayerEffect.Filter` (one of the built-in looks, by id) — see the notes below for each. **Six more
+  are planned and all six wait on one thing**, the bake-backed preview:
+  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) §7.
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
 **Rendering — hybrid:**
@@ -315,14 +317,25 @@ enforces. Per layer:
   the LRU. Calling `invalidate` would also bump `generation`, whose whole job is the one input the key cannot see
   (an app replacing its own artwork) and which recomposes every icon on screen.
 
-**Two renderers is the standing hazard, and six shared things are what keep them honest.** An icon that looks
-right while being edited and wrong on every surface is a bug the editor structurally cannot show you, so the
-agreement is made of shared *things* rather than shared intentions: `ParsedIconLoader` (what the layers are),
-`IconLayerResolver` (which draw, and what each means), `LayerTransform` (where they sit), `LayerFilter` (the
+**Two renderers is the standing hazard, and the shared derivations are what keep them honest — nine of them now.** An
+icon that looks right while being edited and wrong on every surface is a bug the editor structurally cannot show you,
+so the agreement is made of shared *things* rather than shared intentions: `ParsedIconLoader` (what the layers are),
+`IconLayerResolver` (which draw, and what each means), `LayerTransform` (where they sit, including the perspective
+matrix both paths now take rather than each configuring its own camera), `LayerFilter` (the
 color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`),
-`LayerGradient` (which way an angle runs) and `ShapeMask` (where the silhouette sits — which stopped being "the
-box" the moment `ShapeAnchor` existed, and so became arithmetic rather than a constant). Only the drawing API
-differs, which is unavoidable and is exactly why those six exist. The per-layer order is **content → shape mask →
+`IconFilters` (the table of built-in looks), `LayerGradient` (which way an angle runs, and the frame a bloom or a
+gloss is laid out in), `ShapeMask` (where the silhouette sits — which stopped being "the
+box" the moment `ShapeAnchor` existed, and so became arithmetic rather than a constant), `LayerPattern` (a tile's
+size, its matrix and how a stencil becomes colored marks), `LayerExtrude` (how many copies and how far apart) and
+`LayerChromatic` (which channel leads).
+
+**What each new one is for is worth reading as a group, because the pattern repeats**: an effect earns a derivation
+exactly when its two implementations would differ in something *invisible*. A tile at half the intended scale is
+still a texture; an extrusion built from twelve copies instead of forty is still an extrusion; a red fringe on the
+left is as plausible as one on the right. None of those fail, and none of them look wrong until the editor and the
+home screen are seen together — which is the whole argument.
+
+Only the drawing API differs, which is unavoidable and is exactly why those nine exist. The per-layer order is **content → shape mask →
 effects, in list order → composite**, the same on both sides for different-looking reasons — statement order in
 one, modifier nesting in the other. Two consequences: the live stack must composite **offscreen** (or a `MULTIPLY`
 on the bottom layer blends against the studio canvas rather than against nothing), and the `IconLayers` dev-harness
@@ -540,12 +553,20 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
     Previewing on the real icon is seventeen bakes, and an icon that happens to be black says nothing about a warm
     grade; every tile being the same strip is what makes them comparable.
 
-**Shadows are deferred, and they are the one effect that is not additive.** A shadow derives from the layer's
-*finished* silhouette — after transform and after the mask, since an outer shadow must escape the shape — which
-the bake holds as a bitmap and can blur on any API, and which the live path only has as nodes. Compose's only
-blur is `RenderEffect`, **API 31+ against a `minSdk` of 26**. No way out is free: gating the effect denies it
-where the bake could manage it, `RenderEffect` makes the editor lie below 31, and rasterizing re-bakes a shadowed
-layer per frame while its sliders move. Nothing waits on it, and `minSdk` reaching 31 retires the fork outright.
+**Six effects are blocked on one thing, and shadows are the oldest of them.** Glow, drop shadow, pixelate, ripple,
+grain and progressive blur all need something the **live** path structurally cannot reach — Compose's only blur is
+`RenderEffect`, API 31+, and its only per-pixel route is AGSL, API 33+, against a `minSdk` of 26. The **bake** can
+draw every one of them at any API, because it owns a software bitmap: a blur is a `BlurMaskFilter` and a
+displacement is arithmetic over an `IntArray`.
+
+A shadow is the clearest case and the one this file deferred first: it derives from the layer's *finished*
+silhouette — after transform and after the mask, since an outer shadow must escape the shape — which the bake holds
+as a bitmap and the live path only has as nodes. **Gating was considered and rejected**: it would deny glow and drop
+shadow to every device below Android 12 to solve a problem only the *editor* has, when the home screen could have
+drawn them all along. So the answer is that the studio **previews from the bake** when such an effect is present —
+`LayerEffect.drawsLive` is what says so, and building that fallback is the next slice. See the in-flight note above
+and [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) §7. `minSdk` reaching 31 would retire half the fork, and 33
+all of it.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
 bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
@@ -1579,8 +1600,25 @@ tier 1, are done.** Thirteen effects were drawn from captures of another icon st
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the
-*editor* has. Instead the studio will preview such layers **from the bake**, downscaled and throttled during a
-gesture, which is why `LayerEffect.drawsLive` exists now with nothing yet answering it `false`.
+*editor* has. Instead the studio will preview **from the bake**, downscaled and throttled during a gesture, which is
+why `LayerEffect.drawsLive` exists now with nothing yet answering it `false`.
+
+**Next is slice 8, the bake-backed preview, and it is the only thing the remaining six wait on** — Glow, Drop shadow,
+Pixelate, Ripple, Grain and Progressive blur are all blocked on it and on nothing else. Designed in that plan's §7;
+four decisions worth knowing before touching it:
+- **The whole icon falls back, never one layer**, which reverses what the plan's §2 assumed. A per-layer fallback is a
+  *hybrid stack* — one layer from a bitmap, the rest live around it — so the two halves must agree about geometry at a
+  seam **inside one icon**, which is the two-renderer hazard in its worst form. Whole-icon keeps them two complete
+  pictures, which is what the `IconLayers` playground compares. It also costs nothing: the bake renders a whole set
+  either way and its expense is the effect, not the layer count.
+- **`IconLayerSpec.drawsLive` keeps a real job** and is not made vestigial by that: a *layer tile* in the rail solos
+  one layer, so it falls back on that layer's own effects. One property, two scopes, each asking about what it draws.
+- **Throttling is `collectLatest` over a `MutableStateFlow`, not a timer** — a new value cancels the in-flight bake, so
+  work conflates instead of queueing, with no interval to pick. It must **not** go through `IconRenderManager`'s cache,
+  which is keyed on the resolved set: that is exactly what changes every frame of a drag, so the preview would evict
+  every real icon on the device within seconds.
+- **The resolution split needs no new signal.** `onUpdate` without `onCommit` *is* a gesture in flight, so a live edit
+  schedules a downscaled bake and `commitEdit` schedules a full-size one — the same punctuation undo already steps over.
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
 `SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
