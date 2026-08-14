@@ -4,9 +4,9 @@ Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from oth
 filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
 before any of them can land, and the order to build them in.
 
-Status: **slices 0–6 done** (see §5). The pipeline, the effect panel, the filter library, the layer rail, Bloom,
-Gloss, perspective, Pattern and `IconLayerSet.effects` are built; **Extrude** and **Chromatic split** finish tier 1,
-and everything past those waits on the bake-backed preview. Where the build diverged from this plan, §5 records it —
+Status: **slices 0–6 done, plus Extrude from slice 7** (see §5). The pipeline, the effect panel, the filter library,
+the layer rail, Bloom, Gloss, perspective, Pattern, Extrude and `IconLayerSet.effects` are built; **Chromatic split**
+is the last of tier 1, and everything past it waits on the bake-backed preview. Where the build diverged from this plan, §5 records it —
 the plan is kept as written so the reasoning that was wrong stays visible next to what replaced it.
 
 **The largest thing this plan got wrong is in §3**: it treats all thirteen as *layer* effects, and six of them are only
@@ -267,7 +267,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 4a | **Whole-icon effects** | Not in the plan — see below | **done** |
 | 5 | **Perspective** | Extends `LayerTransform`, which is already shared | **done** |
 | 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | **done** |
-| 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | |
+| 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | Extrude **done** |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | |
 | 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | |
@@ -354,6 +354,18 @@ Each slice is independently reviewable and leaves the studio working.
     novelty rather than a control.
   - **No `ShapeAnchor`**, unlike Bloom and Gloss: a pattern is a texture laid over the icon and its own angle already
     orients it. Additive if wanted.
+- **Extrude is the first effect whose live cost scales with a slider**, and §3's "N offset draws of the layer
+  silhouette" understates what that means on the live side. The bake blits a bitmap it already holds; the editor
+  re-runs the layer's *content* per copy, per frame, at preview size. So `LayerExtrude` caps the count (48) and grows
+  the per-step offset to compensate — the slab reaches the depth asked for whatever the cap does to its smoothness,
+  which is the half a fixed step size would get wrong and nobody would attribute to a step limit.
+  - **It is the first candidate for `drawsLive = false`** if it proves slow on device. Left true only because the
+    bake-backed preview (slice 8) is not built, which is exactly the situation that flag was added for.
+  - **`ColorMatrices.solid` got a second consumer**, so `LayerFilter.solidMatrixOf` came out: an extrusion is the
+    layer's silhouette in one colour, which is the operation a `TintMode.SOLID` tint already performs. Both now pull
+    the channels out of an int in one place, and that place is the fifth column — silent when wrong.
+  - The bake's effect loop stopped being "a colour matrix or an overlay": Extrude produces a new buffer without being
+    a matrix, so the `when` now says plainly which effects replace the buffer and which paint into it.
 - **Whole-icon effects (4a) — the thing thirteen effects actually needed, and §3 assumed away.** Every entry in this
   plan is written as a *layer* effect, and for six of them that is simply wrong: a glow derives from the finished
   silhouette, so per-layer it glows around the foreground *inside* the background plate where nobody can see it; grain,

@@ -181,7 +181,8 @@ three times inside one document, at a cost of four destructive schema bumps on o
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
 [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is seven
 slices in — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
-**Gloss**, **perspective** and **Pattern**, plus **whole-icon effects**, which that plan had not noticed it needed.
+**Gloss**, **perspective**, **Pattern** and **Extrude**, plus **whole-icon effects**, which that plan had not noticed
+it needed.
 **Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
 this section describes what exists, and flags the places the built thing differs from what was locked here.
 
@@ -475,6 +476,25 @@ pipeline: drop a drawable in, add an id, the id is the on-disk contract, an unkn
 - **No `ShapeAnchor` and no randomize.** A pattern is a texture laid *over* the icon and its own angle orients it, so
   the anchor is additive if wanted; and what the reference's randomize button randomizes cannot be read off a
   capture, where a button writing a random number into a slider the user can drag is a novelty rather than a control.
+
+**`LayerEffect.Extrude` is the layer's silhouette repeated *behind* itself, and the first effect whose live cost
+scales with a slider.** An extrusion is the union of a silhouette with a line segment and nothing draws that
+directly, so it is N copies — and N is the whole of the cost. The bake blits a bitmap it already holds; the live path
+re-runs the layer's own **content** per copy, per frame, at preview size.
+- **`LayerExtrude` caps the count at 48 and grows the per-step offset to compensate**, so the slab reaches the depth
+  asked for whatever the cap does to its smoothness. That second half is the one a fixed step size would get wrong,
+  and the symptom — a depth slider that quietly stops partway — is not something anyone would attribute to a step
+  limit. Pinned by a test at a bake size where the cap actually binds.
+- **It is the first candidate for `drawsLive = false`.** Left true only because the bake-backed preview is not built,
+  which is exactly the situation that flag was added for.
+- **`LayerFilter.solidMatrixOf` came out of `ColorMatrices.solid` gaining a second consumer** — an extrusion is the
+  layer's silhouette in one color, which is the operation a `TintMode.SOLID` tint already performs. Both now pull the
+  channels out of an int in one place, and that place is the fifth column, which is silent when wrong.
+- **Each copy takes its own `saveLayer` in the live path**, not one over the whole slab: the color matrix has to see
+  each *copy*, where filtering the finished slab would flatten it correctly and then composite it as a single
+  translucent sheet, so the overlaps would show through one another.
+- The bake's effect loop stopped being "a color matrix, or an overlay": Extrude produces a new buffer without being a
+  matrix, so the `when` now says plainly which effects replace the buffer and which paint into it.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
     mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
     (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
@@ -1537,7 +1557,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–6 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+**In flight: the icon effects expansion — slices 0–6 plus Extrude of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
 done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
@@ -1549,9 +1569,9 @@ Built so far: the ordered effect **pipeline** (slice 0), the paged effect **pane
 `SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
 `LAYERS` tool entry (slice 3), slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
 effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite) — and
-slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`, and slice 6,
-**Pattern**, with an asset library of its own. **Extrude** and **Chromatic split** finish tier 1; everything past them
-waits on the bake-backed preview.
+slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`, slice 6, **Pattern**,
+with an asset library of its own, and **Extrude**. **Chromatic split** is the last of tier 1; everything past it waits
+on the bake-backed preview.
 
 **Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes

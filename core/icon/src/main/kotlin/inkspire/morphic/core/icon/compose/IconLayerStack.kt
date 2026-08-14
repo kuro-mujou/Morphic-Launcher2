@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalResources
@@ -34,6 +35,7 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.icon.render.IconLayerResolver
 import inkspire.morphic.core.icon.render.LayerFilter
+import inkspire.morphic.core.icon.render.LayerExtrude
 import inkspire.morphic.core.icon.render.LayerGradient
 import inkspire.morphic.core.icon.render.LayerPattern
 import inkspire.morphic.core.icon.render.LayerTransform
@@ -283,6 +285,34 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
             drawGlossOverlay(effect, spec, inkFit)
             canvas.restore()
         }
+    }
+
+    // **The one effect that draws the content more than once, and it is why `MaxSteps` exists.** Every copy is a
+    // re-run of the layer's own drawing rather than a blit of a finished bitmap, which the bake gets for free by
+    // already holding one. Back to front, then the layer itself on top — the same order, and the same picture, as
+    // `IconRenderer.extruded`.
+    is LayerEffect.Extrude -> Modifier.drawWithContent {
+        // Held because `translate` hands its block a plain `DrawScope`, which has no `drawContent` — the same
+        // canvas and the same transform, only a narrower receiver.
+        val scope = this
+        val steps = LayerExtrude.steps(effect, size.width.toInt())
+        val bounds = Rect(0f, 0f, size.width, size.height)
+        val slab = Paint().apply {
+            colorFilter = ColorFilter.colorMatrix(ColorMatrix(LayerFilter.solidMatrixOf(effect.argb)))
+            alpha = effect.strength.coerceIn(0f, 1f)
+        }
+
+        drawIntoCanvas { canvas ->
+            for (step in steps.count downTo 1) {
+                // One layer per copy, because the colour matrix has to see the *copy* — filtering the whole slab
+                // at once would flatten it correctly and then composite it as a single translucent sheet, so the
+                // overlaps would show through each other.
+                canvas.saveLayer(bounds, slab)
+                translate(steps.dxPx * step, steps.dyPx * step) { scope.drawContent() }
+                canvas.restore()
+            }
+        }
+        drawContent()
     }
 
     // **The one overlay whose tile is remembered rather than derived per frame.** A gradient is three numbers handed

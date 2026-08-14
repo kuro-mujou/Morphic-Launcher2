@@ -285,6 +285,37 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer's own silhouette repeated **behind** itself along a direction, in [argb] — the layer read as a solid
+     * slab seen slightly off-square.
+     *
+     * **The only effect so far that draws what is already there rather than over it**, which is why it is the one
+     * whose live cost scales with a slider: the extrusion is the union of many copies of the silhouette, and there is
+     * no primitive for that short of drawing them. Both renderers cap the count for that reason — see `LayerExtrude`.
+     *
+     * @property angleDegrees which way the slab extends, clockwise from straight down — 0 puts the depth below the
+     *   layer, which is what "extruded" reads as. The same convention every other angle here runs on.
+     * @property depth how far it extends, as a fraction of the icon's box. A fraction rather than pixels so one
+     *   recipe reads the same baked at 96px for a list row and at 288px for a folder.
+     * @property strength how strongly it is laid on, and how it is switched off.
+     */
+    @Serializable
+    @SerialName("extrude")
+    data class Extrude(
+        val argb: Int = 0xFF000000.toInt(),
+        val angleDegrees: Float = 0f,
+        val depth: Float = 0.15f,
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** Turned down to nothing, or reaching nowhere — a slab with no depth is the layer itself. */
+        override val isIdentity: Boolean get() = strength <= 0f || depth <= 0f
+
+        /** Offset copies of the layer, which both paths can draw at any API. */
+        override val drawsLive: Boolean get() = true
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *

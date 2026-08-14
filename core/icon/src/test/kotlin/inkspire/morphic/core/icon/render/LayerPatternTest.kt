@@ -42,6 +42,8 @@ class LayerPatternTest {
 
     @Test
     fun `a square-on tiling needs no matrix at all`() {
+        // Nothing to do with patterns' own sizing, but the same "return null rather than an identity" bargain the
+        // rest of this package makes — kept here because it is this file's own function.
         // The common case, and the reason this returns null rather than an identity: it lets both renderers skip
         // building and binding one for every unrotated pattern.
         assertNull(LayerPattern.localMatrix(angleDegrees = 0f, sizePx = 192))

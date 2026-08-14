@@ -41,16 +41,32 @@ object LayerFilter {
             matrix = matrix.then(ColorMatrices.scale(color.brightness, color.brightness, color.brightness))
         }
         color.tintArgb?.let { tint ->
-            val r = tint shr 16 and 0xFF
-            val g = tint shr 8 and 0xFF
-            val b = tint and 0xFF
             matrix = matrix.then(
                 when (color.tintMode) {
-                    TintMode.MULTIPLY -> ColorMatrices.scale(r = r / 255f, g = g / 255f, b = b / 255f)
-                    TintMode.SOLID -> ColorMatrices.solid(r = r.toFloat(), g = g.toFloat(), b = b.toFloat())
+                    TintMode.MULTIPLY -> ColorMatrices.scale(
+                        r = (tint shr 16 and 0xFF) / 255f,
+                        g = (tint shr 8 and 0xFF) / 255f,
+                        b = (tint and 0xFF) / 255f,
+                    )
+
+                    TintMode.SOLID -> solidMatrixOf(tint)
                 },
             )
         }
         return matrix
     }
+
+    /**
+     * The matrix that turns whatever it is applied to into a flat silhouette of [argb], keeping only its alpha.
+     *
+     * Second consumer of [ColorMatrices.solid] and the reason it is worth a name here: an extrusion is the layer's
+     * silhouette in one colour, which is the same operation a [TintMode.SOLID] tint performs — so both go through
+     * one place rather than each pulling the channels out of an int its own way. **The channels are 0..255**, being
+     * the matrix's fifth column, and that is exactly the thing that would be silently wrong if it were written twice.
+     */
+    fun solidMatrixOf(argb: Int): FloatArray = ColorMatrices.solid(
+        r = (argb shr 16 and 0xFF).toFloat(),
+        g = (argb shr 8 and 0xFF).toFloat(),
+        b = (argb and 0xFF).toFloat(),
+    )
 }

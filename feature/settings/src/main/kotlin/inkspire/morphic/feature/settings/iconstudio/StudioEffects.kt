@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
@@ -153,6 +154,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** A repeating texture laid over the artwork — see `IconPatterns`. */
     PATTERN("Pattern", Icons.Default.Grain),
 
+    /** The layer's own silhouette repeated behind itself, so it reads as a slab. */
+    EXTRUDE("Extrude", Icons.Default.Layers),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -177,6 +181,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
+        EXTRUDE -> effects.filterIsInstance<LayerEffect.Extrude>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -201,6 +206,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         BLOOM -> target.effects.activeEffects.any { it is LayerEffect.Bloom }
         GLOSS -> target.effects.activeEffects.any { it is LayerEffect.Gloss }
         PATTERN -> target.effects.activeEffects.any { it is LayerEffect.Pattern }
+        EXTRUDE -> target.effects.activeEffects.any { it is LayerEffect.Extrude }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -273,6 +279,7 @@ internal fun EffectsControls(
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
+            EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -460,6 +467,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.PATTERN -> current.effectOrNull<LayerEffect.Pattern>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.EXTRUDE -> current.effectOrNull<LayerEffect.Extrude>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -882,6 +892,63 @@ private fun BloomPosition(
             }
         }
     }
+}
+
+/**
+ * The slab's colour, how deep it runs, which way, and how strongly.
+ *
+ * **Depth is bounded well short of the box**, and that bound is about cost rather than taste: the extrusion is drawn
+ * as many copies of the layer, `LayerExtrude` caps how many, and past the cap the copies spread far enough apart for
+ * the edge to stair visibly. A quarter of the box is deep enough to read as a slab and still inside the cap at every
+ * bake size.
+ *
+ * **Black by default**, unlike every other overlay here, because an extrusion is a *shadowed* side rather than a
+ * light — it is the one place in this panel where the resting colour is the dark one.
+ */
+@Composable
+private fun ExtrudeControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // Seeded at zero strength when absent, as the other overlays are, so the controls describe a coherent slab
+    // before it is turned on rather than jumping the moment strength leaves zero.
+    val extrude = effects.effectOrNull<LayerEffect.Extrude>() ?: LayerEffect.Extrude(strength = 0f)
+
+    LabeledControl("Color") {
+        ColorField(argb = extrude.argb) { argb ->
+            onUpdate { it.withEffect(extrude.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = extrude.strength,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Depth",
+        value = extrude.depth,
+        valueRange = UnitStep..0.25f,
+        step = UnitStep,
+        default = 0.15f,
+        onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(depth = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Angle",
+        value = extrude.angleDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = 0f,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(angleDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
 }
 
 /**

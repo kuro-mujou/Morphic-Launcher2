@@ -168,45 +168,75 @@ class IconRenderer(
         var current = bitmap
         var canvas = Canvas(current)
 
+        /** Swaps in a buffer built from the current one, which is what every non-overlay effect does. */
+        fun replace(with: (Bitmap) -> Bitmap) {
+            val next = with(current)
+            current.recycle()
+            current = next
+            canvas = Canvas(current)
+        }
+
         for (effect in effects) {
-            val matrix = when (effect) {
-                is LayerEffect.Bloom -> {
+            when (effect) {
+                is LayerEffect.Bloom ->
                     applyBloom(canvas, effect, LayerGradient.frameOf(effect, inkFit, transform, sizePx), sizePx)
-                    null
-                }
 
                 is LayerEffect.Gloss -> {
                     val frame = LayerGradient.frameOf(effect.anchor, inkFit, transform, sizePx)
                     applyGloss(canvas, effect, LayerGradient.sweep(frame, effect.angleDegrees, effect.curve), sizePx)
-                    null
                 }
 
-                is LayerEffect.Pattern -> {
-                    applyPattern(canvas, effect, sizePx)
-                    null
-                }
+                is LayerEffect.Pattern -> applyPattern(canvas, effect, sizePx)
 
-                is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
-                // Null for an id this build does not know, which then draws nothing rather than failing.
-                is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
-            }
+                is LayerEffect.Color ->
+                    LayerFilter.colorMatrixOf(effect)?.let { m -> replace { filtered(it, m, sizePx) } }
 
-            if (matrix != null) {
-                val filtered = createBitmap(sizePx, sizePx)
-                Canvas(filtered).drawBitmap(
-                    current,
-                    0f,
-                    0f,
-                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
-                    },
-                )
-                current.recycle()
-                current = filtered
-                canvas = Canvas(current)
+                // An id this build does not know draws nothing rather than failing.
+                is LayerEffect.Filter ->
+                    IconFilters.matrixOrNull(effect.filter)?.let { m -> replace { filtered(it, m, sizePx) } }
+
+                is LayerEffect.Extrude -> replace { extruded(it, effect, sizePx) }
             }
         }
         return current
+    }
+
+    /** [source] through one colour matrix, in a buffer of its own — a canvas cannot filter its pixels in place. */
+    private fun filtered(source: Bitmap, matrix: FloatArray, sizePx: Int): Bitmap {
+        val out = createBitmap(sizePx, sizePx)
+        Canvas(out).drawBitmap(
+            source,
+            0f,
+            0f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
+            },
+        )
+        return out
+    }
+
+    /**
+     * [source] with its own silhouette repeated behind it — the slab, then the layer standing on it.
+     *
+     * **Drawn back to front rather than with a destination-over paint**, which is the same picture and one fewer
+     * thing to get wrong: the furthest copy first, the nearest last, the untouched layer on top. Each copy is the
+     * source through `ColorMatrices.solid`, so it comes out as a flat silhouette of the extrusion colour whatever
+     * the layer is made of.
+     */
+    private fun extruded(source: Bitmap, extrude: LayerEffect.Extrude, sizePx: Int): Bitmap {
+        val steps = LayerExtrude.steps(extrude, sizePx)
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+
+        val slab = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(ColorMatrix(LayerFilter.solidMatrixOf(extrude.argb)))
+            alpha = (extrude.strength.coerceIn(0f, 1f) * 255).toInt()
+        }
+        for (step in steps.count downTo 1) {
+            canvas.drawBitmap(source, steps.dxPx * step, steps.dyPx * step, slab)
+        }
+        canvas.drawBitmap(source, 0f, 0f, null)
+        return out
     }
 
     /**
