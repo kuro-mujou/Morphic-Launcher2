@@ -512,6 +512,37 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer redrawn as a field of dots, one colour sampled per cell — an LED panel rather than a blur.
+     *
+     * **Not a resampling, unlike [Ripple] and [Grain], and that is why it shares nothing with them.** Those read
+     * every output pixel from somewhere else in the layer; this reads one colour per *cell* and then draws a shape.
+     * A pixelate built as a coordinate quantisation would give solid touching blocks and could express neither
+     * [fill] nor [roundness] — the gaps between dots are the look, and gaps are something drawn rather than sampled.
+     *
+     * @property cellSize how big one dot's cell is, as a fraction of the icon's box. It is also the switch: cells
+     *   with no size are the layer itself, which is why this and not a separate strength.
+     * @property fill how much of its cell a dot covers, 0..1. Below 1 the gaps open up, which is what separates a
+     *   panel of lights from a mosaic.
+     * @property roundness the dot's corner, 0 square through 1 circle. A fraction of the dot rather than a length,
+     *   so it stays a circle at every [fill] and every bake size.
+     */
+    @Serializable
+    @SerialName("pixelate")
+    data class Pixelate(
+        val cellSize: Float = 0f,
+        val fill: Float = 1f,
+        val roundness: Float = 0f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** Cells with no size, or dots that cover none of them — either way the layer comes back untouched. */
+        override val isIdentity: Boolean get() = cellSize <= 0f || fill <= 0f
+
+        /** Per-pixel sampling, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *

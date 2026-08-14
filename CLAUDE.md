@@ -303,9 +303,9 @@ enforces. Per layer:
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
-  and `LayerEffect.Grain` (waves and noise pushing its pixels about — the four that do **not** draw live) and
-  `LayerEffect.Filter` (one of the built-in looks, by id). See the notes below for each. **Two more are planned** —
-  pixelate and progressive blur:
+  `LayerEffect.Grain` and `LayerEffect.Pixelate` (waves, noise and cells — the five that do **not** draw live) and
+  `LayerEffect.Filter` (one of the built-in looks, by id). See the notes below for each. **One is left** —
+  progressive blur:
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
@@ -620,6 +620,23 @@ transparent out there.
   directed uses one and spends it along the angle, and there is no continuum between "two fields" and "one".
 - **Strength and Grain size sound alike and are not.** Strength is how far a piece moves; grain size is how big a
   piece is. Turning the second up makes the tearing coarser rather than stronger.
+
+**`LayerEffect.Pixelate` is the odd one of the three per-pixel effects, and shares nothing with the other two.** It
+samples one color per *cell* and then **draws** a shape — so the gaps between dots and their rounded corners are
+things painted rather than sampled, which is why it does not go through `resample`. Drawn on a canvas the corners
+come out antialiased for free, where an `IntArray` would owe its own coverage arithmetic.
+- **The averaging is the part that is silently wrong if done naively**, and it is the reason `LayerPixelate` exists.
+  Straight ARGB averaging counts a transparent pixel's color equally with an opaque one — and a transparent pixel is
+  almost always transparent *black* — so every cell straddling the artwork's edge comes out dark and the icon gains a
+  fringe that reads as a rendering fault. `averageArgb` weights by alpha and divides by the alpha total, which is
+  premultiplying and un-premultiplying. Pinned by the one test that would catch the naive version.
+- **Size is the switch**, since cells with no size are the layer itself. Same shape as the chromatic split's offset,
+  reached from the other direction — so no separate strength, and one fewer way to express the same state.
+- **Fill and Roundness are what make it a panel of lights rather than a mosaic.** At full fill the dots touch; below
+  it the gaps open, and roundness then decides whether what is left reads as tiles or as pixels on a display. The
+  radius is a *fraction of the dot*, so full roundness stays a circle at every fill and every bake size.
+- A cell whose average is fully transparent is skipped, which keeps the artwork's outline made of dots rather than of
+  a square block of them.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
 bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
@@ -1648,9 +1665,9 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–9 plus Ripple and Grain of
+**In flight: the icon effects expansion — slices 0–10 of
 [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are done: all of tier 1, the bake-backed preview the rest were
-blocked on, and four of the effects that use it. **Pixelate and Progressive blur are what is left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+blocked on, and the five effects that use it. **Progressive blur is the only one left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the

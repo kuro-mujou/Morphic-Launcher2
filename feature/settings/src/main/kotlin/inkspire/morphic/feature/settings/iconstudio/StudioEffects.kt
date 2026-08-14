@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
+import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
@@ -179,6 +180,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** Noise pushing the layer's pixels about, tearing it into pieces. Per-pixel, so baked, never live. */
     GRAIN("Grain", Icons.Default.Texture),
 
+    /** The layer redrawn as a field of dots, one colour per cell. Per-pixel, so baked, never live. */
+    PIXELATE("Pixelate", Icons.Default.GridOn),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -209,6 +213,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
         RIPPLE -> effects.filterIsInstance<LayerEffect.Ripple>().firstOrNull()
         GRAIN -> effects.filterIsInstance<LayerEffect.Grain>().firstOrNull()
+        PIXELATE -> effects.filterIsInstance<LayerEffect.Pixelate>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -239,6 +244,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         SHADOW -> target.effects.activeEffects.any { it is LayerEffect.Shadow }
         RIPPLE -> target.effects.activeEffects.any { it is LayerEffect.Ripple }
         GRAIN -> target.effects.activeEffects.any { it is LayerEffect.Grain }
+        PIXELATE -> target.effects.activeEffects.any { it is LayerEffect.Pixelate }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -317,6 +323,7 @@ internal fun EffectsControls(
             EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
             EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
             EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
+            EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -524,6 +531,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.GRAIN -> current.effectOrNull<LayerEffect.Grain>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.PIXELATE -> current.effectOrNull<LayerEffect.Pixelate>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -947,6 +957,67 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * How big the dots are, how much of their cells they fill, and how round they come out.
+ *
+ * **No strength slider, and the size is why.** Every other effect here needs a separate knob because it *adds*
+ * something at an intensity; this one replaces the layer with a grid, and cells with no size are the layer itself.
+ * So Size is both the control and the switch — the same shape the chromatic split's offset has, reached from a
+ * different direction.
+ *
+ * **Fill and Roundness are what make it a panel of lights rather than a mosaic.** At a fill of 1 the dots touch and
+ * the effect is a plain mosaic; below it the gaps open, and the roundness then decides whether what is left reads as
+ * tiles or as pixels on a display.
+ */
+@Composable
+private fun PixelateControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // The model's own default is already zero-size — identity — so an absent effect needs no special seeding here,
+    // unlike the ones whose natural resting value is something visible.
+    val pixelate = effects.effectOrNull<LayerEffect.Pixelate>() ?: LayerEffect.Pixelate()
+
+    SliderControl(
+        label = "Size",
+        value = pixelate.cellSize,
+        valueRange = 0f..PixelateReach,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(cellSize = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Fill",
+        // Floored above zero: dots covering none of their cells is identity, so a slider reaching it would silently
+        // delete the effect being tuned.
+        value = pixelate.fill,
+        valueRange = UnitStep..1f,
+        step = UnitStep,
+        default = 1f,
+        onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(fill = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Roundness",
+        value = pixelate.roundness,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(roundness = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
+ * How large a cell may get, as a fraction of the box.
+ *
+ * A fifth puts five dots across the icon, which is already past the point where an app is identifiable — the ceiling
+ * is where the control stops being useful rather than where the arithmetic stops working.
+ */
+private const val PixelateReach = 0.2f
 
 /**
  * How far the noise pushes, how big the pieces are, and whether they scatter or all slide one way.

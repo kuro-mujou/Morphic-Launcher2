@@ -219,6 +219,8 @@ class IconRenderer(
 
                 is LayerEffect.Grain -> replace { grained(it, effect, sizePx) }
 
+                is LayerEffect.Pixelate -> replace { pixelated(it, effect, sizePx) }
+
                 // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
                 is LayerEffect.Glow -> replace {
                     haloed(
@@ -413,6 +415,61 @@ class IconRenderer(
             into[0] = (x + dx * amplitudePx).roundToInt()
             into[1] = (y + dy * amplitudePx).roundToInt()
         }
+    }
+
+    /**
+     * [source] redrawn as a field of dots, one colour averaged per cell.
+     *
+     * **Drawn rather than resampled**, which is why it does not go through [resample]: the gaps between dots and
+     * their rounded corners are things *painted*, and a per-pixel sampler has nowhere to put them. That also means
+     * the corners come out antialiased for free, where an `IntArray` would have to do its own coverage arithmetic.
+     *
+     * A cell whose average is fully transparent is skipped rather than drawn — cheap, and it keeps the artwork's
+     * outline made of dots rather than of a square block of them.
+     */
+    private fun pixelated(source: Bitmap, pixelate: LayerEffect.Pixelate, sizePx: Int): Bitmap {
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+
+        val cellPx = LayerPixelate.cellPx(pixelate, sizePx)
+        val inset = LayerPixelate.insetPx(cellPx, pixelate.fill)
+        val dotPx = cellPx - inset * 2f
+        val radius = LayerPixelate.cornerRadiusPx(dotPx, pixelate.roundness)
+
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+        // Stepped in pixels rather than counted in cells, so the last partial cell at the far edge is drawn too —
+        // dropping it would leave a bare strip whose width changed with the cell size.
+        var top = 0f
+        while (top < sizePx) {
+            var left = 0f
+            while (left < sizePx) {
+                val argb = LayerPixelate.averageArgb(
+                    pixels = pixels,
+                    sizePx = sizePx,
+                    left = left.toInt(),
+                    top = top.toInt(),
+                    cellPx = cellPx.toInt().coerceAtLeast(1),
+                )
+                if (argb ushr 24 != 0) {
+                    paint.color = argb
+                    canvas.drawRoundRect(
+                        left + inset,
+                        top + inset,
+                        left + cellPx - inset,
+                        top + cellPx - inset,
+                        radius,
+                        radius,
+                        paint,
+                    )
+                }
+                left += cellPx
+            }
+            top += cellPx
+        }
+        return out
     }
 
     /**
