@@ -292,8 +292,8 @@ enforces. Per layer:
   the stack* rather than what it is: every layer has both, always, with a meaningful default.
 - **effects** — a sealed list, never columns, and an **ordered pipeline** rather than a bag (see the pipeline note
   below). `LayerEffect.Color` (hue → saturation → brightness → tint, composed into **one** matrix, so monochrome is
-  `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Gradient` (two stops, angle,
-  strength; source-atop so it colors the artwork instead of covering the icon with a rectangle) and
+  `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` (light spilling across the layer
+  — see the bloom note below) and
   `LayerEffect.Filter` (one of the built-in looks, by id). Eleven more are planned —
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — of which **shadows are deferred** until the bake backs
   the preview; see below.
@@ -344,10 +344,67 @@ setup for.
     previewing from its bake (the bake has no such limit at any API). The named `spec.color`/`spec.gradient`
     accessors remain the **editor's** view and deliberately ignore `enabled`, since a panel must show the sliders of
     an effect you switched off.
-  - **One behavior change, accepted:** a stored recipe whose list reads `[Color, Gradient]` — what setting a tint
-    before a gradient produced — now renders in that order, so its tint no longer recolors its gradient. Nothing has
+  - **One behavior change, accepted:** a stored recipe whose list reads `[Color, Bloom]` — what setting a tint
+    before an overlay produced — now renders in that order, so its tint no longer recolors its bloom. Nothing has
     shipped, and the alternative is a canonical order no reorder control could override. Full plan for the thirteen
     effects this unblocks: [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
+
+**Effects apply to a *layer* or to the *whole icon*, and the second is a capability rather than a convenience.**
+`IconLayerSet` carries its own `effects`, run over the finished composite — the same `LayerEffect` type, the same
+pipeline, in both renderers. Per-layer simply *cannot express* six of the planned thirteen: a glow derives from the
+finished silhouette, so on the foreground it glows inside the background plate where nobody can see it; grain, ripple
+and pixelate applied per layer give independent distortion fields that visibly shear apart at the edge of the glyph;
+and even a color matrix differs before and after compositing once opacity or a blend is in play. Additive (defaulted
+empty, `encodeDefaults = false`), and `IconId` already keys on the whole set, so invalidation was free.
+- **The layer rail is the scope control, so this cost one tile and no new vocabulary.** Selection there already meant
+  *"the thing every tool acts on"* — the reason the `LAYERS` bar entry was deleted — so the composite is a tile at the
+  **head** of the rail (above the top layer, since that is where it sits) and `StudioTarget` is a sum type over
+  *composite or layer index*. The studio **opens on the composite**: the layers are permanently on screen, so picking
+  one is an obvious tap, where discovering that effects can apply to everything is not. A *"this layer / whole icon"*
+  switch inside the Effects panel was the alternative and is a second answer to a question the rail already answers —
+  you would be editing the composite while the rail highlighted a layer.
+- **The bar shrinks with the selection, and three tools survive.** `StudioTool.appliesTo` — Source, Transform and Shape
+  are a *layer's* (the composite has no source, no transform of its own and no stack-level mask); Effects applies to
+  both, which is the point; Presets and More were never per-layer. So no "a bar of one is not a bar" special case was
+  needed.
+- **Opacity and Blend drop from the grid for the composite, by the rule slice 1 already settled.** They describe how
+  something *joins a stack* and the composite joins nothing — which is exactly `EffectSlice.ownsEffect`, the same
+  predicate that decides which entries carry a switch. So a new effect is offered on both targets for free.
+- **The composite tile draws the real stack with nothing hidden**, where a layer tile hides every layer but one — a
+  small copy of the canvas, which is correct: it is the thumbnail of the thing being edited. It gets **no quick menu**,
+  since move/hide/delete are all about a place in a stack it is not in; four disabled rows would say less than none,
+  and that is the one place the "disable, never omit" rule does not apply, because these can never become legal.
+- **`activeEffects`, `effectOrNull` and `withEffect` moved onto `List<LayerEffect>`** and the six named per-effect
+  members came off `IconLayerSpec`. Not tidying: "which of these draw?" has to have **one** answer for a layer and for
+  the whole icon, and two holders with their own copies of the filter is a difference nobody would think to look for.
+- **The trap, and it is silent:** anything rebuilding the stack must `copy(layers = …)`, never `IconLayerSet(layers)` —
+  the constructor takes `effects` too, so a positional rebuild drops every whole-icon effect the moment a layer moves.
+  Pinned by a test.
+- Rejected: a Photoshop-style **adjustment layer** at any height. The bake would manage it; the live path cannot sample
+  its siblings without restructuring the whole stack into nesting, which is the two-renderer hazard at its worst. The
+  composite is the one position that is cheap on both sides.
+
+**`LayerEffect.Bloom` is what `Gradient` became, and it is one color fading out rather than two stops.** Light spilling
+across the layer, painted source-atop. The rename is the rule the rest of the grid follows — every other entry names a
+*look* where "gradient" named a shader. The color change is the load-bearing half: with two opaque stops, source-atop
+*replaces* every pixel it covers, so a default white→black bloom at full strength obliterated the artwork it was meant
+to light. Four things worth knowing:
+- **The far end is the same color with its alpha dropped, never `Color.TRANSPARENT`.** Transparent black drags a white
+  bloom through gray on the way out — a dirty edge that reads as a rendering fault. `LayerGradient.fadeOut`, shared
+  because it is exactly the detail one renderer would get right and the other would not.
+- **`BloomFalloff` swaps one control for another rather than adding one.** A linear ramp spans its frame at every angle
+  so it has no reach to set; a disc has no direction to run in. The panel shows Angle *or* Radius — the same rule that
+  gates the tint-style control on a tint existing.
+- **It takes `ShapeAnchor`, through the same `InkFit`**, so a bloom and a shape anchored to content on one layer land on
+  the same square. Second consumer of that enum, which now wants renaming (`ContentAnchor`?) — a mechanical commit of
+  its own, like the queued `folder/` one.
+- **`LayerGradient` places it without a `Matrix`**, unlike `ShapeMask`: a gradient is placed by handing endpoints or a
+  center to a platform constructor, so the whole frame derivation is float arithmetic and therefore JVM-testable — which
+  is where the anchored cases are pinned, since drift there is invisible in an editor drawing it the same wrong way.
+- **The `@SerialName` stays `"gradient"` deliberately.** An unknown *key* is skipped, but an unknown polymorphic *type*
+  throws, and `IconLayerSetCodec` drops the **whole recipe** on a throw — so renaming it would cost a user every
+  customized icon rather than one effect's colors. That is why the settings layer's "the key name is the seam for a
+  semantic break" rule does not transfer here. Stored blooms lose their two stops and keep everything else.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
     mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
     (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
@@ -459,15 +516,20 @@ app's context menu. Five things about it:
   so a live-committing slider rewrites the whole document per frame, and a global edit restyles every icon on the
   device — not a thing to do continuously while someone is still deciding. The *preview* is live either way,
   which is all "live edit is non-negotiable" ever meant.
-- **There is no "this layer / whole icon" scope split**, which L1's UI plan left as an open question. Every one of
-  its six whole-icon tools has gone elsewhere here: the tile shape became a per-layer shape (there is no
-  stack-level mask), the background is the background layer's source, theming is `AppDefaultMonochrome`, sizing is
-  `data:settings` and another screen, the skin is deferred, and a pack will be a per-layer source.
+- **There *is* a "this layer / whole icon" split now, and it is a tile in the rail rather than a scope toggle.** This
+  used to say there was none, and that was right while every one of L1's six whole-icon tools had somewhere else to go:
+  the tile shape became a per-layer shape (there is still no stack-level mask), the background is the background
+  layer's source, theming is `AppDefaultMonochrome`, sizing is `data:settings` and another screen, the skin is
+  deferred, and a pack is a per-layer source. **Effects are the one that had nowhere to go** — see the whole-icon
+  effects note above — so the composite became a selectable target, which is a different answer from L1's open question
+  rather than a reversal of this one: the scope is chosen by *selecting a thing*, not by a mode switch inside a panel.
 - **The stack is a rail down the canvas edge, not a bar entry** (`StudioLayerRail`), and the `LAYERS` tool is gone.
   The bar had swallowed the one thing that must never need opening — `StudioToolPanel`'s own KDoc recorded it:
   *"while the stack was permanently on screen, 'which layer am I editing?' was answered by looking at it"*. Once the
   rail also reordered, hid and deleted, the entry's only remaining job was *add*, and an entry that is one button is
   a button — it belongs where the layers are, as the `+` at the end of the rail.
+  - **The whole icon is the tile at its head**, which is what makes the rail the studio's scope control rather than
+    only its layer list — see the whole-icon effects note above.
   - **Tap selects; long-press selects *and* opens the quick menu.** Selecting first is what lets one set of commands
     serve every tile — the rule the old eye button already followed, since an action on an unselected row silently
     acts on a different layer. So the menu reads `state.canMoveUp` and friends, which are answers about the
@@ -1414,9 +1476,10 @@ and rejected — it would deny glow and drop shadow to every device below Androi
 gesture, which is why `LayerEffect.drawsLive` exists now with nothing yet answering it `false`.
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
-`SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), and the **layer rail** that replaced
-the `LAYERS` tool entry (slice 3). Next is Bloom + Gloss, which reuse the gradient path and retire the standalone
-"Gradient" entry into them; seven of the thirteen need no render-architecture change at all.
+`SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
+`LAYERS` tool entry (slice 3), and half of slice 4 — **`LayerEffect.Bloom`**, plus **whole-icon effects**, which that
+plan had not noticed it needed (six of the thirteen are only correct over the composite). Next is **Gloss**; seven of
+the thirteen need no render-architecture change at all.
 
 **Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes

@@ -11,6 +11,23 @@ import kotlinx.serialization.Serializable
  * The invariant is enforced in code, not the type: construction validates it, and the reorder helpers
  * ([moveUp]/[moveDown]) refuse a move that would break it (returning the set unchanged) rather than throwing.
  *
+ * ## [effects] — the set's own, applied to the finished icon
+ *
+ * The layers composite into one picture, and *then* these run over it. **That is a capability rather than a
+ * convenience**, which is the whole reason it is not "the same effect copied onto every layer": a glow derives from
+ * the finished silhouette, so a per-layer one glows around the foreground *inside* the background plate, where it
+ * cannot be seen; a displacement applied per layer produces two independent distortion fields that visibly shear
+ * apart at the edge of the glyph; and even a colour matrix is not the same thing applied before compositing as
+ * after, the moment opacity or a blend mode is in play.
+ *
+ * **The same [LayerEffect] type, deliberately.** The composite is a thing with pixels and nothing beneath it — which
+ * is a layer's shape minus the two properties that describe *joining a stack* — so both renderers reuse their whole
+ * per-layer pipeline on it rather than growing a second one. What it does not get is [IconLayerSpec.opacity] and
+ * [IconLayerSpec.blend], and the studio's Effects grid drops exactly those two entries for it, which falls out of
+ * the same rule that decides which entries carry a switch.
+ *
+ * Defaulted empty with `encodeDefaults = false`, so no stored recipe moved to gain it.
+ *
  * ## Why the recipe lives in `core:model` and not beside the renderer
  *
  * This whole package is an icon's **recipe** — pure data describing what an icon should look like — while
@@ -24,7 +41,10 @@ import kotlinx.serialization.Serializable
  * in this package is `@Serializable` and their `@SerialName`s are a stable on-disk contract.
  */
 @Serializable
-data class IconLayerSet(val layers: List<IconLayerSpec>) {
+data class IconLayerSet(
+    val layers: List<IconLayerSpec>,
+    val effects: List<LayerEffect> = emptyList(),
+) {
 
     init {
         val fg = layers.count { it.role == LayerRole.FOREGROUND }
@@ -33,6 +53,9 @@ data class IconLayerSet(val layers: List<IconLayerSpec>) {
         require(bg == 1) { "an icon layer set needs exactly one background layer, had $bg" }
         require(foregroundAboveBackground(layers)) { "the foreground layer must sit above the background" }
     }
+
+    /** The whole-icon effects that actually draw, in the order they are applied. @see activeEffects */
+    val activeEffects: List<LayerEffect> get() = effects.activeEffects
 
     /** The single, always-present background layer. */
     val background: IconLayerSpec get() = layers.first { it.role == LayerRole.BACKGROUND }
@@ -61,7 +84,11 @@ data class IconLayerSet(val layers: List<IconLayerSpec>) {
         reordered[i] = layers[j]
         reordered[j] = layers[i]
         // A swap never changes the role counts, so only the fg-above-bg order can be violated.
-        return if (foregroundAboveBackground(reordered)) IconLayerSet(reordered) else this
+        //
+        // `copy` rather than the constructor, and that is not a style choice: the constructor takes [effects] too, so
+        // rebuilding positionally would silently drop the whole icon's effects every time a layer moved. Anything
+        // else assembling a new layer list must do the same.
+        return if (foregroundAboveBackground(reordered)) copy(layers = reordered) else this
     }
 
     companion object {

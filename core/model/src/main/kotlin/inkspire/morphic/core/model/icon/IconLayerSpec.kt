@@ -65,12 +65,12 @@ data class IconLayerSpec(
      * instead, so its tint no longer recolors its bloom. Nothing has shipped, and the alternative is a canonical
      * order that no reorder control could ever override.
      *
-     * Filtering here rather than in each renderer is what keeps "disabled" and "does nothing" from being answered
-     * twice: [LayerEffect.enabled] is the user's switch, [LayerEffect.isIdentity] is the effect saying it would
-     * paint nothing.
+     * **The filtering itself lives on `List<LayerEffect>`**, not here, because a layer stopped being the only thing
+     * that has effects the moment [IconLayerSet] gained its own — and "which of these draw?" must have exactly one
+     * answer for both. See [activeEffects].
      */
     val activeEffects: List<LayerEffect>
-        get() = effects.filter { it.enabled && !it.isIdentity }
+        get() = effects.activeEffects
 
     /**
      * Whether the **live** render path can draw every effect on this layer, or whether the studio must preview it
@@ -78,42 +78,15 @@ data class IconLayerSpec(
      * since a preview missing one effect is a preview that lies.
      */
     val drawsLive: Boolean
-        get() = activeEffects.all { it.drawsLive }
-
-    /**
-     * The layer's color effect, or null when it has none. At most one is meaningful — see [LayerEffect.Color].
-     *
-     * **These named accessors are the *editor's* view, and [activeEffects] is the *renderers'*.** The split is
-     * deliberate now that the two can disagree: this one deliberately ignores [LayerEffect.enabled], because a
-     * panel has to show you the sliders of an effect you switched off — that is what switching off rather than
-     * deleting is for. Anything deciding what to *draw* must read [activeEffects] instead.
-     */
-    val color: LayerEffect.Color?
-        get() = effects.filterIsInstance<LayerEffect.Color>().firstOrNull()?.takeIf { !it.isIdentity }
-
-    /** Replaces (or clears) this layer's color effect, leaving every other effect in place and in order. */
-    fun withColor(color: LayerEffect.Color?): IconLayerSpec {
-        val rest = effects.filterNot { it is LayerEffect.Color }
-        return copy(effects = if (color == null || color.isIdentity) rest else rest + color)
-    }
-
-    /** The layer's bloom overlay, or null when it has none. */
-    val bloom: LayerEffect.Bloom?
-        get() = effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()?.takeIf { !it.isIdentity }
-
-    /** Replaces (or clears) this layer's bloom overlay, leaving every other effect in place and in order. */
-    fun withBloom(bloom: LayerEffect.Bloom?): IconLayerSpec {
-        val rest = effects.filterNot { it is LayerEffect.Bloom }
-        return copy(effects = if (bloom == null || bloom.isIdentity) rest else rest + bloom)
-    }
-
-    /** The layer's colour-look filter, or null when it has none. */
-    val filter: LayerEffect.Filter?
-        get() = effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()?.takeIf { !it.isIdentity }
-
-    /** Replaces (or clears) this layer's filter, leaving every other effect in place and in order. */
-    fun withFilter(filter: LayerEffect.Filter?): IconLayerSpec {
-        val rest = effects.filterNot { it is LayerEffect.Filter }
-        return copy(effects = if (filter == null || filter.isIdentity) rest else rest + filter)
-    }
+        get() = effects.drawLive
 }
+
+/**
+ * This layer with its one effect of type [T] replaced, or removed when [effect] is null or would paint nothing.
+ *
+ * The list function of the same name, lifted to the layer that holds one — which is the ordinary case, and saves
+ * every caller spelling out `copy(effects = effects.withEffect(…))`. Top-level rather than a member because a
+ * `reified` type parameter cannot be one.
+ */
+inline fun <reified T : LayerEffect> IconLayerSpec.withEffect(effect: T?): IconLayerSpec =
+    copy(effects = effects.withEffect(effect))

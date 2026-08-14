@@ -130,7 +130,8 @@ fun IconStudioScreen(
     val editingOneApp = state.subject is StudioSubject.App
     val actions = remember(viewModel, imagePicker, editingOneApp) {
         StudioActions(
-            selectLayer = viewModel::selectLayer,
+            selectTarget = viewModel::selectTarget,
+            updateEffects = viewModel::updateEffects,
             update = viewModel::updateSelected,
             commit = viewModel::commitEdit,
             toggleVisible = viewModel::toggleSelectedVisible,
@@ -232,7 +233,7 @@ fun IconStudioScreen(
                 hazeState = canvasHaze,
                 customImage = customImage,
                 packImage = packImage,
-                onSelectLayer = viewModel::selectLayer,
+                onSelect = viewModel::selectTarget,
                 onMove = viewModel::moveSelected,
                 onAdd = viewModel::addLayer,
                 onRemove = viewModel::removeSelected,
@@ -447,6 +448,9 @@ fun IconStudioScreen(
 
                 StudioToolBar(
                     hazeState = screenHaze,
+                    // Derived from the selection, so the composite offers only what applies to it — see
+                    // [StudioTool.appliesTo].
+                    tools = StudioTool.entries.filter { it.appliesTo(state.target) },
                     // Centred explicitly, because the bar wraps its contents now and this column aligns to the
                     // start for the row of session buttons above. `ColumnScope.align` is the per-child override,
                     // so the two say what they mean rather than one of them settling for the other's answer.

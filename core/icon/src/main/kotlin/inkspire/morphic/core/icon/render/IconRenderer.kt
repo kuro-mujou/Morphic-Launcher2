@@ -82,7 +82,11 @@ class IconRenderer(
             canvas.drawBitmap(layerBitmap, 0f, 0f, compositePaint(layer.spec))
             layerBitmap.recycle()
         }
-        return output
+
+        // **The set's own effects, over the finished picture** — the same pipeline a layer's run through, which is
+        // the point of them being the same type. What the composite does not have is a transform or measured ink, so
+        // anything anchored to content falls back to the box, exactly as an unmeasured layer's does.
+        return applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx)
     }
 
     /**
@@ -112,8 +116,8 @@ class IconRenderer(
      * if either is touched.
      */
     private fun renderLayer(layer: ResolvedLayer, sizePx: Int): Bitmap {
-        var bitmap = createBitmap(sizePx, sizePx)
-        var canvas = Canvas(bitmap)
+        val bitmap = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(bitmap)
         val transform = LayerTransform.of(layer.spec, sizePx)
 
         canvas.withMatrix(transform.toMatrix(sizePx)) {
@@ -128,18 +132,41 @@ class IconRenderer(
         }
 
         // **Effects come after the mask**, so one colors or covers the shaped silhouette rather than the square it
-        // was cut from — which is what made a gradient an overlay rather than a rectangle, and holds for every
-        // effect that follows it.
-        //
-        // **Two kinds, and the difference is a buffer.** An *overlay* paints onto what is already there and needs
-        // nothing; a *filter* transforms pixels that have already been drawn, which a canvas cannot do in place —
-        // so it costs one bitmap. Keeping that visible here is the point: it is the honest cost of the pipeline,
-        // and the shape every effect added later has to declare itself against.
+        // was cut from — which is what made a bloom an overlay rather than a rectangle, and holds for every effect
+        // that follows it.
         //
         // Measured once for the whole pipeline rather than per effect: it is a property of the layer's artwork, and
         // every effect that can be anchored to content is anchored to the *same* square a shape mask would use.
-        val inkFit = ShapeMask.inkFit(layer.content)
-        for (effect in layer.spec.activeEffects) {
+        return applyEffects(bitmap, layer.spec.activeEffects, ShapeMask.inkFit(layer.content), transform, sizePx)
+    }
+
+    /**
+     * Runs [effects] over [bitmap] in order, returning whatever the pipeline ends up holding.
+     *
+     * **One function for a layer and for the whole icon**, which is what makes an icon-wide effect cost a call rather
+     * than a second implementation: the composite is a thing with pixels, so the only difference is what it is
+     * placed against — [ShapeMask.InkFit.Box] and [LayerTransform.Identity], since it has neither ink of its own to
+     * measure nor a transform to follow.
+     *
+     * **Two kinds of effect, and the difference is a buffer.** An *overlay* paints onto what is already there and
+     * needs nothing; a *filter* transforms pixels that have already been drawn, which a canvas cannot do in place —
+     * so it costs one bitmap. Keeping that visible here is the point: it is the honest cost of the pipeline, and the
+     * shape every effect added later has to declare itself against.
+     *
+     * Takes ownership of [bitmap]: a filter recycles it and hands back its replacement, so the caller must use the
+     * return value and must not touch what it passed in.
+     */
+    private fun applyEffects(
+        bitmap: Bitmap,
+        effects: List<LayerEffect>,
+        inkFit: ShapeMask.InkFit,
+        transform: LayerTransform,
+        sizePx: Int,
+    ): Bitmap {
+        var current = bitmap
+        var canvas = Canvas(current)
+
+        for (effect in effects) {
             val matrix = when (effect) {
                 is LayerEffect.Bloom -> {
                     applyBloom(canvas, effect, LayerGradient.frameOf(effect, inkFit, transform, sizePx), sizePx)
@@ -154,19 +181,19 @@ class IconRenderer(
             if (matrix != null) {
                 val filtered = createBitmap(sizePx, sizePx)
                 Canvas(filtered).drawBitmap(
-                    bitmap,
+                    current,
                     0f,
                     0f,
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
                     },
                 )
-                bitmap.recycle()
-                bitmap = filtered
-                canvas = Canvas(bitmap)
+                current.recycle()
+                current = filtered
+                canvas = Canvas(current)
             }
         }
-        return bitmap
+        return current
     }
 
     /**

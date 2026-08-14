@@ -7,6 +7,8 @@ import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.TintMode
+import inkspire.morphic.core.model.icon.effectOrNull
+import inkspire.morphic.core.model.icon.withEffect
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import kotlin.math.PI
@@ -165,13 +167,13 @@ private fun IconLayerSpec.resolveLayer(
         //
         // Folded into the spec rather than baked into the content, which keeps it composable with the layer's own
         // recoloring: a tint the user set survives, and silhouette-plus-tint is the themed-icon recipe.
-        null -> ResolvedLayer(icon.foreground, withColor(monochromeFallbackColor()))
+        null -> ResolvedLayer(icon.foreground, withEffect(monochromeFallbackColor()))
 
         // The app ships one — and it is drained too, which is the arm this used to get wrong by handing the artwork
         // straight through. The themed-icon slot is *meant* to hold a silhouette, but it is only a convention and a
         // fair number of apps put full-color artwork in it. Those came out colored while every other icon in the set
         // had gone gray, so the one app that shipped the slot correctly-looking was the one that stood out.
-        else -> ResolvedLayer(mono, withColor(monochromeColor()))
+        else -> ResolvedLayer(mono, withEffect(monochromeColor()))
     }
 
     is LayerSource.SolidFill -> ResolvedLayer(ParsedLayer.Color(src.argb), this)
@@ -228,7 +230,7 @@ private fun IconLayerSpec.appArtwork(icon: ParsedIcon): ParsedLayer? = when (rol
  * or black. That is L1's `foregroundUniform`/`normalize` question and is deliberately still open.
  */
 private fun IconLayerSpec.monochromeColor(): LayerEffect.Color =
-    (color ?: LayerEffect.Color()).copy(saturation = 0f)
+    (effects.effectOrNull<LayerEffect.Color>() ?: LayerEffect.Color()).copy(saturation = 0f)
 
 /**
  * [monochromeColor] plus the one thing the **fallback** needs on top of it: [TintMode.SOLID] downgraded to

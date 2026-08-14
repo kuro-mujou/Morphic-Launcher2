@@ -237,3 +237,47 @@ sealed interface LayerEffect {
         override val drawsLive: Boolean get() = true
     }
 }
+
+/**
+ * The effects that actually draw, **in the order they are applied** — which is the list's own order.
+ *
+ * **On the list rather than on [IconLayerSpec], because a layer is no longer the only thing that has effects.**
+ * [IconLayerSet] carries its own, applied to the finished composite, and "which of these draw?" has to have one
+ * answer for both — a set whose disabled effects were filtered by a different rule from a layer's would be a
+ * difference nobody would think to look for.
+ *
+ * Two questions, deliberately answered together: [LayerEffect.enabled] is the user's switch,
+ * [LayerEffect.isIdentity] is the effect saying it would paint nothing. No renderer should have to ask either.
+ */
+val List<LayerEffect>.activeEffects: List<LayerEffect>
+    get() = filter { it.enabled && !it.isIdentity }
+
+/**
+ * Whether the **live** render path can draw every one of these, or whether the studio must preview from the bake.
+ *
+ * False if any single active effect says so — an effect that cannot be drawn cannot simply be skipped, since a
+ * preview missing one effect is a preview that lies.
+ */
+val List<LayerEffect>.drawLive: Boolean
+    get() = activeEffects.all { it.drawsLive }
+
+/**
+ * The one effect of type [T] that is doing something, or null.
+ *
+ * **This is the *editor's* view, where [activeEffects] is the *renderers'*.** It deliberately ignores
+ * [LayerEffect.enabled], because a panel has to show the sliders of an effect you switched off — that is what
+ * switching off rather than deleting is for. Anything deciding what to *draw* must read [activeEffects] instead.
+ */
+inline fun <reified T : LayerEffect> List<LayerEffect>.effectOrNull(): T? =
+    filterIsInstance<T>().firstOrNull()?.takeIf { !it.isIdentity }
+
+/**
+ * These effects with the one of type [T] replaced, or removed when [effect] is null or would paint nothing.
+ *
+ * At most one of each type is meaningful, so this replaces rather than appends — and an effect at its defaults is
+ * *dropped* rather than stored as a row of neutral numbers, which is what keeps an untouched recipe empty on disk.
+ */
+inline fun <reified T : LayerEffect> List<LayerEffect>.withEffect(effect: T?): List<LayerEffect> {
+    val rest = filterNot { it is T }
+    return if (effect == null || effect.isIdentity) rest else rest + effect
+}

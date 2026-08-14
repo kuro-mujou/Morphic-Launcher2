@@ -81,4 +81,23 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
      * it does not deserve a bar entry of its own, where it could be pressed on the way to a tool.
      */
     MORE("More", Icons.Default.MoreHoriz),
+    ;
+
+    /**
+     * Whether this tool means anything for [target] — which is what decides the bar's contents.
+     *
+     * **The bar is derived from the selection, and always was in spirit**: every entry here acts on the selected
+     * thing, which is why the Layers entry was deleted when the rail took that job. Making the whole icon selectable
+     * simply makes some of them inapplicable, and a bar that changes with the selection is the honest report of that
+     * — a shorter bar for a target with fewer questions.
+     *
+     * [SOURCE], [TRANSFORM] and [SHAPE] are a *layer's*: the composite has no source (it is what the layers make),
+     * no transform of its own, and no stack-level mask. [EFFECTS] is the one that applies to both, which is the whole
+     * point of the composite existing. [PRESETS] and [MORE] were never per-layer — they act on the whole recipe — so
+     * they stay, and the composite keeps three entries rather than one.
+     */
+    fun appliesTo(target: StudioTarget): Boolean = when (this) {
+        SOURCE, TRANSFORM, SHAPE -> target is StudioTarget.Layer
+        EFFECTS, PRESETS, MORE -> true
+    }
 }

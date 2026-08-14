@@ -108,6 +108,48 @@ class LayerEffectPipelineTest {
     }
 
     @Test
+    fun `the whole icon filters its effects by the same rule a layer does`() {
+        // One rule for both, which is why `activeEffects` is on the list rather than on either holder: a set whose
+        // switched-off effects were filtered differently from a layer's would be a difference nobody thinks to look
+        // for, and it would show up as one renderer drawing an effect the other skipped.
+        val set = IconLayerSet.Base.copy(effects = listOf(tint.copy(enabled = false), bloom))
+
+        assertEquals(listOf(bloom), set.activeEffects)
+        assertEquals(2, set.effects.size)
+    }
+
+    @Test
+    fun `reordering layers keeps the icon's own effects`() {
+        // The trap this field brought with it: everything that rebuilds the stack must `copy` rather than call the
+        // constructor, or a whole-icon effect silently disappears the moment a layer is moved — a loss with no error
+        // and no obvious cause.
+        val set = IconLayerSet(
+            layers = listOf(
+                IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.AppDefault),
+                IconLayerSpec(role = LayerRole.FOREGROUND, source = LayerSource.AppDefault),
+                IconLayerSpec(role = LayerRole.CUSTOM, source = LayerSource.Empty),
+            ),
+            effects = listOf(bloom),
+        )
+
+        assertEquals(listOf(bloom), set.moveUp(1).effects)
+        assertEquals(listOf(bloom), set.moveDown(2).effects)
+        // And a refused move returns the set itself, so there is nothing to lose on that path either.
+        assertEquals(listOf(bloom), set.moveDown(0).effects)
+    }
+
+    @Test
+    fun `an icon with no effects of its own costs nothing on disk`() {
+        // Additive, like every field before it: `encodeDefaults = false` plus an empty default means the recipes
+        // written before whole-icon effects existed read back byte-identical.
+        val json = Json { encodeDefaults = false }
+        val encoded = json.encodeToString(IconLayerSet.serializer(), IconLayerSet.Base)
+
+        assertFalse(encoded.contains("effects"))
+        assertEquals(IconLayerSet.Base, json.decodeFromString(IconLayerSet.serializer(), encoded))
+    }
+
+    @Test
     fun `a radial bloom that reaches nowhere paints nothing`() {
         // Not cosmetic: `RadialGradient` rejects a non-positive radius outright, so this is what keeps the one value
         // a slider can always be dragged to from reaching either renderer.

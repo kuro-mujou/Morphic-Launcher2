@@ -106,13 +106,28 @@ fun IconLayerStack(
     // are given, so without its own buffer a `MULTIPLY` on the bottom layer would multiply against the *studio
     // canvas* — the black, white or checkerboard behind the icon — instead of against nothing. The baked path
     // gets this for free by drawing into a fresh bitmap.
-    Box(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+    Box(
+        modifier
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            // **The set's own effects, applied to the finished stack.** Inside the offscreen layer, so what they
+            // transform is the composited children and not whatever is behind the icon. The composite has no
+            // transform and no measured ink, so anything anchored to content falls back to the box — the same
+            // degrade an unmeasured layer takes, stated by passing no spec.
+            .layerEffects(layerSet.activeEffects, spec = null, inkFit = ShapeMask.InkFit.Box),
+    ) {
         layers.forEach { layer ->
             // Three nested nodes now, and the nesting is the whole trick. The composite (opacity / blend / color)
             // is **outermost**, so it applies to the finished layer and blends against the layers already drawn;
             // the mask sits inside it but **outside the transform**, so a shape stays put in the box while the
             // content moves under it. The baked path gets the same ordering from its draw order.
-            Box(Modifier.fillMaxSize().layerComposite(layer.spec).layerEffects(layer).shapeMask(layer)) {
+            val inkFit = remember(layer.content) { ShapeMask.inkFit(layer.content) }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .layerComposite(layer.spec)
+                    .layerEffects(layer.spec.activeEffects, layer.spec, inkFit)
+                    .shapeMask(layer),
+            ) {
                 Canvas(
                     Modifier
                         .fillMaxSize()
@@ -194,16 +209,15 @@ private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
  * what makes the pipeline a pipeline instead of four things painted on the same sheet.
  */
 @Composable
-private fun Modifier.layerEffects(layer: ResolvedLayer): Modifier {
-    val effects = layer.spec.activeEffects
+private fun Modifier.layerEffects(
+    effects: List<LayerEffect>,
+    spec: IconLayerSpec?,
+    inkFit: ShapeMask.InkFit,
+): Modifier {
     if (effects.isEmpty()) return this
 
-    // Measured once for the whole chain, as the bake measures once for its whole loop — it is a property of the
-    // layer's artwork, and every effect anchored to content is anchored to the square a shape mask would use.
-    val inkFit = remember(layer.content) { ShapeMask.inkFit(layer.content) }
-
     return effects.reversed().fold(this) { chain, effect ->
-        chain.then(effectModifier(effect, layer.spec, inkFit))
+        chain.then(effectModifier(effect, spec, inkFit))
     }
 }
 
@@ -213,9 +227,11 @@ private fun Modifier.layerEffects(layer: ResolvedLayer): Modifier {
  * Takes the spec and the ink fit rather than the resolved frame, because a frame is in **pixels** and the node's
  * real size is only known inside the draw scope — which is the same reason [LayerTransform] is resolved in the
  * `graphicsLayer` block rather than in composition.
+ *
+ * A null [spec] is the **composite**: it has no transform of its own, so anything placed against it sits in the box.
  */
 @Composable
-private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec, inkFit: ShapeMask.InkFit): Modifier = when (effect) {
+private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit): Modifier = when (effect) {
     // Two effects, one drawing: both resolve to a colour matrix over everything drawn so far, and only where the
     // matrix comes from differs — composed from four sliders, or looked up by id.
     is LayerEffect.Color, is LayerEffect.Filter -> {
@@ -262,10 +278,11 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec, inkFit: Sha
  * source-atop, and where each one sits comes from [LayerGradient] — including the frame, so a bloom anchored to the
  * artwork lands on the same ink in both paths and turns with it by the same arithmetic.
  */
-private fun DrawScope.drawBloomOverlay(bloom: LayerEffect.Bloom, spec: IconLayerSpec, inkFit: ShapeMask.InkFit) {
+private fun DrawScope.drawBloomOverlay(bloom: LayerEffect.Bloom, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit) {
     // Square, from the width — the same quantity the transform and the shape mask read the box by.
     val sizePx = size.width.toInt()
-    val frame = LayerGradient.frameOf(bloom, inkFit, LayerTransform.of(spec, sizePx), sizePx)
+    val transform = spec?.let { LayerTransform.of(it, sizePx) } ?: LayerTransform.Identity
+    val frame = LayerGradient.frameOf(bloom, inkFit, transform, sizePx)
     val colors = listOf(Color(bloom.argb), Color(LayerGradient.fadeOut(bloom.argb)))
 
     val brush = when (bloom.falloff) {

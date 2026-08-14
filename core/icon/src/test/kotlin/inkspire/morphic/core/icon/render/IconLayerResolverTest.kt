@@ -6,6 +6,7 @@ import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerEffect
+import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.TintMode
@@ -73,7 +74,7 @@ class IconLayerResolverTest {
         assertEquals(ParsedLayer.Color(themedArgb), resolved.content)
         // ...and it is drained. This is the assertion that was false: the spec came back with no color effect at all,
         // so a themed layer holding a full-color picture stayed a full-color picture.
-        assertEquals(0f, resolved.spec.color?.saturation)
+        assertEquals(0f, resolved.color?.saturation)
     }
 
     @Test
@@ -81,7 +82,7 @@ class IconLayerResolverTest {
         val resolved = resolveForeground(monochromeSet(), icon(monochrome = null))
 
         assertEquals(ParsedLayer.Color(foregroundArgb), resolved.content)
-        assertEquals(0f, resolved.spec.color?.saturation)
+        assertEquals(0f, resolved.color?.saturation)
     }
 
     /**
@@ -94,8 +95,8 @@ class IconLayerResolverTest {
         val withThemed = resolveForeground(monochromeSet(), icon(monochrome = ParsedLayer.Color(themedArgb)))
         val withoutThemed = resolveForeground(monochromeSet(), icon(monochrome = null))
 
-        assertEquals(withoutThemed.spec.color?.saturation, withThemed.spec.color?.saturation)
-        assertEquals(0f, withThemed.spec.color?.saturation)
+        assertEquals(withoutThemed.color?.saturation, withThemed.color?.saturation)
+        assertEquals(0f, withThemed.color?.saturation)
     }
 
     @Test
@@ -103,11 +104,11 @@ class IconLayerResolverTest {
         val tint = LayerEffect.Color(tintArgb = 0xFF3366CC.toInt(), tintMode = TintMode.SOLID)
         val resolved = resolveForeground(monochromeSet(tint), icon(monochrome = ParsedLayer.Color(themedArgb)))
 
-        assertEquals(0xFF3366CC.toInt(), resolved.spec.color?.tintArgb)
-        assertEquals(0f, resolved.spec.color?.saturation)
+        assertEquals(0xFF3366CC.toInt(), resolved.color?.tintArgb)
+        assertEquals(0f, resolved.color?.saturation)
         // SOLID is *kept* over real themed artwork: flattening a silhouette to one flat color is what that mode is
         // for, and lifting a black glyph to white is the case it was added for.
-        assertEquals(TintMode.SOLID, resolved.spec.color?.tintMode)
+        assertEquals(TintMode.SOLID, resolved.color?.tintMode)
     }
 
     /**
@@ -120,14 +121,14 @@ class IconLayerResolverTest {
         val tint = LayerEffect.Color(tintArgb = 0xFF3366CC.toInt(), tintMode = TintMode.SOLID)
         val resolved = resolveForeground(monochromeSet(tint), icon(monochrome = null))
 
-        assertEquals(TintMode.MULTIPLY, resolved.spec.color?.tintMode)
+        assertEquals(TintMode.MULTIPLY, resolved.color?.tintMode)
         // The tint itself is kept — only its mode changes, so the color the user picked still shows through as a
         // multiply over greyscale.
-        assertEquals(0xFF3366CC.toInt(), resolved.spec.color?.tintArgb)
+        assertEquals(0xFF3366CC.toInt(), resolved.color?.tintArgb)
     }
 
     /**
-     * The drain must not eat the layer's other effects. `withColor` replaces only the color effect, and a bloom
+     * The drain must not eat the layer's other effects. `withEffect` replaces only the color effect, and a bloom
      * silently disappearing when a source changed would be the kind of loss nobody attributes to this arm.
      */
     @Test
@@ -147,7 +148,7 @@ class IconLayerResolverTest {
         val resolved = resolveForeground(set, icon(monochrome = ParsedLayer.Color(themedArgb)))
 
         assertTrue(bloom in resolved.spec.effects)
-        assertEquals(0f, resolved.spec.color?.saturation)
+        assertEquals(0f, resolved.color?.saturation)
     }
 
     // --- normalize: every icon fills its box ---
@@ -485,3 +486,13 @@ internal class StubDrawable : android.graphics.drawable.Drawable() {
     @Deprecated("Deprecated in Java", ReplaceWith("android.graphics.PixelFormat.TRANSLUCENT"))
     override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
 }
+
+/**
+ * The colour effect the resolver left on a layer.
+ *
+ * A local accessor because this file asks for it a dozen times, and `IconLayerSpec` deliberately no longer carries
+ * one: the named per-effect helpers came off it when [IconLayerSet] gained effects of its own, so that "which of
+ * these draw?" had one answer for a layer and for the whole icon rather than two.
+ */
+private val ResolvedLayer.color: LayerEffect.Color?
+    get() = spec.effects.effectOrNull<LayerEffect.Color>()

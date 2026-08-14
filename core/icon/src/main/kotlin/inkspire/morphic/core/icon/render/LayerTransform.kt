@@ -53,6 +53,17 @@ data class LayerTransform(
     }
 
     companion object {
+
+        /**
+         * The transform of something that is not moved at all — what the **composite** takes.
+         *
+         * The finished icon has no transform of its own (there is nothing to slide it relative to), but anything
+         * placed against it still has to be placed against *something*: `LayerGradient.frameOf` asks for one, and
+         * a null there would mean every consumer inventing this value for itself.
+         */
+        val Identity: LayerTransform =
+            LayerTransform(zoom = 1f, rotationDegrees = 0f, translateXPx = 0f, translateYPx = 0f)
+
         /** Resolves [spec]'s normalized transform against a square box of [sizePx]. */
         fun of(spec: IconLayerSpec, sizePx: Int): LayerTransform = LayerTransform(
             zoom = spec.zoom,

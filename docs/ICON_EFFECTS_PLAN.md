@@ -4,9 +4,13 @@ Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from oth
 filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
 before any of them can land, and the order to build them in.
 
-Status: **slices 0–3 done** (see §5). The pipeline, the effect panel, the filter library and the layer rail are
-built; the eleven remaining effects are not. Where the build diverged from this plan, §5 records it — the plan is
-kept as written so the reasoning that was wrong stays visible next to what replaced it.
+Status: **slices 0–3 done, plus Bloom and whole-icon effects from slice 4** (see §5). The pipeline, the effect panel,
+the filter library, the layer rail, `LayerEffect.Bloom` and `IconLayerSet.effects` are built; the remaining effects are
+not. Where the build diverged from this plan, §5 records it — the plan is kept as written so the reasoning that was
+wrong stays visible next to what replaced it.
+
+**The largest thing this plan got wrong is in §3**: it treats all thirteen as *layer* effects, and six of them are only
+correct over the finished composite. See §5's whole-icon note.
 
 ---
 
@@ -259,7 +263,8 @@ Each slice is independently reviewable and leaves the studio working.
 | 1 | Effect panel: grid paging, per-effect switch, slider reset + numeric field | The container for everything below | **done** |
 | 2 | **Filters** | Largest visible gain, tier 1, no new machinery | **done** |
 | 3 | **Layer rail**; delete the Layers section | Independent of the effects; do it once the bar is about to get busy | **done** |
-| 4 | **Bloom** + **Gloss** | Reuse the gradient path; retire the "gradient" entry into them | |
+| 4 | **Bloom** + **Gloss** | Reuse the gradient path; retire the "gradient" entry into them | Bloom **done** |
+| 4a | **Whole-icon effects** | Not in the plan — see below | **done** |
 | 5 | **Perspective** | Extends `LayerTransform`, which is already shared | |
 | 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | |
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | |
@@ -298,6 +303,29 @@ Each slice is independently reviewable and leaves the studio working.
   nothing.
 - **Still open from slice 1:** the numeric readout is a *readout*, not an editable field. Typing an exact value is a
   text field per slider with parse, clamp and commit semantics, which is its own slice.
+- **Slice 4 split, and half of it was a capability this plan never noticed.** Bloom landed first: `LayerEffect.Gradient`
+  renamed and grown (linear or radial falloff, a position, a `ShapeAnchor`), and **one colour fading to transparent**
+  rather than two opaque stops — with two, source-atop *replaces* every pixel it covers, so a bloom at full strength
+  obliterated the artwork it was meant to light. Gloss is still to come.
+- **Whole-icon effects (4a) — the thing thirteen effects actually needed, and §3 assumed away.** Every entry in this
+  plan is written as a *layer* effect, and for six of them that is simply wrong: a glow derives from the finished
+  silhouette, so per-layer it glows around the foreground *inside* the background plate where nobody can see it; grain,
+  ripple and pixelate applied per layer produce independent distortion fields that visibly shear apart at the edge of
+  the glyph; and even a colour matrix differs before and after compositing once opacity or a blend is in play. So
+  `IconLayerSet` carries its own `effects`, applied to the composite — additive, defaulted empty, and reusing the
+  **same** `LayerEffect` type and the same pipeline in both renderers rather than growing a second one.
+  - **The UI cost one tile, because the rail was already the scope control.** Selection there has always meant "the
+    thing every tool acts on" — the reason the Layers bar entry was deleted — so the whole icon is one more tile at the
+    head of it, and the studio opens on it. A *"this layer / whole icon"* switch inside the Effects panel was the
+    obvious alternative and is a second answer to a question already answered on screen.
+  - **The composite offers three tools, not one.** Source, Transform and Shape are a layer's; Effects applies to both;
+    Presets and More were never per-layer. So the bar shrinks with the selection rather than needing a special case.
+  - **Two entries drop for it, by the rule slice 1 already established.** Opacity and blend describe *joining a stack*
+    and the composite joins nothing, which is exactly `ownsEffect` — the same predicate that decides which entries
+    carry a switch.
+  - The Photoshop-style generalization — an **adjustment layer** at any height — was rejected: the bake would manage it,
+    but the live path cannot sample its siblings without restructuring the whole stack into nesting, which is the
+    two-renderer hazard in its worst form. The composite is the one position that is cheap live.
 
 Slices 4–7 are the remaining tier-1 effects and need **no** change to the render architecture. The rail sat at 3
 because it is independent of every effect and gets more valuable the longer the bar gets — and its thumbnails turned

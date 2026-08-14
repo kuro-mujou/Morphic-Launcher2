@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.data.settings.IconPreset
 
 /**
@@ -43,8 +44,10 @@ private val PanelMaxHeight = 320.dp
  */
 @Immutable
 data class StudioActions(
-    val selectLayer: (Int) -> Unit,
+    val selectTarget: (StudioTarget) -> Unit,
     val update: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    /** Writes whichever effect list the target owns — the selected layer's, or the whole icon's. */
+    val updateEffects: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     val commit: () -> Unit,
     val toggleVisible: () -> Unit,
     val move: (up: Boolean) -> Unit,
@@ -121,7 +124,13 @@ fun StudioToolPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        PanelHeader(tool = tool, spec = state.selectedLayer.takeIf { tool.actsOnLayer })
+        PanelHeader(
+            tool = tool,
+            spec = state.selectedLayer.takeIf { tool.actsOnLayer },
+            // Named only where the distinction is live: a section that is not about a layer would otherwise say
+            // "Whole icon" on the composite and nothing on a layer, which reads as a state rather than a scope.
+            composite = state.editingComposite && tool.actsOnLayer,
+        )
 
         // **`weight(1f, fill = false)` is what makes the header and the footer win the space they need.** The header
         // and footer are measured first and the scroll takes what is left, so a pinned row is subtracted from the
@@ -170,8 +179,18 @@ fun StudioToolPanel(
                     ShapeControls(spec, actions.update, actions.commit)
                 }
 
-                StudioTool.EFFECTS -> state.selectedLayer?.let { spec ->
-                    EffectsControls(spec, actions.update, actions.commit)
+                // **The one section both targets reach**, which is what the composite exists for. The target is
+                // built here rather than passed down as a nullable spec, so the panel's own `when` cannot be handed
+                // a layer's opacity control with no layer behind it.
+                StudioTool.EFFECTS -> {
+                    val target = state.selectedLayer?.let(EffectTarget::Layer)
+                        ?: EffectTarget.Composite(state.editing.effects)
+                    EffectsControls(
+                        target = target,
+                        onEffects = actions.updateEffects,
+                        onLayer = actions.update,
+                        onCommit = actions.commit,
+                    )
                 }
 
                 StudioTool.PRESETS -> PresetsControls(
@@ -212,15 +231,22 @@ private fun SectionFooter(tool: StudioTool, state: IconStudioState, actions: Stu
     }
 }
 
-/** The section's name, and — for a per-layer section — which layer it is pointed at. */
+/** The section's name, and — for a per-layer section — what it is pointed at. */
 @Composable
-private fun PanelHeader(tool: StudioTool, spec: IconLayerSpec?) {
+private fun PanelHeader(tool: StudioTool, spec: IconLayerSpec?, composite: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(tool.label, color = StudioContentColor, style = MaterialTheme.typography.titleSmall)
+        if (composite) {
+            Text(
+                text = "Whole icon",
+                color = StudioContentColor.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
         spec?.let {
             Text(
                 text = "${it.role.label} · ${it.source.label}",

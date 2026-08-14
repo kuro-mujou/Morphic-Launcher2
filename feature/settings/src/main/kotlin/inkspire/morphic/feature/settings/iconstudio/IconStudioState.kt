@@ -45,6 +45,31 @@ sealed interface StudioSubject {
 }
 
 /**
+ * What the studio's tools are pointed at: one layer, or the finished icon.
+ *
+ * **The rail is the scope control, and this is what it selects.** Selection there has always meant *"the thing every
+ * tool acts on"* — which is why the Layers bar entry was deleted — so making the whole icon one more tile in it costs
+ * no new vocabulary at all. The alternatives were a *"this layer / whole icon"* switch inside the Effects panel or a
+ * second bar entry, and both are a second answer to a question already answered on screen: you would be editing the
+ * composite while the rail highlighted a layer.
+ *
+ * **A sum type rather than a nullable index or a sentinel**, the call this codebase makes everywhere (`HomeMainSizing`,
+ * `IconStudioRoute`, `MenuAnchor`). `selected = -1` would be an index that is not one, and every piece of index
+ * arithmetic in the ViewModel would have to remember that.
+ *
+ * **[Composite] is what the studio opens on.** The layers are permanently on screen in the rail, so picking one is a
+ * visible, obvious tap — where discovering that effects *can* apply to the whole icon is not.
+ */
+sealed interface StudioTarget {
+
+    /** The finished icon: what the layers composite into. Carries effects, and nothing that describes joining a stack. */
+    data object Composite : StudioTarget
+
+    /** One layer of the stack, by its index. */
+    data class Layer(val index: Int) : StudioTarget
+}
+
+/**
  * Browsing one pack's drawables to choose a specific icon for this app.
  *
  * **Individual mode only, and that is a property of the model rather than a scoping decision.** A named drawable
@@ -92,7 +117,7 @@ data class IconStudioState(
     val parsed: ParsedIcon? = null,
     val label: String? = null,
     val background: PreviewBackground = PreviewBackground.Default,
-    val selected: Int = 0,
+    val target: StudioTarget = StudioTarget.Composite,
     val layerKeys: List<Long> = emptyList(),
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
@@ -105,8 +130,14 @@ data class IconStudioState(
     val presets: List<IconPreset> = emptyList(),
 ) {
 
-    /** The layer the controls act on, or null before anything has loaded. */
-    val selectedLayer: IconLayerSpec? get() = editing.layers.getOrNull(selected)
+    /** Which layer is selected, or null when the target is the whole icon. */
+    val selected: Int? get() = (target as? StudioTarget.Layer)?.index
+
+    /** The layer the controls act on — null for the composite, and null before anything has loaded. */
+    val selectedLayer: IconLayerSpec? get() = selected?.let(editing.layers::getOrNull)
+
+    /** True while the tools are pointed at the finished icon rather than at one of its layers. */
+    val editingComposite: Boolean get() = target is StudioTarget.Composite
 
     /**
      * A stable identity for the layer at [index], for the row list to `key` on.
@@ -185,9 +216,11 @@ data class IconStudioState(
      * it is attempted**, where a refused drag is an interaction that silently does nothing and cannot explain
      * itself. (L1 locked buttons for this reason, then reversed itself to a drag list in a later plan; this takes
      * the first answer.)
+     *
+     * False for the composite, which is not in the stack and so has nowhere to move to.
      */
-    val canMoveUp: Boolean get() = editing.moveUp(selected) !== editing
+    val canMoveUp: Boolean get() = selected?.let { editing.moveUp(it) !== editing } == true
 
     /** @see canMoveUp */
-    val canMoveDown: Boolean get() = editing.moveDown(selected) !== editing
+    val canMoveDown: Boolean get() = selected?.let { editing.moveDown(it) !== editing } == true
 }

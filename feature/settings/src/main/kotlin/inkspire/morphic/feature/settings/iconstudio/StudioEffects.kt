@@ -61,10 +61,44 @@ import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.ShapeAnchor
 import inkspire.morphic.core.model.icon.TintMode
+import inkspire.morphic.core.model.icon.activeEffects
+import inkspire.morphic.core.model.icon.effectOrNull
+import inkspire.morphic.core.model.icon.withEffect
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
+
+/**
+ * What the Effects section is pointed at: one layer, or the finished icon.
+ *
+ * **The two differ by exactly two entries, and it falls out of a rule this file already had.** An entry either owns
+ * a `LayerEffect` — and so carries a switch — or configures an [IconLayerSpec] *field*. Opacity and blend are the
+ * fields, they describe how something *joins a stack*, and the composite joins nothing: there is nothing beneath the
+ * finished icon to be more or less opaque against. So `ownsEffect` answers both questions, and a new effect is
+ * offered on both targets for free.
+ *
+ * A sum type rather than a nullable spec because the two carry different things and the compiler should say so —
+ * `StudioTarget`'s reason, one layer up, where this is the same distinction expressed in what the panel needs.
+ */
+internal sealed interface EffectTarget {
+
+    /** The effects this target carries, in pipeline order. */
+    val effects: List<LayerEffect>
+
+    /** The entries it offers — every one, for a layer. */
+    val slices: List<EffectSlice> get() = EffectSlice.entries
+
+    /** One layer of the stack: it has opacity and blend as well, being something that joins a stack. */
+    data class Layer(val spec: IconLayerSpec) : EffectTarget {
+        override val effects: List<LayerEffect> get() = spec.effects
+    }
+
+    /** The finished icon: effects only. */
+    data class Composite(override val effects: List<LayerEffect>) : EffectTarget {
+        override val slices: List<EffectSlice> get() = EffectSlice.entries.filter { it.ownsEffect }
+    }
+}
 
 /**
  * One entry in the Effects grid: a job the user can go and do to this layer, with the glyph and word the grid
@@ -123,11 +157,11 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
      * Reads `spec.effects` rather than `spec.color`/`spec.gradient` deliberately: those two drop an identity
      * effect, and this needs to know whether there is a *record* to switch off, not whether it currently paints.
      */
-    fun storedEffect(spec: IconLayerSpec): LayerEffect? = when (this) {
+    fun storedEffect(effects: List<LayerEffect>): LayerEffect? = when (this) {
         OPACITY, BLEND -> null
-        COLOR -> spec.effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
-        BLOOM -> spec.effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
-        FILTER -> spec.effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
+        COLOR -> effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
+        BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
+        FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
     /**
@@ -142,14 +176,14 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
      * null for an identity effect — the model's own definition of "not doing anything", so this cannot disagree
      * with what is stored.
      */
-    fun isActive(spec: IconLayerSpec): Boolean = when (this) {
-        OPACITY -> spec.opacity != 1f
-        BLEND -> spec.blend != LayerBlend.NORMAL
+    fun isActive(target: EffectTarget): Boolean = when (this) {
+        OPACITY -> (target as? EffectTarget.Layer)?.spec?.opacity?.let { it != 1f } == true
+        BLEND -> (target as? EffectTarget.Layer)?.spec?.blend?.let { it != LayerBlend.NORMAL } == true
         // `activeEffects` is the renderers' own list, so a tile marks itself exactly when the icon is affected —
         // which means an effect switched off reads as inactive, and correctly so: it is not doing anything.
-        COLOR -> spec.activeEffects.any { it is LayerEffect.Color }
-        BLOOM -> spec.activeEffects.any { it is LayerEffect.Bloom }
-        FILTER -> spec.activeEffects.any { it is LayerEffect.Filter }
+        COLOR -> target.effects.activeEffects.any { it is LayerEffect.Color }
+        BLOOM -> target.effects.activeEffects.any { it is LayerEffect.Bloom }
+        FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
 
@@ -178,40 +212,48 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
  */
 @Composable
 internal fun EffectsControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    target: EffectTarget,
+    onEffects: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onLayer: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
     // Saveable, so a rotation does not drop the user back at the grid. It is *not* hoisted to the ViewModel: which
     // control is open is not part of the recipe, does not belong in undo, and nothing outside this panel asks.
     var open by rememberSaveable { mutableStateOf<EffectSlice?>(null) }
 
+    // **Closed when the target stops offering it**, which is not hypothetical: Opacity belongs to a layer, so moving
+    // the selection to the whole icon with that panel open would leave sliders on screen writing to nothing.
+    val slice = open?.takeIf { it in target.slices }
+
     // Back leaves the entry before it leaves the studio. Enabled only when there is somewhere to go back *to*, so
     // the studio's own handler still answers from the grid — nested handlers resolve innermost-enabled-first, which
     // is what makes this two lines rather than a shared piece of state.
-    BackHandler(enabled = open != null) { open = null }
+    BackHandler(enabled = slice != null) { open = null }
 
-    when (val slice = open) {
-        null -> EffectGrid(spec = spec, onOpen = { open = it })
+    if (slice == null) {
+        EffectGrid(target = target, onOpen = { open = it })
+        return
+    }
 
-        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            EffectHeader(
-                slice = slice,
-                spec = spec,
-                onBack = { open = null },
-                onUpdate = onUpdate,
-                onCommit = onCommit,
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        EffectHeader(
+            slice = slice,
+            target = target,
+            onBack = { open = null },
+            onEffects = onEffects,
+            onCommit = onCommit,
+        )
 
-            // Exhaustive, so an entry cannot be added to the grid without controls behind it — the same reason the
-            // tool panel's own `when` lists every section rather than falling through an `else`.
-            when (slice) {
-                EffectSlice.OPACITY -> OpacityControls(spec, onUpdate, onCommit)
-                EffectSlice.BLEND -> BlendControls(spec, onUpdate, onCommit)
-                EffectSlice.COLOR -> ColorControls(spec, onUpdate, onCommit)
-                EffectSlice.BLOOM -> BloomControls(spec, onUpdate, onCommit)
-                EffectSlice.FILTER -> FilterControls(spec, onUpdate, onCommit)
-            }
+        // Exhaustive, so an entry cannot be added to the grid without controls behind it — the same reason the
+        // tool panel's own `when` lists every section rather than falling through an `else`.
+        when (slice) {
+            // The two spec fields, reachable only on a layer: `EffectTarget.Composite` does not list them, so the
+            // cast is the compiler being told what `slices` already guarantees.
+            EffectSlice.OPACITY -> (target as? EffectTarget.Layer)?.let { OpacityControls(it.spec, onLayer, onCommit) }
+            EffectSlice.BLEND -> (target as? EffectTarget.Layer)?.let { BlendControls(it.spec, onLayer, onCommit) }
+            EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
+            EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
+            EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
 }
@@ -229,8 +271,9 @@ internal fun EffectsControls(
  * four tiles. Same derive-versus-store rule the shape pager follows, one question further on.
  */
 @Composable
-private fun EffectGrid(spec: IconLayerSpec, onOpen: (EffectSlice) -> Unit) {
-    val pages = remember { EffectSlice.entries.chunked(EffectColumns * EffectRows) }
+private fun EffectGrid(target: EffectTarget, onOpen: (EffectSlice) -> Unit) {
+    val slices = target.slices
+    val pages = remember(slices) { slices.chunked(EffectColumns * EffectRows) }
     val pagerState = rememberPagerState { pages.size }
     val rows = remember(pages) { pages.maxOf { ceil(it.size / EffectColumns.toFloat()).toInt() } }
 
@@ -247,7 +290,7 @@ private fun EffectGrid(spec: IconLayerSpec, onOpen: (EffectSlice) -> Unit) {
                 pageSpacing = 8.dp,
                 modifier = Modifier.height(pageHeight),
             ) { page ->
-                EffectPage(slices = pages[page], spec = spec, onOpen = onOpen)
+                EffectPage(slices = pages[page], target = target, onOpen = onOpen)
             }
         }
 
@@ -264,7 +307,7 @@ private fun EffectGrid(spec: IconLayerSpec, onOpen: (EffectSlice) -> Unit) {
  * padded with empty weights, or its tiles would come out wider than the rest.
  */
 @Composable
-private fun EffectPage(slices: List<EffectSlice>, spec: IconLayerSpec, onOpen: (EffectSlice) -> Unit) {
+private fun EffectPage(slices: List<EffectSlice>, target: EffectTarget, onOpen: (EffectSlice) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(EffectGridSpacing)) {
         slices.chunked(EffectColumns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(EffectGridSpacing)) {
@@ -276,7 +319,7 @@ private fun EffectPage(slices: List<EffectSlice>, spec: IconLayerSpec, onOpen: (
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                         EffectTile(
                             slice = slice,
-                            active = slice.isActive(spec),
+                            active = slice.isActive(target),
                             onClick = { onOpen(slice) },
                             modifier = Modifier.widthIn(max = EffectTileMax),
                         )
@@ -355,9 +398,9 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
 @Composable
 private fun EffectHeader(
     slice: EffectSlice,
-    spec: IconLayerSpec,
+    target: EffectTarget,
     onBack: () -> Unit,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onEffects: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
     Row(
@@ -379,17 +422,22 @@ private fun EffectHeader(
 
         // Only where there is a `LayerEffect` to carry the flag — see [EffectSlice].
         if (slice.ownsEffect) {
-            val stored = slice.storedEffect(spec)
+            val stored = slice.storedEffect(target.effects)
             MorphicSwitch(
                 checked = stored?.enabled == true,
                 enabled = stored != null,
                 onCheckedChange = { on ->
                     // Flipping a switch is discrete, so it records at once and undo steps over it.
-                    onUpdate { current ->
+                    onEffects { current ->
                         when (slice) {
-                            EffectSlice.COLOR -> current.color?.let { current.withColor(it.copy(enabled = on)) }
-                            EffectSlice.FILTER -> current.filter?.let { current.withFilter(it.copy(enabled = on)) }
-                            else -> current.bloom?.let { current.withBloom(it.copy(enabled = on)) }
+                            EffectSlice.COLOR -> current.effectOrNull<LayerEffect.Color>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.FILTER -> current.effectOrNull<LayerEffect.Filter>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            else -> current.effectOrNull<LayerEffect.Bloom>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
                         } ?: current
                     }
                     onCommit()
@@ -453,7 +501,7 @@ private fun BlendControls(
 /**
  * Hue, saturation, brightness and the tint — one `LayerEffect.Color`.
  *
- * **These write one effect, never four**, via `IconLayerSpec.withColor` — which is why an all-default one is
+ * **These write one effect, never four**, via `withEffect` — which is why an all-default one is
  * *removed* from the list rather than stored as a row of 1s, and why they share a single switch. Four separate
  * effects would mean their order in the list silently changed the result, which is the failure this shape does not
  * have: they compose into one matrix, in one pass, in a fixed sequence.
@@ -463,11 +511,11 @@ private fun BlendControls(
  */
 @Composable
 private fun ColorControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
-    val color = spec.color ?: LayerEffect.Color()
+    val color = effects.effectOrNull<LayerEffect.Color>() ?: LayerEffect.Color()
 
     SliderControl(
         label = "Saturation",
@@ -475,7 +523,7 @@ private fun ColorControls(
         valueRange = 0f..2f,
         step = UnitStep,
         default = 1f,
-        onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
+        onValueChange = { value -> onUpdate { it.withEffect(color.copy(saturation = value)) } },
         onValueChangeFinished = onCommit,
     )
     SliderControl(
@@ -484,7 +532,7 @@ private fun ColorControls(
         valueRange = 0.2f..2f,
         step = UnitStep,
         default = 1f,
-        onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
+        onValueChange = { value -> onUpdate { it.withEffect(color.copy(brightness = value)) } },
         onValueChangeFinished = onCommit,
     )
     SliderControl(
@@ -494,7 +542,7 @@ private fun ColorControls(
         step = AngleStep,
         default = 0f,
         format = { "%.0f°".format(it) },
-        onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
+        onValueChange = { value -> onUpdate { it.withEffect(color.copy(hueDegrees = value)) } },
         onValueChangeFinished = onCommit,
     )
 
@@ -503,7 +551,7 @@ private fun ColorControls(
         // middle — without a way off, picking one would be a one-way door.
         ClearableColorField(
             argb = color.tintArgb,
-            onChange = { argb -> onUpdate { it.withColor(color.copy(tintArgb = argb)) } },
+            onChange = { argb -> onUpdate { it.withEffect(color.copy(tintArgb = argb)) } },
         )
     }
 
@@ -520,7 +568,7 @@ private fun ColorControls(
                 options = listOf("Shaded", "Solid"),
                 selectedIndex = if (color.tintMode == TintMode.SOLID) 1 else 0,
                 onSelect = { index ->
-                    onUpdate { it.withColor(color.copy(tintMode = if (index == 1) TintMode.SOLID else TintMode.MULTIPLY)) }
+                    onUpdate { it.withEffect(color.copy(tintMode = if (index == 1) TintMode.SOLID else TintMode.MULTIPLY)) }
                     onCommit()
                 },
             )
@@ -546,11 +594,11 @@ private fun ColorControls(
  */
 @Composable
 private fun FilterControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
-    val selected = spec.filter?.filter
+    val selected = effects.effectOrNull<LayerEffect.Filter>()?.filter
     // Opens on the selected filter's own category, so returning to the panel lands where the look came from
     // rather than at the top — `ca40030`'s rule, one control over.
     var category by rememberSaveable {
@@ -558,7 +606,7 @@ private fun FilterControls(
     }
 
     fun choose(filter: IconFilter?) {
-        onUpdate { it.withFilter(filter?.let { id -> LayerEffect.Filter(id) }) }
+        onUpdate { it.withEffect(filter?.let { id -> LayerEffect.Filter(id) }) }
         onCommit()
     }
 
@@ -663,9 +711,9 @@ private val FilterSwatchHeight = 48.dp
 private val FilterTileGap = 8.dp
 
 /**
- * The bloom's falloff, its two stops, and how strongly it is laid on.
+ * The bloom's falloff, its color, and how strongly it is laid on.
  *
- * **Strength doubles as the on/off switch**: at zero the effect is identity and `withBloom` drops it from the list
+ * **Strength doubles as the on/off switch**: at zero the effect is identity and `withEffect` drops it from the list
  * entirely, so there is no separate toggle to disagree with the slider. That is the same shape the recoloring
  * controls have — an effect at its defaults is simply not stored.
  *
@@ -676,13 +724,13 @@ private val FilterTileGap = 8.dp
  */
 @Composable
 private fun BloomControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
     // Seeded at zero strength when absent, so the sliders show a coherent bloom before it is turned on rather than
     // jumping to arbitrary values the moment strength leaves zero.
-    val bloom = spec.bloom ?: LayerEffect.Bloom(strength = 0f)
+    val bloom = effects.effectOrNull<LayerEffect.Bloom>() ?: LayerEffect.Bloom(strength = 0f)
 
     LabeledControl("Falloff") {
         MorphicSegmentedButtons(
@@ -690,7 +738,7 @@ private fun BloomControls(
             selectedIndex = if (bloom.falloff == BloomFalloff.RADIAL) 1 else 0,
             onSelect = { index ->
                 val falloff = if (index == 1) BloomFalloff.RADIAL else BloomFalloff.LINEAR
-                onUpdate { it.withBloom(bloom.copy(falloff = falloff)) }
+                onUpdate { it.withEffect(bloom.copy(falloff = falloff)) }
                 onCommit()
             },
         )
@@ -701,7 +749,7 @@ private fun BloomControls(
     // off, and at zero the effect is dropped from the list entirely.
     LabeledControl("Color") {
         ColorField(argb = bloom.argb) { argb ->
-            onUpdate { it.withBloom(bloom.copy(argb = argb)) }
+            onUpdate { it.withEffect(bloom.copy(argb = argb)) }
         }
     }
 
@@ -713,7 +761,7 @@ private fun BloomControls(
         // Nothing, not `Bloom()`'s own default of 1: reset means "as if untouched", and an unconfigured bloom is
         // the one this panel seeds at zero so it stays invisible until asked for.
         default = 0f,
-        onValueChange = { value -> onUpdate { it.withBloom(bloom.copy(strength = value)) } },
+        onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
     )
 
@@ -725,7 +773,7 @@ private fun BloomControls(
             step = AngleStep,
             default = 0f,
             format = { "%.0f°".format(it) },
-            onValueChange = { value -> onUpdate { it.withBloom(bloom.copy(angleDegrees = value)) } },
+            onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(angleDegrees = value)) } },
             onValueChangeFinished = onCommit,
         )
 
@@ -737,7 +785,7 @@ private fun BloomControls(
             valueRange = UnitStep..1.5f,
             step = UnitStep,
             default = 1f,
-            onValueChange = { value -> onUpdate { it.withBloom(bloom.copy(radius = value)) } },
+            onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(radius = value)) } },
             onValueChangeFinished = onCommit,
         )
     }
@@ -752,7 +800,7 @@ private fun BloomControls(
         supportingText = bloom.anchor.bloomHint,
         checked = bloom.anchor == ShapeAnchor.CONTENT,
         onCheckedChange = { on ->
-            onUpdate { it.withBloom(bloom.copy(anchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX)) }
+            onUpdate { it.withEffect(bloom.copy(anchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX)) }
             onCommit()
         },
         modifier = Modifier.fillMaxWidth(),
@@ -775,7 +823,7 @@ private fun BloomControls(
 @Composable
 private fun BloomPosition(
     bloom: LayerEffect.Bloom,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
     LabeledControl("Position") {
@@ -783,7 +831,7 @@ private fun BloomPosition(
             BloomFalloff.RADIAL -> PositionPad(
                 x = bloom.offsetX,
                 y = bloom.offsetY,
-                onValueChange = { x, y -> onUpdate { it.withBloom(bloom.copy(offsetX = x, offsetY = y)) } },
+                onValueChange = { x, y -> onUpdate { it.withEffect(bloom.copy(offsetX = x, offsetY = y)) } },
                 onCommit = onCommit,
             )
 
@@ -801,7 +849,7 @@ private fun BloomPosition(
                     step = UnitStep,
                     what = "position",
                     onValueChange = { along ->
-                        onUpdate { it.withBloom(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
+                        onUpdate { it.withEffect(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
                     },
                     onValueChangeFinished = onCommit,
                 )

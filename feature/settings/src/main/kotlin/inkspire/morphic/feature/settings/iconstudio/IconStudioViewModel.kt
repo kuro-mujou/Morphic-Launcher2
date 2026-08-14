@@ -9,6 +9,7 @@ import inkspire.morphic.core.icon.parse.ParsedIconLoader
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.key
@@ -122,7 +123,7 @@ class IconStudioViewModel(
     fun loadPreset(preset: IconPreset) = _state.update { current ->
         val keys = freshKeys(preset.layerSet.layers.size)
         current.withEditing(preset.layerSet)
-            .copy(layerKeys = keys, selected = preset.layerSet.foregroundIndex)
+            .copy(layerKeys = keys, target = StudioTarget.Composite)
             .recordHistory()
     }
 
@@ -220,8 +221,14 @@ class IconStudioViewModel(
         }
     }
 
-    /** Points the controls at a layer. Pure selection — nothing about the recipe changes, so no history entry. */
-    fun selectLayer(index: Int) = _state.update { it.copy(selected = index) }
+    /**
+     * Points the controls at a layer or at the finished icon. Pure selection — nothing about the recipe changes, so
+     * no history entry.
+     *
+     * One command for both, because the rail is one control: a tile is a tile whether it draws a layer or the whole
+     * stack, and splitting this would make the caller decide which kind it just handled.
+     */
+    fun selectTarget(target: StudioTarget) = _state.update { it.copy(target = target) }
 
     /**
      * Applies [transform] to the selected layer **without recording history** — the live-edit path.
@@ -231,10 +238,34 @@ class IconStudioViewModel(
      * gesture ends.
      */
     fun updateSelected(transform: (IconLayerSpec) -> IconLayerSpec) = _state.update { current ->
+        val index = current.selected ?: return@update current
         val layers = current.editing.layers.toMutableList()
-        val spec = layers.getOrNull(current.selected) ?: return@update current
-        layers[current.selected] = transform(spec)
-        current.withEditing(IconLayerSet(layers))
+        val spec = layers.getOrNull(index) ?: return@update current
+        layers[index] = transform(spec)
+        current.withEditing(current.editing.copy(layers = layers))
+    }
+
+    /**
+     * Applies [transform] to whichever effect list the target owns — the selected layer's, or the whole icon's.
+     *
+     * **One command rather than two, and the target is what decides.** The panel behind it is the same panel either
+     * way (see `EffectsControls`), so a caller that had to pick would be re-deciding something the rail already
+     * settled — and the two would eventually disagree about which one a given tap meant.
+     *
+     * Live, like [updateSelected]: every frame of a slider drag arrives here and [commitEdit] punctuates it.
+     */
+    fun updateEffects(transform: (List<LayerEffect>) -> List<LayerEffect>) = _state.update { current ->
+        when (val target = current.target) {
+            StudioTarget.Composite ->
+                current.withEditing(current.editing.copy(effects = transform(current.editing.effects)))
+
+            is StudioTarget.Layer -> {
+                val layers = current.editing.layers.toMutableList()
+                val spec = layers.getOrNull(target.index) ?: return@update current
+                layers[target.index] = spec.copy(effects = transform(spec.effects))
+                current.withEditing(current.editing.copy(layers = layers))
+            }
+        }
     }
 
     /**
@@ -329,7 +360,7 @@ class IconStudioViewModel(
     fun pickSolidFill() {
         val current = _state.value
         if (!current.canUseFixedSource) return
-        val remembered = current.layerKeys.getOrNull(current.selected)?.let(layerFills::get)
+        val remembered = current.selected?.let(current.layerKeys::getOrNull)?.let(layerFills::get)
         updateSelected { spec ->
             if (spec.source is LayerSource.SolidFill) spec
             else spec.copy(source = LayerSource.SolidFill(remembered ?: DefaultFillArgb))
@@ -346,19 +377,20 @@ class IconStudioViewModel(
      * does nothing.
      */
     fun moveSelected(up: Boolean) = _state.update { current ->
-        val moved = if (up) current.editing.moveUp(current.selected) else current.editing.moveDown(current.selected)
+        val index = current.selected ?: return@update current
+        val moved = if (up) current.editing.moveUp(index) else current.editing.moveDown(index)
         if (moved === current.editing) return@update current
-        val destination = if (up) current.selected + 1 else current.selected - 1
+        val destination = if (up) index + 1 else index - 1
         // The keys swap with the layers, so both rows keep their identity and glide past each other rather than
         // swapping contents in place.
         val keys = current.layerKeys.toMutableList().apply {
-            if (current.selected in indices && destination in indices) {
-                val held = this[current.selected]
-                this[current.selected] = this[destination]
+            if (index in indices && destination in indices) {
+                val held = this[index]
+                this[index] = this[destination]
                 this[destination] = held
             }
         }
-        current.withEditing(moved).copy(selected = destination, layerKeys = keys).recordHistory()
+        current.withEditing(moved).copy(target = StudioTarget.Layer(destination), layerKeys = keys).recordHistory()
     }
 
     /**
@@ -484,10 +516,11 @@ class IconStudioViewModel(
 
     /** Swaps the selected layer's source, leaving every other property of it alone. */
     private fun IconStudioState.replaceSelectedSource(source: LayerSource): IconStudioState {
+        val index = selected ?: return this
         val layers = editing.layers.toMutableList()
-        val spec = layers.getOrNull(selected) ?: return this
-        layers[selected] = spec.copy(source = source)
-        return withEditing(IconLayerSet(layers))
+        val spec = layers.getOrNull(index) ?: return this
+        layers[index] = spec.copy(source = source)
+        return withEditing(editing.copy(layers = layers))
     }
 
     /**
@@ -511,13 +544,19 @@ class IconStudioViewModel(
      * the same "the selection follows the row" rule [removeSelected] keeps.
      */
     fun addLayer() = _state.update { current ->
-        val insertAt = current.selected.coerceIn(0, current.editing.layers.size)
+        // With the whole icon selected there is no layer to go beneath, so the new one goes on **top** of the stack
+        // — which is beneath the composite in exactly the sense above, since the composite is what sits over
+        // everything. One rule, read from wherever the selection happens to be.
+        val insertAt = (current.selected ?: current.editing.layers.size)
+            .coerceIn(0, current.editing.layers.size)
         val layers = current.editing.layers.toMutableList()
         layers.add(insertAt, IconLayerSpec(role = LayerRole.CUSTOM, source = LayerSource.Empty))
         // A key of its own for the new layer; every other layer keeps the one it had, which is what lets the rows
         // beneath it *slide* rather than being rebuilt in their new positions.
         val keys = current.layerKeys.toMutableList().apply { add(insertAt, nextLayerKey++) }
-        current.withEditing(IconLayerSet(layers)).copy(selected = insertAt, layerKeys = keys).recordHistory()
+        current.withEditing(current.editing.copy(layers = layers))
+            .copy(target = StudioTarget.Layer(insertAt), layerKeys = keys)
+            .recordHistory()
     }
 
     /**
@@ -539,12 +578,13 @@ class IconStudioViewModel(
      * rather than staying armed over a layer the user never selected.
      */
     fun removeSelected() = _state.update { current ->
+        val index = current.selected ?: return@update current
         if (!current.canRemoveSelected) return@update current
         val layers = current.editing.layers.toMutableList()
-        layers.removeAt(current.selected)
-        val keys = current.layerKeys.toMutableList().apply { removeAt(current.selected) }
-        current.withEditing(IconLayerSet(layers))
-            .copy(selected = (current.selected - 1).coerceAtLeast(0), layerKeys = keys)
+        layers.removeAt(index)
+        val keys = current.layerKeys.toMutableList().apply { removeAt(index) }
+        current.withEditing(current.editing.copy(layers = layers))
+            .copy(target = StudioTarget.Layer((index - 1).coerceAtLeast(0)), layerKeys = keys)
             .recordHistory()
     }
 
@@ -799,7 +839,7 @@ class IconStudioViewModel(
     private fun IconStudioState.seatedOn(set: IconLayerSet): IconStudioState {
         val keys = freshKeys(set.layers.size)
         resetHistory(set, keys)
-        return withEditing(set).copy(layerKeys = keys, selected = set.foregroundIndex).withHistoryFlags()
+        return withEditing(set).copy(layerKeys = keys, target = StudioTarget.Composite).withHistoryFlags()
     }
 
     /**
@@ -896,6 +936,11 @@ class IconStudioViewModel(
 
     /** Keeps the selection valid when a step through history changes how many layers there are. */
     private fun IconStudioState.withSelectionInRange(): IconStudioState =
-        copy(selected = selected.coerceIn(0, editing.layers.lastIndex.coerceAtLeast(0)))
+        when (val target = target) {
+            // The composite survives any stack, so there is nothing to clamp.
+            StudioTarget.Composite -> this
+            is StudioTarget.Layer ->
+                copy(target = StudioTarget.Layer(target.index.coerceIn(0, editing.layers.lastIndex.coerceAtLeast(0))))
+        }
 
 }

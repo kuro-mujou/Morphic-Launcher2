@@ -89,7 +89,7 @@ internal fun StudioLayerRail(
     hazeState: HazeState,
     customImage: (path: String) -> android.graphics.drawable.Drawable?,
     packImage: (packPackage: String, drawableName: String?) -> android.graphics.drawable.Drawable?,
-    onSelectLayer: (Int) -> Unit,
+    onSelect: (StudioTarget) -> Unit,
     onMove: (up: Boolean) -> Unit,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
@@ -175,6 +175,23 @@ internal fun StudioLayerRail(
                 verticalArrangement = Arrangement.spacedBy(RailGap),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                    // **The whole icon, at the head of the stack** — above the top layer, because that is where it
+                // sits: it is what everything beneath composites into. Separated by a rule so it does not read as
+                // one more slot, and given no long-press menu, since none of those verbs mean anything for it.
+                CompositeTile(
+                    state = state,
+                    customImage = customImage,
+                    packImage = packImage,
+                    onClick = {
+                        onSelect(StudioTarget.Composite)
+                        menuOpen = false
+                    },
+                )
+                HorizontalDivider(
+                    color = StudioContentColor.copy(alpha = 0.15f),
+                    modifier = Modifier.width(TileSide),
+                )
+
                 state.editing.layers.indices.reversed().forEach { index ->
                     // `key` gives the tiles identity the model cannot — see `IconStudioState.layerKey` — so an
                     // insert *moves* the tiles beneath rather than rebuilding them, and `animatePlacement` has
@@ -187,11 +204,11 @@ internal fun StudioLayerRail(
                             customImage = customImage,
                             packImage = packImage,
                             onClick = {
-                                onSelectLayer(index)
+                                onSelect(StudioTarget.Layer(index))
                                 menuOpen = false
                             },
                             onLongClick = {
-                                onSelectLayer(index)
+                                onSelect(StudioTarget.Layer(index))
                                 menuOpen = true
                             },
                         )
@@ -214,6 +231,59 @@ internal fun StudioLayerRail(
                     menuOpen = false
                 },
                 modifier = Modifier.size(TileSide),
+            )
+        }
+    }
+}
+
+/**
+ * The whole icon, drawn as itself — the tile that selects the composite.
+ *
+ * **It draws the real stack with nothing hidden**, where a layer tile hides every layer but one. So it is a small
+ * copy of the canvas, and that is correct rather than redundant: it is the thumbnail of the thing being edited, and
+ * a thumbnail that did not match what the tools act on would be the one thing this rail must not do.
+ *
+ * **No long-press menu.** Every row of that menu — move up, move down, hide, delete — is about a layer's place in a
+ * stack, and the composite has none: it is not in the stack, it is what the stack makes. A menu of four disabled
+ * rows says less than no menu at all, which is the one place this file's own "disable, never omit" rule does not
+ * apply, because these are not moves that could ever become legal.
+ *
+ * It shares [LayerTile]'s selection treatment exactly — the same gap, the same ring, the same checkerboard — because
+ * it is the same question being answered: which tile is lit.
+ */
+@Composable
+private fun CompositeTile(
+    state: IconStudioState,
+    customImage: (path: String) -> android.graphics.drawable.Drawable?,
+    packImage: (packPackage: String, drawableName: String?) -> android.graphics.drawable.Drawable?,
+    onClick: () -> Unit,
+) {
+    val selection by animateFloatAsState(
+        targetValue = if (state.editingComposite) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "compositeTileSelection",
+    )
+    // Clamped for [LayerTile]'s reason: the spatial spec is a spring, and `Modifier.padding` throws on a negative.
+    val inset = TileInset * selection.coerceIn(0f, 1f)
+
+    Box(
+        modifier = Modifier
+            .size(TileSide)
+            .clip(RoundedCornerShape(TileCorner))
+            .clickable(onClick = onClick)
+            .border(SelectionBorder, StudioContentColor.copy(alpha = selection.coerceIn(0f, 1f)), RoundedCornerShape(TileCorner))
+            .padding(inset)
+            .clip(RoundedCornerShape(TileCorner - inset))
+            .drawBehind { drawCheckerboard(CheckerTileSquare.toPx()) },
+        contentAlignment = Alignment.Center,
+    ) {
+        state.parsed?.let { parsed ->
+            IconLayerStack(
+                icon = parsed,
+                layerSet = state.editing,
+                modifier = Modifier.fillMaxSize(),
+                customImage = customImage,
+                packImage = packImage,
             )
         }
     }
@@ -274,7 +344,7 @@ private fun LayerTile(
     onLongClick: () -> Unit,
 ) {
     val spec = state.editing.layers[index]
-    val selected = index == state.selected
+    val selected = state.selected == index
     // **One driver for both halves of the selection, so they cannot come apart.** The gap opening and the ring
     // fading in are the same event; animated separately — a `Dp` on the spatial spec, a colour on the effects one —
     // they would run at different rates, and the frames where the ring is already dark over a gap that has barely

@@ -261,17 +261,23 @@ fun StudioHistoryButtons(
  * icon" would mean a panel permanently covering a third of what is being edited. Null is a real state, and it is what
  * the studio opens in.
  *
+ * **It shows the tools that apply to what is selected**, which is why it takes a list rather than reading
+ * `StudioTool.entries` itself — see [StudioTool.appliesTo]. The bar wraps its contents, so a shorter one is a
+ * narrower bar rather than a bar with holes in it.
+ *
+ * @param tools the entries to draw, in order.
  * @param selected the section whose panel is showing, or null for none.
  */
 @Composable
 fun StudioToolBar(
     hazeState: HazeState,
+    tools: List<StudioTool>,
     selected: StudioTool?,
     onSelect: (StudioTool?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     StudioBottomBar(hazeState = hazeState, modifier = modifier) {
-        StudioTool.entries.forEach { tool ->
+        tools.forEach { tool ->
             StudioIconButton(
                 icon = tool.icon,
                 contentDescription = tool.label,
