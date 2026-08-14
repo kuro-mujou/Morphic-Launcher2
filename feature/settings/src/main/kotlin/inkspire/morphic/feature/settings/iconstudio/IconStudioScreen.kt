@@ -65,9 +65,11 @@ import org.koin.core.parameter.parametersOf
  * only the presentation was wrong. So this starts from the presentation L1 arrived at rather than the one it began
  * with.
  *
- * **The canvas is the Haze source and everything else floats on it.** One `hazeState` for the screen, and every
- * floating surface uses the shared [studioSurface] material, so a new panel cannot arrive looking different from the
- * rest. See that modifier for why this is Haze and not the launcher's own `wallpaperBackdrop`.
+ * **The canvas is the Haze source and everything else floats on it** — and the layer rail is both, which is why
+ * there are two states rather than one. The rail samples the canvas alone; everything above the rail samples the
+ * canvas *and* the rail. Every floating surface uses the shared [studioSurface] material either way, so a new panel
+ * cannot arrive looking different from the rest. See that modifier for why this is Haze and not the launcher's own
+ * `wallpaperBackdrop`.
  *
  * **The layout is a drawing app's, and it was reached by taking the first cut's chrome out rather than reshaping it.**
  * That cut had every control the studio has today, and it worked — but it presented them as one permanent bottom sheet
@@ -91,7 +93,19 @@ fun IconStudioScreen(
 ) {
     val viewModel: IconStudioViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val hazeState = rememberHazeState()
+    // **Two sources, because the rail is both a surface and something to see through.** Haze samples what is
+    // *behind* a node, so one shared state would have the rail sampling itself — and the panel, which overlaps the
+    // rail's lower half when it opens, sampling a rail that had nothing behind it.
+    //
+    // [canvasHaze] is the work alone. The rail's glass and its quick menu read this, so they blur the icon and
+    // never each other.
+    //
+    // [screenHaze] is the work **and** the rail. Everything that floats over both reads this — the panel most of
+    // all, which is what makes the rail appear blurred through it rather than vanishing behind an opaque edge.
+    //
+    // A node can register with both: `hazeSource` is one modifier node per call, so the canvas simply carries two.
+    val canvasHaze = rememberHazeState()
+    val screenHaze = rememberHazeState()
     // Which section's panel is showing, or null for none. Screen state and nothing more — the recipe does not care
     // which tool is open, and neither does undo, so it stays out of the ViewModel.
     var tool by remember { mutableStateOf<StudioTool?>(null) }
@@ -192,7 +206,11 @@ fun IconStudioScreen(
             // source that included the surfaces themselves would have them sampling each other.
             StudioCanvas(
                 background = state.background,
-                modifier = Modifier.hazeSource(hazeState),
+                // The source for both, and the only node in either that is the *work* rather than chrome. Explicit
+                // z-indices so "behind" is stated rather than inferred from draw order.
+                modifier = Modifier
+                    .hazeSource(canvasHaze, zIndex = CanvasDepth)
+                    .hazeSource(screenHaze, zIndex = CanvasDepth),
             ) {
                 state.parsed?.let { parsed ->
                     IconLayerStack(
@@ -210,7 +228,8 @@ fun IconStudioScreen(
             // the tool panel below without either having to know about it. See [StudioLayerRail].
             StudioLayerRail(
                 state = state,
-                hazeState = hazeState,
+                // The canvas alone: the rail's own glass cannot sample the rail.
+                hazeState = canvasHaze,
                 customImage = customImage,
                 packImage = packImage,
                 onSelectLayer = viewModel::selectLayer,
@@ -220,6 +239,10 @@ fun IconStudioScreen(
                 onToggleVisible = viewModel::toggleSelectedVisible,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
+                    // ...but it *is* a source for everything above it, which is what puts blurred tiles behind the
+                    // panel. Above the canvas, so a consumer of [screenHaze] gets the two in the order they are
+                    // drawn.
+                    .hazeSource(screenHaze, zIndex = RailDepth)
                     .uiInsetsPadding()
                     .padding(ChromeMargin),
             )
@@ -233,7 +256,7 @@ fun IconStudioScreen(
             StudioPillButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                hazeState = hazeState,
+                hazeState = screenHaze,
                 onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -253,7 +276,7 @@ fun IconStudioScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StudioHistoryButtons(
-                    hazeState = hazeState,
+                    hazeState = screenHaze,
                     canUndo = state.canUndo,
                     canRedo = state.canRedo,
                     onUndo = viewModel::undo,
@@ -266,7 +289,7 @@ fun IconStudioScreen(
                 StudioPillButton(
                     icon = Icons.Default.Check,
                     contentDescription = "Save",
-                    hazeState = hazeState,
+                    hazeState = screenHaze,
                     enabled = state.dirty,
                     onClick = viewModel::save,
                 )
@@ -314,14 +337,14 @@ fun IconStudioScreen(
                         is StudioSubject.Global -> StudioPillButton(
                             icon = Icons.Default.Casino,
                             contentDescription = "Preview on another app",
-                            hazeState = hazeState,
+                            hazeState = screenHaze,
                             onClick = viewModel::shuffleSample,
                         )
 
                         is StudioSubject.App -> StudioPillButton(
                             icon = Icons.Default.Apps,
                             contentDescription = "Edit another app",
-                            hazeState = hazeState,
+                            hazeState = screenHaze,
                             onClick = viewModel::chooseAnotherApp,
                         )
 
@@ -396,7 +419,7 @@ fun IconStudioScreen(
                         request != null -> StudioColorPickerPanel(
                             modifier = Modifier.padding(vertical = 6.dp),
                             request = request,
-                            hazeState = hazeState,
+                            hazeState = screenHaze,
                             onDone = colorPicker::close,
                         )
 
@@ -409,7 +432,7 @@ fun IconStudioScreen(
                                     tool = panel,
                                     state = state,
                                     actions = actions,
-                                    hazeState = hazeState,
+                                    hazeState = screenHaze,
                                 )
                             }
 
@@ -423,7 +446,7 @@ fun IconStudioScreen(
                 if (picking != null) BackHandler { colorPicker.close() }
 
                 StudioToolBar(
-                    hazeState = hazeState,
+                    hazeState = screenHaze,
                     // Centred explicitly, because the bar wraps its contents now and this column aligns to the
                     // start for the row of session buttons above. `ColumnScope.align` is the per-child override,
                     // so the two say what they mean rather than one of them settling for the other's answer.
@@ -450,7 +473,7 @@ fun IconStudioScreen(
                     onPick = viewModel::pickPackDrawable,
                     modifier = Modifier
                         .fillMaxSize()
-                        .studioSurface(hazeState, shape = RectangleShape)
+                        .studioSurface(screenHaze, shape = RectangleShape)
                         .uiInsetsPadding()
                         .padding(top = 64.dp),
                 )
@@ -465,7 +488,7 @@ fun IconStudioScreen(
                     onPick = viewModel::selectApp,
                     modifier = Modifier
                         .fillMaxSize()
-                        .studioSurface(hazeState, shape = RectangleShape)
+                        .studioSurface(screenHaze, shape = RectangleShape)
                         .uiInsetsPadding()
                         .padding(top = 64.dp),
                 )
@@ -482,3 +505,7 @@ fun IconStudioScreen(
  * the `AnimatedContent` above.
  */
 private enum class PanelSlot { NONE, TOOLS, COLOR }
+
+/** Source depths for `screenHaze`: the work, then the rail that floats on it. */
+private const val CanvasDepth = 0f
+private const val RailDepth = 1f
