@@ -824,7 +824,21 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  * studio's first [MorphicSwitchRow], and the first switch in the launcher at all.
  */
 @Composable
-internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
+internal fun ShapeControls(
+    spec: IconLayerSpec,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // Both edits here are discrete — a tile press, a switch flip — so each records at once and undo steps over it,
+    // the rule every source tile already follows. This section had no `onCommit` at all until now, which did not
+    // look like a bug because the *preview* was always right: the live path deliberately records nothing, so a
+    // shape change showed up on the icon immediately and then was invisible to undo, which stepped straight past
+    // it to whatever was edited before.
+    fun edit(transform: (IconLayerSpec) -> IconLayerSpec) {
+        onUpdate(transform)
+        onCommit()
+    }
+
     // **`null` is the first cell rather than a row above the grid.** "No shape" is a choice among the same set — the
     // one every layer starts on — so it belongs in the set, and a full-width row above a grid is exactly the
     // settings-list vocabulary this screen exists not to be.
@@ -856,7 +870,7 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
                         ShapePage(
                             shapes = pages[page],
                             selected = spec.shape,
-                            onSelect = { shape -> onUpdate { it.copy(shape = shape) } },
+                            onSelect = { shape -> edit { it.copy(shape = shape) } },
                         )
                     }
                 }
@@ -886,7 +900,7 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
                 supportingText = spec.shapeAnchor.hint,
                 checked = spec.shapeAnchor == ShapeAnchor.CONTENT,
                 onCheckedChange = { on ->
-                    onUpdate { it.copy(shapeAnchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX) }
+                    edit { it.copy(shapeAnchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX) }
                 },
                 modifier = Modifier.fillMaxWidth(),
             )

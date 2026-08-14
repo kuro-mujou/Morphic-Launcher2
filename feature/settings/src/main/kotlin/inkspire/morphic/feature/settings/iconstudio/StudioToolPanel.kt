@@ -173,7 +173,7 @@ fun StudioToolPanel(
                 }
 
                 StudioTool.SHAPE -> state.selectedLayer?.let { spec ->
-                    ShapeControls(spec, actions.update)
+                    ShapeControls(spec, actions.update, actions.commit)
                 }
 
                 StudioTool.EFFECTS -> state.selectedLayer?.let { spec ->
