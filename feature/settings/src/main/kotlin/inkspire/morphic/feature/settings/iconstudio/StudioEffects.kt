@@ -38,7 +38,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
-import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
@@ -271,10 +270,12 @@ private fun OpacityControls(
     onCommit: () -> Unit,
 ) {
     LabeledControl("Opacity  ${"%.2f".format(spec.opacity)}") {
-        MorphicSlider(
+        SteppedSlider(
             value = spec.opacity,
-            onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
             valueRange = 0f..1f,
+            step = UnitStep,
+            what = "opacity",
+            onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
             onValueChangeFinished = onCommit,
         )
     }
@@ -329,26 +330,32 @@ private fun RecolorControls(
     val color = spec.color ?: LayerEffect.Color()
 
     LabeledControl("Saturation  ${"%.2f".format(color.saturation)}") {
-        MorphicSlider(
+        SteppedSlider(
             value = color.saturation,
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
             valueRange = 0f..2f,
+            step = UnitStep,
+            what = "saturation",
+            onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
             onValueChangeFinished = onCommit,
         )
     }
     LabeledControl("Brightness  ${"%.2f".format(color.brightness)}") {
-        MorphicSlider(
+        SteppedSlider(
             value = color.brightness,
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
             valueRange = 0.2f..2f,
+            step = UnitStep,
+            what = "brightness",
+            onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
             onValueChangeFinished = onCommit,
         )
     }
     LabeledControl("Hue  ${"%.0f".format(color.hueDegrees)}°") {
-        MorphicSlider(
+        SteppedSlider(
             value = color.hueDegrees,
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
             valueRange = 0f..360f,
+            step = AngleStep,
+            what = "hue",
+            onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
             onValueChangeFinished = onCommit,
         )
     }
@@ -411,18 +418,22 @@ private fun GradientControls(
     val gradient = spec.gradient ?: LayerEffect.Gradient(strength = 0f)
 
     LabeledControl("Strength  ${"%.2f".format(gradient.strength)}") {
-        MorphicSlider(
+        SteppedSlider(
             value = gradient.strength,
-            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
             valueRange = 0f..1f,
+            step = UnitStep,
+            what = "strength",
+            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
             onValueChangeFinished = onCommit,
         )
     }
     LabeledControl("Angle  ${"%.0f".format(gradient.angleDegrees)}°") {
-        MorphicSlider(
+        SteppedSlider(
             value = gradient.angleDegrees,
-            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
             valueRange = 0f..360f,
+            step = AngleStep,
+            what = "gradient angle",
+            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
             onValueChangeFinished = onCommit,
         )
     }
@@ -438,8 +449,14 @@ private fun GradientControls(
     }
 }
 
-/** Three across: five entries land as 3 + 2, and the deferred shadow fills the second row rather than starting a third. */
-private const val EffectColumns = 3
+/**
+ * Four across: five entries land as 4 + 1 today, and the deferred shadow fills the second row.
+ *
+ * Three was the first cut and made the tiles too big — at three columns a phone hands each one most of 110dp, which
+ * is a button the size of an app icon for a section that is a menu. Four brings them to roughly 76dp, under the cap
+ * below, so the cap now only binds on a tablet.
+ */
+private const val EffectColumns = 4
 
 /** Between tiles on both axes. */
 private val EffectGridSpacing = 8.dp
@@ -449,3 +466,15 @@ private val EffectTileMax = 96.dp
 
 /** The glyph inside a tile's plate — a signpost, so it sits in the square rather than filling it. */
 private const val EffectGlyphFraction = 0.42f
+
+/**
+ * The grid the stepper buttons snap to.
+ *
+ * One step for every 0..1-ish value here — opacity, saturation, brightness, gradient strength — because they are all
+ * read the same way and a user who learns one button's feel has learned them all. It puts 0.00, 0.50 and 1.00 on the
+ * grid, which are the values people ask for by name, and it matches the zoom slider one section over.
+ */
+private const val UnitStep = 0.05f
+
+/** Five degrees for both angles, so 45, 90 and 180 are reachable by stepping — the rotation slider's own step. */
+private const val AngleStep = 5f

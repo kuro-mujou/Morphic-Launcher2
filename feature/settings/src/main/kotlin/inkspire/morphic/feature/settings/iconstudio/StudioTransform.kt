@@ -8,22 +8,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
-import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.model.icon.IconLayerSpec
-import kotlin.math.ceil
-import kotlin.math.floor
-
 
 /**
  * Position, zoom and rotation.
@@ -35,12 +29,9 @@ import kotlin.math.floor
  * **Every control also has buttons, because a drag cannot be exact and these values have exact answers people want.**
  * Centered, 1.00×, 0°, 90° — a finger on a 140dp pad or a 250dp slider lands on 0.037 and 87°, and no amount of care
  * fixes that: the control's resolution is its length in pixels. The pad and the sliders stay the way you *find* a
- * value; the buttons are how you land on one.
- *
- * **The buttons snap to a grid rather than adding to the current value**, which is the detail that makes them worth
- * having. From 1.037 a plain `+0.05` gives 1.087 and every later press keeps the same debris; snapping gives 1.05, and
- * one press the other way gives exactly 1.00. So the round numbers are always at most one press away, and stepping
- * from a dragged value cleans it up instead of preserving it. See [snappedStep].
+ * value; the buttons are how you land on one. [SteppedSlider] carries that for the two sliders and states the whole
+ * argument, including why a press snaps to the grid instead of adding to the value; the pad's cluster below is the
+ * same idea in two dimensions.
  *
  * Steps are chosen so the values people ask for by name are on the grid: 5° puts 45, 90 and 180 on it, and 0.05 puts
  * 1.00 and 1.50 on it.
@@ -97,7 +88,6 @@ internal fun TransformControls(
             what = "zoom",
             onValueChange = { value -> onUpdate { it.copy(zoom = value) } },
             onValueChangeFinished = onCommit,
-            onStepTo = { value -> onUpdate { it.copy(zoom = value) } },
         )
     }
 
@@ -109,7 +99,6 @@ internal fun TransformControls(
             what = "rotation",
             onValueChange = { value -> onUpdate { it.copy(rotation = value) } },
             onValueChangeFinished = onCommit,
-            onStepTo = { value -> onUpdate { it.copy(rotation = value) } },
         )
     }
 }
@@ -160,55 +149,6 @@ private fun NudgePad(
 }
 
 /**
- * A slider between a pair of buttons that step it onto the nearest grid value.
- *
- * @param what names the value for the buttons' content descriptions — the only thing here that is not the same for
- *   zoom and rotation, since both targets are computed from [step].
- * @param onStepTo the live edit a press makes, and it must **not** commit: a held button repeats, and
- *   [onValueChangeFinished] is what closes both a drag and a hold into one undo step. See `StudioStepperButton`.
- */
-@Composable
-private fun SteppedSlider(
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    step: Float,
-    what: String,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit,
-    onStepTo: (Float) -> Unit,
-) {
-    val down = snappedStep(value, step, up = false).coerceIn(valueRange)
-    val up = snappedStep(value, step, up = true).coerceIn(valueRange)
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StudioStepperButton(
-            icon = Icons.Default.Remove,
-            contentDescription = "Decrease $what",
-            enabled = down != value,
-            onStep = { onStepTo(down) },
-            onStepsFinished = onValueChangeFinished,
-        )
-        MorphicSlider(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            valueRange = valueRange,
-            onValueChangeFinished = onValueChangeFinished,
-        )
-        StudioStepperButton(
-            icon = Icons.Default.Add,
-            contentDescription = "Increase $what",
-            enabled = up != value,
-            onStep = { onStepTo(up) },
-            onStepsFinished = onValueChangeFinished,
-        )
-    }
-}
-
-/**
  * This layer moved one nudge along each axis [x] and [y] name (`-1`, `0`, `+1`), clamped to the pad's own range so a
  * button can never leave the layer somewhere the pad cannot show.
  *
@@ -225,22 +165,6 @@ private fun IconLayerSpec.nudged(x: Int, y: Int): IconLayerSpec = copy(
 private fun Float.nudged(direction: Int): Float =
     if (direction == 0) this else snappedStep(this, NudgeStep, up = direction > 0).coerceIn(OffsetRange)
 
-/**
- * The next multiple of [step] beyond [value], in the direction [up] names.
- *
- * **A grid position, not an addition**, which is what lets one press clean up a dragged value: 1.037 steps down to
- * 1.00 rather than to 0.987, and every value on the way is a number somebody could have meant. A value already on the
- * grid moves a full step, so repeated presses walk it evenly.
- *
- * The epsilon is what stops a value that *is* on the grid — arrived at by an earlier press — being read as a hair
- * below it and stepping only to itself, which would present as a button that works every other press.
- */
-private fun snappedStep(value: Float, step: Float, up: Boolean): Float {
-    val steps = value / step
-    val target = if (up) floor(steps + SnapEpsilon) + 1f else ceil(steps - SnapEpsilon) - 1f
-    return target * step
-}
-
 /** Where the pad's own edges are; the nudge buttons clamp to the same range so the two agree. */
 private val OffsetRange = -0.5f..0.5f
 private val ZoomRange = 0.2f..2f
@@ -254,9 +178,6 @@ private const val ZoomStep = 0.05f
 
 /** Five degrees, so 45, 90 and 180 are all reachable by stepping rather than only by luck. */
 private const val RotationStep = 5f
-
-/** Small against any step here, large against the float error of adding them up. */
-private const val SnapEpsilon = 1e-4f
 
 /** The pad, and one cell of the cluster beside it — equal to `StudioIconButton`'s own side. */
 private val PadSide = 140.dp
