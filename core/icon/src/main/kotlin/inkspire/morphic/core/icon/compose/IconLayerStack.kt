@@ -34,6 +34,7 @@ import inkspire.morphic.core.icon.render.LayerGradient
 import inkspire.morphic.core.icon.render.LayerTransform
 import inkspire.morphic.core.icon.render.ResolvedLayer
 import inkspire.morphic.core.icon.render.ShapeMask
+import inkspire.morphic.core.model.icon.BloomFalloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
@@ -59,7 +60,8 @@ import inkspire.morphic.core.model.icon.LayerEffect
  *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
  * - [IconFilters] is the table of built-in looks both paths resolve an id through, so a filter is one authored
  *   matrix rather than two that drifted. It composes from the same builders `LayerFilter` does.
- * - [LayerGradient] decides which way an angle runs, for both.
+ * - [LayerGradient] decides which way an angle runs and where a bloom's light sits, for both — including the frame
+ *   it is laid out in, so one anchored to the artwork lands on the same ink in the editor and on the home screen.
  * - [ShapeMask] decides where the silhouette sits, for both. The mask itself is built from the **same** vector
  *   drawable via [IconShapes] and applied the same way — as a destination-in mask over the finished layer — but
  *   *where* it lands stopped being "the box" the moment a shape could be anchored to the artwork, and that is
@@ -110,7 +112,7 @@ fun IconLayerStack(
             // is **outermost**, so it applies to the finished layer and blends against the layers already drawn;
             // the mask sits inside it but **outside the transform**, so a shape stays put in the box while the
             // content moves under it. The baked path gets the same ordering from its draw order.
-            Box(Modifier.fillMaxSize().layerComposite(layer.spec).layerEffects(layer.spec).shapeMask(layer)) {
+            Box(Modifier.fillMaxSize().layerComposite(layer.spec).layerEffects(layer).shapeMask(layer)) {
                 Canvas(
                     Modifier
                         .fillMaxSize()
@@ -192,16 +194,28 @@ private fun Modifier.layerComposite(spec: IconLayerSpec): Modifier {
  * what makes the pipeline a pipeline instead of four things painted on the same sheet.
  */
 @Composable
-private fun Modifier.layerEffects(spec: IconLayerSpec): Modifier {
-    val effects = spec.activeEffects
+private fun Modifier.layerEffects(layer: ResolvedLayer): Modifier {
+    val effects = layer.spec.activeEffects
     if (effects.isEmpty()) return this
 
-    return effects.reversed().fold(this) { chain, effect -> chain.then(effectModifier(effect)) }
+    // Measured once for the whole chain, as the bake measures once for its whole loop — it is a property of the
+    // layer's artwork, and every effect anchored to content is anchored to the square a shape mask would use.
+    val inkFit = remember(layer.content) { ShapeMask.inkFit(layer.content) }
+
+    return effects.reversed().fold(this) { chain, effect ->
+        chain.then(effectModifier(effect, layer.spec, inkFit))
+    }
 }
 
-/** One effect as a draw modifier. Exhaustive, so a new variant cannot be added without a live answer or a bake. */
+/**
+ * One effect as a draw modifier. Exhaustive, so a new variant cannot be added without a live answer or a bake.
+ *
+ * Takes the spec and the ink fit rather than the resolved frame, because a frame is in **pixels** and the node's
+ * real size is only known inside the draw scope — which is the same reason [LayerTransform] is resolved in the
+ * `graphicsLayer` block rather than in composition.
+ */
 @Composable
-private fun effectModifier(effect: LayerEffect): Modifier = when (effect) {
+private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec, inkFit: ShapeMask.InkFit): Modifier = when (effect) {
     // Two effects, one drawing: both resolve to a colour matrix over everything drawn so far, and only where the
     // matrix comes from differs — composed from four sliders, or looked up by id.
     is LayerEffect.Color, is LayerEffect.Filter -> {
@@ -229,30 +243,47 @@ private fun effectModifier(effect: LayerEffect): Modifier = when (effect) {
         }
     }
 
-    is LayerEffect.Gradient -> Modifier.drawWithContent {
+    is LayerEffect.Bloom -> Modifier.drawWithContent {
         drawIntoCanvas { canvas ->
             // Its own layer, so source-atop's destination is what the pipeline has drawn so far and nothing else —
-            // which is what makes the gradient color the artwork instead of covering the icon with a rectangle.
+            // which is what makes the bloom color the artwork instead of covering the icon with a rectangle.
             canvas.saveLayer(bounds = Rect(0f, 0f, size.width, size.height), paint = Paint())
             drawContent()
-            drawGradientOverlay(effect)
+            drawBloomOverlay(effect, spec, inkFit)
             canvas.restore()
         }
     }
 }
 
-/** Paints a gradient over whatever has been drawn, clipped to it — the live twin of `IconRenderer.applyGradient`. */
-private fun DrawScope.drawGradientOverlay(gradient: LayerEffect.Gradient) {
-    val (x0, y0, x1, y1) = LayerGradient.endpoints(gradient.angleDegrees, size.width.toInt()).toList()
-    drawRect(
-        brush = Brush.linearGradient(
-            colors = listOf(Color(gradient.startArgb), Color(gradient.endArgb)),
-            start = Offset(x0, y0),
-            end = Offset(x1, y1),
-        ),
-        alpha = gradient.strength.coerceIn(0f, 1f),
-        blendMode = BlendMode.SrcAtop,
-    )
+/**
+ * Paints a bloom over whatever has been drawn, clipped to it — the live twin of `IconRenderer.applyBloom`.
+ *
+ * The `when` chooses a brush and nothing else: both falloffs take the same stops, the same alpha and the same
+ * source-atop, and where each one sits comes from [LayerGradient] — including the frame, so a bloom anchored to the
+ * artwork lands on the same ink in both paths and turns with it by the same arithmetic.
+ */
+private fun DrawScope.drawBloomOverlay(bloom: LayerEffect.Bloom, spec: IconLayerSpec, inkFit: ShapeMask.InkFit) {
+    // Square, from the width — the same quantity the transform and the shape mask read the box by.
+    val sizePx = size.width.toInt()
+    val frame = LayerGradient.frameOf(bloom, inkFit, LayerTransform.of(spec, sizePx), sizePx)
+    val colors = listOf(Color(bloom.argb), Color(LayerGradient.fadeOut(bloom.argb)))
+
+    val brush = when (bloom.falloff) {
+        BloomFalloff.LINEAR -> {
+            val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, bloom.angleDegrees).toList()
+            Brush.linearGradient(colors = colors, start = Offset(x0, y0), end = Offset(x1, y1))
+        }
+
+        BloomFalloff.RADIAL -> {
+            val radial = LayerGradient.radial(frame, bloom.radius)
+            Brush.radialGradient(
+                colors = colors,
+                center = Offset(radial.centerX, radial.centerY),
+                radius = radial.radiusPx,
+            )
+        }
+    }
+    drawRect(brush = brush, alpha = bloom.strength.coerceIn(0f, 1f), blendMode = BlendMode.SrcAtop)
 }
 
 /** The Compose blend mode for [LayerBlend], or `null` for `NORMAL` — which is the default source-over. */

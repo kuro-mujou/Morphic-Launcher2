@@ -127,26 +127,26 @@ class IconLayerResolverTest {
     }
 
     /**
-     * The drain must not eat the layer's other effects. `withColor` replaces only the color effect, and a gradient
+     * The drain must not eat the layer's other effects. `withColor` replaces only the color effect, and a bloom
      * silently disappearing when a source changed would be the kind of loss nobody attributes to this arm.
      */
     @Test
     fun `draining replaces only the color effect and leaves the rest of the stack in place`() {
-        val gradient = LayerEffect.Gradient(startArgb = 0xFF000000.toInt(), endArgb = 0xFFFFFFFF.toInt())
+        val bloom = LayerEffect.Bloom(argb = 0xFFFFFFFF.toInt())
         val set = IconLayerSet(
             listOf(
                 IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.Empty),
                 IconLayerSpec(
                     role = LayerRole.FOREGROUND,
                     source = LayerSource.AppDefaultMonochrome,
-                    effects = listOf(gradient),
+                    effects = listOf(bloom),
                 ),
             ),
         )
 
         val resolved = resolveForeground(set, icon(monochrome = ParsedLayer.Color(themedArgb)))
 
-        assertTrue(gradient in resolved.spec.effects)
+        assertTrue(bloom in resolved.spec.effects)
         assertEquals(0f, resolved.spec.color?.saturation)
     }
 

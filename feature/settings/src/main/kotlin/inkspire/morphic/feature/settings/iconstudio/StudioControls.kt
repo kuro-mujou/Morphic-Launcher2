@@ -11,7 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.foundation.layout.size
@@ -22,7 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
@@ -261,6 +268,113 @@ internal fun snappedStep(value: Float, step: Float, up: Boolean): Float {
 
 /** Small against any step here, large against the float error of adding them up. */
 private const val SnapEpsilon = 1e-4f
+
+/**
+ * A point in the icon's frame: a [Morphic2DPad] to find it with, and a cluster of four arrows plus a center button
+ * to land on one exactly.
+ *
+ * **A 2D pad rather than two sliders**, because the value is a point — something is nudged diagonally as often as
+ * along an axis, and two sliders make that two gestures and a mental transpose.
+ *
+ * **And buttons beside it, because a drag cannot be exact.** A finger on a 140dp pad lands on 0.037, and no amount of
+ * care fixes that: the control's resolution is its length in pixels. The pad stays the way you *find* a position; the
+ * cluster is how you land on one. [SteppedSlider] carries the same argument in one dimension and states why a press
+ * snaps to the grid rather than adding to the value.
+ *
+ * **The center of a direction pad is where "back to the middle" belongs** — the one arrangement where the control's
+ * shape states what it does, and it costs no row of its own. It is disabled while the point is already centered, so
+ * the cluster doubles as the answer to "is it?", which the pad's knob only approximates. Arrows disable at the edge of
+ * the range for the same reason: a press that would do nothing says so first.
+ *
+ * **Extracted on its second consumer**, which is the rule `IconPreviewPlate` and `AppPicker` also arrived by. It was
+ * the transform section's alone until a bloom needed somewhere to sit; two copies would have been two answers to
+ * where the range ends and how far one press moves.
+ *
+ * Dragging edits live and commits when the gesture *ends*, so undo steps over the whole drag rather than through a
+ * hundred frames of it. A button press is discrete, so it commits at once and is one undo step.
+ */
+@Composable
+internal fun PositionPad(
+    x: Float,
+    y: Float,
+    onValueChange: (x: Float, y: Float) -> Unit,
+    onCommit: () -> Unit,
+) {
+    @Composable
+    fun Arrow(icon: ImageVector, description: String, dx: Int, dy: Int) {
+        val target = x.nudged(dx) to y.nudged(dy)
+        StudioStepperButton(
+            icon = icon,
+            contentDescription = description,
+            enabled = target != (x to y),
+            onStep = { onValueChange(target.first, target.second) },
+            onStepsFinished = onCommit,
+            modifier = Modifier.size(NudgeSlot),
+        )
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Morphic2DPad(
+            x = x,
+            y = y,
+            onValueChange = onValueChange,
+            xRange = PositionRange,
+            yRange = PositionRange,
+            onValueChangeFinished = onCommit,
+            modifier = Modifier.size(PadSide),
+        )
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Arrow(Icons.Default.KeyboardArrowUp, "Nudge up", 0, -1)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Arrow(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Nudge left", -1, 0)
+                StudioIconButton(
+                    icon = Icons.Default.CenterFocusStrong,
+                    contentDescription = "Center",
+                    enabled = x != 0f || y != 0f,
+                    onClick = {
+                        onValueChange(0f, 0f)
+                        onCommit()
+                    },
+                    modifier = Modifier.size(NudgeSlot),
+                )
+                Arrow(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Nudge right", 1, 0)
+            }
+            Arrow(Icons.Default.KeyboardArrowDown, "Nudge down", 0, 1)
+        }
+    }
+}
+
+/**
+ * This coordinate moved one nudge in the direction [direction] names (`-1`, `0`, `+1`), clamped to the pad's own
+ * range so a button can never leave the point somewhere the pad cannot show.
+ *
+ * **Snapped like the sliders, and here it is load-bearing rather than tidy.** Adding `0.01` repeatedly accumulates
+ * float error, so a point nudged twenty steps out and twenty back would land near zero rather than on it — leaving
+ * the Center button lit, and lit *forever*, over an offset too small to see. Stepping onto the grid means the way
+ * back is exactly the way out.
+ */
+private fun Float.nudged(direction: Int): Float =
+    if (direction == 0) this else snappedStep(this, NudgeStep, up = direction > 0).coerceIn(PositionRange)
+
+/**
+ * Half a frame either way — which puts the point on an edge at the ends and off it nowhere.
+ *
+ * Shared by [PositionPad] and by any control writing the same kind of value, so the pad, the nudge buttons and a
+ * one-dimensional slider over the same field all agree about where the ends are.
+ */
+internal val PositionRange = -0.5f..0.5f
+
+/** A hundredth of the frame — fine enough that a press is a correction rather than a move. */
+private const val NudgeStep = 0.01f
+
+/** The pad, and one cell of the cluster beside it — equal to `StudioIconButton`'s own side. */
+private val PadSide = 140.dp
+private val NudgeSlot = 40.dp
 
 /**
  * Which page of a pager is showing. Not a control — pressing one is not offered, since swiping is the gesture.

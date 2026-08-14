@@ -51,11 +51,11 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
     SHAPE("Shape", Icons.Default.Hexagon),
 
     /**
-     * How the layer reads: opacity, blend mode, recoloring (hue / saturation / brightness / tint) and the gradient
-     * overlay.
+     * How the layer reads: opacity, blend mode, recoloring (hue / saturation / brightness / tint), the bloom overlay
+     * and the built-in looks.
      *
      * **This is the one deliberate merge, and the model is what justifies it.** `LayerEffect.Color` and
-     * `LayerEffect.Gradient` are two variants of one sealed list — and the deferred shadow will be a third — so an
+     * `LayerEffect.Bloom` are two variants of one sealed list — and the deferred shadow will be another — so an
      * entry per variant would mean the bar grew every time that list did. Opacity and blend join them despite being
      * spec *fields* rather than effects, for the reason the controls' own KDoc gives: that distinction is about what
      * can vary independently in storage, and someone adjusting how a layer reads color-wise does not care which side

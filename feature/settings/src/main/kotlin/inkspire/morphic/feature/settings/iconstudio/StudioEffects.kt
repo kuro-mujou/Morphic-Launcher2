@@ -52,13 +52,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconFilters
+import inkspire.morphic.core.model.icon.BloomFalloff
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconFilter
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
+import inkspire.morphic.core.model.icon.ShapeAnchor
 import inkspire.morphic.core.model.icon.TintMode
+import kotlin.math.PI
 import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * One entry in the Effects grid: a job the user can go and do to this layer, with the glyph and word the grid
@@ -90,8 +96,14 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** Hue, saturation, brightness and the tint — one `LayerEffect.Color`, one matrix. */
     COLOR("Color", Icons.Default.Tune),
 
-    /** The two-stop overlay laid over the artwork. */
-    GRADIENT("Gradient", Icons.Default.Gradient),
+    /**
+     * Light or shade spilling across the artwork — the two-stop overlay, linear or radial.
+     *
+     * **This is the entry that used to read "Gradient"**, and the rename is the rule rather than a preference: every
+     * other entry here names a look, so one naming a shader was the odd one out. Nothing was retired *into* it that
+     * it could not already do — both stops stay arbitrary, so a duotone is still one edit.
+     */
+    BLOOM("Bloom", Icons.Default.Gradient),
 
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
@@ -114,7 +126,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     fun storedEffect(spec: IconLayerSpec): LayerEffect? = when (this) {
         OPACITY, BLEND -> null
         COLOR -> spec.effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
-        GRADIENT -> spec.effects.filterIsInstance<LayerEffect.Gradient>().firstOrNull()
+        BLOOM -> spec.effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         FILTER -> spec.effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -136,14 +148,14 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         // `activeEffects` is the renderers' own list, so a tile marks itself exactly when the icon is affected —
         // which means an effect switched off reads as inactive, and correctly so: it is not doing anything.
         COLOR -> spec.activeEffects.any { it is LayerEffect.Color }
-        GRADIENT -> spec.activeEffects.any { it is LayerEffect.Gradient }
+        BLOOM -> spec.activeEffects.any { it is LayerEffect.Bloom }
         FILTER -> spec.activeEffects.any { it is LayerEffect.Filter }
     }
 }
 
 /**
- * How the layer reads: opacity and blend, recoloring, tint and the gradient overlay — as a **grid of entries you
- * open**, rather than every control at once.
+ * How the layer reads: opacity and blend, recoloring, tint, bloom and the built-in looks — as a **grid of entries
+ * you open**, rather than every control at once.
  *
  * **The column this replaces was the whole problem.** Twelve controls stacked in a panel capped at 320dp meant the
  * section was always scrolling, the thing being adjusted was usually half off-screen, and finding a control meant
@@ -197,7 +209,7 @@ internal fun EffectsControls(
                 EffectSlice.OPACITY -> OpacityControls(spec, onUpdate, onCommit)
                 EffectSlice.BLEND -> BlendControls(spec, onUpdate, onCommit)
                 EffectSlice.COLOR -> ColorControls(spec, onUpdate, onCommit)
-                EffectSlice.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
+                EffectSlice.BLOOM -> BloomControls(spec, onUpdate, onCommit)
                 EffectSlice.FILTER -> FilterControls(spec, onUpdate, onCommit)
             }
         }
@@ -377,7 +389,7 @@ private fun EffectHeader(
                         when (slice) {
                             EffectSlice.COLOR -> current.color?.let { current.withColor(it.copy(enabled = on)) }
                             EffectSlice.FILTER -> current.filter?.let { current.withFilter(it.copy(enabled = on)) }
-                            else -> current.gradient?.let { current.withGradient(it.copy(enabled = on)) }
+                            else -> current.bloom?.let { current.withBloom(it.copy(enabled = on)) }
                         } ?: current
                     }
                     onCommit()
@@ -651,54 +663,159 @@ private val FilterSwatchHeight = 48.dp
 private val FilterTileGap = 8.dp
 
 /**
- * The gradient overlay's two stops, its direction and how strongly it is laid on.
+ * The bloom's falloff, its two stops, and how strongly it is laid on.
  *
- * **Strength doubles as the on/off switch**: at zero the effect is identity and `withGradient` drops it from the
- * list entirely, so there is no separate toggle to disagree with the slider. That is the same shape the recoloring
+ * **Strength doubles as the on/off switch**: at zero the effect is identity and `withBloom` drops it from the list
+ * entirely, so there is no separate toggle to disagree with the slider. That is the same shape the recoloring
  * controls have — an effect at its defaults is simply not stored.
+ *
+ * **The falloff swaps one slider for another rather than adding one**, which is the whole reason it is an enum: a
+ * linear ramp spans the box at every angle so it has no reach to set, and a centered disc has no direction to run
+ * in. Showing both and letting one do nothing is the thing this file's own rule forbids — see the tint-style
+ * control above, which appears only once a tint exists, for the same rule in its other form.
  */
 @Composable
-private fun GradientControls(
+private fun BloomControls(
     spec: IconLayerSpec,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
-    // Seeded at zero strength when absent, so the sliders show a coherent gradient before it is turned on rather
-    // than jumping to arbitrary values the moment strength leaves zero.
-    val gradient = spec.gradient ?: LayerEffect.Gradient(strength = 0f)
+    // Seeded at zero strength when absent, so the sliders show a coherent bloom before it is turned on rather than
+    // jumping to arbitrary values the moment strength leaves zero.
+    val bloom = spec.bloom ?: LayerEffect.Bloom(strength = 0f)
+
+    LabeledControl("Falloff") {
+        MorphicSegmentedButtons(
+            options = listOf("Linear", "Radial"),
+            selectedIndex = if (bloom.falloff == BloomFalloff.RADIAL) 1 else 0,
+            onSelect = { index ->
+                val falloff = if (index == 1) BloomFalloff.RADIAL else BloomFalloff.LINEAR
+                onUpdate { it.withBloom(bloom.copy(falloff = falloff)) }
+                onCommit()
+            },
+        )
+    }
+
+    // **One color, not two** — the far end is that color with its alpha gone, so the light fades out of the picture
+    // instead of into a second one. Not clearable, since a bloom must be *some* color; strength is how it is turned
+    // off, and at zero the effect is dropped from the list entirely.
+    LabeledControl("Color") {
+        ColorField(argb = bloom.argb) { argb ->
+            onUpdate { it.withBloom(bloom.copy(argb = argb)) }
+        }
+    }
 
     SliderControl(
         label = "Strength",
-        value = gradient.strength,
+        value = bloom.strength,
         valueRange = 0f..1f,
         step = UnitStep,
-        // Nothing, not `Gradient()`'s own default of 1: reset means "as if untouched", and an unconfigured gradient
-        // is the one this panel seeds at zero so it stays invisible until asked for.
+        // Nothing, not `Bloom()`'s own default of 1: reset means "as if untouched", and an unconfigured bloom is
+        // the one this panel seeds at zero so it stays invisible until asked for.
         default = 0f,
-        onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
+        onValueChange = { value -> onUpdate { it.withBloom(bloom.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
     )
-    SliderControl(
-        label = "Angle",
-        value = gradient.angleDegrees,
-        valueRange = 0f..360f,
-        step = AngleStep,
-        default = 0f,
-        format = { "%.0f°".format(it) },
-        onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
-        onValueChangeFinished = onCommit,
-    )
-    LabeledControl("From") {
-        ColorField(argb = gradient.startArgb) { argb ->
-            onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
-        }
+
+    when (bloom.falloff) {
+        BloomFalloff.LINEAR -> SliderControl(
+            label = "Angle",
+            value = bloom.angleDegrees,
+            valueRange = 0f..360f,
+            step = AngleStep,
+            default = 0f,
+            format = { "%.0f°".format(it) },
+            onValueChange = { value -> onUpdate { it.withBloom(bloom.copy(angleDegrees = value)) } },
+            onValueChangeFinished = onCommit,
+        )
+
+        // Floored just above zero rather than at it: a disc that reaches nowhere is identity, so a slider that
+        // could land there would silently delete the effect the user is in the middle of tuning.
+        BloomFalloff.RADIAL -> SliderControl(
+            label = "Radius",
+            value = bloom.radius,
+            valueRange = UnitStep..1.5f,
+            step = UnitStep,
+            default = 1f,
+            onValueChange = { value -> onUpdate { it.withBloom(bloom.copy(radius = value)) } },
+            onValueChangeFinished = onCommit,
+        )
     }
-    LabeledControl("To") {
-        ColorField(argb = gradient.endArgb) { argb ->
-            onUpdate { it.withGradient(gradient.copy(endArgb = argb)) }
+
+    BloomPosition(bloom = bloom, onUpdate = onUpdate, onCommit = onCommit)
+
+    // The shape section's control, on the same enum and through the same derivation — see `ShapeMask`. A bloom and a
+    // shape anchored to content on one layer therefore sit on the *same* square, which is what a user putting a
+    // highlight inside a trimmed silhouette is relying on without being told.
+    MorphicSwitchRow(
+        label = "Fit to artwork",
+        supportingText = bloom.anchor.bloomHint,
+        checked = bloom.anchor == ShapeAnchor.CONTENT,
+        onCheckedChange = { on ->
+            onUpdate { it.withBloom(bloom.copy(anchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX)) }
+            onCommit()
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/**
+ * Where the light sits — **the transform section's pad for a disc, one slider for a ramp**, because a linear
+ * gradient is constant along its own perpendicular and so genuinely cannot see half of a 2D move.
+ *
+ * The radial case is [PositionPad] unchanged, arrows and center button included: the value is the same *kind* of
+ * thing a layer's own offset is, so it should be found and landed on the same way. That is what made the pad worth
+ * extracting rather than copying.
+ *
+ * The model stores a point either way ([LayerEffect.Bloom.offsetX]/`offsetY`, again the layer offset's vocabulary).
+ * The linear control writes the **projection** onto its angle and zeroes the rest, so what is stored is always
+ * somewhere the ramp could have been put — rather than carrying an invisible sideways component that would appear
+ * out of nowhere on switching to radial.
+ */
+@Composable
+private fun BloomPosition(
+    bloom: LayerEffect.Bloom,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
+) {
+    LabeledControl("Position") {
+        when (bloom.falloff) {
+            BloomFalloff.RADIAL -> PositionPad(
+                x = bloom.offsetX,
+                y = bloom.offsetY,
+                onValueChange = { x, y -> onUpdate { it.withBloom(bloom.copy(offsetX = x, offsetY = y)) } },
+                onCommit = onCommit,
+            )
+
+            BloomFalloff.LINEAR -> {
+                // The same convention `LayerGradient.endpoints` runs on — 0° straight down, so the direction vector
+                // is (sin, cos). Reading it back as a projection is what keeps the slider and the picture agreeing
+                // after the angle has been turned.
+                val radians = bloom.angleDegrees * PI.toFloat() / 180f
+                val dx = sin(radians)
+                val dy = cos(radians)
+
+                SteppedSlider(
+                    value = bloom.offsetX * dx + bloom.offsetY * dy,
+                    valueRange = PositionRange,
+                    step = UnitStep,
+                    what = "position",
+                    onValueChange = { along ->
+                        onUpdate { it.withBloom(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
+                    },
+                    onValueChangeFinished = onCommit,
+                )
+            }
         }
     }
 }
+
+/** One line saying what the chosen anchor does — the shape section's rule, that a static one would look broken. */
+private val ShapeAnchor.bloomHint: String
+    get() = when (this) {
+        ShapeAnchor.BOX -> "The light stays put; moving the layer slides the artwork under it."
+        ShapeAnchor.CONTENT -> "The light sits on the artwork and moves, zooms and turns with it."
+    }
 
 /**
  * Four across, two rows to a page — eight entries before a second page is needed, against four today.

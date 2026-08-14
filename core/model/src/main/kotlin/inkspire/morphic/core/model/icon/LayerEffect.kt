@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
  * **Opacity and blend mode are deliberately *not* here.** They live on [IconLayerSpec] as fields, because they
  * describe how a layer joins the stack rather than what it looks like — see [LayerBlend].
  *
- * Shadows and gradient overlays are the next variants; the render path takes them without further change.
+ * A **shadow** is the next variant, and the one that is not additive — see the plan's deferral note.
  */
 /**
  * How a [LayerEffect.Color.tintArgb] is laid onto the layer it tints.
@@ -47,6 +47,30 @@ enum class TintMode {
      */
     @SerialName("solid")
     SOLID,
+}
+
+/**
+ * How a [LayerEffect.Bloom]'s light falls off across the layer — which is the *only* thing separating its two forms.
+ *
+ * **Each form has exactly one geometric parameter, and it is not the same one**, which is why this is an enum rather
+ * than a flag beside two always-visible sliders: a [LINEAR] bloom is decided by the direction it runs and spans its
+ * frame whatever that direction is, where a [RADIAL] one is decided by how far out it reaches. Neither value can
+ * answer the other's question, so the studio shows one slider or the other and this is what it asks. Where the light
+ * *sits* is a question both can answer, so that is a field on the effect rather than part of this.
+ *
+ * Persisted inside the layer set, so the names are an on-disk contract. Defaults to [LINEAR], which is what this
+ * effect was before it had a choice — so every stored recipe reads back rendering exactly as it did.
+ */
+@Serializable
+enum class BloomFalloff {
+
+    /** A ramp running across the whole frame along `angleDegrees`. The original, and still the common case. */
+    @SerialName("linear")
+    LINEAR,
+
+    /** A disc reaching `radius` of the way to the frame's corners — a glow from a point, or a vignette. */
+    @SerialName("radial")
+    RADIAL,
 }
 
 @Serializable
@@ -124,26 +148,64 @@ sealed interface LayerEffect {
     }
 
     /**
-     * A two-stop linear gradient painted **over the layer and clipped to it** — source-atop, so it colors the
-     * artwork rather than covering the icon with a rectangle.
+     * Light spilling across the layer: [argb] fading out to nothing, painted **over it and clipped to it** —
+     * source-atop, so it colors the artwork rather than covering the icon with a rectangle.
      *
-     * @property angleDegrees the direction the gradient runs, clockwise from "straight down". 0 is top-to-bottom.
-     * @property strength how strongly it is laid over the layer; 0 is invisible, 1 fully replaces the color. A
-     *   separate knob from the stops' own alpha because it is the one a user reaches for, and having to dilute two
-     *   colors by hand to soften a gradient is the sort of thing that makes a control feel broken.
+     * **This is what used to be called `Gradient`, and it is one color now rather than two.** The rename is because
+     * every other entry in this list names a *look* — a blend, a filter, a color — where "gradient" named the
+     * mechanism. Fading to transparent rather than to a second chosen color is the bigger change and it is what
+     * makes the effect usable: with two opaque stops, source-atop *replaces* every pixel it covers, so a
+     * white-to-black bloom at full strength obliterated the artwork it was supposed to light. What is given up is the
+     * two-arbitrary-stop duotone the general control also allowed; a tint plus a bloom reaches most of it.
+     *
+     * **The `@SerialName` stays `"gradient"` deliberately, even though the shape broke.** An unknown discriminator
+     * is not skipped the way an unknown *key* is — it throws, and `IconLayerSetCodec` drops the **whole recipe** on
+     * a throw, where an unreadable field costs one color. So the settings layer's rule that a key name is the seam
+     * for a semantic break does not transfer here: the blast radius is a whole icon rather than one slice. Stored
+     * recipes lose their two stops (the old keys are dropped, [argb] defaults to white) and keep everything else.
+     *
+     * @property falloff whether the light runs across the frame or out from a point in it. See [BloomFalloff] — it
+     *   is what decides which of [angleDegrees] and [radius] means anything.
+     * @property angleDegrees the direction it runs, clockwise from "straight down"; 0 is top-to-bottom.
+     *   [BloomFalloff.LINEAR] only — a disc has no direction.
+     * @property radius how far the light reaches, as a fraction of the way to the frame's corners; 1 covers it
+     *   entirely. [BloomFalloff.RADIAL] only — a linear ramp always spans its frame.
+     * @property offsetX where the light sits, as a fraction of the frame from its center. Positive is toward the
+     *   frame's own right, which is the artwork's right under [ShapeAnchor.CONTENT] — so a bloom placed on a corner
+     *   of the artwork stays on that corner when the layer turns.
+     * @property offsetY the same, downward.
+     * @property anchor what the light is placed against — the icon's box, or this layer's artwork carried by its
+     *   transform. [ShapeAnchor.BOX] leaves it where it is put while the content slides underneath;
+     *   [ShapeAnchor.CONTENT] sits it on the ink and moves, zooms and turns with it. The same question a shape mask
+     *   asks, and answered by the same enum through the same derivation, which is what stops the two drifting apart.
+     * @property strength how strongly it is laid on; 0 is invisible, 1 is the full color where the ramp starts. A
+     *   separate knob from [argb]'s own alpha because the color picker has no alpha channel by design, and because
+     *   this is the one a user reaches for.
      */
     @Serializable
     @SerialName("gradient")
-    data class Gradient(
-        val startArgb: Int = 0xFFFFFFFF.toInt(),
-        val endArgb: Int = 0xFF000000.toInt(),
+    data class Bloom(
+        val argb: Int = 0xFFFFFFFF.toInt(),
         val angleDegrees: Float = 0f,
         val strength: Float = 1f,
+        val falloff: BloomFalloff = BloomFalloff.LINEAR,
+        val radius: Float = 1f,
+        val offsetX: Float = 0f,
+        val offsetY: Float = 0f,
+        val anchor: ShapeAnchor = ShapeAnchor.BOX,
         override val enabled: Boolean = true,
     ) : LayerEffect {
 
-        /** Painting nothing is the only way a gradient is a no-op. */
-        override val isIdentity: Boolean get() = strength <= 0f
+        /**
+         * Painting nothing, either because it was turned down to nothing or because a radial one reaches nowhere.
+         *
+         * That second clause is **not** cosmetic: `RadialGradient` rejects a radius of zero or less outright, so
+         * without it the one value a slider can always be dragged to would crash the bake. The renderers still
+         * clamp, since a recipe is not obliged to be sensible — but an effect that would draw nothing should say so
+         * here, where [IconLayerSpec.activeEffects] filters it out before either path is reached.
+         */
+        override val isIdentity: Boolean
+            get() = strength <= 0f || (falloff == BloomFalloff.RADIAL && radius <= 0f)
 
         /** A shader drawn source-atop, which both paths can do at any API. */
         override val drawsLive: Boolean get() = true

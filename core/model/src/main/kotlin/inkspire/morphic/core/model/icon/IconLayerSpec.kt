@@ -55,14 +55,14 @@ data class IconLayerSpec(
      * The effects that actually draw, **in the order they are applied** — which is the order of [effects] itself.
      *
      * **This is the layer's pipeline, and the list order being real is new.** Both renderers used to read
-     * [color] and [gradient] by name and apply them in a sequence they each hardcoded, so [effects] was a bag whose
+     * [color] and [bloom] by name and apply them in a sequence they each hardcoded, so [effects] was a bag whose
      * order meant nothing. That is survivable at two effects and wrong at thirteen: a pattern over a glow is not a
      * glow over a pattern, so the order has to be the user's rather than the renderer's.
      *
-     * **One consequence worth knowing.** The hardcoded sequence applied the gradient and *then* the color matrix,
+     * **One consequence worth knowing.** The hardcoded sequence applied the overlay and *then* the color matrix,
      * because the matrix rode on the paint that joined the layer to the stack. A stored recipe whose list happens to
-     * read `[Color, Gradient]` — which is what setting a tint before a gradient produced — now renders in that order
-     * instead, so its tint no longer recolors its gradient. Nothing has shipped, and the alternative is a canonical
+     * read `[Color, Bloom]` — which is what setting a tint before a bloom produced — now renders in that order
+     * instead, so its tint no longer recolors its bloom. Nothing has shipped, and the alternative is a canonical
      * order that no reorder control could ever override.
      *
      * Filtering here rather than in each renderer is what keeps "disabled" and "does nothing" from being answered
@@ -97,14 +97,14 @@ data class IconLayerSpec(
         return copy(effects = if (color == null || color.isIdentity) rest else rest + color)
     }
 
-    /** The layer's gradient overlay, or null when it has none. */
-    val gradient: LayerEffect.Gradient?
-        get() = effects.filterIsInstance<LayerEffect.Gradient>().firstOrNull()?.takeIf { !it.isIdentity }
+    /** The layer's bloom overlay, or null when it has none. */
+    val bloom: LayerEffect.Bloom?
+        get() = effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()?.takeIf { !it.isIdentity }
 
-    /** Replaces (or clears) this layer's gradient overlay, leaving every other effect in place and in order. */
-    fun withGradient(gradient: LayerEffect.Gradient?): IconLayerSpec {
-        val rest = effects.filterNot { it is LayerEffect.Gradient }
-        return copy(effects = if (gradient == null || gradient.isIdentity) rest else rest + gradient)
+    /** Replaces (or clears) this layer's bloom overlay, leaving every other effect in place and in order. */
+    fun withBloom(bloom: LayerEffect.Bloom?): IconLayerSpec {
+        val rest = effects.filterNot { it is LayerEffect.Bloom }
+        return copy(effects = if (bloom == null || bloom.isIdentity) rest else rest + bloom)
     }
 
     /** The layer's colour-look filter, or null when it has none. */

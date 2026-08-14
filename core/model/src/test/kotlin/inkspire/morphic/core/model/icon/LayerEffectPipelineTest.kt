@@ -12,12 +12,12 @@ import org.junit.Test
  * **The order is the assertion worth having.** Both renderers walk `activeEffects` front to back — the bake as
  * statements, the live path by folding the reversed list into nested modifiers — and neither can check the other.
  * If this list ever came back reordered, or filtered into a different order, the two would still each draw *an*
- * icon and the difference would only show up as "the tint looks wrong on the gradient" on one surface.
+ * icon and the difference would only show up as "the tint looks wrong on the bloom" on one surface.
  */
 class LayerEffectPipelineTest {
 
     private val tint = LayerEffect.Color(tintArgb = 0xFFFF0000.toInt())
-    private val gradient = LayerEffect.Gradient(strength = 0.5f)
+    private val bloom = LayerEffect.Bloom(strength = 0.5f)
 
     private fun spec(vararg effects: LayerEffect) = IconLayerSpec(
         role = LayerRole.FOREGROUND,
@@ -27,33 +27,33 @@ class LayerEffectPipelineTest {
 
     @Test
     fun `effects are applied in the order they are listed`() {
-        assertEquals(listOf(tint, gradient), spec(tint, gradient).activeEffects)
+        assertEquals(listOf(tint, bloom), spec(tint, bloom).activeEffects)
         // The same two the other way round is a different pipeline, not the same one normalised.
-        assertEquals(listOf(gradient, tint), spec(gradient, tint).activeEffects)
+        assertEquals(listOf(bloom, tint), spec(bloom, tint).activeEffects)
     }
 
     @Test
     fun `a disabled effect is kept in the list and left out of the pipeline`() {
         // The whole point of `enabled`: switching an effect off must not discard what was tuned into it.
         val off = tint.copy(enabled = false)
-        val spec = spec(off, gradient)
+        val spec = spec(off, bloom)
 
-        assertEquals(listOf(off, gradient), spec.effects)
-        assertEquals(listOf(gradient), spec.activeEffects)
+        assertEquals(listOf(off, bloom), spec.effects)
+        assertEquals(listOf(bloom), spec.activeEffects)
     }
 
     @Test
     fun `an effect that would paint nothing is left out too`() {
         // Two different reasons to skip — the user's switch, and the effect saying it is a no-op — and the pipeline
         // must not care which, or every renderer would have to ask both questions itself.
-        assertEquals(emptyList<LayerEffect>(), spec(LayerEffect.Color(), LayerEffect.Gradient(strength = 0f)).activeEffects)
+        assertEquals(emptyList<LayerEffect>(), spec(LayerEffect.Color(), LayerEffect.Bloom(strength = 0f)).activeEffects)
     }
 
     @Test
     fun `a layer draws live only while every one of its effects can`() {
         // An effect that cannot be drawn live cannot simply be skipped: a preview missing one effect is a preview
         // that lies, so the whole layer falls back to its bake.
-        assertTrue(spec(tint, gradient).drawsLive)
+        assertTrue(spec(tint, bloom).drawsLive)
         assertTrue(spec().drawsLive)
     }
 
@@ -75,9 +75,53 @@ class LayerEffectPipelineTest {
     }
 
     @Test
+    fun `a bloom still stores itself as a gradient, so old recipes keep loading`() {
+        // The discriminator is deliberately stale — see `LayerEffect.Bloom`. An unknown *key* is skipped, but an
+        // unknown polymorphic *type* throws, and `IconLayerSetCodec` drops the whole recipe on a throw. So renaming
+        // it would cost a user every customized icon rather than one effect's colors. Silent and total, so pinned.
+        val json = Json { encodeDefaults = false }
+        val encoded = json.encodeToString(LayerEffect.serializer(), bloom)
+
+        assertTrue(encoded.contains("\"gradient\""))
+        // The geometry is all defaulted, so an untouched bloom costs nothing on disk.
+        assertFalse(encoded.contains("falloff"))
+        assertFalse(encoded.contains("radius"))
+        assertFalse(encoded.contains("anchor"))
+        assertFalse(encoded.contains("offset"))
+        // And a recipe predating them comes back as the plain top-to-bottom ramp it was.
+        assertEquals(bloom, json.decodeFromString(LayerEffect.serializer(), """{"type":"gradient","strength":0.5}"""))
+    }
+
+    @Test
+    fun `a recipe written with two stops loses them and nothing else`() {
+        // The accepted cost of one color replacing two: the old keys are unknown now, so `ignoreUnknownKeys` drops
+        // them and the color defaults. Everything the effect still has a field for survives, which is what makes
+        // this a downgrade rather than a corruption.
+        val json = Json { ignoreUnknownKeys = true }
+        val stored = """{"type":"gradient","startArgb":-16711936,"endArgb":-65536,"angleDegrees":90.0,"strength":0.5}"""
+
+        val decoded = json.decodeFromString(LayerEffect.serializer(), stored) as LayerEffect.Bloom
+
+        assertEquals(0xFFFFFFFF.toInt(), decoded.argb)
+        assertEquals(90f, decoded.angleDegrees, 0.001f)
+        assertEquals(0.5f, decoded.strength, 0.001f)
+    }
+
+    @Test
+    fun `a radial bloom that reaches nowhere paints nothing`() {
+        // Not cosmetic: `RadialGradient` rejects a non-positive radius outright, so this is what keeps the one value
+        // a slider can always be dragged to from reaching either renderer.
+        val nowhere = LayerEffect.Bloom(falloff = BloomFalloff.RADIAL, radius = 0f)
+
+        assertTrue(nowhere.isIdentity)
+        // The same radius is meaningless to a linear ramp, which spans the box whatever it says.
+        assertFalse(nowhere.copy(falloff = BloomFalloff.LINEAR).isIdentity)
+    }
+
+    @Test
     fun `a recipe that switched an effect off does say so`() {
         val json = Json { encodeDefaults = false }
-        val off = gradient.copy(enabled = false)
+        val off = bloom.copy(enabled = false)
 
         assertTrue(json.encodeToString(LayerEffect.serializer(), off).contains("\"enabled\":false"))
         assertEquals(off, json.decodeFromString(LayerEffect.serializer(), json.encodeToString(LayerEffect.serializer(), off)))

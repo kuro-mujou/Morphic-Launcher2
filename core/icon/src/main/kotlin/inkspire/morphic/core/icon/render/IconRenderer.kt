@@ -8,6 +8,7 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
+import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -17,6 +18,7 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconShapes
+import inkspire.morphic.core.model.icon.BloomFalloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
@@ -40,7 +42,7 @@ import androidx.core.graphics.withMatrix
  * ([inkspire.morphic.core.icon.compose.IconLayerStack]) composes the same three into one paint for the same
  * reason, and shares [LayerFilter]'s matrix arithmetic so the two cannot disagree about a tint.
  *
- * A layer's gradient overlay is applied **after its shape mask**, so it colors the shaped silhouette rather than
+ * A layer's effects are applied **after its shape mask**, so an overlay colors the shaped silhouette rather than
  * the square it was cut from — the live path orders it the same way, by which node carries which modifier.
  *
  * Still deferred: a **shadow** effect (not additive — it could not be matched in the live path below API 31; see
@@ -112,8 +114,9 @@ class IconRenderer(
     private fun renderLayer(layer: ResolvedLayer, sizePx: Int): Bitmap {
         var bitmap = createBitmap(sizePx, sizePx)
         var canvas = Canvas(bitmap)
+        val transform = LayerTransform.of(layer.spec, sizePx)
 
-        canvas.withMatrix(LayerTransform.of(layer.spec, sizePx).toMatrix(sizePx)) {
+        canvas.withMatrix(transform.toMatrix(sizePx)) {
             drawContent(canvas, layer.content, sizePx)
         }
 
@@ -132,10 +135,14 @@ class IconRenderer(
         // nothing; a *filter* transforms pixels that have already been drawn, which a canvas cannot do in place —
         // so it costs one bitmap. Keeping that visible here is the point: it is the honest cost of the pipeline,
         // and the shape every effect added later has to declare itself against.
+        //
+        // Measured once for the whole pipeline rather than per effect: it is a property of the layer's artwork, and
+        // every effect that can be anchored to content is anchored to the *same* square a shape mask would use.
+        val inkFit = ShapeMask.inkFit(layer.content)
         for (effect in layer.spec.activeEffects) {
             val matrix = when (effect) {
-                is LayerEffect.Gradient -> {
-                    applyGradient(canvas, effect, sizePx)
+                is LayerEffect.Bloom -> {
+                    applyBloom(canvas, effect, LayerGradient.frameOf(effect, inkFit, transform, sizePx), sizePx)
                     null
                 }
 
@@ -162,16 +169,42 @@ class IconRenderer(
         return bitmap
     }
 
-    /** Paints [gradient] over the layer, clipped to what the layer has already drawn. */
-    private fun applyGradient(canvas: Canvas, gradient: LayerEffect.Gradient, sizePx: Int) {
-        val (x0, y0, x1, y1) = LayerGradient.endpoints(gradient.angleDegrees, sizePx).toList()
+    /**
+     * Paints [bloom] over the layer, clipped to what the layer has already drawn.
+     *
+     * Both falloffs go through the same paint and the same rectangle, so only the shader differs — and *where* each
+     * shader sits is [frame]'s answer rather than this method's, which is what keeps the live path drawing the same
+     * disc in the same place.
+     */
+    private fun applyBloom(canvas: Canvas, bloom: LayerEffect.Bloom, frame: LayerGradient.Frame, sizePx: Int) {
+        val fade = LayerGradient.fadeOut(bloom.argb)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(x0, y0, x1, y1, gradient.startArgb, gradient.endArgb, Shader.TileMode.CLAMP)
+            shader = when (bloom.falloff) {
+                BloomFalloff.LINEAR -> {
+                    val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, bloom.angleDegrees).toList()
+                    LinearGradient(x0, y0, x1, y1, bloom.argb, fade, Shader.TileMode.CLAMP)
+                }
+
+                BloomFalloff.RADIAL -> {
+                    val radial = LayerGradient.radial(frame, bloom.radius)
+                    RadialGradient(
+                        radial.centerX,
+                        radial.centerY,
+                        radial.radiusPx,
+                        bloom.argb,
+                        fade,
+                        Shader.TileMode.CLAMP,
+                    )
+                }
+            }
             // SRC_ATOP is what makes this an overlay rather than a rectangle: it keeps the layer's own alpha, so
-            // the gradient colors the artwork and stops at its edge.
+            // the bloom colors the artwork and stops at its edge. The shader's own alpha then decides how much of
+            // the artwork survives at each pixel, which is what makes the light *fade* rather than replace.
             xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
-            alpha = (gradient.strength.coerceIn(0f, 1f) * 255).toInt()
+            alpha = (bloom.strength.coerceIn(0f, 1f) * 255).toInt()
         }
+        // Always the whole box, whatever the frame is: a frame says where the light is laid out, not where it may
+        // land. A content-anchored bloom on small artwork still lights the pixels its ramp reaches past the ink.
         canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
     }
 
