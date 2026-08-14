@@ -23,6 +23,8 @@ class LayerTransformTest {
         offsetY: Float = 0f,
         zoom: Float = 1f,
         rotation: Float = 0f,
+        tiltX: Float = 0f,
+        tiltY: Float = 0f,
     ) = IconLayerSpec(
         role = LayerRole.FOREGROUND,
         source = LayerSource.AppDefault,
@@ -30,6 +32,8 @@ class LayerTransformTest {
         offsetY = offsetY,
         zoom = zoom,
         rotation = rotation,
+        tiltX = tiltX,
+        tiltY = tiltY,
     )
 
     @Test
@@ -69,5 +73,34 @@ class LayerTransformTest {
         // every rotation, which is the sort of thing an `isIdentity` gets wrong exactly once.
         assertFalse(LayerTransform.of(spec(rotation = 45f), sizePx = 192).isIdentity)
         assertFalse(LayerTransform.of(spec(zoom = 0.8f), sizePx = 192).isIdentity)
+    }
+
+    @Test
+    fun `a tilted layer is not identity either, and says it is tilted`() {
+        // The same shortcut one field further on, and the failure would be worse here: a tilt dropped from
+        // `isIdentity` leaves `toMatrix` skipping the camera entirely, so the layer draws flat with no error.
+        val tilted = LayerTransform.of(spec(tiltX = 30f), sizePx = 192)
+
+        assertFalse(tilted.isIdentity)
+        assertTrue(tilted.isTilted)
+        assertTrue(LayerTransform.of(spec(tiltY = -15f), sizePx = 192).isTilted)
+    }
+
+    @Test
+    fun `an untilted layer says so, so the affine path stays free of camera work`() {
+        // What `isTilted` is for: every layer of an unedited icon takes the cheap branch, and a rotation or a zoom
+        // must not push it onto the expensive one.
+        assertFalse(LayerTransform.of(spec(rotation = 45f, zoom = 2f), sizePx = 192).isTilted)
+    }
+
+    @Test
+    fun `tilts pass through in degrees, being angles like the rotation beside them`() {
+        val transform = LayerTransform.of(spec(tiltX = 30f, tiltY = -45f), sizePx = 192)
+
+        assertEquals(30f, transform.tiltXDegrees, 0.001f)
+        assertEquals(-45f, transform.tiltYDegrees, 0.001f)
+        // Unlike an offset, a tilt is *not* scaled by the box: an angle is an angle at every bake size, and the
+        // foreshortening it produces stays proportional because the camera's depth is a multiple of the box.
+        assertEquals(30f, LayerTransform.of(spec(tiltX = 30f), sizePx = 384).tiltXDegrees, 0.001f)
     }
 }

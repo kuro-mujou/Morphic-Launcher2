@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -47,7 +46,7 @@ import inkspire.morphic.core.model.icon.LayerEffect
  * This is the editor's render path, and nothing else draws through it. Surfaces use [LauncherIcon], which shows a
  * baked bitmap — right for hundreds of icons that rarely change. The editor is the opposite case: one icon,
  * changing every frame a slider moves, where baking per frame would allocate a bitmap per frame. Here a transform
- * is a `graphicsLayer` on a node that already exists, so a slider drag costs a redraw and no re-composite at all.
+ * is a matrix on a node that already exists, so a slider drag costs a redraw and no re-composite at all.
  *
  * ## Staying honest with the baked path
  *
@@ -128,23 +127,24 @@ fun IconLayerStack(
                     .layerEffects(layer.spec.activeEffects, layer.spec, inkFit)
                     .shapeMask(layer),
             ) {
-                Canvas(
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            // Resolved here, inside the block, because this is where the node's real size is
-                            // known — which is what lets the *shared* arithmetic run against real pixels rather
-                            // than being re-derived in Compose units.
-                            val transform = LayerTransform.of(layer.spec, sizePx = size.width.toInt())
-                            scaleX = transform.zoom
-                            scaleY = transform.zoom
-                            rotationZ = transform.rotationDegrees
-                            translationX = transform.translateXPx
-                            translationY = transform.translateYPx
-                            transformOrigin = TransformOrigin.Center
-                        },
-                ) {
-                    drawLayerContent(layer.content)
+                Canvas(Modifier.fillMaxSize()) {
+                    // **The shared matrix, not a `graphicsLayer`'s fields — and perspective is why.** Reading zoom,
+                    // rotation and translation into a layer was equivalent while the transform was affine, but a
+                    // tilt is expressed there as a `cameraDistance` whose unit is not `android.graphics.Camera`'s,
+                    // and matching two camera models by eye is exactly the agreement `LayerTransform` exists to make
+                    // unnecessary. Taking the same matrix the bake takes retires the question.
+                    //
+                    // Resolved here rather than in composition because a matrix is in **pixels**, and this is where
+                    // the node's real size is known.
+                    val sizePx = size.width.toInt()
+                    val matrix = LayerTransform.of(layer.spec, sizePx).toMatrix(sizePx)
+                    drawIntoCanvas { canvas ->
+                        val native = canvas.nativeCanvas
+                        val depth = native.save()
+                        native.concat(matrix)
+                        drawLayerContent(layer.content)
+                        native.restoreToCount(depth)
+                    }
                 }
             }
         }
@@ -226,7 +226,7 @@ private fun Modifier.layerEffects(
  *
  * Takes the spec and the ink fit rather than the resolved frame, because a frame is in **pixels** and the node's
  * real size is only known inside the draw scope — which is the same reason [LayerTransform] is resolved in the
- * `graphicsLayer` block rather than in composition.
+ * draw scope rather than in composition.
  *
  * A null [spec] is the **composite**: it has no transform of its own, so anything placed against it sits in the box.
  */
@@ -240,7 +240,6 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
                 is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
                 // Null for an id this build does not know, which then draws nothing rather than failing.
                 is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
-                else -> null
             }
         }
         if (matrix == null) {
@@ -360,7 +359,7 @@ private fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
  * **This node stays outside the transform whatever the anchor is, and only what it draws inside changes.** The mask
  * has to be applied to the layer's *finished* pixels, so its position cannot come from where the node sits — it
  * comes from [ShapeMask], the same answer the baked path gets. Nesting the mask inside the content's transform
- * would look equivalent and is not: the transform node is a `graphicsLayer`, so a rotation would rotate the mask's
+ * would look equivalent and is not: the content is drawn through the transform, so a rotation would turn the mask's
  * own buffer and its edges with it.
  *
  * Takes the whole [ResolvedLayer] rather than the shape, because a content-anchored mask is fitted to the ink of

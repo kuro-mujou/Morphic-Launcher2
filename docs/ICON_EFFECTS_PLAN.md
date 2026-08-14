@@ -4,8 +4,8 @@ Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from oth
 filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
 before any of them can land, and the order to build them in.
 
-Status: **slices 0–4 done** (see §5). The pipeline, the effect panel, the filter library, the layer rail,
-`LayerEffect.Bloom`, `LayerEffect.Gloss` and `IconLayerSet.effects` are built; the remaining effects are not. Where the
+Status: **slices 0–5 done** (see §5). The pipeline, the effect panel, the filter library, the layer rail,
+`LayerEffect.Bloom`, `LayerEffect.Gloss`, `IconLayerSet.effects` and perspective are built; the remaining effects are not. Where the
 build diverged from this plan, §5 records it — the plan is kept as written so the reasoning that was wrong stays
 visible next to what replaced it.
 
@@ -265,7 +265,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 3 | **Layer rail**; delete the Layers section | Independent of the effects; do it once the bar is about to get busy | **done** |
 | 4 | **Bloom** + **Gloss** | Reuse the gradient path; retire the "gradient" entry into them | **done** |
 | 4a | **Whole-icon effects** | Not in the plan — see below | **done** |
-| 5 | **Perspective** | Extends `LayerTransform`, which is already shared | |
+| 5 | **Perspective** | Extends `LayerTransform`, which is already shared | **done** |
 | 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | |
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | |
@@ -321,6 +321,23 @@ Each slice is independently reviewable and leaves the studio working.
     share of the frame at every curve. Pinned by a test.
   - **No position pad**, unlike Bloom: a sheen is placed by the direction it is struck from and the way its edge bows,
     and a third control moving the same band would be a second answer to what the angle settles.
+- **Perspective is *not* an effect, and it cost the live path its `graphicsLayer`.** §3 says it "fits `LayerTransform`'s
+  existing job", which is right and is why it landed as two `IconLayerSpec` fields (`tiltX`/`tiltY`) rather than a
+  `LayerEffect`: leaning a layer out of the plane says *where it sits*, so as an effect one rotation would be orderable
+  against a colour matrix while the in-plane one was not.
+  - **What §3 got wrong is "no new render machinery".** Compose expresses perspective as `graphicsLayer.cameraDistance`
+    and the bake as `android.graphics.Camera`, and **the two use different units** — Camera's z is in 72-pixel units,
+    Compose's is a density-scaled dp. Matching two camera models by eye is exactly the agreement `LayerTransform`
+    exists to make unnecessary, so instead the live path stopped reading the transform's *fields* into a
+    `graphicsLayer` and now takes the same `Matrix` the bake takes. One derivation, no unit question, and the shared
+    thing got stronger rather than a seventh unverifiable one being added.
+  - Side effect worth having: content is now drawn *through* the matrix rather than rasterized and then transformed,
+    so a zoomed vector drawable re-rasterizes at its final scale instead of being stretched from a texture.
+  - The camera depth is **a multiple of the box** (2.5×), for the same reason offsets are fractions: a constant pixel
+    depth would make one recipe read as mild at 96px and violent at 288px.
+  - Not offered on the **composite** — `StudioTool.appliesTo` gives it no Transform panel — so tilting a whole icon
+    means tilting its layers. That is a real gap rather than a decision, and the place to fix it is whether the
+    composite gets a transform of its own.
 - **Whole-icon effects (4a) — the thing thirteen effects actually needed, and §3 assumed away.** Every entry in this
   plan is written as a *layer* effect, and for six of them that is simply wrong: a glow derives from the finished
   silhouette, so per-layer it glows around the foreground *inside* the background plate where nobody can see it; grain,

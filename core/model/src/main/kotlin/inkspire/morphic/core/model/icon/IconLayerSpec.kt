@@ -6,9 +6,10 @@ import kotlinx.serialization.Serializable
  * One layer in an [IconLayerSet]: its [role], where its content comes from ([source]), and how it is drawn.
  *
  * Transform values live in the icon's normalized square box: [offsetX]/[offsetY] are fractions of that box
- * (0 = centered), [zoom] is a scale (1 = the default fit, >1 zooms in), [rotation] is in degrees clockwise.
- * [shape] masks a layer to a silhouette, so it defaults to `null` (unshaped), and [shapeAnchor] says what that
- * silhouette is cut against. [effects] is the extensible, defaulted-empty effect bag (see [LayerEffect]).
+ * (0 = centered), [zoom] is a scale (1 = the default fit, >1 zooms in), [rotation] is in degrees clockwise, and
+ * [tiltX]/[tiltY] lean the layer out of the plane. [shape] masks a layer to a silhouette, so it defaults to `null`
+ * (unshaped), and [shapeAnchor] says what that silhouette is cut against. [effects] is the extensible,
+ * defaulted-empty effect bag (see [LayerEffect]).
  *
  * [opacity] and [blend] are **compositing** properties rather than effects: every layer has both, always, with a
  * meaningful default, which is what makes them fields. See [LayerBlend].
@@ -30,6 +31,14 @@ import kotlinx.serialization.Serializable
  *   alone; a background is never resized, because a plate changes what sits behind the artwork rather than how large
  *   the artwork should be — so an app comes out the same size whether its background is drawn or switched off. An
  *   intermediate version applied one factor to every layer at once and this note used to describe it.
+ * @property tiltX Rotation **about the horizontal axis**, in degrees — so the top of the layer leans away and the
+ *   bottom toward the viewer. Named for the axis it turns around, matching `Camera.rotateX` and Compose's
+ *   `rotationX`, which is the convention every platform API here uses; the label the studio shows is "Tilt X".
+ *
+ *   **It is a transform, not an effect, and that is why it lives here beside [rotation].** Leaning a layer out of
+ *   the plane is the same *kind* of thing as turning it in the plane — it says where the layer sits — so splitting
+ *   them across two mechanisms would mean one rotation being orderable against a colour matrix and the other not.
+ * @property tiltY Rotation about the **vertical** axis: the left edge leans away and the right toward the viewer.
  * @property shapeAnchor What [shape] is cut against — the box, or this layer's own artwork carried by its transform.
  *   Means nothing when [shape] is null, which is why the studio shows the control only once a shape is chosen. See
  *   [ShapeAnchor]; it defaults to [ShapeAnchor.BOX], so stored recipes read back rendering exactly as they did.
@@ -43,6 +52,8 @@ data class IconLayerSpec(
     val offsetY: Float = 0f,
     val zoom: Float = 1f,
     val rotation: Float = 0f,
+    val tiltX: Float = 0f,
+    val tiltY: Float = 0f,
     val shape: IconShape? = null,
     val shapeAnchor: ShapeAnchor = ShapeAnchor.BOX,
     val opacity: Float = 1f,

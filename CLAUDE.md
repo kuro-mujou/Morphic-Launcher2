@@ -179,9 +179,9 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is five
-slices in — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom** and
-**Gloss**, plus **whole-icon effects**, which that plan had not noticed it needed.
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is six
+slices in — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
+**Gloss** and **perspective**, plus **whole-icon effects**, which that plan had not noticed it needed.
 **Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
 this section describes what exists, and flags the places the built thing differs from what was locked here.
 
@@ -257,7 +257,10 @@ L1 locked buttons for the right reason and then reversed itself in a later plan;
 move is illegal before it is attempted, where a refused drag does nothing and cannot explain itself. The buttons
 are disabled by asking the model (`editing.moveUp(i) !== editing`), so they cannot drift from the rule the set
 enforces. Per layer:
-- **transform** — X/Y (in a normalized square frame), zoom, rotation.
+- **transform** — X/Y (in a normalized square frame), zoom, rotation, and **tilt** (X/Y, leaning the layer out of the
+  plane). Tilt is a *transform* and not an effect because it says where the layer sits — as an effect, one rotation
+  would be orderable against a color matrix while the in-plane one was not. See the perspective note below for what it
+  cost the live path.
 - **shape** — an `IconShape`, **on any layer**. *(Differs from what was locked here: this said fg & bg only,
   with custom layers keeping their own alpha. The renderer masks whatever it is given, so the restriction would
   have been one the UI invented — and a shaped custom layer is obviously useful, since a color fill trimmed to a
@@ -424,6 +427,28 @@ what "signed radius bending the sweep" turns out to mean: the whole of the contr
 - **No position pad**, unlike Bloom: a sheen is placed by the direction it is struck from and the way its edge bows,
   and a third control moving the same band would be a second answer to what the angle already settles. `Frame.movedBy`
   is split from `frameOf` for exactly that — not every effect placed against a frame has a position of its own.
+
+**Perspective cost the live path its `graphicsLayer`, and that is the whole story of the slice.** `tiltX`/`tiltY` are
+`IconLayerSpec` fields resolved through `LayerTransform`, not a `LayerEffect` — leaning a layer out of the plane says
+where it *sits*. What the plan called "no new render machinery" was wrong in one place: **Compose and the platform use
+different camera units** (`graphicsLayer.cameraDistance` is a density-scaled dp; `android.graphics.Camera`'s z is in
+72-pixel units), so the two paths could not be made to foreshorten identically by matching numbers. Matching two camera
+models by eye is exactly the agreement `LayerTransform` exists to remove, so instead **the live path stopped reading the
+transform's fields into a `graphicsLayer` and now takes the same `Matrix` the bake takes**. One derivation, no unit
+question, and the shared thing got stronger rather than a seventh unverifiable one being added.
+- **Content is now drawn *through* the matrix** rather than rasterized and then transformed, which is a small
+  improvement as well as a change: a zoomed vector drawable re-rasterizes at its final scale instead of being
+  stretched from a texture. Everything else about the node stack is unchanged — the mask and the composite still sit
+  outside it.
+- **The camera depth is a multiple of the box** (2.5×), for the reason offsets are fractions: a constant pixel depth
+  would make one recipe read as mild baked at 96px and violent at 288px. Android's own View default is ~1280dp, which
+  on a 48dp icon is nearly orthographic and so invisible.
+- **`isTilted` keeps the untilted case free of camera work**, which is every layer of every unedited icon. Tested,
+  because a tilt dropped from `isIdentity` would leave `toMatrix` skipping the camera and drawing flat with no error.
+- **Not offered on the composite** — `StudioTool.appliesTo` gives it no Transform panel — so tilting a whole icon means
+  tilting its layers. A real gap rather than a decision; the fix is whether the composite gets a transform of its own.
+- **A content-anchored bloom or gloss does not follow a tilt.** `LayerGradient.Frame` carries a 2D rotation, so it
+  tracks zoom, offset and in-plane rotation but has no perspective term. The light stays flat on a leaning layer.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
     mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
     (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
@@ -1486,7 +1511,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–4 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+**In flight: the icon effects expansion — slices 0–5 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
 done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
@@ -1496,10 +1521,10 @@ gesture, which is why `LayerEffect.drawsLive` exists now with nothing yet answer
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
 `SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
-`LAYERS` tool entry (slice 3), and slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
-effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite). Next is
-**Perspective** (slice 5), which extends the already-shared `LayerTransform`; five of the thirteen still need no
-render-architecture change at all.
+`LAYERS` tool entry (slice 3), slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
+effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite) — and
+slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`. Next is **Pattern**,
+which needs an asset library of its own; four of the thirteen still need no render-architecture change at all.
 
 **Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes
