@@ -409,9 +409,33 @@ a canvas the *user* switches between black and white.
   is bridged monochrome, wrap the real M3 component and get its native Expressive motion for free:
   `MorphicButton` = the M3 button family + `ButtonDefaults.shapes()` (press shape-morph); `MorphicSlider` =
   M3 `Slider` with a custom `thumb` slot over M3's own track (our grow-on-press thumb, M3's track + grab). Reserve fully-custom `Row`/`Canvas`
-  for controls M3 lacks — the **2D pad** and the **segmented control**. The **range slider** is built on M3
+  for controls M3 lacks — the **2D pad**, the **segmented control** and the **switch**. The **range slider** is built on M3
   `RangeSlider` (custom thumbs, M3 track); a **vertical slider** (custom Canvas — M3 has none) is deferred
   until a consumer needs it.
+  - **`MorphicSwitch` is the one component that goes custom even though M3 *has* the control, and the test it
+    passes is the same one — "no equivalent" reached from the other direction.** M3's `Switch` exposes
+    `thumbContent` and `colors` and **nothing for the track**: its 52×32 pill comes from `SwitchTokens`, is not a
+    parameter, and `Modifier.size` does not reach it either, so the shape wanted here is unreachable through it.
+    The shape wanted is **M2's** — a 34×14 rail with a 20dp knob standing proud of it — because M3's track
+    *encloses* its thumb, leaving the state to read as which end a blob is at, where the M2 split gives two
+    independent signals (where the knob is, how bright the rail is). On a palette with no hue that second signal is
+    worth the custom component. The metrics are taken from M2 exactly rather than eyeballed near them, since the
+    proportion is the entire point.
+  - **Expressive motion is still kept** — the knob travels on `motionScheme.defaultSpatialSpec`, the colors
+    cross-fade on `defaultEffectsSpec`: spatial for what moves, effects for what does not. Colors come from the
+    **slider's** `trackInactive`/`trackActive`/`thumb` roles so the two controls are made of the same greys, with
+    alpha on the *on* track because at full strength `trackActive` **is** `thumb` and the knob would vanish into
+    the rail. Off, the knob is `contentMuted` on a `trackInactive` rail — light-on-dark in the dark theme and
+    dark-on-light in the light one, which a fixed pair of colors would not have given.
+  - **Tap only: there is no drag**, which M3's switch has. Deliberate, because the form to reach for is
+    `MorphicSwitchRow`, where the *row* is the target and nobody swipes 14dp of travel; `AnchoredDraggable` on the
+    knob is the way back if a bare switch ever lands somewhere a drag is natural.
+  - **`MorphicSwitchRow` is that form**, not the bare switch: `Modifier.toggleable` with `Role.Switch`
+    on the row puts the target, the ripple and the accessibility announcement on the label *and* the switch
+    together, where a `Row { Text; Switch }` leaves a small target beside unassociated prose. The switch is then
+    handed `onCheckedChange = null` — not `enabled = false`, which would gray it — so one press is handled once.
+    Its first consumer is the icon studio's shape anchor, which works there with no variant because the studio is
+    already a fixed-dark theme zone (`LauncherTheme(darkTheme = true)` at its root).
 - **Modern state APIs behind convenient facades.** Components sit on the **state-hoisted** M3 APIs internally
   (`Slider(state = …)`/`RangeSlider(state = …)`) — not the value-based overloads (deprecation path). But
   they expose a plain `value`/`onValueChange` API and create + bridge the state *inside* (`LaunchedEffect(value)`

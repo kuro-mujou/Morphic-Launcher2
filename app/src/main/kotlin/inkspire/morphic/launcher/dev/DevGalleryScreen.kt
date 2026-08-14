@@ -39,6 +39,8 @@ import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
 import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSlider
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.designsystem.theme.MorphicColors
@@ -73,6 +75,9 @@ fun DevGalleryScreen(modifier: Modifier = Modifier) {
 
             SectionHeader("Buttons", colors)
             ButtonsDemo()
+
+            SectionHeader("Switches", colors)
+            SwitchesDemo()
 
             SectionHeader("Sliders", colors)
             SlidersDemo()
@@ -123,6 +128,53 @@ private fun ButtonsDemo() {
             onSelect = { segment = it },
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/**
+ * Both switch forms, plus the pair the palette makes hardest: **on and off side by side**. With no hue in the
+ * scheme the whole distinction is lightness, so a gallery that showed only one state would not show whether the
+ * gap is wide enough — which is the thing to check when the light/dark toggle above is flipped.
+ */
+@Composable
+private fun SwitchesDemo() {
+    val colors = LocalMorphicColors.current
+    var wraps by remember { mutableStateOf(true) }
+    var normalize by remember { mutableStateOf(false) }
+    var bare by remember { mutableStateOf(true) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Custom — M2 proportions (34×14 rail, 20dp knob), Expressive motion",
+            color = colors.contentMuted,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        MorphicSwitchRow(
+            label = "Infinite scroll",
+            supportingText = "Pages loop past the last one. Takes the one-finger surface swipe away.",
+            checked = wraps,
+            onCheckedChange = { wraps = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        MorphicSwitchRow(
+            label = "Normalize size",
+            checked = normalize,
+            onCheckedChange = { normalize = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        MorphicSwitchRow(
+            label = "Disabled, and still says which way it is set",
+            checked = true,
+            onCheckedChange = {},
+            enabled = false,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MorphicSwitch(checked = bare, onCheckedChange = { bare = it })
+            MorphicSwitch(checked = !bare, onCheckedChange = { bare = !it })
+            MorphicSwitch(checked = true, onCheckedChange = {}, enabled = false)
+            MorphicSwitch(checked = false, onCheckedChange = {}, enabled = false)
+        }
     }
 }
 
