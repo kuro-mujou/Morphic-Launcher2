@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
  *
  * Transform values live in the icon's normalized square box: [offsetX]/[offsetY] are fractions of that box
  * (0 = centered), [zoom] is a scale (1 = the default fit, >1 zooms in), [rotation] is in degrees clockwise.
- * [shape] masks a layer to a silhouette, so it defaults to `null` (unshaped). [effects] is the extensible,
- * defaulted-empty effect bag (see [LayerEffect]).
+ * [shape] masks a layer to a silhouette, so it defaults to `null` (unshaped), and [shapeAnchor] says what that
+ * silhouette is cut against. [effects] is the extensible, defaulted-empty effect bag (see [LayerEffect]).
  *
  * [opacity] and [blend] are **compositing** properties rather than effects: every layer has both, always, with a
  * meaningful default, which is what makes them fields. See [LayerBlend].
@@ -30,6 +30,9 @@ import kotlinx.serialization.Serializable
  *   alone; a background is never resized, because a plate changes what sits behind the artwork rather than how large
  *   the artwork should be — so an app comes out the same size whether its background is drawn or switched off. An
  *   intermediate version applied one factor to every layer at once and this note used to describe it.
+ * @property shapeAnchor What [shape] is cut against — the box, or this layer's own artwork carried by its transform.
+ *   Means nothing when [shape] is null, which is why the studio shows the control only once a shape is chosen. See
+ *   [ShapeAnchor]; it defaults to [ShapeAnchor.BOX], so stored recipes read back rendering exactly as they did.
  */
 @Serializable
 data class IconLayerSpec(
@@ -41,6 +44,7 @@ data class IconLayerSpec(
     val zoom: Float = 1f,
     val rotation: Float = 0f,
     val shape: IconShape? = null,
+    val shapeAnchor: ShapeAnchor = ShapeAnchor.BOX,
     val opacity: Float = 1f,
     val blend: LayerBlend = LayerBlend.NORMAL,
     val normalize: Boolean = false,

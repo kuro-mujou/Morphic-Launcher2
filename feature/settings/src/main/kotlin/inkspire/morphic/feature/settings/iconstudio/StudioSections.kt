@@ -84,7 +84,9 @@ import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.model.icon.LayerSource
+import inkspire.morphic.core.model.icon.ShapeAnchor
 import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.data.icons.InstalledIconPack
 import kotlin.math.ceil
@@ -814,6 +816,12 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  * a page rather than growing the panel, which is what keeps the section a fixed height inside a panel that is already
  * capped and scrolling: **paging horizontally is how this avoids a vertical scroller inside a vertical scroller**,
  * which is the arrangement that makes a drag ambiguous.
+ *
+ * **The anchor is the second control here, and it is what a shape is cut against rather than which shape it is.**
+ * See [ShapeAnchor]: the box, or the layer's own artwork carried by its transform. It appears only once a shape is
+ * chosen, because with no shape there is nothing to anchor and the studio's rule is that a control which changes
+ * nothing is worse than a missing one — the same gate `TintMode`'s control sits behind in Effects. It is the
+ * studio's first [MorphicSwitchRow], and the first switch in the launcher at all.
  */
 @Composable
 internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit) {
@@ -823,40 +831,75 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
     val pages = remember { (listOf<IconShape?>(null) + IconShapes.All).chunked(ShapesPerPage) }
     val pagerState = rememberPagerState { pages.size }
 
-    LabeledControl("Shape") {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // **The page height is derived from the width, because it is a consequence of it and not a value
-            // anyone owns.** Tiles are square and the columns are fixed, so the width settles the cell and the
-            // cell settles two rows plus the gap between them — a formula exists, which is this codebase's own
-            // test for derive-versus-store (`derivedCell`, `CellFit`). It was a flat 168dp, and that is wrong on
-            // an ordinary phone before it is wrong on a tablet: a 393dp screen leaves ≈361dp inside the panel,
-            // so a cell is ≈84dp and two rows plus the gap want ≈176. The eight dp it was short of is not a
-            // clipped corner — a `LazyVerticalGrid` in a box too small to hold it **scrolls**, so the fixed
-            // height quietly created the vertical-scroller-inside-a-vertical-scroller that paging exists to
-            // avoid. `pageSpacing` is not subtracted: with `PageSize.Fill` it is inserted *between* pages and
-            // pages stay the full viewport width.
-            BoxWithConstraints {
-                val cell = (maxWidth - ShapeGridSpacing * (ShapeColumns - 1)) / ShapeColumns
-                val pageHeight = cell * ShapeRows + ShapeGridSpacing * (ShapeRows - 1)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LabeledControl("Shape") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // **The page height is derived from the width, because it is a consequence of it and not a value
+                // anyone owns.** Tiles are square and the columns are fixed, so the width settles the cell and the
+                // cell settles two rows plus the gap between them — a formula exists, which is this codebase's own
+                // test for derive-versus-store (`derivedCell`, `CellFit`). It was a flat 168dp, and that is wrong on
+                // an ordinary phone before it is wrong on a tablet: a 393dp screen leaves ≈361dp inside the panel,
+                // so a cell is ≈84dp and two rows plus the gap want ≈176. The eight dp it was short of is not a
+                // clipped corner — a `LazyVerticalGrid` in a box too small to hold it **scrolls**, so the fixed
+                // height quietly created the vertical-scroller-inside-a-vertical-scroller that paging exists to
+                // avoid. `pageSpacing` is not subtracted: with `PageSize.Fill` it is inserted *between* pages and
+                // pages stay the full viewport width.
+                BoxWithConstraints {
+                    val cell = (maxWidth - ShapeGridSpacing * (ShapeColumns - 1)) / ShapeColumns
+                    val pageHeight = cell * ShapeRows + ShapeGridSpacing * (ShapeRows - 1)
 
-                HorizontalPager(
-                    state = pagerState,
-                    pageSpacing = 8.dp,
-                    modifier = Modifier.height(pageHeight),
-                ) { page ->
-                    ShapePage(
-                        shapes = pages[page],
-                        selected = spec.shape,
-                        onSelect = { shape -> onUpdate { it.copy(shape = shape) } },
-                    )
+                    HorizontalPager(
+                        state = pagerState,
+                        pageSpacing = 8.dp,
+                        modifier = Modifier.height(pageHeight),
+                    ) { page ->
+                        ShapePage(
+                            shapes = pages[page],
+                            selected = spec.shape,
+                            onSelect = { shape -> onUpdate { it.copy(shape = shape) } },
+                        )
+                    }
                 }
-            }
 
-            // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
-            if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
+                // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
+                if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
+            }
+        }
+
+        // Nothing to anchor without a shape, so the control is absent rather than disabled — the same rule the
+        // monochrome row, the pack-browse row and the tint-style control are each gated by.
+        //
+        // **A switch and not a pair of chips, even though the model behind it is an enum.** The two anchors are
+        // genuinely two frames, which is why `ShapeAnchor` names both rather than being a boolean — but what the
+        // *user* is doing is turning one behavior on, against a default that is also what every icon rendered as
+        // before this existed. The model keeps illegal states unrepresentable; the control says what is being asked
+        // for. `MorphicSwitch` reads correctly here because the studio is a fixed-dark theme zone (see
+        // `IconStudioScreen`), so the design system's colors are the dark ones whatever the system is set to.
+        if (spec.shape != null) {
+            MorphicSwitchRow(
+                label = "Fit to artwork",
+                // **State-dependent, which is unusual for a switch and earns it here.** The difference is invisible
+                // on an icon whose artwork already fills its box — most of them, and *every* one with Normalize on,
+                // where the two frames provably coincide. A static description would leave the control looking
+                // broken on exactly the icons someone tries it on first; saying what the current setting does
+                // instead tells them which of the two they are looking at.
+                supportingText = spec.shapeAnchor.hint,
+                checked = spec.shapeAnchor == ShapeAnchor.CONTENT,
+                onCheckedChange = { on ->
+                    onUpdate { it.copy(shapeAnchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
+
+/** One line saying what the chosen anchor does — see the call site for why it changes with the state. */
+private val ShapeAnchor.hint: String
+    get() = when (this) {
+        ShapeAnchor.BOX -> "The shape stays put; moving the layer slides the artwork under it."
+        ShapeAnchor.CONTENT -> "The shape sits on the artwork and moves, zooms and turns with it."
+    }
 
 /**
  * One page of the shape chooser: [ShapeRows] rows of [ShapeColumns] tiles.

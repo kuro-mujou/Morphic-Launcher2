@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.core.graphics.withMatrix
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
@@ -31,11 +32,12 @@ import inkspire.morphic.core.icon.render.IconLayerResolver
 import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.icon.render.LayerGradient
 import inkspire.morphic.core.icon.render.LayerTransform
+import inkspire.morphic.core.icon.render.ResolvedLayer
+import inkspire.morphic.core.icon.render.ShapeMask
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.IconShape
 
 /**
  * The **live** half of the hybrid render: an [IconLayerSet] drawn as Compose nodes, one per layer, rather than
@@ -49,15 +51,17 @@ import inkspire.morphic.core.model.icon.IconShape
  * ## Staying honest with the baked path
  *
  * Two renderers is a real hazard — an icon that looks right while being edited and wrong on every surface is a bug
- * the editor structurally cannot show you. Three things make the paths agree, and each is a shared *thing* rather
+ * the editor structurally cannot show you. Five things make the paths agree, and each is a shared *thing* rather
  * than a shared intention:
  * - [IconLayerResolver] decides which layers draw and what content each one means, for both.
  * - [LayerTransform] does the offset/zoom/rotation arithmetic, for both.
  * - [LayerFilter] does the color-matrix arithmetic, for both — and shares the *same shape*, since Android's and
  *   Compose's `ColorMatrix` are each a row-major `FloatArray(20)`, so neither side converts anything.
  * - [LayerGradient] decides which way an angle runs, for both.
- * - The shape mask is built from the **same** vector drawable via [IconShapes], and applied the same way — as a
- *   destination-in mask over the finished layer.
+ * - [ShapeMask] decides where the silhouette sits, for both. The mask itself is built from the **same** vector
+ *   drawable via [IconShapes] and applied the same way — as a destination-in mask over the finished layer — but
+ *   *where* it lands stopped being "the box" the moment a shape could be anchored to the artwork, and that is
+ *   arithmetic, so it went the way the other four did rather than being written twice.
  *
  * What is *not* shared is the drawing API (Android's `Canvas` there, [DrawScope] here). That is unavoidable, and
  * it is exactly why the five above are.
@@ -103,7 +107,7 @@ fun IconLayerStack(
             // is **outermost**, so it applies to the finished layer and blends against the layers already drawn;
             // the mask sits inside it but **outside the transform**, so a shape stays put in the box while the
             // content moves under it. The baked path gets the same ordering from its draw order.
-            Box(Modifier.fillMaxSize().layerComposite(layer.spec).shapeMask(layer.spec.shape)) {
+            Box(Modifier.fillMaxSize().layerComposite(layer.spec).shapeMask(layer)) {
                 Canvas(
                     Modifier
                         .fillMaxSize()
@@ -200,18 +204,28 @@ private fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
 }
 
 /**
- * Keeps the node's pixels only where [shape]'s silhouette is opaque. A null shape — or an unknown id, which stale
- * stored data can still produce — is a no-op, matching the baked path's early return.
+ * Keeps the node's pixels only where the layer's shape silhouette is opaque. A null shape — or an unknown id, which
+ * stale stored data can still produce — is a no-op, matching the baked path's early return.
  *
  * **The mask goes through `saveLayer` because a `Drawable` cannot be drawn with a blend mode.** It paints with its
  * own paints, so the silhouette has to be captured into its own buffer first and *that* composited with
  * [BlendMode.DstIn]. [CompositingStrategy.Offscreen] is the matching requirement one level out: the blend's
  * destination must be this node's own pixels, and without it the blend would apply against whatever happened to be
  * on the canvas beneath — which for the bottom layer of a stack is the surface behind the icon.
+ *
+ * **This node stays outside the transform whatever the anchor is, and only what it draws inside changes.** The mask
+ * has to be applied to the layer's *finished* pixels, so its position cannot come from where the node sits — it
+ * comes from [ShapeMask], the same answer the baked path gets. Nesting the mask inside the content's transform
+ * would look equivalent and is not: the transform node is a `graphicsLayer`, so a rotation would rotate the mask's
+ * own buffer and its edges with it.
+ *
+ * Takes the whole [ResolvedLayer] rather than the shape, because a content-anchored mask is fitted to the ink of
+ * the artwork this layer actually resolved to — the same correction that made normalization right for a themed
+ * layer, and for the same reason: a layer's own content is the only honest thing to measure it against.
  */
 @Composable
-private fun Modifier.shapeMask(shape: IconShape?): Modifier {
-    val res = shape?.let { IconShapes.drawableResOrNull(it) } ?: return this
+private fun Modifier.shapeMask(layer: ResolvedLayer): Modifier {
+    val res = layer.spec.shape?.let { IconShapes.drawableResOrNull(it) } ?: return this
     val resource = LocalResources.current
     val maskDrawable = remember(res, resource) { resource.getDrawable(res, null) } ?: return this
 
@@ -224,8 +238,14 @@ private fun Modifier.shapeMask(shape: IconShape?): Modifier {
                     bounds = Rect(0f, 0f, size.width, size.height),
                     paint = Paint().apply { blendMode = BlendMode.DstIn },
                 )
-                maskDrawable.setBounds(0, 0, size.width.toInt(), size.height.toInt())
-                maskDrawable.draw(canvas.nativeCanvas)
+                // Square, from the width — the same quantity the transform above is resolved against, so the two
+                // read the box the same way.
+                val sizePx = size.width.toInt()
+                maskDrawable.setBounds(0, 0, sizePx, sizePx)
+                val matrix = ShapeMask.matrixOf(layer.spec, layer.content, sizePx)
+                val native = canvas.nativeCanvas
+                if (matrix == null) maskDrawable.draw(native)
+                else native.withMatrix(matrix) { maskDrawable.draw(this) }
                 canvas.restore()
             }
         }

@@ -260,6 +260,31 @@ enforces. Per layer:
   circle is how a colored disc goes behind a legacy icon.)* A shape is **backed by a vector drawable** (prepared
   as a resource) and referenced by a stable id; the clip mask is built from that drawable's silhouette, so adding
   a shape = drop in a drawable, no path math in code.
+  - **A shape is cut against one of two frames, and `ShapeAnchor` is which.** `BOX` (the default, and what the mask
+    always did) fills the icon's square and stays put, so the transform slides the *content* under a fixed
+    silhouette — the plate reading. `CONTENT` fits the shape to the layer's **artwork** and hands it the layer's own
+    transform, so it lands on the ink and zooms, rotates and moves with it — the trim reading, which the box frame
+    could not express at all: artwork sitting small and off-center is cropped by a shape it does not touch. An enum
+    rather than the `shapeFollowsArtwork` boolean it was asked for, on `SideZoneEdge`'s grounds — a mask is always
+    anchored somewhere, so both states are real and neither is "off".
+  - **The two are made to agree by going through the same matrix, not by matching arithmetic.** `ShapeMask` is a
+    sixth shared derivation beside the five below, and a content-anchored silhouette is positioned *in the artwork's
+    frame* and then carried by `LayerTransform` — the same one the content took — so it cannot drift off the ink
+    under any transform. `ShapeMask.inkFit` (the decision) is split from `matrixOf` (the assembly) so the part that
+    would be **silently** wrong is unit-testable on the JVM, the split `ContentMetrics` and `LegacyBackground`
+    already make; `android.graphics.Matrix` stubs to no-ops in a JVM test, which is why `LayerTransformTest` leaves
+    `toMatrix` alone too.
+  - Three properties worth knowing. The fit is the ink's bounding **square** (`longestSide`), never its rectangle —
+    stretching would turn a circle into an ellipse. It **rotates with the layer**, which is what "follows the
+    transform" means and the whole difference from `BOX`. And **unmeasured content degrades to the box**: only the
+    app's own artwork is measured (measurement and normalization share a scope, deliberately), so a pack drawable,
+    an imported image or a flat fill has no ink bounds — it still follows the transform, so the control is never
+    inert, it just cannot trim to something unmeasured. Measuring those would mean the injected `customImage` /
+    `packImage` lambdas returning metrics rather than a bare `Drawable`; that is the seam if it is ever wanted.
+    With `normalize` on the two anchors **coincide** at zoom 1, which falls out rather than being special-cased —
+    normalizing *is* rescaling the ink to fill the box, so the two frames become one.
+  - Additive: a defaulted field with `encodeDefaults = false`, so stored recipes read back rendering exactly as they
+    did and the test pinning `IconLayerSet.Base`'s stored JSON still passes. Same deal the sealed effect list gives.
 - **opacity + blend mode** — `IconLayerSpec` **fields**, not effects, because they describe how a layer *joins
   the stack* rather than what it is: every layer has both, always, with a meaningful default.
 - **effects** — a sealed list, never columns. `LayerEffect.Color` (hue → saturation → brightness → tint,
@@ -279,13 +304,14 @@ enforces. Per layer:
   the LRU. Calling `invalidate` would also bump `generation`, whose whole job is the one input the key cannot see
   (an app replacing its own artwork) and which recomposes every icon on screen.
 
-**Two renderers is the standing hazard, and five shared things are what keep them honest.** An icon that looks
+**Two renderers is the standing hazard, and six shared things are what keep them honest.** An icon that looks
 right while being edited and wrong on every surface is a bug the editor structurally cannot show you, so the
 agreement is made of shared *things* rather than shared intentions: `ParsedIconLoader` (what the layers are),
 `IconLayerResolver` (which draw, and what each means), `LayerTransform` (where they sit), `LayerFilter` (the
-color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`)
-and `LayerGradient` (which way an angle runs). Only the drawing API differs, which is unavoidable and is exactly
-why those five exist. The per-layer order is **content → shape mask → gradient → composite**, the same on both
+color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`),
+`LayerGradient` (which way an angle runs) and `ShapeMask` (where the silhouette sits — which stopped being "the
+box" the moment `ShapeAnchor` existed, and so became arithmetic rather than a constant). Only the drawing API
+differs, which is unavoidable and is exactly why those six exist. The per-layer order is **content → shape mask → gradient → composite**, the same on both
 sides for different-looking reasons — statement order in one, modifier nesting in the other. Two consequences:
 the live stack must composite **offscreen** (or a `MULTIPLY` on the bottom layer blends against the studio canvas
 rather than against nothing), and the `IconLayers` dev-harness playground draws one set both ways side by side,

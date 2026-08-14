@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Shader
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -103,8 +104,12 @@ class IconRenderer(
             drawContent(canvas, layer.content, sizePx)
         }
 
-        // Shape is fixed in the box (it does not move with the content), so mask after restoring the matrix.
-        layer.spec.shape?.let { applyShapeMask(canvas, it, sizePx) }
+        // Masked after the matrix is restored, because where the silhouette goes is [ShapeMask]'s answer and not
+        // the content's: anchored to the box it stays put while the content moves under it, anchored to the content
+        // it is handed that same transform to go through.
+        layer.spec.shape?.let {
+            applyShapeMask(canvas, it, sizePx, ShapeMask.matrixOf(layer.spec, layer.content, sizePx))
+        }
         // After the mask, so a gradient colors the shaped silhouette rather than the square it was cut from.
         layer.spec.gradient?.let { applyGradient(canvas, it, sizePx) }
         return bitmap
@@ -134,13 +139,20 @@ class IconRenderer(
         }
     }
 
-    private fun applyShapeMask(canvas: Canvas, shape: IconShape, sizePx: Int) {
+    /**
+     * Cuts the layer down to [shape]'s silhouette, drawn under [matrix] — `null` meaning plainly at box size.
+     *
+     * The bounds are always the full box: [matrix] is what places the silhouette, so the drawable is asked for its
+     * authoring square either way and the anchor is expressed in one place rather than two.
+     */
+    private fun applyShapeMask(canvas: Canvas, shape: IconShape, sizePx: Int, matrix: Matrix?) {
         val res = IconShapes.drawableResOrNull(shape) ?: return
         val shapeDrawable = context.getDrawable(res) ?: return
         val mask = createBitmap(sizePx, sizePx)
         Canvas(mask).let { maskCanvas ->
             shapeDrawable.setBounds(0, 0, sizePx, sizePx)
-            shapeDrawable.draw(maskCanvas)
+            if (matrix == null) shapeDrawable.draw(maskCanvas)
+            else maskCanvas.withMatrix(matrix) { shapeDrawable.draw(this) }
         }
         canvas.drawBitmap(mask, 0f, 0f, maskPaint)
         mask.recycle()

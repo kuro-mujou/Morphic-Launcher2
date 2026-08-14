@@ -472,10 +472,13 @@ class IconLayerResolverTest {
 }
 
 /**
- * A drawable that draws nothing, so a resolver test can hold [ParsedLayer.Image] without an emulator. Nothing here
- * calls a method on it — the resolver only passes it through — so the stubs never run.
+ * A drawable that draws nothing, so a test can hold [ParsedLayer.Image] without an emulator. Nothing calls a method
+ * on it — the code under test only passes it through — so the stubs never run.
+ *
+ * `internal` rather than file-private because [ShapeMaskTest] wants exactly this and a second copy of it would be
+ * two stubs to keep in step for no gain.
  */
-private class StubDrawable : android.graphics.drawable.Drawable() {
+internal class StubDrawable : android.graphics.drawable.Drawable() {
     override fun draw(canvas: android.graphics.Canvas) = Unit
     override fun setAlpha(alpha: Int) = Unit
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
