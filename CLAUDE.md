@@ -179,10 +179,10 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is seven
-slices in — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
-**Gloss**, **perspective**, **Pattern** and **Extrude**, plus **whole-icon effects**, which that plan had not noticed
-it needed.
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **all of
+tier 1** — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
+**Gloss**, **perspective**, **Pattern**, **Extrude** and **Chromatic split**, plus **whole-icon effects**, which that
+plan had not noticed it needed.
 **Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
 this section describes what exists, and flags the places the built thing differs from what was locked here.
 
@@ -495,6 +495,23 @@ re-runs the layer's own **content** per copy, per frame, at preview size.
   translucent sheet, so the overlaps would show through one another.
 - The bake's effect loop stopped being "a color matrix, or an overlay": Extrude produces a new buffer without being a
   matrix, so the `when` now says plainly which effects replace the buffer and which paint into it.
+
+**`LayerEffect.ChromaticSplit` is the layer's three color channels displaced and added back together**, and it needed
+no new arithmetic — a channel isolation is `ColorMatrices.mix` with a single one in each row, which is what that
+builder exists for and what `scale` structurally cannot express. What `LayerChromatic` contributes is the
+**convention**, and that is precisely what is worth sharing: red leads, blue trails, green stays put. Either direction
+looks like a lens, so nothing would fail if the two renderers disagreed — it would simply be wrong in one place.
+- **Green holds still on purpose.** The eye reads luminance mostly from green, so displacing it would shift the whole
+  icon rather than fringe it.
+- **Additive, not layered.** `PorterDuff.ADD` in the bake, `BlendMode.Plus` live, each inside one isolating layer so
+  the sum starts from nothing rather than from whatever the pipeline had drawn. Ordinary source-over would stack three
+  colored silhouettes and the last would win.
+- **The only effect with no strength slider**, and that is the honest shape: the effect *is* a displacement, so an
+  offset of nothing already means "not split" — `isIdentity` falls out of it, and a second knob would be a second way
+  to reach the same state.
+- **It is the only effect that draws the content *instead of* over it**, so the layer's own pixels never appear.
+- **`PositionPad` gained a range parameter** for it: a fringe is a couple of percent of the icon, so at the pad's own
+  travel the whole useful span would sit under the thumb. Everything else keeps `PositionRange`.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
     mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
     (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
@@ -1557,8 +1574,8 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–6 plus Extrude of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
-done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+**In flight: the icon effects expansion — slices 0–7 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), all of
+tier 1, are done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the
@@ -1570,8 +1587,9 @@ Built so far: the ordered effect **pipeline** (slice 0), the paged effect **pane
 `LAYERS` tool entry (slice 3), slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
 effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite) — and
 slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`, slice 6, **Pattern**,
-with an asset library of its own, and **Extrude**. **Chromatic split** is the last of tier 1; everything past it waits
-on the bake-backed preview.
+with an asset library of its own, and slice 7, **Extrude** + **Chromatic split**. That is all of tier 1; everything
+remaining — Glow, Drop shadow, Pixelate, Ripple, Grain, Progressive blur — waits on the **bake-backed preview**, which
+Extrude has already given a second reason to build.
 
 **Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes

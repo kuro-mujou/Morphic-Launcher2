@@ -4,9 +4,9 @@ Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from oth
 filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
 before any of them can land, and the order to build them in.
 
-Status: **slices 0–6 done, plus Extrude from slice 7** (see §5). The pipeline, the effect panel, the filter library,
-the layer rail, Bloom, Gloss, perspective, Pattern, Extrude and `IconLayerSet.effects` are built; **Chromatic split**
-is the last of tier 1, and everything past it waits on the bake-backed preview. Where the build diverged from this plan, §5 records it —
+Status: **slices 0–7 done — all of tier 1** (see §5). Everything remaining (Glow, Drop shadow, Pixelate, Ripple,
+Grain, Progressive blur) waits on **slice 8, the bake-backed preview**, which Extrude has already given a second
+reason to build. Where the build diverged from this plan, §5 records it —
 the plan is kept as written so the reasoning that was wrong stays visible next to what replaced it.
 
 **The largest thing this plan got wrong is in §3**: it treats all thirteen as *layer* effects, and six of them are only
@@ -267,7 +267,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 4a | **Whole-icon effects** | Not in the plan — see below | **done** |
 | 5 | **Perspective** | Extends `LayerTransform`, which is already shared | **done** |
 | 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | **done** |
-| 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | Extrude **done** |
+| 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | **done** |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | |
 | 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | |
@@ -366,6 +366,18 @@ Each slice is independently reviewable and leaves the studio working.
     the channels out of an int in one place, and that place is the fifth column — silent when wrong.
   - The bake's effect loop stopped being "a colour matrix or an overlay": Extrude produces a new buffer without being
     a matrix, so the `when` now says plainly which effects replace the buffer and which paint into it.
+- **Chromatic split needed no new arithmetic at all**, which is what `ColorMatrices.mix` was extracted for: a channel
+  isolation is that builder with a single one in each row, and `scale` structurally cannot express it. What
+  `LayerChromatic` contributes is the **convention** — red leads, blue trails, green stays put — and that is precisely
+  the thing worth sharing, because either direction looks like a lens and nothing would fail if the two paths
+  disagreed.
+  - **It is the only effect with no strength slider**, and that is the honest shape rather than an omission: the
+    effect *is* a displacement, so an offset of nothing already means "not split", and a second knob would be a second
+    way to reach the same state.
+  - **`PositionPad` gained a range** for it. A fringe is a couple of percent of the icon, so at the pad's own travel
+    the whole useful span would sit under the thumb.
+  - Green holds still on purpose: the eye reads luminance mostly from green, so displacing it would shift the whole
+    icon rather than fringe it.
 - **Whole-icon effects (4a) — the thing thirteen effects actually needed, and §3 assumed away.** Every entry in this
   plan is written as a *layer* effect, and for six of them that is simply wrong: a glow derives from the finished
   silhouette, so per-layer it glows around the foreground *inside* the background plate where nobody can see it; grain,

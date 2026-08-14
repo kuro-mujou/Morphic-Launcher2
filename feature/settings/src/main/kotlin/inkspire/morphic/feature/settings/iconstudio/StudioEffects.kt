@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Tonality
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -157,6 +158,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** The layer's own silhouette repeated behind itself, so it reads as a slab. */
     EXTRUDE("Extrude", Icons.Default.Layers),
 
+    /** The layer's colour channels displaced and added back together — lens fringing. */
+    CHROMATIC("Chromatic", Icons.Default.Tonality),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -182,6 +186,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
         EXTRUDE -> effects.filterIsInstance<LayerEffect.Extrude>().firstOrNull()
+        CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -207,6 +212,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         GLOSS -> target.effects.activeEffects.any { it is LayerEffect.Gloss }
         PATTERN -> target.effects.activeEffects.any { it is LayerEffect.Pattern }
         EXTRUDE -> target.effects.activeEffects.any { it is LayerEffect.Extrude }
+        CHROMATIC -> target.effects.activeEffects.any { it is LayerEffect.ChromaticSplit }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -280,6 +286,7 @@ internal fun EffectsControls(
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
             EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
+            EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -470,6 +477,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.EXTRUDE -> current.effectOrNull<LayerEffect.Extrude>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.CHROMATIC -> current.effectOrNull<LayerEffect.ChromaticSplit>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -893,6 +903,47 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * How far the channels are displaced, and in which direction — which is the whole effect.
+ *
+ * **One control, because the effect is one quantity.** Every other panel here pairs a look with a strength; a
+ * chromatic split *is* a displacement, so an offset of nothing already means "not split" and a strength slider
+ * beside it would be a second way to reach the same state.
+ *
+ * **The transform section's pad, at a tenth of its travel.** The value is a point and is found by dragging, which is
+ * exactly what that control is for — but a fringe is a couple of percent of the icon, so at the pad's own range the
+ * whole useful span would be a few pixels under the thumb. [PositionPad] takes the range for that reason.
+ */
+@Composable
+private fun ChromaticControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // Seeded at no offset when absent, which is also this effect's own "off" — so the pad opens centred and the
+    // first drag is what brings the effect into being.
+    val split = effects.effectOrNull<LayerEffect.ChromaticSplit>()
+        ?: LayerEffect.ChromaticSplit(offsetX = 0f, offsetY = 0f)
+
+    LabeledControl("Offset") {
+        PositionPad(
+            x = split.offsetX,
+            y = split.offsetY,
+            onValueChange = { x, y -> onUpdate { it.withEffect(split.copy(offsetX = x, offsetY = y)) } },
+            onCommit = onCommit,
+            range = ChromaticRange,
+        )
+    }
+}
+
+/**
+ * How far a fringe may reach, either way.
+ *
+ * A tenth of [PositionRange]: past a few percent of the icon the three channels stop reading as one object with
+ * coloured edges and start reading as three overlapping icons, which is a different — and much less useful — effect.
+ */
+private val ChromaticRange = -0.05f..0.05f
 
 /**
  * The slab's colour, how deep it runs, which way, and how strongly.

@@ -196,6 +196,8 @@ class IconRenderer(
                     IconFilters.matrixOrNull(effect.filter)?.let { m -> replace { filtered(it, m, sizePx) } }
 
                 is LayerEffect.Extrude -> replace { extruded(it, effect, sizePx) }
+
+                is LayerEffect.ChromaticSplit -> replace { split(it, effect, sizePx) }
             }
         }
         return current
@@ -299,6 +301,27 @@ class IconRenderer(
             alpha = (gloss.strength.coerceIn(0f, 1f) * 255).toInt()
         }
         canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
+    }
+
+    /**
+     * [source] as its three colour channels, displaced and added back together.
+     *
+     * **Additive rather than layered**, which is what makes the channels recombine into the original colour where
+     * they overlap and leave a single-channel fringe where they do not — the whole of the effect. Drawing them with
+     * ordinary source-over would stack three coloured silhouettes and the last would simply win.
+     */
+    private fun split(source: Bitmap, split: LayerEffect.ChromaticSplit, sizePx: Int): Bitmap {
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+
+        LayerChromatic.fringes(split, sizePx).forEach { fringe ->
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                colorFilter = ColorMatrixColorFilter(ColorMatrix(fringe.matrix))
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
+            }
+            canvas.drawBitmap(source, fringe.dxPx, fringe.dyPx, paint)
+        }
+        return out
     }
 
     /**

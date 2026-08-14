@@ -316,6 +316,35 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer split into its red, green and blue channels and put back together offset — the coloured fringing a
+     * cheap lens leaves, and the one effect here that *replaces* the layer rather than drawing over it.
+     *
+     * **No strength, and that is the honest shape rather than an omission.** Every other effect needs a separate
+     * knob because its parameters describe a look that exists at any intensity; this one is *made of* an offset, so
+     * an offset of nothing already means "not split". A strength slider beside it would be a second way to reach the
+     * same state, and the two would disagree about which one switched it off.
+     *
+     * @property offsetX how far the red channel moves, as a fraction of the icon's box — blue moves the same
+     *   distance the other way, and green stays put. A fraction for [IconLayerSpec.offsetX]'s reason: the fringe has
+     *   to be the same width of the icon at every bake size.
+     * @property offsetY the same, downward.
+     */
+    @Serializable
+    @SerialName("chromatic")
+    data class ChromaticSplit(
+        val offsetX: Float = 0.02f,
+        val offsetY: Float = 0f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** Nothing moved is nothing split — which is what makes the offsets their own on/off. */
+        override val isIdentity: Boolean get() = offsetX == 0f && offsetY == 0f
+
+        /** Three colour matrices added together, which both paths can do at any API. */
+        override val drawsLive: Boolean get() = true
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *

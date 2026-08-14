@@ -36,6 +36,7 @@ import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.icon.render.IconLayerResolver
 import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.icon.render.LayerExtrude
+import inkspire.morphic.core.icon.render.LayerChromatic
 import inkspire.morphic.core.icon.render.LayerGradient
 import inkspire.morphic.core.icon.render.LayerPattern
 import inkspire.morphic.core.icon.render.LayerTransform
@@ -313,6 +314,31 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
             }
         }
         drawContent()
+    }
+
+    // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what
+    // comes out is the three channels, displaced and added. The outer layer is what keeps `Plus` adding against
+    // nothing rather than against whatever the pipeline had already drawn — the same isolation the bake gets free by
+    // building into a new bitmap.
+    is LayerEffect.ChromaticSplit -> Modifier.drawWithContent {
+        val scope = this
+        val bounds = Rect(0f, 0f, size.width, size.height)
+
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(bounds, Paint())
+            LayerChromatic.fringes(effect, size.width.toInt()).forEach { fringe ->
+                canvas.saveLayer(
+                    bounds = bounds,
+                    paint = Paint().apply {
+                        colorFilter = ColorFilter.colorMatrix(ColorMatrix(fringe.matrix))
+                        blendMode = BlendMode.Plus
+                    },
+                )
+                translate(fringe.dxPx, fringe.dyPx) { scope.drawContent() }
+                canvas.restore()
+            }
+            canvas.restore()
+        }
     }
 
     // **The one overlay whose tile is remembered rather than derived per frame.** A gradient is three numbers handed

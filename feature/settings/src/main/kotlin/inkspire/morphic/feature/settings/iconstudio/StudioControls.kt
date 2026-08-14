@@ -299,10 +299,11 @@ internal fun PositionPad(
     y: Float,
     onValueChange: (x: Float, y: Float) -> Unit,
     onCommit: () -> Unit,
+    range: ClosedFloatingPointRange<Float> = PositionRange,
 ) {
     @Composable
     fun Arrow(icon: ImageVector, description: String, dx: Int, dy: Int) {
-        val target = x.nudged(dx) to y.nudged(dy)
+        val target = x.nudged(dx, range) to y.nudged(dy, range)
         StudioStepperButton(
             icon = icon,
             contentDescription = description,
@@ -322,8 +323,8 @@ internal fun PositionPad(
             x = x,
             y = y,
             onValueChange = onValueChange,
-            xRange = PositionRange,
-            yRange = PositionRange,
+            xRange = range,
+            yRange = range,
             onValueChangeFinished = onCommit,
             modifier = Modifier.size(PadSide),
         )
@@ -358,14 +359,18 @@ internal fun PositionPad(
  * the Center button lit, and lit *forever*, over an offset too small to see. Stepping onto the grid means the way
  * back is exactly the way out.
  */
-private fun Float.nudged(direction: Int): Float =
-    if (direction == 0) this else snappedStep(this, NudgeStep, up = direction > 0).coerceIn(PositionRange)
+private fun Float.nudged(direction: Int, range: ClosedFloatingPointRange<Float>): Float =
+    if (direction == 0) this else snappedStep(this, NudgeStep, up = direction > 0).coerceIn(range)
 
 /**
  * Half a frame either way — which puts the point on an edge at the ends and off it nowhere.
  *
- * Shared by [PositionPad] and by any control writing the same kind of value, so the pad, the nudge buttons and a
- * one-dimensional slider over the same field all agree about where the ends are.
+ * The default a [PositionPad] takes, and shared with any one-dimensional control over the same field so the pad, the
+ * nudge buttons and a slider all agree about where the ends are.
+ *
+ * **A parameter rather than a constant everywhere, because not every point is an offset.** A chromatic split is a
+ * displacement of a few percent, and a pad whose useful travel was the middle tenth of it would be a control you
+ * could not hold still — so that one passes its own range and gets the same pad at a scale it can be dragged in.
  */
 internal val PositionRange = -0.5f..0.5f
 
