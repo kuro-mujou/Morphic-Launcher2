@@ -138,6 +138,25 @@ class LayerEffectPipelineTest {
         assertEquals(listOf(bloom), set.moveDown(0).effects)
     }
 
+    /**
+     * That an ordinary icon draws **live** — which is the half of the fallback that can be tested today, and the
+     * half whose regression would be worst.
+     *
+     * `LayerEffect` is a sealed interface, so a test module cannot stub an undrawable variant, and every effect that
+     * exists answers `drawsLive` true. **The false path is therefore genuinely untestable until the first tier-2
+     * effect lands**, and a fake here would only assert that `all {}` works. What is worth pinning meanwhile is the
+     * default: if this ever came back false, every preview in the studio would silently take the baked path — slower,
+     * for nothing, on every unedited icon.
+     */
+    @Test
+    fun `an ordinary icon draws live, so the preview stays on the fast path`() {
+        assertTrue(IconLayerSet.Base.drawsLive)
+        assertTrue(IconLayerSet.Base.copy(effects = listOf(bloom)).drawsLive)
+        assertTrue(spec(tint, bloom).drawsLive)
+        // Empty is the case that matters most, being every icon nobody has edited.
+        assertTrue(emptyList<LayerEffect>().drawLive)
+    }
+
     @Test
     fun `an icon with no effects of its own costs nothing on disk`() {
         // Additive, like every field before it: `encodeDefaults = false` plus an empty default means the recipes

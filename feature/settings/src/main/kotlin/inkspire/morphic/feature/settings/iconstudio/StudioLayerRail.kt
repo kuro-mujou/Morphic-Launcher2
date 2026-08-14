@@ -57,7 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.grid.animatePlacement
-import inkspire.morphic.core.icon.compose.IconLayerStack
+import inkspire.morphic.core.icon.compose.IconPreview
 
 /**
  * The stack, always on screen: one tile per layer down the end edge of the canvas, with a `+` at the end.
@@ -278,7 +278,7 @@ private fun CompositeTile(
         contentAlignment = Alignment.Center,
     ) {
         state.parsed?.let { parsed ->
-            IconLayerStack(
+            IconPreview(
                 icon = parsed,
                 layerSet = state.editing,
                 modifier = Modifier.fillMaxSize(),
@@ -391,8 +391,16 @@ private fun LayerTile(
 
     // Every other layer hidden, so the stack draws this one alone. Keyed on the whole set, so an edit anywhere
     // re-derives it exactly as the canvas does.
+    //
+    // **And the whole-icon effects come off with them**, which they did not before the composite had any. A tile's
+    // job is *which layer is this?*, and a grain or a glow belonging to the icon rather than to the layer obscures
+    // exactly that at 48dp — it would also drag every tile onto the baked path the moment one was added, for
+    // something none of them are showing. The composite tile is where those are seen.
     val soloed = remember(state.editing, index) {
-        state.editing.copy(layers = state.editing.layers.mapIndexed { i, layer -> layer.copy(visible = i == index) })
+        state.editing.copy(
+            layers = state.editing.layers.mapIndexed { i, layer -> layer.copy(visible = i == index) },
+            effects = emptyList(),
+        )
     }
 
     Box(
@@ -424,7 +432,7 @@ private fun LayerTile(
         contentAlignment = Alignment.Center,
     ) {
         state.parsed?.let { parsed ->
-            IconLayerStack(
+            IconPreview(
                 icon = parsed,
                 layerSet = soloed,
                 modifier = Modifier

@@ -4,10 +4,10 @@ Drawn from captures of another icon studio (`~/Downloads/effect from other icon 
 hash rather than by effect; the thirteenth, drop shadow, was never captured). This plan is **what each one actually
 needs from our two renderers**, what has to change before any of them can land, and the order to build them in.
 
-Status: **slices 0–7 done — all of tier 1** (see §5). Everything remaining (Glow, Drop shadow, Pixelate, Ripple,
-Grain, Progressive blur) waits on **slice 8, the bake-backed preview**, which Extrude has already given a second
-reason to build. Where the build diverged from this plan, §5 records it —
-the plan is kept as written so the reasoning that was wrong stays visible next to what replaced it.
+Status: **slices 0–8 done — all of tier 1, plus the bake-backed preview it was blocking on** (see §5, and §7 for how
+the preview came out). Glow, Drop shadow, Pixelate, Ripple, Grain and Progressive blur are now unblocked and can be
+built in any order. Where the build diverged from this plan, §5 and §7 record it — the plan is kept as written so the
+reasoning that was wrong stays visible next to what replaced it.
 
 **The largest thing this plan got wrong is in §3**: it treats all thirteen as *layer* effects, and six of them are only
 correct over the finished composite. See §5's whole-icon note.
@@ -268,7 +268,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 5 | **Perspective** | Extends `LayerTransform`, which is already shared | **done** |
 | 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | **done** |
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | **done** |
-| 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | |
+| 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | **done** |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | |
 | 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | |
 | 11 | **Progressive blur** | Hardest: blur *and* a mask | |
@@ -481,14 +481,20 @@ what changes every frame of a drag — so the preview would evict every real ico
 of sliding. The studio wants its own single-slot state, and the coalescing and concurrency cap `IconRenderManager`
 provides are not what this needs either: there is one bake in flight, by construction.
 
-### Resolution: the studio already has the punctuation
+### Resolution: no signal at all, as it turned out
 
-§2 proposes downscaling "while a gesture is in flight", which normally needs a gesture-start signal the studio does
-not emit. It does not need one: `onUpdate` without `onCommit` **is** a gesture in flight. So every live edit
-schedules a **downscaled** bake and every `commitEdit` schedules a **full-size** one — the same punctuation that
-already decides what undo steps over, used for a second thing it happens to answer exactly.
+This section proposed threading a gesture-in-flight signal down from the studio — `onUpdate` without `onCommit` — and
+**building it showed none is needed**, which is the one place slice 8 came out simpler than it was designed.
 
-The fraction is the one number to measure on device (§6).
+Every recipe is baked **twice**: downscaled immediately, then full size. `collectLatest` cancels the in-flight
+collector when a newer recipe arrives, so during a drag the draft keeps landing and the full-size bake is cancelled
+before it starts; when the finger stops, nothing newer arrives and the full-size one completes and replaces it.
+
+So one mechanism decides both *what to skip* and *what resolution to skip it at*, and the two cannot disagree. It is
+also the truer condition — "nothing newer has arrived" is what settled actually *means*, where a commit signal is a
+proxy for it that any non-slider edit would answer differently.
+
+The fraction is still the one number to measure on device (§6).
 
 ### What tier 2 and tier 3 will share
 

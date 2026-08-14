@@ -95,7 +95,14 @@ class IconRenderManager(
             // the parallelism cap covering all three. See `ParsedIconLoader` for why it does not hop for itself.
             baked = withContext(bakeContext) {
                 parsedIcons.load(component)?.let { parsed ->
-                    renderer.render(parsed, layerSet, sizePx) { pack, name -> packImages.drawable(pack, component, name) }
+                    // Named, because `render` grew a `customImage` after this and a trailing lambda would bind to
+                    // that one instead — silently, and only for pack layers.
+                    renderer.render(
+                        icon = parsed,
+                        layerSet = layerSet,
+                        sizePx = sizePx,
+                        packImage = { pack, name -> packImages.drawable(pack, component, name) },
+                    )
                 }
             }
             if (baked != null) cache.put(id, baked)

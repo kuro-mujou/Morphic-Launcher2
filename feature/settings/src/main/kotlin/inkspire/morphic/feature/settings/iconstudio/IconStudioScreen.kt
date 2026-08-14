@@ -50,7 +50,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.picker.AppPicker
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
-import inkspire.morphic.core.icon.compose.IconLayerStack
+import inkspire.morphic.core.icon.compose.IconPreview
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.key
 import org.koin.androidx.compose.koinViewModel
@@ -214,7 +214,11 @@ fun IconStudioScreen(
                     .hazeSource(screenHaze, zIndex = CanvasDepth),
             ) {
                 state.parsed?.let { parsed ->
-                    IconLayerStack(
+                    // **The canvas, and every other preview here, goes through `IconPreview` rather than the live
+                    // stack directly.** It picks the bake for a recipe the live path cannot draw, which is what the
+                    // six remaining effects need — and picking at one entry point is what stops a call site from
+                    // forgetting to ask and silently showing a lie.
+                    IconPreview(
                         icon = parsed,
                         layerSet = state.editing,
                         modifier = Modifier.fillMaxSize(),

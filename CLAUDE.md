@@ -180,7 +180,8 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
 [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **all of
-tier 1** — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
+tier 1 plus the bake-backed preview** — the effect **pipeline**, the effect **panel**, the **filter** library, the
+**layer rail**, **Bloom**,
 **Gloss**, **perspective**, **Pattern**, **Extrude** and **Chromatic split**, plus **whole-icon effects**, which that
 plan had not noticed it needed.
 The **six remaining effects are all blocked on one mechanism** — the bake-backed preview — which is also what
@@ -1595,30 +1596,47 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–7 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), all of
-tier 1, are done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+**In flight: the icon effects expansion — slices 0–8 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+done: all of tier 1, plus the bake-backed preview the remaining six were blocked on.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the
 *editor* has. Instead the studio will preview **from the bake**, downscaled and throttled during a gesture, which is
 why `LayerEffect.drawsLive` exists now with nothing yet answering it `false`.
 
-**Next is slice 8, the bake-backed preview, and it is the only thing the remaining six wait on** — Glow, Drop shadow,
-Pixelate, Ripple, Grain and Progressive blur are all blocked on it and on nothing else. Designed in that plan's §7;
-four decisions worth knowing before touching it:
+**The bake-backed preview is built (slice 8), so the remaining six are unblocked.** `IconPreview` is the studio's one
+entry point: it draws through `IconLayerStack` where the live path can manage it and from `IconRenderer` where it
+cannot. Every studio preview goes through it — canvas, layer tiles, composite tile — because a call site that could
+forget to ask is one that silently shows a lie. Five things worth knowing:
 - **The whole icon falls back, never one layer**, which reverses what the plan's §2 assumed. A per-layer fallback is a
   *hybrid stack* — one layer from a bitmap, the rest live around it — so the two halves must agree about geometry at a
-  seam **inside one icon**, which is the two-renderer hazard in its worst form. Whole-icon keeps them two complete
-  pictures, which is what the `IconLayers` playground compares. It also costs nothing: the bake renders a whole set
-  either way and its expense is the effect, not the layer count.
+  seam **inside one icon**, which is the two-renderer hazard in its worst form: no longer two whole pictures that can
+  be held against each other. It also costs nothing, the bake rendering a whole set either way and its expense being
+  the effect rather than the layer count. `IconLayerSet.drawsLive` is the one question asked.
 - **`IconLayerSpec.drawsLive` keeps a real job** and is not made vestigial by that: a *layer tile* in the rail solos
   one layer, so it falls back on that layer's own effects. One property, two scopes, each asking about what it draws.
-- **Throttling is `collectLatest` over a `MutableStateFlow`, not a timer** — a new value cancels the in-flight bake, so
-  work conflates instead of queueing, with no interval to pick. It must **not** go through `IconRenderManager`'s cache,
-  which is keyed on the resolved set: that is exactly what changes every frame of a drag, so the preview would evict
-  every real icon on the device within seconds.
-- **The resolution split needs no new signal.** `onUpdate` without `onCommit` *is* a gesture in flight, so a live edit
-  schedules a downscaled bake and `commitEdit` schedules a full-size one — the same punctuation undo already steps over.
+- **Draft first, then full — and that is the throttle *and* the resolution split in one mechanism.** Every recipe is
+  baked downscaled immediately and then at full size; `collectLatest` cancels the in-flight collector when a newer one
+  arrives, so a drag keeps landing drafts while the full-size bake is cancelled before it starts, and a stopped finger
+  lets it complete. **The plan's gesture-in-flight signal turned out to be unnecessary** — "nothing newer has arrived"
+  *is* what settled means, where `onCommit` is a proxy any non-slider edit would answer differently.
+- **Deliberately not `IconRenderManager`.** Its cache is keyed on the resolved layer set, which is exactly what changes
+  every frame of a drag — a preview going through it would evict every real icon on the device within seconds. The
+  editor wants one slot and has one. Its coalescing and concurrency cap are moot here too: there is one bake in flight
+  by construction.
+- **`IconRenderer.render` gained a `customImage` lambda**, defaulting to the disk read it always did. That default is
+  right for every surface and **wrong for the studio**, whose whole point is that a freshly picked image previews
+  before anything is written (see `CustomIconStore`) — so the editor passes the same lambda it gives the live path and
+  the two draw the same picture. `IconRenderManager`'s call had to name `packImage` as a result: a trailing lambda now
+  binds to the new parameter, silently and only for pack layers.
+- **A layer tile drops the whole-icon effects**, which it did not before the composite had any. A tile answers *which
+  layer is this?*, and a grain belonging to the icon obscures exactly that at 48dp — it would also drag every tile onto
+  the baked path for something none of them show. The composite tile is where those are seen.
+
+What is **not** built is the *"working"* hint for a bake that runs genuinely long: it wants measuring against the
+heaviest effect on the slowest device to hand, and the draft is what makes its absence survivable since something
+always lands quickly. The draft fraction (a quarter of the side, a sixteenth of the pixels) is the other number to
+tune on device.
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
 `SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the

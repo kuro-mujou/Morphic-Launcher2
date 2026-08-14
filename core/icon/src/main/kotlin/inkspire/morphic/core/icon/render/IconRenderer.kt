@@ -71,17 +71,22 @@ class IconRenderer(
      * @param packImage this app's artwork from an installed icon pack, pre-bound to the component by the caller —
      *   this class draws pixels and has no business knowing which app they belong to. Defaults to nothing, which
      *   is what a recipe with no pack layer needs and what the harness passes.
+     * @param customImage resolves a custom-image layer's stored path. Defaults to reading the file, which is right
+     *   for every surface — and **wrong for the studio**, whose whole point is that a freshly picked image is
+     *   previewed before anything is written to disk (see `CustomIconStore`). So the editor passes the same lambda
+     *   it hands the live path, and the two draw the same picture rather than one of them showing a missing layer.
      */
     fun render(
         icon: ParsedIcon,
         layerSet: IconLayerSet,
         sizePx: Int,
         packImage: (packPackage: String, drawableName: String?) -> Drawable? = { _, _ -> null },
+        customImage: (path: String) -> Drawable? = ::decodeCustomImage,
     ): Bitmap {
         val output = createBitmap(sizePx, sizePx)
         val canvas = Canvas(output)
 
-        resolver.resolve(layerSet, icon, ::decodeCustomImage, packImage).forEach { layer ->
+        resolver.resolve(layerSet, icon, customImage, packImage).forEach { layer ->
             val layerBitmap = renderLayer(layer, sizePx)
             // Opacity, blend and color are applied **as the layer joins the stack**, not while its content is
             // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the

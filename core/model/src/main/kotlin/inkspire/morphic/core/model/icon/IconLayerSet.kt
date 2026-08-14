@@ -57,6 +57,23 @@ data class IconLayerSet(
     /** The whole-icon effects that actually draw, in the order they are applied. @see activeEffects */
     val activeEffects: List<LayerEffect> get() = effects.activeEffects
 
+    /**
+     * Whether the **live** render path can draw this whole icon, or whether the studio must preview it from the bake.
+     *
+     * **Asked of the whole set rather than layer by layer, and that is the decision rather than a convenience.** A
+     * per-layer fallback would mean a *hybrid* preview — one layer from a bitmap, the rest drawn live around it — so
+     * the two halves would have to agree about geometry at a seam **inside a single icon**. That is the two-renderer
+     * hazard in its worst form: no longer two whole pictures that can be held up against each other, but one picture
+     * assembled from both, where a drift shows as a misalignment with nothing to compare it to. It also costs
+     * nothing, since the bake renders a whole set either way and its expense is the *effect* rather than the number
+     * of layers.
+     *
+     * [IconLayerSpec.drawsLive] keeps its own job despite this, which is worth saying because it looks redundant
+     * next to it: a *layer tile* in the studio's rail draws one layer alone, so it falls back on that layer's own
+     * effects. One question, two scopes, each asking about what it actually draws.
+     */
+    val drawsLive: Boolean get() = layers.all { it.drawsLive } && effects.drawLive
+
     /** The single, always-present background layer. */
     val background: IconLayerSpec get() = layers.first { it.role == LayerRole.BACKGROUND }
 
