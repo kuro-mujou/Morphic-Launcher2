@@ -259,16 +259,50 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
         }
     }
 
+    // Two overlays, one arrangement: each takes its own layer so source-atop's destination is what the pipeline has
+    // drawn so far and nothing else — which is what makes them light the artwork instead of covering the icon with a
+    // rectangle.
     is LayerEffect.Bloom -> Modifier.drawWithContent {
         drawIntoCanvas { canvas ->
-            // Its own layer, so source-atop's destination is what the pipeline has drawn so far and nothing else —
-            // which is what makes the bloom color the artwork instead of covering the icon with a rectangle.
             canvas.saveLayer(bounds = Rect(0f, 0f, size.width, size.height), paint = Paint())
             drawContent()
             drawBloomOverlay(effect, spec, inkFit)
             canvas.restore()
         }
     }
+
+    is LayerEffect.Gloss -> Modifier.drawWithContent {
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(bounds = Rect(0f, 0f, size.width, size.height), paint = Paint())
+            drawContent()
+            drawGlossOverlay(effect, spec, inkFit)
+            canvas.restore()
+        }
+    }
+}
+
+/**
+ * Paints a sheen over whatever has been drawn, clipped to it — the live twin of `IconRenderer.applyGloss`.
+ *
+ * Every decision is [LayerGradient.sweep]'s: where the disc sits, where its stops fall, and which side of the rim is
+ * lit. What is left here is turning four ARGB ints into Compose colours and handing them to a brush.
+ */
+private fun DrawScope.drawGlossOverlay(gloss: LayerEffect.Gloss, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit) {
+    val sizePx = size.width.toInt()
+    val transform = spec?.let { LayerTransform.of(it, sizePx) } ?: LayerTransform.Identity
+    val frame = LayerGradient.frameOf(gloss.anchor, inkFit, transform, sizePx)
+    val sweep = LayerGradient.sweep(frame, gloss.angleDegrees, gloss.curve)
+    val colors = sweep.colorsOf(gloss.argb)
+
+    drawRect(
+        brush = Brush.radialGradient(
+            colorStops = Array(colors.size) { sweep.stops[it] to Color(colors[it]) },
+            center = Offset(sweep.centerX, sweep.centerY),
+            radius = sweep.radiusPx,
+        ),
+        alpha = gloss.strength.coerceIn(0f, 1f),
+        blendMode = BlendMode.SrcAtop,
+    )
 }
 
 /**

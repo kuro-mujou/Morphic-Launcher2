@@ -179,8 +179,9 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is four
-slices in — the effect **pipeline**, the effect **panel**, the **filter** library and the **layer rail** are built.
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is five
+slices in — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom** and
+**Gloss**, plus **whole-icon effects**, which that plan had not noticed it needed.
 **Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
 this section describes what exists, and flags the places the built thing differs from what was locked here.
 
@@ -292,9 +293,9 @@ enforces. Per layer:
   the stack* rather than what it is: every layer has both, always, with a meaningful default.
 - **effects** — a sealed list, never columns, and an **ordered pipeline** rather than a bag (see the pipeline note
   below). `LayerEffect.Color` (hue → saturation → brightness → tint, composed into **one** matrix, so monochrome is
-  `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` (light spilling across the layer
-  — see the bloom note below) and
-  `LayerEffect.Filter` (one of the built-in looks, by id). Eleven more are planned —
+  `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` and `LayerEffect.Gloss` (light
+  spilling across the layer, and light struck across it with an edge — see the notes below) and
+  `LayerEffect.Filter` (one of the built-in looks, by id). Ten more are planned —
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — of which **shadows are deferred** until the bake backs
   the preview; see below.
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
@@ -405,6 +406,24 @@ to light. Four things worth knowing:
   throws, and `IconLayerSetCodec` drops the **whole recipe** on a throw — so renaming it would cost a user every
   customized icon rather than one effect's colors. That is why the settings layer's "the key name is the seam for a
   semantic break" rule does not transfer here. Stored blooms lose their two stops and keep everything else.
+
+**`LayerEffect.Gloss` is a sheen, and the *edge* is what makes it its own effect rather than a bloom preset.** A bloom
+is a ramp or a disc — light with no boundary; a gloss has a lit region, an unlit one, and an arc between them. It is
+still the same radial fill, with the disc pushed **outside** the frame so only its rim lands on the artwork, which is
+what "signed radius bending the sweep" turns out to mean: the whole of the control is how big that disc is.
+- **One signed slider doing two things, on purpose.** `curve`'s magnitude is how tightly the edge bows (0 is very
+  nearly straight); its **sign** is which way — the lit region bulging out, or the arc cutting into it. The light stays
+  on the side the angle names either way, so the sign can never be mistaken for a 180° turn. That was the test it had
+  to pass to stay one control rather than becoming a second angle.
+- **Four stops, not two, and it is load-bearing.** With a two-stop ramp over the whole radius, a large disc leaves the
+  frame in an almost flat part of it — so flattening the curve would fade the sheen away, a control undoing itself.
+  `LayerGradient.sweep` places them so the boundary lands on the frame's center and the soft band is a constant share
+  of the frame at every curve. `colorsOf` is a member of `Sweep` rather than each renderer's own two lines, because
+  the stop *order* is the whole of what `litInside` means and reversing it draws a plausible sheen lit on the wrong
+  side.
+- **No position pad**, unlike Bloom: a sheen is placed by the direction it is struck from and the way its edge bows,
+  and a third control moving the same band would be a second answer to what the angle already settles. `Frame.movedBy`
+  is split from `frameOf` for exactly that — not every effect placed against a frame has a position of its own.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
     mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
     (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
@@ -1467,7 +1486,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–3 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+**In flight: the icon effects expansion — slices 0–4 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
 done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
@@ -1477,9 +1496,10 @@ gesture, which is why `LayerEffect.drawsLive` exists now with nothing yet answer
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
 `SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
-`LAYERS` tool entry (slice 3), and half of slice 4 — **`LayerEffect.Bloom`**, plus **whole-icon effects**, which that
-plan had not noticed it needed (six of the thirteen are only correct over the composite). Next is **Gloss**; seven of
-the thirteen need no render-architecture change at all.
+`LAYERS` tool entry (slice 3), and slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
+effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite). Next is
+**Perspective** (slice 5), which extends the already-shared `LayerTransform`; five of the thirteen still need no
+render-architecture change at all.
 
 **Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes

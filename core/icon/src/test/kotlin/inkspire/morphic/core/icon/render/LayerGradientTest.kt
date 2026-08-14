@@ -182,6 +182,87 @@ class LayerGradientTest {
         assertEquals(25f, frame.centerY, 0.01f)
     }
 
+    @Test
+    fun `a sheen at zero degrees is lit from the top`() {
+        // The same convention `endpoints` runs on, and the one that would be silently inverted if each renderer had
+        // placed the disc itself: the light sits on the side the angle names, which at 0° is the top.
+        val sweep = LayerGradient.sweep(box, angleDegrees = 0f, curve = 0.5f)
+
+        assertEquals(50f, sweep.centerX, 0.01f)
+        assertTrue("the disc sits above the frame", sweep.centerY < 0f)
+        assertTrue(sweep.litInside)
+    }
+
+    @Test
+    fun `a quarter turn lights the left, matching the ramp's own direction`() {
+        val sweep = LayerGradient.sweep(box, angleDegrees = 90f, curve = 0.5f)
+
+        assertTrue("the disc sits left of the frame", sweep.centerX < 0f)
+        assertEquals(50f, sweep.centerY, 0.01f)
+    }
+
+    @Test
+    fun `flattening the curve pushes the disc away rather than changing which side is lit`() {
+        // What the magnitude means: a bigger circle crosses the frame as a straighter edge. If this ever came out
+        // *smaller* at zero the control would read as inverted, which is a look you would tune around rather than
+        // report.
+        val bowed = LayerGradient.sweep(box, angleDegrees = 0f, curve = 1f)
+        val flat = LayerGradient.sweep(box, angleDegrees = 0f, curve = 0f)
+
+        assertTrue(flat.radiusPx > bowed.radiusPx)
+        assertTrue(flat.litInside)
+    }
+
+    @Test
+    fun `the sign flips which side of the arc is lit, not where the light comes from`() {
+        // The whole of what makes one signed slider legitimate: both keep the light on the angle's side, and only
+        // the way the boundary bows changes. If the sign were a half turn instead, the control would duplicate the
+        // angle and there would be two ways to say one thing.
+        val outward = LayerGradient.sweep(box, angleDegrees = 0f, curve = 0.5f)
+        val inward = LayerGradient.sweep(box, angleDegrees = 0f, curve = -0.5f)
+
+        assertTrue(outward.litInside)
+        assertTrue(!inward.litInside)
+        // Mirrored about the frame, which is what "bows the other way" is: one disc above, one below.
+        assertTrue(outward.centerY < 50f)
+        assertTrue(inward.centerY > 50f)
+    }
+
+    @Test
+    fun `the boundary lands on the frame's center at every curve`() {
+        // The reason there are four stops rather than two: the transition has to stay the same visual width whatever
+        // the disc's size, or flattening the curve would fade the sheen out — a control undoing itself.
+        listOf(0f, 0.25f, 0.5f, 1f).forEach { curve ->
+            val sweep = LayerGradient.sweep(box, angleDegrees = 0f, curve = curve)
+            val distanceToCenter = kotlin.math.hypot(50f - sweep.centerX, 50f - sweep.centerY)
+            val boundary = (sweep.stops[1] + sweep.stops[2]) / 2f
+
+            assertEquals("curve $curve", distanceToCenter / sweep.radiusPx, boundary, 0.01f)
+        }
+    }
+
+    @Test
+    fun `stops ascend, which every gradient constructor requires`() {
+        listOf(-1f, -0.3f, 0f, 0.3f, 1f).forEach { curve ->
+            val stops = LayerGradient.sweep(box, angleDegrees = 37f, curve = curve).stops
+
+            assertEquals("curve $curve", stops.sorted(), stops)
+        }
+    }
+
+    @Test
+    fun `the lit color is on the inside or the outside, and never both`() {
+        val lit = 0xFF102030.toInt()
+        val outward = LayerGradient.sweep(box, angleDegrees = 0f, curve = 0.5f).colorsOf(lit)
+        val inward = LayerGradient.sweep(box, angleDegrees = 0f, curve = -0.5f).colorsOf(lit)
+
+        assertEquals(lit, outward.first())
+        assertEquals(LayerGradient.fadeOut(lit), outward.last())
+        // Reversed, which is the one thing a renderer assembling its own colors would eventually get wrong.
+        assertEquals(LayerGradient.fadeOut(lit), inward.first())
+        assertEquals(lit, inward.last())
+    }
+
     private fun bloom(anchor: ShapeAnchor = ShapeAnchor.BOX) =
         LayerEffect.Bloom(falloff = BloomFalloff.LINEAR, anchor = anchor)
 

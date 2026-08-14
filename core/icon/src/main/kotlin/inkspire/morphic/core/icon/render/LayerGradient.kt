@@ -2,6 +2,7 @@ package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.ShapeAnchor
+import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -40,6 +41,19 @@ object LayerGradient {
         val rotationDegrees: Float,
     ) {
 
+        /**
+         * This frame with its center displaced by [x], [y] — fractions of the frame, **turned with it**, so "right"
+         * means the artwork's right rather than the screen's under [ShapeAnchor.CONTENT].
+         *
+         * Separate from [frameOf] because not every effect placed against a frame has a position of its own: a bloom
+         * does, a gloss is placed by its angle. Folding it in would have meant the second one passing zeros.
+         */
+        fun movedBy(x: Float, y: Float): Frame {
+            if (x == 0f && y == 0f) return this
+            val moved = turn(x * sizePx, y * sizePx, rotationDegrees)
+            return copy(centerX = centerX + moved.first, centerY = centerY + moved.second)
+        }
+
         companion object {
             /** The icon's own box, unturned — what [ShapeAnchor.BOX] resolves to and what a composite has. */
             fun box(sizePx: Int): Frame =
@@ -48,11 +62,11 @@ object LayerGradient {
     }
 
     /**
-     * Where [bloom]'s light is laid out: its own offset, applied inside whichever frame its anchor names.
+     * The frame [anchor] names: the icon's box, or the layer's artwork carried by its own transform.
      *
-     * **A content-anchored bloom is placed in the artwork's frame and carried by the same transform the artwork
-     * takes**, which is what makes them provably agree — the light cannot drift off the ink under zoom, rotation or
-     * an offset, because it is not being positioned *alongside* the artwork. That is [ShapeMask]'s argument exactly,
+     * **Content-anchored light is placed in the artwork's frame and carried by the same transform the artwork
+     * takes**, which is what makes them provably agree — it cannot drift off the ink under zoom, rotation or an
+     * offset, because it is not being positioned *alongside* the artwork. That is [ShapeMask]'s argument exactly,
      * and the two take the same [ShapeMask.InkFit] so a shape and a bloom on one layer land on the same square.
      *
      * **Unmeasured content degrades to the box** for [ShapeMask.inkFit]'s reason — only the app's own artwork is
@@ -62,8 +76,8 @@ object LayerGradient {
      * @param fit the square the layer's artwork occupies, from [ShapeMask.inkFit].
      * @param transform the layer's own transform, already resolved against [sizePx].
      */
-    fun frameOf(bloom: LayerEffect.Bloom, fit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int): Frame {
-        val base = when (bloom.anchor) {
+    fun frameOf(anchor: ShapeAnchor, fit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int): Frame =
+        when (anchor) {
             ShapeAnchor.BOX -> Frame.box(sizePx)
 
             ShapeAnchor.CONTENT -> {
@@ -83,13 +97,9 @@ object LayerGradient {
             }
         }
 
-        if (bloom.offsetX == 0f && bloom.offsetY == 0f) return base
-
-        // In the frame's own units and turned with it, so "right" means the artwork's right rather than the
-        // screen's — which is the whole point of anchoring to content, and would be lost by adding raw pixels here.
-        val moved = turn(bloom.offsetX * base.sizePx, bloom.offsetY * base.sizePx, base.rotationDegrees)
-        return base.copy(centerX = base.centerX + moved.first, centerY = base.centerY + moved.second)
-    }
+    /** Where [bloom]'s light is laid out: its own offset, applied inside whichever frame its anchor names. */
+    fun frameOf(bloom: LayerEffect.Bloom, fit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int): Frame =
+        frameOf(bloom.anchor, fit, transform, sizePx).movedBy(bloom.offsetX, bloom.offsetY)
 
     /**
      * `[x0, y0, x1, y1]` for a ramp at [angleDegrees] across [frame].
@@ -130,6 +140,93 @@ object LayerGradient {
     }
 
     /**
+     * Where a gloss's sheen sits: a disc whose **edge** is the light's boundary, and which side of it is lit.
+     *
+     * **A sheen is an arc, and an arc is a circle seen close up.** The whole of `LayerEffect.Gloss.curve` is how big
+     * that circle is relative to the frame: a huge one crosses the frame as very nearly a straight edge, a small one
+     * as a pronounced bow. So there is no second mechanism here — a gloss is the radial fill a bloom already uses,
+     * with its center pushed outside the frame so only the *rim* of it lands on the artwork.
+     *
+     * @property stops the four positions the [colorsOf] colours sit at, ascending. Four rather than two because the
+     *   transition has to stay the same visual width whatever the circle's size — with two stops spanning the whole
+     *   radius, a large circle would leave the frame in an almost flat part of the ramp and the sheen would fade out
+     *   as the curve was flattened, which is a control undoing itself.
+     * @property litInside whether the light is inside the arc or outside it, which is what the sign of the curve
+     *   flips. Both keep the light on the side the angle names; what changes is which way the boundary bows.
+     */
+    data class Sweep(
+        val centerX: Float,
+        val centerY: Float,
+        val radiusPx: Float,
+        val stops: List<Float>,
+        val litInside: Boolean,
+    ) {
+
+        /**
+         * The four colours, in [stops] order — [argb] on the lit side, its own fade on the other.
+         *
+         * A member rather than something each renderer assembles, because the order is the whole of what [litInside]
+         * means: getting it backwards draws a perfectly plausible sheen with the light on the wrong side, on the one
+         * axis neither renderer can check against the other.
+         */
+        fun colorsOf(argb: Int): IntArray {
+            val fade = fadeOut(argb)
+            return if (litInside) {
+                intArrayOf(argb, argb, fade, fade)
+            } else {
+                intArrayOf(fade, fade, argb, argb)
+            }
+        }
+    }
+
+    /**
+     * A sheen across [frame], struck from [angleDegrees] with its boundary bowed by [curve].
+     *
+     * [curve] runs −1..1 and does two things at once, which is what makes it one control rather than two: its
+     * **magnitude** is how tightly the boundary is curved (0 is very nearly a straight edge), and its **sign** is
+     * which way it bows — the lit region bulging outward, or the arc cutting into it. The light stays on the side
+     * [angleDegrees] names either way, so the sign is never mistakable for a 180° turn.
+     *
+     * The angle follows the frame's rotation for [endpoints]' reason: a sheen anchored to the artwork has to turn
+     * with it, or a rotated layer would be lit from a direction the user never chose.
+     */
+    fun sweep(frame: Frame, angleDegrees: Float, curve: Float): Sweep {
+        val half = frame.sizePx / 2f
+        // Tight at full curve, and `FlatSweepReach` times the frame at none — far enough out that the rim reads as a
+        // straight edge without the arithmetic ever reaching for an infinite radius.
+        val radius = half * (1f + FlatSweepReach * (1f - curve.absoluteValue.coerceAtMost(1f)))
+
+        // `endpoints`' own direction vector, which points *away* from where its first colour sits — so the lit side
+        // is the negative one, and 0° means light from the top in both.
+        val radians = (angleDegrees + frame.rotationDegrees) * Math.PI.toFloat() / 180f
+        val litInside = curve >= 0f
+        // Toward the light when the lit side is inside the disc, away from it when the arc bows the other way.
+        val push = if (litInside) -radius else radius
+        val centerX = frame.centerX + sin(radians) * push
+        val centerY = frame.centerY + cos(radians) * push
+
+        // The gradient reaches one half-frame past the circle's rim, which puts the frame's far edge at 1 and the
+        // boundary itself at `radius / span` — so the soft band below is a constant share of the frame at every
+        // curve rather than shrinking as the circle grows.
+        val span = radius + half
+        val boundary = radius / span
+        val soft = (half / span) * SweepSoftness
+
+        return Sweep(
+            centerX = centerX,
+            centerY = centerY,
+            radiusPx = span.coerceAtLeast(MinRadiusPx),
+            stops = listOf(
+                0f,
+                (boundary - soft).coerceIn(0f, 1f),
+                (boundary + soft).coerceIn(0f, 1f),
+                1f,
+            ),
+            litInside = litInside,
+        )
+    }
+
+    /**
      * The far end of a bloom: [argb]'s own color with no alpha left.
      *
      * **Not `Color.TRANSPARENT`**, and the difference is visible. Transparent black is `0x00000000`, so a ramp to it
@@ -151,6 +248,18 @@ object LayerGradient {
 
     /** How much further a square's corner is than its edge midpoint — `sqrt(2)`, as a multiple of the half-width. */
     private const val HalfDiagonal = 1.4142135f
+
+    /**
+     * How far a *flat* sweep's circle sits from the frame, in half-frames — the "straight edge" end of the curve.
+     *
+     * At seven the boundary's sag across the whole frame is about a sixteenth of a half-frame, which reads as a
+     * straight line while keeping the arithmetic finite. Larger buys nothing visible and starts losing float
+     * precision in the stop positions.
+     */
+    private const val FlatSweepReach = 7f
+
+    /** How wide a sweep's transition is, as a share of the half-frame. Soft enough to read as light, not as a cut. */
+    private const val SweepSoftness = 0.6f
 
     /** Small enough to be invisible, large enough that no platform constructor refuses it. */
     private const val MinRadiusPx = 0.01f

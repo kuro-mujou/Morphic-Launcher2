@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -139,6 +140,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
      */
     BLOOM("Bloom", Icons.Default.Gradient),
 
+    /** A sheen struck across the artwork, with a bowed edge between what is lit and what is not. */
+    GLOSS("Gloss", Icons.Default.WbTwilight),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -161,6 +165,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         OPACITY, BLEND -> null
         COLOR -> effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
+        GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -183,6 +188,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         // which means an effect switched off reads as inactive, and correctly so: it is not doing anything.
         COLOR -> target.effects.activeEffects.any { it is LayerEffect.Color }
         BLOOM -> target.effects.activeEffects.any { it is LayerEffect.Bloom }
+        GLOSS -> target.effects.activeEffects.any { it is LayerEffect.Gloss }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -253,6 +259,7 @@ internal fun EffectsControls(
             EffectSlice.BLEND -> (target as? EffectTarget.Layer)?.let { BlendControls(it.spec, onLayer, onCommit) }
             EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
+            EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -434,6 +441,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.FILTER -> current.effectOrNull<LayerEffect.Filter>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.GLOSS -> current.effectOrNull<LayerEffect.Gloss>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -857,6 +867,83 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * The sheen's colour, how hard it is struck, where from, and how its edge bows.
+ *
+ * **The curve slider is signed and rests at zero**, which is the whole of what separates a gloss from a bloom in the
+ * controls: zero is a straight edge, and dragging either way bows it the two opposite directions. A reset at zero
+ * therefore means "a flat edge" rather than "no effect" — strength is what switches it off, as everywhere else here.
+ *
+ * No position pad, unlike the bloom. A sheen is placed by the direction it is struck from and the way its edge bows;
+ * a third control for moving the same band across the icon would be a second answer to a question the angle already
+ * settles.
+ */
+@Composable
+private fun GlossControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // Seeded at zero strength when absent, as the bloom is — so the controls describe a coherent sheen before it is
+    // turned on rather than jumping the moment strength leaves zero.
+    val gloss = effects.effectOrNull<LayerEffect.Gloss>() ?: LayerEffect.Gloss(strength = 0f)
+
+    LabeledControl("Color") {
+        ColorField(argb = gloss.argb) { argb ->
+            onUpdate { it.withEffect(gloss.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = gloss.strength,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        // Nothing, not `Gloss()`'s own default: reset means "as if untouched", and an unconfigured sheen is the one
+        // this panel seeds at zero so it stays invisible until asked for.
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Angle",
+        value = gloss.angleDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = 0f,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(angleDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Curve",
+        value = gloss.curve,
+        valueRange = -1f..1f,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(curve = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    MorphicSwitchRow(
+        label = "Fit to artwork",
+        supportingText = gloss.anchor.glossHint,
+        checked = gloss.anchor == ShapeAnchor.CONTENT,
+        onCheckedChange = { on ->
+            onUpdate { it.withEffect(gloss.copy(anchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX)) }
+            onCommit()
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** @see bloomHint */
+private val ShapeAnchor.glossHint: String
+    get() = when (this) {
+        ShapeAnchor.BOX -> "The sheen stays put; moving the layer slides the artwork under it."
+        ShapeAnchor.CONTENT -> "The sheen sits on the artwork and moves, zooms and turns with it."
+    }
 
 /** One line saying what the chosen anchor does — the shape section's rule, that a static one would look broken. */
 private val ShapeAnchor.bloomHint: String

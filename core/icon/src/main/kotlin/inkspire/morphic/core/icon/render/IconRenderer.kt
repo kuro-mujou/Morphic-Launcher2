@@ -173,6 +173,12 @@ class IconRenderer(
                     null
                 }
 
+                is LayerEffect.Gloss -> {
+                    val frame = LayerGradient.frameOf(effect.anchor, inkFit, transform, sizePx)
+                    applyGloss(canvas, effect, LayerGradient.sweep(frame, effect.angleDegrees, effect.curve), sizePx)
+                    null
+                }
+
                 is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
                 // Null for an id this build does not know, which then draws nothing rather than failing.
                 is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
@@ -232,6 +238,29 @@ class IconRenderer(
         }
         // Always the whole box, whatever the frame is: a frame says where the light is laid out, not where it may
         // land. A content-anchored bloom on small artwork still lights the pixels its ramp reaches past the ink.
+        canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
+    }
+
+    /**
+     * Paints [gloss]'s sheen over the layer, clipped to what it has already drawn.
+     *
+     * The same source-atop overlay [applyBloom] is, differing only in the shader — a four-stop radial whose rim is
+     * the light's boundary. Where it sits and which side is lit are [sweep]'s answers, so the live path draws the
+     * same arc on the same side.
+     */
+    private fun applyGloss(canvas: Canvas, gloss: LayerEffect.Gloss, sweep: LayerGradient.Sweep, sizePx: Int) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(
+                sweep.centerX,
+                sweep.centerY,
+                sweep.radiusPx,
+                sweep.colorsOf(gloss.argb),
+                sweep.stops.toFloatArray(),
+                Shader.TileMode.CLAMP,
+            )
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+            alpha = (gloss.strength.coerceIn(0f, 1f) * 255).toInt()
+        }
         canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
     }
 

@@ -212,6 +212,43 @@ sealed interface LayerEffect {
     }
 
     /**
+     * A sheen struck across the layer: [argb] on one side of a bowed edge, fading out across it. Source-atop, like
+     * [Bloom], so it lights the artwork rather than covering the icon with a shape.
+     *
+     * **The difference from [Bloom] is the *edge*, and it is what makes this its own effect rather than a preset.**
+     * A bloom is a ramp or a disc — light with no boundary. A gloss has one: a region that is lit, a region that is
+     * not, and an arc between them. That is what a highlight on a glossy surface looks like, and neither of a bloom's
+     * two falloffs can produce it.
+     *
+     * @property angleDegrees where the light comes from, clockwise from straight down — so 0 lights the top, the same
+     *   convention [Bloom.angleDegrees] runs on.
+     * @property curve how the boundary bows, −1..1. **One control doing two things deliberately**: its magnitude is
+     *   how tightly curved the edge is (0 is very nearly straight), its sign is which way it bows — the lit region
+     *   bulging out, or the arc cutting into it. The light stays on the side [angleDegrees] names either way, so the
+     *   sign can never be mistaken for a half turn.
+     * @property strength how strongly the sheen is laid on; 0 is invisible, and is how it is switched off.
+     * @property anchor what the sheen is placed against — the icon's box, or this layer's artwork carried by its
+     *   transform. The same enum a shape mask and a bloom take, through the same derivation.
+     */
+    @Serializable
+    @SerialName("gloss")
+    data class Gloss(
+        val argb: Int = 0xFFFFFFFF.toInt(),
+        val angleDegrees: Float = 0f,
+        val curve: Float = 0f,
+        val strength: Float = 1f,
+        val anchor: ShapeAnchor = ShapeAnchor.BOX,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** Turned down to nothing is the only way a sheen paints nothing — a flat edge is still an edge. */
+        override val isIdentity: Boolean get() = strength <= 0f
+
+        /** A shader drawn source-atop, which both paths can do at any API. */
+        override val drawsLive: Boolean get() = true
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *
