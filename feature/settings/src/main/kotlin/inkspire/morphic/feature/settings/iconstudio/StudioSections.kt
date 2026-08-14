@@ -17,17 +17,16 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.size
@@ -826,30 +825,68 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
 
     LabeledControl("Shape") {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            HorizontalPager(
-                state = pagerState,
-                pageSpacing = 8.dp,
-                modifier = Modifier.height(ShapePagerHeight),
-            ) { page ->
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(ShapeColumns),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // No `key`: the pages are built once and never reorder, so there is no identity to preserve —
-                    // and the one cell with no shape has no id to key on without inventing a sentinel.
-                    items(pages[page]) { shape ->
-                        ShapeTile(
-                            shape = shape,
-                            selected = spec.shape == shape,
-                            onClick = { onUpdate { it.copy(shape = shape) } },
-                        )
-                    }
+            // **The page height is derived from the width, because it is a consequence of it and not a value
+            // anyone owns.** Tiles are square and the columns are fixed, so the width settles the cell and the
+            // cell settles two rows plus the gap between them — a formula exists, which is this codebase's own
+            // test for derive-versus-store (`derivedCell`, `CellFit`). It was a flat 168dp, and that is wrong on
+            // an ordinary phone before it is wrong on a tablet: a 393dp screen leaves ≈361dp inside the panel,
+            // so a cell is ≈84dp and two rows plus the gap want ≈176. The eight dp it was short of is not a
+            // clipped corner — a `LazyVerticalGrid` in a box too small to hold it **scrolls**, so the fixed
+            // height quietly created the vertical-scroller-inside-a-vertical-scroller that paging exists to
+            // avoid. `pageSpacing` is not subtracted: with `PageSize.Fill` it is inserted *between* pages and
+            // pages stay the full viewport width.
+            BoxWithConstraints {
+                val cell = (maxWidth - ShapeGridSpacing * (ShapeColumns - 1)) / ShapeColumns
+                val pageHeight = cell * ShapeRows + ShapeGridSpacing * (ShapeRows - 1)
+
+                HorizontalPager(
+                    state = pagerState,
+                    pageSpacing = 8.dp,
+                    modifier = Modifier.height(pageHeight),
+                ) { page ->
+                    ShapePage(
+                        shapes = pages[page],
+                        selected = spec.shape,
+                        onSelect = { shape -> onUpdate { it.copy(shape = shape) } },
+                    )
                 }
             }
 
             // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
             if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
+        }
+    }
+}
+
+/**
+ * One page of the shape chooser: [ShapeRows] rows of [ShapeColumns] tiles.
+ *
+ * **Plain rows rather than a `LazyVerticalGrid`, which is what makes the height bug unrepeatable rather than
+ * merely fixed.** A page holds at most eight tiles by construction, so laziness saves nothing — and it was an
+ * active liability, because a lazy grid given a box too short for its contents *scrolls* instead of clipping. That
+ * turned a wrong constant into a nested vertical scroller; plain rows cannot do that whatever height they are
+ * handed. It is the grid plan's right-tool-per-surface rule, on a surface small enough that the answer is "no
+ * tool".
+ *
+ * A short last page is **padded with empty weights**, which the lazy grid did for free and a `Row` does not: four
+ * columns of `weight(1f)` given two children would hand each half the width, so the final page's tiles would come
+ * out twice the size of every other page's.
+ */
+@Composable
+private fun ShapePage(shapes: List<IconShape?>, selected: IconShape?, onSelect: (IconShape?) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(ShapeGridSpacing)) {
+        shapes.chunked(ShapeColumns).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(ShapeGridSpacing)) {
+                row.forEach { shape ->
+                    ShapeTile(
+                        shape = shape,
+                        selected = selected == shape,
+                        onClick = { onSelect(shape) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(ShapeColumns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
@@ -862,11 +899,18 @@ internal fun ShapeControls(spec: IconLayerSpec, onUpdate: ((IconLayerSpec) -> Ic
  * persisted id rather than a state to design for, and it falls through to the same mark `null` uses.
  */
 @Composable
-private fun ShapeTile(shape: IconShape?, selected: Boolean, onClick: () -> Unit) {
+private fun ShapeTile(
+    shape: IconShape?,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val resource = shape?.let(IconShapes::drawableResOrNull)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
+            // Square, which is also the assumption the page height is derived from — so a tile that stopped being
+            // square would have to change that arithmetic too.
             .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = if (selected) 0.22f else 0.06f))
@@ -904,12 +948,18 @@ private fun PagerDots(current: Int, count: Int) {
     }
 }
 
-/** Four across, two rows down: eight to a page, which is exactly the seven built-ins plus "no shape" today. */
+/**
+ * Four across, two rows down: eight to a page, which is exactly the seven built-ins plus "no shape" today.
+ *
+ * [ShapesPerPage] is the **product** rather than a third number, so the page size and the shape of the page cannot
+ * disagree — which is what a flat `8` beside a `4` was one edit away from doing.
+ */
 private const val ShapeColumns = 4
-private const val ShapesPerPage = 8
+private const val ShapeRows = 2
+private const val ShapesPerPage = ShapeColumns * ShapeRows
 
-/** Two rows of tiles at the width four columns leaves, plus the gap between them. */
-private val ShapePagerHeight = 168.dp
+/** Between tiles on both axes — and, being the gap the rows are separated by, an input to the page height. */
+private val ShapeGridSpacing = 8.dp
 
 /** Keeps the silhouette clear of the tile's own rounded corners. */
 private val ShapeTileInset = 12.dp
