@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
@@ -205,6 +205,25 @@ fun IconStudioScreen(
                 }
             }
 
+            // **The stack, always on screen**, which is what the tool bar cost when the layer list went behind an
+            // entry of its own. On the *end* edge and vertically centred, so it sits between the save row above and
+            // the tool panel below without either having to know about it. See [StudioLayerRail].
+            StudioLayerRail(
+                state = state,
+                hazeState = hazeState,
+                customImage = customImage,
+                packImage = packImage,
+                onSelectLayer = viewModel::selectLayer,
+                onMove = viewModel::moveSelected,
+                onAdd = viewModel::addLayer,
+                onRemove = viewModel::removeSelected,
+                onToggleVisible = viewModel::toggleSelectedVisible,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .uiInsetsPadding()
+                    .padding(ChromeMargin),
+            )
+
             // Chrome floats over the canvas, inset from the system bars. The studio paints its own backdrop edge to
             // edge — the insets are content padding, never layout padding, as everywhere else in this launcher.
             //
@@ -264,17 +283,28 @@ fun IconStudioScreen(
                     // it costs the other panels nothing.
                     .imePadding()
                     .uiInsetsPadding()
-                    .padding(ChromeMargin),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(ChromeMargin),
+                    .padding(ChromeMargin)
+                    .fillMaxWidth(),
+                // **Start, not end, and the layer rail is why.** These two used to sit at the trailing end, which
+                // was out of the way of everything that existed at the time. The rail now runs down that edge, and
+                // the panel is what brings them together: opening one pushes this row up into the rail's vertical
+                // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only
+                // side with nothing else on it — the icon bound has already shifted the other way for the same
+                // reason (`IconBoundShift`).
+                //
+                // Only this row moves. Everything else in this column fills the width, so the alignment does not
+                // reach the panel or the bar.
+                horizontalAlignment = Alignment.Start,
             ) {
-                // Provisional placement: above the bar and at the trailing end, which is out of the way of both the
-                // icon it edits and the bar's own contents. Where it finally sits is a decision for the pass that
-                // knows what else is up here.
                 Row(
+                    modifier = Modifier.padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    BackgroundCycleButton(
+                        background = state.background,
+                        onClick = viewModel::cycleBackground,
+                    )
                     // **One slot, and the subject decides what is in it** — which is the sum type earning its keep
                     // rather than two buttons each checking whether they apply. Both answer the same question, "which
                     // app am I looking at?", and they differ because the answer means different things: a global
@@ -298,11 +328,6 @@ fun IconStudioScreen(
                         // The picker is already up, so there is nothing to change to.
                         StudioSubject.Unchosen -> Unit
                     }
-
-                    BackgroundCycleButton(
-                        background = state.background,
-                        onClick = viewModel::cycleBackground,
-                    )
                 }
 
                 // Above the bar it belongs to, and below the cycle button, which belongs to neither. Absent rather
@@ -369,6 +394,7 @@ fun IconStudioScreen(
                 ) { (request, panel) ->
                     when {
                         request != null -> StudioColorPickerPanel(
+                            modifier = Modifier.padding(vertical = 6.dp),
                             request = request,
                             hazeState = hazeState,
                             onDone = colorPicker::close,
@@ -379,6 +405,7 @@ fun IconStudioScreen(
                             // things that ask for a color, and the host is what they ask.
                             CompositionLocalProvider(LocalStudioColorPicker provides colorPicker) {
                                 StudioToolPanel(
+                                    modifier = Modifier.padding(vertical = 6.dp),
                                     tool = panel,
                                     state = state,
                                     actions = actions,
@@ -397,6 +424,12 @@ fun IconStudioScreen(
 
                 StudioToolBar(
                     hazeState = hazeState,
+                    // Centred explicitly, because the bar wraps its contents now and this column aligns to the
+                    // start for the row of session buttons above. `ColumnScope.align` is the per-child override,
+                    // so the two say what they mean rather than one of them settling for the other's answer.
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .align(Alignment.CenterHorizontally),
                     selected = tool,
                     // Choosing a tool closes the picker, so the rail always opens what it says it opens. Without it a
                     // press would swap the bar's highlight and leave the color panel sitting there — the one way this

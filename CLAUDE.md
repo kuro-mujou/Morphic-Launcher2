@@ -439,6 +439,31 @@ app's context menu. Five things about it:
   its six whole-icon tools has gone elsewhere here: the tile shape became a per-layer shape (there is no
   stack-level mask), the background is the background layer's source, theming is `AppDefaultMonochrome`, sizing is
   `data:settings` and another screen, the skin is deferred, and a pack will be a per-layer source.
+- **The stack is a rail down the canvas edge, not a bar entry** (`StudioLayerRail`), and the `LAYERS` tool is gone.
+  The bar had swallowed the one thing that must never need opening — `StudioToolPanel`'s own KDoc recorded it:
+  *"while the stack was permanently on screen, 'which layer am I editing?' was answered by looking at it"*. Once the
+  rail also reordered, hid and deleted, the entry's only remaining job was *add*, and an entry that is one button is
+  a button — it belongs where the layers are, as the `+` at the end of the rail.
+  - **Tap selects; long-press selects *and* opens the quick menu.** Selecting first is what lets one set of commands
+    serve every tile — the rule the old eye button already followed, since an action on an unselected row silently
+    acts on a different layer. So the menu reads `state.canMoveUp` and friends, which are answers about the
+    *selected* layer, and no per-index variant of any of them had to exist.
+  - **Every menu row that would do nothing is disabled, never absent** — the reason reorder was buttons and not a
+    drag: a disabled row says which move is illegal *before* it is attempted. The answers come from the model
+    (`editing.moveUp(i) !== editing`), so they cannot drift from the rule the set enforces.
+  - **A tile is the real render path with every other layer hidden.** `IconLayerSet`'s `init` forbids a set without
+    a foreground and a background, so a one-layer set is unrepresentable — but visibility is per layer, so hiding
+    the rest says the same thing through `IconLayerStack`. The tile therefore shows that layer's transform, shape,
+    effects and source exactly as the icon will, with no second way to draw a layer that could drift. It sits on the
+    canvas's own **checkerboard**, because most layers are mostly transparent and a dark glyph on nothing is an
+    empty tile on dark glass.
+  - **Drawn top layer first**, matching the list it replaced and the order layers are drawn on screen. That
+    reversal is load-bearing beyond the UI: `IconStudioViewModel.removeSelected` moves the selection *down* an index
+    to keep the highlight on the same tile, and only makes sense while they are drawn this way round.
+  - **The icon bound shifts toward the start to clear it** (`IconBoundShift`, the horizontal twin of
+    `IconBoundLift`) — a fraction of the canvas rather than the rail's width in dp, because `drawBackdrop`
+    reproduces that square from its own draw-time size and anything it cannot derive would have to be threaded in
+    and kept in step.
 
 **The studio is the one screen with a second blur system, and the two do not overlap.** `wallpaperBackdrop`
 samples a *pre-blurred wallpaper bitmap* by position and can only ever show the wallpaper; the studio's canvas is

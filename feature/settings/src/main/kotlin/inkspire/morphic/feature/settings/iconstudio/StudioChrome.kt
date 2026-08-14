@@ -283,7 +283,13 @@ fun StudioToolBar(
 }
 
 /**
- * The bar the studio's tools live on: a full-width sheet of the shared glass at the bottom of the screen.
+ * The bar the studio's tools live on: a sheet of the shared glass at the bottom of the screen, **as wide as what it
+ * holds**.
+ *
+ * It filled the width until the stack moved to its own rail and the bar dropped to six entries — at which point the
+ * glass ran edge to edge with a margin of nothing at each end, so the bar read as a surface the tools happened to sit
+ * on rather than as the tools' own container. Wrapping is also what keeps that true as the set changes: a bar sized
+ * to its contents cannot develop dead space, where a full-width one develops it every time an entry leaves.
  *
  * Separate from [StudioToolBar] so the container and its contents stay independent — the bar settles the material and
  * where the bottom edge of the workspace is, which is what every panel above it will inherit, and it is the piece a
@@ -292,7 +298,7 @@ fun StudioToolBar(
  * It does **not** apply `uiInsetsPadding` itself. The bar and whatever floats above it are one stack in the caller's
  * `Column`, and insetting each separately would inset the gap between them twice.
  *
- * @param content laid out in a centered row; a rail of [StudioIconButton]s is what this is shaped for.
+ * @param content laid out in a row; a rail of [StudioIconButton]s is what this is shaped for.
  */
 @Composable
 fun StudioBottomBar(
@@ -304,11 +310,10 @@ fun StudioBottomBar(
 ) {
     Row(
         modifier = modifier
-            .fillMaxWidth()
             .height(height)
             .studioSurface(hazeState, shape = shape)
             .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )

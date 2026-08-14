@@ -41,11 +41,26 @@ private const val IconBoundFraction = 0.62f
  */
 private const val IconBoundLift = 0.12f
 
+/**
+ * How far toward the start the bound sits, as a fraction of the canvas's width — the horizontal twin of
+ * [IconBoundLift], and it exists for the same reason applied to the other axis.
+ *
+ * **The layer rail runs down the end edge**, so the canvas is no longer symmetrical left to right any more than it
+ * was top to bottom. Centred, a phone's bound reaches within a few dp of the rail and a narrower one goes under it —
+ * the icon being obscured by the very control used to pick which layer is being edited.
+ *
+ * A fraction rather than the rail's own width in dp, for the reason the lift gives: a dp shift would move the bound
+ * further on a phone than on a tablet relative to what is around it, and — the load-bearing half — [drawBackdrop]
+ * reproduces this square from its own draw-time size, so anything it cannot derive there would have to be threaded
+ * in and kept in step.
+ */
+private const val IconBoundShift = 0.08f
+
 /** One square of the transparency checkerboard, at canvas scale. */
 private val CheckerSquare = 12.dp
 
 /** The checkerboard's two grays — mid-toned, so they read against both a black and a white surround. */
-private val CheckerLight = Color(0xFFBDBDBD)
+internal val CheckerLight = Color(0xFFBDBDBD)
 internal val CheckerDark = Color(0xFF8A8A8A)
 
 /**
@@ -85,11 +100,12 @@ fun StudioCanvas(
         Box(
             modifier = Modifier
                 .size(side.dp)
-                // Centered, then lifted clear of the chrome below — see [IconBoundLift]. An offset rather than an
-                // alignment bias because a bias scales with the *leftover* space, so the same value would move the
-                // bound further on a tablet than on a phone; this is a fraction of the canvas either way, which is
-                // what lets `drawBackdrop` reproduce it from its own size.
-                .offset(y = -maxHeight * IconBoundLift)
+                // Centered, then lifted clear of the chrome below and shifted clear of the layer rail at the end
+                // edge — see [IconBoundLift] and [IconBoundShift]. Offsets rather than an alignment bias because a
+                // bias scales with the *leftover* space, so the same value would move the bound further on a tablet
+                // than on a phone; these are fractions of the canvas either way, which is what lets `drawBackdrop`
+                // reproduce the square from its own size.
+                .offset(x = -maxWidth * IconBoundShift, y = -maxHeight * IconBoundLift)
                 // The bound's whole job beyond holding the icon: overflow vanishes here as it would in the bake.
                 .clipToBounds(),
         ) {
@@ -121,10 +137,10 @@ private fun DrawScope.drawBackdrop(background: PreviewBackground, checkerPx: Flo
 
     // The same square the icon is drawn in. Derived here from this draw scope's own size rather than passed in,
     // which is what makes the two certain to agree: both are `IconBoundFraction` of the shorter side of the very
-    // same node, centered and then lifted by `IconBoundLift` of its height.
+    // same node, centered and then moved by `IconBoundShift` of its width and `IconBoundLift` of its height.
     val side = min(size.width, size.height) * IconBoundFraction
     val topLeft = Offset(
-        x = (size.width - side) / 2f,
+        x = (size.width - side) / 2f - size.width * IconBoundShift,
         y = (size.height - side) / 2f - size.height * IconBoundLift,
     )
     drawCheckerboard(topLeft, Size(side, side), checkerPx)

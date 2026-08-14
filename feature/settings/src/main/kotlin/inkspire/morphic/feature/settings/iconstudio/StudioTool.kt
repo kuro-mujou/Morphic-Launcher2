@@ -3,7 +3,6 @@ package inkspire.morphic.feature.settings.iconstudio
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Hexagon
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Palette
@@ -23,17 +22,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * it — then the library and the leftovers. A tool rail read left to right is a reasonable first guess at a workflow, so
  * it may as well be the right one.
  *
- * **Every value except [MORE] and [PRESETS] acts on the *selected layer*, which is why [LAYERS] comes first**: the
- * stack is the subject the rest of the bar has an object of. That is the same shape L1's studio never settled — it
- * mixed per-layer tools and whole-icon tools in one flat row and left the split as an open question in its own plan.
- * Here there is nothing whole-icon left to mix in: the tile shape became a per-layer shape, the background became the
- * background layer's source, theming became a foreground source, and sizing lives in `data:settings` and another
- * screen entirely.
+ * **Every value except [MORE] and [PRESETS] acts on the *selected layer*, and the stack itself is no longer one of
+ * them.** It was `LAYERS`, first on the bar; it is now the always-visible rail down the canvas edge
+ * (`StudioLayerRail`), which is where "which layer am I editing?" is answered by looking rather than by opening a
+ * panel. Once the rail also reordered, hid and deleted, the entry's only remaining job was *add* — and an entry that
+ * is one button is not an entry, it is a button, and it belongs where the layers are.
+ *
+ * That is also the same shape L1's studio never settled — it mixed per-layer tools and whole-icon tools in one flat
+ * row and left the split as an open question in its own plan. Here there is nothing whole-icon left to mix in: the
+ * tile shape became a per-layer shape, the background became the background layer's source, theming became a
+ * foreground source, and sizing lives in `data:settings` and another screen entirely.
  */
 enum class StudioTool(val label: String, val icon: ImageVector) {
-
-    /** The stack: which layer is being edited, whether it is showing, its order, and adding or removing one. */
-    LAYERS("Layers", Icons.Default.Layers),
 
     /**
      * Where the selected layer's pixels come from — app default, the app's monochrome artwork, a solid fill, a custom

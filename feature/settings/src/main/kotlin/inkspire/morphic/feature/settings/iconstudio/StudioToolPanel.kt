@@ -76,9 +76,10 @@ data class StudioActions(
  * scroll — which is how two panels end up different heights with different corners — and all three are settled here
  * instead. It is also the piece a landscape arrangement re-points at a side rail without touching a single section.
  *
- * **The header names the selected *layer*, not just the tool**, and that is the one thing the bar cost us. While the
- * stack was permanently on screen, "which layer am I editing?" was answered by looking at it; now the stack is behind
- * its own entry, so every per-layer section has to say what it is acting on or a slider becomes a guess.
+ * **The header names the selected *layer*, not just the tool.** This was the answer to the bar having swallowed the
+ * layer list, and it survives the rail bringing that list back: the rail says which tile is lit, the header says what
+ * that layer *is* — its role and where its pixels come from — which is the thing a 44dp thumbnail cannot. Between
+ * them a slider is never a guess about which layer it moves.
  *
  * **Capped and scrolling, not sized to fit.** A section's length varies by an order of magnitude — Shape is a grid of
  * chips, Effects is nine controls — and a panel that grew to whatever its contents wanted would bury the icon at
@@ -137,14 +138,7 @@ fun StudioToolPanel(
             // Exhaustive over the bar, so a new entry cannot be added without a panel to open — the same reason
             // `AppsScreen` lists its unbuilt layouts individually rather than behind an `else`.
             when (tool) {
-                // The list only — its buttons are pinned below, outside this scroll. See [SectionFooter].
-                StudioTool.LAYERS -> LayerStackRows(
-                    state = state,
-                    onSelectLayer = actions.selectLayer,
-                    onToggleVisible = actions.toggleVisible,
-                )
-
-                // The four per-layer sections. `selectedLayer` is null only if the set were empty, which
+                // The per-layer sections. `selectedLayer` is null only if the set were empty, which
                 // `IconLayerSet`'s own `init` forbids — so this is a guard rather than a state to design for.
                 StudioTool.SOURCE -> state.selectedLayer?.let { spec ->
                     SourceControls(
@@ -208,13 +202,6 @@ fun StudioToolPanel(
 @Composable
 private fun SectionFooter(tool: StudioTool, state: IconStudioState, actions: StudioActions) {
     when (tool) {
-        StudioTool.LAYERS -> LayerStackActions(
-            state = state,
-            onMove = actions.move,
-            onAdd = actions.addLayer,
-            onRemove = actions.removeLayer,
-        )
-
         StudioTool.SOURCE,
         StudioTool.TRANSFORM,
         StudioTool.SHAPE,
@@ -278,5 +265,5 @@ private fun MoreControls(subject: StudioSubject, onReset: () -> Unit) {
 private val StudioTool.actsOnLayer: Boolean
     get() = when (this) {
         StudioTool.SOURCE, StudioTool.TRANSFORM, StudioTool.SHAPE, StudioTool.EFFECTS -> true
-        StudioTool.LAYERS, StudioTool.PRESETS, StudioTool.MORE -> false
+        StudioTool.PRESETS, StudioTool.MORE -> false
     }
