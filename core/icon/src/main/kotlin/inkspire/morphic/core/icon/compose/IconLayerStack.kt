@@ -335,7 +335,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     // false, so `IconPreview` routes an icon carrying any of them to the bake and never reaches here — this arm is
     // what a caller gets for using [IconLayerStack] *directly*, and drawing nothing is the honest answer: a wrong
     // effect would be worse than a missing one, since only the missing one is noticed.
-    is LayerEffect.Glow, is LayerEffect.Shadow, is LayerEffect.Ripple -> Modifier
+    is LayerEffect.Glow, is LayerEffect.Shadow, is LayerEffect.Ripple, is LayerEffect.Grain -> Modifier
 
     // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what
     // comes out is the three channels, displaced and added. The outer layer is what keeps `Plus` adding against

@@ -22,6 +22,7 @@ import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.BloomFalloff
+import inkspire.morphic.core.model.icon.GrainDrift
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
@@ -216,6 +217,8 @@ class IconRenderer(
 
                 is LayerEffect.Ripple -> replace { rippled(it, effect, sizePx) }
 
+                is LayerEffect.Grain -> replace { grained(it, effect, sizePx) }
+
                 // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
                 is LayerEffect.Glow -> replace {
                     haloed(
@@ -358,33 +361,83 @@ class IconRenderer(
      * outermost row outward wherever a trough reaches past the box, which reads as a smudge rather than as water —
      * and an icon is transparent out there, so nothing is the truthful sample.
      *
-     * The `IntArray` is not extracted into a shared displacement pass, though [inkspire.morphic.core.model.icon
-     * .LayerEffect.Ripple] will not be the only effect shaped like this. Grain is the second, and this codebase
-     * extracts on the second consumer rather than in anticipation of it — the loop is six lines and what the two
-     * would share is not yet known to be the same six.
+     * The loop itself is [resample], shared with [grained] — extracted on that second consumer rather than in
+     * anticipation of it, which is this codebase's usual point.
      */
     private fun rippled(source: Bitmap, ripple: LayerEffect.Ripple, sizePx: Int): Bitmap {
-        val pixels = IntArray(sizePx * sizePx)
-        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
-        val out = IntArray(pixels.size)
-
         val centerX = LayerRipple.centerPx(ripple.centerX, sizePx)
         val centerY = LayerRipple.centerPx(ripple.centerY, sizePx)
         val amplitudePx = LayerRipple.amplitudePx(ripple, sizePx)
         val wavelengthPx = LayerRipple.wavelengthPx(ripple, sizePx)
 
+        return resample(source, sizePx) { x, y, into ->
+            val dx = x - centerX
+            val dy = y - centerY
+            val distance = hypot(dx, dy)
+            val sampled = LayerRipple.sampleDistancePx(distance, amplitudePx, wavelengthPx)
+
+            // Dead centre has no radius to travel along, so it reads from itself — which is also what stops the
+            // division from being one by zero.
+            into[0] = if (distance == 0f) x else (centerX + dx / distance * sampled).roundToInt()
+            into[1] = if (distance == 0f) y else (centerY + dy / distance * sampled).roundToInt()
+        }
+    }
+
+    /**
+     * [source] with every pixel read from wherever a noise field pushes it — the artwork torn into pieces.
+     *
+     * **Two independent fields, one per axis**, which is what [LayerGrain.noise]'s salt is for: sampling the same
+     * field twice would give every pixel the same displacement in x and y, so the whole picture would shear along
+     * the diagonal instead of scattering.
+     *
+     * [GrainDrift.DIRECTED] uses **one** field and spends it along the angle, which is why the two forms are a
+     * choice rather than a slider between them — there is no continuum between "two fields" and "one".
+     */
+    private fun grained(source: Bitmap, grain: LayerEffect.Grain, sizePx: Int): Bitmap {
+        val amplitudePx = LayerGrain.amplitudePx(grain, sizePx)
+        val cellPx = LayerGrain.cellPx(grain, sizePx)
+        val radians = grain.angleDegrees * Math.PI.toFloat() / 180f
+        // The studio's own convention: straight down at 0°, which puts 90° along +x.
+        val alongX = sin(radians)
+        val alongY = cos(radians)
+
+        return resample(source, sizePx) { x, y, into ->
+            val u = x / cellPx
+            val v = y / cellPx
+            val first = LayerGrain.noise(u, v, salt = 0)
+
+            val (dx, dy) = when (grain.drift) {
+                GrainDrift.FREE -> first to LayerGrain.noise(u, v, salt = 1)
+                GrainDrift.DIRECTED -> (first * alongX) to (first * alongY)
+            }
+            into[0] = (x + dx * amplitudePx).roundToInt()
+            into[1] = (y + dy * amplitudePx).roundToInt()
+        }
+    }
+
+    /**
+     * [source] with every output pixel read from wherever [sourceOf] says — the shape both per-pixel effects take.
+     *
+     * **Outside the box reads as transparent, not clamped.** Clamping would smear the outermost row outward wherever
+     * a displacement reaches past the box, which looks like a smudge; an icon *is* transparent out there, so nothing
+     * is the truthful sample. Both effects want that, which is part of why the loop is worth sharing rather than
+     * being two loops that could answer it differently.
+     *
+     * @param sourceOf writes the source pixel for output ([x], [y]) into [into] as `[srcX, srcY]`. An out-parameter
+     *   rather than a returned pair because this runs once per pixel — six hundred thousand times at preview size —
+     *   and a pair there is six hundred thousand allocations.
+     */
+    private fun resample(source: Bitmap, sizePx: Int, sourceOf: (x: Int, y: Int, into: IntArray) -> Unit): Bitmap {
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+        val out = IntArray(pixels.size)
+        val at = IntArray(2)
+
         for (y in 0 until sizePx) {
             for (x in 0 until sizePx) {
-                val dx = x - centerX
-                val dy = y - centerY
-                val distance = hypot(dx, dy)
-
-                val sampled = LayerRipple.sampleDistancePx(distance, amplitudePx, wavelengthPx)
-                // Dead centre has no radius to travel along, so it reads from itself — which is also what stops the
-                // division below from being one by zero.
-                val sourceX = if (distance == 0f) x else (centerX + dx / distance * sampled).roundToInt()
-                val sourceY = if (distance == 0f) y else (centerY + dy / distance * sampled).roundToInt()
-
+                sourceOf(x, y, at)
+                val sourceX = at[0]
+                val sourceY = at[1]
                 out[y * sizePx + x] = if (sourceX in 0 until sizePx && sourceY in 0 until sizePx) {
                     pixels[sourceY * sizePx + sourceX]
                 } else {

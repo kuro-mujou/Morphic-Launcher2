@@ -73,6 +73,28 @@ enum class BloomFalloff {
     RADIAL,
 }
 
+/**
+ * Which way a [LayerEffect.Grain]'s noise pushes the pixels it displaces.
+ *
+ * **Two forms rather than a slider between them**, which is [BloomFalloff]'s shape and its reason: an angle means
+ * nothing to noise that pushes every way at once, so a continuous "directionality" would leave the angle control
+ * inert at one end and the panel changing height as the slider crossed zero. A discrete choice makes the panel
+ * change once, deliberately, when the user asks for the form that has a direction.
+ *
+ * Persisted inside the layer set, so the names are an on-disk contract.
+ */
+@Serializable
+enum class GrainDrift {
+
+    /** Every pixel pushed its own way — the dissolve, and what "grain" means unqualified. */
+    @SerialName("free")
+    FREE,
+
+    /** Every pixel pushed along one axis, so the artwork tears into bands rather than into blobs. */
+    @SerialName("directed")
+    DIRECTED,
+}
+
 @Serializable
 sealed interface LayerEffect {
 
@@ -444,6 +466,46 @@ sealed interface LayerEffect {
          * division by zero one step down in `LayerRipple`.
          */
         override val isIdentity: Boolean get() = amplitude <= 0f || waves <= 0f
+
+        /** Per-pixel, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
+     * The layer's pixels pushed about by noise — the artwork torn into blobs rather than smoothly distorted.
+     *
+     * [Ripple]'s sibling: both read every output pixel from somewhere else, so both are per-pixel and neither draws
+     * live. What separates them is where the displacement comes from — a wave there, a noise field here.
+     *
+     * **The noise is smooth, not per-pixel random**, and that is the whole difference between grain and static. A
+     * fresh number per pixel scatters the artwork into confetti; a field interpolated between lattice points a
+     * [grainSize] apart moves neighbouring pixels *together*, which is what tears it into recognisable pieces.
+     *
+     * @property amplitude how far a pixel is pushed at the field's extreme, as a fraction of the icon's box. Also
+     *   the switch: noise that displaces nothing changes nothing.
+     * @property grainSize how far apart the field's lattice points sit, again a fraction of the box — so it is the
+     *   size of the *pieces*, where [amplitude] is how far they move.
+     * @property drift whether the pieces scatter or all slide one way. See [GrainDrift].
+     * @property angleDegrees which way they slide, clockwise from straight down. [GrainDrift.DIRECTED] only — noise
+     *   that pushes every way at once has no direction to name.
+     */
+    @Serializable
+    @SerialName("grain")
+    data class Grain(
+        val amplitude: Float = 0.02f,
+        val grainSize: Float = 0.08f,
+        val drift: GrainDrift = GrainDrift.FREE,
+        val angleDegrees: Float = 0f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Displacing nothing, or having no field to displace along.
+         *
+         * The second clause guards a division: a grain size of zero is a lattice with no spacing, which
+         * `LayerGrain` would otherwise divide by.
+         */
+        override val isIdentity: Boolean get() = amplitude <= 0f || grainSize <= 0f
 
         /** Per-pixel, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
         override val drawsLive: Boolean get() = false

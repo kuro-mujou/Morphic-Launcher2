@@ -303,8 +303,9 @@ enforces. Per layer:
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
-  (waves pushing its pixels about — the three that do **not** draw live) and `LayerEffect.Filter` (one of the built-in
-  looks, by id). See the notes below for each. **Three more are planned** — pixelate, grain and progressive blur:
+  and `LayerEffect.Grain` (waves and noise pushing its pixels about — the four that do **not** draw live) and
+  `LayerEffect.Filter` (one of the built-in looks, by id). See the notes below for each. **Two more are planned** —
+  pixelate and progressive blur:
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
@@ -598,6 +599,27 @@ the bake does at any API and Compose needs AGSL and API 33 for. Four things:
 - **No color**, unlike every other effect in the panel: a ripple moves the layer's own pixels rather than adding any,
   so there is nothing to tint. `waves` steps by one, since it counts crests and 8.37 of them is a precision the
   picture cannot show.
+
+**`LayerEffect.Grain` is the second resampling, and it is what made the loop worth sharing.** Noise pushes each pixel
+somewhere else, tearing the artwork into pieces rather than distorting it smoothly. `IconRenderer.resample` came out
+on this second consumer — a private helper taking a per-pixel `sourceOf`, not a new file or a public type, which is
+the right size for two call sites in one class. It also settled **transparent, never clamped** in one place rather
+than two: clamping smears the outermost row wherever a displacement reaches past the box, and an icon genuinely *is*
+transparent out there.
+- **The noise has to be *smooth*, and that is the whole effect.** A hash per pixel scatters the artwork into confetti;
+  a field interpolated between lattice points a grain-size apart moves neighbors together, which is what tears it
+  into pieces still recognizable as pieces of it. The test that catches this is the only one that would — a
+  discontinuous field passes every other assertion and simply looks wrong.
+- **Deterministic and in fractions of the box**, for the reason everything else here is: a field that varied between
+  bakes would make the icon shimmer as the studio re-rendered, and a draft would not predict the full-size result.
+  That is also why there is **no seed** — a hash *of position* is the randomness, and a seed would be a second
+  control offering nothing the grain size does not.
+- **`GrainDrift` is a choice, not a directionality slider** — `BloomFalloff`'s shape and reason. An angle means
+  nothing to noise pushing every way at once, so a continuous control would leave it inert at one end and change the
+  panel's height as it crossed zero. It is also honest about the mechanism: scatter uses two independent fields,
+  directed uses one and spends it along the angle, and there is no continuum between "two fields" and "one".
+- **Strength and Grain size sound alike and are not.** Strength is how far a piece moves; grain size is how big a
+  piece is. Turning the second up makes the tearing coarser rather than stronger.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
 bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
@@ -1626,10 +1648,9 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–9 plus Ripple of
+**In flight: the icon effects expansion — slices 0–9 plus Ripple and Grain of
 [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are done: all of tier 1, the bake-backed preview the rest were
-blocked on, and the first three effects to use it (Glow, Drop shadow, Ripple). Pixelate, Grain and Progressive blur
-are what is left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+blocked on, and four of the effects that use it. **Pixelate and Progressive blur are what is left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the

@@ -4,9 +4,8 @@ Drawn from captures of another icon studio (`~/Downloads/effect from other icon 
 hash rather than by effect; the thirteenth, drop shadow, was never captured). This plan is **what each one actually
 needs from our two renderers**, what has to change before any of them can land, and the order to build them in.
 
-Status: **slices 0–9 done, plus Ripple from slice 10** — all of tier 1, the bake-backed preview it was blocking on,
-and the first three effects to use it (Glow, Drop shadow, Ripple). Pixelate, Grain and Progressive blur are what is
-left. Where the
+Status: **slices 0–9 done, plus Ripple and Grain from slice 10** — all of tier 1, the bake-backed preview it was
+blocking on, and four of the effects that use it. **Pixelate and Progressive blur are what is left.** Where the
 build diverged from this plan, §5 and §7 record it — the plan is kept as written so the reasoning that was wrong stays
 visible next to what replaced it.
 
@@ -271,7 +270,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | **done** |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | **done** |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | **done** |
-| 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | Ripple **done** |
+| 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | Ripple + Grain **done** |
 | 11 | **Progressive blur** | Hardest: blur *and* a mask | |
 
 ### What the built slices settled that this plan did not
@@ -530,5 +529,22 @@ Worth naming now, because both groups are three effects that are one mechanism e
     genuinely share is not yet known to be the same six. `LayerRipple` holds the part that can be silently wrong —
     the displacement as a pure function of distance — which is the `LayerShadow` precedent rather than the
     shared-derivation one, since only the bake draws any of these.
+  - **Grain arrived and it was the same six**, so `IconRenderer.resample` exists now — a private helper taking a
+    per-pixel `sourceOf`, not a new file or a new public type, which is the right size for two call sites in one
+    class. It also settled the out-of-bounds question in one place rather than two: **transparent, never clamped**,
+    since clamping smears the outermost row wherever a displacement reaches past the box and an icon genuinely *is*
+    transparent out there.
+  - **Grain's noise had to be smooth, and that is the whole effect.** A hash per pixel scatters the artwork into
+    confetti; a field interpolated between lattice points a grain-size apart moves neighbours together, which is
+    what tears it into pieces still recognisable as pieces of it. `LayerGrain` is deterministic and defined in
+    fractions of the box for the reason everything else here is — a field that varied between bakes would make the
+    icon shimmer as the studio re-rendered, and a draft would not predict the full-size result. That is also why
+    there is no seed: a hash *of position* is the randomness, and a seed would be a second control offering nothing
+    the grain size does not.
+  - **`GrainDrift` is a choice rather than a directionality slider**, `BloomFalloff`'s shape and reason: an angle
+    means nothing to noise pushing every way at once, so a continuous control would leave the angle inert at one end
+    and change the panel's height as it crossed zero. It is also honest about the mechanism — scatter uses two
+    independent noise fields, directed uses one and spends it along the angle, and there is no continuum between
+    "two fields" and "one".
 - **Progressive blur is last for a reason**: it is a blur *and* a mask ramp, so it is the only one that needs both
   mechanisms and the only one with no cheap approximation.

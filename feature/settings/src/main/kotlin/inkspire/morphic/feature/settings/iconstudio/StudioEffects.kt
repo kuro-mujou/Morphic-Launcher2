@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Texture
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.Tonality
 import androidx.compose.material.icons.filled.WbTwilight
@@ -67,6 +68,7 @@ import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.model.icon.BloomFalloff
+import inkspire.morphic.core.model.icon.GrainDrift
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconFilter
 import inkspire.morphic.core.model.icon.IconPattern
@@ -174,6 +176,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** Concentric waves pushing the layer's pixels about. Per-pixel, so baked, never live. */
     RIPPLE("Ripple", Icons.Default.Waves),
 
+    /** Noise pushing the layer's pixels about, tearing it into pieces. Per-pixel, so baked, never live. */
+    GRAIN("Grain", Icons.Default.Texture),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -203,6 +208,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         GLOW -> effects.filterIsInstance<LayerEffect.Glow>().firstOrNull()
         SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
         RIPPLE -> effects.filterIsInstance<LayerEffect.Ripple>().firstOrNull()
+        GRAIN -> effects.filterIsInstance<LayerEffect.Grain>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -232,6 +238,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         GLOW -> target.effects.activeEffects.any { it is LayerEffect.Glow }
         SHADOW -> target.effects.activeEffects.any { it is LayerEffect.Shadow }
         RIPPLE -> target.effects.activeEffects.any { it is LayerEffect.Ripple }
+        GRAIN -> target.effects.activeEffects.any { it is LayerEffect.Grain }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -309,6 +316,7 @@ internal fun EffectsControls(
             EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
             EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
             EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
+            EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -513,6 +521,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.RIPPLE -> current.effectOrNull<LayerEffect.Ripple>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.GRAIN -> current.effectOrNull<LayerEffect.Grain>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -936,6 +947,82 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * How far the noise pushes, how big the pieces are, and whether they scatter or all slide one way.
+ *
+ * **Two sliders that sound alike and are not**, which is the thing to get straight before touching this: *Strength*
+ * is how far a piece moves, *Grain size* is how big a piece is. Turning the second up makes the tearing coarser
+ * rather than stronger, and at a large size with a small strength the artwork barely moves while visibly breaking
+ * into a few large chunks.
+ *
+ * **Drift is a choice rather than a slider**, for [BloomControls]' reason: an angle means nothing to noise that
+ * pushes every way at once, so a continuous "directionality" would leave the angle inert at one end and the panel
+ * changing height as the slider crossed zero. A segmented control changes it once, deliberately.
+ */
+@Composable
+private fun GrainControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val grain = effects.effectOrNull<LayerEffect.Grain>() ?: LayerEffect.Grain(amplitude = 0f)
+
+    LabeledControl("Drift") {
+        MorphicSegmentedButtons(
+            options = listOf("Scatter", "Along angle"),
+            selectedIndex = if (grain.drift == GrainDrift.DIRECTED) 1 else 0,
+            onSelect = { index ->
+                val drift = if (index == 1) GrainDrift.DIRECTED else GrainDrift.FREE
+                onUpdate { it.withEffect(grain.copy(drift = drift)) }
+                onCommit()
+            },
+        )
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = grain.amplitude,
+        valueRange = 0f..GrainReach,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(grain.copy(amplitude = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Grain size",
+        // Floored above zero: a lattice with no spacing is a division, and the model already calls that identity —
+        // so a slider that could reach it would silently delete the effect being tuned.
+        value = grain.grainSize,
+        valueRange = UnitStep..0.4f,
+        step = UnitStep,
+        default = 0.08f,
+        onValueChange = { value -> onUpdate { it.withEffect(grain.copy(grainSize = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    // Only where there is a direction to name — see `GrainDrift`.
+    if (grain.drift == GrainDrift.DIRECTED) {
+        SliderControl(
+            label = "Angle",
+            value = grain.angleDegrees,
+            valueRange = 0f..360f,
+            step = AngleStep,
+            default = 0f,
+            format = { "%.0f°".format(it) },
+            onValueChange = { value -> onUpdate { it.withEffect(grain.copy(angleDegrees = value)) } },
+            onValueChangeFinished = onCommit,
+        )
+    }
+}
+
+/**
+ * How far the noise may push a pixel, as a fraction of the box.
+ *
+ * Deliberately more generous than [RippleReach]: a ripple past a tenth stops reading as water, where grain *wants*
+ * to reach the point of tearing the artwork apart — that is the look, rather than the failure of it.
+ */
+private const val GrainReach = 0.15f
 
 /**
  * How far the waves push, how many of them, and where they start.
