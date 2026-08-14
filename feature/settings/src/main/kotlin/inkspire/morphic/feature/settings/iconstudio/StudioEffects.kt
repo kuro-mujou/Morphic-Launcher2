@@ -28,6 +28,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.FilterBAndW
+import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Layers
@@ -162,6 +164,12 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** The layer's colour channels displaced and added back together — lens fringing. */
     CHROMATIC("Chromatic", Icons.Default.Tonality),
 
+    /** A soft halo around the finished silhouette. Baked, never live — see `LayerEffect.Glow`. */
+    GLOW("Glow", Icons.Default.BlurOn),
+
+    /** The finished silhouette blurred, thrown and drawn behind. Baked, never live. */
+    SHADOW("Shadow", Icons.Default.FlipToBack),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -188,6 +196,8 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
         EXTRUDE -> effects.filterIsInstance<LayerEffect.Extrude>().firstOrNull()
         CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
+        GLOW -> effects.filterIsInstance<LayerEffect.Glow>().firstOrNull()
+        SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -214,6 +224,8 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         PATTERN -> target.effects.activeEffects.any { it is LayerEffect.Pattern }
         EXTRUDE -> target.effects.activeEffects.any { it is LayerEffect.Extrude }
         CHROMATIC -> target.effects.activeEffects.any { it is LayerEffect.ChromaticSplit }
+        GLOW -> target.effects.activeEffects.any { it is LayerEffect.Glow }
+        SHADOW -> target.effects.activeEffects.any { it is LayerEffect.Shadow }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -288,6 +300,8 @@ internal fun EffectsControls(
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
             EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
             EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
+            EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
+            EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -483,6 +497,12 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.CHROMATIC -> current.effectOrNull<LayerEffect.ChromaticSplit>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.GLOW -> current.effectOrNull<LayerEffect.Glow>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.SHADOW -> current.effectOrNull<LayerEffect.Shadow>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -906,6 +926,125 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * The halo's colour, how strong it is, how far it fades and how far it is grown first.
+ *
+ * **Spread and radius are two different things and both are needed**, which is the one non-obvious control here. A
+ * blur alone leaves the halo at about half strength right at the silhouette's edge and fading immediately, so a glow
+ * built from radius alone reads as a smudge; spread grows the silhouette *before* the blur, giving the fade a solid
+ * ring to start from. Radius is how soft, spread is how big.
+ *
+ * **No offset**, unlike [ShadowControls]: a glow is centred on the silhouette by definition, and a halo pushed to one
+ * side is a coloured shadow — which is the other entry.
+ */
+@Composable
+private fun GlowControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val glow = effects.effectOrNull<LayerEffect.Glow>() ?: LayerEffect.Glow(strength = 0f)
+
+    LabeledControl("Color") {
+        ColorField(argb = glow.argb) { argb ->
+            onUpdate { it.withEffect(glow.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = glow.strength,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(glow.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Radius",
+        value = glow.radius,
+        valueRange = 0f..HaloReach,
+        step = UnitStep,
+        default = 0.08f,
+        onValueChange = { value -> onUpdate { it.withEffect(glow.copy(radius = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Spread",
+        value = glow.spread,
+        valueRange = 0f..HaloReach,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(glow.copy(spread = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
+ * The shadow's colour, how strong it is, how soft, and where it is thrown.
+ *
+ * **A radius of zero is a legitimate answer here**, unlike a glow's: a hard-edged silhouette offset behind the layer
+ * is a perfectly good shadow, and it is the one a long-shadow look is built from. The renderer reads that as "skip
+ * the blur" rather than as nothing, since `BlurMaskFilter` refuses a radius of zero outright.
+ *
+ * The throw is the transform section's pad at a fraction of its travel, for [ChromaticControls]' reason — a shadow
+ * thrown half the icon's width is not a shadow.
+ */
+@Composable
+private fun ShadowControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val shadow = effects.effectOrNull<LayerEffect.Shadow>() ?: LayerEffect.Shadow(strength = 0f)
+
+    LabeledControl("Color") {
+        ColorField(argb = shadow.argb) { argb ->
+            onUpdate { it.withEffect(shadow.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = shadow.strength,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(shadow.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Radius",
+        value = shadow.radius,
+        valueRange = 0f..HaloReach,
+        step = UnitStep,
+        default = 0.05f,
+        onValueChange = { value -> onUpdate { it.withEffect(shadow.copy(radius = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    LabeledControl("Throw") {
+        PositionPad(
+            x = shadow.offsetX,
+            y = shadow.offsetY,
+            onValueChange = { x, y -> onUpdate { it.withEffect(shadow.copy(offsetX = x, offsetY = y)) } },
+            onCommit = onCommit,
+            range = ThrowRange,
+        )
+    }
+}
+
+/**
+ * How far a halo may reach, as a fraction of the box.
+ *
+ * A fifth is generous — the output is one square and anything past the edge is clipped, so a larger bound would only
+ * offer travel that stops doing anything. Shared by the radius and the spread, which reach in the same units.
+ */
+private const val HaloReach = 0.2f
+
+/** How far a shadow may be thrown. Past this it stops reading as cast by the icon and starts reading as a second one. */
+private val ThrowRange = -0.15f..0.15f
 
 /**
  * How far the channels are displaced, and in which direction — which is the whole effect.

@@ -179,8 +179,8 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **all of
-tier 1 plus the bake-backed preview** — the effect **pipeline**, the effect **panel**, the **filter** library, the
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **nine of
+them plus the bake-backed preview** — the effect **pipeline**, the effect **panel**, the **filter** library, the
 **layer rail**, **Bloom**,
 **Gloss**, **perspective**, **Pattern**, **Extrude** and **Chromatic split**, plus **whole-icon effects**, which that
 plan had not noticed it needed.
@@ -302,9 +302,10 @@ enforces. Per layer:
   `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` and `LayerEffect.Gloss` (light
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
-  displaced) and `LayerEffect.Filter` (one of the built-in looks, by id) — see the notes below for each. **Six more
-  are planned and all six wait on one thing**, the bake-backed preview:
-  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) §7.
+  displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it — the two that do **not**
+  draw live) and `LayerEffect.Filter` (one of the built-in looks, by id). See the notes below for each. **Four more
+  are planned** — pixelate, ripple, grain and progressive blur, all per-pixel:
+  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
 **Rendering — hybrid:**
@@ -554,20 +555,31 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
     Previewing on the real icon is seventeen bakes, and an icon that happens to be black says nothing about a warm
     grade; every tile being the same strip is what makes them comparable.
 
-**Six effects are blocked on one thing, and shadows are the oldest of them.** Glow, drop shadow, pixelate, ripple,
-grain and progressive blur all need something the **live** path structurally cannot reach — Compose's only blur is
-`RenderEffect`, API 31+, and its only per-pixel route is AGSL, API 33+, against a `minSdk` of 26. The **bake** can
-draw every one of them at any API, because it owns a software bitmap: a blur is a `BlurMaskFilter` and a
-displacement is arithmetic over an `IntArray`.
-
-A shadow is the clearest case and the one this file deferred first: it derives from the layer's *finished*
-silhouette — after transform and after the mask, since an outer shadow must escape the shape — which the bake holds
-as a bitmap and the live path only has as nodes. **Gating was considered and rejected**: it would deny glow and drop
-shadow to every device below Android 12 to solve a problem only the *editor* has, when the home screen could have
-drawn them all along. So the answer is that the studio **previews from the bake** when such an effect is present —
-`LayerEffect.drawsLive` is what says so, and building that fallback is the next slice. See the in-flight note above
-and [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) §7. `minSdk` reaching 31 would retire half the fork, and 33
-all of it.
+**`LayerEffect.Glow` and `LayerEffect.Shadow` are the same halo twice, and the first two effects that do not draw
+live.** Both are a blurred copy of the layer's *finished* silhouette drawn behind it — after the transform and the
+mask, since an outer halo must escape the shape. The bake holds that as a bitmap and can blur it at any API; the live
+path only has it as nodes, and Compose's only blur is `RenderEffect`, API 31+ against a `minSdk` of 26. **Gating was
+considered and rejected** — it would deny both to every device below Android 12 to solve a problem only the *editor*
+has — so they answer `drawsLive` false and `IconPreview` routes an icon carrying either to the bake. They are what
+retires the deferral this file carried from B3, and the first real exercise of slice 8.
+- **Two effects rather than one, despite one mechanism.** At most one effect of a type is meaningful, so a single
+  record would mean a layer could carry a glow *or* a shadow — and a glowing icon casting one is ordinary. The
+  parameters differ honestly too: a glow is centered so it has a **spread** and no offset; a shadow is thrown so it
+  has an **offset** and no spread. Same shape of argument as Bloom and Gloss.
+- **Spread is a dilation, and a dilation is the silhouette swept around a circle** — `LayerExtrude`'s "nothing draws
+  this directly" problem one dimension over. Cheap in a way that one could not be, precisely *because* this never
+  draws live: the copies are blits of a bitmap the bake already holds rather than re-runs of a layer per frame. It
+  earns its place because a blur alone leaves the halo at half strength right at the edge, so a glow built from
+  radius alone reads as a smudge — spread is what gives the fade a solid ring to start from.
+- **`LayerShadow.radiusPxOrNull` is nullable and that is load-bearing.** `BlurMaskFilter` rejects a non-positive
+  radius, so a slider at its floor would throw rather than draw. Null means "skip the blur", which is a hard-edged
+  shadow — a real look, and the one a long shadow is built from.
+- **`LayerShadow` is the first shared derivation extracted *not* for two renderers to agree**, since only one path
+  draws these. It is separated for the other half of the reason the `render` package is shaped this way: pulled out
+  of `IconRenderer` the arithmetic is unit-testable, where every line of that class needs an emulator.
+- **The halo is clipped to the icon's box**, which is inherent rather than an oversight — the output is one square
+  and always was. A radius large enough to reach the edge is one the user can see reaching it.
+- `minSdk` reaching 31 would retire the fork for these two; 33 would retire it for the four still to come.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
 bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
@@ -1596,8 +1608,9 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–8 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
-done: all of tier 1, plus the bake-backed preview the remaining six were blocked on.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+**In flight: the icon effects expansion — slices 0–9 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+done: all of tier 1, the bake-backed preview the rest were blocked on, and **Glow + Drop shadow**, which are the first
+two effects to use it. Pixelate, Ripple, Grain and Progressive blur are what is left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the

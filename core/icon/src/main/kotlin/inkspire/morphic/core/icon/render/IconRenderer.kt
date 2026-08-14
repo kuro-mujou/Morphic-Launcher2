@@ -3,6 +3,7 @@ package inkspire.morphic.core.icon.render
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
+import android.graphics.BlurMaskFilter
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
@@ -29,6 +30,8 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.graphics.withMatrix
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Composites an [IconLayerSet] + the app's [ParsedIcon] into one square [Bitmap] of `sizePx` — the baked icon
@@ -208,6 +211,33 @@ class IconRenderer(
                 is LayerEffect.Extrude -> replace { extruded(it, effect, sizePx) }
 
                 is LayerEffect.ChromaticSplit -> replace { split(it, effect, sizePx) }
+
+                // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
+                is LayerEffect.Glow -> replace {
+                    haloed(
+                        source = it,
+                        argb = effect.argb,
+                        strength = effect.strength,
+                        radiusPx = LayerShadow.radiusPxOrNull(effect.radius, sizePx),
+                        spreadPx = LayerShadow.spreadPx(effect.spread, sizePx),
+                        dxPx = 0f,
+                        dyPx = 0f,
+                        sizePx = sizePx,
+                    )
+                }
+
+                is LayerEffect.Shadow -> replace {
+                    haloed(
+                        source = it,
+                        argb = effect.argb,
+                        strength = effect.strength,
+                        radiusPx = LayerShadow.radiusPxOrNull(effect.radius, sizePx),
+                        spreadPx = 0f,
+                        dxPx = LayerShadow.offsetPx(effect.offsetX, sizePx),
+                        dyPx = LayerShadow.offsetPx(effect.offsetY, sizePx),
+                        sizePx = sizePx,
+                    )
+                }
             }
         }
         return current
@@ -312,6 +342,79 @@ class IconRenderer(
         }
         canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
     }
+
+    /**
+     * [source] with a blurred copy of its own silhouette behind it — a glow when it spreads, a shadow when it moves.
+     *
+     * **`extractAlpha` is the whole of it, and it is why this needs no bitmap arithmetic.** It hands back the
+     * silhouette as an `ALPHA_8` mask with the [android.graphics.BlurMaskFilter] already applied, *grown* to fit the
+     * blur — hence the offset it fills in, which has to be added back or the halo sits up and to the left of the
+     * layer casting it. Drawing that mask with a coloured paint is what turns it into the halo.
+     *
+     * **The halo is clipped to the icon's box**, which is inherent rather than an oversight: the output is one
+     * `sizePx` square and always was. A radius large enough to reach the edge is a radius the user can see reaching
+     * the edge, so it corrects itself.
+     */
+    private fun haloed(
+        source: Bitmap,
+        argb: Int,
+        strength: Float,
+        radiusPx: Float?,
+        spreadPx: Float,
+        dxPx: Float,
+        dyPx: Float,
+        sizePx: Int,
+    ): Bitmap {
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+
+        val grown = if (spreadPx > 0f) dilated(source, spreadPx, sizePx) else source
+        val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = argb
+            // Set **after** the colour, which carries its own alpha and would otherwise overwrite this.
+            alpha = (strength.coerceIn(0f, 1f) * 255).toInt()
+        }
+
+        if (radiusPx == null) {
+            // No blur asked for: the silhouette itself, which is a hard-edged shadow and a legitimate thing to want.
+            canvas.drawBitmap(grown, dxPx, dyPx, halo.apply { colorFilter = solidFilter(argb) })
+        } else {
+            val offset = IntArray(2)
+            val blur = Paint().apply { maskFilter = BlurMaskFilter(radiusPx, BlurMaskFilter.Blur.NORMAL) }
+            val mask = grown.extractAlpha(blur, offset)
+            canvas.drawBitmap(mask, offset[0] + dxPx, offset[1] + dyPx, halo)
+            mask.recycle()
+        }
+
+        canvas.drawBitmap(source, 0f, 0f, null)
+        if (grown !== source) grown.recycle()
+        return out
+    }
+
+    /**
+     * [source] grown by [spreadPx] — its own silhouette swept around a ring, which is a dilation approximated the
+     * only way a canvas offers.
+     *
+     * `LayerExtrude`'s problem in two dimensions, and cheap here for a reason that one is not: this effect never
+     * draws live, so the copies are blits of a bitmap the bake already holds rather than re-runs of a layer's
+     * content per frame.
+     */
+    private fun dilated(source: Bitmap, spreadPx: Float, sizePx: Int): Bitmap {
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+        val steps = LayerShadow.spreadSteps(spreadPx)
+
+        for (step in 0 until steps) {
+            val radians = step * 2f * Math.PI.toFloat() / steps
+            canvas.drawBitmap(source, cos(radians) * spreadPx, sin(radians) * spreadPx, null)
+        }
+        // The un-displaced copy as well, or a spread larger than the artwork would leave a hole in the middle.
+        canvas.drawBitmap(source, 0f, 0f, null)
+        return out
+    }
+
+    /** Flattens whatever is drawn to [argb], keeping its alpha — the un-blurred halo's equivalent of the mask. */
+    private fun solidFilter(argb: Int) = ColorMatrixColorFilter(ColorMatrix(LayerFilter.solidMatrixOf(argb)))
 
     /**
      * [source] as its three colour channels, displaced and added back together.

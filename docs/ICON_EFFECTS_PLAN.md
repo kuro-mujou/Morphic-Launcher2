@@ -4,10 +4,10 @@ Drawn from captures of another icon studio (`~/Downloads/effect from other icon 
 hash rather than by effect; the thirteenth, drop shadow, was never captured). This plan is **what each one actually
 needs from our two renderers**, what has to change before any of them can land, and the order to build them in.
 
-Status: **slices 0–8 done — all of tier 1, plus the bake-backed preview it was blocking on** (see §5, and §7 for how
-the preview came out). Glow, Drop shadow, Pixelate, Ripple, Grain and Progressive blur are now unblocked and can be
-built in any order. Where the build diverged from this plan, §5 and §7 record it — the plan is kept as written so the
-reasoning that was wrong stays visible next to what replaced it.
+Status: **slices 0–9 done** — all of tier 1, the bake-backed preview it was blocking on, and **Glow + Drop shadow**,
+which are the first two effects to use it. Pixelate, Ripple, Grain and Progressive blur are what is left. Where the
+build diverged from this plan, §5 and §7 record it — the plan is kept as written so the reasoning that was wrong stays
+visible next to what replaced it.
 
 **The largest thing this plan got wrong is in §3**: it treats all thirteen as *layer* effects, and six of them are only
 correct over the finished composite. See §5's whole-icon note.
@@ -269,7 +269,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | **done** |
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | **done** |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | **done** |
-| 9 | **Glow** + **Drop shadow** | Retires the standing deferral | |
+| 9 | **Glow** + **Drop shadow** | Retires the standing deferral | **done** |
 | 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | |
 | 11 | **Progressive blur** | Hardest: blur *and* a mask | |
 
@@ -502,9 +502,21 @@ Worth naming now, because both groups are three effects that are one mechanism e
 
 - **Glow and Drop shadow are the same effect twice** — a blurred copy of the finished silhouette, placed behind, one
   centred and spread, the other offset. `Bitmap.extractAlpha(paint, offset)` with a `BlurMaskFilter` is the whole of
-  it and needs no bitmap arithmetic at all. Expect a `LayerShadow` deriving the blur radius, spread and offset for
-  both. Note the box blur in `data:wallpaper`'s `Blur.kt` is **not** reachable from `core:icon` — wrong direction —
-  so `BlurMaskFilter` is the route rather than a choice.
+  it and needs no bitmap arithmetic at all. **Built (slice 9)**, and four things came out of it:
+  - **Two effects rather than one**, despite the shared mechanism, because at most one effect of a type is
+    meaningful — one record would mean a layer could carry a glow *or* a shadow, and a glowing icon casting one is
+    ordinary. The parameters differ honestly too: a glow is centred so it has a spread and no offset, a shadow is
+    thrown so it has an offset and no spread.
+  - **Spread is a dilation, and a dilation is the silhouette swept around a circle** — `LayerExtrude`'s "no primitive
+    draws this" problem one dimension over, and cheap here in a way that one could not be, since this effect never
+    draws live: the copies are blits of a bitmap the bake holds rather than re-runs of a layer per frame. Without it a
+    blur alone leaves the halo half-strength at the edge and a glow reads as a smudge.
+  - **`radiusPxOrNull` is nullable and that is load-bearing**: `BlurMaskFilter` rejects a non-positive radius, so a
+    slider at its floor would throw. Null means "skip the blur", which is a hard-edged shadow — a real look rather
+    than a degenerate one.
+  - **`LayerShadow` is the first derivation extracted *not* for two renderers to agree.** Only one path draws these,
+    so nothing is competing with the arithmetic; it is separated for the other half of the reason — pulled out of
+    `IconRenderer` the numbers are unit-testable, where every line of that class needs an emulator.
 - **Pixelate, Ripple and Grain are one loop with three answers.** Each is a resampling: for every output pixel, which
   input pixel does it read? Pixelate quantises the coordinate, Ripple displaces it by a sinusoid, Grain by noise. So
   one `IntArray` pass over `getPixels`/`setPixels` and one `sample(x, y) -> (srcX, srcY)` per effect, which is the

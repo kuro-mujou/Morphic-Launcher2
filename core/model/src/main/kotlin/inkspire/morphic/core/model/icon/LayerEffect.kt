@@ -345,6 +345,76 @@ sealed interface LayerEffect {
     }
 
     /**
+     * A soft halo of [argb] around the layer's finished silhouette, drawn behind it.
+     *
+     * **The first effect that cannot be drawn live**, together with [Shadow] — see [drawsLive]. It derives from the
+     * silhouette *after* the transform and the mask, which the bake holds as a bitmap and can blur at any API, and
+     * which the live path only has as nodes: Compose's only blur is `RenderEffect`, API 31+ against a `minSdk` of 26.
+     * So the studio previews an icon carrying one **from the bake** rather than the effect being gated to Android 12.
+     *
+     * **A glow has no direction, which is the whole of what separates it from [Shadow].** It is centred on the
+     * silhouette by definition; a halo pushed to one side is a coloured shadow, and that is the other effect. Making
+     * them one record with both an offset and a spread would also mean a layer could carry only one of them, since at
+     * most one effect of a type is meaningful — and a glowing icon casting a shadow is an ordinary thing to want.
+     *
+     * @property radius how far the halo fades out, as a fraction of the icon's box.
+     * @property spread how far the silhouette is grown *before* it is blurred, again a fraction of the box. Without
+     *   it a blur alone leaves the halo at about half strength right at the edge and fading immediately; spread is
+     *   what gives a glow a solid ring to fade *from*.
+     * @property strength how strongly it is laid on, and how it is switched off.
+     */
+    @Serializable
+    @SerialName("glow")
+    data class Glow(
+        val argb: Int = 0xFFFFFFFF.toInt(),
+        val radius: Float = 0.08f,
+        val spread: Float = 0f,
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** Turned down to nothing, or reaching nowhere — neither a blur nor a spread leaves anything to see. */
+        override val isIdentity: Boolean get() = strength <= 0f || (radius <= 0f && spread <= 0f)
+
+        /** Compose's only blur is `RenderEffect`, API 31+ against a `minSdk` of 26. The bake has no such limit. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
+     * The layer's finished silhouette blurred, offset and drawn behind it in [argb] — a cast shadow.
+     *
+     * [Glow]'s twin, and the same mechanism: what separates them is that a shadow is thrown *somewhere*, so it has an
+     * offset and no spread where a glow has a spread and no offset. See [Glow] for why they are two effects and why
+     * neither draws live.
+     *
+     * @property radius how soft the shadow is, as a fraction of the icon's box. Zero is a hard silhouette.
+     * @property offsetX how far it is thrown, as a fraction of the box; positive is right.
+     * @property offsetY the same, downward — which is where a shadow falls by default, so this is the one non-zero
+     *   default among the four.
+     * @property strength how strongly it is laid on, and how it is switched off.
+     */
+    @Serializable
+    @SerialName("shadow")
+    data class Shadow(
+        val argb: Int = 0xFF000000.toInt(),
+        val radius: Float = 0.05f,
+        val offsetX: Float = 0f,
+        val offsetY: Float = 0.04f,
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Turned down to nothing is the only way a shadow disappears — unlike [Glow], a hard silhouette directly
+         * behind the layer is still hidden by it, but any offset at all makes it visible again.
+         */
+        override val isIdentity: Boolean get() = strength <= 0f
+
+        /** @see Glow.drawsLive */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *

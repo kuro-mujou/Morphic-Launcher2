@@ -139,14 +139,9 @@ class LayerEffectPipelineTest {
     }
 
     /**
-     * That an ordinary icon draws **live** — which is the half of the fallback that can be tested today, and the
-     * half whose regression would be worst.
-     *
-     * `LayerEffect` is a sealed interface, so a test module cannot stub an undrawable variant, and every effect that
-     * exists answers `drawsLive` true. **The false path is therefore genuinely untestable until the first tier-2
-     * effect lands**, and a fake here would only assert that `all {}` works. What is worth pinning meanwhile is the
-     * default: if this ever came back false, every preview in the studio would silently take the baked path — slower,
-     * for nothing, on every unedited icon.
+     * That an ordinary icon draws **live**, which is the regression that would cost the most: if this came back
+     * false, every preview in the studio would silently take the baked path — slower, for nothing, on every icon
+     * nobody has edited.
      */
     @Test
     fun `an ordinary icon draws live, so the preview stays on the fast path`() {
@@ -155,6 +150,38 @@ class LayerEffectPipelineTest {
         assertTrue(spec(tint, bloom).drawsLive)
         // Empty is the case that matters most, being every icon nobody has edited.
         assertTrue(emptyList<LayerEffect>().drawLive)
+    }
+
+    /**
+     * And that a glow or a shadow sends the **whole icon** to the bake, from wherever it sits.
+     *
+     * These are the first two effects that answer `drawsLive` false, so this is the first test of the fallback at
+     * all — it could not be written before them, `LayerEffect` being sealed and a test module unable to stub a
+     * variant. Which is also why it is worth having now rather than being taken as obvious.
+     */
+    @Test
+    fun `a blurred effect anywhere sends the whole icon to the bake`() {
+        val glow = LayerEffect.Glow()
+        val shadow = LayerEffect.Shadow()
+
+        // On one layer. **Whole-icon rather than per-layer** — see `IconLayerSet.drawsLive` for why a hybrid stack
+        // is the worst version of the two-renderer problem rather than the cheapest version of this one.
+        val onLayer = IconLayerSet.Base.let {
+            it.copy(layers = it.layers.mapIndexed { i, l -> if (i == 0) l.copy(effects = listOf(glow)) else l })
+        }
+        assertFalse(onLayer.drawsLive)
+
+        // And on the composite, which has no layer to belong to.
+        assertFalse(IconLayerSet.Base.copy(effects = listOf(shadow)).drawsLive)
+    }
+
+    @Test
+    fun `a switched-off glow leaves the icon on the fast path`() {
+        // `activeEffects` filters before anything asks, so an effect nobody can see must not drag the preview onto
+        // the slow path — which would be a cost with nothing on screen to show for it.
+        assertTrue(IconLayerSet.Base.copy(effects = listOf(LayerEffect.Glow(enabled = false))).drawsLive)
+        // Same for one turned down to nothing, which is the *effect's* own answer rather than the user's switch.
+        assertTrue(IconLayerSet.Base.copy(effects = listOf(LayerEffect.Glow(strength = 0f))).drawsLive)
     }
 
     @Test

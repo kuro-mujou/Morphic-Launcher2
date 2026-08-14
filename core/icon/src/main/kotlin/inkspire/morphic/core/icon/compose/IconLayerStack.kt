@@ -329,6 +329,13 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
         drawContent()
     }
 
+    // **The two this path cannot draw, and the reason [IconPreview] exists.** Both derive from the layer's finished
+    // silhouette and need it blurred, which Compose can only do with `RenderEffect` from API 31 against a `minSdk`
+    // of 26. They answer `drawsLive` false, so `IconPreview` routes an icon carrying either to the bake and never
+    // reaches here — this arm is what a caller gets for using [IconLayerStack] *directly*, and drawing nothing is
+    // the honest answer: a wrong halo would be worse than a missing one, since only the missing one is noticed.
+    is LayerEffect.Glow, is LayerEffect.Shadow -> Modifier
+
     // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what
     // comes out is the three channels, displaced and added. The outer layer is what keeps `Plus` adding against
     // nothing rather than against whatever the pipeline had already drawn — the same isolation the bake gets free by
