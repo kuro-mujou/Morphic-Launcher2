@@ -4,8 +4,9 @@ Drawn from captures of another icon studio (`~/Downloads/effect from other icon 
 hash rather than by effect; the thirteenth, drop shadow, was never captured). This plan is **what each one actually
 needs from our two renderers**, what has to change before any of them can land, and the order to build them in.
 
-Status: **slices 0–9 done** — all of tier 1, the bake-backed preview it was blocking on, and **Glow + Drop shadow**,
-which are the first two effects to use it. Pixelate, Ripple, Grain and Progressive blur are what is left. Where the
+Status: **slices 0–9 done, plus Ripple from slice 10** — all of tier 1, the bake-backed preview it was blocking on,
+and the first three effects to use it (Glow, Drop shadow, Ripple). Pixelate, Grain and Progressive blur are what is
+left. Where the
 build diverged from this plan, §5 and §7 record it — the plan is kept as written so the reasoning that was wrong stays
 visible next to what replaced it.
 
@@ -270,7 +271,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | **done** |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | **done** |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | **done** |
-| 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | |
+| 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | Ripple **done** |
 | 11 | **Progressive blur** | Hardest: blur *and* a mask | |
 
 ### What the built slices settled that this plan did not
@@ -517,9 +518,17 @@ Worth naming now, because both groups are three effects that are one mechanism e
   - **`LayerShadow` is the first derivation extracted *not* for two renderers to agree.** Only one path draws these,
     so nothing is competing with the arithmetic; it is separated for the other half of the reason — pulled out of
     `IconRenderer` the numbers are unit-testable, where every line of that class needs an emulator.
-- **Pixelate, Ripple and Grain are one loop with three answers.** Each is a resampling: for every output pixel, which
-  input pixel does it read? Pixelate quantises the coordinate, Ripple displaces it by a sinusoid, Grain by noise. So
-  one `IntArray` pass over `getPixels`/`setPixels` and one `sample(x, y) -> (srcX, srcY)` per effect, which is the
-  shared derivation to build with the first of them rather than after the third.
+- **Pixelate, Ripple and Grain are one loop with three answers** — or so this said. Building Ripple first showed
+  the grouping is **two and one**: Ripple and Grain are resamplings (for every output pixel, which input pixel does
+  it read — a sinusoid and noise respectively), where Pixelate as the reference draws it is not a resampling at all.
+  Its cells have gaps and rounded corners, so it *redraws* the layer as a field of shapes, one colour sampled per
+  cell. A pure coordinate-quantising pixelate would give solid blocks and no way to express either control.
+  - **So Ripple went first**, against this plan's order, to put the displacement pass under its natural first
+    consumer rather than under the odd one out.
+  - **And the pass was not extracted**, which reverses the note above: this codebase extracts on the *second*
+    consumer (`IconPreviewPlate`, `AppPicker`, `PositionPad`), the loop is six lines, and what Ripple and Grain
+    genuinely share is not yet known to be the same six. `LayerRipple` holds the part that can be silently wrong —
+    the displacement as a pure function of distance — which is the `LayerShadow` precedent rather than the
+    shared-derivation one, since only the bake draws any of these.
 - **Progressive blur is last for a reason**: it is a blur *and* a mask ramp, so it is the only one that needs both
   mechanisms and the only one with no cheap approximation.

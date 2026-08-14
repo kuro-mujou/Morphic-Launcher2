@@ -415,6 +415,41 @@ sealed interface LayerEffect {
     }
 
     /**
+     * Concentric waves pushing the layer's pixels toward and away from a centre — the layer seen through water.
+     *
+     * **The first *per-pixel* effect**, and the third that cannot draw live: it reads each output pixel from
+     * somewhere else in the layer, which is arithmetic over an `IntArray` in the bake and AGSL (API 33+) in Compose,
+     * against a `minSdk` of 26. See [Glow.drawsLive].
+     *
+     * @property amplitude how far a pixel is pushed at the crest of a wave, as a fraction of the icon's box. It is
+     *   also the switch: a wave that displaces nothing is no wave at all.
+     * @property waves how many crests fall across the box. More makes finer ripples rather than bigger ones.
+     * @property centerX where the waves start, as a fraction of the box from its middle. Positive is right.
+     * @property centerY the same, downward.
+     */
+    @Serializable
+    @SerialName("ripple")
+    data class Ripple(
+        val amplitude: Float = 0.03f,
+        val waves: Float = 8f,
+        val centerX: Float = 0f,
+        val centerY: Float = 0f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Displacing nothing, or having nothing to displace along.
+         *
+         * The second clause is not decoration: a wave count of zero divides the box into no crests, which is a
+         * division by zero one step down in `LayerRipple`.
+         */
+        override val isIdentity: Boolean get() = amplitude <= 0f || waves <= 0f
+
+        /** Per-pixel, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *

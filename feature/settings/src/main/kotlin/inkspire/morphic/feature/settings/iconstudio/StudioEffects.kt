@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.Tonality
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material3.Icon
@@ -170,6 +171,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** The finished silhouette blurred, thrown and drawn behind. Baked, never live. */
     SHADOW("Shadow", Icons.Default.FlipToBack),
 
+    /** Concentric waves pushing the layer's pixels about. Per-pixel, so baked, never live. */
+    RIPPLE("Ripple", Icons.Default.Waves),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -198,6 +202,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
         GLOW -> effects.filterIsInstance<LayerEffect.Glow>().firstOrNull()
         SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
+        RIPPLE -> effects.filterIsInstance<LayerEffect.Ripple>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -226,6 +231,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         CHROMATIC -> target.effects.activeEffects.any { it is LayerEffect.ChromaticSplit }
         GLOW -> target.effects.activeEffects.any { it is LayerEffect.Glow }
         SHADOW -> target.effects.activeEffects.any { it is LayerEffect.Shadow }
+        RIPPLE -> target.effects.activeEffects.any { it is LayerEffect.Ripple }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -302,6 +308,7 @@ internal fun EffectsControls(
             EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
             EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
+            EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -503,6 +510,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.SHADOW -> current.effectOrNull<LayerEffect.Shadow>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.RIPPLE -> current.effectOrNull<LayerEffect.Ripple>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -926,6 +936,64 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * How far the waves push, how many of them, and where they start.
+ *
+ * **No colour**, unlike every other effect in this panel — a ripple moves the layer's own pixels rather than adding
+ * any, so there is nothing to tint. It is the first entry here whose whole subject is *where* the artwork is instead
+ * of what colour it comes out.
+ *
+ * **Waves steps by one**, because it counts crests: a slider that could land on 8.37 of them would be offering a
+ * precision the picture cannot show.
+ */
+@Composable
+private fun RippleControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // Seeded at no amplitude when absent, which is also this effect's own "off" — the waves are described before
+    // they displace anything, so the first drag brings a coherent ripple into being rather than an arbitrary one.
+    val ripple = effects.effectOrNull<LayerEffect.Ripple>() ?: LayerEffect.Ripple(amplitude = 0f)
+
+    SliderControl(
+        label = "Strength",
+        value = ripple.amplitude,
+        valueRange = 0f..RippleReach,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(ripple.copy(amplitude = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Waves",
+        value = ripple.waves,
+        valueRange = 1f..30f,
+        step = 1f,
+        default = 8f,
+        format = { "%.0f".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(ripple.copy(waves = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    LabeledControl("Center") {
+        PositionPad(
+            x = ripple.centerX,
+            y = ripple.centerY,
+            onValueChange = { x, y -> onUpdate { it.withEffect(ripple.copy(centerX = x, centerY = y)) } },
+            onCommit = onCommit,
+        )
+    }
+}
+
+/**
+ * How far a crest may push a pixel, as a fraction of the box.
+ *
+ * A tenth is already extreme — past it the crests overlap far enough that the artwork stops being recognisable and
+ * the effect reads as damage rather than as water.
+ */
+private const val RippleReach = 0.1f
 
 /**
  * The halo's colour, how strong it is, how far it fades and how far it is grown first.

@@ -31,7 +31,9 @@ import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.graphics.withMatrix
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
+import kotlin.math.roundToInt
 
 /**
  * Composites an [IconLayerSet] + the app's [ParsedIcon] into one square [Bitmap] of `sizePx` — the baked icon
@@ -212,6 +214,8 @@ class IconRenderer(
 
                 is LayerEffect.ChromaticSplit -> replace { split(it, effect, sizePx) }
 
+                is LayerEffect.Ripple -> replace { rippled(it, effect, sizePx) }
+
                 // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
                 is LayerEffect.Glow -> replace {
                     haloed(
@@ -341,6 +345,57 @@ class IconRenderer(
             alpha = (gloss.strength.coerceIn(0f, 1f) * 255).toInt()
         }
         canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
+    }
+
+    /**
+     * [source] with every pixel read from somewhere else along its own radius — the layer seen through water.
+     *
+     * **The first per-pixel effect, and the first that leaves the canvas entirely.** Everything up to now has been
+     * something the platform could draw; this is arithmetic over the pixels, which is exactly what the live path
+     * cannot reach below API 33 and what a software bitmap makes free at any API.
+     *
+     * **Nearest-neighbour, and outside the box reads as transparent.** Clamping to the edge instead would smear the
+     * outermost row outward wherever a trough reaches past the box, which reads as a smudge rather than as water —
+     * and an icon is transparent out there, so nothing is the truthful sample.
+     *
+     * The `IntArray` is not extracted into a shared displacement pass, though [inkspire.morphic.core.model.icon
+     * .LayerEffect.Ripple] will not be the only effect shaped like this. Grain is the second, and this codebase
+     * extracts on the second consumer rather than in anticipation of it — the loop is six lines and what the two
+     * would share is not yet known to be the same six.
+     */
+    private fun rippled(source: Bitmap, ripple: LayerEffect.Ripple, sizePx: Int): Bitmap {
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+        val out = IntArray(pixels.size)
+
+        val centerX = LayerRipple.centerPx(ripple.centerX, sizePx)
+        val centerY = LayerRipple.centerPx(ripple.centerY, sizePx)
+        val amplitudePx = LayerRipple.amplitudePx(ripple, sizePx)
+        val wavelengthPx = LayerRipple.wavelengthPx(ripple, sizePx)
+
+        for (y in 0 until sizePx) {
+            for (x in 0 until sizePx) {
+                val dx = x - centerX
+                val dy = y - centerY
+                val distance = hypot(dx, dy)
+
+                val sampled = LayerRipple.sampleDistancePx(distance, amplitudePx, wavelengthPx)
+                // Dead centre has no radius to travel along, so it reads from itself — which is also what stops the
+                // division below from being one by zero.
+                val sourceX = if (distance == 0f) x else (centerX + dx / distance * sampled).roundToInt()
+                val sourceY = if (distance == 0f) y else (centerY + dy / distance * sampled).roundToInt()
+
+                out[y * sizePx + x] = if (sourceX in 0 until sizePx && sourceY in 0 until sizePx) {
+                    pixels[sourceY * sizePx + sourceX]
+                } else {
+                    0
+                }
+            }
+        }
+
+        val bitmap = createBitmap(sizePx, sizePx)
+        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
+        return bitmap
     }
 
     /**

@@ -302,9 +302,9 @@ enforces. Per layer:
   `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` and `LayerEffect.Gloss` (light
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
-  displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it — the two that do **not**
-  draw live) and `LayerEffect.Filter` (one of the built-in looks, by id). See the notes below for each. **Four more
-  are planned** — pixelate, ripple, grain and progressive blur, all per-pixel:
+  displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
+  (waves pushing its pixels about — the three that do **not** draw live) and `LayerEffect.Filter` (one of the built-in
+  looks, by id). See the notes below for each. **Three more are planned** — pixelate, grain and progressive blur:
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
@@ -579,7 +579,25 @@ retires the deferral this file carried from B3, and the first real exercise of s
   of `IconRenderer` the arithmetic is unit-testable, where every line of that class needs an emulator.
 - **The halo is clipped to the icon's box**, which is inherent rather than an oversight — the output is one square
   and always was. A radius large enough to reach the edge is one the user can see reaching it.
-- `minSdk` reaching 31 would retire the fork for these two; 33 would retire it for the four still to come.
+- `minSdk` reaching 31 would retire the fork for these two; 33 would retire it for the three still to come.
+
+**`LayerEffect.Ripple` is the first *per-pixel* effect, and the first that leaves the canvas entirely.** Concentric
+waves push each output pixel to read from somewhere else along its own radius — arithmetic over an `IntArray`, which
+the bake does at any API and Compose needs AGSL and API 33 for. Four things:
+- **The plan grouped it with Pixelate and Grain as "one loop with three answers", and that is two-thirds right.**
+  Ripple and Grain are resamplings; **Pixelate is not** — as the reference draws it the cells have gaps and rounded
+  corners, so it *redraws* the layer as a field of shapes with one color sampled per cell. A coordinate-quantising
+  pixelate would give solid blocks and could express neither control. So Ripple went first, against the plan's order,
+  to put the displacement pass under its natural first consumer rather than under the odd one out.
+- **The pass is not extracted yet**, which is this codebase's own extract-on-the-second-consumer rule applied rather
+  than the plan's anticipation: the loop is six lines and what Ripple and Grain share is not yet known to be the same
+  six. `LayerRipple` holds only the part that can be silently wrong — the displacement as a pure function of distance.
+- **Outside the box reads as transparent, not clamped.** Clamping would smear the outermost row outward wherever a
+  trough reaches past the box, which looks like a smudge; an icon *is* transparent out there, so nothing is the
+  truthful sample.
+- **No color**, unlike every other effect in the panel: a ripple moves the layer's own pixels rather than adding any,
+  so there is nothing to tint. `waves` steps by one, since it counts crests and 8.37 of them is a precision the
+  picture cannot show.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
 bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
@@ -1608,9 +1626,10 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–9 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
-done: all of tier 1, the bake-backed preview the rest were blocked on, and **Glow + Drop shadow**, which are the first
-two effects to use it. Pixelate, Ripple, Grain and Progressive blur are what is left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+**In flight: the icon effects expansion — slices 0–9 plus Ripple of
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are done: all of tier 1, the bake-backed preview the rest were
+blocked on, and the first three effects to use it (Glow, Drop shadow, Ripple). Pixelate, Grain and Progressive blur
+are what is left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the
