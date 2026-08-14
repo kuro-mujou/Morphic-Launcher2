@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
@@ -35,7 +34,6 @@ import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.ShapeAnchor
-
 
 /**
  * The layer's silhouette.
@@ -225,24 +223,6 @@ private fun ShapeTile(
                 .fillMaxSize()
                 .padding(ShapeTileInset),
         )
-    }
-}
-
-/** Which page of a pager is showing. Not a control — pressing one is not offered, since swiping is the gesture. */
-@Composable
-private fun PagerDots(current: Int, count: Int) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        repeat(count) { index ->
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(StudioContentColor.copy(alpha = if (index == current) 1f else 0.3f)),
-            )
-        }
     }
 }
 

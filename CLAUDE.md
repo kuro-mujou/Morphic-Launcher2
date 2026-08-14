@@ -342,6 +342,15 @@ setup for.
     before a gradient produced — now renders in that order, so its tint no longer recolors its gradient. Nothing has
     shipped, and the alternative is a canonical order no reorder control could override. Full plan for the thirteen
     effects this unblocks: [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
+  - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
+    mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
+    (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
+    value. It briefly split `LayerEffect.Color` into *Recolor* and *Tint*; the switch overturned that, because two
+    entries sharing one record can express "tint off, recolor on" — a state the model cannot hold. Splitting `Color`
+    in the *model* is worse still: its four numbers compose into one matrix in a fixed sequence, so as separate
+    entries their list order would silently change the result. A tile marks itself from `activeEffects`, so an
+    effect switched off correctly reads as inactive. Every slider goes through `SliderControl` — name, value
+    readout, and a **reset** disabled at the default, so the row doubles as "have I changed this?".
 
 **Shadows are deferred, and they are the one effect that is not additive.** A shadow derives from the layer's
 *finished* silhouette — after transform and after the mask, since an outer shadow must escape the shape — which

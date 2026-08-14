@@ -3,14 +3,18 @@ package inkspire.morphic.feature.settings.iconstudio
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -96,6 +100,84 @@ internal val LayerSource.label: String
     }
 
 /**
+ * The full form of a numeric control: a caption row carrying the name, the **value** and a **reset**, over a
+ * [SteppedSlider].
+ *
+ * **The value is a readout of its own rather than part of the label**, which every one of these used to bake in
+ * (`"Hue  180°"`). Two reasons: a name that changes as you drag is not a name, and a number wants to sit where the
+ * eye returns to it — beside the control — not appended to prose on the far left.
+ *
+ * **Reset is a button because the alternative is remembering.** These values have a resting position that is easy
+ * to leave and hard to find again: a slider dragged to 0.98 looks like 1.00 and is not, and the stepper buttons
+ * only get you back if you can see that you are off. It is **disabled at [default]**, so the row doubles as the
+ * answer to "have I changed this?" — the same "ask, do not guess" rule the layer reorder buttons and the transform
+ * cluster are built on.
+ *
+ * A press is discrete, so it commits at once and is one undo step.
+ *
+ * @param default where reset goes. Deliberately per call site and not `valueRange.start`: the resting value of a
+ *   gradient's strength is nothing, of a zoom is 1, and of a hue is the start — three different answers.
+ * @param format how the number reads. Ranges here are unitless fractions or degrees, and printing 180.0 for an
+ *   angle is as wrong as printing 1 for an opacity.
+ */
+@Composable
+internal fun SliderControl(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    step: Float,
+    default: Float,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    format: (Float) -> String = { "%.2f".format(it) },
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = label,
+                color = StudioContentColor.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = format(value),
+                color = StudioContentColor,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+            StudioIconButton(
+                icon = Icons.Default.Refresh,
+                contentDescription = "Reset ${label.lowercase()}",
+                enabled = value != default,
+                onClick = {
+                    onValueChange(default)
+                    onValueChangeFinished()
+                },
+                modifier = Modifier.size(ResetSlot),
+            )
+        }
+        SteppedSlider(
+            value = value,
+            valueRange = valueRange,
+            step = step,
+            what = label.lowercase(),
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+        )
+    }
+}
+
+/** Smaller than a stepper, because it sits in a caption row rather than beside the track. */
+private val ResetSlot = 32.dp
+
+/**
  * A slider between a pair of buttons that step it onto the nearest grid value.
  *
  * **A drag cannot be exact and these values have exact answers people want.** A finger on a 250dp slider lands on
@@ -179,3 +261,25 @@ internal fun snappedStep(value: Float, step: Float, up: Boolean): Float {
 
 /** Small against any step here, large against the float error of adding them up. */
 private const val SnapEpsilon = 1e-4f
+
+/**
+ * Which page of a pager is showing. Not a control — pressing one is not offered, since swiping is the gesture.
+ *
+ * Shared vocabulary since the effects grid grew a pager of its own; the two must not drift into different dots.
+ */
+@Composable
+internal fun PagerDots(current: Int, count: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        repeat(count) { index ->
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(StudioContentColor.copy(alpha = if (index == current) 1f else 0.3f)),
+            )
+        }
+    }
+}

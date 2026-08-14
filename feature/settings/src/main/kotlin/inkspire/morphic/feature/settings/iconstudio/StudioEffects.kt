@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,12 +12,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Opacity
@@ -27,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,27 +42,31 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.TintMode
+import kotlin.math.ceil
 
 /**
  * One entry in the Effects grid: a job the user can go and do to this layer, with the glyph and word the grid
  * offers it under.
  *
- * **These are jobs, not model types, and the difference is deliberate.** `LayerEffect.Color` is one record holding
- * hue, saturation, brightness and a tint — but "balance the color" and "pick a tint" are two different things to
- * want, done with different controls, so they are two entries. Nothing about storage changes: both still write one
- * `LayerEffect.Color` through `IconLayerSpec.withColor`, which is what keeps an all-default effect *removed* from
- * the list rather than stored as a row of 1s. Equally [OPACITY] and [BLEND] are spec *fields* rather than effects,
- * and a user adjusting how a layer reads does not care which side of that line a control sits on.
+ * **One entry per `LayerEffect`, plus the two spec fields — and that mapping is now load-bearing.** This briefly
+ * split `LayerEffect.Color` into *Recolor* and *Tint*, on the reasoning that "balance the color" and "pick a tint"
+ * are different things to want. The per-effect switch is what overturned it: `enabled` belongs to the effect, one
+ * `Color` record holds both halves, so two entries sharing it could express "tint off, recolor on" — a state the
+ * model cannot hold and the renderer would have to guess at. Splitting `Color` in the model instead is worse still:
+ * its four numbers compose into a *single* matrix in a fixed sequence, and as separate entries their list order
+ * would silently change the result, which is precisely the failure its own KDoc exists to prevent.
  *
- * The three sliders stay together in [RECOLOR] for the opposite reason: they compose into a single color matrix and
- * are judged against each other, so splitting them would mean leaving and re-entering to balance two of them.
+ * So the rule is: **an entry that owns a `LayerEffect` gets a switch; one that configures a spec field does not.**
+ * [OPACITY] and [BLEND] are fields — always in play, with their "off" being their default value — so there is
+ * nothing to enable. Every effect the plan adds is 1:1 and takes a switch for free.
  *
  * The deferred **shadow** is the next entry, and it costs one value here plus its controls — which is the whole
- * point of the grid over a column, since a column would have gained a sixth block of sliders instead.
+ * point of the grid over a column, since a column would have gained another block of sliders instead.
  */
 internal enum class EffectSlice(val label: String, val icon: ImageVector) {
 
@@ -68,15 +76,25 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** How it combines with everything beneath it. */
     BLEND("Blend", Icons.Default.FilterBAndW),
 
-    /** Hue, saturation and brightness — the three that compose into one matrix. */
-    RECOLOR("Recolor", Icons.Default.Tune),
-
-    /** A color pushed through the layer, and whether it shades or replaces. */
-    TINT("Tint", Icons.Default.Colorize),
+    /** Hue, saturation, brightness and the tint — one `LayerEffect.Color`, one matrix. */
+    COLOR("Color", Icons.Default.Tune),
 
     /** The two-stop overlay laid over the artwork. */
     GRADIENT("Gradient", Icons.Default.Gradient),
     ;
+
+    /**
+     * The stored effect this entry owns, or null when it configures spec fields instead — or when the effect has
+     * simply never been configured, which is what an absent entry in `effects` means.
+     *
+     * Reads `spec.effects` rather than `spec.color`/`spec.gradient` deliberately: those two drop an identity
+     * effect, and this needs to know whether there is a *record* to switch off, not whether it currently paints.
+     */
+    fun storedEffect(spec: IconLayerSpec): LayerEffect? = when (this) {
+        OPACITY, BLEND -> null
+        COLOR -> spec.effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
+        GRADIENT -> spec.effects.filterIsInstance<LayerEffect.Gradient>().firstOrNull()
+    }
 
     /**
      * Whether this entry is currently doing anything to [spec] — which is what the grid marks, and it is a
@@ -93,9 +111,10 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     fun isActive(spec: IconLayerSpec): Boolean = when (this) {
         OPACITY -> spec.opacity != 1f
         BLEND -> spec.blend != LayerBlend.NORMAL
-        RECOLOR -> spec.color?.let { it.hueDegrees != 0f || it.saturation != 1f || it.brightness != 1f } == true
-        TINT -> spec.color?.tintArgb != null
-        GRADIENT -> spec.gradient != null
+        // `activeEffects` is the renderers' own list, so a tile marks itself exactly when the icon is affected —
+        // which means an effect switched off reads as inactive, and correctly so: it is not doing anything.
+        COLOR -> spec.activeEffects.any { it is LayerEffect.Color }
+        GRADIENT -> spec.activeEffects.any { it is LayerEffect.Gradient }
     }
 }
 
@@ -141,15 +160,20 @@ internal fun EffectsControls(
         null -> EffectGrid(spec = spec, onOpen = { open = it })
 
         else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            EffectHeader(slice = slice, onBack = { open = null })
+            EffectHeader(
+                slice = slice,
+                spec = spec,
+                onBack = { open = null },
+                onUpdate = onUpdate,
+                onCommit = onCommit,
+            )
 
             // Exhaustive, so an entry cannot be added to the grid without controls behind it — the same reason the
             // tool panel's own `when` lists every section rather than falling through an `else`.
             when (slice) {
                 EffectSlice.OPACITY -> OpacityControls(spec, onUpdate, onCommit)
                 EffectSlice.BLEND -> BlendControls(spec, onUpdate, onCommit)
-                EffectSlice.RECOLOR -> RecolorControls(spec, onUpdate, onCommit)
-                EffectSlice.TINT -> TintControls(spec, onUpdate, onCommit)
+                EffectSlice.COLOR -> ColorControls(spec, onUpdate, onCommit)
                 EffectSlice.GRADIENT -> GradientControls(spec, onUpdate, onCommit)
             }
         }
@@ -157,23 +181,62 @@ internal fun EffectsControls(
 }
 
 /**
- * The grid of entries — [EffectColumns] across, wrapping.
+ * The entries, [EffectColumns] across and paged.
  *
- * **Plain rows rather than a lazy grid**, for the shape page's reason: the entry count is a compile-time constant
- * and always will be, so laziness saves nothing and costs a scroller nested inside the panel's own. The short last
- * row is padded with empty weights, or its tiles would come out wider than the rest.
+ * **Paged for the shape chooser's reason, and here the list really is about to get long.** Four entries fit one row
+ * today; the plan adds eleven. Paging horizontally is what keeps this section a fixed height however many arrive —
+ * the alternative is a vertical scroller inside the panel's own vertical scroller, which makes every drag
+ * ambiguous. So adding an effect adds a *page* eventually, never height.
+ *
+ * **The height is derived, and from the fullest page rather than from the page capacity.** A page holds up to
+ * [EffectRows] rows, but today's single page uses one — sizing to the capacity would reserve an empty row under
+ * four tiles. Same derive-versus-store rule the shape pager follows, one question further on.
  */
 @Composable
 private fun EffectGrid(spec: IconLayerSpec, onOpen: (EffectSlice) -> Unit) {
+    val pages = remember { EffectSlice.entries.chunked(EffectColumns * EffectRows) }
+    val pagerState = rememberPagerState { pages.size }
+    val rows = remember(pages) { pages.maxOf { ceil(it.size / EffectColumns.toFloat()).toInt() } }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        BoxWithConstraints {
+            // A tile is a square plate plus its label, so a row is taller than it is wide per column. The plate is
+            // capped, so past that width the extra goes to the gaps between tiles rather than to the tiles.
+            val cell = ((maxWidth - EffectGridSpacing * (EffectColumns - 1)) / EffectColumns)
+                .coerceAtMost(EffectTileMax)
+            val pageHeight = (cell + EffectLabelHeight) * rows + EffectGridSpacing * (rows - 1)
+
+            HorizontalPager(
+                state = pagerState,
+                pageSpacing = 8.dp,
+                modifier = Modifier.height(pageHeight),
+            ) { page ->
+                EffectPage(slices = pages[page], spec = spec, onOpen = onOpen)
+            }
+        }
+
+        // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
+        if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
+    }
+}
+
+/**
+ * One page of entries.
+ *
+ * **Plain rows rather than a lazy grid**, for the shape page's reason: a page holds a compile-time-bounded number
+ * of tiles, so laziness saves nothing and costs a scroller nested inside the panel's own. The short last row is
+ * padded with empty weights, or its tiles would come out wider than the rest.
+ */
+@Composable
+private fun EffectPage(slices: List<EffectSlice>, spec: IconLayerSpec, onOpen: (EffectSlice) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(EffectGridSpacing)) {
-        EffectSlice.entries.chunked(EffectColumns).forEach { row ->
+        slices.chunked(EffectColumns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(EffectGridSpacing)) {
                 row.forEach { slice ->
                     // **The cell takes the share; the tile takes a bounded slice of it.** A square tile in a
                     // column that grows with the panel is a square that grows with the panel, and this panel is as
-                    // wide as the screen — so on a tablet two rows of them would be taller than the panel is
-                    // allowed to be, and the grid would scroll for five entries. Capped, the tiles keep their size
-                    // and the row simply spreads them out.
+                    // wide as the screen — so on a tablet the tiles would be huge and the grid would scroll for a
+                    // handful of entries. Capped, the tiles keep their size and the row spreads them out.
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                         EffectTile(
                             slice = slice,
@@ -242,14 +305,27 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
 }
 
 /**
- * Which entry is open, and the way back to the grid.
+ * Which entry is open, the way back to the grid, and — for an entry that owns an effect — its switch.
  *
  * A breadcrumb rather than a replacement for the panel's own header: that still says "Effects", so the two read as
  * where you are and what you are in.
+ *
+ * **The switch is disabled until the effect exists**, which is the honest reading of three states in one control.
+ * An effect absent from the list has never been configured, so there is nothing to silence and nothing to restore;
+ * moving a slider is what brings it into being, and from then on the switch turns it off *keeping* what was tuned.
+ * Absent rather than disabled was the alternative and is worse here: a control that appears the moment you touch a
+ * slider makes the panel jump under the finger that touched it.
  */
 @Composable
-private fun EffectHeader(slice: EffectSlice, onBack: () -> Unit) {
+private fun EffectHeader(
+    slice: EffectSlice,
+    spec: IconLayerSpec,
+    onBack: () -> Unit,
+    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
+    onCommit: () -> Unit,
+) {
     Row(
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -258,7 +334,31 @@ private fun EffectHeader(slice: EffectSlice, onBack: () -> Unit) {
             contentDescription = "Back to effects",
             onClick = onBack,
         )
-        Text(slice.label, color = StudioContentColor, style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = slice.label,
+            color = StudioContentColor,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.weight(1f),
+        )
+
+        // Only where there is a `LayerEffect` to carry the flag — see [EffectSlice].
+        if (slice == EffectSlice.COLOR || slice == EffectSlice.GRADIENT) {
+            val stored = slice.storedEffect(spec)
+            MorphicSwitch(
+                checked = stored?.enabled == true,
+                enabled = stored != null,
+                onCheckedChange = { on ->
+                    // Flipping a switch is discrete, so it records at once and undo steps over it.
+                    onUpdate { current ->
+                        when (slice) {
+                            EffectSlice.COLOR -> current.color?.let { current.withColor(it.copy(enabled = on)) }
+                            else -> current.gradient?.let { current.withGradient(it.copy(enabled = on)) }
+                        } ?: current
+                    }
+                    onCommit()
+                },
+            )
+        }
     }
 }
 
@@ -269,16 +369,15 @@ private fun OpacityControls(
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
-    LabeledControl("Opacity  ${"%.2f".format(spec.opacity)}") {
-        SteppedSlider(
-            value = spec.opacity,
-            valueRange = 0f..1f,
-            step = UnitStep,
-            what = "opacity",
-            onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    SliderControl(
+        label = "Opacity",
+        value = spec.opacity,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 1f,
+        onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
+        onValueChangeFinished = onCommit,
+    )
 }
 
 /**
@@ -315,63 +414,55 @@ private fun BlendControls(
 }
 
 /**
- * Saturation, brightness and hue.
+ * Hue, saturation, brightness and the tint — one `LayerEffect.Color`.
  *
- * **These write one `LayerEffect.Color`, never three**, via `IconLayerSpec.withColor` — which is why an
- * all-default effect is *removed* from the list rather than stored as a row of 1s. Three separate effects would
- * mean their order in the list silently changed the result.
+ * **These write one effect, never four**, via `IconLayerSpec.withColor` — which is why an all-default one is
+ * *removed* from the list rather than stored as a row of 1s, and why they share a single switch. Four separate
+ * effects would mean their order in the list silently changed the result, which is the failure this shape does not
+ * have: they compose into one matrix, in one pass, in a fixed sequence.
+ *
+ * The sliders sit above the tint because that sequence is the order they act in — recolouring happens first and a
+ * [TintMode.SOLID] tint then overwrites the channels it produced.
  */
 @Composable
-private fun RecolorControls(
+private fun ColorControls(
     spec: IconLayerSpec,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
     val color = spec.color ?: LayerEffect.Color()
 
-    LabeledControl("Saturation  ${"%.2f".format(color.saturation)}") {
-        SteppedSlider(
-            value = color.saturation,
-            valueRange = 0f..2f,
-            step = UnitStep,
-            what = "saturation",
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Brightness  ${"%.2f".format(color.brightness)}") {
-        SteppedSlider(
-            value = color.brightness,
-            valueRange = 0.2f..2f,
-            step = UnitStep,
-            what = "brightness",
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Hue  ${"%.0f".format(color.hueDegrees)}°") {
-        SteppedSlider(
-            value = color.hueDegrees,
-            valueRange = 0f..360f,
-            step = AngleStep,
-            what = "hue",
-            onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
-}
-
-/** A color pushed through the layer, and — once there is one — whether it shades or replaces. */
-@Composable
-private fun TintControls(
-    spec: IconLayerSpec,
-    onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
-    onCommit: () -> Unit,
-) {
-    val color = spec.color ?: LayerEffect.Color()
+    SliderControl(
+        label = "Saturation",
+        value = color.saturation,
+        valueRange = 0f..2f,
+        step = UnitStep,
+        default = 1f,
+        onValueChange = { value -> onUpdate { it.withColor(color.copy(saturation = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Brightness",
+        value = color.brightness,
+        valueRange = 0.2f..2f,
+        step = UnitStep,
+        default = 1f,
+        onValueChange = { value -> onUpdate { it.withColor(color.copy(brightness = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Hue",
+        value = color.hueDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = 0f,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withColor(color.copy(hueDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
 
     LabeledControl("Tint") {
-        // Clearable because a tint is the one recoloring that cannot be undone by returning a slider to its
+        // Clearable because a tint is the one recolouring that cannot be undone by returning a slider to its
         // middle — without a way off, picking one would be a one-way door.
         ClearableColorField(
             argb = color.tintArgb,
@@ -382,9 +473,9 @@ private fun TintControls(
     // **Only once a tint exists**, which is the difference between a mode and a dead control: with no tint set there
     // is nothing for either option to do, and the pair would be two buttons that change nothing.
     //
-    // *Shaded* keeps the layer's own light and dark and pushes it toward the color; *Solid* keeps only the shape and
+    // *Shaded* keeps the layer's own light and dark and pushes it toward the colour; *Solid* keeps only the shape and
     // fills it flat. Solid is what makes app-shipped themed icons agree with each other — they arrive black, white or
-    // colored depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
+    // coloured depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
     // multiply cannot reach, since black multiplied by anything is still black. See `TintMode`.
     if (color.tintArgb != null) {
         LabeledControl("Tint style") {
@@ -417,26 +508,27 @@ private fun GradientControls(
     // than jumping to arbitrary values the moment strength leaves zero.
     val gradient = spec.gradient ?: LayerEffect.Gradient(strength = 0f)
 
-    LabeledControl("Strength  ${"%.2f".format(gradient.strength)}") {
-        SteppedSlider(
-            value = gradient.strength,
-            valueRange = 0f..1f,
-            step = UnitStep,
-            what = "strength",
-            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
-    LabeledControl("Angle  ${"%.0f".format(gradient.angleDegrees)}°") {
-        SteppedSlider(
-            value = gradient.angleDegrees,
-            valueRange = 0f..360f,
-            step = AngleStep,
-            what = "gradient angle",
-            onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    SliderControl(
+        label = "Strength",
+        value = gradient.strength,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        // Nothing, not `Gradient()`'s own default of 1: reset means "as if untouched", and an unconfigured gradient
+        // is the one this panel seeds at zero so it stays invisible until asked for.
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Angle",
+        value = gradient.angleDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = 0f,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withGradient(gradient.copy(angleDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
     LabeledControl("From") {
         ColorField(argb = gradient.startArgb) { argb ->
             onUpdate { it.withGradient(gradient.copy(startArgb = argb)) }
@@ -450,13 +542,14 @@ private fun GradientControls(
 }
 
 /**
- * Four across: five entries land as 4 + 1 today, and the deferred shadow fills the second row.
+ * Four across, two rows to a page — eight entries before a second page is needed, against four today.
  *
- * Three was the first cut and made the tiles too big — at three columns a phone hands each one most of 110dp, which
- * is a button the size of an app icon for a section that is a menu. Four brings them to roughly 76dp, under the cap
+ * Three columns was the first cut and made the tiles too big: a phone hands each one most of 110dp, which is a
+ * button the size of an app icon for a section that is a menu. Four brings them to roughly 76dp, under the cap
  * below, so the cap now only binds on a tablet.
  */
 private const val EffectColumns = 4
+private const val EffectRows = 2
 
 /** Between tiles on both axes. */
 private val EffectGridSpacing = 8.dp
@@ -478,3 +571,5 @@ private const val UnitStep = 0.05f
 
 /** Five degrees for both angles, so 45, 90 and 180 are reachable by stepping — the rotation slider's own step. */
 private const val AngleStep = 5f
+/** What a tile's label adds under its plate — the gap plus one line of `labelSmall`, which is what sizes a page. */
+private val EffectLabelHeight = 20.dp
