@@ -17,6 +17,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,11 +29,13 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.core.graphics.withMatrix
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconShapes
+import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.icon.render.IconLayerResolver
 import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.icon.render.LayerGradient
+import inkspire.morphic.core.icon.render.LayerPattern
 import inkspire.morphic.core.icon.render.LayerTransform
 import inkspire.morphic.core.icon.render.ResolvedLayer
 import inkspire.morphic.core.icon.render.ShapeMask
@@ -278,6 +284,56 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
             canvas.restore()
         }
     }
+
+    // **The one overlay whose tile is remembered rather than derived per frame.** A gradient is three numbers handed
+    // to a constructor; a pattern is a rasterised drawable, so building it inside the draw scope would allocate two
+    // bitmaps on every frame of a slider drag. Keyed on the effect and the resources, which is everything the tile
+    // depends on except the node's size — see [drawPatternOverlay] for why that one is handled where it is.
+    is LayerEffect.Pattern -> {
+        val res = IconPatterns.drawableResOrNull(effect.pattern)
+        val resource = LocalResources.current
+        val drawable = remember(res, resource) { res?.let { resource.getDrawable(it, null) } }
+
+        if (drawable == null) {
+            // An id this build does not know. Nothing drawn, matching the bake — a recipe from a later build loses
+            // one effect rather than failing to render.
+            Modifier
+        } else {
+            Modifier.drawWithContent {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(bounds = Rect(0f, 0f, size.width, size.height), paint = Paint())
+                    drawContent()
+                    drawPatternOverlay(effect, drawable)
+                    canvas.restore()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Tiles a pattern over whatever has been drawn, clipped to it — the live twin of `IconRenderer.applyPattern`.
+ *
+ * The tile, its size and the matrix that turns it are all [LayerPattern]'s answers, so the two paths cannot come to
+ * texture the same icon at different scales. What differs is only the wrapper: a `BitmapShader` there, Compose's
+ * [ImageShader] here, over the same bitmap.
+ *
+ * **Built in the draw scope rather than remembered**, unlike the drawable above, because the tile's size depends on
+ * the node's — which composition does not know. The cost is one rasterise per frame of a drag; the alternative is
+ * plumbing the size back out of layout, and a tile is a handful of pixels square.
+ */
+private fun DrawScope.drawPatternOverlay(pattern: LayerEffect.Pattern, drawable: Drawable) {
+    val sizePx = size.width.toInt()
+    val tile = LayerPattern.tile(drawable, pattern, LayerPattern.tileSizePx(pattern.scale, sizePx))
+    val shader = ImageShader(tile.asImageBitmap(), TileMode.Repeated, TileMode.Repeated).apply {
+        LayerPattern.localMatrix(pattern.angleDegrees, sizePx)?.let(::setLocalMatrix)
+    }
+
+    drawRect(
+        brush = ShaderBrush(shader),
+        alpha = pattern.strength.coerceIn(0f, 1f),
+        blendMode = BlendMode.SrcAtop,
+    )
 }
 
 /**

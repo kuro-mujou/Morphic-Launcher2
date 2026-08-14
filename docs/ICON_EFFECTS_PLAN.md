@@ -4,10 +4,10 @@ Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from oth
 filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
 before any of them can land, and the order to build them in.
 
-Status: **slices 0–5 done** (see §5). The pipeline, the effect panel, the filter library, the layer rail,
-`LayerEffect.Bloom`, `LayerEffect.Gloss`, `IconLayerSet.effects` and perspective are built; the remaining effects are not. Where the
-build diverged from this plan, §5 records it — the plan is kept as written so the reasoning that was wrong stays
-visible next to what replaced it.
+Status: **slices 0–6 done** (see §5). The pipeline, the effect panel, the filter library, the layer rail, Bloom,
+Gloss, perspective, Pattern and `IconLayerSet.effects` are built; **Extrude** and **Chromatic split** finish tier 1,
+and everything past those waits on the bake-backed preview. Where the build diverged from this plan, §5 records it —
+the plan is kept as written so the reasoning that was wrong stays visible next to what replaced it.
 
 **The largest thing this plan got wrong is in §3**: it treats all thirteen as *layer* effects, and six of them are only
 correct over the finished composite. See §5's whole-icon note.
@@ -266,7 +266,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 4 | **Bloom** + **Gloss** | Reuse the gradient path; retire the "gradient" entry into them | **done** |
 | 4a | **Whole-icon effects** | Not in the plan — see below | **done** |
 | 5 | **Perspective** | Extends `LayerTransform`, which is already shared | **done** |
-| 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | |
+| 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | **done** |
 | 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | |
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | |
@@ -338,6 +338,22 @@ Each slice is independently reviewable and leaves the studio working.
   - Not offered on the **composite** — `StudioTool.appliesTo` gives it no Transform panel — so tilting a whole icon
     means tilting its layers. That is a real gap rather than a decision, and the place to fix it is whether the
     composite gets a transform of its own.
+- **Pattern confirmed §6's split and added one the plan had not stated: the tile is a *stencil*.** Its marks are
+  authored white on transparent and the effect's `argb` is what they come out in — so one asset serves every colour,
+  and `invert` is a `DST_OUT` punch rather than a second library. A tile carrying its own colours would need both.
+  - **`LayerPattern` is a seventh shared derivation**, and a tiled shader earns it: there are *three* things the two
+    paths must agree on and each is invisible alone — the tile's pixel size, the matrix that turns it, and how the
+    stencil becomes coloured marks. It hands back a **bitmap** rather than a shader, because that is the last point
+    they can share: one wraps it in `BitmapShader`, the other in Compose's `ImageShader`.
+  - **Every asset is authored to repeat**, which is the part with no compiler behind it. A mark crossing an edge is
+    drawn again on the opposite one, or drawn whole and centred *on* the edge so the drawable clips it and the
+    neighbour completes it (the dots do this at all four corners). A mistake shows as a seam every tile, which reads
+    as a rendering fault rather than a bad asset.
+  - **No *randomize* button**, unlike the reference. What it randomizes there cannot be read off a capture — an
+    angle, an offset, a per-tile scatter — and a button writing a random number into a slider the user can drag is a
+    novelty rather than a control.
+  - **No `ShapeAnchor`**, unlike Bloom and Gloss: a pattern is a texture laid over the icon and its own angle already
+    orients it. Additive if wanted.
 - **Whole-icon effects (4a) — the thing thirteen effects actually needed, and §3 assumed away.** Every entry in this
   plan is written as a *layer* effect, and for six of them that is simply wrong: a glow derives from the finished
   silhouette, so per-layer it glows around the foreground *inside* the background plate where nobody can see it; grain,

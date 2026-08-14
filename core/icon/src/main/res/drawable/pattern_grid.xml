@@ -1,0 +1,18 @@
+<!--
+  A lattice: one bar down the leading edge and one across the top, so tiling joins them into continuous lines.
+
+  Only two of the four edges are drawn — the other two arrive from the neighbours. Drawing all four would double
+  every interior line's width and leave the outermost ones thin.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M0,0 H100 V8 H0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M0,0 V100 H8 V0 Z" />
+</vector>

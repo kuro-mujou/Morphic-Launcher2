@@ -249,6 +249,42 @@ sealed interface LayerEffect {
     }
 
     /**
+     * A repeating texture laid over the layer: [pattern]'s marks, tiled, in [argb]. Source-atop like the other two
+     * overlays, so it decorates the artwork rather than covering the icon with wallpaper.
+     *
+     * **The drawable is a stencil and [argb] is what it is drawn in** — see [IconPattern]. That is what makes one
+     * asset serve every colour, and it is also what [invert] can act on: swapping the marks for the ground is a
+     * property of a two-tone stencil and would mean nothing over a full-colour tile.
+     *
+     * @property scale one tile's side as a fraction of the icon's box, so a quarter puts four tiles across it. A
+     *   fraction rather than a pixel count for [IconLayerSpec.offsetX]'s reason: the same recipe has to look the
+     *   same baked at 96px for a list row and at 288px for a folder.
+     * @property angleDegrees which way the tiling runs, turned about the box's centre. Every built-in tile is
+     *   authored square-on for this: a slanted asset would be a second way to say the same thing, and one that
+     *   could only reach the angles it happened to be drawn at.
+     * @property invert draws the ground and leaves the marks empty — the negative of the tile.
+     * @property strength how strongly the texture is laid on, and how it is switched off.
+     */
+    @Serializable
+    @SerialName("pattern")
+    data class Pattern(
+        val pattern: IconPattern,
+        val argb: Int = 0xFFFFFFFF.toInt(),
+        val scale: Float = 0.25f,
+        val angleDegrees: Float = 0f,
+        val strength: Float = 1f,
+        val invert: Boolean = false,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** Nothing chosen, or turned down to nothing. An id this build does not know is caught by the renderer. */
+        override val isIdentity: Boolean get() = strength <= 0f || pattern.id.isBlank()
+
+        /** A tiled shader drawn source-atop, which both paths can do at any API. */
+        override val drawsLive: Boolean get() = true
+    }
+
+    /**
      * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *

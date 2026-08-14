@@ -179,9 +179,9 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is six
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is seven
 slices in — the effect **pipeline**, the effect **panel**, the **filter** library, the **layer rail**, **Bloom**,
-**Gloss** and **perspective**, plus **whole-icon effects**, which that plan had not noticed it needed.
+**Gloss**, **perspective** and **Pattern**, plus **whole-icon effects**, which that plan had not noticed it needed.
 **Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
 this section describes what exists, and flags the places the built thing differs from what was locked here.
 
@@ -449,6 +449,32 @@ question, and the shared thing got stronger rather than a seventh unverifiable o
   tilting its layers. A real gap rather than a decision; the fix is whether the composite gets a transform of its own.
 - **A content-anchored bloom or gloss does not follow a tilt.** `LayerGradient.Frame` carries a 2D rotation, so it
   tracks zoom, offset and in-plane rotation but has no perspective term. The light stays flat on a leaning layer.
+
+**`LayerEffect.Pattern` tiles a texture over the layer, and its assets are a library of their own.** `IconPattern` is
+`IconShape`'s exact shape and deliberately **not** its list — sharing one catalog was considered and rejected, because
+a shape is a silhouette whose *alpha is a mask* stretched once to the box, where a pattern is artwork whose *marks are
+drawn*, tiled at a scale and an angle. Half of each list would be nonsense in the other role. What they share is the
+pipeline: drop a drawable in, add an id, the id is the on-disk contract, an unknown id draws nothing.
+- **The tile is a *stencil*, which is the fact everything else falls out of.** Marks are authored white on
+  transparent and `argb` is what they come out in, so one asset serves every color — and `invert` is a `DST_OUT`
+  punch rather than a second library. A tile carrying its own colors would need both.
+- **`LayerPattern` is the seventh shared derivation, and a tiled shader earns one.** There are *three* things the two
+  paths must agree on and each is invisible alone: the tile's pixel size, the matrix that turns it, and how the
+  stencil becomes colored marks. It hands back a **bitmap** rather than a shader, because that is the last point they
+  can share — one wraps it in `BitmapShader`, the other in Compose's `ImageShader`.
+- **Every asset is authored to repeat, and nothing checks that.** A mark crossing an edge is drawn again on the
+  opposite one, or drawn whole and centered *on* the edge so the drawable clips it and the neighbor completes it
+  (`pattern_dots` does this at all four corners; `pattern_grid` draws only two of its four edges, since drawing all
+  four would double every interior line). A mistake shows as a seam every tile, which reads as a rendering fault
+  rather than as a bad asset.
+- **The live path remembers the drawable and rebuilds the tile per frame**, which is the one place it does more work
+  than it looks: the tile's size depends on the node's, which composition does not know. The alternative is plumbing
+  the measured size back out of layout for a bitmap a few pixels square.
+- **Scale is a fraction of the box**, for the reason offsets are — a quarter puts four tiles across the icon at every
+  bake size — with a pixel floor, since a shader repeating a one-pixel bitmap is a flat wash that costs a texture.
+- **No `ShapeAnchor` and no randomize.** A pattern is a texture laid *over* the icon and its own angle orients it, so
+  the anchor is additive if wanted; and what the reference's randomize button randomizes cannot be read off a
+  capture, where a button writing a random number into a slider the user can drag is a novelty rather than a control.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
     mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
     (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
@@ -1511,7 +1537,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–5 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+**In flight: the icon effects expansion — slices 0–6 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
 done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
@@ -1523,8 +1549,9 @@ Built so far: the ordered effect **pipeline** (slice 0), the paged effect **pane
 `SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
 `LAYERS` tool entry (slice 3), slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
 effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite) — and
-slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`. Next is **Pattern**,
-which needs an asset library of its own; four of the thirteen still need no render-architecture change at all.
+slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`, and slice 6,
+**Pattern**, with an asset library of its own. **Extrude** and **Chromatic split** finish tier 1; everything past them
+waits on the bake-backed preview.
 
 **Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes

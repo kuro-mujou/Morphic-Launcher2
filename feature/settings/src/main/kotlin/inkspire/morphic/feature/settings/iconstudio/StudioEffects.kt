@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.iconstudio
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.Gradient
+import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
@@ -43,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorFilter
@@ -51,13 +55,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconFilters
+import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.model.icon.BloomFalloff
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconFilter
+import inkspire.morphic.core.model.icon.IconPattern
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.ShapeAnchor
@@ -143,6 +150,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** A sheen struck across the artwork, with a bowed edge between what is lit and what is not. */
     GLOSS("Gloss", Icons.Default.WbTwilight),
 
+    /** A repeating texture laid over the artwork — see `IconPatterns`. */
+    PATTERN("Pattern", Icons.Default.Grain),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -166,6 +176,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         COLOR -> effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
+        PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -189,6 +200,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         COLOR -> target.effects.activeEffects.any { it is LayerEffect.Color }
         BLOOM -> target.effects.activeEffects.any { it is LayerEffect.Bloom }
         GLOSS -> target.effects.activeEffects.any { it is LayerEffect.Gloss }
+        PATTERN -> target.effects.activeEffects.any { it is LayerEffect.Pattern }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -260,6 +272,7 @@ internal fun EffectsControls(
             EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
+            EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -444,6 +457,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.GLOSS -> current.effectOrNull<LayerEffect.Gloss>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.PATTERN -> current.effectOrNull<LayerEffect.Pattern>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -867,6 +883,148 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * Which texture, in what colour, how large, which way round, and how strongly.
+ *
+ * **The tiles are chosen from a row and the rest is sliders**, which is the filter panel's arrangement rather than
+ * the shape chooser's paged grid: six entries fit a scroll, and unlike shapes they are not the *whole* control —
+ * scale and angle change the look at least as much as which tile it is.
+ *
+ * **"None" is the first tile rather than a clear button**, the shape and filter choosers' shared answer: having no
+ * texture is a choice among the same set, and the one every layer starts on.
+ *
+ * **A swatch draws the tile itself, tiled** — the same thing the icon will get, at the same stencil-into-colour
+ * treatment, so what is being chosen is visible rather than named. That costs one small bitmap per tile, which is
+ * what makes it affordable where a filter's seventeen live icon previews were not.
+ *
+ * No *randomize* button, unlike the reference this was drawn from. What it randomizes there cannot be read off a
+ * capture — an angle, an offset, a per-tile scatter — and a button that writes a random number into a slider the
+ * user can already drag is a novelty rather than a control.
+ */
+@Composable
+private fun PatternControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val current = effects.effectOrNull<LayerEffect.Pattern>()
+    // Seeded from whatever is stored so switching tiles keeps the scale, angle and colour already tuned — the tile
+    // is one field of the effect, not a different effect.
+    val pattern = current ?: LayerEffect.Pattern(pattern = IconPatterns.Dots)
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LabeledControl("Texture") {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(FilterTileGap),
+            ) {
+                PatternTile(
+                    pattern = null,
+                    argb = pattern.argb,
+                    selected = current == null,
+                    onClick = {
+                        onUpdate { it.withEffect<LayerEffect.Pattern>(null) }
+                        onCommit()
+                    },
+                )
+                IconPatterns.All.forEach { entry ->
+                    PatternTile(
+                        pattern = entry,
+                        argb = pattern.argb,
+                        selected = current?.pattern == entry,
+                        onClick = {
+                            onUpdate { it.withEffect(pattern.copy(pattern = entry)) }
+                            onCommit()
+                        },
+                    )
+                }
+            }
+        }
+
+        LabeledControl("Color") {
+            ColorField(argb = pattern.argb) { argb ->
+                onUpdate { it.withEffect(pattern.copy(argb = argb)) }
+            }
+        }
+
+        SliderControl(
+            label = "Strength",
+            value = pattern.strength,
+            valueRange = 0f..1f,
+            step = UnitStep,
+            default = 1f,
+            onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(strength = value)) } },
+            onValueChangeFinished = onCommit,
+        )
+        SliderControl(
+            label = "Scale",
+            value = pattern.scale,
+            // Floored well above zero: the tile is floored in pixels anyway, so a smaller number would stop
+            // changing anything while the slider went on moving.
+            valueRange = 0.05f..1f,
+            step = UnitStep,
+            default = 0.25f,
+            onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(scale = value)) } },
+            onValueChangeFinished = onCommit,
+        )
+        SliderControl(
+            label = "Angle",
+            value = pattern.angleDegrees,
+            valueRange = 0f..360f,
+            step = AngleStep,
+            default = 0f,
+            format = { "%.0f°".format(it) },
+            onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(angleDegrees = value)) } },
+            onValueChangeFinished = onCommit,
+        )
+
+        MorphicSwitchRow(
+            label = "Invert",
+            supportingText = "Draws the gaps instead of the marks.",
+            checked = pattern.invert,
+            onCheckedChange = { on ->
+                onUpdate { it.withEffect(pattern.copy(invert = on)) }
+                onCommit()
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * One texture, drawn as itself over the checkerboard the layer tiles use.
+ *
+ * A null [pattern] is the "None" tile and draws the ground alone, which is what makes it comparable — the others are
+ * that same square with a texture on it.
+ */
+@Composable
+private fun PatternTile(pattern: IconPattern?, argb: Int, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(PatternTileSide)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .then(
+                if (selected) Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(8.dp)) else Modifier,
+            )
+            .clickable(onClick = onClick),
+    ) {
+        pattern?.let {
+            Image(
+                painter = painterResource(IconPatterns.drawableResOrNull(it) ?: return@let),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(Color(argb)),
+                // The drawable is one tile, and the swatch shows four of them — enough to read as a repeat rather
+                // than as a single mark, which is the whole difference between choosing a texture and choosing a
+                // shape.
+                modifier = Modifier.fillMaxSize().scale(2f),
+            )
+        }
+    }
+}
+
+private val PatternTileSide = 56.dp
 
 /**
  * The sheen's colour, how hard it is struck, where from, and how its edge bows.

@@ -1,0 +1,16 @@
+<!--
+  One wave across the middle, entering and leaving at the same height and slope so the tiles join without a kink.
+
+  `T` mirrors the previous control point, which is what guarantees the second half is the first reflected — so the
+  curve arrives at the trailing edge travelling exactly as it left the leading one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="10"
+        android:pathData="M0,50 Q25,12 50,50 T100,50" />
+</vector>

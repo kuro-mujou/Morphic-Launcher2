@@ -2,6 +2,7 @@ package inkspire.morphic.core.icon.render
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
@@ -17,6 +18,7 @@ import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.icon.IconFilters
+import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.BloomFalloff
 import inkspire.morphic.core.model.icon.IconLayerSet
@@ -179,6 +181,11 @@ class IconRenderer(
                     null
                 }
 
+                is LayerEffect.Pattern -> {
+                    applyPattern(canvas, effect, sizePx)
+                    null
+                }
+
                 is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
                 // Null for an id this build does not know, which then draws nothing rather than failing.
                 is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
@@ -262,6 +269,28 @@ class IconRenderer(
             alpha = (gloss.strength.coerceIn(0f, 1f) * 255).toInt()
         }
         canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
+    }
+
+    /**
+     * Tiles [pattern] over the layer, clipped to what it has already drawn.
+     *
+     * An **unknown id draws nothing**, which is the same degrade `IconShapes` and `IconFilters` take: a recipe from a
+     * later build loses one effect rather than failing to render at all.
+     */
+    private fun applyPattern(canvas: Canvas, pattern: LayerEffect.Pattern, sizePx: Int) {
+        val res = IconPatterns.drawableResOrNull(pattern.pattern) ?: return
+        val drawable = context.getDrawable(res) ?: return
+        val tile = LayerPattern.tile(drawable, pattern, LayerPattern.tileSizePx(pattern.scale, sizePx))
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = BitmapShader(tile, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).apply {
+                LayerPattern.localMatrix(pattern.angleDegrees, sizePx)?.let(::setLocalMatrix)
+            }
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+            alpha = (pattern.strength.coerceIn(0f, 1f) * 255).toInt()
+        }
+        canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
+        tile.recycle()
     }
 
     private fun drawContent(canvas: Canvas, content: ParsedLayer, sizePx: Int) {

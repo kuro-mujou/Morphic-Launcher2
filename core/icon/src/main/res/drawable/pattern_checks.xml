@@ -1,0 +1,13 @@
+<!-- Two opposite quadrants, which tiles into a checkerboard. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M0,0 H50 V50 H0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M50,50 H100 V100 H50 Z" />
+</vector>
