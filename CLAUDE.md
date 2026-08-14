@@ -177,9 +177,12 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 
 **This is now built, S1–S7 of [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md)** — one plan replacing L1's
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
-three times inside one document, at a cost of four destructive schema bumps on one table). What is left is **icon
-packs** and **presets**; **shadows are deferred with reason** (see the effects note below). The rest of this
-section describes what exists, and flags the two places the built thing differs from what was locked here.
+three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
+plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is four
+slices in — the effect **pipeline**, the effect **panel**, the **filter** library and the **layer rail** are built.
+**Shadows are deferred with reason** (see the effects note below) and that plan is what un-defers them. The rest of
+this section describes what exists, and flags the places the built thing differs from what was locked here.
 
 **Source & parsing.** App icons come from the `LauncherApps` API. Each is parsed into **two permanent,
 non-deletable layers**: a **background** and a **foreground** (fg always renders above bg). Parsing never
@@ -287,10 +290,13 @@ enforces. Per layer:
     did and the test pinning `IconLayerSet.Base`'s stored JSON still passes. Same deal the sealed effect list gives.
 - **opacity + blend mode** — `IconLayerSpec` **fields**, not effects, because they describe how a layer *joins
   the stack* rather than what it is: every layer has both, always, with a meaningful default.
-- **effects** — a sealed list, never columns. `LayerEffect.Color` (hue → saturation → brightness → tint,
-  composed into **one** matrix, so monochrome is `saturation = 0` plus a tint rather than a variant of its own)
-  and `LayerEffect.Gradient` (two stops, angle, strength; source-atop so it colors the artwork instead of
-  covering the icon with a rectangle). **Shadows are deferred** — see below.
+- **effects** — a sealed list, never columns, and an **ordered pipeline** rather than a bag (see the pipeline note
+  below). `LayerEffect.Color` (hue → saturation → brightness → tint, composed into **one** matrix, so monochrome is
+  `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Gradient` (two stops, angle,
+  strength; source-atop so it colors the artwork instead of covering the icon with a rectangle) and
+  `LayerEffect.Filter` (one of the built-in looks, by id). Eleven more are planned —
+  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — of which **shadows are deferred** until the bake backs
+  the preview; see below.
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
 **Rendering — hybrid:**
@@ -351,6 +357,24 @@ setup for.
     entries their list order would silently change the result. A tile marks itself from `activeEffects`, so an
     effect switched off correctly reads as inactive. Every slider goes through `SliderControl` — name, value
     readout, and a **reset** disabled at the default, so the row doubles as "have I changed this?".
+  - **`LayerEffect.Filter` is the first effect the pipeline was built for, and it is a fixed vocabulary rather than
+    curated content** — the opposite call from icon *presets*, and the difference is what each thing is. A preset is
+    a whole recipe whose quality depends on the artwork it lands on, so curating one is design work with no end; a
+    filter is one 4×5 matrix that does the same thing to every icon, and choosing twenty numbers and a name is the
+    same act as adding a value to `LayerBlend`. So it takes **`IconShape`'s exact shape**: `IconFilter(id)` in
+    `core:model.icon`, the id → matrix table as `IconFilters` in `core:icon` beside the renderer that applies it, and
+    an **unknown id resolving to no matrix** so a recipe from a later build degrades rather than failing. Names
+    describe the look — never a person or a film, since a filter's name is shipped, stored and user-visible.
+  - **`ColorMatrices` is the arithmetic, `LayerFilter` the policy.** The builders came out of `LayerFilter` when the
+    table arrived, because authoring seventeen looks as raw `floatArrayOf` is unreviewable — a look composes as
+    `saturation(0.9).then(contrast(1.12))…`, which says what it *is*. `LayerFilter` kept the one thing that is about
+    the four sliders: the order they compose in. Two builders are new: **`contrast` pivots about mid-grey** (without
+    the offset it is a brightness control that also steepens, the usual way this is written wrong), and **`mix`**
+    weights each output channel across all three inputs, which is what a true sepia needs and what `scale`
+    structurally cannot express. The fifth column is a translation on 0..255, which is silent when wrong.
+  - **A filter swatch shows the look, not the icon** — one fixed reference gradient under each filter's matrix.
+    Previewing on the real icon is seventeen bakes, and an icon that happens to be black says nothing about a warm
+    grade; every tile being the same strip is what makes them comparable.
 
 **Shadows are deferred, and they are the one effect that is not additive.** A shadow derives from the layer's
 *finished* silhouette — after transform and after the mask, since an outer shadow must escape the shape — which
@@ -474,6 +498,17 @@ Haze needs a real drawn node, and the `BlendMode.Src` punch every settings previ
 One shared `studioSurface` modifier is the material, so a new panel cannot arrive looking different; its content
 color is **fixed white**, the one place the studio departs from the theme, because the thing behind the glass is
 a canvas the *user* switches between black and white.
+- **Two `HazeState`s, not one, because the layer rail is a surface *and* something to see through.** Haze samples
+  what is behind a node, so one shared state has the rail sampling **itself**, and has the panel — which overlaps
+  the rail's lower half the moment it opens — sampling a rail with nothing behind it, which reads as an opaque edge
+  the panel disappears under. `canvasHaze` is the work alone and the rail's own glass and quick menu read it;
+  `screenHaze` is the work *and* the rail, read by everything floating over both. The rule is one line: **the rail
+  samples the canvas; everything above the rail samples both.**
+  - **A node can register with several states, which is what makes this cost a line rather than a redesign.**
+    `HazeInput.Sources` takes exactly one state, so a *consumer* can never combine two — but `hazeSource` is
+    `this then HazeSourceElement(...)`, one modifier node per call, so a *source* can belong to as many as it likes.
+    The canvas simply carries two. The z-indices are stated rather than inferred from draw order, so a reshuffle of
+    the screen's `Box` children cannot silently reorder what the panel sees.
 
 ## Design system (`core:designsystem`)
 
@@ -1370,11 +1405,24 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**Next likely: icon packs (S8)** — the last piece of the icon studio, and the one thing the icon feature is still
-waiting on. A pack is one more `LayerSource` variant rather than a mode, so "apply a pack to everything" is setting
-the global default's fg/bg source and goes through the same commit, cache key and invalidation as any other edit.
-What has to be built with it is pack *detection* (theme-intent actions), `appfilter.xml` parsing, and — for browse
-and search — a drawable lister, which L1 never finished either.
+**In flight: the icon effects expansion — slices 0–3 of [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are
+done.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+**only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
+a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
+and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the
+*editor* has. Instead the studio will preview such layers **from the bake**, downscaled and throttled during a
+gesture, which is why `LayerEffect.drawsLive` exists now with nothing yet answering it `false`.
+
+Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
+`SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), and the **layer rail** that replaced
+the `LAYERS` tool entry (slice 3). Next is Bloom + Gloss, which reuse the gradient path and retire the standalone
+"Gradient" entry into them; seven of the thirteen need no render-architecture change at all.
+
+**Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
+variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes
+through the same commit, cache key and invalidation as any other edit. What has to be built with it is pack
+*detection* (theme-intent actions), `appfilter.xml` parsing, and — for browse and search — a drawable lister, which
+L1 never finished either.
 
 **The effects sequence below is done and is kept as the record of how S5f was split.** S5f split
 into three when it was costed, because as one slice it was `BackdropEffect` + the params slice + `Blur.kt` + a 350-line

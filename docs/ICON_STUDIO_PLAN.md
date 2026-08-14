@@ -2,6 +2,12 @@
 
 **Status:** S1–S9 landed (2026-08-11) — the plan is complete. S1 and S2 verified on device. Shadows are deferred
 with reason (see S6), as are a pack's unmapped drawables and built-in curated presets.
+
+**Superseded in part (2026-08-14):** the studio has outgrown this plan's *effect* and *layer-list* sections. See
+[ICON_EFFECTS_PLAN.md](ICON_EFFECTS_PLAN.md), which takes the effect list from two variants to thirteen and is the
+plan that un-defers shadows. Two things it has already changed here: the effect list is now an **ordered pipeline**
+rather than a bag both renderers read by name, and the layer stack left the tool bar for a **rail** down the canvas
+edge, so this document's `LAYERS` tool entry no longer exists. Everything else below still describes what is built.
 **Covers:** the per-app + global icon editor, its persistence, and the render path it needs.
 **L1 reference:** five docs, read in full — `ICON_STUDIO_PLAN`, `ICON_SKIN_PLAN`, `ICON_LAYER_STUDIO_PLAN`,
 `ICON_DASHBOARD_PLAN`, `ICON_STUDIO_UI_PLAN`. This is one plan replacing all five, for the reason below.
@@ -255,7 +261,8 @@ and the commit affordance.
 - **Canvas.** Full-bleed, marked `hazeSource`, the icon centered in a **square bound that clips overflow** — the
   same bound the real renderer scales into, so what overflows here overflows there. A background button cycles
   black / white / checkerboard / black-outside-checkerboard-inside / white-outside-checkerboard-inside.
-- **Everything else floats over it on Haze.** One `hazeState` for the screen and one shared surface modifier
+- **Everything else floats over it on Haze.** One `hazeState` for the screen — *since split in two by the layer
+  rail, which is both a surface and something to see through; see the effects plan* — and one shared surface modifier
   (dark blur + tint, white content on top), applied by the tool rail, the extras, the settings container and the
   layer popup — so a new floating surface cannot arrive with a different material. The rails are **adaptive**:
   a row at the bottom with the extras at the side in portrait, a column at the side with the extras along the

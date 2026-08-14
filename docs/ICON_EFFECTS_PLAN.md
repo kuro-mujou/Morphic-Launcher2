@@ -4,8 +4,9 @@ Drawn from 13 captures of another icon studio (`~/Downloads/effect copy from oth
 filenames name the effect. This plan is **what each one actually needs from our two renderers**, what has to change
 before any of them can land, and the order to build them in.
 
-Status: **plan only, nothing built.** The effect model today is two variants — `LayerEffect.Color` and
-`LayerEffect.Gradient` — plus a deferred shadow.
+Status: **slices 0–3 done** (see §5). The pipeline, the effect panel, the filter library and the layer rail are
+built; the eleven remaining effects are not. Where the build diverged from this plan, §5 records it — the plan is
+kept as written so the reasoning that was wrong stays visible next to what replaced it.
 
 ---
 
@@ -252,24 +253,56 @@ one more tile in it.
 
 Each slice is independently reviewable and leaves the studio working.
 
-| # | Slice | Why here |
-|---|---|---|
-| 0 | Effects list → ordered pipeline; `enabled` + `drawsLive` on variants | Nothing else is safe until draw order is real |
-| 1 | Effect panel: grid paging, per-effect switch, slider reset + numeric field | The container for everything below |
-| 2 | **Filters** | Largest visible gain, tier 1, no new machinery |
-| 3 | **Layer rail**; delete the Layers section | Independent of the effects; do it once the bar is about to get busy |
-| 4 | **Bloom** + **Gloss** | Reuse the gradient path; retire the "gradient" entry into them |
-| 5 | **Perspective** | Extends `LayerTransform`, which is already shared |
-| 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 |
-| 7 | **Extrude** + **Chromatic split** | Tier 1 finishers |
-| 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API |
-| 9 | **Glow** + **Drop shadow** | Retires the standing deferral |
-| 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview |
-| 11 | **Progressive blur** | Hardest: blur *and* a mask |
+| # | Slice | Why here | |
+|---|---|---|---|
+| 0 | Effects list → ordered pipeline; `enabled` + `drawsLive` on variants | Nothing else is safe until draw order is real | **done** |
+| 1 | Effect panel: grid paging, per-effect switch, slider reset + numeric field | The container for everything below | **done** |
+| 2 | **Filters** | Largest visible gain, tier 1, no new machinery | **done** |
+| 3 | **Layer rail**; delete the Layers section | Independent of the effects; do it once the bar is about to get busy | **done** |
+| 4 | **Bloom** + **Gloss** | Reuse the gradient path; retire the "gradient" entry into them | |
+| 5 | **Perspective** | Extends `LayerTransform`, which is already shared | |
+| 6 | **Pattern** (+ its own assets) | Tier 1, needs an asset pipeline of its own — see §6 | |
+| 7 | **Extrude** + **Chromatic split** | Tier 1 finishers | |
+| 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | |
+| 9 | **Glow** + **Drop shadow** | Retires the standing deferral | |
+| 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | |
+| 11 | **Progressive blur** | Hardest: blur *and* a mask | |
 
-Slices 2–7 are seven effects with **no** change to the render architecture. The rail sits at 3 because it is
-independent of every effect and gets more valuable the longer the bar gets — and its thumbnails are the first
-consumer of the per-layer bake that slice 8 needs anyway.
+### What the built slices settled that this plan did not
+
+- **The entry list is one-per-`LayerEffect`, which cost a merge.** Slice 1 split `LayerEffect.Color` into *Recolor*
+  and *Tint* on the grid, and the per-effect switch overturned it within the same slice: `enabled` belongs to the
+  effect, so two entries sharing one record can express "tint off, recolor on" — a state the model cannot hold.
+  Splitting `Color` in the *model* instead is worse, since its four numbers compose into a single matrix in a fixed
+  sequence. The rule that came out of it: **an entry owning a `LayerEffect` gets a switch; one configuring a spec
+  field (opacity, blend) does not.**
+- **Effects are two *kinds*, and the difference is a buffer.** An overlay paints onto what is there; a filter
+  transforms pixels already drawn, which a canvas cannot do in place — one bitmap in the bake, one `saveLayer`
+  live. Every effect from here declares which it is. Slice 2's filters are the second member of the filter kind, so
+  they cost one `when` arm each rather than a mechanism.
+- **`ColorMatrices` came out of `LayerFilter`.** Authoring seventeen looks as raw `floatArrayOf` is unreviewable, so
+  the builders were extracted and the table composes from them; `LayerFilter` kept the one thing that is about the
+  four sliders, which is the order they compose in. `contrast` and `mix` are new — the first pivots about mid-grey
+  (without the offset it is a brightness control that also steepens), the second is what a true sepia needs and what
+  `scale` structurally cannot express.
+- **A filter swatch shows the *look*, not the icon** — a fixed reference gradient under the filter's matrix.
+  Previewing on the real icon is seventeen bakes, and an icon that happens to be black says nothing about a warm
+  grade.
+- **The rail forced a second Haze source**, which this plan did not foresee. Haze samples what is behind a node, so
+  one shared state has the rail sampling itself *and* the panel sampling a rail with nothing behind it. `canvasHaze`
+  is the work alone (the rail's own glass reads it); `screenHaze` is the work and the rail (everything above reads
+  it). A node can register with both, so the canvas simply carries two.
+- **Three things moved out of the rail's way**, none of them predicted: the icon bound shifts toward the start
+  (`IconBoundShift`), the session buttons above the panel move to the leading end, and the tool bar wraps its
+  contents rather than filling the width — at six entries a full-width bar ran edge to edge with a margin of
+  nothing.
+- **Still open from slice 1:** the numeric readout is a *readout*, not an editable field. Typing an exact value is a
+  text field per slider with parse, clamp and commit semantics, which is its own slice.
+
+Slices 4–7 are the remaining tier-1 effects and need **no** change to the render architecture. The rail sat at 3
+because it is independent of every effect and gets more valuable the longer the bar gets — and its thumbnails turned
+out to be the first consumer of the per-layer render that slice 8 needs anyway, reached through `IconLayerStack`
+with every other layer hidden rather than through a new path.
 
 ---
 
