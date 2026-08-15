@@ -426,6 +426,26 @@ sealed interface LayerEffect {
      * asset serve every colour, and it is also what [invert] can act on: swapping the marks for the ground is a
      * property of a two-tone stencil and would mean nothing over a full-colour tile.
      *
+     * ### One set of settings for every texture, unlike a bloom's two per falloff
+     *
+     * The obvious next question, having split [Bloom] and [ProgressiveBlur] into a profile per form, is whether
+     * [pattern] deserves the same. It does not, and the difference is what the parameters *mean*.
+     *
+     * A falloff changes the question: a ramp has an angle and a disc has a radius, and neither can answer the
+     * other's. A texture changes nothing — [scale] is "how big is one tile" and [angleDegrees] is "which way does it
+     * run" whether the marks are dots or a grid. With the questions identical, keeping the answers is what makes
+     * switching texture an **audition**: the user is comparing dots against a grid *at their own scale*, and
+     * per-texture state would replace that with a jump to unrelated settings every time they tapped a tile.
+     *
+     * Two more reasons the same way. The falloffs are **two, fixed** — a profile each is a bounded cost — where
+     * textures are a growing asset library, so profiles would grow with it and adding an asset would add stored
+     * state. And [IconShape] is the same shape of thing exactly, chosen from a library by id, and carries no
+     * per-shape state either.
+     *
+     * **What would be reasonable, if a texture ever needs it, is a per-texture *default*** — the scale a texture
+     * arrives at, keyed on its id. That is additive, costs no storage, and does not break the audition, because it
+     * only decides where a texture the user has never tuned starts.
+     *
      * @property scale one tile's side as a fraction of the icon's box, so a quarter puts four tiles across it. A
      *   fraction rather than a pixel count for [IconLayerSpec.offsetX]'s reason: the same recipe has to look the
      *   same baked at 96px for a list row and at 288px for a folder.
@@ -440,9 +460,27 @@ sealed interface LayerEffect {
     data class Pattern(
         val pattern: IconPattern,
         val argb: Int = 0xFFFFFFFF.toInt(),
-        val scale: Float = 0.25f,
+        /**
+         * **The finest scale that is still real**, and the panel's slider starts here for the same reason its range
+         * does: below about a twentieth of the box the pixel floor in `LayerPattern.tileSizePx` takes over, so the
+         * number would go on falling while the picture stopped changing. A texture arriving fine reads as *texture*;
+         * arriving coarse reads as a pattern of shapes laid over the icon, which is the thing a user goes looking
+         * for rather than the thing they want handed to them.
+         *
+         * One consequence worth knowing: at this scale the floor binds on the **small** previews. A 48dp rail tile
+         * and the draft bake both clamp to a 4px tile, so they show the texture coarser than the finished icon does.
+         * The full-size preview and the bake agree, which is what matters, but the tiles are approximate here in a
+         * way they are not for any other effect.
+         */
+        val scale: Float = 0.05f,
         val angleDegrees: Float = 0f,
-        val strength: Float = 1f,
+        /**
+         * **Laid on lightly**, which is the other half of arriving fine: at full strength a tile this small covers
+         * the artwork in opaque marks rather than texturing it, and what a user is reaching for is the *surface* of
+         * the icon changing, not a second picture over it. Turning it up is the obvious move once the effect is
+         * visible; arriving there is not.
+         */
+        val strength: Float = 0.3f,
         val invert: Boolean = false,
         override val enabled: Boolean = true,
     ) : LayerEffect {
