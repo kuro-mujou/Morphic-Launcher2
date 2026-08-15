@@ -510,8 +510,18 @@ sealed interface LayerEffect {
     @SerialName("extrude")
     data class Extrude(
         val argb: Int = 0xFF000000.toInt(),
-        val angleDegrees: Float = 0f,
-        val depth: Float = 0.15f,
+        val angleDegrees: Float = 45f,
+        val depth: Float = 0.1f,
+        /**
+         * The opacity of the finished slab — linear across its whole range, and the same at every depth and every
+         * bake size. See `IconRenderer.extruded` for why that took a change and what it cost.
+         *
+         * **It arrives opaque, and that is a re-pick rather than a preference.** This was tuned by eye at 0.10 while
+         * `strength` was still each *copy's* alpha, where the copies compounded to `1 - (1 - strength)^count` — at
+         * the studio's preview size that is the full 48 copies, so 0.10 was already 99% and looked exactly like 1.0.
+         * The value that preserves what was approved is therefore the top of the range, not the number that was
+         * typed. Worth re-picking now that the slider means something across all of it.
+         */
         val strength: Float = 1f,
         override val enabled: Boolean = true,
     ) : LayerEffect {

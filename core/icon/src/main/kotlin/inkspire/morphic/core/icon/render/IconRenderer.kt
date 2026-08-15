@@ -291,6 +291,21 @@ class IconRenderer(
      * thing to get wrong: the furthest copy first, the nearest last, the untouched layer on top. Each copy is the
      * source through `ColorMatrices.solid`, so it comes out as a flat silhouette of the extrusion colour whatever
      * the layer is made of.
+     *
+     * **`strength` is the opacity of the finished slab, and getting there took one layer over the whole loop.** It
+     * used to be the alpha of each *copy*, which compounds where they overlap: with `n` copies the slab came out at
+     * `1 - (1 - strength)^n`, so it reached 97% by a strength of 0.3 and the top two thirds of the slider did
+     * nothing at all. Worse, `n` is a function of depth *and* of [sizePx] — so the same recipe was denser at a
+     * greater depth, and denser again baked at 288px than at 96px, which is one icon looking like two.
+     *
+     * Compositing the copies opaque and multiplying once makes the control linear and both couplings vanish. What
+     * is given up is the density gradient the compounding produced — a slab darker at its base and fading at the
+     * tip — and that is the honest trade: a solid object has one opacity, and the gradient was an artifact of the
+     * technique rather than anything anyone asked for.
+     *
+     * The colour matrix still lands correctly on the union rather than per copy, which is what makes one layer
+     * enough: `solid` replaces the colour and keeps the alpha, so a silhouette assembled from overlapping copies and
+     * then filtered is the same flat colour as each copy filtered and then assembled.
      */
     private fun extruded(source: Bitmap, extrude: LayerEffect.Extrude, sizePx: Int): Bitmap {
         val steps = LayerExtrude.steps(extrude, sizePx)
@@ -299,11 +314,14 @@ class IconRenderer(
 
         val slab = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             colorFilter = ColorMatrixColorFilter(ColorMatrix(LayerFilter.solidMatrixOf(extrude.argb)))
-            alpha = (extrude.strength.coerceIn(0f, 1f) * 255).toInt()
         }
+        val alpha = (extrude.strength.coerceIn(0f, 1f) * 255).toInt()
+        val layer = canvas.saveLayerAlpha(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), alpha)
         for (step in steps.count downTo 1) {
             canvas.drawBitmap(source, steps.dxPx * step, steps.dyPx * step, slab)
         }
+        canvas.restoreToCount(layer)
+
         canvas.drawBitmap(source, 0f, 0f, null)
         return out
     }

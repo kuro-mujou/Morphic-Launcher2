@@ -317,14 +317,22 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
         }
 
         drawIntoCanvas { canvas ->
+            // **One layer over the whole slab, not one per copy**, which reverses what this did and what its own
+            // comment argued for. Per copy, `strength` was each copy's alpha and compounded where they overlapped:
+            // the slab reached `1 - (1 - strength)^count`, so it was 97% opaque by 0.3 and the top of the slider did
+            // nothing — and `count` follows the depth *and* the bake size, so one recipe was denser at a greater
+            // depth and denser again at a larger size. Flattened, `strength` is the slab's own opacity and both
+            // couplings go.
+            //
+            // The old comment's worry was the colour matrix, and it does not apply: `solid` replaces the colour and
+            // keeps the alpha, so filtering the assembled union gives the same flat silhouette as filtering each
+            // copy. What is genuinely given up is the density gradient the compounding made — darker at the base,
+            // fading at the tip — which was an artifact of the technique rather than a thing that was asked for.
+            canvas.saveLayer(bounds, slab)
             for (step in steps.count downTo 1) {
-                // One layer per copy, because the colour matrix has to see the *copy* — filtering the whole slab
-                // at once would flatten it correctly and then composite it as a single translucent sheet, so the
-                // overlaps would show through each other.
-                canvas.saveLayer(bounds, slab)
                 translate(steps.dxPx * step, steps.dyPx * step) { scope.drawContent() }
-                canvas.restore()
             }
+            canvas.restore()
         }
         drawContent()
     }
