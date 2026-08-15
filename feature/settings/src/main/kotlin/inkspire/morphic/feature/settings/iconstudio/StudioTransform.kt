@@ -26,7 +26,10 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
  * to it, and there was no way back to the resting value but to find it again by hand. Nothing was extracted for this —
  * the component was already there, and Transform was the one section not using it.
  *
- * See [ZoomStep] for why one press is now the smallest step each value has rather than a comfortable one.
+ * **One press is the smallest move each value has, and only the angles say so here.** Zoom takes `SliderControl`'s
+ * derived step, which is the finest its readout can report; rotation and tilt pass [AngleStep], degrees not being
+ * fractions. Both were coarse — 0.05 and 5° — picked so a press felt "worth pressing", which is the slider's job.
+ * See `finestStep` for the whole argument and for why the step and the readout are derived together.
  *
  * Every control edits live and calls [onCommit] when the gesture *ends* — so the preview follows the finger, while
  * undo steps over the whole drag rather than through a hundred frames of it. A button press is discrete, so it commits
@@ -51,7 +54,6 @@ internal fun TransformControls(
         label = "Zoom",
         value = spec.zoom,
         valueRange = ZoomRange,
-        step = ZoomStep,
         default = ZoomDefault,
         onValueChange = { value -> onUpdate { it.copy(zoom = value) } },
         onValueChangeFinished = onCommit,
@@ -62,7 +64,7 @@ internal fun TransformControls(
         label = "Rotation",
         value = spec.rotation,
         valueRange = RotationRange,
-        step = RotationStep,
+        step = AngleStep,
         default = AngleDefault,
         onValueChange = { value -> onUpdate { it.copy(rotation = value) } },
         onValueChangeFinished = onCommit,
@@ -79,7 +81,7 @@ internal fun TransformControls(
         label = "Tilt X",
         value = spec.tiltX,
         valueRange = TiltRange,
-        step = RotationStep,
+        step = AngleStep,
         default = AngleDefault,
         onValueChange = { value -> onUpdate { it.copy(tiltX = value) } },
         onValueChangeFinished = onCommit,
@@ -90,7 +92,7 @@ internal fun TransformControls(
         label = "Tilt Y",
         value = spec.tiltY,
         valueRange = TiltRange,
-        step = RotationStep,
+        step = AngleStep,
         default = AngleDefault,
         onValueChange = { value -> onUpdate { it.copy(tiltY = value) } },
         onValueChangeFinished = onCommit,
@@ -118,22 +120,3 @@ private val TiltRange = -60f..60f
  */
 private const val ZoomDefault = 1f
 private const val AngleDefault = 0f
-
-/**
- * How far one press of a stepper moves a transform — **the finest step each value has**, which is a reversal.
- *
- * These were 0.05 and 5°, chosen so a press was "worth pressing" and so 1.50, 45 and 90 sat on the grid. That reads
- * the buttons as the way to *travel*, and it is the wrong job for them: the slider is what crosses a range, and the
- * buttons exist for the last little bit it cannot reach — a finger on a 250dp track lands on 1.037 and 87°, and the
- * whole point of a press is to land on 1.04 and 88. A coarse step cannot express that at all, so the control that
- * was meant to make an edit exact was the one rounding it off.
- *
- * **Holding is what pays for the small step**, and it is why this costs nothing: `StudioStepperButton` repeats while
- * it is held, so crossing a range is a hold rather than a hundred taps — and a hold is still *one* undo entry, since
- * `onStepsFinished` is what closes it. Coarse travel and fine correction come out of the same button.
- *
- * Every named value stays reachable, which the coarse steps only managed by being chosen for it: on a grid of 1°
- * every whole angle is on it, and on a grid of 0.01 so is every hundredth.
- */
-private const val ZoomStep = 0.01f
-private const val RotationStep = 1f

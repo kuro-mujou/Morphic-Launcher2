@@ -124,19 +124,22 @@ internal val LayerSource.label: String
  *
  * @param default where reset goes. Deliberately per call site and not `valueRange.start`: the resting value of a
  *   gradient's strength is nothing, of a zoom is 1, and of a hue is the start — three different answers.
- * @param format how the number reads. Ranges here are unitless fractions or degrees, and printing 180.0 for an
- *   angle is as wrong as printing 1 for an opacity.
+ * @param step how far one press of a stepper moves the value. Defaults to [finestStep], which is what almost every
+ *   caller wants; an angle overrides it, degrees not being fractions.
+ * @param format how the number reads. Defaults to [finestFormat], matched to [step] so a press always moves the
+ *   digit the readout ends on. An angle overrides it, since printing 180.00 for one is as wrong as printing 1 for
+ *   an opacity.
  */
 @Composable
 internal fun SliderControl(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    step: Float,
     default: Float,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
-    format: (Float) -> String = { "%.2f".format(it) },
+    step: Float = finestStep(valueRange),
+    format: (Float) -> String = { finestFormat(valueRange).format(it) },
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
@@ -185,6 +188,57 @@ internal fun SliderControl(
 private val ResetSlot = 32.dp
 
 /**
+ * How far one press of a stepper moves a value on [range] — **the finest move its readout can report**, which is
+ * the whole job of these buttons.
+ *
+ * **A stepper is for the last little bit the slider cannot reach, not for travelling.** A finger on a 250dp track
+ * lands on 0.37 and the point of a press is to reach 0.38; a step chosen to feel "worth pressing" cannot express
+ * that, so the control meant to make an edit exact was the one rounding it off. Holding is what pays for a fine
+ * step — [SteppedSlider]'s buttons repeat, so crossing a range is a hold rather than a hundred taps, and a hold is
+ * still **one** undo entry because `onValueChangeFinished` closes it. Coarse travel and fine correction out of the
+ * same button.
+ *
+ * **It is paired with [finestFormat] and must stay so**: a step below what the number on screen can show is a press
+ * that visibly does nothing, which is worse than a coarse one. That pairing is why both are derived from the range
+ * here rather than chosen per slider — thirty call sites each picking a step *and* a matching format is thirty
+ * chances for the two to disagree, and the symptom of disagreeing is a dead-looking button.
+ *
+ * **Narrow ranges get the extra digit**, which is where this earns its keep. Half the effect sliders run 0..0.1 or
+ * 0..0.2 — a blur radius, a ripple's amplitude, a halo's spread — and against a two-decimal readout one press moved
+ * five to ten percent of everything the control could express, on exactly the values where a small difference is
+ * the point. The cut is at half a unit: wider than that and a hundredth is already a fine move, narrower and it is
+ * a tenth of the whole range.
+ */
+internal fun finestStep(range: ClosedFloatingPointRange<Float>): Float =
+    if (range.endInclusive - range.start >= FineRangeSpan) 0.01f else 0.001f
+
+/** The readout [finestStep] is matched to — one more digit exactly where the step gains one. */
+internal fun finestFormat(range: ClosedFloatingPointRange<Float>): String =
+    if (range.endInclusive - range.start >= FineRangeSpan) "%.2f" else "%.3f"
+
+/**
+ * Where a range stops being "about a unit" and starts being a fine quantity.
+ *
+ * Half a unit rather than a whole one, because several sliders run `0.05..1` or `0.05..1.5` and are plainly the
+ * same *kind* of value as the `0..1` ones beside them — a threshold of 1 would have given those an extra decimal
+ * for the sake of the 0.05 missing from the bottom of their track.
+ */
+private const val FineRangeSpan = 0.5f
+
+/**
+ * One degree — the finest turn a `"%.0f°"` readout can report, and **the one step in the studio still stated rather
+ * than derived**.
+ *
+ * [finestStep] answers for fractions, which is what every other slider here carries; an angle is not one, so it is
+ * the single exception and it lives beside the rule rather than in one of the two sections that use it. Both do:
+ * the transform panel's rotation and tilt, and the effects panel's gradient and pattern angles.
+ *
+ * It was five degrees in both places, chosen so 45, 90 and 180 sat on the grid. On a grid of one degree every whole
+ * angle is reachable, those three included — so nothing was lost by making it the smallest move instead.
+ */
+internal const val AngleStep = 1f
+
+/**
  * A slider between a pair of buttons that step it onto the nearest grid value.
  *
  * **A drag cannot be exact and these values have exact answers people want.** A finger on a 250dp slider lands on
@@ -214,8 +268,8 @@ private val ResetSlot = 32.dp
 internal fun SteppedSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    step: Float,
     what: String,
+    step: Float = finestStep(valueRange),
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
 ) {

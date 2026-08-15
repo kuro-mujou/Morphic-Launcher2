@@ -679,7 +679,6 @@ private fun OpacityControls(
         label = "Opacity",
         value = spec.opacity,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 1f,
         onValueChange = { value -> onUpdate { it.copy(opacity = value) } },
         onValueChangeFinished = onCommit,
@@ -742,7 +741,6 @@ private fun ColorControls(
         label = "Saturation",
         value = color.saturation,
         valueRange = 0f..2f,
-        step = UnitStep,
         default = 1f,
         onValueChange = { value -> onUpdate { it.withEffect(color.copy(saturation = value)) } },
         onValueChangeFinished = onCommit,
@@ -751,7 +749,6 @@ private fun ColorControls(
         label = "Brightness",
         value = color.brightness,
         valueRange = 0.2f..2f,
-        step = UnitStep,
         default = 1f,
         onValueChange = { value -> onUpdate { it.withEffect(color.copy(brightness = value)) } },
         onValueChangeFinished = onCommit,
@@ -978,7 +975,6 @@ private fun BloomControls(
         label = "Strength",
         value = bloom.strength,
         valueRange = 0f..1f,
-        step = UnitStep,
         // Nothing, not `Bloom()`'s own default of 1: reset means "as if untouched", and an unconfigured bloom is
         // the one this panel seeds at zero so it stays invisible until asked for.
         default = 0f,
@@ -1003,8 +999,7 @@ private fun BloomControls(
         Falloff.RADIAL -> SliderControl(
             label = "Radius",
             value = bloom.radius,
-            valueRange = UnitStep..1.5f,
-            step = UnitStep,
+            valueRange = UnitFloor..1.5f,
             default = 1f,
             onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(radius = value)) } },
             onValueChangeFinished = onCommit,
@@ -1067,7 +1062,6 @@ private fun BloomPosition(
                 SteppedSlider(
                     value = bloom.offsetX * dx + bloom.offsetY * dy,
                     valueRange = PositionRange,
-                    step = UnitStep,
                     what = "position",
                     onValueChange = { along ->
                         onUpdate { it.withEffect(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
@@ -1119,7 +1113,6 @@ private fun ProgressiveBlurControls(
         label = "Blur",
         value = blur.radius,
         valueRange = 0f..BlurReach,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(blur.copy(radius = value)) } },
         onValueChangeFinished = onCommit,
@@ -1128,7 +1121,6 @@ private fun ProgressiveBlurControls(
         label = "Sharp area",
         value = blur.sharpArea,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 0.2f,
         onValueChange = { value -> onUpdate { it.withEffect(blur.copy(sharpArea = value)) } },
         onValueChangeFinished = onCommit,
@@ -1137,7 +1129,6 @@ private fun ProgressiveBlurControls(
         label = "Softness",
         value = blur.softness,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 0.4f,
         onValueChange = { value -> onUpdate { it.withEffect(blur.copy(softness = value)) } },
         onValueChangeFinished = onCommit,
@@ -1200,7 +1191,6 @@ private fun PixelateControls(
         label = "Size",
         value = pixelate.cellSize,
         valueRange = 0f..PixelateReach,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(cellSize = value)) } },
         onValueChangeFinished = onCommit,
@@ -1210,8 +1200,7 @@ private fun PixelateControls(
         // Floored above zero: dots covering none of their cells is identity, so a slider reaching it would silently
         // delete the effect being tuned.
         value = pixelate.fill,
-        valueRange = UnitStep..1f,
-        step = UnitStep,
+        valueRange = UnitFloor..1f,
         default = 1f,
         onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(fill = value)) } },
         onValueChangeFinished = onCommit,
@@ -1220,7 +1209,6 @@ private fun PixelateControls(
         label = "Roundness",
         value = pixelate.roundness,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(roundness = value)) } },
         onValueChangeFinished = onCommit,
@@ -1271,7 +1259,6 @@ private fun GrainControls(
         label = "Strength",
         value = grain.amplitude,
         valueRange = 0f..GrainReach,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(grain.copy(amplitude = value)) } },
         onValueChangeFinished = onCommit,
@@ -1281,8 +1268,7 @@ private fun GrainControls(
         // Floored above zero: a lattice with no spacing is a division, and the model already calls that identity —
         // so a slider that could reach it would silently delete the effect being tuned.
         value = grain.grainSize,
-        valueRange = UnitStep..0.4f,
-        step = UnitStep,
+        valueRange = UnitFloor..0.4f,
         default = 0.08f,
         onValueChange = { value -> onUpdate { it.withEffect(grain.copy(grainSize = value)) } },
         onValueChangeFinished = onCommit,
@@ -1335,7 +1321,6 @@ private fun RippleControls(
         label = "Strength",
         value = ripple.amplitude,
         valueRange = 0f..RippleReach,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(ripple.copy(amplitude = value)) } },
         onValueChangeFinished = onCommit,
@@ -1398,7 +1383,6 @@ private fun GlowControls(
         label = "Strength",
         value = glow.strength,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(glow.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
@@ -1407,7 +1391,6 @@ private fun GlowControls(
         label = "Radius",
         value = glow.radius,
         valueRange = 0f..HaloReach,
-        step = UnitStep,
         default = 0.08f,
         onValueChange = { value -> onUpdate { it.withEffect(glow.copy(radius = value)) } },
         onValueChangeFinished = onCommit,
@@ -1416,7 +1399,6 @@ private fun GlowControls(
         label = "Spread",
         value = glow.spread,
         valueRange = 0f..HaloReach,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(glow.copy(spread = value)) } },
         onValueChangeFinished = onCommit,
@@ -1451,7 +1433,6 @@ private fun ShadowControls(
         label = "Strength",
         value = shadow.strength,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(shadow.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
@@ -1460,7 +1441,6 @@ private fun ShadowControls(
         label = "Radius",
         value = shadow.radius,
         valueRange = 0f..HaloReach,
-        step = UnitStep,
         default = 0.05f,
         onValueChange = { value -> onUpdate { it.withEffect(shadow.copy(radius = value)) } },
         onValueChangeFinished = onCommit,
@@ -1560,7 +1540,6 @@ private fun ExtrudeControls(
         label = "Strength",
         value = extrude.strength,
         valueRange = 0f..1f,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
@@ -1568,8 +1547,7 @@ private fun ExtrudeControls(
     SliderControl(
         label = "Depth",
         value = extrude.depth,
-        valueRange = UnitStep..0.25f,
-        step = UnitStep,
+        valueRange = UnitFloor..0.25f,
         default = 0.15f,
         onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(depth = value)) } },
         onValueChangeFinished = onCommit,
@@ -1654,7 +1632,6 @@ private fun PatternControls(
             label = "Strength",
             value = pattern.strength,
             valueRange = 0f..1f,
-            step = UnitStep,
             default = 1f,
             onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(strength = value)) } },
             onValueChangeFinished = onCommit,
@@ -1665,7 +1642,6 @@ private fun PatternControls(
             // Floored well above zero: the tile is floored in pixels anyway, so a smaller number would stop
             // changing anything while the slider went on moving.
             valueRange = 0.05f..1f,
-            step = UnitStep,
             default = 0.25f,
             onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(scale = value)) } },
             onValueChangeFinished = onCommit,
@@ -1759,7 +1735,6 @@ private fun GlossControls(
         label = "Strength",
         value = gloss.strength,
         valueRange = 0f..1f,
-        step = UnitStep,
         // Nothing, not `Gloss()`'s own default: reset means "as if untouched", and an unconfigured sheen is the one
         // this panel seeds at zero so it stays invisible until asked for.
         default = 0f,
@@ -1780,7 +1755,6 @@ private fun GlossControls(
         label = "Curve",
         value = gloss.curve,
         valueRange = -1f..1f,
-        step = UnitStep,
         default = 0f,
         onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(curve = value)) } },
         onValueChangeFinished = onCommit,
@@ -1832,15 +1806,15 @@ private val EffectTileMax = 96.dp
 private const val EffectGlyphFraction = 0.42f
 
 /**
- * The grid the stepper buttons snap to.
+ * The smallest **value** a slider that must not reach zero will take — which was `UnitStep` until that constant
+ * became the stepper's increment and the two turned out to be unrelated questions sharing a number.
  *
- * One step for every 0..1-ish value here — opacity, saturation, brightness, gradient strength — because they are all
- * read the same way and a user who learns one button's feel has learned them all. It puts 0.00, 0.50 and 1.00 on the
- * grid, which are the values people ask for by name, and it matches the zoom slider one section over.
+ * Four sliders bound their floor to it: a bloom's radius, a pixelate's fill, a grain's size and an extrude's depth.
+ * Each is a quantity whose zero *is* the effect's identity, so the floor is what keeps dragging to the bottom of the
+ * track a very small effect rather than a silently absent one — the switch in the header being where "off" is said.
+ * It stays at the value it has always had; only the stepper got finer.
  */
-private const val UnitStep = 0.05f
+private const val UnitFloor = 0.05f
 
-/** Five degrees for both angles, so 45, 90 and 180 are reachable by stepping — the rotation slider's own step. */
-private const val AngleStep = 5f
 /** What a tile's label adds under its plate — the gap plus one line of `labelSmall`, which is what sizes a page. */
 private val EffectLabelHeight = 20.dp
