@@ -1,5 +1,6 @@
 package inkspire.morphic.core.icon.render
 
+import inkspire.morphic.core.model.icon.BloomProfile
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.ContentAnchor
@@ -165,7 +166,10 @@ class LayerGradientTest {
     @Test
     fun `the bloom's own offset is in frame units and turns with it`() {
         val turned = LayerTransform(zoom = 1f, rotationDegrees = 90f, translateXPx = 0f, translateYPx = 0f)
-        val nudged = bloom(anchor = ContentAnchor.CONTENT).copy(offsetX = 0.5f)
+        // A **disc**, which is the falloff that owns a 2D point; a ramp is placed along its own angle instead.
+        val nudged = bloom(anchor = ContentAnchor.CONTENT)
+            .copy(falloff = Falloff.RADIAL)
+            .withActive { it.copy(offsetX = 0.5f) }
         val frame = LayerGradient.frameOf(nudged, ShapeMask.InkFit.Box, turned, sizePx = 100)
 
         // Half a frame "right" in a frame turned a quarter clockwise is half a box *down* on screen — which is what
@@ -176,10 +180,35 @@ class LayerGradientTest {
 
     @Test
     fun `an offset alone still moves a box-anchored bloom`() {
-        val frame = LayerGradient.frameOf(bloom().copy(offsetY = -0.25f), smallInk, identity, sizePx = 100)
+        val disc = bloom().copy(falloff = Falloff.RADIAL).withActive { it.copy(offsetY = -0.25f) }
+        val frame = LayerGradient.frameOf(disc, smallInk, identity, sizePx = 100)
 
         assertEquals(50f, frame.centerX, 0.01f)
         assertEquals(25f, frame.centerY, 0.01f)
+    }
+
+    /**
+     * The placement split itself: the two falloffs read different fields, so neither can move the other's light.
+     *
+     * This is the bug it was built for — one pair of offsets between them meant switching falloff carried the
+     * position across, and the panel storing a ramp's distance *as* a projected point meant flipping to radial and
+     * back destroyed whatever 2D position had been set.
+     */
+    @Test
+    fun `a disc's point does not move a ramp, and a ramp's distance does not move a disc`() {
+        val profile = BloomProfile(along = 0.5f, offsetX = -0.5f, offsetY = -0.5f, angleDegrees = 0f)
+        val both = bloom().copy(linear = profile, radial = profile)
+
+        // A ramp at 0° runs straight down, so half a frame along it is half a box down and nothing sideways — the
+        // disc's own point is not consulted.
+        val ramp = LayerGradient.frameOf(both, ShapeMask.InkFit.Box, identity, sizePx = 100)
+        assertEquals(50f, ramp.centerX, 0.01f)
+        assertEquals(100f, ramp.centerY, 0.01f)
+
+        // And the disc reads its point, untouched by the distance beside it.
+        val disc = LayerGradient.frameOf(both.copy(falloff = Falloff.RADIAL), ShapeMask.InkFit.Box, identity, 100)
+        assertEquals(0f, disc.centerX, 0.01f)
+        assertEquals(0f, disc.centerY, 0.01f)
     }
 
     @Test
@@ -263,8 +292,20 @@ class LayerGradientTest {
         assertEquals(lit, inward.last())
     }
 
-    private fun bloom(anchor: ContentAnchor = ContentAnchor.BOX) =
-        LayerEffect.Bloom(falloff = Falloff.LINEAR, anchor = anchor)
+    /**
+     * A bloom with **no placement of its own on either falloff**, so the anchoring tests isolate what they are about.
+     *
+     * All three placement fields are zeroed deliberately. `LayerEffect.Bloom`'s own defaults push a ramp along its
+     * angle *and* sit a disc off toward one corner — right for an effect arriving on an icon, where being visible is
+     * the point, and wrong for a test asking where the **anchor** puts the frame. A test that took those defaults
+     * would be asserting the defaults rather than the derivation, and would have to be rewritten every time one is
+     * tuned.
+     */
+    private fun bloom(anchor: ContentAnchor = ContentAnchor.BOX): LayerEffect.Bloom {
+        // The same profile in both slots, so a test that flips the falloff is changing only which placement is read.
+        val placed = BloomProfile(anchor = anchor, along = 0f, offsetX = 0f, offsetY = 0f)
+        return LayerEffect.Bloom(falloff = Falloff.LINEAR, linear = placed, radial = placed)
+    }
 
     /** A quarter-box square of ink, sitting low and to the left — deliberately not centered, so a bug shows. */
     private val smallInk = ShapeMask.InkFit(scale = 0.25f, centerX = 0.25f, centerY = 0.75f)

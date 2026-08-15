@@ -3,6 +3,7 @@ package inkspire.morphic.core.icon.render
 import inkspire.morphic.core.icon.parse.ContentMetrics
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
+import inkspire.morphic.core.model.icon.BloomProfile
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerEffect
@@ -133,7 +134,7 @@ class IconLayerResolverTest {
      */
     @Test
     fun `draining replaces only the color effect and leaves the rest of the stack in place`() {
-        val bloom = LayerEffect.Bloom(argb = 0xFFFFFFFF.toInt())
+        val bloom = LayerEffect.Bloom(linear = BloomProfile(argb = 0xFFFFFFFF.toInt()))
         val set = IconLayerSet(
             listOf(
                 IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.Empty),

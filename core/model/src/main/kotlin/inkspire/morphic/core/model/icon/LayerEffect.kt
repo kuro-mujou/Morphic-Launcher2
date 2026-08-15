@@ -1,5 +1,8 @@
 package inkspire.morphic.core.model.icon
 
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -76,6 +79,58 @@ enum class Falloff {
     @SerialName("radial")
     RADIAL,
 }
+
+/**
+ * One complete set of a [LayerEffect.Bloom]'s settings — a bloom holds **two**, one per [Falloff], and shows the one
+ * its falloff selects.
+ *
+ * **Two whole profiles rather than a shared set plus the bits that differ**, and the difference is what a user is
+ * doing when they flip that switch: comparing two arrangements, not editing one through two lenses. With anything
+ * shared, turning a disc down to a whisper and flipping to linear hands back a ramp nobody dimmed — and the sharing
+ * was worst on position, where the panel resolved a ramp's distance into the disc's own point and destroyed it.
+ *
+ * **Each profile carries every field, including the ones its own falloff ignores**, and that is deliberate rather
+ * than sloppy. It makes "each control keeps its own value per falloff" literally true with one type instead of two
+ * plus a shared third, and the unused fields cost nothing: they are never written, so `encodeDefaults = false`
+ * never stores them. It also leaves the door open — giving the two falloffs *different* defaults for a field they
+ * both use is a one-line change at [LayerEffect.Bloom]'s constructor rather than a reshape.
+ *
+ * The defaults here are the arrangement a bloom **arrives** in, chosen to be plainly visible; see
+ * `EffectSlice.seeded`. They are also what each slider's reset returns to, which is one fact read from one place
+ * rather than two numbers kept in step by hand.
+ *
+ * @property argb the light's color. The far end of the ramp is this color with its alpha gone, so it fades out of
+ *   the picture rather than into a second one.
+ * @property strength how strongly it is laid on; 0 is invisible. A separate knob from [argb]'s own alpha because
+ *   the color picker has no alpha channel by design, and because this is the one a user reaches for.
+ * @property anchor what the light is placed against — the icon's box, or this layer's artwork carried by its
+ *   transform. [ContentAnchor.BOX] leaves it where it is put while the content slides underneath;
+ *   [ContentAnchor.CONTENT] sits it on the ink and moves, zooms and turns with it. The same question a shape mask
+ *   asks, answered by the same enum through the same derivation, which is what stops the two drifting apart.
+ * @property angleDegrees the direction a ramp runs, clockwise from "straight down"; 0 is top-to-bottom.
+ *   [Falloff.LINEAR]'s.
+ * @property along how far the ramp is pushed along its own [angleDegrees], as a fraction of the frame.
+ *   [Falloff.LINEAR]'s. **A scalar rather than a point**, because a linear gradient is constant along its own
+ *   perpendicular and so genuinely cannot see a sideways move — storing one would be storing a value nothing can
+ *   ever observe, which is exactly what the old shared offsets did.
+ * @property radius how far a disc reaches, as a fraction of the way to the frame's corners; 1 covers it entirely.
+ *   [Falloff.RADIAL]'s — a ramp always spans its frame.
+ * @property offsetX where a disc sits, as a fraction of the frame from its centre. Positive is toward the frame's
+ *   own right, which is the artwork's right under [ContentAnchor.CONTENT] — so a light placed on a corner of the
+ *   artwork stays on that corner when the layer turns. [Falloff.RADIAL]'s.
+ * @property offsetY the same, downward. [Falloff.RADIAL]'s.
+ */
+@Serializable
+data class BloomProfile(
+    val argb: Int = 0xFFFFFFFF.toInt(),
+    val strength: Float = 0.6f,
+    val anchor: ContentAnchor = ContentAnchor.CONTENT,
+    val angleDegrees: Float = 45f,
+    val along: Float = -0.4f,
+    val radius: Float = 1.5f,
+    val offsetX: Float = -0.5f,
+    val offsetY: Float = -0.5f,
+)
 
 /**
  * Which way a [LayerEffect.Grain]'s noise pushes the pixels it displaces.
@@ -190,37 +245,88 @@ sealed interface LayerEffect {
      * for a semantic break does not transfer here: the blast radius is a whole icon rather than one slice. Stored
      * recipes lose their two stops (the old keys are dropped, [argb] defaults to white) and keep everything else.
      *
-     * @property falloff whether the light runs across the frame or out from a point in it. See [Falloff] — it
-     *   is what decides which of [angleDegrees] and [radius] means anything.
-     * @property angleDegrees the direction it runs, clockwise from "straight down"; 0 is top-to-bottom.
-     *   [Falloff.LINEAR] only — a disc has no direction.
-     * @property radius how far the light reaches, as a fraction of the way to the frame's corners; 1 covers it
-     *   entirely. [Falloff.RADIAL] only — a linear ramp always spans its frame.
-     * @property offsetX where the light sits, as a fraction of the frame from its center. Positive is toward the
-     *   frame's own right, which is the artwork's right under [ContentAnchor.CONTENT] — so a bloom placed on a corner
-     *   of the artwork stays on that corner when the layer turns.
-     * @property offsetY the same, downward.
-     * @property anchor what the light is placed against — the icon's box, or this layer's artwork carried by its
-     *   transform. [ContentAnchor.BOX] leaves it where it is put while the content slides underneath;
-     *   [ContentAnchor.CONTENT] sits it on the ink and moves, zooms and turns with it. The same question a shape mask
-     *   asks, and answered by the same enum through the same derivation, which is what stops the two drifting apart.
-     * @property strength how strongly it is laid on; 0 is invisible, 1 is the full color where the ramp starts. A
-     *   separate knob from [argb]'s own alpha because the color picker has no alpha channel by design, and because
-     *   this is the one a user reaches for.
+     * ### The two falloffs are two whole blooms, and [falloff] picks which one is showing
+     *
+     * **A ramp and a disc are not one set of settings with a switch on it.** They had one set between them, so every
+     * control the two shared carried across: turning a disc's strength down and flipping to linear gave a dim ramp
+     * nobody had asked for. Worse for position — a ramp is placed by a distance along its angle and a disc by a
+     * point, and the panel resolved the ramp's distance into the disc's own point, so flipping to radial and back
+     * destroyed whatever position had been set there.
+     *
+     * So a bloom holds **two complete [BloomProfile]s** and [falloff] selects one. Each is arrived at, tuned and
+     * left alone independently; flipping between them is looking at two arrangements rather than editing one through
+     * two lenses.
+     *
+     * **Every reader goes through [active], which is what made this cost the renderers nothing.** Both draw paths
+     * read `bloom.argb`, `bloom.strength`, `bloom.angleDegrees` and `bloom.radius`, and they still do — the
+     * forwarding accessors below resolve the profile once, where two paths each choosing one could choose
+     * differently. [placementX] is the same argument for the position, and doing that projection here rather than in
+     * the panel is what made the split possible at all: turning "how far along the angle" into a point is arithmetic
+     * about the model, and the UI storing its *result* was how the two falloffs came to overwrite each other.
+     *
+     * @property falloff whether the light runs across the frame or out from a point in it, and therefore which of
+     *   [linear] and [radial] is in play. See [Falloff].
+     * @property linear the ramp's own settings — its [BloomProfile.angleDegrees] and [BloomProfile.along] are the
+     *   ones that mean anything to it.
+     * @property radial the disc's — [BloomProfile.radius] and [BloomProfile.offsetX] / [BloomProfile.offsetY].
      */
     @Serializable
     @SerialName("gradient")
     data class Bloom(
-        val argb: Int = 0xFFFFFFFF.toInt(),
-        val angleDegrees: Float = 0f,
-        val strength: Float = 1f,
         val falloff: Falloff = Falloff.LINEAR,
-        val radius: Float = 1f,
-        val offsetX: Float = 0f,
-        val offsetY: Float = 0f,
-        val anchor: ContentAnchor = ContentAnchor.BOX,
+        val linear: BloomProfile = BloomProfile(),
+        val radial: BloomProfile = BloomProfile(),
         override val enabled: Boolean = true,
     ) : LayerEffect {
+
+        /** The profile [falloff] selects — every reader below goes through it, and so does every write. */
+        val active: BloomProfile get() = if (falloff == Falloff.LINEAR) linear else radial
+
+        /**
+         * The active profile's fields, forwarded.
+         *
+         * **This is what let the split cost the renderers nothing.** Both of them read `bloom.argb`,
+         * `bloom.strength`, `bloom.angleDegrees` and `bloom.radius`, and they still do — the resolution happens
+         * here, once, rather than in two paths that would each have to pick the right profile and could pick
+         * differently. That is the same reason `placementX` exists rather than a branch in `LayerGradient`.
+         */
+        val argb: Int get() = active.argb
+
+        /** @see argb */
+        val strength: Float get() = active.strength
+
+        /** @see argb */
+        val anchor: ContentAnchor get() = active.anchor
+
+        /** @see argb */
+        val angleDegrees: Float get() = active.angleDegrees
+
+        /** @see argb */
+        val radius: Float get() = active.radius
+
+        /**
+         * Where the light sits in the frame, whichever falloff is placing it — a fraction of the frame from its
+         * centre, which is what `LayerGradient.frameOf` moves by.
+         *
+         * A disc reads its own point. A ramp resolves [BloomProfile.along] onto [angleDegrees], the same
+         * `(sin, cos)` convention `LayerGradient.endpoints` runs on, so pushing it "forward" moves it the way the
+         * light travels.
+         */
+        val placementX: Float
+            get() = if (falloff == Falloff.LINEAR) active.along * sin(angleRadians) else active.offsetX
+
+        /** @see placementX */
+        val placementY: Float
+            get() = if (falloff == Falloff.LINEAR) active.along * cos(angleRadians) else active.offsetY
+
+        private val angleRadians: Float get() = angleDegrees * PI.toFloat() / 180f
+
+        /**
+         * This bloom with [transform] applied to whichever profile is active — how every control in the panel
+         * writes, so none of them has to know which falloff it is editing.
+         */
+        fun withActive(transform: (BloomProfile) -> BloomProfile): Bloom =
+            if (falloff == Falloff.LINEAR) copy(linear = transform(linear)) else copy(radial = transform(radial))
 
         /**
          * Painting nothing, either because it was turned down to nothing or because a radial one reaches nowhere.

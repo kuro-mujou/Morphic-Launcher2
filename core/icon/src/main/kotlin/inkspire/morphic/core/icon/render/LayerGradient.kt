@@ -98,8 +98,12 @@ object LayerGradient {
         }
 
     /** Where [bloom]'s light is laid out: its own offset, applied inside whichever frame its anchor names. */
+    // **The resolved placement, not the raw offsets** — a ramp and a disc are placed by different fields now, and
+    // `LayerEffect.Bloom.placementX` is what answers for both. It has to be the model's arithmetic rather than a
+    // branch here: the panel used to do the ramp's projection itself and store the result in the disc's own point,
+    // which is exactly how the two falloffs came to overwrite each other.
     fun frameOf(bloom: LayerEffect.Bloom, fit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int): Frame =
-        frameOf(bloom.anchor, fit, transform, sizePx).movedBy(bloom.offsetX, bloom.offsetY)
+        frameOf(bloom.anchor, fit, transform, sizePx).movedBy(bloom.placementX, bloom.placementY)
 
     /**
      * `[x0, y0, x1, y1]` for a ramp at [angleDegrees] across [frame].

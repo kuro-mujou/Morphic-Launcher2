@@ -17,7 +17,7 @@ import org.junit.Test
 class LayerEffectPipelineTest {
 
     private val tint = LayerEffect.Color(tintArgb = 0xFFFF0000.toInt())
-    private val bloom = LayerEffect.Bloom(strength = 0.5f)
+    private val bloom = LayerEffect.Bloom(linear = BloomProfile(strength = 0.5f))
 
     private fun spec(vararg effects: LayerEffect) = IconLayerSpec(
         role = LayerRole.FOREGROUND,
@@ -46,7 +46,7 @@ class LayerEffectPipelineTest {
     fun `an effect that would paint nothing is left out too`() {
         // Two different reasons to skip — the user's switch, and the effect saying it is a no-op — and the pipeline
         // must not care which, or every renderer would have to ask both questions itself.
-        assertEquals(emptyList<LayerEffect>(), spec(LayerEffect.Color(), LayerEffect.Bloom(strength = 0f)).activeEffects)
+        assertEquals(emptyList<LayerEffect>(), spec(LayerEffect.Color(), LayerEffect.Bloom(linear = BloomProfile(strength = 0f))).activeEffects)
     }
 
     @Test
@@ -83,28 +83,58 @@ class LayerEffectPipelineTest {
         val encoded = json.encodeToString(LayerEffect.serializer(), bloom)
 
         assertTrue(encoded.contains("\"gradient\""))
-        // The geometry is all defaulted, so an untouched bloom costs nothing on disk.
+        // Only the profile that was touched is written, and only its one changed field — an untouched bloom costs
+        // nothing on disk and a tuned one costs what was tuned.
+        assertTrue(encoded.contains("linear"))
+        assertFalse(encoded.contains("radial"))
         assertFalse(encoded.contains("falloff"))
-        assertFalse(encoded.contains("radius"))
-        assertFalse(encoded.contains("anchor"))
         assertFalse(encoded.contains("offset"))
-        // And a recipe predating them comes back as the plain top-to-bottom ramp it was.
-        assertEquals(bloom, json.decodeFromString(LayerEffect.serializer(), """{"type":"gradient","strength":0.5}"""))
     }
 
+    /**
+     * What a recipe written before the two falloffs were split reads back as.
+     *
+     * **It loses its settings, and that is the accepted cost rather than a guarantee being kept.** Every one of the
+     * old flat keys — `strength`, `angleDegrees`, `radius`, `offsetX` — now lives inside `linear` or `radial`, so
+     * `ignoreUnknownKeys` drops them all and both profiles default. Nothing has shipped, which is the only reason
+     * that is affordable; what is still worth pinning is the shape of the failure: a **default bloom**, not a throw,
+     * because a throw takes the whole recipe with it.
+     */
     @Test
-    fun `a recipe written with two stops loses them and nothing else`() {
-        // The accepted cost of one color replacing two: the old keys are unknown now, so `ignoreUnknownKeys` drops
-        // them and the color defaults. Everything the effect still has a field for survives, which is what makes
-        // this a downgrade rather than a corruption.
+    fun `a recipe predating the profiles comes back as a default bloom rather than failing`() {
         val json = Json { ignoreUnknownKeys = true }
-        val stored = """{"type":"gradient","startArgb":-16711936,"endArgb":-65536,"angleDegrees":90.0,"strength":0.5}"""
+        val stored = """{"type":"gradient","startArgb":-16711936,"angleDegrees":90.0,"strength":0.5,"radius":0.25}"""
 
         val decoded = json.decodeFromString(LayerEffect.serializer(), stored) as LayerEffect.Bloom
 
-        assertEquals(0xFFFFFFFF.toInt(), decoded.argb)
-        assertEquals(90f, decoded.angleDegrees, 0.001f)
-        assertEquals(0.5f, decoded.strength, 0.001f)
+        assertEquals(LayerEffect.Bloom(), decoded)
+    }
+
+    @Test
+    fun `each falloff keeps its own settings, so flipping between them changes nothing`() {
+        // The bug this shape was built for: one set of fields between the two meant turning a disc's strength down
+        // and flipping to linear handed back a ramp nobody had dimmed.
+        val tuned = LayerEffect.Bloom(
+            falloff = Falloff.RADIAL,
+            linear = BloomProfile(strength = 0.9f, angleDegrees = 10f),
+            radial = BloomProfile(strength = 0.1f, radius = 0.3f),
+        )
+
+        assertEquals(0.1f, tuned.strength, 0.001f)
+        assertEquals(0.3f, tuned.radius, 0.001f)
+        // Flipping reads the other profile whole, and flipping back finds the first one exactly as it was left.
+        val flipped = tuned.copy(falloff = Falloff.LINEAR)
+        assertEquals(0.9f, flipped.strength, 0.001f)
+        assertEquals(10f, flipped.angleDegrees, 0.001f)
+        assertEquals(tuned, flipped.copy(falloff = Falloff.RADIAL))
+    }
+
+    @Test
+    fun `a write reaches only the profile that is showing`() {
+        val tuned = LayerEffect.Bloom(falloff = Falloff.RADIAL).withActive { it.copy(strength = 0.2f) }
+
+        assertEquals(0.2f, tuned.radial.strength, 0.001f)
+        assertEquals(BloomProfile().strength, tuned.linear.strength, 0.001f)
     }
 
     @Test
@@ -199,7 +229,7 @@ class LayerEffectPipelineTest {
     fun `a radial bloom that reaches nowhere paints nothing`() {
         // Not cosmetic: `RadialGradient` rejects a non-positive radius outright, so this is what keeps the one value
         // a slider can always be dragged to from reaching either renderer.
-        val nowhere = LayerEffect.Bloom(falloff = Falloff.RADIAL, radius = 0f)
+        val nowhere = LayerEffect.Bloom(falloff = Falloff.RADIAL, radial = BloomProfile(radius = 0f))
 
         assertTrue(nowhere.isIdentity)
         // The same radius is meaningless to a linear ramp, which spans the box whatever it says.
@@ -223,8 +253,8 @@ class LayerEffectPipelineTest {
      */
     @Test
     fun `an effect dialled down to nothing keeps its record and its other values`() {
-        val tuned = LayerEffect.Bloom(strength = 0.5f, angleDegrees = 135f, argb = 0xFF00FF00.toInt())
-        val list = listOf<LayerEffect>(tuned).withEffect(tuned.copy(strength = 0f))
+        val tuned = LayerEffect.Bloom(linear = BloomProfile(strength = 0.5f, angleDegrees = 135f, argb = 0xFF00FF00.toInt()))
+        val list = listOf<LayerEffect>(tuned).withEffect(tuned.withActive { it.copy(strength = 0f) })
 
         val kept = list.effectOrNull<LayerEffect.Bloom>()
         assertEquals(135f, kept?.angleDegrees)

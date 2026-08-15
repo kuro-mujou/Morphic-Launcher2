@@ -324,19 +324,17 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
      */
     fun seeded(): LayerEffect? = when (this) {
         OPACITY, BLEND, COLOR, FILTER -> null
-        BLOOM -> LayerEffect.Bloom()
-        GLOSS -> LayerEffect.Gloss()
-        // The one addition with no all-default constructor: a pattern has to *be* one, and there is no neutral
-        // tile. Dots for the same reason `PatternControls` picks it — the most legible of the set at icon size.
-        PATTERN -> LayerEffect.Pattern(pattern = IconPatterns.Dots)
-        EXTRUDE -> LayerEffect.Extrude()
-        CHROMATIC -> LayerEffect.ChromaticSplit()
-        GLOW -> LayerEffect.Glow()
-        SHADOW -> LayerEffect.Shadow()
-        RIPPLE -> LayerEffect.Ripple()
-        GRAIN -> LayerEffect.Grain()
-        PIXELATE -> LayerEffect.Pixelate()
-        PROGRESSIVE_BLUR -> LayerEffect.ProgressiveBlur()
+        BLOOM -> BloomDefaults
+        GLOSS -> GlossDefaults
+        PATTERN -> PatternDefaults
+        EXTRUDE -> ExtrudeDefaults
+        CHROMATIC -> ChromaticDefaults
+        GLOW -> GlowDefaults
+        SHADOW -> ShadowDefaults
+        RIPPLE -> RippleDefaults
+        GRAIN -> GrainDefaults
+        PIXELATE -> PixelateDefaults
+        PROGRESSIVE_BLUR -> ProgressiveBlurDefaults
     }
 
     /** These effects without this entry's record — how an abandoned seed is taken back out. */
@@ -946,9 +944,17 @@ private fun BloomControls(
     onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
-    // Seeded at zero strength when absent, so the sliders show a coherent bloom before it is turned on rather than
-    // jumping to arbitrary values the moment strength leaves zero.
-    val bloom = effects.effectOrNull<LayerEffect.Bloom>() ?: LayerEffect.Bloom(strength = 0f)
+    // The effect's own defaults when absent, which is what opening this entry seeds — so the one frame before the
+    // seed lands shows the bloom that is about to arrive rather than a different one. It read `strength = 0f` back
+    // when nothing was seeded and the panel had to stay invisible until asked for; that is `EffectSlice.seeded`'s
+    // job now, and the two must agree.
+    val bloom = effects.effectOrNull<LayerEffect.Bloom>() ?: LayerEffect.Bloom()
+
+    // **The defaults of whichever falloff is showing.** Both profiles start identical, so today this is one value
+    // either way — written as a lookup rather than as `BloomDefaults.linear` so that giving the two falloffs
+    // different arrival values stays the one-line change `BloomProfile` promises, instead of silently leaving every
+    // reset in this panel pointing at the ramp's.
+    val defaults = if (bloom.falloff == Falloff.LINEAR) BloomDefaults.linear else BloomDefaults.radial
 
     LabeledControl("Falloff") {
         MorphicSegmentedButtons(
@@ -967,7 +973,7 @@ private fun BloomControls(
     // off, and at zero the effect is dropped from the list entirely.
     LabeledControl("Color") {
         ColorField(argb = bloom.argb) { argb ->
-            onUpdate { it.withEffect(bloom.copy(argb = argb)) }
+            onUpdate { it.withEffect(bloom.withActive { p -> p.copy(argb = argb) }) }
         }
     }
 
@@ -975,10 +981,10 @@ private fun BloomControls(
         label = "Strength",
         value = bloom.strength,
         valueRange = 0f..1f,
-        // Nothing, not `Bloom()`'s own default of 1: reset means "as if untouched", and an unconfigured bloom is
-        // the one this panel seeds at zero so it stays invisible until asked for.
-        default = 0f,
-        onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(strength = value)) } },
+        // The bloom's own strength, which is what "untouched" means for a *seeded* effect — see [BloomDefaults].
+        // It was 0, so this button was lit the moment the panel opened and pressing it made the light invisible.
+        default = defaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(bloom.withActive { p -> p.copy(strength = value) }) } },
         onValueChangeFinished = onCommit,
     )
 
@@ -988,9 +994,9 @@ private fun BloomControls(
             value = bloom.angleDegrees,
             valueRange = 0f..360f,
             step = AngleStep,
-            default = 0f,
+            default = defaults.angleDegrees,
             format = { "%.0f°".format(it) },
-            onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(angleDegrees = value)) } },
+            onValueChange = { value -> onUpdate { it.withEffect(bloom.withActive { p -> p.copy(angleDegrees = value) }) } },
             onValueChangeFinished = onCommit,
         )
 
@@ -1000,8 +1006,8 @@ private fun BloomControls(
             label = "Radius",
             value = bloom.radius,
             valueRange = UnitFloor..1.5f,
-            default = 1f,
-            onValueChange = { value -> onUpdate { it.withEffect(bloom.copy(radius = value)) } },
+            default = defaults.radius,
+            onValueChange = { value -> onUpdate { it.withEffect(bloom.withActive { p -> p.copy(radius = value) }) } },
             onValueChangeFinished = onCommit,
         )
     }
@@ -1016,7 +1022,11 @@ private fun BloomControls(
         supportingText = bloom.anchor.bloomHint,
         checked = bloom.anchor == ContentAnchor.CONTENT,
         onCheckedChange = { on ->
-            onUpdate { it.withEffect(bloom.copy(anchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX)) }
+            onUpdate {
+                it.withEffect(
+                    bloom.withActive { p -> p.copy(anchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX) },
+                )
+            }
             onCommit()
         },
         modifier = Modifier.fillMaxWidth(),
@@ -1046,38 +1056,29 @@ private fun BloomPosition(
         // A pad carries no name of its own, so it takes one; the slider below labels itself.
         Falloff.RADIAL -> LabeledControl("Position") {
             PositionPad(
-                x = bloom.offsetX,
-                y = bloom.offsetY,
-                onValueChange = { x, y -> onUpdate { it.withEffect(bloom.copy(offsetX = x, offsetY = y)) } },
+                x = bloom.active.offsetX,
+                y = bloom.active.offsetY,
+                onValueChange = { x, y ->
+                    onUpdate { it.withEffect(bloom.withActive { p -> p.copy(offsetX = x, offsetY = y) }) }
+                },
                 onCommit = onCommit,
             )
         }
 
-        Falloff.LINEAR -> {
-            // The same convention `LayerGradient.endpoints` runs on — 0° straight down, so the direction vector
-            // is (sin, cos). Reading it back as a projection is what keeps the slider and the picture agreeing
-            // after the angle has been turned.
-            val radians = bloom.angleDegrees * PI.toFloat() / 180f
-            val dx = sin(radians)
-            val dy = cos(radians)
-
-            // **A [SliderControl], like every other slider in the studio.** This was the one bare [SteppedSlider]
-            // left — a track and two buttons under a `LabeledControl`, with no value readout and no reset. So it
-            // was the only control here that could not answer "what is this set to?" or "put it back", which is
-            // exactly what a position wants: the useful values are near the middle and the middle is unfindable by
-            // dragging. Nothing about it needed a bare slider; it predates the readout being added.
-            SliderControl(
-                label = "Position",
-                value = bloom.offsetX * dx + bloom.offsetY * dy,
-                valueRange = PositionRange,
-                // Centered on the frame, which is where `LayerEffect.Bloom` itself rests.
-                default = 0f,
-                onValueChange = { along ->
-                    onUpdate { it.withEffect(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
-                },
-                onValueChangeFinished = onCommit,
-            )
-        }
+        // **Writes `along` directly, where it used to write the projection into the disc's own point.** That was the
+        // whole of the shared-state bug: the panel did the trigonometry and stored a 2D result, so flipping to
+        // radial and back destroyed whatever position had been set there — and flipping the other way handed the
+        // ramp a distance it never chose. `LayerEffect.Bloom.placementX` does the projection now, which is where it
+        // belongs; this control is one number writing one field.
+        Falloff.LINEAR -> SliderControl(
+            label = "Position",
+            value = bloom.active.along,
+            valueRange = PositionRange,
+            // The ramp's own, named directly: this arm *is* the linear one, so there is no active profile to look up.
+            default = BloomDefaults.linear.along,
+            onValueChange = { along -> onUpdate { it.withEffect(bloom.withActive { p -> p.copy(along = along) }) } },
+            onValueChangeFinished = onCommit,
+        )
     }
 }
 
@@ -1121,7 +1122,7 @@ private fun ProgressiveBlurControls(
         label = "Blur",
         value = blur.radius,
         valueRange = 0f..BlurReach,
-        default = 0f,
+        default = ProgressiveBlurDefaults.radius,
         onValueChange = { value -> onUpdate { it.withEffect(blur.copy(radius = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1129,7 +1130,7 @@ private fun ProgressiveBlurControls(
         label = "Sharp area",
         value = blur.sharpArea,
         valueRange = 0f..1f,
-        default = 0.2f,
+        default = ProgressiveBlurDefaults.sharpArea,
         onValueChange = { value -> onUpdate { it.withEffect(blur.copy(sharpArea = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1137,7 +1138,7 @@ private fun ProgressiveBlurControls(
         label = "Softness",
         value = blur.softness,
         valueRange = 0f..1f,
-        default = 0.4f,
+        default = ProgressiveBlurDefaults.softness,
         onValueChange = { value -> onUpdate { it.withEffect(blur.copy(softness = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1148,7 +1149,7 @@ private fun ProgressiveBlurControls(
             value = blur.angleDegrees,
             valueRange = 0f..360f,
             step = AngleStep,
-            default = 0f,
+            default = ProgressiveBlurDefaults.angleDegrees,
             format = { "%.0f°".format(it) },
             onValueChange = { value -> onUpdate { it.withEffect(blur.copy(angleDegrees = value)) } },
             onValueChangeFinished = onCommit,
@@ -1199,7 +1200,7 @@ private fun PixelateControls(
         label = "Size",
         value = pixelate.cellSize,
         valueRange = 0f..PixelateReach,
-        default = 0f,
+        default = PixelateDefaults.cellSize,
         onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(cellSize = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1209,7 +1210,7 @@ private fun PixelateControls(
         // delete the effect being tuned.
         value = pixelate.fill,
         valueRange = UnitFloor..1f,
-        default = 1f,
+        default = PixelateDefaults.fill,
         onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(fill = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1217,7 +1218,7 @@ private fun PixelateControls(
         label = "Roundness",
         value = pixelate.roundness,
         valueRange = 0f..1f,
-        default = 0f,
+        default = PixelateDefaults.roundness,
         onValueChange = { value -> onUpdate { it.withEffect(pixelate.copy(roundness = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1267,7 +1268,7 @@ private fun GrainControls(
         label = "Strength",
         value = grain.amplitude,
         valueRange = 0f..GrainReach,
-        default = 0f,
+        default = GrainDefaults.amplitude,
         onValueChange = { value -> onUpdate { it.withEffect(grain.copy(amplitude = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1277,7 +1278,7 @@ private fun GrainControls(
         // so a slider that could reach it would silently delete the effect being tuned.
         value = grain.grainSize,
         valueRange = UnitFloor..0.4f,
-        default = 0.08f,
+        default = GrainDefaults.grainSize,
         onValueChange = { value -> onUpdate { it.withEffect(grain.copy(grainSize = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1289,7 +1290,7 @@ private fun GrainControls(
             value = grain.angleDegrees,
             valueRange = 0f..360f,
             step = AngleStep,
-            default = 0f,
+            default = GrainDefaults.angleDegrees,
             format = { "%.0f°".format(it) },
             onValueChange = { value -> onUpdate { it.withEffect(grain.copy(angleDegrees = value)) } },
             onValueChangeFinished = onCommit,
@@ -1329,7 +1330,7 @@ private fun RippleControls(
         label = "Strength",
         value = ripple.amplitude,
         valueRange = 0f..RippleReach,
-        default = 0f,
+        default = RippleDefaults.amplitude,
         onValueChange = { value -> onUpdate { it.withEffect(ripple.copy(amplitude = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1338,7 +1339,7 @@ private fun RippleControls(
         value = ripple.waves,
         valueRange = 1f..30f,
         step = 1f,
-        default = 8f,
+        default = RippleDefaults.waves,
         format = { "%.0f".format(it) },
         onValueChange = { value -> onUpdate { it.withEffect(ripple.copy(waves = value)) } },
         onValueChangeFinished = onCommit,
@@ -1391,7 +1392,7 @@ private fun GlowControls(
         label = "Strength",
         value = glow.strength,
         valueRange = 0f..1f,
-        default = 0f,
+        default = GlowDefaults.strength,
         onValueChange = { value -> onUpdate { it.withEffect(glow.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1399,7 +1400,7 @@ private fun GlowControls(
         label = "Radius",
         value = glow.radius,
         valueRange = 0f..HaloReach,
-        default = 0.08f,
+        default = GlowDefaults.radius,
         onValueChange = { value -> onUpdate { it.withEffect(glow.copy(radius = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1407,7 +1408,7 @@ private fun GlowControls(
         label = "Spread",
         value = glow.spread,
         valueRange = 0f..HaloReach,
-        default = 0f,
+        default = GlowDefaults.spread,
         onValueChange = { value -> onUpdate { it.withEffect(glow.copy(spread = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1441,7 +1442,7 @@ private fun ShadowControls(
         label = "Strength",
         value = shadow.strength,
         valueRange = 0f..1f,
-        default = 0f,
+        default = ShadowDefaults.strength,
         onValueChange = { value -> onUpdate { it.withEffect(shadow.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1449,7 +1450,7 @@ private fun ShadowControls(
         label = "Radius",
         value = shadow.radius,
         valueRange = 0f..HaloReach,
-        default = 0.05f,
+        default = ShadowDefaults.radius,
         onValueChange = { value -> onUpdate { it.withEffect(shadow.copy(radius = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1548,7 +1549,7 @@ private fun ExtrudeControls(
         label = "Strength",
         value = extrude.strength,
         valueRange = 0f..1f,
-        default = 0f,
+        default = ExtrudeDefaults.strength,
         onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1556,7 +1557,7 @@ private fun ExtrudeControls(
         label = "Depth",
         value = extrude.depth,
         valueRange = UnitFloor..0.25f,
-        default = 0.15f,
+        default = ExtrudeDefaults.depth,
         onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(depth = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1565,7 +1566,7 @@ private fun ExtrudeControls(
         value = extrude.angleDegrees,
         valueRange = 0f..360f,
         step = AngleStep,
-        default = 0f,
+        default = ExtrudeDefaults.angleDegrees,
         format = { "%.0f°".format(it) },
         onValueChange = { value -> onUpdate { it.withEffect(extrude.copy(angleDegrees = value)) } },
         onValueChangeFinished = onCommit,
@@ -1640,7 +1641,7 @@ private fun PatternControls(
             label = "Strength",
             value = pattern.strength,
             valueRange = 0f..1f,
-            default = 1f,
+            default = PatternDefaults.strength,
             onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(strength = value)) } },
             onValueChangeFinished = onCommit,
         )
@@ -1650,7 +1651,7 @@ private fun PatternControls(
             // Floored well above zero: the tile is floored in pixels anyway, so a smaller number would stop
             // changing anything while the slider went on moving.
             valueRange = 0.05f..1f,
-            default = 0.25f,
+            default = PatternDefaults.scale,
             onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(scale = value)) } },
             onValueChangeFinished = onCommit,
         )
@@ -1659,7 +1660,7 @@ private fun PatternControls(
             value = pattern.angleDegrees,
             valueRange = 0f..360f,
             step = AngleStep,
-            default = 0f,
+            default = PatternDefaults.angleDegrees,
             format = { "%.0f°".format(it) },
             onValueChange = { value -> onUpdate { it.withEffect(pattern.copy(angleDegrees = value)) } },
             onValueChangeFinished = onCommit,
@@ -1745,7 +1746,7 @@ private fun GlossControls(
         valueRange = 0f..1f,
         // Nothing, not `Gloss()`'s own default: reset means "as if untouched", and an unconfigured sheen is the one
         // this panel seeds at zero so it stays invisible until asked for.
-        default = 0f,
+        default = GlossDefaults.strength,
         onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(strength = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1754,7 +1755,7 @@ private fun GlossControls(
         value = gloss.angleDegrees,
         valueRange = 0f..360f,
         step = AngleStep,
-        default = 0f,
+        default = GlossDefaults.angleDegrees,
         format = { "%.0f°".format(it) },
         onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(angleDegrees = value)) } },
         onValueChangeFinished = onCommit,
@@ -1763,7 +1764,7 @@ private fun GlossControls(
         label = "Curve",
         value = gloss.curve,
         valueRange = -1f..1f,
-        default = 0f,
+        default = GlossDefaults.curve,
         onValueChange = { value -> onUpdate { it.withEffect(gloss.copy(curve = value)) } },
         onValueChangeFinished = onCommit,
     )
@@ -1823,6 +1824,40 @@ private const val EffectGlyphFraction = 0.42f
  * It stays at the value it has always had; only the stepper got finer.
  */
 private const val UnitFloor = 0.05f
+
+/**
+ * **Each effect as it arrives** — held once, so the value the studio *seeds* and the value a slider's **reset**
+ * returns to are the same object's fields rather than two numbers that happen to agree.
+ *
+ * They did not agree, and the symptom was a panel that lied. Every `Strength` reset was pinned to `0`, on the
+ * reading that reset means "neutral" — so opening a fresh effect lit **every** reset button, telling the user they
+ * had changed things they had not touched, and pressing one took the effect to invisible rather than back to what
+ * they had just been shown. The row is supposed to double as the answer to *"have I changed this?"*, and against a
+ * seeded default only one reading makes that true: reset goes to **the value the effect arrives at**.
+ *
+ * Which is also why these are read rather than restated. A default is tuned in `LayerEffect` — that is where the
+ * effect says what it looks like — and a reset target copied by hand into a call site is one edit away from
+ * disagreeing with it, silently, in the direction of the bug above.
+ *
+ * The adjustments need no entry: an unseeded effect arrives at its identity, so `LayerEffect.Color()`'s own neutral
+ * *is* both answers, and the sliders that read `1f` and `0f` for hue, saturation and brightness were right all along.
+ */
+private val BloomDefaults = LayerEffect.Bloom()
+private val GlossDefaults = LayerEffect.Gloss()
+
+/**
+ * The one addition with no all-default constructor: a pattern has to *be* one, and there is no neutral tile. Dots for
+ * the reason `PatternControls` picks it as its own fallback — the most legible of the set at icon size.
+ */
+private val PatternDefaults = LayerEffect.Pattern(pattern = IconPatterns.Dots)
+private val ExtrudeDefaults = LayerEffect.Extrude()
+private val ChromaticDefaults = LayerEffect.ChromaticSplit()
+private val GlowDefaults = LayerEffect.Glow()
+private val ShadowDefaults = LayerEffect.Shadow()
+private val RippleDefaults = LayerEffect.Ripple()
+private val GrainDefaults = LayerEffect.Grain()
+private val PixelateDefaults = LayerEffect.Pixelate()
+private val ProgressiveBlurDefaults = LayerEffect.ProgressiveBlur()
 
 /** What a tile's label adds under its plate — the gap plus one line of `labelSmall`, which is what sizes a page. */
 private val EffectLabelHeight = 20.dp

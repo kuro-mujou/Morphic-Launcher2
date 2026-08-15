@@ -120,10 +120,18 @@ internal val LayerSource.label: String
  * answer to "have I changed this?" — the same "ask, do not guess" rule the layer reorder buttons and the transform
  * cluster are built on.
  *
+ * **Which makes [default] "the value this arrives at", not "the value that does nothing".** The two are the same for
+ * an adjustment, whose untouched state *is* its identity — and they came apart the moment effects began arriving
+ * seeded at values chosen to be visible. Every `Strength` reset was pinned to zero on the old reading, so opening a
+ * fresh effect lit every reset in the panel, claiming changes the user had not made, and pressing one took the
+ * effect to invisible rather than back to what they had just been handed. See `BloomDefaults` for how the effect
+ * panel now reads its targets from the model rather than restating them.
+ *
  * A press is discrete, so it commits at once and is one undo step.
  *
- * @param default where reset goes. Deliberately per call site and not `valueRange.start`: the resting value of a
- *   gradient's strength is nothing, of a zoom is 1, and of a hue is the start — three different answers.
+ * @param default where reset goes — **the value this control has when untouched**. Deliberately per call site and
+ *   not `valueRange.start`: a zoom rests at 1 in the middle of its range, a hue at the start, and a seeded effect's
+ *   strength wherever that effect chose to arrive.
  * @param step how far one press of a stepper moves the value. Defaults to [finestStep], which is what almost every
  *   caller wants; an angle overrides it, degrees not being fractions.
  * @param format how the number reads. Defaults to [finestFormat], matched to [step] so a press always moves the
