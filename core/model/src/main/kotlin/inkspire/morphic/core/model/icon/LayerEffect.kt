@@ -623,7 +623,13 @@ sealed interface LayerEffect {
     data class Shadow(
         val argb: Int = 0xFF000000.toInt(),
         val radius: Float = 0.05f,
-        val offsetX: Float = 0f,
+        /**
+         * **Thrown down *and* to the side, where this used to fall straight down.** Equal on both axes puts the
+         * light over the icon's leading shoulder, which is where every other surface in this launcher implies it is
+         * — a shadow directly beneath reads as the icon floating rather than as anything lighting it. The pair is
+         * what makes it a direction; either alone is a drop.
+         */
+        val offsetX: Float = 0.04f,
         val offsetY: Float = 0.04f,
         val strength: Float = 1f,
         override val enabled: Boolean = true,
