@@ -29,6 +29,7 @@ import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.IconPresets
 import inkspire.morphic.data.settings.IconOverride
+import inkspire.morphic.data.settings.IconStudioWorkspace
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceMetrics
@@ -127,6 +128,22 @@ private val IconStudioBackgroundSlice = SettingsSlice(
     default = PreviewBackground.Default,
 )
 
+/**
+ * How the studio's workspace is arranged: one key, one blob of fractions.
+ *
+ * **Its own key rather than a field in [IconStudioBackgroundSlice]**, on that slice's own stated grounds about rates
+ * of change, pointed one step further: a backdrop is cycled a handful of times a session, where this is written at
+ * the end of every pan and every pinch. Sharing a blob would make each drag rewrite the backdrop too.
+ *
+ * A record rather than a bare value, unlike the backdrop — there are five numbers here, and they are read and written
+ * together as one arrangement.
+ */
+private val IconStudioWorkspaceSlice = SettingsSlice(
+    name = "icon_studio_workspace",
+    serializer = serializer<IconStudioWorkspace>(),
+    default = IconStudioWorkspace.Default,
+)
+
 /** The APPS surface's chrome: one key, one blob. */
 private val AppsChromeSlice = SettingsSlice(
     name = "apps_chrome",
@@ -181,6 +198,15 @@ internal class SettingsRepositoryImpl(
     // Ignores the old value: one value replaced outright. See the interface.
     override suspend fun setIconStudioBackground(background: PreviewBackground) =
         update(IconStudioBackgroundSlice) { background }
+
+    // **Sanitized on the way out, so no consumer has to remember to.** A non-finite float reaching a
+    // `Modifier.offset` places the node nowhere without throwing, so the guard belongs at the one point every read
+    // passes through rather than at each screen that might forget it. See `IconStudioWorkspace.sanitized`.
+    override val iconStudioWorkspace: Flow<IconStudioWorkspace> =
+        dataStore.read(IconStudioWorkspaceSlice) { it.sanitized() }
+
+    override suspend fun setIconStudioWorkspace(workspace: IconStudioWorkspace) =
+        update(IconStudioWorkspaceSlice) { workspace }
 
     override val appsChrome: Flow<AppsChrome> = dataStore.read(AppsChromeSlice) { it }
 

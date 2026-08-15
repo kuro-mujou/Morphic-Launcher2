@@ -18,6 +18,7 @@ import inkspire.morphic.data.icons.CustomIconStore
 import inkspire.morphic.data.icons.IconOverrideRepository
 import inkspire.morphic.data.icons.IconPackManager
 import inkspire.morphic.data.settings.IconPreset
+import inkspire.morphic.data.settings.IconStudioWorkspace
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,8 +70,9 @@ class IconStudioViewModel(
 
     init {
         // Above the route branch, because the canvas exists in all three cases — including the picker's, which floats
-        // over it rather than replacing it.
+        // over it rather than replacing it. The workspace is the same canvas's arrangement, so it is seeded here too.
         observeBackground()
+        observeWorkspace()
 
         when (route) {
             is IconStudioRoute.Global -> openGlobal(route.preset)
@@ -218,6 +220,86 @@ class IconStudioViewModel(
             settingsRepository.iconStudioBackground.collect { stored ->
                 _state.update { it.copy(background = stored) }
             }
+        }
+    }
+
+    /**
+     * Moves the workspace — the preview's pan and zoom, or where the layer rail sits — **without writing anything**.
+     *
+     * Called every frame of a pinch or a rail drag, which is exactly why it does not persist: a gesture is sixty of
+     * these a second and a settings slice is one JSON document rewritten whole. [commitWorkspace] is the other half.
+     *
+     * **It touches neither `dirty` nor history, and that is the point rather than an omission.** The viewport is not
+     * part of the recipe — it is where the paper is lying, not the drawing — so panning the icon must not light up
+     * Save, and undo must not step back through a pinch on the way to the edit before it. That is the same line
+     * `background` sits on, and the reason both are fields of their own rather than anything inside `editing`.
+     */
+    fun setWorkspace(workspace: IconStudioWorkspace) = _state.update { it.copy(workspace = workspace) }
+
+    /**
+     * Remembers wherever the workspace was left. One write per gesture, at the end of it.
+     *
+     * The same optimistic shape as [cycleBackground] — the state has already moved, so this only catches the store up
+     * — and [observeWorkspace]'s echo is a no-op for the same reason.
+     */
+    fun commitWorkspace() {
+        val workspace = _state.value.workspace
+        viewModelScope.launch { settingsRepository.setIconStudioWorkspace(workspace) }
+    }
+
+    /**
+     * Puts the preview back where it started — nothing panned, nothing zoomed — and remembers that.
+     *
+     * **Discrete, so it writes at once**, unlike [setWorkspace]: there is no gesture to punctuate, which is the same
+     * line every source tile and every slider reset in the studio sits on.
+     *
+     * It leaves the **layer rail** where the user put it; see `IconStudioWorkspace.withPreviewReset` for why those are
+     * two arrangements rather than one.
+     */
+    fun resetPreviewView() {
+        _state.update { it.copy(workspace = it.workspace.withPreviewReset()) }
+        commitWorkspace()
+    }
+
+    /**
+     * Turns the layer rail from a column into a row, or back.
+     *
+     * **A toggle rather than a setter**, because the menu row that drives it names the *other* arrangement ("Lay out
+     * as a row") — so the caller has nothing to say that the current value does not already answer. Same shape as the
+     * quick menu's Hide/Show.
+     *
+     * Discrete, so it writes at once. Like every workspace command it leaves the recipe alone: rearranging the rail is
+     * not an edit and must neither light up Save nor land in undo.
+     */
+    fun toggleRailAxis() {
+        _state.update { it.copy(workspace = it.workspace.copy(railAxis = it.workspace.railAxis.flipped)) }
+        commitWorkspace()
+    }
+
+    /**
+     * Cuts the rail's list of layers down to one tile's worth of viewport, or opens it back up.
+     *
+     * It shrinks the *window*, never the list — see `IconStudioWorkspace.railCollapsed`.
+     *
+     * @see toggleRailAxis
+     */
+    fun toggleRailCollapsed() {
+        _state.update { it.copy(workspace = it.workspace.copy(railCollapsed = !it.workspace.railCollapsed)) }
+        commitWorkspace()
+    }
+
+    /**
+     * Seeds the workspace from the store, and **once only**, which is where it differs from [observeBackground].
+     *
+     * A backdrop is changed by discrete taps, so collecting it forever is harmless: an echo lands on the value already
+     * held. The workspace is *dragged*, so a late emission arriving mid-gesture would yank the icon back to where the
+     * last commit put it — the divergence that makes projecting `editing` wrong, on a field that looked safe because
+     * its neighbour is. So this reads the first value and then the screen owns it, which is the studio's usual detach.
+     */
+    private fun observeWorkspace() {
+        viewModelScope.launch {
+            val stored = settingsRepository.iconStudioWorkspace.first()
+            _state.update { it.copy(workspace = stored) }
         }
     }
 

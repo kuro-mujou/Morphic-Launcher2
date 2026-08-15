@@ -22,10 +22,17 @@ import inkspire.morphic.core.model.icon.PreviewBackground
 /** The swatch's own corner. Small enough to read as a tile rather than as a pill at this size. */
 private val SwatchCorner = 8.dp
 
-/** The button's side. A press target on its own, so it does not need a surrounding pill. */
-private val SwatchSide = 34.dp
+/**
+ * The swatch's side — what is **drawn**, not what is pressed.
+ *
+ * It stood alone and was its own press target until `StudioViewButtons` put it on a pill beside the reset-view
+ * button; the press target is that button's full slot now, and this is the mark inside it. Which is why it matches
+ * `GlyphSide` rather than filling the slot: the two halves of that pill are a picture and a glyph, and they read as
+ * one control only while they are the same size.
+ */
+private val SwatchSide = 20.dp
 
-/** One square of the swatch's checkerboard — a fraction of the canvas's, so the pattern still reads at 34dp. */
+/** One square of the swatch's checkerboard — small enough that the pattern still reads at [SwatchSide]. */
 private val SwatchCheckerSquare = 4.dp
 
 /**

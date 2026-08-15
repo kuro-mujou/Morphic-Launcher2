@@ -6,19 +6,27 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -26,16 +34,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +46,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,14 +54,27 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.icon.compose.IconPreview
+import inkspire.morphic.data.settings.IconStudioWorkspace
+import inkspire.morphic.data.settings.LayerRailAxis
+import kotlin.math.roundToInt
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The stack, always on screen: one tile per layer down the end edge of the canvas, with a `+` at the end.
@@ -78,30 +95,59 @@ import inkspire.morphic.core.icon.compose.IconPreview
  * reversal reaches further than this file: `IconStudioViewModel.removeSelected` moves the selection **down** an
  * index to keep the highlight on the same tile, which only makes sense while they are drawn this way round.
  *
- * **On the end edge, not "the right"** — RTL-aware, for `SideZoneEdge`'s own reason. Vertically centred and capped,
- * so it stays clear of the history and save buttons above and the tool panel below, and scrolls rather than growing
- * into either. The **stack** is what scrolls: `+` is pinned below it, because a control that adds a layer must not
- * be pushed out of reach by the layer it just added.
+ * **On the end edge, not "the right"** — RTL-aware, for `SideZoneEdge`'s own reason. It **rests** at the top of the
+ * workspace, directly below the back and history buttons, and is capped so it scrolls rather than growing into the
+ * tool panel below. The **stack** is what scrolls: `+` is pinned below it, because a control that adds a layer must
+ * not be pushed out of reach by the layer it just added.
+ *
+ * **And resting is all it is now: the rail can be dragged anywhere on the canvas by the handle at its head.** Which
+ * is what the handle is for and why it sits *above* the composite tile rather than beside the `+` — it belongs to the
+ * whole rail, and the head is the one position that is not next to some particular layer. The offset is persisted
+ * (see [IconStudioWorkspace]), so a user who moves the rail out of their own way finds it there next time.
+ *
+ * A **handle rather than a drag on the tiles themselves**, for the reason the reorder buttons already give: the tiles
+ * are targets — tap selects, long-press opens the quick menu — and a third gesture on the same 48dp square would have
+ * to be told apart from those two by timing. A grab bar has nothing else to mean.
+ *
+ * **The handle carries the stack's own menu as well**, which is the one place two gestures do share a target — and
+ * they can, because they are the same two the tiles already carry: drag and long-press, told apart by whether the
+ * finger moves. See [RailDragHandle] for the race, and for what happens when a user long-presses and *then* drags.
+ *
+ * **It runs as a column or a row, and its list of layers collapses to one tile's worth of viewport**, both from that
+ * menu and both persisted. The two arms below are the only thing not shared between them: a `Column` and a `Row` are
+ * two layouts, and `weight` is scope-specific, so the container is written twice and everything inside it once.
+ *
+ * **Four bands, and only one of them scrolls**: the handle, the composite tile, the layers, then `+`. The three that
+ * do not are pinned because none of them is a layer — a control that adds one must not be pushed out of reach by the
+ * layer it just added, and the composite is what the whole stack draws into. Collapsing shortens the one that does.
+ *
+ * @param workspace the rail's whole arrangement — where it was dragged, which way it runs, whether it is collapsed.
+ * @param canvasWidth the studio canvas, in pixels, which the rail is clamped inside. Zero before it is measured, which
+ *   [railDragged] treats as "not yet" rather than as a canvas of nothing.
+ * @param menu which of the rail's menus is showing, or null. **Hoisted**, so a tap on the canvas can put it away —
+ *   which is the one thing the rail cannot know about — and so the two menus cannot both be up.
+ * @param onBoundsChange the rail's bounds in canvas space, reported as they change. The menus are drawn *outside* the
+ *   rail and so cannot be children of it (Compose does not hit-test past a parent's bounds), which means the thing
+ *   that positions them needs this.
  */
 @Composable
 internal fun StudioLayerRail(
     state: IconStudioState,
     hazeState: HazeState,
+    workspace: IconStudioWorkspace,
+    canvasWidth: Float,
+    canvasHeight: Float,
+    menu: RailMenu?,
     customImage: (path: String) -> android.graphics.drawable.Drawable?,
     packImage: (packPackage: String, drawableName: String?) -> android.graphics.drawable.Drawable?,
     onSelect: (StudioTarget) -> Unit,
-    onMove: (up: Boolean) -> Unit,
     onAdd: () -> Unit,
-    onRemove: () -> Unit,
-    onToggleVisible: () -> Unit,
+    onMenuChange: (RailMenu?) -> Unit,
+    onWorkspaceChange: (IconStudioWorkspace) -> Unit,
+    onWorkspaceCommit: () -> Unit,
+    onBoundsChange: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // **Whether the quick menu is open, and nothing more.** It held the tile's index first, which read as though
-    // the menu belonged to a *tile* — it never did: every row acts on the **selected** layer, and long-pressing
-    // selects before opening. Keeping an index became actively wrong once reordering stopped closing the menu,
-    // since a move changes the index while the menu goes on pointing at the same layer.
-    var menuOpen by remember { mutableStateOf(false) }
-
     // Which layers were already on screen last time this composed, so a tile that is genuinely **new** can arrive
     // while the ones that merely moved glide. Held as a plain var behind a `remember` and advanced in a
     // `SideEffect`: reading it during composition is what decides the entrance, and it must not change under that
@@ -110,131 +156,329 @@ internal fun StudioLayerRail(
     val current = state.editing.layers.indices.map(state::layerKey).toSet()
     SideEffect { known = current }
 
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // The menu opens *toward the canvas*, so it never hangs off the screen edge the rail is pinned to.
-        if (menuOpen) {
-            // **Reorder and hide leave it open; delete and close do not.** The first three are things you do
-            // *repeatedly* and judge by looking — moving a layer two places is two presses, and hiding one is a
-            // question about the icon you have to see answered — so closing after each would make the menu a thing
-            // to keep reopening. It also makes the disabled rows work for you: move up greys out at the moment the
-            // layer reaches the top, which is the answer to "how far can this go?" given while you are asking.
-            //
-            // Delete closes because the layer it acted on is gone, and leaving the menu up would silently re-point
-            // it at whatever the selection fell to.
-            LayerQuickMenu(
-                state = state,
-                hazeState = hazeState,
-                onMove = onMove,
-                onToggleVisible = onToggleVisible,
-                onRemove = {
-                    onRemove()
-                    menuOpen = false
-                },
-                onDismiss = { menuOpen = false },
-            )
-        }
+    // **What the rail measures about itself, so the drag can be clamped without anyone declaring its geometry.** The
+    // resting top-left is the placed position *less* the offset currently applied — exact, and not circular, because
+    // the offset is a value we already hold. That is what lets the caller change the padding, the cap or the edge the
+    // rail rests on with nothing here to keep in step.
+    var railSize by remember { mutableStateOf(Size.Zero) }
+    var restingTopLeft by remember { mutableStateOf(Offset.Zero) }
 
-        // **Two bands: the stack scrolls, `+` does not.** `weight(1f, fill = false)` is what makes that free — the
-        // pinned button is measured first and the scroll takes what is left of the cap, so pinning takes space
-        // *from* the list rather than adding it to the rail. `fill = false` is the half that is easy to miss: with
-        // it filling, three layers would stretch the scroll to the full cap and the rail would be its tallest
-        // whatever it held. Same three-band shape `StudioToolPanel` uses, and the same reason.
-        Column(
-            modifier = Modifier
-                .studioSurface(hazeState, shape = RoundedCornerShape(RailCorner))
-                .heightIn(max = RailMaxHeight)
-                .padding(RailPadding),
-            verticalArrangement = Arrangement.spacedBy(RailGap),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    // **Clipped to the rail's inner contour, because a scroller clips square** — a tile passing the
-                    // top fills the very corner the rail's radius cuts away, and the checkerboard is opaque right
-                    // to its edge. The radius is the rail's less its padding, which keeps the two concentric.
-                    //
-                    // Outside the size animation, so the clip is at the **animated** height rather than the target:
-                    // a modifier earlier in the chain wraps the ones after it, so this sees what the animation
-                    // reports.
-                    .clip(RoundedCornerShape(topStart = RailCorner - RailPadding, topEnd = RailCorner - RailPadding))
-                    // **This is the height that animates, and it is the only one that does.** It was on the rail's
-                    // outer `Column` first, which animated the *glass* while the tiles inside sat at their final
-                    // layout — the frame grew smoothly around a list that had already jumped, which is the worst of
-                    // both. What actually changes when a layer is added is the height of this scroll viewport, so
-                    // this is where it belongs, and the outer column follows for free because it wraps this.
-                    //
-                    // One animation rather than two, for the reason `StudioToolPanel` states: nested size
-                    // animations mean the outer chases a target that is itself still moving, which reads as lag.
-                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(RailGap),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                    // **The whole icon, at the head of the stack** — above the top layer, because that is where it
-                // sits: it is what everything beneath composites into. Separated by a rule so it does not read as
-                // one more slot, and given no long-press menu, since none of those verbs mean anything for it.
-                CompositeTile(
+    val offsetX = workspace.railX * canvasWidth
+    val offsetY = workspace.railY * canvasHeight
+    val vertical = workspace.railAxis == LayerRailAxis.VERTICAL
+
+    // **Collapsing shrinks the viewport; it does not shorten the list.** The first cut drew only the selected layer,
+    // which made collapse a different rail rather than a smaller one — you could not reach any other layer without
+    // expanding first, so the state it left you in was one you had to leave to do anything. Capping the scroll band
+    // to a single tile says the same thing about screen space and costs nothing: every layer is still there, still in
+    // order, still one flick away, and the selected one is still scrolled into view by [LayerTile]'s own effect.
+    val bandExtent = if (workspace.railCollapsed) TileSide else RailScrollExtent
+
+    val handle = @Composable {
+        // **The grab bar, at the head of the rail and before everything in it.** It moves and configures the whole
+        // rail, so it belongs where it is next to no particular layer — and being first it is also what a user
+        // reaches for when the rail is in the way of what they are looking at.
+        RailDragHandle(
+            vertical = vertical,
+            onDrag = { dragX, dragY ->
+                onWorkspaceChange(
+                    workspace.railDragged(
+                        canvasWidth = canvasWidth,
+                        canvasHeight = canvasHeight,
+                        railWidth = railSize.width,
+                        railHeight = railSize.height,
+                        restingLeft = restingTopLeft.x,
+                        restingTop = restingTopLeft.y,
+                        dragX = dragX,
+                        dragY = dragY,
+                    ),
+                )
+            },
+            onDragEnd = onWorkspaceCommit,
+            onMenuChange = onMenuChange,
+        )
+    }
+
+    // **The whole icon, at the head of the stack and *pinned* there** — before the top layer, because that is where
+    // it sits: it is what everything beneath composites into. Separated by a rule so it does not read as one more
+    // slot, and given no long-press menu, since none of those verbs mean anything for it.
+    //
+    // Outside the scroll band, which is what collapsing made necessary: a rail cut down to one tile has to be one
+    // tile *of the list*, and a composite scrolling away with the layers would leave a collapsed rail showing
+    // whichever of the two the finger last stopped on. Pinning it costs the expanded rail a tile's worth of scroll
+    // and buys the thing being edited always being on screen.
+    val composite = @Composable {
+        CompositeTile(
+            state = state,
+            customImage = customImage,
+            packImage = packImage,
+            onClick = {
+                onSelect(StudioTarget.Composite)
+                onMenuChange(null)
+            },
+        )
+        RailDivider(vertical)
+    }
+
+    val tiles = @Composable {
+        state.editing.layers.indices.reversed().forEach { index ->
+            // `key` gives the tiles identity the model cannot — see `IconStudioState.layerKey` — so an insert
+            // *moves* the tiles beneath rather than rebuilding them, and `animatePlacement` has something to glide.
+            key(state.layerKey(index)) {
+                LayerTile(
                     state = state,
+                    index = index,
+                    entering = state.layerKey(index) !in known,
+                    vertical = vertical,
                     customImage = customImage,
                     packImage = packImage,
                     onClick = {
-                        onSelect(StudioTarget.Composite)
-                        menuOpen = false
+                        onSelect(StudioTarget.Layer(index))
+                        onMenuChange(null)
+                    },
+                    onLongClick = {
+                        onSelect(StudioTarget.Layer(index))
+                        onMenuChange(RailMenu.LAYER)
                     },
                 )
-                HorizontalDivider(
-                    color = StudioContentColor.copy(alpha = 0.15f),
-                    modifier = Modifier.width(TileSide),
-                )
-
-                state.editing.layers.indices.reversed().forEach { index ->
-                    // `key` gives the tiles identity the model cannot — see `IconStudioState.layerKey` — so an
-                    // insert *moves* the tiles beneath rather than rebuilding them, and `animatePlacement` has
-                    // something to glide.
-                    key(state.layerKey(index)) {
-                        LayerTile(
-                            state = state,
-                            index = index,
-                            entering = state.layerKey(index) !in known,
-                            customImage = customImage,
-                            packImage = packImage,
-                            onClick = {
-                                onSelect(StudioTarget.Layer(index))
-                                menuOpen = false
-                            },
-                            onLongClick = {
-                                onSelect(StudioTarget.Layer(index))
-                                menuOpen = true
-                            },
-                        )
-                    }
-                }
             }
+        }
+    }
 
-            // **Separated, because a tile is a layer and this is not.** Flush among them it reads as another slot
-            // in the stack — the same misreading the old layer list's buttons had, and the same fix.
-            HorizontalDivider(
-                color = StudioContentColor.copy(alpha = 0.15f),
-                modifier = Modifier.width(TileSide),
-            )
+    val addButton = @Composable {
+        // **Separated, because a tile is a layer and this is not.** Flush among them it reads as another slot in the
+        // stack — the same misreading the old layer list's buttons had, and the same fix.
+        RailDivider(vertical)
+        StudioIconButton(
+            icon = Icons.Default.Add,
+            contentDescription = "Add layer",
+            onClick = {
+                onAdd()
+                onMenuChange(null)
+            },
+            modifier = Modifier.size(TileSide),
+        )
+    }
 
-            StudioIconButton(
-                icon = Icons.Default.Add,
-                contentDescription = "Add layer",
-                onClick = {
-                    onAdd()
-                    menuOpen = false
-                },
-                modifier = Modifier.size(TileSide),
-            )
+    // **The scroll band's cap is stated rather than weighted, which is what lets one number serve both arms.** It was
+    // `weight(1f, fill = false)` inside a capped column — correct, and unavailable here, because `weight` belongs to
+    // `ColumnScope` or `RowScope` and the two arms need the same answer. Capping the band directly says the same
+    // thing: the pinned handle and `+` are measured on their own and the band takes [RailScrollExtent], which is
+    // [RailMaxHeight] less exactly what those two occupy. The rail is still its content's size when it holds little.
+    val surface = modifier
+        .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+        .onGloballyPositioned { coordinates ->
+            railSize = coordinates.size.toSize()
+            val placed = coordinates.positionInParent()
+            restingTopLeft = Offset(placed.x - offsetX, placed.y - offsetY)
+            onBoundsChange(Rect(placed, coordinates.size.toSize()))
+        }
+        .studioSurface(hazeState, shape = RoundedCornerShape(RailCorner))
+        .padding(RailPadding)
+
+    // **The band's extent is the only thing on the rail that animates**, and every reason it changes arrives here: a
+    // layer added or removed, and collapsing. One animation rather than two, for the reason `StudioToolPanel` states —
+    // nested size animations mean the outer chases a target that is itself still moving, which reads as lag. The
+    // surface follows for free because it wraps this.
+    //
+    // No clip of its own: a scroller already clips to its bounds, and the band no longer touches the rail's rounded
+    // corners now that the composite tile is pinned above it.
+    val band = Modifier.animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+
+    if (vertical) {
+        Column(
+            modifier = surface,
+            verticalArrangement = Arrangement.spacedBy(RailGap),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            handle()
+            composite()
+            Column(
+                modifier = band
+                    .heightIn(max = bandExtent)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(RailGap),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) { tiles() }
+            addButton()
+        }
+    } else {
+        Row(
+            modifier = surface,
+            horizontalArrangement = Arrangement.spacedBy(RailGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            handle()
+            composite()
+            Row(
+                modifier = band
+                    .widthIn(max = bandExtent)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(RailGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) { tiles() }
+            addButton()
         }
     }
 }
+
+/** The rule between the composite and the layers, and between the layers and `+`, laid across the rail's own run. */
+@Composable
+private fun RailDivider(vertical: Boolean) {
+    if (vertical) {
+        HorizontalDivider(color = RailDividerColor, modifier = Modifier.width(TileSide))
+    } else {
+        VerticalDivider(color = RailDividerColor, modifier = Modifier.height(TileSide))
+    }
+}
+
+/**
+ * The bar that moves the whole rail — and, on a long press, opens the stack's own menu.
+ *
+ * **A grab bar and not a drag on the tiles**, because the tiles already carry two gestures — tap selects, long-press
+ * opens the layer menu — and a third on the same square would have to be distinguished from those by timing alone.
+ *
+ * **It looks like a sheet's handle on purpose.** That shape is already the platform's word for "this whole surface
+ * moves", so it needs no label and no discovery — which matters for a control that would otherwise be a plain gap at
+ * the head of a column of pictures. It turns with the rail, because a bar across the run of a row would read as a
+ * divider rather than as something to grab.
+ *
+ * The bar itself is deliberately much smaller than the slot it sits in: [HandleWidth] × [HandleThickness] is what is
+ * *drawn*, and the slot around it is the press target, so the mark can be discreet without the control being fiddly.
+ * Same split as `StudioIconButton`'s glyph inside its 40dp face.
+ *
+ * ### The gesture, which is three states rather than two callbacks
+ *
+ * A press here can become either of two things, and — this is the part that is not standard — it can become the
+ * *second* after having already become the first. So this is a hand-written `awaitEachGesture` rather than
+ * `detectDragGestures` plus a long-press detector, which could not express the hand-off:
+ *
+ * 1. **The race.** From the down, whichever comes first: the finger crosses touch slop (a drag) or the long-press
+ *    timeout elapses (the menu). `withTimeoutOrNull` around `awaitTouchSlopOrCancellation` decides it, and the result
+ *    is wrapped so that "timed out" and "the finger lifted before slop" stay distinguishable — both are null on their
+ *    own, and they mean opposite things.
+ * 2. **Drag after menu.** If the menu opened and the finger has *not* lifted, this waits for slop again with no
+ *    timeout. A drag from there hides the menu, moves the rail, and **puts the menu back when the finger lifts** —
+ *    which is what makes "long-press, then reposition, then keep choosing" one gesture instead of three. The menu is
+ *    re-opened rather than merely re-shown, so it is placed against where the rail *now* is.
+ * 3. **Neither.** The finger lifted: a long press leaves its menu up, and a plain tap does nothing at all. A tap is
+ *    deliberately not a third meaning — the handle would then have every gesture there is, and the menu it would open
+ *    is the one a long press already opens.
+ *
+ * A drag edits live and commits when the finger lifts — the studio's rule for anything draggable, and here it is what
+ * keeps one reposition one write to the settings store rather than one per frame.
+ */
+@Composable
+private fun RailDragHandle(
+    vertical: Boolean,
+    onDrag: (dragX: Float, dragY: Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onMenuChange: (RailMenu?) -> Unit,
+) {
+    // **Read through `rememberUpdatedState`, and this is load-bearing rather than tidy.** `pointerInput(Unit)` runs
+    // its block *once*, so a lambda referenced directly inside it is the one built by the **first** composition —
+    // which closed over the workspace as it was then, and over a rail that had not been measured. That is not a stale
+    // *position*, it is a stale *whole value*: every frame of a drag recomputed from `IconStudioWorkspace.Default`, so
+    // the rail never moved (its offset was always one step from zero, against an unmeasured size the clamp refused)
+    // **and the preview snapped back to its resting pan and zoom**, because those two fields came along in the copy.
+    // One capture, both symptoms.
+    //
+    // Keying the `pointerInput` on the workspace instead would fix the staleness and break the gesture: the block
+    // restarts on its own first frame, so the drag would be cancelled the instant it moved anything and would never
+    // reach the commit. Which is the same reasoning `StudioStepperButton` spells out for `enabled`, and what
+    // `StudioCanvas` already does for the pinch.
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentDragEnd by rememberUpdatedState(onDragEnd)
+    val currentMenuChange by rememberUpdatedState(onMenuChange)
+
+    Box(
+        modifier = Modifier
+            .size(
+                width = if (vertical) TileSide else HandleSlotThickness,
+                height = if (vertical) HandleSlotThickness else TileSide,
+            )
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var overSlop = Offset.Zero
+                    val slop: (PointerInputChange, Offset) -> Unit = { change, over ->
+                        change.consume()
+                        overSlop = over
+                    }
+
+                    // Stage 1 — the race. **Wrapped rather than returned bare**, because a bare null is ambiguous
+                    // here: `withTimeoutOrNull` returns null on the timeout *and* `awaitTouchSlopOrCancellation`
+                    // returns null when the finger lifts before slop, and those are the two opposite outcomes.
+                    var raced = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        SlopOutcome(awaitTouchSlopOrCancellation(down.id, slop))
+                    }
+
+                    var openedMenu = false
+                    if (raced == null) {
+                        // The finger stayed put: the stack's menu, opened under a finger that is still down.
+                        openedMenu = true
+                        currentMenuChange(RailMenu.STACK)
+                        // Stage 2 — and no timeout this time. A drag from here is a reposition *of the thing the
+                        // menu is about*, so it hands the menu off rather than being a second gesture.
+                        raced = SlopOutcome(awaitTouchSlopOrCancellation(down.id, slop))
+                    }
+
+                    // Stage 3 — the finger lifted without ever dragging. A long press keeps its menu; a plain tap
+                    // did nothing and leaves nothing.
+                    val start = raced.change ?: return@awaitEachGesture
+
+                    // The menu is put away for the length of the drag, so the panel is not carried across the canvas
+                    // by a rail sliding out from under it.
+                    if (openedMenu) currentMenuChange(null)
+
+                    // The slop overshoot is the drag's first delta — dropping it makes the rail lag the finger by
+                    // the slop distance for the whole gesture, which reads as the handle being loose.
+                    if (overSlop != Offset.Zero) currentDrag(overSlop.x, overSlop.y)
+
+                    drag(start.id) { change ->
+                        // **Read the delta, *then* consume — the order is the whole of it.**
+                        // `positionChange()` answers `Offset.Zero` for a change that is already consumed, so
+                        // consuming first makes every frame after the slop report no movement at all. The symptom is
+                        // not an error: the rail jumps by the slop overshoot and then sits still under a finger that
+                        // is plainly still dragging, which reads as the gesture having died. `detectDragGestures`,
+                        // which this replaced, computes the delta before it hands the change over — so the same two
+                        // lines in the other order had been correct by accident of who called `consume`.
+                        val delta = change.positionChange()
+                        change.consume()
+                        currentDrag(delta.x, delta.y)
+                    }
+                    currentDragEnd()
+
+                    // **Re-opened, not un-hidden**, so it is placed against where the rail is now rather than where
+                    // it was when the press landed. A cancelled drag comes back here too: the rail has moved either
+                    // way, so the finger has been let go of and the menu is what the user was in the middle of.
+                    if (openedMenu) currentMenuChange(RailMenu.STACK)
+                }
+            }
+            .semantics { contentDescription = "Move the layer rail, or hold for its options" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(
+                    width = if (vertical) HandleWidth else HandleThickness,
+                    height = if (vertical) HandleThickness else HandleWidth,
+                )
+                .clip(RoundedCornerShape(HandleThickness / 2))
+                .background(StudioContentColor.copy(alpha = HandleAlpha)),
+        )
+    }
+}
+
+/**
+ * The result of racing touch slop against the long-press timeout — a wrapper whose only job is to keep two nulls
+ * apart.
+ *
+ * `withTimeoutOrNull` answers null for "the timeout won", and `awaitTouchSlopOrCancellation` answers null for "the
+ * finger lifted before it moved". Those are opposite outcomes — one opens a menu, one does nothing at all — so the
+ * inner one is boxed and the outer one left bare.
+ */
+private class SlopOutcome(val change: PointerInputChange?)
 
 /**
  * The whole icon, drawn as itself — the tile that selects the composite.
@@ -322,9 +566,11 @@ private fun CompositeTile(
  *   migration. A tile whose index changes glides, which is the whole of both choreographies: an insert pushes the
  *   tiles beneath it along, a removal lets them close up, and the tiles *above* never move because their indices do
  *   not change.
- * - **Entrance** — [entering] tiles slide down out of the tile above and fade in, which is the new layer emerging
+ * - **Entrance** — [entering] tiles slide out of the tile *before* them and fade in, which is the new layer emerging
  *   from the selected one it was inserted beneath. Only genuinely new tiles get it: without that test the rail
- *   would re-assemble itself every time the studio recomposed for an unrelated reason.
+ *   would re-assemble itself every time the studio recomposed for an unrelated reason. **It follows the rail's
+ *   axis** — down the column, across the row — because "out of the tile before it" is a different direction in each,
+ *   and a tile dropping vertically into a horizontal rail comes from nowhere in particular.
  * - **Selection** — the gap and the ring, above.
  *
  * The one thing not animated is a tile **leaving**: it is gone from the stack the moment delete is pressed, so
@@ -338,6 +584,7 @@ private fun LayerTile(
     state: IconStudioState,
     index: Int,
     entering: Boolean,
+    vertical: Boolean,
     customImage: (path: String) -> android.graphics.drawable.Drawable?,
     packImage: (packPackage: String, drawableName: String?) -> android.graphics.drawable.Drawable?,
     onClick: () -> Unit,
@@ -346,7 +593,7 @@ private fun LayerTile(
     val spec = state.editing.layers[index]
     val selected = state.selected == index
     // **One driver for both halves of the selection, so they cannot come apart.** The gap opening and the ring
-    // fading in are the same event; animated separately — a `Dp` on the spatial spec, a colour on the effects one —
+    // fading in are the same event; animated separately — a `Dp` on the spatial spec, a color on the effects one —
     // they would run at different rates, and the frames where the ring is already dark over a gap that has barely
     // opened are exactly the ones where it clips the artwork.
     val selection by animateFloatAsState(
@@ -407,11 +654,18 @@ private fun LayerTile(
         modifier = Modifier
             .bringIntoViewRequester(reveal)
             .animatePlacement()
-            // Slides down out of the tile above rather than appearing from nowhere: a new layer is inserted
-            // directly beneath the selected one, so that is where it comes from.
+            // Slides out of the tile *before* it rather than appearing from nowhere: a new layer is inserted directly
+            // beneath the selected one, so that is where it comes from — down the column, or across the row. Along
+            // the rail's own run either way, which is the axis the tiles are laid out on; the other one would have a
+            // tile arriving from outside the rail entirely.
             .graphicsLayer {
                 alpha = entrance.value
-                translationY = -size.height * (1f - entrance.value)
+                val travel = 1f - entrance.value
+                if (vertical) {
+                    translationY = -size.height * travel
+                } else {
+                    translationX = -size.width * travel
+                }
             }
             .size(TileSide)
             .clip(RoundedCornerShape(TileCorner))
@@ -451,61 +705,6 @@ private fun LayerTile(
                 modifier = Modifier.size(HiddenBadge),
             )
         }
-    }
-}
-
-/**
- * The quick menu: what can be done to the selected layer, and what cannot.
- *
- * **Every row that would do nothing is disabled rather than absent**, which is the reason the reorder controls were
- * buttons and never a drag: *a disabled row says which move is illegal before it is attempted*, where a refused
- * gesture does nothing and cannot explain itself. The answers come from the model (`editing.moveUp(i) !== editing`),
- * so they cannot drift from the rule the set enforces.
- */
-@Composable
-private fun LayerQuickMenu(
-    state: IconStudioState,
-    hazeState: HazeState,
-    onMove: (up: Boolean) -> Unit,
-    onToggleVisible: () -> Unit,
-    onRemove: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val spec = state.selectedLayer ?: return
-
-    Column(
-        modifier = Modifier
-            .width(MenuWidth)
-            .studioSurface(hazeState, shape = RoundedCornerShape(RailCorner))
-            .padding(vertical = 6.dp),
-    ) {
-        MenuRow(Icons.Default.KeyboardArrowUp, "Move up", state.canMoveUp) { onMove(true) }
-        MenuRow(Icons.Default.KeyboardArrowDown, "Move down", state.canMoveDown) { onMove(false) }
-        MenuRow(
-            icon = if (spec.visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-            label = if (spec.visible) "Hide" else "Show",
-            enabled = true,
-            onClick = onToggleVisible,
-        )
-        MenuRow(Icons.Default.Delete, "Delete", state.canRemoveSelected, onClick = onRemove)
-        MenuRow(Icons.Default.Close, "Close", enabled = true, onClick = onDismiss)
-    }
-}
-
-@Composable
-private fun MenuRow(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
-    val tint = StudioContentColor.copy(alpha = if (enabled) 1f else 0.35f)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-        Text(label, color = tint, style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -555,16 +754,71 @@ private val SelectionBorder = 2.dp
 private val RailCorner = 18.dp
 private val RailPadding = 6.dp
 private val RailGap = 6.dp
-private val MenuWidth = 148.dp
 private val HiddenBadge = 18.dp
 private val CheckerTileSquare = 6.dp
+
+/** The rules inside the rail. Its own value so the two calls cannot drift, being the same line drawn twice. */
+private val RailDividerColor = StudioContentColor.copy(alpha = 0.15f)
+
+/**
+ * M3's own divider thickness, restated so [RailScrollExtent] can subtract it.
+ *
+ * `DividerDefaults.Thickness` is what the dividers actually draw at; naming it here is the one place this file could
+ * drift from Material, and it is one dp of a 320dp cap — stated rather than dropped, because the whole point of that
+ * derivation is that the pieces add up to the cap exactly.
+ */
+private val DividerThickness = 1.dp
+
+/**
+ * The grab bar: what is **drawn**, and the slot that is **pressed**.
+ *
+ * The two are deliberately different sizes — the mark is a discreet 20×4, the slot a full tile across and 20dp
+ * through — which is `StudioIconButton`'s own split between its 20dp glyph and its 40dp face. A handle large enough
+ * to grab reliably would be a heavy bar at the head of a rail whose whole subject is small pictures.
+ *
+ * Both turn with the rail: across its run, a grab bar reads as a divider rather than as something to take hold of.
+ */
+private val HandleWidth = 20.dp
+private val HandleThickness = 4.dp
+private val HandleSlotThickness = 20.dp
+
+/** Present without competing with the tiles: a handle is chrome, and the layers are the content. */
+private const val HandleAlpha = 0.45f
 
 /** Enough that a hidden layer reads as switched off, not enough that it stops being identifiable. */
 private const val HiddenLayerAlpha = 0.25f
 
 /**
- * Capped so the rail stays clear of the chrome above and below it — the save row at the top end, the tool panel at
- * the bottom, which grows to 320dp. Past this it scrolls, which is the right answer for a stack deep enough to
- * reach it.
+ * Capped so a rail at rest stays clear of the tool panel below it, which grows to 320dp. Past this it scrolls, which
+ * is the right answer for a stack deep enough to reach it.
+ *
+ * **A cap on the resting arrangement, not a guarantee**, now that the rail can be dragged: a user who moves it down
+ * the canvas can put it over the panel, and that is their call rather than something to prevent. What the cap still
+ * buys is that the studio never *opens* with the two overlapping.
  */
 private val RailMaxHeight = 320.dp
+
+/**
+ * How far the **expanded** scroll band of layer tiles may run — [RailMaxHeight] less exactly what everything pinned
+ * around it takes: the padding at both ends, the handle, the composite tile, the two rules, `+`, and the five gaps
+ * between those six children.
+ *
+ * **Derived rather than a second number**, which is what keeps the cap meaning what it says: the rail is capped at
+ * [RailMaxHeight] whatever it holds, and stating the band's own extent separately would be one edit away from a rail
+ * that quietly grew past it. It is the arithmetic `weight(1f, fill = false)` used to perform at measure time — given
+ * up because `weight` belongs to `ColumnScope` or `RowScope`, and a rail that can be either needs one answer both
+ * arms can use.
+ *
+ * One value for both axes, deliberately: the cap is "how much of the screen may the stack take", and that is the same
+ * question lying down as standing up.
+ *
+ * The **collapsed** extent is not here — it is one [TileSide], stated at the call site, because it is not a leftover
+ * but the whole point: a collapsed rail is a list one item tall.
+ */
+private val RailScrollExtent = RailMaxHeight -
+    RailPadding * 2 -
+    HandleSlotThickness -
+    TileSide -
+    DividerThickness * 2 -
+    RailGap * 5 -
+    TileSide

@@ -15,8 +15,11 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -36,8 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntRect
 import androidx.core.graphics.drawable.toDrawable
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -47,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.RectangleShape
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.picker.AppPicker
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -109,6 +117,16 @@ fun IconStudioScreen(
     // Which section's panel is showing, or null for none. Screen state and nothing more — the recipe does not care
     // which tool is open, and neither does undo, so it stays out of the ViewModel.
     var tool by remember { mutableStateOf<StudioTool?>(null) }
+    // **The rail's menu, hoisted out of the rail**, which is what lets a tap on the canvas put it away. The rail held
+    // it while the rail was the only thing that could close it; the canvas cannot reach into it, and a dismissal that
+    // worked for the tool panel but not for the menu would be the sort of half-rule nobody can learn.
+    //
+    // A nullable [RailMenu] rather than a boolean each, so "the layer menu and the stack menu are both up" cannot be
+    // said — the same reason the launcher has one menu host for its item and surface menus.
+    var railMenu by remember { mutableStateOf<RailMenu?>(null) }
+    // **Where the rail is**, reported by the rail as it is dragged and re-laid-out. The menu is placed against this
+    // rather than being a child of the rail, because a child drawn outside its parent is visible but not touchable.
+    var railBounds by remember { mutableStateOf(Rect.Zero) }
 
     // The full color picker is hosted here rather than where it is asked for, and takes the tool panel's slot when it
     // is up. See [StudioColorPickerHost] for why a control cannot render inside the section that opens it.
@@ -202,11 +220,50 @@ fun IconStudioScreen(
     // dark glass with white content is the only setting that reads over both. Same call as `StudioContentColor`,
     // applied to the components rather than to the text.
     LauncherTheme(darkTheme = true) {
-        Box(modifier.fillMaxSize()) {
+        // **The root measures**, which the viewport made necessary: both the canvas's pan and the rail's drag are
+        // clamped against the canvas, and both store their positions as fractions of it, so somebody has to know how
+        // big it is. The root is the honest place — it is the canvas, every floating surface being drawn over it.
+        BoxWithConstraints(modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            val canvasWidth = with(density) { maxWidth.toPx() }
+            val canvasHeight = with(density) { maxHeight.toPx() }
+
+            // **How far down the workspace starts** — the system inset plus the row of pill buttons and the margins
+            // around it. Computed here rather than inside the canvas and the rail separately, because it is the one
+            // number that makes them line up: the icon rests immediately below the chrome and the rail rests beside
+            // it, and two derivations of "below the chrome" would be one edit away from disagreeing.
+            val insets = uiInsets.asPaddingValues()
+            val topChrome = insets.calculateTopPadding() + ChromeMargin + StudioTopChromeHeight + WorkspaceGap
+
+            // The area a floating panel may occupy: the canvas less `uiInsets`. Whole pixels, since that is what the
+            // placement arithmetic works in.
+            val layoutDirection = LocalLayoutDirection.current
+            val usableFrame = with(density) {
+                IntRect(
+                    left = insets.calculateLeftPadding(layoutDirection).roundToPx(),
+                    top = insets.calculateTopPadding().roundToPx(),
+                    right = canvasWidth.toInt() - insets.calculateRightPadding(layoutDirection).roundToPx(),
+                    bottom = canvasHeight.toInt() - insets.calculateBottomPadding().roundToPx(),
+                )
+            }
+
+            // Everything a tap on the canvas puts away. One lambda so the three cannot come apart — a dismissal that
+            // closed the panel but left the quick menu up would read as the tap having half worked.
+            val dismissChrome = {
+                tool = null
+                railMenu = null
+                colorPicker.close()
+            }
+
             // `hazeSource` on the canvas rather than on this root: a floating surface must blur *the work*, and a
             // source that included the surfaces themselves would have them sampling each other.
             StudioCanvas(
                 background = state.background,
+                workspace = state.workspace,
+                topInset = topChrome,
+                onWorkspaceChange = viewModel::setWorkspace,
+                onWorkspaceCommit = viewModel::commitWorkspace,
+                onTap = dismissChrome,
                 // The source for both, and the only node in either that is the *work* rather than chrome. Explicit
                 // z-indices so "behind" is stated rather than inferred from draw order.
                 modifier = Modifier
@@ -229,28 +286,71 @@ fun IconStudioScreen(
             }
 
             // **The stack, always on screen**, which is what the tool bar cost when the layer list went behind an
-            // entry of its own. On the *end* edge and vertically centred, so it sits between the save row above and
-            // the tool panel below without either having to know about it. See [StudioLayerRail].
+            // entry of its own. It **rests** at the top of the end edge, level with the icon and directly below the
+            // save row, and is draggable from there by the handle at its head. See [StudioLayerRail].
+            //
+            // Top-aligned rather than vertically centered, which is the other half of the icon moving up: the two are
+            // the workspace, and a rail floating in the middle of the screen beside an icon at the top read as two
+            // unrelated things rather than as a picture and its layers.
             StudioLayerRail(
                 state = state,
                 // The canvas alone: the rail's own glass cannot sample the rail.
                 hazeState = canvasHaze,
+                workspace = state.workspace,
+                canvasWidth = canvasWidth,
+                canvasHeight = canvasHeight,
+                menu = railMenu,
                 customImage = customImage,
                 packImage = packImage,
                 onSelect = viewModel::selectTarget,
-                onMove = viewModel::moveSelected,
                 onAdd = viewModel::addLayer,
-                onRemove = viewModel::removeSelected,
-                onToggleVisible = viewModel::toggleSelectedVisible,
+                onMenuChange = { railMenu = it },
+                onWorkspaceChange = viewModel::setWorkspace,
+                onWorkspaceCommit = viewModel::commitWorkspace,
+                onBoundsChange = { railBounds = it },
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
+                    .align(Alignment.TopEnd)
                     // ...but it *is* a source for everything above it, which is what puts blurred tiles behind the
                     // panel. Above the canvas, so a consumer of [screenHaze] gets the two in the order they are
                     // drawn.
                     .hazeSource(screenHaze, zIndex = RailDepth)
-                    .uiInsetsPadding()
-                    .padding(ChromeMargin),
+                    // The same expression the canvas is given, so the rail's head and the icon's top edge rest on one
+                    // line. Applied as padding rather than as an offset so the rail's *cap* is measured against what
+                    // is left below it.
+                    .padding(top = topChrome, end = ChromeMargin)
+                    .uiInsetsPadding(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                    .padding(bottom = ChromeMargin),
             )
+
+            // **The rail's menus, drawn beside the rail rather than inside it.** Which side they take is computed from
+            // where the rail currently is and which way it runs — see [railMenuPlacement]. A sibling because a child
+            // drawn outside its parent's bounds is visible but **not touchable**: Compose does not hit-test past a
+            // parent, so a menu placed to the left of a rail would have been a panel whose rows did nothing.
+            //
+            // After the rail in this stack, so it draws over it, and given the whole canvas to place itself in.
+            railMenu?.let { menu ->
+                StudioRailMenu(
+                    menu = menu,
+                    state = state,
+                    workspace = state.workspace,
+                    anchor = railBounds,
+                    // The usable area, not the raw canvas: a menu clamped against the window would be allowed to sit
+                    // under a notch or the gesture bar. Same correction `menuPlacementFor` documents for the launcher.
+                    frame = usableFrame,
+                    hazeState = screenHaze,
+                    onMove = viewModel::moveSelected,
+                    onToggleVisible = viewModel::toggleSelectedVisible,
+                    onRemove = viewModel::removeSelected,
+                    onToggleAxis = viewModel::toggleRailAxis,
+                    onToggleCollapsed = viewModel::toggleRailCollapsed,
+                    onDismiss = { railMenu = null },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                // Declared after the screen's own handler, so back closes the menu before it leaves the studio — the
+                // same layering the color picker and the pack browser rely on. Set directly rather than through the
+                // menu's animated dismissal, matching what a tap on the canvas does.
+                BackHandler { railMenu = null }
+            }
 
             // Chrome floats over the canvas, inset from the system bars. The studio paints its own backdrop edge to
             // edge — the insets are content padding, never layout padding, as everywhere else in this launcher.
@@ -329,9 +429,15 @@ fun IconStudioScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    BackgroundCycleButton(
+                    // **The view's two controls on one pill, the subject's on another** — see [StudioViewButtons].
+                    // The grouping is the whole of what says these are different questions: the first pill is *how
+                    // the work is shown*, the second is *which app it is shown on*.
+                    StudioViewButtons(
                         background = state.background,
-                        onClick = viewModel::cycleBackground,
+                        canResetView = !state.workspace.previewAtRest,
+                        hazeState = screenHaze,
+                        onCycleBackground = viewModel::cycleBackground,
+                        onResetView = viewModel::resetPreviewView,
                     )
                     // **One slot, and the subject decides what is in it** — which is the sum type earning its keep
                     // rather than two buttons each checking whether they apply. Both answer the same question, "which
@@ -455,18 +561,21 @@ fun IconStudioScreen(
                     // Derived from the selection, so the composite offers only what applies to it — see
                     // [StudioTool.appliesTo].
                     tools = StudioTool.entries.filter { it.appliesTo(state.target) },
-                    // Centred explicitly, because the bar wraps its contents now and this column aligns to the
+                    // Centered explicitly, because the bar wraps its contents now and this column aligns to the
                     // start for the row of session buttons above. `ColumnScope.align` is the per-child override,
                     // so the two say what they mean rather than one of them settling for the other's answer.
                     modifier = Modifier
                         .padding(top = 6.dp)
                         .align(Alignment.CenterHorizontally),
                     selected = tool,
-                    // Choosing a tool closes the picker, so the rail always opens what it says it opens. Without it a
-                    // press would swap the bar's highlight and leave the color panel sitting there — the one way this
-                    // screen could show a selection that is not what is on screen.
+                    // Choosing a tool closes the picker **and the rail's menu**, so the bar always opens what it says
+                    // it opens. Without the first a press would swap the bar's highlight and leave the color panel
+                    // sitting there — the one way this screen could show a selection that is not what is on screen —
+                    // and without the second a stack menu would hang over the panel that had just replaced what it
+                    // was pointing at.
                     onSelect = {
                         colorPicker.close()
+                        railMenu = null
                         tool = it
                     },
                 )

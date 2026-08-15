@@ -10,6 +10,7 @@ import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.data.icons.InstalledIconPack
 import inkspire.morphic.data.settings.IconPreset
+import inkspire.morphic.data.settings.IconStudioWorkspace
 
 /**
  * Which recipe the studio is editing, resolved from [IconStudioRoute] once the app (if any) has been parsed.
@@ -105,6 +106,12 @@ data class PackBrowse(
  *   layer whose pack does not cover this app is simply absent here.
  * @property browsing the pack whose drawables are being browsed, or null. Null in the global studio always — see
  *   [PackBrowse].
+ * @property workspace how the canvas is arranged — the preview's pan and zoom, and where the layer rail was dragged
+ *   to. **Seeded from the store once and then owned by the screen**, which is [editing]'s bargain rather than
+ *   [background]'s, and for [editing]'s reason: it is dragged, so a late emission arriving mid-gesture would yank the
+ *   icon back to the last committed position. It is deliberately *not* part of [editing] — the viewport is where the
+ *   paper is lying rather than what is drawn on it, so panning must not make the recipe [dirty] and undo must not
+ *   step back through a pinch. See `IconStudioWorkspace`.
  * @property background what the canvas is drawn on. **Unlike [editing], this one *is* a projection of the store** —
  *   it is persisted, so the studio reopens on the backdrop the user left it on. It can be, because nothing edits it
  *   continuously: a cycle is one discrete tap, so there is no drag for an emission to overwrite. Its default here is
@@ -117,6 +124,7 @@ data class IconStudioState(
     val parsed: ParsedIcon? = null,
     val label: String? = null,
     val background: PreviewBackground = PreviewBackground.Default,
+    val workspace: IconStudioWorkspace = IconStudioWorkspace.Default,
     val target: StudioTarget = StudioTarget.Composite,
     val layerKeys: List<Long> = emptyList(),
     val canUndo: Boolean = false,

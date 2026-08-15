@@ -138,6 +138,27 @@ interface SettingsRepository {
      */
     suspend fun setIconStudioBackground(background: PreviewBackground)
 
+    /**
+     * How the icon studio's workspace is arranged — the preview's pan and zoom, and where the layer rail was put.
+     *
+     * [iconStudioBackground]'s sibling and its exact argument: the paper, not the drawing. See [IconStudioWorkspace]
+     * for why every value in it is a fraction of the canvas rather than a dp, and for why it is a slice of its own
+     * rather than a field beside the backdrop.
+     *
+     * Emits [IconStudioWorkspace.Default] until the user has arranged something, and **never emits a value carrying a
+     * non-finite float** — see [IconStudioWorkspace.sanitized], which is applied on the way out so no consumer has to
+     * remember to.
+     */
+    val iconStudioWorkspace: Flow<IconStudioWorkspace>
+
+    /**
+     * Remembers how the studio's workspace is arranged.
+     *
+     * A whole-value write like [setIconStudioBackground]: the studio owns this continuously while a gesture is in
+     * flight and hands back the settled arrangement, so there is no field to patch and nothing to merge with.
+     */
+    suspend fun setIconStudioWorkspace(workspace: IconStudioWorkspace)
+
     /** Sets HOME's main-area + side-zone pairing. */
     suspend fun setHomeLayout(layout: HomeLayout)
 

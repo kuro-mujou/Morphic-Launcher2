@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+import inkspire.morphic.core.model.icon.PreviewBackground
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Every icon button in the studio is this wide, so a rail of them lines up without each caller choosing a number. */
@@ -54,6 +56,19 @@ private val BottomBarHeight = 56.dp
 
 /** How far the bottom container and the chrome above it stay clear of the screen's sides. */
 internal val ChromeMargin = 12.dp
+
+/**
+ * How tall the top row of chrome is — back on one side, history and save on the other.
+ *
+ * Exported because the **workspace begins below it**: the icon's resting bound and the layer rail's resting head are
+ * both placed against this, and they line up only because they are placed against the *same* number. It is
+ * [ButtonSide] and must stay so; the pills are one button tall, and a second constant beside it would be that fact
+ * written down twice.
+ */
+internal val StudioTopChromeHeight = ButtonSide
+
+/** Between the chrome and the work it sits above — enough that the icon is not touching the buttons. */
+internal val WorkspaceGap = 8.dp
 
 /**
  * How far a selected entry's wash carries. The same value the layer rows use, so "this is the one being edited" looks
@@ -251,6 +266,60 @@ fun StudioHistoryButtons(
     ) {
         StudioIconButton(Icons.AutoMirrored.Filled.Undo, "Undo", onUndo, enabled = canUndo)
         StudioIconButton(Icons.AutoMirrored.Filled.Redo, "Redo", onRedo, enabled = canRedo)
+    }
+}
+
+/**
+ * The two controls that act on **how the work is shown** rather than on what it is: the canvas backdrop, and putting
+ * the preview back where it started.
+ *
+ * **One pill for the pair, on [StudioHistoryButtons]' exact argument.** Those two share a surface because a history
+ * has a direction and two separate buttons invite reading them as unrelated; these two share one because neither
+ * touches the recipe — they are the *view*, where the button beside them ("which app am I looking at?") chooses the
+ * subject. Grouping is what says which of the three questions each answers, and it is the cheaper blur besides:
+ * [studioSurface] is a Haze effect per node, so a pair sharing one samples the canvas once.
+ *
+ * **The reset takes the position pad's own center glyph, deliberately.** In `PositionPad` it means "put this back in
+ * the middle" about a *layer*; here it means the same about the *view*. One verb, two subjects — and both are disabled
+ * once there is nothing to undo, so the glyph carries the same promise in both places rather than being reused for its
+ * looks.
+ *
+ * @param canResetView whether the preview has been panned or zoomed at all. Dimmed rather than absent, per this file's
+ *   rule: its availability changes as the canvas is dragged, and a control that came and went under the finger using
+ *   it would be worse than a gray one — and gray still says the view *can* be put back.
+ */
+@Composable
+fun StudioViewButtons(
+    background: PreviewBackground,
+    canResetView: Boolean,
+    hazeState: HazeState,
+    onCycleBackground: () -> Unit,
+    onResetView: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.studioSurface(hazeState, shape = CircleShape),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The swatch is smaller than a glyph slot and stays so — it is a *picture* of a backdrop, and at 40dp it would
+        // read as a tile rather than as a button's contents. Centered in a full-size cell instead, so the pair lines
+        // up and both halves have the same press target.
+        Box(
+            modifier = Modifier.size(ButtonSide),
+            contentAlignment = Alignment.Center
+        ) {
+            BackgroundCycleButton(
+                background = background,
+                onClick = onCycleBackground
+            )
+        }
+
+        StudioIconButton(
+            icon = Icons.Default.CenterFocusStrong,
+            contentDescription = "Reset the preview's position and zoom",
+            enabled = canResetView,
+            onClick = onResetView,
+        )
     }
 }
 
