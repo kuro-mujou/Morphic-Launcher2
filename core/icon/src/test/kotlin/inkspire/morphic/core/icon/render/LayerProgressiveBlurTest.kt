@@ -1,5 +1,6 @@
 package inkspire.morphic.core.icon.render
 
+import inkspire.morphic.core.model.icon.BlurProfile
 import inkspire.morphic.core.model.icon.LayerEffect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -16,7 +17,9 @@ import org.junit.Test
 class LayerProgressiveBlurTest {
 
     private fun blur(sharpArea: Float = 0.2f, softness: Float = 0.4f) =
-        LayerEffect.ProgressiveBlur(radius = 0.05f, sharpArea = sharpArea, softness = softness)
+        LayerEffect.ProgressiveBlur(
+            radial = BlurProfile(radius = 0.05f, sharpArea = sharpArea, softness = softness),
+        )
 
     @Test
     fun `a bigger radius scales further down, which is what makes it blurrier`() {

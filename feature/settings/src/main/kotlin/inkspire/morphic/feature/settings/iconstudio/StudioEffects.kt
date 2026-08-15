@@ -1102,9 +1102,16 @@ private fun ProgressiveBlurControls(
     onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
-    // The model's own default radius is already zero — identity — so an absent effect needs no seeding, as with
-    // Pixelate and for the same reason: the switch and the first control are one slider.
     val blur = effects.effectOrNull<LayerEffect.ProgressiveBlur>() ?: LayerEffect.ProgressiveBlur()
+
+    // The defaults of whichever falloff is showing — `BloomControls`' lookup and its reason: both profiles start
+    // identical, so writing `.radial` directly would be right today and silently wrong the moment the two are given
+    // different arrival values.
+    val defaults = if (blur.falloff == Falloff.LINEAR) {
+        ProgressiveBlurDefaults.linear
+    } else {
+        ProgressiveBlurDefaults.radial
+    }
 
     LabeledControl("Falloff") {
         MorphicSegmentedButtons(
@@ -1122,24 +1129,24 @@ private fun ProgressiveBlurControls(
         label = "Blur",
         value = blur.radius,
         valueRange = 0f..BlurReach,
-        default = ProgressiveBlurDefaults.radius,
-        onValueChange = { value -> onUpdate { it.withEffect(blur.copy(radius = value)) } },
+        default = defaults.radius,
+        onValueChange = { value -> onUpdate { it.withEffect(blur.withActive { p -> p.copy(radius = value) }) } },
         onValueChangeFinished = onCommit,
     )
     SliderControl(
         label = "Sharp area",
         value = blur.sharpArea,
         valueRange = 0f..1f,
-        default = ProgressiveBlurDefaults.sharpArea,
-        onValueChange = { value -> onUpdate { it.withEffect(blur.copy(sharpArea = value)) } },
+        default = defaults.sharpArea,
+        onValueChange = { value -> onUpdate { it.withEffect(blur.withActive { p -> p.copy(sharpArea = value) }) } },
         onValueChangeFinished = onCommit,
     )
     SliderControl(
         label = "Softness",
         value = blur.softness,
         valueRange = 0f..1f,
-        default = ProgressiveBlurDefaults.softness,
-        onValueChange = { value -> onUpdate { it.withEffect(blur.copy(softness = value)) } },
+        default = defaults.softness,
+        onValueChange = { value -> onUpdate { it.withEffect(blur.withActive { p -> p.copy(softness = value) }) } },
         onValueChangeFinished = onCommit,
     )
 
@@ -1149,9 +1156,9 @@ private fun ProgressiveBlurControls(
             value = blur.angleDegrees,
             valueRange = 0f..360f,
             step = AngleStep,
-            default = ProgressiveBlurDefaults.angleDegrees,
+            default = defaults.angleDegrees,
             format = { "%.0f°".format(it) },
-            onValueChange = { value -> onUpdate { it.withEffect(blur.copy(angleDegrees = value)) } },
+            onValueChange = { value -> onUpdate { it.withEffect(blur.withActive { p -> p.copy(angleDegrees = value) }) } },
             onValueChangeFinished = onCommit,
         )
 
@@ -1159,7 +1166,7 @@ private fun ProgressiveBlurControls(
             PositionPad(
                 x = blur.centerX,
                 y = blur.centerY,
-                onValueChange = { x, y -> onUpdate { it.withEffect(blur.copy(centerX = x, centerY = y)) } },
+                onValueChange = { x, y -> onUpdate { it.withEffect(blur.withActive { p -> p.copy(centerX = x, centerY = y) }) } },
                 onCommit = onCommit,
             )
         }

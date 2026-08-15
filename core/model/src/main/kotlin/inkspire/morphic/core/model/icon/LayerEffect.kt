@@ -120,6 +120,44 @@ enum class Falloff {
  *   artwork stays on that corner when the layer turns. [Falloff.RADIAL]'s.
  * @property offsetY the same, downward. [Falloff.RADIAL]'s.
  */
+/**
+ * One complete set of a [LayerEffect.ProgressiveBlur]'s settings — the blur holds **two**, one per [Falloff].
+ *
+ * [BloomProfile]'s shape and its whole argument, applied to the other effect that has two forms. The sharing was the
+ * same and so was its cost: the blur's radius, sharp area and softness were one set between the two, so tuning a
+ * radial focus and flipping to linear to compare handed back a ramp already carrying the disc's numbers — which is
+ * not a comparison, it is the same edit seen twice.
+ *
+ * Each profile carries every field including the ones its falloff ignores, for [BloomProfile]'s stated reason.
+ *
+ * **There is no `along` here, unlike a bloom's ramp**, and that is a real difference rather than an omission: a
+ * progressive blur's linear form is placed entirely by [sharpArea] and [softness] — where along its angle the sharp
+ * band sits and how far it takes to soften — so a distance would be a second control for the position the band
+ * already has. The disc needs [centerX] / [centerY] because a band has a *width* while a disc has a *place*.
+ *
+ * @property radius how far the blurred copy is softened, as a fraction of the box. 0 is no blur, which is how the
+ *   effect is identity.
+ * @property sharpArea how much of the frame stays fully sharp before the ramp starts, 0..1.
+ * @property softness how much of the frame the ramp takes to reach full blur.
+ * @property angleDegrees which way the band runs, clockwise from "straight down". [Falloff.LINEAR]'s.
+ * @property centerX where the sharp disc sits, as a fraction of the frame from its centre. [Falloff.RADIAL]'s.
+ * @property centerY the same, downward. [Falloff.RADIAL]'s.
+ */
+@Serializable
+data class BlurProfile(
+    /**
+     * **A visible default**, for `LayerEffect.Pixelate.cellSize`'s reason exactly: this rested at zero, which is the
+     * value `isIdentity` reads, so the effect drew nothing until its first slider moved. Half the panel's own reach,
+     * which on a 96dp bake is a soft edge you cannot mistake for a sharp one.
+     */
+    val radius: Float = 0.05f,
+    val sharpArea: Float = 0.2f,
+    val softness: Float = 0.4f,
+    val angleDegrees: Float = 0f,
+    val centerX: Float = 0f,
+    val centerY: Float = 0f,
+)
+
 @Serializable
 data class BloomProfile(
     val argb: Int = 0xFFFFFFFF.toInt(),
@@ -682,20 +720,42 @@ sealed interface LayerEffect {
     @Serializable
     @SerialName("progressiveBlur")
     data class ProgressiveBlur(
-        /**
-         * **A visible default**, for [Pixelate.cellSize]'s reason exactly: this rested at zero, which is the value
-         * [isIdentity] reads, so the effect drew nothing until its first slider moved. Half the panel's own reach,
-         * which on a 96dp bake is a soft edge you cannot mistake for a sharp one.
-         */
-        val radius: Float = 0.05f,
         val falloff: Falloff = Falloff.RADIAL,
-        val sharpArea: Float = 0.2f,
-        val softness: Float = 0.4f,
-        val angleDegrees: Float = 0f,
-        val centerX: Float = 0f,
-        val centerY: Float = 0f,
+        val linear: BlurProfile = BlurProfile(),
+        val radial: BlurProfile = BlurProfile(),
         override val enabled: Boolean = true,
     ) : LayerEffect {
+
+        /** The profile [falloff] selects — every reader below goes through it, and so does every write. */
+        val active: BlurProfile get() = if (falloff == Falloff.LINEAR) linear else radial
+
+        /**
+         * The active profile's fields, forwarded — [Bloom.argb]'s arrangement and its reason.
+         *
+         * `IconRenderer` reads `blur.radius`, `blur.angleDegrees` and `blur.centerX`, and `LayerProgressiveBlur`
+         * reads `blur.sharpArea` and `blur.softness` off the whole effect. None of them changed: the profile is
+         * resolved here, once, rather than at each of those sites where they could resolve differently.
+         */
+        val radius: Float get() = active.radius
+
+        /** @see radius */
+        val sharpArea: Float get() = active.sharpArea
+
+        /** @see radius */
+        val softness: Float get() = active.softness
+
+        /** @see radius */
+        val angleDegrees: Float get() = active.angleDegrees
+
+        /** @see radius */
+        val centerX: Float get() = active.centerX
+
+        /** @see radius */
+        val centerY: Float get() = active.centerY
+
+        /** This blur with [transform] applied to whichever profile is active. @see Bloom.withActive */
+        fun withActive(transform: (BlurProfile) -> BlurProfile): ProgressiveBlur =
+            if (falloff == Falloff.LINEAR) copy(linear = transform(linear)) else copy(radial = transform(radial))
 
         /** No blur is no effect, whatever the ramp is doing — which is what makes the radius the switch. */
         override val isIdentity: Boolean get() = radius <= 0f

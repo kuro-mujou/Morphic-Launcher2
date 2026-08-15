@@ -138,6 +138,34 @@ class LayerEffectPipelineTest {
     }
 
     @Test
+    fun `a progressive blur keeps a profile per falloff too`() {
+        // The same split, on the other effect that has two forms — its radius, sharp area and softness were shared,
+        // so tuning a radial focus and flipping to linear to *compare* handed back a ramp already carrying the
+        // disc's numbers, which is the same edit seen twice rather than a comparison.
+        val tuned = LayerEffect.ProgressiveBlur(
+            falloff = Falloff.RADIAL,
+            linear = BlurProfile(radius = 0.02f, angleDegrees = 30f),
+            radial = BlurProfile(radius = 0.09f, centerX = 0.25f),
+        )
+
+        assertEquals(0.09f, tuned.radius, 0.001f)
+        assertEquals(0.25f, tuned.centerX, 0.001f)
+
+        val flipped = tuned.copy(falloff = Falloff.LINEAR)
+        assertEquals(0.02f, flipped.radius, 0.001f)
+        assertEquals(30f, flipped.angleDegrees, 0.001f)
+        assertEquals(tuned, flipped.copy(falloff = Falloff.RADIAL))
+    }
+
+    @Test
+    fun `a blur's write reaches only the profile that is showing`() {
+        val tuned = LayerEffect.ProgressiveBlur(falloff = Falloff.LINEAR).withActive { it.copy(radius = 0.07f) }
+
+        assertEquals(0.07f, tuned.linear.radius, 0.001f)
+        assertEquals(BlurProfile().radius, tuned.radial.radius, 0.001f)
+    }
+
+    @Test
     fun `the whole icon filters its effects by the same rule a layer does`() {
         // One rule for both, which is why `activeEffects` is on the list rather than on either holder: a set whose
         // switched-off effects were filtered differently from a layer's would be a difference nobody thinks to look
