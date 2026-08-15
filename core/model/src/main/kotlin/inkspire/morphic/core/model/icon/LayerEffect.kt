@@ -751,14 +751,21 @@ sealed interface LayerEffect {
     @SerialName("pixelate")
     data class Pixelate(
         /**
-         * **A visible default, like every other effect here.** It rested at zero, which is this effect's own
-         * identity — so adding a pixelate did nothing at all until a slider was moved, and the studio offered a
-         * control whose first impression was that it was broken. An eighth of the box puts roughly eight cells
-         * across the icon: coarse enough to read instantly as pixels, fine enough that the artwork is still the
-         * artwork.
+         * **A visible default, like every other effect here** — it rested at zero, which is this effect's own
+         * identity, so adding a pixelate did nothing at all until a slider was moved and the control's first
+         * impression was that it was broken.
+         *
+         * A twenty-fifth of the box, which is fine enough that the artwork survives being made of cells and coarse
+         * enough that they are plainly cells. `LayerPixelate.cellPx` floors at one pixel, so this stays honest down
+         * to a 25px bake — well below anything the launcher asks for.
          */
-        val cellSize: Float = 0.12f,
-        val fill: Float = 1f,
+        val cellSize: Float = 0.04f,
+        /**
+         * **Just short of touching**, which is what makes this read as a panel of lights rather than a mosaic. At a
+         * full fill the cells meet and the gaps close, and what is left is a low-resolution copy of the icon; a
+         * tenth of a cell of ground between them is what says the picture is *made of* something.
+         */
+        val fill: Float = 0.9f,
         val roundness: Float = 0f,
         override val enabled: Boolean = true,
     ) : LayerEffect {
