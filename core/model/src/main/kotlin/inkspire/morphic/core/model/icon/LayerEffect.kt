@@ -151,8 +151,18 @@ data class BlurProfile(
      * which on a 96dp bake is a soft edge you cannot mistake for a sharp one.
      */
     val radius: Float = 0.05f,
-    val sharpArea: Float = 0.2f,
-    val softness: Float = 0.4f,
+    /**
+     * **The disc's share**, which the ramp overrides at [LayerEffect.ProgressiveBlur]'s constructor — see there for
+     * why the two want different amounts of it. The base is this one because [Falloff.RADIAL] is what the effect
+     * opens on, so it is the arrangement a user meets first.
+     */
+    val sharpArea: Float = 0.25f,
+    /**
+     * **Half the frame spent softening**, which is what keeps this a *progressive* blur rather than a sharp region
+     * with a blurred one next to it. Shared by both falloffs: how long the transition takes is the same question
+     * whether it runs across the frame or out from a point.
+     */
+    val softness: Float = 0.5f,
     val angleDegrees: Float = 0f,
     val centerX: Float = 0f,
     val centerY: Float = 0f,
@@ -801,7 +811,19 @@ sealed interface LayerEffect {
     @SerialName("progressiveBlur")
     data class ProgressiveBlur(
         val falloff: Falloff = Falloff.RADIAL,
-        val linear: BlurProfile = BlurProfile(),
+        /**
+         * **The ramp keeps more of the frame sharp than the disc does**, and this is the first place the two
+         * falloffs are given different arrival values — the one-line change [BlurProfile] said the shape would stay,
+         * now that something has asked for it.
+         *
+         * The reason is geometric rather than aesthetic. A disc's sharp area is a *radius*, so a quarter of the
+         * frame still leaves the whole ring beyond it soft — most of the icon's area is outside a quarter-radius
+         * circle. A ramp's is a band measured across the frame, so the same number leaves three quarters of the icon
+         * blurred and the effect stops looking like focus and starts looking like a smudge with a corner cut out.
+         * Two numbers because the quantity means two different things, which is the same reason the profiles are
+         * split at all.
+         */
+        val linear: BlurProfile = BlurProfile(sharpArea = 0.4f),
         val radial: BlurProfile = BlurProfile(),
         override val enabled: Boolean = true,
     ) : LayerEffect {
