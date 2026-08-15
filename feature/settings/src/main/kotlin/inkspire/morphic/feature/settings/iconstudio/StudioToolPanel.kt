@@ -25,9 +25,9 @@ import inkspire.morphic.data.settings.IconPreset
 /**
  * How tall a panel may grow. The rest of the screen is the work, and it stays visible.
  *
- * **The cap is on the whole panel, not on its scrolling part** — header, scroll and pinned footer together — which is
- * what makes a footer free: pinning a row takes space from the scroll rather than adding it to the panel, so a section
- * that grows one cannot push the canvas up behind it.
+ * **The cap is on the whole panel, not on its scrolling part** — the pinned header and the scroll together — which is
+ * what makes pinning free: a header takes space *from* the scroll rather than adding it to the panel, so the section
+ * with the tallest one cannot push the canvas up behind it.
  */
 private val PanelMaxHeight = 320.dp
 
@@ -88,8 +88,14 @@ data class StudioActions(
  * chips, Effects is nine controls — and a panel that grew to whatever its contents wanted would bury the icon at
  * exactly the moment the user was coloring it.
  *
- * **Three bands: header, scroll, footer.** The outer two are measured first and the scroll takes what is left of
- * [PanelMaxHeight], which is what lets a section pin a row ([SectionFooter]) without the panel growing to fit it.
+ * **Two bands: a pinned header and a scroll.** The header is measured first and the scroll takes what is left of
+ * [PanelMaxHeight], which is what lets the header stay put without the panel growing to fit it.
+ *
+ * There was a third — a footer, for controls that must not scroll away because they act on what is scrolling. It was
+ * added for the layer stack's reorder buttons, which then moved to `StudioLayerRail`, and it spent the time since as
+ * a `when` returning `Unit` for all six sections. Removed rather than kept for a future consumer: the shape is two
+ * lines to bring back, and an empty band is a claim about the layout that is not true. The thing that *did* need
+ * pinning — an open effect entry's header — turned out to belong at the top, where the way back out is.
  */
 @Composable
 fun StudioToolPanel(
@@ -120,9 +126,9 @@ fun StudioToolPanel(
             // And before `heightIn`, so what is animated *towards* is already capped.
             //
             // **Anchored `BottomStart`, which is the half that matters for a panel at the bottom of the screen.** The
-            // default top-anchors the content, so a growing panel would hold the header still and clip the footer —
-            // hiding the pinned buttons for the length of the animation. Anchored to the bottom, the footer stays put
-            // and the panel opens upward from behind it.
+            // default top-anchors the content, so a growing panel would hold its top edge still and extend downward
+            // over the tool bar — the opposite of coming out from behind it. Anchored to the bottom, the lower edge
+            // stays against the bar and the panel opens upward.
             .animateContentSize(
                 animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 alignment = Alignment.BottomStart,
@@ -163,11 +169,10 @@ fun StudioToolPanel(
             )
         }
 
-        // **`weight(1f, fill = false)` is what makes the header and the footer win the space they need.** The header
-        // and footer are measured first and the scroll takes what is left, so a pinned row is subtracted from the
-        // scrollable area rather than added to the panel. `fill = false` is the half that is easy to miss: with it
-        // filling, a two-control section would stretch its scroll to the full cap and every panel would be the same
-        // height whatever it held.
+        // **`weight(1f, fill = false)` is what makes the header win the space it needs.** It is measured first and
+        // the scroll takes what is left, so a pinned row is subtracted from the scrollable area rather than added to
+        // the panel. `fill = false` is the half that is easy to miss: with it filling, a two-control section would
+        // stretch its scroll to the full cap and every panel would be the same height whatever it held.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -231,31 +236,6 @@ fun StudioToolPanel(
                 StudioTool.MORE -> MoreControls(subject = state.subject, onReset = actions.reset)
             }
         }
-
-        SectionFooter(tool = tool, state = state, actions = actions)
-    }
-}
-
-/**
- * The row a section keeps at the bottom of the panel, below the scroll — or nothing, for the sections that have none.
- *
- * **A footer is for controls that must not scroll away because they act on what is scrolling.** The layer stack is the
- * case and today the only one: its buttons operate on the *selected* layer, so a deep stack would put them below the
- * fold exactly when they are most needed, and adding a layer would push "add a layer" further out of reach.
- *
- * **Exhaustive rather than an `if`**, so a new section has to decide whether it has one instead of silently not — the
- * same reason the body's `when` lists every value. Sections without a footer say `Unit` and cost nothing.
- */
-@Composable
-private fun SectionFooter(tool: StudioTool, state: IconStudioState, actions: StudioActions) {
-    when (tool) {
-        StudioTool.SOURCE,
-        StudioTool.TRANSFORM,
-        StudioTool.SHAPE,
-        StudioTool.EFFECTS,
-        StudioTool.PRESETS,
-        StudioTool.MORE,
-        -> Unit
     }
 }
 
