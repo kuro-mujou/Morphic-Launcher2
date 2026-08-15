@@ -74,6 +74,17 @@ class StudioControlsTest {
     }
 
     @Test
+    fun `the position pad's nudge follows its own range, like every slider`() {
+        // Four of the six pads run over a full frame and are unaffected; the two narrow ones are why this matters.
+        // A shadow's throw is ±0.15 and a chromatic split's ±0.05, and a flat hundredth there was 3% and **10%** of
+        // everything the control could express — the jump these buttons exist not to be. The pad's readout already
+        // printed three decimals on those, so the step and the number on screen disagreed by a factor of ten.
+        assertEquals(0.01f, finestStep(PositionRange))
+        assertEquals(0.001f, finestStep(-0.15f..0.15f))
+        assertEquals(0.001f, finestStep(-0.05f..0.05f))
+    }
+
+    @Test
     fun `an angle steps by one degree`() {
         // The one step still stated rather than derived — degrees are not fractions. Every whole angle is on the
         // grid, so 45, 90 and 180 stay reachable, which is all the old five-degree step bought.

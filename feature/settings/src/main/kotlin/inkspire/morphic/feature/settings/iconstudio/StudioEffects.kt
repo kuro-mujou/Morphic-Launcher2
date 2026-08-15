@@ -48,7 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Stable
@@ -112,19 +112,18 @@ import kotlin.math.sin
  * `StudioTarget`'s reason, one layer up, where this is the same distinction expressed in what the panel needs.
  */
 /**
- * Which entry of the Effects grid is open, and whether this visit to it has changed anything.
+ * Which entry of the Effects grid is open, or null for the grid itself.
  *
  * **It lives above `EffectsControls` because the entry's header is pinned above the scroll**, and only the panel owns
  * that band. The header — back, the effect's name, its switch — used to be the first thing inside the scrolling body,
  * so on a section with more than a screenful of sliders the way back scrolled off the top and the switch went with
  * it. A control for leaving a place has to stay where the place is.
  *
- * That split is what makes this a holder rather than two parameters: the panel *renders* the header, `EffectsControls`
- * *renders* the body, and both have to read and write the same two facts. The alternative — a `MutableState` handed
- * down, or a `() -> Boolean` for the dispose to read — says the same thing with less of a name on it.
+ * That split is what makes this a holder rather than a hoisted value: the panel *renders* the header,
+ * `EffectsControls` *renders* the body, and both read and write it.
  *
- * [touched] is deliberately reset by [open] rather than tracked per composition: it is a fact about *this visit* to
- * *this* entry, which is exactly what the seed-and-abandon rule needs to know. See `EffectsControls`.
+ * It carried a second field — whether this visit had changed anything — while leaving an entry untouched took the
+ * effect back out again. Opening now applies for good, so nobody asks. See `EffectsControls`.
  */
 @Stable
 internal class EffectEntryState {
@@ -133,29 +132,14 @@ internal class EffectEntryState {
     var open: EffectSlice? by mutableStateOf(null)
         private set
 
-    /** Whether anything has been changed since [open] last moved — the switch counts, a slider counts. */
-    var touched: Boolean by mutableStateOf(false)
-        private set
-
-    /** Opens [slice], or returns to the grid. A fresh entry has been touched by nothing. */
+    /** Opens [slice], or returns to the grid. */
     fun open(slice: EffectSlice?) {
         open = slice
-        touched = false
-    }
-
-    fun markTouched() {
-        touched = true
     }
 
     companion object {
 
-        /**
-         * Saves which entry was open, so a rotation does not drop the user back at the grid.
-         *
-         * [touched] is deliberately **not** saved: a configuration change is not the user changing anything, and
-         * restoring `true` would keep a seeded effect nobody had touched. Restoring `false` is the safe direction —
-         * at worst an abandoned entry is taken back out, which is what would have happened anyway.
-         */
+        /** Saves which entry was open, so a rotation does not drop the user back at the grid. */
         val Saver: Saver<EffectEntryState, String> = Saver(
             save = { it.open?.name ?: "" },
             restore = { name ->
@@ -409,9 +393,6 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         PROGRESSIVE_BLUR -> ProgressiveBlurDefaults
     }
 
-    /** These effects without this entry's record — how an abandoned seed is taken back out. */
-    fun removedFrom(effects: List<LayerEffect>): List<LayerEffect> =
-        storedEffect(effects)?.let { stored -> effects.filterNot { it === stored } } ?: effects
 }
 
 /**
@@ -455,45 +436,34 @@ internal fun EffectsControls(
     // the selection to the whole icon with that panel open would leave sliders on screen writing to nothing.
     val slice = entry.open?.takeIf { it in target.slices }
 
-    // **Opening an addition applies it; abandoning it takes it back out.** Two halves of one rule, in one effect so
-    // they cannot come apart:
+    // **Opening an addition applies it, and it stays.** Seeding is what makes an effect legible at all — the
+    // defaults were always visible, but nothing wrote them, so tapping Glow showed sliders against an unchanged
+    // icon. Now the halo is there before the finger leaves the tile.
     //
-    // Seeding is what makes an effect legible at all — the defaults were always visible, but nothing wrote them, so
-    // tapping Glow showed sliders against an unchanged icon. Now the halo is there before the finger leaves the
-    // tile.
+    // **It used to be taken back out again if the entry was left untouched**, so that browsing cost nothing. That
+    // was the right call while an effect arrived invisible — opening one told you nothing, so it was fair to treat
+    // leaving as never having asked. It is the wrong call now that every addition arrives at values chosen to be
+    // seen: opening *is* applying, the user watched it happen, and undoing it behind their back reads as the studio
+    // refusing what they just did. Undo is the way back, and it is one step because this commits.
     //
-    // The undo is what makes *browsing* free. Opening writes but does not commit, so no history entry exists yet;
-    // leaving without touching anything removes the record and the recipe is exactly as it was, `dirty` included.
-    // The first real edit commits, and that one entry covers the seed and the edit together — so undo steps back
-    // past both, which is the honest unit.
+    // **Committing is what that costs, and it is not optional.** An uncommitted seed leaves `editing` diverged from
+    // the last history entry, so undo would step to the one *before* it and take a prior edit along with the seed.
+    // See `IconStudioViewModel.recordHistory`.
     //
-    // In a `DisposableEffect` rather than the tile's own click handler because there are four ways out of an entry,
-    // not one: the header's back button, the system back gesture, the target changing under it, and the whole panel
-    // being closed by the tool bar or a tap on the canvas. Only disposal catches all four.
-    DisposableEffect(slice) {
-        val opened = slice
-        var seeded = false
-        if (opened != null && opened.storedEffect(target.effects) == null) {
-            opened.seeded()?.let { fresh ->
-                onEffects { it + fresh }
-                seeded = true
-            }
+    // A `LaunchedEffect` rather than the tile's own click handler because an entry can be arrived at more ways than
+    // by pressing its tile: a rotation restores one, and the target changing can move which entries exist.
+    //
+    // **Keyed on the entry alone, and on nothing about the effects.** Keying on the list too would re-run whenever
+    // it changed, and the change that matters is *undo* — stepping back over a seed would immediately re-seed it,
+    // so the effect could never be undone at all. The cost is that a record removed while its entry is open is not
+    // put back, which is the honest half of that: it was removed on purpose.
+    LaunchedEffect(slice) {
+        val opened = slice ?: return@LaunchedEffect
+        if (opened.storedEffect(target.effects) != null) return@LaunchedEffect
+        opened.seeded()?.let { fresh ->
+            onEffects { it + fresh }
+            onCommit()
         }
-        onDispose {
-            if (seeded && !entry.touched) onEffects { opened!!.removedFrom(it) }
-        }
-    }
-
-    // Every write from a control passes through one of these, so one wrapper each is the whole of "has the user
-    // done anything?". It has to be the *write* rather than the commit: a slider that is dragged and released back
-    // where it started never commits, and the effect it was dragging is plainly wanted.
-    val effectsTouched: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit = { transform ->
-        entry.markTouched()
-        onEffects(transform)
-    }
-    val layerTouched: ((IconLayerSpec) -> IconLayerSpec) -> Unit = { transform ->
-        entry.markTouched()
-        onLayer(transform)
     }
 
     // Back leaves the entry before it leaves the studio. Enabled only when there is somewhere to go back *to*, so
@@ -515,24 +485,24 @@ internal fun EffectsControls(
             // The two spec fields, reachable only on a layer: `EffectTarget.Composite` does not list them, so the
             // cast is the compiler being told what `slices` already guarantees.
             EffectSlice.OPACITY ->
-                (target as? EffectTarget.Layer)?.let { OpacityControls(it.spec, layerTouched, onCommit) }
+                (target as? EffectTarget.Layer)?.let { OpacityControls(it.spec, onLayer, onCommit) }
 
             EffectSlice.BLEND ->
-                (target as? EffectTarget.Layer)?.let { BlendControls(it.spec, layerTouched, onCommit) }
+                (target as? EffectTarget.Layer)?.let { BlendControls(it.spec, onLayer, onCommit) }
 
-            EffectSlice.COLOR -> ColorControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.FILTER -> FilterControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.BLOOM -> BloomControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.GLOSS -> GlossControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.PATTERN -> PatternControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.CHROMATIC -> ChromaticControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.GLOW -> GlowControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.SHADOW -> ShadowControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.RIPPLE -> RippleControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.GRAIN -> GrainControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.PIXELATE -> PixelateControls(target.effects, effectsTouched, onCommit)
-            EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
+            EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
+            EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
+            EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
+            EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
+            EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
+            EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
+            EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
+            EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
+            EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
+            EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
+            EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
+            EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, onEffects, onCommit)
         }
     }
 }

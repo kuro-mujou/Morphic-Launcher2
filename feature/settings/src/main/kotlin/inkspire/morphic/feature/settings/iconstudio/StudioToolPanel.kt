@@ -151,12 +151,7 @@ fun StudioToolPanel(
                 slice = openEntry,
                 target = effectTarget,
                 onBack = { effectEntry.open(null) },
-                // The switch is an edit like any other, so it marks the entry touched — flipping a freshly seeded
-                // effect off is a decision *about* it, not an abandonment of it.
-                onEffects = { transform ->
-                    effectEntry.markTouched()
-                    actions.updateEffects(transform)
-                },
+                onEffects = actions.updateEffects,
                 onCommit = actions.commit,
             )
         } else {

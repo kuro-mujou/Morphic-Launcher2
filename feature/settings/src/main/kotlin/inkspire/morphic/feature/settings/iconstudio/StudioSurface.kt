@@ -1,11 +1,14 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazeInput
@@ -45,6 +48,23 @@ val StudioContentColor = Color.White
  * black or white at will, so a theme-derived color would be unreadable half the time; a dark wash heavy enough to
  * carry white over either is the only setting that is always legible.
  *
+ * **A surface stops what lands on it**, which is the other half of being one — and it was missing. A `Modifier` that
+ * only draws makes no node a hit target, so a press on a panel's padding, its header, or the gap between two controls
+ * found nothing in the panel's subtree and fell through to the **canvas sibling underneath** — whose job is to put
+ * the chrome away. Pressing the header of a panel closed it. Compose stops hit-testing at the first sibling that
+ * reports a hit, so one detector here is the whole fix, for taps and for drags alike: with it the canvas is never
+ * reached, and without it a drag begun on a panel panned the icon behind it.
+ *
+ * It is in the shared material rather than at each panel for `launcherItemGestures`' reason — wiring that must not be
+ * forgotten belongs in the one place every caller already goes through.
+ *
+ * **It claims nothing, which is the point.** Being a *hit target* is the whole of what blocks the sibling, so the
+ * detector awaits a down and consumes neither it nor anything after. A `detectTapGestures {}` would also work and is
+ * what this was first written as, but it consumes the down and the up — and every slider, switch and tile inside a
+ * panel is a descendant sharing that hit path. Swallowing a press that a control underneath is in the middle of
+ * reading is a far worse failure than the one being fixed, and it would show up as one control in one panel
+ * occasionally not responding.
+ *
  * Requires a node upstream marked `Modifier.hazeSource(state)` with the same [state], which is what
  * `HazeInput.Sources` names — in the studio that is the preview canvas, and it is always composed, so a surface here
  * never has nothing to sample. Anything reusing this modifier outside the studio owes itself that check: there is no
@@ -63,3 +83,8 @@ fun Modifier.studioSurface(
         input = HazeInput.Sources(state),
         style = HazeMaterials.ultraThin(StudioTint)
     )
+    // Awaits a down and does nothing with it: the node being a hit target is what stops the press reaching the
+    // canvas, and consuming would reach *into* the panel's own controls instead. `requireUnconsumed = false` so a
+    // press a child has already taken still counts as landing here, which is what keeps the block above true for
+    // every gesture rather than only the ones nothing wanted.
+    .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false) } }

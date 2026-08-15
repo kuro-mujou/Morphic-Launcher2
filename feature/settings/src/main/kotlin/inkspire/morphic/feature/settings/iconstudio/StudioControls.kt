@@ -370,9 +370,17 @@ internal fun PositionPad(
     onCommit: () -> Unit,
     range: ClosedFloatingPointRange<Float> = PositionRange,
 ) {
+    // **The pad's own range decides the nudge, exactly as it decides the readout.** It was a flat hundredth of the
+    // frame whatever the range — which is 1% of the travel on a full-frame offset and **10%** on a chromatic split's
+    // ±0.05, so on the narrow pads the arrows were the jump they exist not to be. And since the readout beneath
+    // already prints through `finestFormat`, those pads showed three decimals while a press moved ten units in the
+    // last one: the step and the number disagreeing, which is the pairing `finestStep` was written to hold together.
+    // The sliders were given that rule and the pad was not, because its constant predates it.
+    val step = finestStep(range)
+
     @Composable
     fun Arrow(icon: ImageVector, description: String, dx: Int, dy: Int) {
-        val target = x.nudged(dx, range) to y.nudged(dy, range)
+        val target = x.nudged(dx, range, step) to y.nudged(dy, range, step)
         StudioStepperButton(
             icon = icon,
             contentDescription = description,
@@ -452,8 +460,8 @@ internal fun PositionPad(
  * the Center button lit, and lit *forever*, over an offset too small to see. Stepping onto the grid means the way
  * back is exactly the way out.
  */
-private fun Float.nudged(direction: Int, range: ClosedFloatingPointRange<Float>): Float =
-    if (direction == 0) this else snappedStep(this, NudgeStep, up = direction > 0).coerceIn(range)
+private fun Float.nudged(direction: Int, range: ClosedFloatingPointRange<Float>, step: Float): Float =
+    if (direction == 0) this else snappedStep(this, step, up = direction > 0).coerceIn(range)
 
 /**
  * Half a frame either way — which puts the point on an edge at the ends and off it nowhere.
@@ -466,9 +474,6 @@ private fun Float.nudged(direction: Int, range: ClosedFloatingPointRange<Float>)
  * could not hold still — so that one passes its own range and gets the same pad at a scale it can be dragged in.
  */
 internal val PositionRange = -0.5f..0.5f
-
-/** A hundredth of the frame — fine enough that a press is a correction rather than a move. */
-private const val NudgeStep = 0.01f
 
 /** The pad, and one cell of the cluster beside it — equal to `StudioIconButton`'s own side. */
 private val PadSide = 140.dp
