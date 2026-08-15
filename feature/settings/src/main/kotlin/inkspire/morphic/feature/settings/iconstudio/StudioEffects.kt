@@ -1042,33 +1042,41 @@ private fun BloomPosition(
     onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
-    LabeledControl("Position") {
-        when (bloom.falloff) {
-            Falloff.RADIAL -> PositionPad(
+    when (bloom.falloff) {
+        // A pad carries no name of its own, so it takes one; the slider below labels itself.
+        Falloff.RADIAL -> LabeledControl("Position") {
+            PositionPad(
                 x = bloom.offsetX,
                 y = bloom.offsetY,
                 onValueChange = { x, y -> onUpdate { it.withEffect(bloom.copy(offsetX = x, offsetY = y)) } },
                 onCommit = onCommit,
             )
+        }
 
-            Falloff.LINEAR -> {
-                // The same convention `LayerGradient.endpoints` runs on — 0° straight down, so the direction vector
-                // is (sin, cos). Reading it back as a projection is what keeps the slider and the picture agreeing
-                // after the angle has been turned.
-                val radians = bloom.angleDegrees * PI.toFloat() / 180f
-                val dx = sin(radians)
-                val dy = cos(radians)
+        Falloff.LINEAR -> {
+            // The same convention `LayerGradient.endpoints` runs on — 0° straight down, so the direction vector
+            // is (sin, cos). Reading it back as a projection is what keeps the slider and the picture agreeing
+            // after the angle has been turned.
+            val radians = bloom.angleDegrees * PI.toFloat() / 180f
+            val dx = sin(radians)
+            val dy = cos(radians)
 
-                SteppedSlider(
-                    value = bloom.offsetX * dx + bloom.offsetY * dy,
-                    valueRange = PositionRange,
-                    what = "position",
-                    onValueChange = { along ->
-                        onUpdate { it.withEffect(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
-                    },
-                    onValueChangeFinished = onCommit,
-                )
-            }
+            // **A [SliderControl], like every other slider in the studio.** This was the one bare [SteppedSlider]
+            // left — a track and two buttons under a `LabeledControl`, with no value readout and no reset. So it
+            // was the only control here that could not answer "what is this set to?" or "put it back", which is
+            // exactly what a position wants: the useful values are near the middle and the middle is unfindable by
+            // dragging. Nothing about it needed a bare slider; it predates the readout being added.
+            SliderControl(
+                label = "Position",
+                value = bloom.offsetX * dx + bloom.offsetY * dy,
+                valueRange = PositionRange,
+                // Centered on the frame, which is where `LayerEffect.Bloom` itself rests.
+                default = 0f,
+                onValueChange = { along ->
+                    onUpdate { it.withEffect(bloom.copy(offsetX = along * dx, offsetY = along * dy)) }
+                },
+                onValueChangeFinished = onCommit,
+            )
         }
     }
 }

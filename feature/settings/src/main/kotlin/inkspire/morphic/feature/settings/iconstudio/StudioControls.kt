@@ -261,11 +261,18 @@ internal const val AngleStep = 1f
  * Neither of them commits, deliberately: a held button repeats, so [onValueChangeFinished] is what closes a drag
  * *and* a hold into one undo step. See `StudioStepperButton`.
  *
+ * **Private to [SliderControl], which is what makes "every slider has a readout and a reset" structural.** It was
+ * `internal`, and exactly one section reached past the wrapper for it — the bloom's linear position — which came out
+ * as the one control in the studio with a track, two buttons, and no way to see what it was set to or put it back.
+ * That is not a thing a caller should be able to choose by accident: this is the *mechanism*, and the caption row is
+ * not decoration on top of it but the half that answers "what is this?". A section wanting a bare track now has to
+ * make that argument by changing this line.
+ *
  * @param what names the value for the buttons' content descriptions — the only per-caller text here, since both
  *   targets are computed from [step].
  */
 @Composable
-internal fun SteppedSlider(
+private fun SteppedSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     what: String,
@@ -373,15 +380,39 @@ internal fun PositionPad(
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Morphic2DPad(
-            x = x,
-            y = y,
-            onValueChange = onValueChange,
-            xRange = range,
-            yRange = range,
-            onValueChangeFinished = onCommit,
-            modifier = Modifier.size(PadSide),
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Morphic2DPad(
+                x = x,
+                y = y,
+                onValueChange = onValueChange,
+                xRange = range,
+                yRange = range,
+                onValueChangeFinished = onCommit,
+                modifier = Modifier.size(PadSide),
+            )
+
+            // **The pad says where, the readout says how far** — the same pairing every slider here has, and it was
+            // missing for the same reason the bloom's linear position had no number: a pad is a picture, and a knob
+            // three pixels off centre is indistinguishable from one on it. A user cannot report a value they cannot
+            // read, and cannot tell a nudged position from a resting one by looking.
+            //
+            // Both axes through [finestFormat] on the pad's own range, so a chromatic split's couple of percent
+            // prints the digit it needs while an ordinary offset stays at two — the same rule the sliders follow,
+            // and the reason it is derived from the range rather than fixed here.
+            val format = finestFormat(range)
+            Text(
+                text = "${format.format(x)}, ${format.format(y)}",
+                color = StudioContentColor,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Arrow(Icons.Default.KeyboardArrowUp, "Nudge up", 0, -1)

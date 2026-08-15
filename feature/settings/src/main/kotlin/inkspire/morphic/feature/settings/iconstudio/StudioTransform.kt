@@ -15,7 +15,7 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
  * **Every control has buttons beside it, because a drag cannot be exact and these values have exact answers people
  * want.** Centered, 1.00×, 0°, 90° — a finger on a 140dp pad or a 250dp slider lands on 0.037 and 87°, and no amount
  * of care fixes that: the control's resolution is its length in pixels. The pad and the sliders stay the way you
- * *find* a value; the buttons are how you land on one. [SteppedSlider] carries that for the sliders and states
+ * *find* a value; the buttons are how you land on one. [SliderControl] carries that for the sliders and states
  * the whole argument, including why a press snaps to the grid instead of adding to the value; [PositionPad] is the
  * same idea in two dimensions, and is shared with the bloom's own position now that it has one.
  *
