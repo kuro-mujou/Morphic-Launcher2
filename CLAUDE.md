@@ -179,8 +179,7 @@ every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-st
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
 plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **nine of
-them plus the bake-backed preview** — the effect **pipeline**, the effect **panel**, the **filter** library, the
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **complete** — the effect **pipeline**, the effect **panel**, the **filter** library, the
 **layer rail**, **Bloom**,
 **Gloss**, **perspective**, **Pattern**, **Extrude** and **Chromatic split**, plus **whole-icon effects**, which that
 plan had not noticed it needed.
@@ -303,9 +302,9 @@ enforces. Per layer:
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
-  `LayerEffect.Grain` and `LayerEffect.Pixelate` (waves, noise and cells — the five that do **not** draw live) and
-  `LayerEffect.Filter` (one of the built-in looks, by id). See the notes below for each. **One is left** —
-  progressive blur:
+  `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
+  blur — the six that do **not** draw live) and `LayerEffect.Filter` (one of the built-in looks, by id). **All
+  thirteen the plan set out are built**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
@@ -637,6 +636,24 @@ come out antialiased for free, where an `IntArray` would owe its own coverage ar
   radius is a *fraction of the dot*, so full roundness stays a circle at every fill and every bake size.
 - A cell whose average is fully transparent is skipped, which keeps the artwork's outline made of dots rather than of
   a square block of them.
+
+**`LayerEffect.ProgressiveBlur` is the thirteenth and the only one built from two mechanisms** — a blurred copy *and*
+a ramp deciding how much of it shows. Both pieces already existed (`LayerGradient` places the ramp exactly as it does
+a bloom's), so what was new is the joining.
+- **The blur is a downscale and an upscale, not a box blur.** A box blur would have been a second copy of the one in
+  `data:wallpaper`'s `Blur.kt`, which `core:icon` cannot reach without depending on a `data` module — and scaling
+  down and back up with bilinear filtering is the platform doing the same averaging in two calls, with no arithmetic
+  to get wrong. It approximates a Gaussian rather than being one, which is invisible in the only place it is used.
+- **The ramp is masked onto the *blurred* copy, `DST_IN`, with the sharp one underneath.** Masking the sharp copy
+  instead would leave the two overlapping at every partial alpha and the icon looking doubled rather than blurred.
+- **`BloomFalloff` became `Falloff`** on this second consumer, since the blur asks the identical linear-or-radial
+  question. Renaming the *type* costs nothing on disk — the `@SerialName`s are the contract and each effect's field is
+  still called `falloff` — which is what made it worth doing here rather than leaving a duplicate enum.
+- **The first stop is capped short of the end**, and that is a crash rather than a nicety: a sharp area of 1 asks for
+  a band from 1.001 to 1, and `coerceIn` throws on an inverted range. A slider dragged to its own top would have taken
+  the bake down. Found by the test, not on device.
+- Labelled **"Focus"** in the panel, since what a user is choosing is what stays in focus — the blur is how that is
+  expressed. It is also the one name that would not fit a tile at four columns.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
 bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
@@ -1665,9 +1682,8 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
   carries no menu and cannot be dragged).
 
-**In flight: the icon effects expansion — slices 0–10 of
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) are done: all of tier 1, the bake-backed preview the rest were
-blocked on, and the five effects that use it. **Progressive blur is the only one left.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+**The icon effects expansion is complete — every slice of
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), all thirteen effects.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the

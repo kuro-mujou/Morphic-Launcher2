@@ -17,11 +17,12 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.IconShapes
-import inkspire.morphic.core.model.icon.BloomFalloff
+import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.GrainDrift
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
@@ -221,6 +222,8 @@ class IconRenderer(
 
                 is LayerEffect.Pixelate -> replace { pixelated(it, effect, sizePx) }
 
+                is LayerEffect.ProgressiveBlur -> replace { progressivelyBlurred(it, effect, sizePx) }
+
                 // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
                 is LayerEffect.Glow -> replace {
                     haloed(
@@ -301,12 +304,12 @@ class IconRenderer(
         val fade = LayerGradient.fadeOut(bloom.argb)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = when (bloom.falloff) {
-                BloomFalloff.LINEAR -> {
+                Falloff.LINEAR -> {
                     val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, bloom.angleDegrees).toList()
                     LinearGradient(x0, y0, x1, y1, bloom.argb, fade, Shader.TileMode.CLAMP)
                 }
 
-                BloomFalloff.RADIAL -> {
+                Falloff.RADIAL -> {
                     val radial = LayerGradient.radial(frame, bloom.radius)
                     RadialGradient(
                         radial.centerX,
@@ -415,6 +418,91 @@ class IconRenderer(
             into[0] = (x + dx * amplitudePx).roundToInt()
             into[1] = (y + dy * amplitudePx).roundToInt()
         }
+    }
+
+    /**
+     * [source] blurred, and then let through only where a ramp says so — sharp in one region, soft away from it.
+     *
+     * **The one effect built from two mechanisms**, which is why it is last: a blurred copy *and* a gradient that
+     * decides how much of it shows. Both pieces already existed — [LayerGradient] places the ramp exactly as it does
+     * a bloom's, and the blur is [blurredCopy] below — so what is new here is only the joining.
+     *
+     * **Destination-in on the blurred copy, then the sharp one underneath.** The ramp's *alpha* is the mixture, so
+     * the blurred layer is erased back to nothing across the sharp region and left whole across the soft one; laying
+     * the untouched layer beneath then fills in what was erased. Doing it the other way round — masking the sharp
+     * copy — would leave the two overlapping at every partial alpha and the icon looking doubled rather than
+     * blurred.
+     */
+    private fun progressivelyBlurred(
+        source: Bitmap,
+        blur: LayerEffect.ProgressiveBlur,
+        sizePx: Int,
+    ): Bitmap {
+        val side = LayerProgressiveBlur.downscaledSidePx(blur.radius, sizePx) ?: return source.copy(source.config!!, false)
+        val blurred = blurredCopy(source, side, sizePx)
+
+        val stops = LayerProgressiveBlur.stops(blur)
+        val frame = LayerGradient.Frame.box(sizePx)
+        Canvas(blurred).drawRect(
+            0f,
+            0f,
+            sizePx.toFloat(),
+            sizePx.toFloat(),
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = rampShader(blur, frame, stops, sizePx)
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            },
+        )
+
+        val out = createBitmap(sizePx, sizePx)
+        Canvas(out).apply {
+            drawBitmap(source, 0f, 0f, null)
+            drawBitmap(blurred, 0f, 0f, null)
+        }
+        blurred.recycle()
+        return out
+    }
+
+    /**
+     * The ramp deciding how much blur shows: transparent where the layer stays sharp, opaque where it is fully soft.
+     *
+     * Only the alpha is read — the destination-in above ignores the colour — so both stops are black and the two
+     * numbers doing the work are [stops].
+     */
+    private fun rampShader(
+        blur: LayerEffect.ProgressiveBlur,
+        frame: LayerGradient.Frame,
+        stops: FloatArray,
+        sizePx: Int,
+    ): Shader {
+        val colors = intArrayOf(0x00000000, 0xFF000000.toInt())
+        return when (blur.falloff) {
+            Falloff.LINEAR -> {
+                val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, blur.angleDegrees).toList()
+                LinearGradient(x0, y0, x1, y1, colors, stops, Shader.TileMode.CLAMP)
+            }
+
+            Falloff.RADIAL -> {
+                // The sharp disc is placed by its own centre, so the frame is moved rather than the stops shifted —
+                // which is what `Frame.movedBy` is for, and what keeps this the same placement a bloom gets.
+                val moved = frame.movedBy(blur.centerX, blur.centerY)
+                val radial = LayerGradient.radial(moved, radiusFraction = 1f)
+                RadialGradient(radial.centerX, radial.centerY, radial.radiusPx, colors, stops, Shader.TileMode.CLAMP)
+            }
+        }
+    }
+
+    /**
+     * [source] blurred, by scaling it down to [sidePx] and back up with bilinear filtering.
+     *
+     * See [LayerProgressiveBlur.downscaledSidePx] for why this rather than a box blur: the alternative was a second
+     * copy of the one in `data:wallpaper`, which `core:icon` cannot reach without depending on a `data` module.
+     */
+    private fun blurredCopy(source: Bitmap, sidePx: Int, sizePx: Int): Bitmap {
+        val small = source.scale(sidePx, sidePx, filter = true)
+        val grown = small.scale(sizePx, sizePx, filter = true)
+        small.recycle()
+        return grown
     }
 
     /**

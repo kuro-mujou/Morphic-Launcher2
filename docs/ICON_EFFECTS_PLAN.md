@@ -4,8 +4,7 @@ Drawn from captures of another icon studio (`~/Downloads/effect from other icon 
 hash rather than by effect; the thirteenth, drop shadow, was never captured). This plan is **what each one actually
 needs from our two renderers**, what has to change before any of them can land, and the order to build them in.
 
-Status: **slices 0–10 done** — all of tier 1, the bake-backed preview it was blocking on, and the five effects that
-use it. **Progressive blur is the only one left.** Where the
+Status: **every slice done — all thirteen effects are built.** Where the
 build diverged from this plan, §5 and §7 record it — the plan is kept as written so the reasoning that was wrong stays
 visible next to what replaced it.
 
@@ -271,7 +270,7 @@ Each slice is independently reviewable and leaves the studio working.
 | 8 | **Bake-backed preview** (downscale + throttle) | Unblocks everything left, on every API | **done** |
 | 9 | **Glow** + **Drop shadow** | Retires the standing deferral | **done** |
 | 10 | **Pixelate**, **Ripple**, **Grain** | Per-pixel, on the baked preview | **done** |
-| 11 | **Progressive blur** | Hardest: blur *and* a mask | |
+| 11 | **Progressive blur** | Hardest: blur *and* a mask | **done** |
 
 ### What the built slices settled that this plan did not
 
@@ -557,4 +556,15 @@ Worth naming now, because both groups are three effects that are one mechanism e
     - **Size is the switch**, since cells with no size are the layer itself — the same shape the chromatic split's
       offset has, reached from the other direction. No separate strength.
 - **Progressive blur is last for a reason**: it is a blur *and* a mask ramp, so it is the only one that needs both
-  mechanisms and the only one with no cheap approximation.
+  mechanisms. **Built**, and three things came out of it:
+  - **The blur is a downscale and an upscale**, not a box blur. A box blur would have been a second copy of the one
+    in `data:wallpaper`'s `Blur.kt`, which `core:icon` cannot reach without depending on a `data` module — where
+    scaling down and back up with bilinear filtering is the platform doing the same averaging in two calls, with no
+    arithmetic to get wrong. It approximates a Gaussian rather than being one, which is invisible in the only place
+    it is used.
+  - **The ramp is masked onto the *blurred* copy, destination-in, with the sharp one underneath.** Masking the sharp
+    copy instead would leave the two overlapping at every partial alpha and the icon looking doubled rather than
+    blurred.
+  - **`BloomFalloff` became `Falloff`** on this second consumer, since the blur asks the identical linear-or-radial
+    question. Renaming the type costs nothing on disk: the `@SerialName`s are the contract and each effect's field
+    is still `falloff`.

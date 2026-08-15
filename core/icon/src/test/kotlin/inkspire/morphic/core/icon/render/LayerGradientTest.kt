@@ -1,6 +1,6 @@
 package inkspire.morphic.core.icon.render
 
-import inkspire.morphic.core.model.icon.BloomFalloff
+import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.ShapeAnchor
 import org.junit.Assert.assertEquals
@@ -264,7 +264,7 @@ class LayerGradientTest {
     }
 
     private fun bloom(anchor: ShapeAnchor = ShapeAnchor.BOX) =
-        LayerEffect.Bloom(falloff = BloomFalloff.LINEAR, anchor = anchor)
+        LayerEffect.Bloom(falloff = Falloff.LINEAR, anchor = anchor)
 
     /** A quarter-box square of ink, sitting low and to the left — deliberately not centered, so a bug shows. */
     private val smallInk = ShapeMask.InkFit(scale = 0.25f, centerX = 0.25f, centerY = 0.75f)

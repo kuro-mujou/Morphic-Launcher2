@@ -50,25 +50,29 @@ enum class TintMode {
 }
 
 /**
- * How a [LayerEffect.Bloom]'s light falls off across the layer — which is the *only* thing separating its two forms.
+ * The geometry a ramp follows: a line across the frame, or a circle out from a point.
+ *
+ * **Shared by [LayerEffect.Bloom] and [LayerEffect.ProgressiveBlur]**, which is why it is not named for either. It
+ * was `BloomFalloff` while the bloom was the only thing that ramped; the blur is the second consumer and asks the
+ * identical question, so it took the honest name rather than gaining a duplicate enum with the same two values.
+ * Renaming the *type* costs nothing on disk — the `@SerialName`s below are the contract, and each effect's own field
+ * is still called `falloff`.
  *
  * **Each form has exactly one geometric parameter, and it is not the same one**, which is why this is an enum rather
- * than a flag beside two always-visible sliders: a [LINEAR] bloom is decided by the direction it runs and spans its
- * frame whatever that direction is, where a [RADIAL] one is decided by how far out it reaches. Neither value can
- * answer the other's question, so the studio shows one slider or the other and this is what it asks. Where the light
- * *sits* is a question both can answer, so that is a field on the effect rather than part of this.
+ * than a flag beside two always-visible sliders: a [LINEAR] ramp is decided by the direction it runs and spans its
+ * frame whatever that direction is, where a [RADIAL] one is decided by where its centre sits. Neither value can
+ * answer the other's question, so the studio shows one control or the other and this is what it asks.
  *
- * Persisted inside the layer set, so the names are an on-disk contract. Defaults to [LINEAR], which is what this
- * effect was before it had a choice — so every stored recipe reads back rendering exactly as it did.
+ * Persisted inside the layer set, so the names are an on-disk contract.
  */
 @Serializable
-enum class BloomFalloff {
+enum class Falloff {
 
-    /** A ramp running across the whole frame along `angleDegrees`. The original, and still the common case. */
+    /** A ramp running across the whole frame along an angle. */
     @SerialName("linear")
     LINEAR,
 
-    /** A disc reaching `radius` of the way to the frame's corners — a glow from a point, or a vignette. */
+    /** A ramp running outward from a point — a glow from the middle, a vignette, or a blur that spreads. */
     @SerialName("radial")
     RADIAL,
 }
@@ -76,7 +80,7 @@ enum class BloomFalloff {
 /**
  * Which way a [LayerEffect.Grain]'s noise pushes the pixels it displaces.
  *
- * **Two forms rather than a slider between them**, which is [BloomFalloff]'s shape and its reason: an angle means
+ * **Two forms rather than a slider between them**, which is [Falloff]'s shape and its reason: an angle means
  * nothing to noise that pushes every way at once, so a continuous "directionality" would leave the angle control
  * inert at one end and the panel changing height as the slider crossed zero. A discrete choice makes the panel
  * change once, deliberately, when the user asks for the form that has a direction.
@@ -186,12 +190,12 @@ sealed interface LayerEffect {
      * for a semantic break does not transfer here: the blast radius is a whole icon rather than one slice. Stored
      * recipes lose their two stops (the old keys are dropped, [argb] defaults to white) and keep everything else.
      *
-     * @property falloff whether the light runs across the frame or out from a point in it. See [BloomFalloff] — it
+     * @property falloff whether the light runs across the frame or out from a point in it. See [Falloff] — it
      *   is what decides which of [angleDegrees] and [radius] means anything.
      * @property angleDegrees the direction it runs, clockwise from "straight down"; 0 is top-to-bottom.
-     *   [BloomFalloff.LINEAR] only — a disc has no direction.
+     *   [Falloff.LINEAR] only — a disc has no direction.
      * @property radius how far the light reaches, as a fraction of the way to the frame's corners; 1 covers it
-     *   entirely. [BloomFalloff.RADIAL] only — a linear ramp always spans its frame.
+     *   entirely. [Falloff.RADIAL] only — a linear ramp always spans its frame.
      * @property offsetX where the light sits, as a fraction of the frame from its center. Positive is toward the
      *   frame's own right, which is the artwork's right under [ShapeAnchor.CONTENT] — so a bloom placed on a corner
      *   of the artwork stays on that corner when the layer turns.
@@ -210,7 +214,7 @@ sealed interface LayerEffect {
         val argb: Int = 0xFFFFFFFF.toInt(),
         val angleDegrees: Float = 0f,
         val strength: Float = 1f,
-        val falloff: BloomFalloff = BloomFalloff.LINEAR,
+        val falloff: Falloff = Falloff.LINEAR,
         val radius: Float = 1f,
         val offsetX: Float = 0f,
         val offsetY: Float = 0f,
@@ -227,7 +231,7 @@ sealed interface LayerEffect {
          * here, where [IconLayerSpec.activeEffects] filters it out before either path is reached.
          */
         override val isIdentity: Boolean
-            get() = strength <= 0f || (falloff == BloomFalloff.RADIAL && radius <= 0f)
+            get() = strength <= 0f || (falloff == Falloff.RADIAL && radius <= 0f)
 
         /** A shader drawn source-atop, which both paths can do at any API. */
         override val drawsLive: Boolean get() = true
@@ -539,6 +543,46 @@ sealed interface LayerEffect {
         override val isIdentity: Boolean get() = cellSize <= 0f || fill <= 0f
 
         /** Per-pixel sampling, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
+     * The layer blurred, but only where a ramp says so — sharp in one region and softening away from it.
+     *
+     * **The last of the thirteen, and the only one needing two mechanisms.** Every other effect is a blur *or* a
+     * ramp; this is a blur masked *by* a ramp, which is why the plan put it last. The pieces both already exist —
+     * the ramp is a gradient [LayerGradient] can place, the blur is the bake's alone — so what is new is the
+     * compositing that joins them.
+     *
+     * @property radius how soft the blurred end gets, as a fraction of the icon's box. Also the switch: no blur is
+     *   the layer itself, however the ramp is shaped.
+     * @property falloff whether the sharp region is a band across the layer or a disc within it. See [Falloff] —
+     *   it decides which of [angleDegrees] and the two centre fractions mean anything.
+     * @property sharpArea how much stays completely sharp, as a fraction of the ramp's own extent.
+     * @property softness how far past that the blur takes to reach full strength. Zero is a hard edge between sharp
+     *   and blurred, which is a real look rather than a degenerate one.
+     * @property angleDegrees which way the ramp runs, clockwise from straight down — so 0 keeps the top sharp and
+     *   blurs downward. [Falloff.LINEAR] only.
+     * @property centerX where the sharp disc sits, as a fraction of the box from its middle. [Falloff.RADIAL] only.
+     * @property centerY the same, downward.
+     */
+    @Serializable
+    @SerialName("progressiveBlur")
+    data class ProgressiveBlur(
+        val radius: Float = 0f,
+        val falloff: Falloff = Falloff.RADIAL,
+        val sharpArea: Float = 0.2f,
+        val softness: Float = 0.4f,
+        val angleDegrees: Float = 0f,
+        val centerX: Float = 0f,
+        val centerY: Float = 0f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /** No blur is no effect, whatever the ramp is doing — which is what makes the radius the switch. */
+        override val isIdentity: Boolean get() = radius <= 0f
+
+        /** A real image blur, so `RenderEffect` and API 31+ live — where the bake owns its own bitmap. */
         override val drawsLive: Boolean get() = false
     }
 

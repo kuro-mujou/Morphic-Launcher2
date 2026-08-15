@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.BlurLinear
 import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
@@ -68,7 +69,7 @@ import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
-import inkspire.morphic.core.model.icon.BloomFalloff
+import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.GrainDrift
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconFilter
@@ -183,6 +184,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     /** The layer redrawn as a field of dots, one colour per cell. Per-pixel, so baked, never live. */
     PIXELATE("Pixelate", Icons.Default.GridOn),
 
+    /** Sharp in one region and softening away from it. A blur *and* a ramp, so baked, never live. */
+    PROGRESSIVE_BLUR("Focus", Icons.Default.BlurLinear),
+
     /** One of the built-in colour looks — see `IconFilters`. */
     FILTER("Filter", Icons.Default.PhotoFilter),
     ;
@@ -214,6 +218,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         RIPPLE -> effects.filterIsInstance<LayerEffect.Ripple>().firstOrNull()
         GRAIN -> effects.filterIsInstance<LayerEffect.Grain>().firstOrNull()
         PIXELATE -> effects.filterIsInstance<LayerEffect.Pixelate>().firstOrNull()
+        PROGRESSIVE_BLUR -> effects.filterIsInstance<LayerEffect.ProgressiveBlur>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -245,6 +250,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
         RIPPLE -> target.effects.activeEffects.any { it is LayerEffect.Ripple }
         GRAIN -> target.effects.activeEffects.any { it is LayerEffect.Grain }
         PIXELATE -> target.effects.activeEffects.any { it is LayerEffect.Pixelate }
+        PROGRESSIVE_BLUR -> target.effects.activeEffects.any { it is LayerEffect.ProgressiveBlur }
         FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
     }
 }
@@ -324,6 +330,7 @@ internal fun EffectsControls(
             EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
             EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
             EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
+            EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
         }
     }
@@ -534,6 +541,9 @@ private fun EffectHeader(
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             EffectSlice.PIXELATE -> current.effectOrNull<LayerEffect.Pixelate>()
+                                ?.let { current.withEffect(it.copy(enabled = on)) }
+
+                            EffectSlice.PROGRESSIVE_BLUR -> current.effectOrNull<LayerEffect.ProgressiveBlur>()
                                 ?.let { current.withEffect(it.copy(enabled = on)) }
 
                             else -> current.effectOrNull<LayerEffect.Bloom>()
@@ -835,9 +845,9 @@ private fun BloomControls(
     LabeledControl("Falloff") {
         MorphicSegmentedButtons(
             options = listOf("Linear", "Radial"),
-            selectedIndex = if (bloom.falloff == BloomFalloff.RADIAL) 1 else 0,
+            selectedIndex = if (bloom.falloff == Falloff.RADIAL) 1 else 0,
             onSelect = { index ->
-                val falloff = if (index == 1) BloomFalloff.RADIAL else BloomFalloff.LINEAR
+                val falloff = if (index == 1) Falloff.RADIAL else Falloff.LINEAR
                 onUpdate { it.withEffect(bloom.copy(falloff = falloff)) }
                 onCommit()
             },
@@ -866,7 +876,7 @@ private fun BloomControls(
     )
 
     when (bloom.falloff) {
-        BloomFalloff.LINEAR -> SliderControl(
+        Falloff.LINEAR -> SliderControl(
             label = "Angle",
             value = bloom.angleDegrees,
             valueRange = 0f..360f,
@@ -879,7 +889,7 @@ private fun BloomControls(
 
         // Floored just above zero rather than at it: a disc that reaches nowhere is identity, so a slider that
         // could land there would silently delete the effect the user is in the middle of tuning.
-        BloomFalloff.RADIAL -> SliderControl(
+        Falloff.RADIAL -> SliderControl(
             label = "Radius",
             value = bloom.radius,
             valueRange = UnitStep..1.5f,
@@ -928,14 +938,14 @@ private fun BloomPosition(
 ) {
     LabeledControl("Position") {
         when (bloom.falloff) {
-            BloomFalloff.RADIAL -> PositionPad(
+            Falloff.RADIAL -> PositionPad(
                 x = bloom.offsetX,
                 y = bloom.offsetY,
                 onValueChange = { x, y -> onUpdate { it.withEffect(bloom.copy(offsetX = x, offsetY = y)) } },
                 onCommit = onCommit,
             )
 
-            BloomFalloff.LINEAR -> {
+            Falloff.LINEAR -> {
                 // The same convention `LayerGradient.endpoints` runs on — 0° straight down, so the direction vector
                 // is (sin, cos). Reading it back as a projection is what keeps the slider and the picture agreeing
                 // after the angle has been turned.
@@ -957,6 +967,101 @@ private fun BloomPosition(
         }
     }
 }
+
+/**
+ * How soft the blurred end gets, how much stays sharp, and where the sharp part is.
+ *
+ * **Labelled *Focus* rather than "Progressive blur"**, which is the reference's name for the mechanism rather than
+ * for the look. What a user is doing here is choosing what stays in focus; the blur is how that is expressed. It is
+ * also the only entry whose name would not fit a tile at four columns.
+ *
+ * **The falloff swaps the placement control**, [BloomControls]' rule and the second use of the same enum: a band
+ * across the layer is placed by the direction it runs, a disc within it by where its centre sits, and neither value
+ * can answer the other's question.
+ *
+ * **Softness of zero is a real answer**, not a degenerate one — a hard edge between sharp and blurred is a look, and
+ * the renderer keeps the two stops a hair apart rather than refusing it.
+ */
+@Composable
+private fun ProgressiveBlurControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // The model's own default radius is already zero — identity — so an absent effect needs no seeding, as with
+    // Pixelate and for the same reason: the switch and the first control are one slider.
+    val blur = effects.effectOrNull<LayerEffect.ProgressiveBlur>() ?: LayerEffect.ProgressiveBlur()
+
+    LabeledControl("Falloff") {
+        MorphicSegmentedButtons(
+            options = listOf("Linear", "Radial"),
+            selectedIndex = if (blur.falloff == Falloff.RADIAL) 1 else 0,
+            onSelect = { index ->
+                val falloff = if (index == 1) Falloff.RADIAL else Falloff.LINEAR
+                onUpdate { it.withEffect(blur.copy(falloff = falloff)) }
+                onCommit()
+            },
+        )
+    }
+
+    SliderControl(
+        label = "Blur",
+        value = blur.radius,
+        valueRange = 0f..BlurReach,
+        step = UnitStep,
+        default = 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(blur.copy(radius = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Sharp area",
+        value = blur.sharpArea,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 0.2f,
+        onValueChange = { value -> onUpdate { it.withEffect(blur.copy(sharpArea = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Softness",
+        value = blur.softness,
+        valueRange = 0f..1f,
+        step = UnitStep,
+        default = 0.4f,
+        onValueChange = { value -> onUpdate { it.withEffect(blur.copy(softness = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    when (blur.falloff) {
+        Falloff.LINEAR -> SliderControl(
+            label = "Angle",
+            value = blur.angleDegrees,
+            valueRange = 0f..360f,
+            step = AngleStep,
+            default = 0f,
+            format = { "%.0f°".format(it) },
+            onValueChange = { value -> onUpdate { it.withEffect(blur.copy(angleDegrees = value)) } },
+            onValueChangeFinished = onCommit,
+        )
+
+        Falloff.RADIAL -> LabeledControl("Center") {
+            PositionPad(
+                x = blur.centerX,
+                y = blur.centerY,
+                onValueChange = { x, y -> onUpdate { it.withEffect(blur.copy(centerX = x, centerY = y)) } },
+                onCommit = onCommit,
+            )
+        }
+    }
+}
+
+/**
+ * How soft the blurred end may get, as a fraction of the box.
+ *
+ * A tenth already scales the layer down to ten pixels a side before growing it back, which is past the point where
+ * anything of the artwork survives — the ceiling is where the control stops doing more rather than where it breaks.
+ */
+private const val BlurReach = 0.1f
 
 /**
  * How big the dots are, how much of their cells they fill, and how round they come out.

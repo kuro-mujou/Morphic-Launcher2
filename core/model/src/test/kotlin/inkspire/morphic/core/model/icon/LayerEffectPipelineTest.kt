@@ -199,11 +199,11 @@ class LayerEffectPipelineTest {
     fun `a radial bloom that reaches nowhere paints nothing`() {
         // Not cosmetic: `RadialGradient` rejects a non-positive radius outright, so this is what keeps the one value
         // a slider can always be dragged to from reaching either renderer.
-        val nowhere = LayerEffect.Bloom(falloff = BloomFalloff.RADIAL, radius = 0f)
+        val nowhere = LayerEffect.Bloom(falloff = Falloff.RADIAL, radius = 0f)
 
         assertTrue(nowhere.isIdentity)
         // The same radius is meaningless to a linear ramp, which spans the box whatever it says.
-        assertFalse(nowhere.copy(falloff = BloomFalloff.LINEAR).isIdentity)
+        assertFalse(nowhere.copy(falloff = Falloff.LINEAR).isIdentity)
     }
 
     @Test

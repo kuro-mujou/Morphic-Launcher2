@@ -42,7 +42,7 @@ import inkspire.morphic.core.icon.render.LayerPattern
 import inkspire.morphic.core.icon.render.LayerTransform
 import inkspire.morphic.core.icon.render.ResolvedLayer
 import inkspire.morphic.core.icon.render.ShapeMask
-import inkspire.morphic.core.model.icon.BloomFalloff
+import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
@@ -340,6 +340,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     is LayerEffect.Ripple,
     is LayerEffect.Grain,
     is LayerEffect.Pixelate,
+    is LayerEffect.ProgressiveBlur,
     -> Modifier
 
     // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what
@@ -457,12 +458,12 @@ private fun DrawScope.drawBloomOverlay(bloom: LayerEffect.Bloom, spec: IconLayer
     val colors = listOf(Color(bloom.argb), Color(LayerGradient.fadeOut(bloom.argb)))
 
     val brush = when (bloom.falloff) {
-        BloomFalloff.LINEAR -> {
+        Falloff.LINEAR -> {
             val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, bloom.angleDegrees).toList()
             Brush.linearGradient(colors = colors, start = Offset(x0, y0), end = Offset(x1, y1))
         }
 
-        BloomFalloff.RADIAL -> {
+        Falloff.RADIAL -> {
             val radial = LayerGradient.radial(frame, bloom.radius)
             Brush.radialGradient(
                 colors = colors,
