@@ -602,7 +602,7 @@ val AppsCategoryGrid = GridBlueprint(
  * Folder / category-card grid — fixed defaults with no editor (sized by icon config only).
  *
  * One blueprint for both because they are one view: an opened folder and an expanded category card are the same
- * bounded, paged grid of an ordered app list (the same `FolderOverlay` renders them), differing only in where their
+ * bounded, paged grid of an ordered app list (the same `AppCollectionOverlay` renders them), differing only in where their
  * contents come from.
  */
 val FolderGrid = GridBlueprint(

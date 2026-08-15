@@ -17,7 +17,7 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
-import inkspire.morphic.core.designsystem.folder.folderInnerSize
+import inkspire.morphic.core.designsystem.collection.appCollectionInnerSize
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -43,7 +43,7 @@ private val RowGap = 8.dp
  * the icons in it are.
  *
  * **It is also where the *category card's expansion* is sized**, and the screen says so rather than leaving it to be
- * discovered: an expanded card is the same `FolderOverlay` on the same `FolderGrid`, so one set of controls governs
+ * discovered: an expanded card is the same `AppCollectionOverlay` on the same `FolderGrid`, so one set of controls governs
  * both. That sharing is stated on the blueprint too.
  *
  * **This section is why the icon-sizing screen is gone.** That screen was a waiting room for grids whose surface had no
@@ -70,12 +70,12 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
     var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
     val shownIcon = previewIcon ?: icon
 
-    // **The cell size comes from a *sizer* rather than from a division**: `folderInnerSize` is what the overlay itself
-    // lays out with, so asking it is the only way this preview can be the size a folder really draws — and it is why
+    // **The cell size comes from a *sizer* rather than from a division**: `appCollectionInnerSize` is what the
+    // overlay itself lays out with, so the only way this preview can be the size a folder really draws — and it is why
     // the folder grid needs no editor (that function decides the card, and the card decides the cells).
     val grid = FolderGrid.toGridConfig(device)
     val window = usableWindowArea(uiInsets)
-    val inner = folderInnerSize(
+    val inner = appCollectionInnerSize(
         window = DpSize(window.widthDp.dp, window.heightDp.dp),
         device = device,
         grid = grid,

@@ -41,7 +41,7 @@ data class CellIconLayout(
  * [CellIconLayout] for a cell of [cellWidth] × [cellHeight], with the label row's height supplied.
  *
  * The pure half, so the arithmetic is checkable without a `MaterialTheme` — the same split `CellFit` and
- * `folderInnerSize` use, and for the same reason.
+ * `appCollectionInnerSize` use, and for the same reason.
  *
  * @param labelHeight from [cellLabelHeight]; ignored entirely when [IconMetrics.showLabel] is false, exactly as the
  *   cell ignores it.

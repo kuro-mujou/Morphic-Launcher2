@@ -397,7 +397,7 @@ every phase ends with something visibly working on device, and no slice is writt
         that:
     - **States the page size instead of offering it** (`FolderGrid.defaults` for the current configuration), which
       pre-empts "where are the − / + buttons?" without inventing an answer to it.
-    - **Says it also governs the category card's expansion**, since that is the same `FolderOverlay` on the same grid —
+    - **Says it also governs the category card's expansion**, since that is the same `AppCollectionOverlay` on the same grid —
       a user who changed one and saw the other move would otherwise read it as a bug.
     - **Takes L1's row wording** ("Folders" / "Icon and text size" / `Icons.Outlined.Folder`) and L1's position: last in
       the surface group, a folder being drawn *over* a surface rather than being one.
@@ -443,7 +443,7 @@ every phase ends with something visibly working on device, and no slice is writt
       rather than `shuffled()` in composition, which is what L1 did — its preview could change app mid-drag.
     - **Every section supplies its own cell size**, which is the part that could not be shared: home divides its area by
       the fitted grid, the dock divides its *height setting* by its rows, APPS branches on layout (a row for the list),
-      and the folder asks `folderInnerSize` — the same sizer the overlay lays out with, since a folder's cell comes from
+      and the folder asks `appCollectionInnerSize` — the same sizer the overlay lays out with, since a folder's cell comes from
       a card, not a division.
     - **Two deliberate departures.** The guardrails are **grayscale** (solid = cell, dashed = upper, dotted = lower, with
       the caption naming them), because L1 colored them green and red and this palette reserves red for `error` — the

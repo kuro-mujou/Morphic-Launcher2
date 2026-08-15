@@ -163,7 +163,7 @@ fun MenuOverlay(host: LauncherMenuHost) {
         onDispose { lock?.release() }
     }
     // Keyed on the request so opening a menu on a different item starts its own two-stage state and its own
-    // entrance, rather than inheriting the previous item's stage — `FolderOverlay`'s `key(folderId)` rule.
+    // entrance, rather than inheriting the previous item's stage — `AppCollectionOverlay`'s `key(folderId)` rule.
     key(request) {
         RequestedMenu(request = request, onDismiss = host::dismiss)
     }

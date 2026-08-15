@@ -50,7 +50,7 @@ data class DropZone(
  * **Why a composable rather than a call inside `onGloballyPositioned`** (which is what every surface did before):
  * registration has two inputs, and only one of them is a measurement. The other is *whether this surface is on
  * screen at all* — and a surface panned off the side of the launcher is laid out exactly once, on its way out, so a
- * registration driven by layout can never be revoked or restored. `FolderOverlay` had already learned this and kept
+ * registration driven by layout can never be revoked or restored. `AppCollectionOverlay` had already learned this and kept
  * its bounds in state for the same reason; this is that pattern given a name so the other seven zones share it.
  *
  * That gate is what keeps a shared coordinator honest. HOME and every side surface stay composed at all times (the

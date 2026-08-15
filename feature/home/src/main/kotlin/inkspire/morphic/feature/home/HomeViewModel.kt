@@ -874,8 +874,8 @@ class HomeViewModel(
      * all. Covers both zones, since a dock folder holds an app exactly as a pager one does.
      *
      * This is what a landing asks to know which folder is owed a departure, and it deliberately asks about
-     * *membership* rather than about where the drag started (`FolderHostState.dragSourceFolderId`). For a drag lifted
-     * inside one of home's folders the two agree — nothing is written until the drop, so the app is still a member —
+     * *membership* rather than about where the drag started (`AppCollectionHostState.dragSourceCollectionId`). For a
+     * drag lifted inside one of home's folders the two agree — nothing is written until the drop, so it is a member —
      * but they part company for an app arriving from the APPS drawer, which can already be in a home folder while
      * having been lifted somewhere else entirely. Membership is the question the write actually depends on.
      *

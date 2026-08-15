@@ -1,4 +1,4 @@
-package inkspire.morphic.core.designsystem.folder
+package inkspire.morphic.core.designsystem.collection
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -80,72 +80,76 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
-/** Padding between the folder title and the inner zone. */
 /** Width of the outline drawn round the inner zone while a drag is in flight (its drop-target affordance). */
 private val InnerZoneOutline = 1.dp
 
 private val DotSize = 6.dp
 private val DotSpacing = 6.dp
 
-/** This overlay's inner-grid drop zone, registered above the home zone (`z = 1`) on the shared coordinator. */
-private val FolderZoneId = ZoneId("folder")
+/** This overlay's inner-grid drop zone, registered above the surface's zone (`z = 1`) on the shared coordinator. */
+private val CollectionZoneId = ZoneId("collection")
 
 /**
- * How long a dragged app must dwell over the outer zone before the folder closes and the drag carries on beneath it.
+ * How long a dragged app must dwell over the outer zone before the collection closes and the drag carries on beneath
+ * it.
  *
- * Deliberately long — and **exactly** the dwell that *opens* a folder mid-drag (`OPEN_FOLDER_DWELL_MS`), because the
- * two are opposite halves of the same gesture: one hold takes the app in, the same hold takes it out again, and a
- * user who has learned one has learned both. A short dwell here made the folder feel like it was ejecting apps by
- * accident: the outer zone is most of the screen, so merely traveling across the card's edge on the way to another
- * cell was enough to trigger it.
+ * Deliberately long — and **exactly** the dwell that *opens* a collection mid-drag (`OPEN_COLLECTION_DWELL_MS`),
+ * because the two are opposite halves of the same gesture: one hold takes the app in, the same hold takes it out
+ * again, and a user who has learned one has learned both. A short dwell here made the card feel like it was ejecting
+ * apps by accident: the outer zone is most of the screen, so merely traveling across the card's edge on the way to
+ * another cell was enough to trigger it.
  */
 private const val LeaveDwellMs = 1000L
 
 /**
- * The opened-folder view — two zones on the **shared** [DragCoordinator] the home owns (one coordinator over
- * both surfaces, per its design):
- * - the **outer zone** is the full-screen scrim: tapping it closes the folder, and holding a dragged app over it
+ * An **ordered collection of apps opened over a surface** — a home folder, a folder on the APPS pager, or an APPS
+ * category card's expansion. Two zones on the **shared** [DragCoordinator] the host surface owns:
+ * - the **outer zone** is the full-screen scrim: tapping it closes the collection, and holding a dragged app over it
  *   (~[LeaveDwellMs], i.e. the finger is off the inner grid — and only once it has *been* on the inner grid, see the
- *   arming note at that dwell) tells the caller the drag has **left** ([onLeave]). The caller closes this folder, so
- *   the shared coordinator targets home again and the same uninterrupted drag continues there — free to enter the
- *   next folder, or this one again. Nothing is written on the way out; where the app ends up is decided by the drop.
- * - the **inner zone** (registered as [FolderZoneId] at a higher `z` than home) is a bounded card holding the
- *   folder's app grid ([label] above it), sized by [folderInnerSize] so every folder is the same size.
+ *   arming note at that dwell) tells the caller the drag has **left** ([onLeave]). The caller closes this one, so
+ *   the shared coordinator targets the surface again and the same uninterrupted drag continues there — free to enter
+ *   the next collection, or this one again. Nothing is written on the way out; the drop decides where the app ends up.
+ * - the **inner zone** (registered as [CollectionZoneId] at a higher `z` than the surface) is a bounded card holding
+ *   the collection's app grid ([label] above it), sized by [appCollectionInnerSize] so every one is the same size.
+ *
+ * **What it renders is the same thing in all three cases**, which is why it is named for that rather than for the
+ * folder it was written for: an ordered list of apps, paged, reorderable, opened over whatever was underneath. The
+ * grid it sizes itself from is `FolderGrid`, whose own KDoc has always called itself the "folder / category-card
+ * grid" — the vocabulary was mixed here long before the name was fixed.
  *
  * The apps are a **dense flow** chunked into pages (dots below), swipeable. Long-press to reorder within the flow
  * — a *moving gap*: the dragged app's slot travels through the ordered list and the flow densifies on drop (see
- * `FolderReorder.kt`). The folder's hover and drop belong to its **own zone**, registered below, so its order and gap
- * never have to be hoisted into the host. A tap launches ([onLaunch]); a release in here merely ends the drag
- * ([onRelease]), and what the *host* has to write — an app injected from the surface joining this folder — reaches
- * it through [onReorder], which is the only report that crosses the boundary at all.
+ * `AppCollectionReorder.kt`). The hover and drop belong to this overlay's **own zone**, registered below, so its
+ * order and gap never have to be hoisted into the host. A tap launches ([onLaunch]); a release in here merely ends
+ * the drag ([onRelease]), and what the *host* has to write — an app injected from the surface joining this
+ * collection — reaches it through [onReorder], which is the only report that crosses the boundary at all.
  *
- * Leaving is a **continuous hand-off**: the drag started here carries on as the *same* session onto home, no lift.
- * Reorder is within the current page.
+ * Leaving is a **continuous hand-off**: the drag started here carries on as the *same* session onto the surface, no
+ * lift. Reorder is within the current page.
  *
- * **Two roles, selected by [presenting].** Normally an overlay *is* the folder view. But an app can be carried out of
- * one folder and into another in a single drag, and the cell driving that drag lives in the **first** folder's grid —
- * an in-flight pointer stream can't be moved to another node, so that folder has to stay composed or the gesture dies
+ * **Two roles, selected by [presenting].** Normally an overlay *is* the open collection. But an app can be carried
+ * out of one and into another in a single drag, and the cell driving that drag lives in the **first** one's grid —
+ * an in-flight pointer stream can't be moved to another node, so that one has to stay composed or the gesture dies
  * (the toolkit's "keep a source surface composed while a drag from it is in flight" rule). So the host composes it
  * alongside the newly opened one with `presenting = false`: same overlay, reduced to a pointer holder — invisible,
- * no back handler, no drop zone, no proxy. See [FolderHostState.dragSourceFolderId].
+ * no back handler, no drop zone, no proxy. See [AppCollectionHostState.dragSourceCollectionId].
  *
- * The flag is a *role*, not a one-way door: a drag that leaves the source folder and later comes back flips it false
- * → true again, and the overlay must resume completely (visible, zone re-registered, leave-dwell re-armed from
+ * The flag is a *role*, not a one-way door: a drag that leaves the source collection and later comes back flips it
+ * false → true again, and the overlay must resume completely (visible, zone re-registered, leave-dwell re-armed from
  * scratch). Anything latched for the duration of a drag rather than the duration of a *visit* breaks that, which is
  * why nothing here is.
  *
- * @param presenting true when this overlay is the folder the user is looking at and interacting with; false when it is
- *   composed only to keep an in-flight drag's pointer stream alive. A host must emit both from **one keyed call site**
- *   — moving a folder to a second call site is a different composition position, which disposes it and defeats the
- *   whole point.
+ * @param presenting true when this overlay is the collection the user is looking at and interacting with; false when
+ *   it is composed only to keep an in-flight drag's pointer stream alive. A host must emit both from **one keyed call
+ *   site** — a second call site is a different composition position, which disposes it and defeats the whole point.
  * @param onShowMenu a long-press on one of the contained apps, with that app's visible extent in root coordinates.
- *   The host decides what the menu offers, because what an app inside a *folder* can be asked to do is not the same
+ *   The host decides what the menu offers, because what an app inside a collection can be asked to do is not the same
  *   as what one on a grid can — it has no placement, so there is nothing to remove it from.
  *
  * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
  */
 @Composable
-fun FolderOverlay(
+fun AppCollectionOverlay(
     label: String,
     apps: List<AppInfo>,
     coordinator: DragCoordinator,
@@ -161,7 +165,7 @@ fun FolderOverlay(
     presenting: Boolean = true,
     onShowMenu: (AppInfo, Rect) -> Unit = { _, _ -> },
 ) {
-    // Only the presented folder answers back; a pointer holder is invisible and must not intercept it.
+    // Only the presented collection answers back; a pointer holder is invisible and must not intercept it.
     if (presenting) BackHandler(onBack = onDismiss)
 
     val device = currentDeviceConfiguration()
@@ -172,7 +176,7 @@ fun FolderOverlay(
     // ── Reorder state ──
     // An app dragged in from home (not yet a member) is appended so the same MovingGap machinery positions it:
     // its cell is the dragged one → drawn invisible (the gap), the proxy floats, and the drop reports an order
-    // that includes it (the caller adds it to the folder + removes it from home).
+    // that includes it (the caller adds it to the collection + removes it from home).
     val allApps = remember(apps, incoming) {
         if (incoming != null && apps.none { it.componentKey == incoming.componentKey }) apps + incoming else apps
     }
@@ -191,7 +195,7 @@ fun FolderOverlay(
 
     var geometry by remember { mutableStateOf<GridGeometry?>(null) }
     // The inner grid's bounds in root space, kept as state so zone registration is driven by [presenting] rather than
-    // by layout: the overlay is laid out once and then only changes alpha, so a re-presented folder would never get
+    // by layout: the overlay is laid out once and then only changes alpha, so a re-presented collection would never get
     // another `onGloballyPositioned` to register itself from.
     var innerBounds by remember { mutableStateOf<Rect?>(null) }
     var gap by remember { mutableStateOf(-1) }
@@ -199,23 +203,23 @@ fun FolderOverlay(
     val pageCount = rememberUpdatedState((orderComponents.size + pageSize - 1) / pageSize)
     val pagerState = rememberLauncherPagerState(pageCount = { pageCount.value.coerceAtLeast(1) }, infiniteScroll = { false })
 
-    // The folder's drag hooks for the shared coordinator, kept stable and reading live state. onHover migrates
+    // The collection's drag hooks for the shared coordinator, kept stable and reading live state. onHover migrates
     // the reorder gap; commitReorder densifies and persists (optimistically first).
     val gridState = rememberUpdatedState(grid)
     val onReorderState = rememberUpdatedState(onReorder)
     val delegate = remember {
-        object : FolderDragDelegate {
+        object : AppCollectionDragDelegate {
             override fun onHover(item: GridItem, fingerInRoot: Offset): PlacementPlan? {
                 val geo = geometry ?: return null
                 val dragged = (item as? GridItem.App)?.component ?: return null
                 val g = gridState.value
                 val ps = (g.cols * g.rows).coerceAtLeast(1)
-                // Off the grid → hold the current gap; on a cell → migrate the gap toward it. Two-zone: a folder
-                // holds no folders, so a cell splits into halves with no center merge third to read.
-                val cell = geo.cellAt(fingerInRoot) ?: return FolderReorderPlan
+                // Off the grid → hold the current gap; on a cell → migrate the gap toward it. Two-zone: a collection
+                // holds no collections, so a cell splits into halves with no center merge third to read.
+                val cell = geo.cellAt(fingerInRoot) ?: return AppCollectionReorderPlan
                 val flatSlot = flatSlotOf(cell.row, cell.col, g.cols, pagerState.currentPage, ps)
                 gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
-                return FolderReorderPlan
+                return AppCollectionReorderPlan
             }
 
             override fun commitReorder(item: GridItem) {
@@ -227,16 +231,16 @@ fun FolderOverlay(
             }
         }
     }
-    // The folder drop zone is owned by the *presented* overlay alone, registered and torn down with that role rather
-    // than with composition. A pointer holder must not register (the coordinator would route drops into a folder
-    // nobody is looking at) and must not unregister either: [FolderZoneId] is one shared id, so an unguarded
-    // teardown would pull the zone out from under whichever folder is actually on screen — which is exactly what
+    // The collection drop zone is owned by the *presented* overlay alone, registered and torn down with that role rather
+    // than with composition. A pointer holder must not register (the coordinator would route drops into a collection
+    // nobody is looking at) and must not unregister either: [CollectionZoneId] is one shared id, so an unguarded
+    // teardown would pull the zone out from under whichever collection is actually on screen — which is exactly what
     // [RegisterDropZone]'s `enabled` gate expresses, with `presenting` as the extra condition on top of the
     // surface-level one it already applies.
     //
-    // **The zone carries the folder's own hover and drop.** They used to be routed here by the host surface, whose
+    // **The zone carries the collection's own hover and drop.** They used to be routed here by the host surface, whose
     // planner had a `zone.id != mine` branch handing over to the published delegate and whose drop had a matching
-    // one; both were the same statement — *this zone's behavior is the folder's* — said in the surface instead of
+    // one; both were the same statement — *this zone's behavior is the collection's* — said in the surface instead of
     // in the zone. The delegate stays for what genuinely crosses the boundary: the host still needs `commitReorder`
     // to be reachable, because an app injected from outside commits through the host's own write path.
     val bounds = innerBounds
@@ -244,7 +248,7 @@ fun FolderOverlay(
         coordinator = coordinator,
         zone = bounds?.let {
             DropZone(
-                id = FolderZoneId,
+                id = CollectionZoneId,
                 bounds = it,
                 z = 1,
                 planner = { item, finger -> delegate.onHover(item, finger) },
@@ -253,13 +257,13 @@ fun FolderOverlay(
             )
         },
         // Both conditions, and the surface-level one written out rather than left to the default: passing `enabled`
-        // at all replaces that default, and a folder is only ever the user's business while the surface holding it
+        // at all replaces that default, and a collection is only ever the user's business while the surface holding it
         // is the one on screen.
         enabled = presenting && LocalSurfacePresented.current,
     )
     // Whether the finger has been over the inner grid during **this visit** — see the arming note below. Reset when
-    // the folder stops being presented, not when the drag ends: a single drag can leave and re-enter, and each entry
-    // has to earn its own arming or the hold that opened the folder would immediately close it again.
+    // the collection stops being presented, not when the drag ends: a single drag can leave and re-enter, and each entry
+    // has to earn its own arming or the hold that opened the collection would immediately close it again.
     var enteredInnerZone by remember { mutableStateOf(false) }
     LaunchedEffect(coordinator.isDragging) {
         if (!coordinator.isDragging) { gap = -1; enteredInnerZone = false }
@@ -269,22 +273,22 @@ fun FolderOverlay(
     val session = coordinator.session
     val draggedComponent = (session?.item as? GridItem.App)?.component
 
-    val overInnerZone = presenting && session != null && session.activeZone == FolderZoneId
+    val overInnerZone = presenting && session != null && session.activeZone == CollectionZoneId
     LaunchedEffect(overInnerZone) { if (overInnerZone) enteredInnerZone = true }
 
     // Dwell with the finger off the inner grid (over the outer zone / home behind it) hands the drag back to the
-    // surface: the caller closes this folder, the coordinator targets home again, and the same drag continues —
-    // onto a cell, into the next folder, or back into this one. Nothing is written here; the drop decides.
+    // surface: the caller closes this collection, the coordinator targets home again, and the same drag continues —
+    // onto a cell, into the next collection, or back into this one. Nothing is written here; the drop decides.
     //
-    // **Armed only after the finger has been inside.** A folder can *open mid-drag* to receive an app (the inject
-    // dwell), and when it does the finger is wherever the folder's cell happened to be — for a folder near a screen
+    // **Armed only after the finger has been inside.** A collection can *open mid-drag* to receive an app (the inject
+    // dwell), and when it does the finger is wherever the collection's cell happened to be — for a collection near a screen
     // edge, that is already over this overlay's outer zone. Leaving from there would eject the app the instant it
     // arrived: the user held still to put it *in*, and the same held finger would immediately take it back out. So a
     // drag becomes ejectable only once it has been over the inner grid, which is the user showing they are done
     // arriving and are now choosing to leave.
     //
-    // For a folder that opens under the middle of the screen the finger is already inside, so it arms at once and
-    // dragging out ejects as expected. And a drag that *starts* in the folder (reordering a member) begins on a cell
+    // For a collection that opens under the middle of the screen the finger is already inside, so it arms at once and
+    // dragging out ejects as expected. And a drag that *starts* in the collection (reordering a member) begins on a cell
     // of the inner grid, so it is armed from the first frame — one rule covers all three cases, which is why this
     // replaced a narrower "never extract the incoming app" guard that also made case 2 impossible.
     val overOuterZone = presenting && session != null && !overInnerZone
@@ -311,7 +315,7 @@ fun FolderOverlay(
     // rather than to the presentation.
     // **An `Animatable` seeded at zero, not `animateFloatAsState`** — and the difference is the whole feature. That
     // helper initializes to its *target*, so an overlay composed with `presenting = true` would snap in at full
-    // strength and only ever animate on a later change: a folder would fade out but never fade in. Starting at zero
+    // strength and only ever animate on a later change: a collection would fade out but never fade in. Starting at zero
     // and animating toward the flag gives the entrance as well, and costs a pointer holder nothing (composed at
     // `false`, it starts at zero and stays there).
     //
@@ -321,8 +325,8 @@ fun FolderOverlay(
     val presenceSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     LaunchedEffect(presenting) { presence.animateTo(if (presenting) 1f else 0f, presenceSpec) }
 
-    // **An open folder claims the surface swipe.** A swipe inside a folder is its pager's or nothing; panning to
-    // another surface out from under an overlay leaves the user somewhere they did not ask to be, with the folder
+    // **An open collection claims the surface swipe.** A swipe inside a collection is its pager's or nothing; panning to
+    // another surface out from under an overlay leaves the user somewhere they did not ask to be, with the collection
     // still on screen. Claimed here rather than by each host, so home, the APPS pager and the category card's
     // expansion are covered at once — `presenting` is exactly the right window, since a pointer holder is invisible
     // and owns no gestures of its own.
@@ -362,7 +366,7 @@ fun FolderOverlay(
                 Modifier.fillMaxSize().windowInsetsPadding(uiInsets),
                 contentAlignment = Alignment.Center,
             ) {
-                val innerSize: DpSize = folderInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
+                val innerSize: DpSize = appCollectionInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = label,
@@ -385,7 +389,7 @@ fun FolderOverlay(
                             // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
                             // invisible but still laid out over the middle of the screen, and Compose stops
                             // hit-testing at the topmost sibling it hits: an always-enabled clickable up here takes
-                            // every press aimed at the surface beneath, so items behind an invisible folder could
+                            // every press aimed at the surface beneath, so items behind an invisible collection could
                             // neither be launched nor lifted. The cells inside are deliberately *not* gated — one of
                             // them owns the in-flight pointer stream this overlay is being kept alive for.
                             .clickable(
@@ -454,7 +458,7 @@ fun FolderOverlay(
                         }
                     }
                     // Page dots below the inner zone; the row's height is reserved even for a single page.
-                    Box(Modifier.height(FolderDotsHeight), contentAlignment = Alignment.Center) {
+                    Box(Modifier.height(CollectionDotsHeight), contentAlignment = Alignment.Center) {
                         if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
                     }
                 }
@@ -468,7 +472,7 @@ fun FolderOverlay(
         // drop ends exactly that — so re-deriving would lose the app mid-gesture and the icon under the finger would
         // blink out. Same resolve-once-and-hold reasoning as the caller's own `incoming` lookup.
         // A pointer holder draws nothing: whoever is presenting owns the proxy (the surface, once the drag has left
-        // every folder), so two overlays drawing one would put two icons under a single finger.
+        // every collection), so two overlays drawing one would put two icons under a single finger.
         val geo = geometry
         val dragApp = remember(draggedComponent) { draggedComponent?.let(appByComponent::get) }
         if (presenting && session != null && geo != null && dragApp != null) {
@@ -487,7 +491,7 @@ fun FolderOverlay(
     }
 }
 
-/** A row of small dots marking the folder's pages, the [current] one filled. */
+/** A row of small dots marking the collection's pages, the [current] one filled. */
 @Composable
 private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(DotSpacing)) {

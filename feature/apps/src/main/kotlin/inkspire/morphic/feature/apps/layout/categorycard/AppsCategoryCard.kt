@@ -43,9 +43,9 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
-import inkspire.morphic.core.designsystem.folder.FolderOverlay
-import inkspire.morphic.core.designsystem.folder.FolderPhase
-import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
+import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
+import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
+import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
@@ -111,16 +111,16 @@ private val DragProxySize = 72.dp
  * grouping inside a grouping that looks identical to it, with a 2×2 preview tile to draw inside a 2×2 preview slot at
  * roughly 20dp a side. `category_item` therefore stays keyed on `component`; no reshape, no migration.
  *
- * **The expansion is a [FolderOverlay]** — not a lookalike. That type's parameters are already a label and a list of
- * apps with no folder id anywhere in them, because what it actually renders is *an ordered collection of apps opened
+ * **The expansion is an [AppCollectionOverlay]** — not a lookalike. That type's parameters are already a label and a
+ * list of apps with no folder id anywhere in them, because what it renders is *an ordered collection of apps opened
  * over a surface*, which is exactly what an expanded category is; even the grid it sizes itself from is
  * [inkspire.morphic.core.model.FolderGrid], whose KDoc has always called itself the "folder / category-card grid".
  * Reusing it brings the paging, the dots, the MovingGap reorder, the scrim and the whole leave/enter dwell for free.
  *
  * ## Dragging between categories — the folder↔home gesture, on cards
  *
- * The lifecycle is the same `FolderHostState` home and the APPS pager run on, so every rule below is that machine's
- * rather than this file's: **tap a card to open it; hold a dragged app over another card (~1s) and that card expands
+ * The lifecycle is the same `AppCollectionHostState` home and the APPS pager run on, so every rule below is that
+ * machine's rather than this file's: **tap a card to open it; hold a dragged app over another card (~1s) and it expands
  * mid-drag so the app lands at a *chosen* slot; hold outside an open expansion (~1s) and it closes with the drag
  * carrying on over the cards beneath.** Both halves are repeatable, in any order, over any number of categories,
  * including re-entering one already visited — because neither half writes anything. Membership is decided **only at
@@ -194,7 +194,7 @@ fun AppsCategoryCard(
 
     val scrollState = rememberScrollState()
     // **Where the card grid is scrolled, for the surface swipe** — the vertical grid's report, over cards rather
-    // than apps. An open expansion does not change it: the expansion is a `FolderOverlay` with its own paging, and
+    // than apps. An open expansion does not change it: the expansion is an `AppCollectionOverlay` with its own paging, and
     // while it is up the surface swipe is locked out entirely by `SurfaceGestureLock`.
     ReportScrollEdges {
         ScrollEdges(atTop = !scrollState.canScrollBackward, atBottom = !scrollState.canScrollForward)
@@ -246,25 +246,25 @@ fun AppsCategoryCard(
     LaunchedEffect(coordinator.isDragging) { if (!coordinator.isDragging) hoveredCategoryId = null }
 
     // Category hosting, on the same lifecycle home uses for folders — keyed by `String` here, which is the whole of
-    // what the generic id on `FolderHostState` buys: the open/leave/enter machine is identical, so this surface gets
+    // what the generic id on `AppCollectionHostState` buys: the open/leave/enter machine is identical, so this surface gets
     // it rather than a near-copy of it. The one thing the host can't know is which collection a merge plan targets;
     // home compares placements, the pager compares slots, and a card grid compares card bounds (above).
-    val folderHost = rememberFolderHostState<String>(coordinator) { zoneId, _ ->
+    val categoryHost = rememberAppCollectionHostState<String>(coordinator) { zoneId, _ ->
         if (zoneId == CardGridZoneId) hoveredCategoryId else null
     }
-    val openCategoryId = folderHost.openFolderId
+    val openCategoryId = categoryHost.openCollectionId
     val expanded = categories.firstOrNull { it.category.id == openCategoryId }
 
     // A category can stop existing underneath an open expansion (a rebalance drops the ids it no longer defines, and
     // `dropUnknownCategories` unfiles their apps), which would otherwise leave an overlay with nothing to render and
     // an id that reappears if it is ever re-created.
     LaunchedEffect(categories, openCategoryId) {
-        if (openCategoryId != null && categories.none { it.category.id == openCategoryId }) folderHost.close()
+        if (openCategoryId != null && categories.none { it.category.id == openCategoryId }) categoryHost.close()
     }
     // Tell the host the presented category's persisted contents, so it knows a just-committed app has landed and can
     // stop handing it over as `incoming`.
     val openMembers = expanded?.apps?.map { it.componentKey }
-    LaunchedEffect(openMembers) { folderHost.onMembersChanged(openMembers.orEmpty()) }
+    LaunchedEffect(openMembers) { categoryHost.onMembersChanged(openMembers.orEmpty()) }
 
     // What a landing **on a card** means: file the app there, at the end. The zone's handler rather than the
     // releasing cell's, so it runs whether the app was lifted from an expansion, from a card's own preview, or —
@@ -272,8 +272,8 @@ fun AppsCategoryCard(
     fun commitLanding(outcome: DropOutcome) {
         // Released while an expansion is on screen → "never mind": close it and write nothing. Leaving is a
         // deliberate dwell, and a drop out here was aimed at a card the scrim is covering.
-        if (folderHost.openFolderId != null) {
-            folderHost.close()
+        if (categoryHost.openCollectionId != null) {
+            categoryHost.close()
             return
         }
         val target = hoveredCategoryId ?: return
@@ -281,7 +281,7 @@ fun AppsCategoryCard(
         // Back on the category it came from is a no-op — it is still filed there and nothing was written on the way
         // out. The source is the expansion the drag started in when there was one, and otherwise simply wherever the
         // app is filed: a drag lifted from a card's preview icon opens nothing, so the host has no answer for it.
-        val sourceCategoryId = folderHost.dragSourceFolderId ?: categoryOf(categories, app)
+        val sourceCategoryId = categoryHost.dragSourceCollectionId ?: categoryOf(categories, app)
         if (target == sourceCategoryId) return
         // The slot is the target's *resolved* size, which can be short of its true membership by however many of its
         // apps the cache couldn't resolve. `moveCategoryItem` coerces, so the app lands at the end of what the user
@@ -292,9 +292,9 @@ fun AppsCategoryCard(
     // A cell of this surface released the finger — that only ends the drag; the landing belongs to whichever zone it
     // fell in. What is left is the source-side bookkeeping: an expansion on screen with nothing landed under it.
     fun handleRelease() {
-        val presentedId = folderHost.openFolderId
+        val presentedId = categoryHost.openCollectionId
         val outcome = coordinator.drop()
-        if (presentedId != null && outcome == null) folderHost.close()
+        if (presentedId != null && outcome == null) categoryHost.close()
     }
 
     // The card grid's own drop zone — the whole scroller. Registered from state rather than from the layout callback
@@ -316,8 +316,8 @@ fun AppsCategoryCard(
     // The app being carried into the open expansion, resolved once and *held*. Keyed on the component alone,
     // deliberately not on `categories`: it is still filed in the category it came from until the write lands, and the
     // commit re-files it — so re-deriving afterwards would lose it mid-hand-off and the icon would blink out.
-    val incomingApp = remember(folderHost.incomingComponent) {
-        folderHost.incomingComponent?.let { component -> appInCategories(categories, component) }
+    val incomingApp = remember(categoryHost.incomingComponent) {
+        categoryHost.incomingComponent?.let { component -> appInCategories(categories, component) }
     }
     val draggedComponent = (session?.item as? GridItem.App)?.component
     val draggedApp = remember(draggedComponent) { draggedComponent?.let { appInCategories(categories, it) } }
@@ -393,7 +393,7 @@ fun AppsCategoryCard(
                                     metrics = slotMetrics,
                                     onLaunch = onLaunch,
                                     showItemMenu = showItemMenu,
-                                    onExpand = { folderHost.open(id) },
+                                    onExpand = { categoryHost.open(id) },
                                     onRelease = ::handleRelease,
                                     onBounds = { bounds ->
                                         if (bounds == null) {
@@ -435,35 +435,35 @@ fun AppsCategoryCard(
             // Holder first so it sits below the presented one, and both from this **one** keyed call site: an
             // expansion moving between the two roles has to keep its composition, and a second call site is a
             // different composition position, which disposes it and kills the drag it exists to preserve.
-            val holder = folderHost.dragSourceFolderId
+            val holder = categoryHost.dragSourceCollectionId
                 ?.takeIf { it != openCategoryId }
                 ?.let { id -> categories.firstOrNull { it.category.id == id } }
             val overlays = listOfNotNull(holder?.let { it to false }, expanded?.let { it to true })
             overlays.forEach { (entry, presenting) ->
                 key(entry.category.id) {
-                    FolderOverlay(
+                    AppCollectionOverlay(
                         label = entry.category.name,
                         apps = entry.apps,
                         coordinator = coordinator,
                         gestureConfig = gestureConfig,
                         incoming = if (presenting) incomingApp else null,
                         presenting = presenting,
-                        onLaunch = { component -> onLaunch(component); folderHost.close() },
+                        onLaunch = { component -> onLaunch(component); categoryHost.close() },
                         onReorder = { order ->
                             // An app still *arriving* is placed with a `Move` — one op that both files it here and
                             // unfiles it from wherever it was. Once committed (or if it was already a member) this is
                             // a plain re-sequence, which is the one thing `Move` cannot express for a whole list.
-                            val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
+                            val incoming = (categoryHost.phase as? AppCollectionPhase.Injecting<*>)?.app
                             if (incoming != null && incoming in order) {
                                 onMove(incoming, entry.category.id, order.indexOf(incoming))
-                                folderHost.injectCommitted()
+                                categoryHost.injectCommitted()
                             } else {
                                 onReorder(entry.category.id, order)
                             }
                         },
-                        onLeave = folderHost::leaveFolder,
+                        onLeave = categoryHost::leaveCollection,
                         onRelease = ::handleRelease,
-                        onDismiss = { folderHost.close() },
+                        onDismiss = { categoryHost.close() },
                         onShowMenu = showItemMenu,
                     )
                 }

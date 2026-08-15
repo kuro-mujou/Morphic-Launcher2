@@ -110,12 +110,12 @@ zone wins (reorder). Move outside its bounds → hit-test falls through to the h
 underneath. "Drag from folder to the surface below" is not a special case — it is one coordinator hit-testing one
 set of zones.
 
-### 4a. A folder is a place a drag passes *through* (built, `FolderHostState` + `FolderOverlay`)
+### 4a. A folder is a place a drag passes *through* (built, `AppCollectionHostState` + `AppCollectionOverlay`)
 
 The zone model above makes the *mechanics* free; the **interaction** rule that turned out to matter is that entering
 and leaving a folder are symmetric, repeatable, and **write nothing**:
 
-- **Enter** — hold a dragged app on any folder's merge ring (`OPEN_FOLDER_DWELL_MS`) → that folder opens mid-drag and
+- **Enter** — hold a dragged app on any folder's merge ring (`OPEN_COLLECTION_DWELL_MS`) → that folder opens mid-drag and
   the same session carries on inside it, so the app lands at a *chosen* slot rather than being appended.
 - **Leave** — hold outside the open card (`LeaveDwellMs`, deliberately the **same** duration) → the folder **closes**
   and the same session carries on over the grids beneath.
@@ -131,7 +131,7 @@ Two rules make that survivable, and both were learned by breaking them:
    purely to hold a pointer stream (see §5) must not touch the registry — an unguarded `onDispose` pulls the zone out
    from under whichever folder is actually on screen.
 
-What *does* span the whole drag is the folder it **started in** (`FolderHostState.dragSourceFolderId`, fixed on lift):
+What *does* span the whole drag is the folder it **started in** (`AppCollectionHostState.dragSourceCollectionId`, fixed on lift):
 that overlay stays composed to keep the pointer stream alive (§5), and it is the membership owed a removal wherever
 the app lands. Captured on lift rather than on the first hand-off, so an app carried *in* from a grid and back out
 owes nobody and its folder stays freely re-openable.
@@ -198,7 +198,7 @@ the structural replacement for L1's `HomeDragBridge` + `onDragOutMove/onDragOutE
 
 **"Source surface" reads per *container*, not per screen.** A folder's grid is a surface by this rule: a drag lifted
 inside one must keep **that** folder composed until release, even after the folder has closed and another has opened
-over the same screen. Hence `FolderOverlay`'s `presenting = false` role (§4a) — the same overlay reduced to an
+over the same screen. Hence `AppCollectionOverlay`'s `presenting = false` role (§4a) — the same overlay reduced to an
 invisible pointer holder, emitted from the **same keyed call site** as the presented one, because moving a composable
 to a different call site is itself a disposal and would kill the drag it exists to preserve.
 
@@ -377,11 +377,11 @@ in one sitting.
   by the dragged tile's **own** pointer stream (no root overlay — that approach swallowed all item gestures and
   was removed). The rule that replaces L1's HomeDragBridge: keep a source surface composed while a drag from it
   is in flight (§5).
-- [x] **6. Folder overlay zone** — done, and it went well past "prove drag-out". `FolderOverlay` registers the inner
-  card as a zone at `z = 1` over home's two; `FolderDragDelegate` keeps its reorder (`MovingGap` over the dense flow)
+- [x] **6. Folder overlay zone** — done, and it went well past "prove drag-out". `AppCollectionOverlay` registers the inner
+  card as a zone at `z = 1` over home's two; `AppCollectionDragDelegate` keeps its reorder (`MovingGap` over the dense flow)
   inside the overlay while the shared planner dispatches to it by zone. On top of that, the **visit model** of §4a:
   dwell-to-enter, dwell-to-leave, both repeatable within one drag, folder→folder in one gesture, auto-dissolve of the
-  second-last app, and `FolderHostState` as the surface-agnostic lifecycle (20 unit tests). Pointer survival is the
+  second-last app, and `AppCollectionHostState` as the surface-agnostic lifecycle (20 unit tests). Pointer survival is the
   §5 rule applied per folder — the folder a drag was lifted from stays composed as an invisible holder.
 - [x] **7. `EjectToHome`** — a drag lifted on the APPS surface lands on HOME. It cost almost nothing in the end,
   because the two things that make it hard were already answered: `SurfacePager` keeps every slot composed (so the

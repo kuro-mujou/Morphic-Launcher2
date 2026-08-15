@@ -33,9 +33,9 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
-import inkspire.morphic.core.designsystem.folder.FolderOverlay
-import inkspire.morphic.core.designsystem.folder.FolderPhase
-import inkspire.morphic.core.designsystem.folder.rememberFolderHostState
+import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
+import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
+import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
@@ -204,10 +204,10 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * the planning itself is shared, see [planCoordinateDrop]), what a landing in one of its grids *writes*
  * ([commitLanding], which the coordinator dispatches to whichever zone the finger came to rest in), the root drag
  * overlay, and the tap→launch wiring; the grids, gestures, dwelled preview, and edge-flip live in
- * [CoordinateDragPager] / [CoordinateDragGrid], and the folder-interaction lifecycle in [FolderHostState].
+ * [CoordinateDragPager] / [CoordinateDragGrid], and the folder-interaction lifecycle in [AppCollectionHostState].
  * Dropping an app onto another
  * (finger in its center ring) **merges** them into a folder; folders render as a [FolderCell] and tapping one opens
- * a [FolderOverlay]. A tap on an app launches it (via [HomeViewModel.launch]) through the gesture layer's `onOpen`,
+ * an [AppCollectionOverlay]. A tap on an app launches it (via [HomeViewModel.launch]) through the gesture layer's `onOpen`,
  * so cells carry no click handler of their own.
  *
  * **Folders are places one drag passes through, not destinations it commits to.** Holding a dragged app on a folder's
@@ -401,7 +401,7 @@ internal fun HomePagerSurface(
     // `DropPlanner` with a `when (zone.id)` over three cases, the third handing off to the open folder — a shape that
     // stopped scaling the moment the coordinator became the *launcher's* rather than this screen's, since the `when`
     // would then have had to know about the APPS drawer too. A planner now travels with the zone that answers it, so
-    // the folder's arm went to `FolderOverlay` and these two are the whole of home's.
+    // the folder's arm went to `AppCollectionOverlay` and these two are the whole of home's.
     val mainPlanner = remember(config) {
         DropPlanner { item, fingerInRoot ->
             val geo = geometry ?: return@DropPlanner null
@@ -441,7 +441,7 @@ internal fun HomePagerSurface(
     val session = coordinator.session
 
     // Folder hosting: which folder is on screen, and what the drag in flight owes the folder it started in.
-    // `folderIdAt` is home's answer to "which folder does this merge plan target?" — a match on **zone + placement**,
+    // `collectionIdAt` is home's answer to "which folder does this merge plan target?" — a match on **zone + placement**,
     // because home is a coordinate surface whose zones each have their own coordinate space, so the placement alone
     // would match a folder sitting at the same cell of the *other* grid.
     //
@@ -449,8 +449,8 @@ internal fun HomePagerSurface(
     // arms the same dwell that opens it mid-drag. The outbound half needs nothing here — closing the folder drops its
     // zone, so the drag simply lands on whichever home grid is underneath, and `handleDrop` commits to the zone it
     // reports.
-    val folderHost = rememberFolderHostState<Long>(coordinator) { zoneId, plan ->
-        val zone = homeZoneOf(zoneId) ?: return@rememberFolderHostState null
+    val folderHost = rememberAppCollectionHostState<Long>(coordinator) { zoneId, plan ->
+        val zone = homeZoneOf(zoneId) ?: return@rememberAppCollectionHostState null
         folders.firstOrNull { it.zone == zone && it.placement == plan.footprint }?.folder?.id
     }
     // The app being carried into the open folder, resolved for the overlay to render. Keyed on the *component only*,
@@ -476,7 +476,7 @@ internal fun HomePagerSurface(
     // see. The moment that drag is *ejected* the surface closes, home becomes the presented one, and the page
     // appears — which is precisely when an app carried in from the drawer can be dropped onto a new one.
     val presented = LocalSurfacePresented.current
-    val homeDragInFlight = presented && coordinator.isDragging && folderHost.openFolderId == null
+    val homeDragInFlight = presented && coordinator.isDragging && folderHost.openCollectionId == null
     LaunchedEffect(homeDragInFlight) { draggingPages = homeDragInFlight }
 
     // **What a landing in one of home's grids means.** Three cases, in the order they have to be told apart; all of
@@ -503,7 +503,7 @@ internal fun HomePagerSurface(
         // 1. Released on a grid while a folder is still on screen. Leaving a folder is a deliberate dwell, so a
         //    release out here is "never mind": write nothing. It could not be honored anyway — an app being carried
         //    inside a folder has no grid placement, so *placing* it would leave it in the folder **and** on the grid.
-        if (folderHost.openFolderId != null) {
+        if (folderHost.openCollectionId != null) {
             folderHost.close()
             return
         }
@@ -538,7 +538,7 @@ internal fun HomePagerSurface(
     // the one thing only the releasing surface knows: a folder is on screen and the drag came to rest nowhere, which
     // reads the same as case 1 above and closes it.
     fun handleRelease() {
-        val presentedFolderId = folderHost.openFolderId
+        val presentedFolderId = folderHost.openCollectionId
         val outcome = coordinator.drop()
         if (presentedFolderId != null && outcome == null) folderHost.close()
     }
@@ -894,7 +894,7 @@ internal fun HomePagerSurface(
             }
             val hasProxy = draggedApp != null || draggedFolder != null || widgetShot != null ||
                 draggedIconContainer != null || draggedWidgetContainer != null
-            if (hasProxy && folderHost.openFolderId == null) {
+            if (hasProxy && folderHost.openCollectionId == null) {
                 val finger = session.fingerInRoot
                 FloatingDragIcon(
                     rootOffset = IntOffset(
@@ -935,7 +935,7 @@ internal fun HomePagerSurface(
         }
 
         // Folder overlays, drawn above the grids. Resolved live from state so their contents track edits.
-        val openFolder = folderHost.openFolderId?.let { id -> folders.firstOrNull { it.folder.id == id } }
+        val openFolder = folderHost.openCollectionId?.let { id -> folders.firstOrNull { it.folder.id == id } }
         // Report the folder's persisted membership back: it is what tells the host that a just-injected app has
         // landed, so it can stop being carried separately.
         val openFolderMembers = openFolder?.folder?.apps
@@ -944,9 +944,9 @@ internal fun HomePagerSurface(
         // Usually one overlay. But a drag that started inside a folder keeps that folder composed for its whole
         // life, even while a different one — or none — is on screen: the cell driving the drag is in its grid, and
         // a pointer stream can't move to another node. It is rendered as a pointer holder (`presenting = false`):
-        // invisible, zone-less, no proxy. See `FolderHostState.dragSourceFolderId`.
-        val holderFolder = folderHost.dragSourceFolderId
-            ?.takeIf { it != folderHost.openFolderId }
+        // invisible, zone-less, no proxy. See `AppCollectionHostState.dragSourceCollectionId`.
+        val holderFolder = folderHost.dragSourceCollectionId
+            ?.takeIf { it != folderHost.openCollectionId }
             ?.let { id -> folders.firstOrNull { it.folder.id == id } }
         // Holder first so it sits *below* the presented folder. Both come from this **one** call site on purpose:
         // when a folder stops being the presented one and becomes the holder, a second call site would be a
@@ -957,7 +957,7 @@ internal fun HomePagerSurface(
         val overlays = listOfNotNull(holderFolder?.let { it to false }, openFolder?.let { it to true })
         overlays.forEach { (folder, presenting) ->
             key(folder.folder.id) {
-                FolderOverlay(
+                AppCollectionOverlay(
                     label = folder.folder.label,
                     apps = folder.apps,
                     coordinator = coordinator,
@@ -969,13 +969,13 @@ internal fun HomePagerSurface(
                     onReorder = { order ->
                         // Only an inject *still in flight* adds membership; once committed this is a plain reorder
                         // (the app is already a member, even if the store hasn't said so yet).
-                        val incoming = (folderHost.phase as? FolderPhase.Injecting<*>)?.app
+                        val incoming = (folderHost.phase as? AppCollectionPhase.Injecting<*>)?.app
                         if (incoming != null && order.contains(incoming)) {
                             // The app landed in this folder at its chosen slot. `from` is the folder that *holds*
                             // it — the folder-to-folder move, committed as one batch; null when it came off a grid
                             // instead, and this folder itself when the drag left and came back, which `addToFolder`
                             // recognizes as the plain reorder it is. Membership rather than
-                            // `dragSourceFolderId` for `commitLanding`'s reason: an app carried in from the APPS
+                            // `dragSourceCollectionId` for `commitLanding`'s reason: an app carried in from the APPS
                             // drawer may already be in one of home's folders without the drag having started there.
                             viewModel.addToFolder(
                                 folderId = folder.folder.id,
@@ -988,7 +988,7 @@ internal fun HomePagerSurface(
                             viewModel.reorderFolder(folder.folder.id, order)
                         }
                     },
-                    onLeave = folderHost::leaveFolder,
+                    onLeave = folderHost::leaveCollection,
                     onRelease = ::handleRelease,
                     onDismiss = { folderHost.close() },
                     onShowMenu = showFolderAppMenu,

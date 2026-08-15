@@ -77,7 +77,7 @@ class FolderViewModel(
     private companion object {
         /**
          * The folder grid — **and the category card's expansion**, which is the same overlay on the same grid
-         * (`FolderGrid`'s KDoc says so, and one `FolderOverlay` renders both). So these controls size the icons in
+         * (`FolderGrid`'s KDoc says so, and one `AppCollectionOverlay` renders both). So these controls size the icons in
          * both, which the screen states rather than leaving a user to discover.
          */
         val SLOT = GridSlot.FOLDER

@@ -1233,11 +1233,12 @@ done-on-device. **Built for the home since:** the shared **coordinate drag surfa
 (single zone) + `CoordinateDragPager` (paged, viewport zone + edge-flip) + the shared `LauncherDragCell`
 (per-item drag wiring), all reused by the harness `GridSurface`; the `AppCell`/`FolderCell` launcher cells (via
 `IconLabelCell` + `cellLabelHeight`, with `FolderCell`'s 2×2 tile extracted as `IconPreviewPlate` once the APPS
-category card needed the same tile for its overflow cluster); and the full **folder subsystem** — `FolderOverlay`, `folderInnerSize`
-(a `@Composable` facade over pure sizing arithmetic), `FolderReorder` MovingGap, `FolderDragDelegate`, and
-**`FolderHostState`/`FolderPhase`** (the open/leave/enter lifecycle any collection-hosting surface reuses — **generic
-in the collection id**, `Long` for a folder and `String` for an APPS category; 21 unit tests). Item gestures are scoped
-to the icon+label group, not the cell — see the design-system rules above.
+category card needed the same tile for its overflow cluster); and the full **app-collection subsystem**
+(`core:designsystem/collection/`) — `AppCollectionOverlay`, `appCollectionInnerSize` (a `@Composable` facade over pure
+sizing arithmetic), the `AppCollectionReorder` MovingGap, `AppCollectionDragDelegate`, and
+**`AppCollectionHostState`/`AppCollectionPhase`** (the open/leave/enter lifecycle any collection-hosting surface
+reuses — **generic in the collection id**, `Long` for a folder and `String` for an APPS category; 21 unit tests). Item
+gestures are scoped to the icon+label group, not the cell — see the design-system rules above.
 
 **B8 `data:layout` — first cut done.** Geometry engine (`FreeGridPlanner`/`GridReflow`/`GridOccupancy`/
 `FreePush`) plus the command + persistence layer: `LayoutChange` (L1's 19 ops → 13), `LayoutRepository` (slim
@@ -1288,8 +1289,8 @@ the default `DevRootScreen` screen.
   push with directional-push + merge-ring partition, dwelled preview, edge-flip pages, trailing empty page mid-drag).
   Seed leaves a free row so a full grid stays rearrangeable.
 - **Folders.** Dropping an app on another (center merge ring) creates a folder; folders render as a `FolderCell`
-  (2×2 icon preview). Tapping opens `FolderOverlay` — two zones (a full-screen `SurfaceBackdropLayer` that **fades in**,
-  plus a transparent bounded card sized live by `folderInnerSize` per device/orientation, inset to
+  (2×2 icon preview). Tapping opens `AppCollectionOverlay` — two zones (a full-screen `SurfaceBackdropLayer` that **fades in**,
+  plus a transparent bounded card sized live by `appCollectionInnerSize` per device/orientation, inset to
   `systemBars ∪ displayCutout`), a **dense-flow pager** of the folder's ordered apps, launch on tap, in-folder
   **MovingGap reorder** (persist `ReorderFolder`), and a border outlining the inner zone while dragging. The frost is
   its own node *under* the card rather than the card's parent, so the two can be given different entrances later; the
@@ -1302,9 +1303,9 @@ the default `DevRootScreen` screen.
   **repeatable, in any order, over any number of folders — including re-entering one already visited**, because
   *neither half writes anything*: membership is decided **only at the drop**. It is one continuous gesture on a
   **single shared `DragCoordinator`** (home + dock + folder zones on it, planner/drop dispatch by zone, the folder
-  publishes a `FolderDragDelegate`). The dwells are **equal by design** (`LeaveDwellMs` == `OPEN_FOLDER_DWELL_MS`):
+  publishes an `AppCollectionDragDelegate`). The dwells are **equal by design** (`LeaveDwellMs` == `OPEN_COLLECTION_DWELL_MS`):
   opposite halves of one gesture, so a user who learned one hold has learned both.
-  - **Leaving must genuinely close the folder, not hide it.** An earlier cut kept a `FolderPhase.Extracting` whose
+  - **Leaving must genuinely close the folder, not hide it.** An earlier cut kept an `AppCollectionPhase.Extracting` whose
     folder was still "open" (faded to alpha 0) and latched an `extracting` flag until the drag ended. That made every
     folder a one-shot: the folder you left could never be re-opened, and re-presenting it rendered nothing and
     registered no drop zone. Nothing in the overlay may be scoped to the **drag** when it belongs to a **visit** —
@@ -1321,15 +1322,15 @@ the default `DevRootScreen` screen.
   - **Releasing outside the open folder cancels** (close it, write nothing). Leaving is a deliberate dwell, so a
     release out there reads as "never mind" — and it *cannot* be honored anyway: an app being carried inside a folder
     has no grid placement, so "placing" it would leave it in the folder **and** on the grid.
-- **What the drag owes is fixed at lift: `FolderHostState.dragSourceFolderId`.** The folder a drag *started in* (null
+- **What the drag owes is fixed at lift: `AppCollectionHostState.dragSourceCollectionId`.** The folder a drag *started in* (null
   if it started on a grid), captured at `onDragStart` and held until release, whatever it visits in between. It answers
   two questions at once, and they are the same folder for the same reason — the gesture began on one of its cells:
   that overlay must **stay composed** (an in-flight pointer stream **cannot** be handed to another node — see the rule
   in `launcherItemGestures`; a root-level pointer overlay was tried and rejected because it swallows item events), and
-  it is the one **owed a removal** wherever the app lands. It is deliberately *not* a `FolderPhase` field: the phase
+  it is the one **owed a removal** wherever the app lands. It is deliberately *not* an `AppCollectionPhase` field: the phase
   names whichever folder is *on screen*, which after one hand-off is no longer the one owed anything.
   **Capturing it at lift rather than at the first hand-off is what makes re-entry work** — an app carried *in* from a
-  grid and back out owes that folder nothing, so nothing pins it and nothing bars re-opening it. `FolderOverlay`'s
+  grid and back out owes that folder nothing, so nothing pins it and nothing bars re-opening it. `AppCollectionOverlay`'s
   `presenting = false` is the pointer-holder role: invisible, no back handler, no delegate, no drop zone, no proxy —
   and reversible, since a drag can come back.
   **Three traps if you touch this:** both overlays must be emitted from **one keyed call site** (a second call site is
@@ -1338,13 +1339,13 @@ the default `DevRootScreen` screen.
   unrenderable — both as a folder's `incoming` and as home's floating **proxy**, which home takes back the moment a
   folder closes; and the folder drop zone is **one shared `ZoneId`**, so only the *presenting* overlay may register or
   unregister it (an unguarded `onDispose` on the holder tears the zone out from under the folder on screen).
-  The whole open/leave/enter lifecycle lives in `FolderHostState` (`core:designsystem`), not the screen; home
+  The whole open/leave/enter lifecycle lives in `AppCollectionHostState` (`core:designsystem`), not the screen; home
   supplies only the surface-specific *"which folder does this merge plan target?"* lambda (a **zone + placement**
   match — placement alone matches the other zone's folder at the same cell) and the commit calls. Two guards worth
   knowing: `reconcileReportedOrder` (`ReportedOrder.kt`) folds a UI-reported order
   back onto real membership, because `ReorderFolder` replaces membership wholesale and the UI can only report
   members it could render — writing its list verbatim **deleted** anything unresolvable (an uninstalled app,
-  B6 pruning still deferred); and `FolderOverlay` is wrapped in `key(folderId)` so switching folders doesn't
+  B6 pruning still deferred); and `AppCollectionOverlay` is wrapped in `key(folderId)` so switching folders doesn't
   inherit the previous one's pager position or reorder gap.
 - **Dock — a second coordinate zone, a peer of the main area.** A single non-paged `CoordinateDragGrid`
   (`DockGrid.toGridConfig(device)`) below the pager, registered as a second zone (`DockZoneId`) on the **same shared
@@ -1577,7 +1578,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   fresh gap rather than continuing the old), and the dragged cell **stays composed on its source page** even after
   the finger carries it elsewhere — both copies are invisible, the far one only reserving the gap, because
   disposing the near one would kill the drag.
-- **Folders on the pager work exactly as they do on home**, because the lifecycle is the same `FolderHostState`:
+- **Folders on the pager work exactly as they do on home**, because the lifecycle is the same `AppCollectionHostState`:
   tap to open, dwell on a merge ring to enter mid-drag, dwell outside the card to leave, drag an app back out onto
   a page or straight into another folder, auto-dissolve at the second-last app. The surface supplies only the one
   answer the host can't know — *"which folder does this merge plan target?"* — as a **slot** match, which is the
@@ -1628,14 +1629,13 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   same categories with the same apps. Lazy (unlike the category *pager*'s `LauncherGrid` pages) because a card
   composes up to seven baked icons, so the card *count* is small but the icon count is not — the vertical grid's
   argument, not the pager page's.
-  - **The expansion is a real `FolderOverlay`, not a lookalike.** That type's parameters were already a label and a
-    list of apps with no folder id in them, because what it renders is *an ordered collection of apps opened over a
+  - **The expansion is a real `AppCollectionOverlay`, not a lookalike.** That type's parameters were already a label and
+    a list of apps with no folder id in them, because what it renders is *an ordered collection of apps opened over a
     surface* — and the grid it sizes itself from is `FolderGrid`, whose KDoc has always called itself the "folder /
-    category-card grid". Reuse brings the paging, dots, MovingGap reorder and scrim for free. It does leave the type
-    named for one of its two cases; a rename (`IconCollectionOverlay`?) would touch home, the APPS pager and the whole
-    `folder/` package, so it waits for a *third* consumer to say what the honest name is rather than being guessed
-    from two. No `FolderHostState` here: that machine exists for the phases an app passes through while its
-    *membership* changes mid-drag, and a tap-opened expansion changes none.
+    category-card grid". Reuse brings the paging, dots, MovingGap reorder and scrim for free. This is what **named**
+    the type: it was `FolderOverlay` in a `folder/` package, and the second case is what proved the name described a
+    *case* rather than the thing. No `AppCollectionHostState` here: that machine exists for the phases an app passes
+    through while its *membership* changes mid-drag, and a tap-opened expansion changes none.
   - **`AppsCategoryChange.Reorder` is the second category op, and it changes order only.** The expansion reports a
     whole list (it is the same overlay a folder uses), which a `Move` can't express without guessing which app the
     user dragged. Its guard sits **in the store**, not at the call site as `ReorderFolder`'s does — and that
@@ -1648,7 +1648,7 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     slots and the padding stay free. The header is not a fallback for the cluster — a category of ≤ 4 apps has no
     cluster, and without it could never be opened. The cluster tile *is* `IconPreviewPlate`, extracted from
     `FolderCell` when this second consumer arrived so a folder tile and a cluster tile can't drift apart.
-  - **Dragging between categories is the folder↔home gesture, on cards** — the same `FolderHostState`, so the rules
+  - **Dragging between categories is the folder↔home gesture, on cards** — the same `AppCollectionHostState`, so the rules
     are that machine's and not this layout's: dwell on a card (~1s) to expand it mid-drag and place the app at a
     *chosen* slot, dwell outside an expansion to close it with the drag carrying on over the cards, drop straight on a
     card to append with no dwell, repeatable in any order including re-entry, membership decided only at the drop.
@@ -1669,13 +1669,17 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     Hit-testing is a **per-card bounds map**, not a `GridGeometry`: cards are lazy, square and separated by spacing
     that belongs to no cell, so there is no lattice to compute from. Entries are added as cards lay out and removed as
     they scroll away.
-  - **`FolderHostState`/`FolderPhase` became generic in the collection id** (`Long` for a folder, `String` for a
-    category) so this surface could *use* the open/leave/enter machine instead of growing a near-copy of it — the L1
-    `resolveDockDrop` mistake this codebase keeps un-making. Nothing in the lifecycle reads an id beyond comparing it,
-    which is what made the parameter free; a unit test pins that with `String` ids. **Naming is now one commit behind
-    the code**: `Folder*` covers folders *and* categories, and the honest vocabulary is a *collection of apps opened
-    over a surface* — a rename reaching `FolderOverlay`, `FolderDragDelegate`, `folderInnerSize`, `FolderReorder` and
-    every call site is worth one mechanical commit of its own, flagged as a TODO rather than mixed into behavior.
+  - **`AppCollectionHostState`/`AppCollectionPhase` became generic in the collection id** (`Long` for a folder,
+    `String` for a category) so this surface could *use* the open/leave/enter machine instead of growing a near-copy of
+    it — the L1 `resolveDockDrop` mistake this codebase keeps un-making. Nothing in the lifecycle reads an id beyond
+    comparing it, which is what made the parameter free; a unit test pins that with `String` ids. **The naming caught
+    up in its own mechanical commit**: `core:designsystem/folder/` is `collection/`, and `Folder{Overlay, HostState,
+    Phase, DragDelegate, ReorderPlan}` / `folderInnerSize` are `AppCollection*` / `appCollectionInnerSize` — the
+    vocabulary the KDoc had already settled on. Deliberately **not** `IconCollection*`, which would read as a sibling
+    of `IconContainer` (a grid item holding icons) when the two are unrelated. What stayed `Folder` is everything that
+    really is one: the Room tables and ops, `GridItem.Folder`, `FolderCell`, the Folders settings section, and
+    `GridSlot.FOLDER`/`FolderGrid` — that last one because the slot name is a **stored settings key**, so renaming it
+    would reset every per-folder icon and grid override.
   - Still to come: an optimistic layer (a drop waits for the write, so a re-file lands a frame or two late — the
     `Injected` phase is what stops the app blinking out meanwhile).
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
@@ -1835,8 +1839,8 @@ grid seeded. Home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render, all the
 arrangement-owning ones drag, and every one of them can drag an app out onto HOME**; what is left is the surrounding
 behavior: the alphabet filter strip, search, an optimistic layer for both the pager and the card (a drop waits for
-the write) + the pager's page indicator. One **mechanical** job is queued and deliberately
-unmixed: renaming the `folder/` package's vocabulary now that it hosts categories too (see the card's notes). Folder
+the write) + the pager's page indicator. The queued **mechanical** job is done: `core:designsystem/folder/` is now
+`collection/` and its types are `AppCollection*` (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create.
 
 **P9 is flipped: this is a launcher.** `app`'s manifest declares `category.HOME` + `category.DEFAULT`, which is what
@@ -1944,7 +1948,7 @@ where APPS supplies its chip's.
 The **folder section** is the smallest and is L1's shape exactly: its `FolderSettingsDetail` has an *empty* layout group
 and its icon controls are the whole screen, because `FolderGrid` declares no `editRange` — a folder's card is sized to
 the screen, so its rows and columns follow rather than being picked. It states the resolved page size as a fact instead,
-and states that it also governs the **category card's expansion**, which is the same `FolderOverlay` on the same grid.
+and states that it also governs the **category card's expansion**, which is the same `AppCollectionOverlay` on the same grid.
 **The name `Icons` has returned with the icon studio** (per-app: shape, background, layers), which is what L1's
 `Icons` section actually is — not grid sizing, which L1 never kept there either. It is the **eighth** section and
 the third in Personalization, and unlike every other one it is a **hub rather than an editor**: two actions and a
@@ -2006,7 +2010,7 @@ drift from the cell it is drawn over — L1 restated the cell's padding under a 
 the cell's **inner box** as well, since a guardrail larger than the cell must stop where the icon really can, not on the
 outer ring); each section
 supplies its own cell size, which is the part that cannot be shared (home divides its area, the dock divides its height
-setting, APPS branches on layout, the folder asks `folderInnerSize`); and the guardrails are **grayscale by stroke**
+setting, APPS branches on layout, the folder asks `appCollectionInnerSize`); and the guardrails are **grayscale by stroke**
 (solid = cell, dashed = upper, dotted = lower) because L1's green/red cannot survive a palette that reserves red for
 `error`. **The wallpaper behind it is L1's trick and it has landed** — the cell box composites with `BlendMode.Src`,
 punching through the pane (`PunchThroughPane` composites the detail offscreen with `withSaveLayer`) to the window,
@@ -2244,7 +2248,7 @@ and each removed something rather than adding a layer:
   docs/DRAG_AND_DROP_DESIGN.md §10's *"behavior travels with the destination zone"* made structural, and it is
   **required** rather than tidy: an app lifted in the drawer is released by a cell in `feature:apps`, and the thing
   that must commit it is *home's* grid. It deleted the `when (zone.id)` every multi-zone surface repeated in its
-  planner and its drop, and with it the `FolderDragDelegate` hand-off and the construction-order squeeze three files
+  planner and its drop, and with it the `AppCollectionDragDelegate` hand-off and the construction-order squeeze three files
   documented (the delegate had to exist before the coordinator, which had to exist before the folder host). A cell's
   `onRelease` is now only what the *source* surface knows — that a drag has left it.
 - **`RegisterDropZone` + `LocalSurfacePresented`.** A slot stays composed for the whole of a pan and, when a drag was

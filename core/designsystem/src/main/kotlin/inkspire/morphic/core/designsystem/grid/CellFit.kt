@@ -47,8 +47,8 @@ import kotlin.math.floor
  * a grid whose rows flow needs the second, and sharing one file is what keeps them describing the same cell.
  *
  * Pure arithmetic over `Float` dp, with a `@Composable` facade for the one input that needs a type scale (the label
- * row's height) — the same split `folderInnerSize` uses, and for the same reason: the interesting behavior should be
- * checkable without an emulator.
+ * row's height) — the same split `appCollectionInnerSize` uses, and for the same reason: the interesting behavior
+ * should be checkable without an emulator.
  */
 
 /** The space a grid has to fill, in dp. */

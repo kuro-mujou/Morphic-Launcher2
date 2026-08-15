@@ -1,4 +1,4 @@
-package inkspire.morphic.core.designsystem.folder
+package inkspire.morphic.core.designsystem.collection
 
 import inkspire.morphic.core.model.ComponentKey
 import org.junit.Assert.assertEquals
@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Behavior spec for [FolderHostState] — the collection-interaction lifecycle a surface hosts.
+ * Behavior spec for [AppCollectionHostState] — the collection-interaction lifecycle a surface hosts.
  *
  * The cases below are written from the gesture they belong to, because that is what the state machine is for: one
  * uninterrupted drag can open a folder, leave it, and open another (or the same one again), and the thing that has to
@@ -17,33 +17,33 @@ import org.junit.Test
  * runs on `String` ids for the APPS category card, and nothing here reads an id beyond comparing it — which is exactly
  * why it could become a type parameter without any of these cases changing.
  */
-class FolderHostStateTest {
+class AppCollectionHostStateTest {
 
     private val app = ComponentKey("pkg", "Main")
     private val other = ComponentKey("pkg.other", "Main")
     private val folderId = 7L
     private val otherFolderId = 99L
 
-    private fun host() = FolderHostState<Long>()
+    private fun host() = AppCollectionHostState<Long>()
 
     @Test
     fun `starts with nothing open and nothing in flight`() {
         val host = host()
-        assertEquals(FolderPhase.Closed, host.phase)
-        assertNull(host.openFolderId)
+        assertEquals(AppCollectionPhase.Closed, host.phase)
+        assertNull(host.openCollectionId)
         assertNull(host.incomingComponent)
-        assertNull(host.dragSourceFolderId)
+        assertNull(host.dragSourceCollectionId)
     }
 
     @Test
     fun `open then close`() {
         val host = host()
         host.open(folderId)
-        assertEquals(FolderPhase.Open(folderId), host.phase)
-        assertEquals(folderId, host.openFolderId)
+        assertEquals(AppCollectionPhase.Open(folderId), host.phase)
+        assertEquals(folderId, host.openCollectionId)
         host.close()
-        assertEquals(FolderPhase.Closed, host.phase)
-        assertNull(host.openFolderId)
+        assertEquals(AppCollectionPhase.Closed, host.phase)
+        assertNull(host.openCollectionId)
     }
 
     // ── Where the drag came from: fixed on lift, and the only thing that outlives the folders it visits ──
@@ -53,14 +53,14 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onDragStart()
-        assertEquals(folderId, host.dragSourceFolderId)
+        assertEquals(folderId, host.dragSourceCollectionId)
     }
 
     @Test
     fun `a drag lifted off the surface owes no folder`() {
         val host = host()
         host.onDragStart()
-        assertNull(host.dragSourceFolderId)
+        assertNull(host.dragSourceCollectionId)
     }
 
     @Test
@@ -70,7 +70,7 @@ class FolderHostStateTest {
         val host = host()
         host.onDragStart()
         host.beginInject(folderId, app)
-        assertNull(host.dragSourceFolderId)
+        assertNull(host.dragSourceCollectionId)
     }
 
     @Test
@@ -78,11 +78,11 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onDragStart()
-        host.leaveFolder()
+        host.leaveCollection()
         host.beginInject(otherFolderId, app) // carried into a second folder…
-        host.leaveFolder() // …and back out of it
+        host.leaveCollection() // …and back out of it
         host.beginInject(otherFolderId, app)
-        assertEquals(folderId, host.dragSourceFolderId) // still owed to the folder it was lifted from
+        assertEquals(folderId, host.dragSourceCollectionId) // still owed to the folder it was lifted from
     }
 
     @Test
@@ -91,7 +91,7 @@ class FolderHostStateTest {
         host.open(folderId)
         host.onDragStart()
         host.onDragEnd()
-        assertNull(host.dragSourceFolderId)
+        assertNull(host.dragSourceCollectionId)
     }
 
     // ── Leaving: the folder closes and the same drag carries on beneath it ──
@@ -101,9 +101,9 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onDragStart()
-        host.leaveFolder()
-        assertEquals(FolderPhase.Closed, host.phase)
-        assertNull(host.openFolderId) // genuinely closed, not hidden — this is what allows re-entry
+        host.leaveCollection()
+        assertEquals(AppCollectionPhase.Closed, host.phase)
+        assertNull(host.openCollectionId) // genuinely closed, not hidden — this is what allows re-entry
     }
 
     @Test
@@ -111,10 +111,10 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onDragStart()
-        host.leaveFolder()
+        host.leaveCollection()
         host.beginInject(folderId, app)
-        assertEquals(FolderPhase.Injecting(folderId, app), host.phase)
-        assertEquals(folderId, host.openFolderId)
+        assertEquals(AppCollectionPhase.Injecting(folderId, app), host.phase)
+        assertEquals(folderId, host.openCollectionId)
     }
 
     @Test
@@ -124,9 +124,9 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onDragStart()
-        host.leaveFolder()
+        host.leaveCollection()
         host.onDragEnd()
-        assertEquals(FolderPhase.Closed, host.phase)
+        assertEquals(AppCollectionPhase.Closed, host.phase)
     }
 
     // ── Entering: an app on its way in, from the surface or from another folder ──
@@ -135,8 +135,8 @@ class FolderHostStateTest {
     fun `beginInject opens the folder and carries the app in`() {
         val host = host()
         host.beginInject(folderId, app)
-        assertEquals(FolderPhase.Injecting(folderId, app), host.phase)
-        assertEquals(folderId, host.openFolderId)
+        assertEquals(AppCollectionPhase.Injecting(folderId, app), host.phase)
+        assertEquals(folderId, host.openCollectionId)
         assertEquals(app, host.incomingComponent)
     }
 
@@ -147,9 +147,9 @@ class FolderHostStateTest {
         val host = host()
         host.beginInject(folderId, app)
         host.injectCommitted()
-        assertEquals(FolderPhase.Injected(folderId, app), host.phase)
+        assertEquals(AppCollectionPhase.Injected(folderId, app), host.phase)
         assertEquals(app, host.incomingComponent) // still rendered by the folder, from the outside
-        assertEquals(folderId, host.openFolderId) // and the folder stays open, so the user sees it land
+        assertEquals(folderId, host.openCollectionId) // and the folder stays open, so the user sees it land
     }
 
     @Test
@@ -158,7 +158,7 @@ class FolderHostStateTest {
         host.beginInject(folderId, app)
         host.injectCommitted()
         host.onMembersChanged(listOf(other, app))
-        assertEquals(FolderPhase.Open(folderId), host.phase)
+        assertEquals(AppCollectionPhase.Open(folderId), host.phase)
         assertNull(host.incomingComponent) // the folder's own data can render it now
     }
 
@@ -169,7 +169,7 @@ class FolderHostStateTest {
         host.beginInject(folderId, app)
         host.injectCommitted()
         host.onMembersChanged(listOf(other))
-        assertEquals(FolderPhase.Injected(folderId, app), host.phase)
+        assertEquals(AppCollectionPhase.Injected(folderId, app), host.phase)
     }
 
     @Test
@@ -177,7 +177,7 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.injectCommitted()
-        assertEquals(FolderPhase.Open(folderId), host.phase)
+        assertEquals(AppCollectionPhase.Open(folderId), host.phase)
     }
 
     @Test
@@ -185,7 +185,7 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onMembersChanged(listOf(app))
-        assertEquals(FolderPhase.Open(folderId), host.phase)
+        assertEquals(AppCollectionPhase.Open(folderId), host.phase)
     }
 
     @Test
@@ -195,7 +195,7 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.beginInject(otherFolderId, other)
-        assertEquals(FolderPhase.Injecting(otherFolderId, other), host.phase)
+        assertEquals(AppCollectionPhase.Injecting(otherFolderId, other), host.phase)
     }
 
     // ── The end of the drag ──
@@ -206,7 +206,7 @@ class FolderHostStateTest {
         val host = host()
         host.beginInject(folderId, app)
         host.onDragEnd()
-        assertEquals(FolderPhase.Closed, host.phase)
+        assertEquals(AppCollectionPhase.Closed, host.phase)
         assertNull(host.incomingComponent)
     }
 
@@ -218,8 +218,8 @@ class FolderHostStateTest {
         host.beginInject(folderId, app)
         host.injectCommitted()
         host.onDragEnd()
-        assertEquals(FolderPhase.Injected(folderId, app), host.phase)
-        assertEquals(folderId, host.openFolderId)
+        assertEquals(AppCollectionPhase.Injected(folderId, app), host.phase)
+        assertEquals(folderId, host.openCollectionId)
     }
 
     @Test
@@ -227,7 +227,7 @@ class FolderHostStateTest {
         val host = host()
         host.open(folderId)
         host.onDragEnd()
-        assertEquals(folderId, host.openFolderId)
+        assertEquals(folderId, host.openCollectionId)
     }
 
     // ── The same lifecycle, on a collection that isn't a folder ──
@@ -237,12 +237,12 @@ class FolderHostStateTest {
         // The APPS category card hosts categories, identified by a String. This case is what keeps "nothing here reads
         // an id beyond comparing it" true — the claim that let the id become a type parameter instead of a second copy
         // of the machine.
-        val host = FolderHostState<String>()
+        val host = AppCollectionHostState<String>()
         host.open("MEDIA")
         host.onDragStart()
-        host.leaveFolder()
+        host.leaveCollection()
         host.beginInject("GAMES", app)
-        assertEquals("MEDIA", host.dragSourceFolderId) // still owed to the category it was lifted from
-        assertEquals(FolderPhase.Injecting("GAMES", app), host.phase)
+        assertEquals("MEDIA", host.dragSourceCollectionId) // still owed to the category it was lifted from
+        assertEquals(AppCollectionPhase.Injecting("GAMES", app), host.phase)
     }
 }

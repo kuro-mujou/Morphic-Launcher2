@@ -99,7 +99,7 @@ L2: one pure top-level `fun IconArrangement.slots(count: Int, width: Float, heig
 with a `when` over the enum, so a new arrangement **fails to compile** until it is laid out, and there is no
 registry to keep in step. The maths itself ports verbatim from L1's `Arrangement.kt` (165 lines: grid, circle, four
 fans, beehive) and is worth unit tests — it is pure, and this codebase tests its pure geometry (`CellFit`,
-`MenuAnchoring`, `FolderHostState`).
+`MenuAnchoring`, `AppCollectionHostState`).
 
 Port all seven even though nothing chooses between them yet: the `when` must be exhaustive anyway, and the chooser
 is one menu row (§3d). The alternative — `GRID` plus six `TODO()`s — makes the enum a landmine.
@@ -223,7 +223,7 @@ costs nothing — it reuses the add flow the surface already holds.
    at the last item, mirroring a folder's (last item inherits the container's cell).
 
 Extraction is the largest single piece here and may want to be its own slice. Note that a container is **not** a
-`FolderHostState` consumer: nothing opens, so there is no open/leave/enter lifecycle — the drag starts on a slot
+`AppCollectionHostState` consumer: nothing opens, so there is no open/leave/enter lifecycle — the drag starts on a slot
 that is already visible.
 
 ### 3d. Slice 3 — arrangement and axis
