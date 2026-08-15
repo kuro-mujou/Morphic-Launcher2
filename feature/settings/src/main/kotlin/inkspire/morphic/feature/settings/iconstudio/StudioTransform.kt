@@ -9,18 +9,24 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
  * **Tilt is here rather than in Effects, and that is the model's call rather than this panel's.** Leaning a layer out
  * of the plane says *where the layer sits*, which is what every other control on this panel does — so it is two more
  * `IconLayerSpec` fields resolved through `LayerTransform`, not a `LayerEffect`. As an effect its position in the list
- * would be orderable against a colour matrix while the in-plane rotation's was not, which is one rotation being two
+ * would be orderable against a color matrix while the in-plane rotation's was not, which is one rotation being two
  * kinds of thing.
  *
  * **Every control has buttons beside it, because a drag cannot be exact and these values have exact answers people
  * want.** Centered, 1.00×, 0°, 90° — a finger on a 140dp pad or a 250dp slider lands on 0.037 and 87°, and no amount
  * of care fixes that: the control's resolution is its length in pixels. The pad and the sliders stay the way you
- * *find* a value; the buttons are how you land on one. [SteppedSlider] carries that for the two sliders and states
+ * *find* a value; the buttons are how you land on one. [SteppedSlider] carries that for the sliders and states
  * the whole argument, including why a press snaps to the grid instead of adding to the value; [PositionPad] is the
  * same idea in two dimensions, and is shared with the bloom's own position now that it has one.
  *
- * Steps are chosen so the values people ask for by name are on the grid: 5° puts 45, 90 and 180 on it, and 0.05 puts
- * 1.00 and 1.50 on it.
+ * **The four sliders are [SliderControl]s, which is the form every effect already uses** — the name on the left, the
+ * value in a readout of its own beside the control, and a **reset** disabled at the default, so the row doubles as the
+ * answer to "have I changed this?". They were `LabeledControl("Zoom  1.00")` before, which baked the number into the
+ * name: a label that changes as you drag is not a label, the number sat on the far left where the eye does not return
+ * to it, and there was no way back to the resting value but to find it again by hand. Nothing was extracted for this —
+ * the component was already there, and Transform was the one section not using it.
+ *
+ * See [ZoomStep] for why one press is now the smallest step each value has rather than a comfortable one.
  *
  * Every control edits live and calls [onCommit] when the gesture *ends* — so the preview follows the finger, while
  * undo steps over the whole drag rather than through a hundred frames of it. A button press is discrete, so it commits
@@ -41,27 +47,27 @@ internal fun TransformControls(
         )
     }
 
-    LabeledControl("Zoom  ${"%.2f".format(spec.zoom)}") {
-        SteppedSlider(
-            value = spec.zoom,
-            valueRange = ZoomRange,
-            step = ZoomStep,
-            what = "zoom",
-            onValueChange = { value -> onUpdate { it.copy(zoom = value) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    SliderControl(
+        label = "Zoom",
+        value = spec.zoom,
+        valueRange = ZoomRange,
+        step = ZoomStep,
+        default = ZoomDefault,
+        onValueChange = { value -> onUpdate { it.copy(zoom = value) } },
+        onValueChangeFinished = onCommit,
+        format = { "%.2f×".format(it) },
+    )
 
-    LabeledControl("Rotation  ${"%.0f".format(spec.rotation)}°") {
-        SteppedSlider(
-            value = spec.rotation,
-            valueRange = RotationRange,
-            step = RotationStep,
-            what = "rotation",
-            onValueChange = { value -> onUpdate { it.copy(rotation = value) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    SliderControl(
+        label = "Rotation",
+        value = spec.rotation,
+        valueRange = RotationRange,
+        step = RotationStep,
+        default = AngleDefault,
+        onValueChange = { value -> onUpdate { it.copy(rotation = value) } },
+        onValueChangeFinished = onCommit,
+        format = { "%.0f°".format(it) },
+    )
 
     // **Two sliders and no 2D pad, unlike Position** — the two tilts are not a point. A pad's knob says "the thing is
     // *here*", which is true of an offset and meaningless of a pair of angles; and unlike the offsets these two are
@@ -69,27 +75,27 @@ internal fun TransformControls(
     //
     // Named for the axis each turns *around*, which is `Camera.rotateX`'s convention and Compose's — so Tilt X leans
     // the top away and Tilt Y leans the left away. See `IconLayerSpec.tiltX`.
-    LabeledControl("Tilt X  ${"%.0f".format(spec.tiltX)}°") {
-        SteppedSlider(
-            value = spec.tiltX,
-            valueRange = TiltRange,
-            step = RotationStep,
-            what = "tilt X",
-            onValueChange = { value -> onUpdate { it.copy(tiltX = value) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    SliderControl(
+        label = "Tilt X",
+        value = spec.tiltX,
+        valueRange = TiltRange,
+        step = RotationStep,
+        default = AngleDefault,
+        onValueChange = { value -> onUpdate { it.copy(tiltX = value) } },
+        onValueChangeFinished = onCommit,
+        format = { "%.0f°".format(it) },
+    )
 
-    LabeledControl("Tilt Y  ${"%.0f".format(spec.tiltY)}°") {
-        SteppedSlider(
-            value = spec.tiltY,
-            valueRange = TiltRange,
-            step = RotationStep,
-            what = "tilt Y",
-            onValueChange = { value -> onUpdate { it.copy(tiltY = value) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    SliderControl(
+        label = "Tilt Y",
+        value = spec.tiltY,
+        valueRange = TiltRange,
+        step = RotationStep,
+        default = AngleDefault,
+        onValueChange = { value -> onUpdate { it.copy(tiltY = value) } },
+        onValueChangeFinished = onCommit,
+        format = { "%.0f°".format(it) },
+    )
 }
 
 private val ZoomRange = 0.2f..2f
@@ -105,8 +111,29 @@ private val RotationRange = 0f..360f
  */
 private val TiltRange = -60f..60f
 
-/** Coarse enough to be worth pressing, fine enough that 1.00 and 1.50 are both on the grid. */
-private const val ZoomStep = 0.05f
+/**
+ * Where a reset lands. Per call site rather than `valueRange.start`, which is [SliderControl]'s own rule and is why
+ * these are two constants and not one: a zoom rests at 1 in the middle of its range, an angle at 0 — which is the
+ * *start* of [RotationRange] and the *middle* of [TiltRange].
+ */
+private const val ZoomDefault = 1f
+private const val AngleDefault = 0f
 
-/** Five degrees, so 45, 90 and 180 are all reachable by stepping rather than only by luck. */
-private const val RotationStep = 5f
+/**
+ * How far one press of a stepper moves a transform — **the finest step each value has**, which is a reversal.
+ *
+ * These were 0.05 and 5°, chosen so a press was "worth pressing" and so 1.50, 45 and 90 sat on the grid. That reads
+ * the buttons as the way to *travel*, and it is the wrong job for them: the slider is what crosses a range, and the
+ * buttons exist for the last little bit it cannot reach — a finger on a 250dp track lands on 1.037 and 87°, and the
+ * whole point of a press is to land on 1.04 and 88. A coarse step cannot express that at all, so the control that
+ * was meant to make an edit exact was the one rounding it off.
+ *
+ * **Holding is what pays for the small step**, and it is why this costs nothing: `StudioStepperButton` repeats while
+ * it is held, so crossing a range is a hold rather than a hundred taps — and a hold is still *one* undo entry, since
+ * `onStepsFinished` is what closes it. Coarse travel and fine correction come out of the same button.
+ *
+ * Every named value stays reachable, which the coarse steps only managed by being chosen for it: on a grid of 1°
+ * every whole angle is on it, and on a grid of 0.01 so is every hundredth.
+ */
+private const val ZoomStep = 0.01f
+private const val RotationStep = 1f
