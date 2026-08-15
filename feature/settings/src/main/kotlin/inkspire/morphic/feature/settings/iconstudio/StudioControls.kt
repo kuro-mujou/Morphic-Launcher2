@@ -478,11 +478,19 @@ private val NudgeSlot = 40.dp
  * Which page of a pager is showing. Not a control — pressing one is not offered, since swiping is the gesture.
  *
  * Shared vocabulary since the effects grid grew a pager of its own; the two must not drift into different dots.
+ *
+ * **Centred under the pages it counts.** It filled the width and packed to the start, which left two or three dots
+ * huddled in a corner of a panel they belonged to the whole of — reading as something left over rather than as the
+ * position marker for what is above them. Centring is also what makes the count legible at a glance: dots either
+ * side of a middle is a length the eye measures, where a left-packed row has to be counted.
+ *
+ * Both consumers get it, which is the reason this is one component: the effects grid and the shape chooser must not
+ * end up with their pagers marked differently.
  */
 @Composable
 internal fun PagerDots(current: Int, count: Int) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         modifier = Modifier.fillMaxWidth(),
     ) {
         repeat(count) { index ->
