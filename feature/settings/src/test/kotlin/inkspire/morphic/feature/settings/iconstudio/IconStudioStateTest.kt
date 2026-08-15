@@ -37,11 +37,14 @@ class IconStudioStateTest {
     private val backgroundIndex = 1
     private val foregroundIndex = 2
 
+    // `target`, not `selected`: the studio gained a composite target, so which layer is selected became a *derived*
+    // property over a sum type rather than a stored index. These helpers were passing the old constructor parameter
+    // and had stopped compiling — this module's tests are not on any gate, so nothing said so.
     private fun global(selected: Int) =
-        IconStudioState(subject = StudioSubject.Global(component), editing = stack, selected = selected)
+        IconStudioState(subject = StudioSubject.Global(component), editing = stack, target = StudioTarget.Layer(selected))
 
     private fun individual(selected: Int) =
-        IconStudioState(subject = StudioSubject.App(component), editing = stack, selected = selected)
+        IconStudioState(subject = StudioSubject.App(component), editing = stack, target = StudioTarget.Layer(selected))
 
     /**
      * The rule's whole purpose: a flat color or one photo on the global foreground makes every app's icon the same
@@ -85,7 +88,7 @@ class IconStudioStateTest {
      */
     @Test
     fun `no selected layer refuses`() {
-        val empty = IconStudioState(subject = StudioSubject.Global(component), selected = 99)
+        val empty = IconStudioState(subject = StudioSubject.Global(component), target = StudioTarget.Layer(99))
 
         assertFalse(empty.canUseFixedSource)
     }
