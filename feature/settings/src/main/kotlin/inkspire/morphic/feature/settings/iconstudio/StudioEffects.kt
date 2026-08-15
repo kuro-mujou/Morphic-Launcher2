@@ -46,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +82,7 @@ import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.core.model.icon.activeEffects
 import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.withEffect
+import inkspire.morphic.core.model.icon.withEnabled
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -98,6 +100,33 @@ import kotlin.math.sin
  * A sum type rather than a nullable spec because the two carry different things and the compiler should say so —
  * `StudioTarget`'s reason, one layer up, where this is the same distinction expressed in what the panel needs.
  */
+/**
+ * What an entry in the Effects grid *does* to the layer — which is what decides whether it carries a switch, and
+ * whether opening it seeds anything.
+ *
+ * **The distinction is the user's, and it holds up:** an adjustment transforms pixels that are already there, an
+ * addition puts new ones in. Everything else about how the two behave falls out of that one difference, so it is
+ * named once here rather than being re-decided per entry.
+ *
+ * It is deliberately *not* the same question as `EffectSlice.ownsEffect`, which asks whether there is a stored
+ * record. Color and Filter own records and are adjustments; opacity and blend own none and are adjustments too.
+ */
+internal enum class EffectKind {
+
+    /**
+     * Transforms what the layer already has: opacity, blend, color, filter. Rests at an identity its own controls
+     * reach and name, so there is nothing to switch and nothing to seed.
+     */
+    ADJUSTMENT,
+
+    /**
+     * Puts something on the layer that was not there: a bloom, a glow, a pattern, a shadow. Its "off" is its
+     * absence, which no slider can say, so it carries a switch — and it arrives with values you can see, because
+     * an effect whose first impression is that nothing happened teaches the user nothing.
+     */
+    ADDITION,
+}
+
 internal sealed interface EffectTarget {
 
     /** The effects this target carries, in pipeline order. */
@@ -137,16 +166,25 @@ internal sealed interface EffectTarget {
  * over a column, since a column would have gained six more blocks of sliders instead. They are also the six that
  * need the bake-backed preview, so the next one added is the first to answer `drawsLive` false.
  */
-internal enum class EffectSlice(val label: String, val icon: ImageVector) {
+internal enum class EffectSlice(val label: String, val icon: ImageVector, val kind: EffectKind) {
 
     /** How much of the layer joins the stack at all. */
-    OPACITY("Opacity", Icons.Default.Opacity),
+    OPACITY("Opacity", Icons.Default.Opacity, EffectKind.ADJUSTMENT),
 
     /** How it combines with everything beneath it. */
-    BLEND("Blend", Icons.Default.FilterBAndW),
+    BLEND("Blend", Icons.Default.FilterBAndW, EffectKind.ADJUSTMENT),
 
     /** Hue, saturation, brightness and the tint — one `LayerEffect.Color`, one matrix. */
-    COLOR("Color", Icons.Default.Tune),
+    COLOR("Color", Icons.Default.Tune, EffectKind.ADJUSTMENT),
+
+    /**
+     * One of the built-in color looks — see `IconFilters`.
+     *
+     * **Beside [COLOR] rather than at the end of the grid**, which is where it sat because it was built last. It is
+     * the other way of asking the same question — "how should these pixels read?" — and the two are the ones a user
+     * moves between while grading a layer, so a page apart was a page too far.
+     */
+    FILTER("Filter", Icons.Default.PhotoFilter, EffectKind.ADJUSTMENT),
 
     /**
      * Light or shade spilling across the artwork — the two-stop overlay, linear or radial.
@@ -155,48 +193,69 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
      * other entry here names a look, so one naming a shader was the odd one out. Nothing was retired *into* it that
      * it could not already do — both stops stay arbitrary, so a duotone is still one edit.
      */
-    BLOOM("Bloom", Icons.Default.Gradient),
+    BLOOM("Bloom", Icons.Default.Gradient, EffectKind.ADDITION),
 
     /** A sheen struck across the artwork, with a bowed edge between what is lit and what is not. */
-    GLOSS("Gloss", Icons.Default.WbTwilight),
+    GLOSS("Gloss", Icons.Default.WbTwilight, EffectKind.ADDITION),
 
     /** A repeating texture laid over the artwork — see `IconPatterns`. */
-    PATTERN("Pattern", Icons.Default.Grain),
+    PATTERN("Pattern", Icons.Default.Grain, EffectKind.ADDITION),
 
     /** The layer's own silhouette repeated behind itself, so it reads as a slab. */
-    EXTRUDE("Extrude", Icons.Default.Layers),
+    EXTRUDE("Extrude", Icons.Default.Layers, EffectKind.ADDITION),
 
-    /** The layer's colour channels displaced and added back together — lens fringing. */
-    CHROMATIC("Chromatic", Icons.Default.Tonality),
+    /** The layer's color channels displaced and added back together — lens fringing. */
+    CHROMATIC("Chromatic", Icons.Default.Tonality, EffectKind.ADDITION),
 
     /** A soft halo around the finished silhouette. Baked, never live — see `LayerEffect.Glow`. */
-    GLOW("Glow", Icons.Default.BlurOn),
+    GLOW("Glow", Icons.Default.BlurOn, EffectKind.ADDITION),
 
     /** The finished silhouette blurred, thrown and drawn behind. Baked, never live. */
-    SHADOW("Shadow", Icons.Default.FlipToBack),
+    SHADOW("Shadow", Icons.Default.FlipToBack, EffectKind.ADDITION),
 
     /** Concentric waves pushing the layer's pixels about. Per-pixel, so baked, never live. */
-    RIPPLE("Ripple", Icons.Default.Waves),
+    RIPPLE("Ripple", Icons.Default.Waves, EffectKind.ADDITION),
 
     /** Noise pushing the layer's pixels about, tearing it into pieces. Per-pixel, so baked, never live. */
-    GRAIN("Grain", Icons.Default.Texture),
+    GRAIN("Grain", Icons.Default.Texture, EffectKind.ADDITION),
 
-    /** The layer redrawn as a field of dots, one colour per cell. Per-pixel, so baked, never live. */
-    PIXELATE("Pixelate", Icons.Default.GridOn),
+    /** The layer redrawn as a field of dots, one color per cell. Per-pixel, so baked, never live. */
+    PIXELATE("Pixelate", Icons.Default.GridOn, EffectKind.ADDITION),
 
     /** Sharp in one region and softening away from it. A blur *and* a ramp, so baked, never live. */
-    PROGRESSIVE_BLUR("Focus", Icons.Default.BlurLinear),
-
-    /** One of the built-in colour looks — see `IconFilters`. */
-    FILTER("Filter", Icons.Default.PhotoFilter),
+    PROGRESSIVE_BLUR("Focus", Icons.Default.BlurLinear, EffectKind.ADDITION),
     ;
 
     /**
-     * Whether this entry configures a `LayerEffect` rather than a spec field — which is exactly the entries that
-     * get a switch, since `enabled` is the effect's. [OPACITY] and [BLEND] are always in play and their "off" is
-     * their default value.
+     * Whether this entry configures a `LayerEffect` rather than a spec field.
+     *
+     * **Orthogonal to [kind], and both are needed.** This one answers "is there a record?" — which is what decides
+     * whether the composite offers the entry at all, since [OPACITY] and [BLEND] describe how something joins a
+     * stack and the composite joins nothing. [kind] answers "what does it do to the layer?", which is what decides
+     * the switch. [COLOR] and [FILTER] are the pair that separates them: they own records *and* are adjustments.
      */
     val ownsEffect: Boolean get() = this != OPACITY && this != BLEND
+
+    /**
+     * Whether this entry gets an on/off switch in its panel header — which is exactly the additions.
+     *
+     * **The line is "can this be off in a way its own controls cannot express?"** An addition's "off" is its
+     * absence, and its controls only say *how much*: a bloom at zero strength is still a bloom you asked for, and
+     * a user who dialled it down to compare wants the color and angle waiting when they dial it back. That is what
+     * a switch is for, and it is why one belongs here.
+     *
+     * An adjustment's "off" **is** a value its controls reach and name. Color rests at hue 0, saturation 1,
+     * brightness 1, no tint — and every one of those sliders already carries a reset disabled at exactly that
+     * value, so the switch was a fifth control saying what four already said. Filter is stronger still: its list
+     * *contains* "None", so a switch is a second way to pick the same entry — the same reason "no shape" is the
+     * first tile in the shape grid rather than a toggle beside it. Opacity and blend are spec fields whose "off" is
+     * likewise their default.
+     *
+     * What this costs is non-destructive A/B on an adjustment — flipping Color off and on to compare, without
+     * losing the numbers. If that is wanted back it belongs to the whole icon rather than to one entry, as a
+     * press-and-hold on the canvas.
+     */
+    val carriesSwitch: Boolean get() = kind == EffectKind.ADDITION
 
     /**
      * The stored effect this entry owns, or null when it configures spec fields instead — or when the effect has
@@ -223,36 +282,66 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector) {
     }
 
     /**
-     * Whether this entry is currently doing anything to [spec] — which is what the grid marks, and it is a
+     * Whether this entry is currently doing anything to [target] — which is what the grid marks, and it is a
      * requirement rather than a decoration.
      *
      * A single column showed every value at once, so "what have I changed?" was answered by looking. A grid hides
      * that behind five taps unless the tiles say it themselves, and a user who cannot see which effects are live
      * has to open all of them to find the one to undo. Marking the tiles gives the information back.
      *
-     * Reading `spec.color`/`spec.gradient` is enough for three of these because those accessors already return
-     * null for an identity effect — the model's own definition of "not doing anything", so this cannot disagree
-     * with what is stored.
+     * **The two kinds are asked different questions, and that is what stops a tile changing under a finger.** An
+     * addition reads its **switch** — the user said it is on, so it is marked, even while its strength sits at
+     * zero. It used to read `activeEffects`, the renderers' own list, which folds the switch together with "would
+     * this paint anything"; the result was a tile that unmarked itself as a slider passed through its floor, with
+     * the switch beside it still on. Two controls contradicting each other, on the one gesture that reaches the
+     * floor by accident.
+     *
+     * An adjustment has no switch to read, so identity is the only meaningful answer and there is nothing to
+     * contradict: a Color back at its resting values genuinely is doing nothing, and saying so is the whole point
+     * of the mark.
      */
-    fun isActive(target: EffectTarget): Boolean = when (this) {
-        OPACITY -> (target as? EffectTarget.Layer)?.spec?.opacity?.let { it != 1f } == true
-        BLEND -> (target as? EffectTarget.Layer)?.spec?.blend?.let { it != LayerBlend.NORMAL } == true
-        // `activeEffects` is the renderers' own list, so a tile marks itself exactly when the icon is affected —
-        // which means an effect switched off reads as inactive, and correctly so: it is not doing anything.
-        COLOR -> target.effects.activeEffects.any { it is LayerEffect.Color }
-        BLOOM -> target.effects.activeEffects.any { it is LayerEffect.Bloom }
-        GLOSS -> target.effects.activeEffects.any { it is LayerEffect.Gloss }
-        PATTERN -> target.effects.activeEffects.any { it is LayerEffect.Pattern }
-        EXTRUDE -> target.effects.activeEffects.any { it is LayerEffect.Extrude }
-        CHROMATIC -> target.effects.activeEffects.any { it is LayerEffect.ChromaticSplit }
-        GLOW -> target.effects.activeEffects.any { it is LayerEffect.Glow }
-        SHADOW -> target.effects.activeEffects.any { it is LayerEffect.Shadow }
-        RIPPLE -> target.effects.activeEffects.any { it is LayerEffect.Ripple }
-        GRAIN -> target.effects.activeEffects.any { it is LayerEffect.Grain }
-        PIXELATE -> target.effects.activeEffects.any { it is LayerEffect.Pixelate }
-        PROGRESSIVE_BLUR -> target.effects.activeEffects.any { it is LayerEffect.ProgressiveBlur }
-        FILTER -> target.effects.activeEffects.any { it is LayerEffect.Filter }
+    fun isActive(target: EffectTarget): Boolean = when (kind) {
+        EffectKind.ADDITION -> storedEffect(target.effects)?.enabled == true
+
+        EffectKind.ADJUSTMENT -> when (this) {
+            OPACITY -> (target as? EffectTarget.Layer)?.spec?.opacity?.let { it != 1f } == true
+            BLEND -> (target as? EffectTarget.Layer)?.spec?.blend?.let { it != LayerBlend.NORMAL } == true
+            // The renderers' own list, so these mark themselves exactly when the icon is affected.
+            else -> storedEffect(target.effects)?.let { it in target.effects.activeEffects } == true
+        }
     }
+
+    /**
+     * A fresh record for this entry at its visible defaults, or null for an entry that owns none.
+     *
+     * **This is what "opening an effect shows you what it does" is made of.** Every addition's constructor defaults
+     * are chosen to be plainly visible (see `LayerEffect.Pixelate.cellSize` for the two that were not), and until
+     * this existed none of them were ever *applied* by opening the entry — the panel showed sliders at those values
+     * against an icon they had not been written to, so tapping an effect produced no change and taught nothing.
+     *
+     * Adjustments are absent here on purpose: seeding one means writing its identity, which is a record that says
+     * nothing and marks nothing.
+     */
+    fun seeded(): LayerEffect? = when (this) {
+        OPACITY, BLEND, COLOR, FILTER -> null
+        BLOOM -> LayerEffect.Bloom()
+        GLOSS -> LayerEffect.Gloss()
+        // The one addition with no all-default constructor: a pattern has to *be* one, and there is no neutral
+        // tile. Dots for the same reason `PatternControls` picks it — the most legible of the set at icon size.
+        PATTERN -> LayerEffect.Pattern(pattern = IconPatterns.Dots)
+        EXTRUDE -> LayerEffect.Extrude()
+        CHROMATIC -> LayerEffect.ChromaticSplit()
+        GLOW -> LayerEffect.Glow()
+        SHADOW -> LayerEffect.Shadow()
+        RIPPLE -> LayerEffect.Ripple()
+        GRAIN -> LayerEffect.Grain()
+        PIXELATE -> LayerEffect.Pixelate()
+        PROGRESSIVE_BLUR -> LayerEffect.ProgressiveBlur()
+    }
+
+    /** These effects without this entry's record — how an abandoned seed is taken back out. */
+    fun removedFrom(effects: List<LayerEffect>): List<LayerEffect> =
+        storedEffect(effects)?.let { stored -> effects.filterNot { it === stored } } ?: effects
 }
 
 /**
@@ -293,6 +382,53 @@ internal fun EffectsControls(
     // the selection to the whole icon with that panel open would leave sliders on screen writing to nothing.
     val slice = open?.takeIf { it in target.slices }
 
+    // **Whether this visit to this entry has touched anything.** Keyed on the slice, so it is a fresh answer per
+    // entry opened — and the state object a given [DisposableEffect] closes over is the one from its own
+    // composition, which is what lets the effect below read the value belonging to the entry it is disposing
+    // rather than to the one that replaced it.
+    val touched = remember(slice) { mutableStateOf(false) }
+
+    // **Opening an addition applies it; abandoning it takes it back out.** Two halves of one rule, in one effect so
+    // they cannot come apart:
+    //
+    // Seeding is what makes an effect legible at all — the defaults were always visible, but nothing wrote them, so
+    // tapping Glow showed sliders against an unchanged icon. Now the halo is there before the finger leaves the
+    // tile.
+    //
+    // The undo is what makes *browsing* free. Opening writes but does not commit, so no history entry exists yet;
+    // leaving without touching anything removes the record and the recipe is exactly as it was, `dirty` included.
+    // The first real edit commits, and that one entry covers the seed and the edit together — so undo steps back
+    // past both, which is the honest unit.
+    //
+    // In a `DisposableEffect` rather than the tile's own click handler because there are four ways out of an entry,
+    // not one: the header's back button, the system back gesture, the target changing under it, and the whole panel
+    // being closed by the tool bar or a tap on the canvas. Only disposal catches all four.
+    DisposableEffect(slice) {
+        val entry = slice
+        var seeded = false
+        if (entry != null && entry.storedEffect(target.effects) == null) {
+            entry.seeded()?.let { fresh ->
+                onEffects { it + fresh }
+                seeded = true
+            }
+        }
+        onDispose {
+            if (seeded && !touched.value) onEffects { entry!!.removedFrom(it) }
+        }
+    }
+
+    // Every write from a control passes through one of these, so one wrapper each is the whole of "has the user
+    // done anything?". It has to be the *write* rather than the commit: a slider that is dragged and released back
+    // where it started never commits, and the effect it was dragging is plainly wanted.
+    val effectsTouched: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit = { transform ->
+        touched.value = true
+        onEffects(transform)
+    }
+    val layerTouched: ((IconLayerSpec) -> IconLayerSpec) -> Unit = { transform ->
+        touched.value = true
+        onLayer(transform)
+    }
+
     // Back leaves the entry before it leaves the studio. Enabled only when there is somewhere to go back *to*, so
     // the studio's own handler still answers from the grid — nested handlers resolve innermost-enabled-first, which
     // is what makes this two lines rather than a shared piece of state.
@@ -308,7 +444,9 @@ internal fun EffectsControls(
             slice = slice,
             target = target,
             onBack = { open = null },
-            onEffects = onEffects,
+            // The header's switch is an edit like any other, so it marks the entry touched — flipping a freshly
+            // seeded effect off is a decision *about* it, not an abandonment of it.
+            onEffects = effectsTouched,
             onCommit = onCommit,
         )
 
@@ -317,21 +455,25 @@ internal fun EffectsControls(
         when (slice) {
             // The two spec fields, reachable only on a layer: `EffectTarget.Composite` does not list them, so the
             // cast is the compiler being told what `slices` already guarantees.
-            EffectSlice.OPACITY -> (target as? EffectTarget.Layer)?.let { OpacityControls(it.spec, onLayer, onCommit) }
-            EffectSlice.BLEND -> (target as? EffectTarget.Layer)?.let { BlendControls(it.spec, onLayer, onCommit) }
-            EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
-            EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
-            EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
-            EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
-            EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
-            EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
-            EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
-            EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
-            EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
-            EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
-            EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
-            EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, onEffects, onCommit)
-            EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
+            EffectSlice.OPACITY ->
+                (target as? EffectTarget.Layer)?.let { OpacityControls(it.spec, layerTouched, onCommit) }
+
+            EffectSlice.BLEND ->
+                (target as? EffectTarget.Layer)?.let { BlendControls(it.spec, layerTouched, onCommit) }
+
+            EffectSlice.COLOR -> ColorControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.FILTER -> FilterControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.BLOOM -> BloomControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.GLOSS -> GlossControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.PATTERN -> PatternControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.CHROMATIC -> ChromaticControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.GLOW -> GlowControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.SHADOW -> ShadowControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.RIPPLE -> RippleControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.GRAIN -> GrainControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.PIXELATE -> PixelateControls(target.effects, effectsTouched, onCommit)
+            EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, effectsTouched, onCommit)
         }
     }
 }
@@ -500,55 +642,24 @@ private fun EffectHeader(
             modifier = Modifier.weight(1f),
         )
 
-        // Only where there is a `LayerEffect` to carry the flag — see [EffectSlice].
-        if (slice.ownsEffect) {
+        // **Only the additions**, whose "off" is their absence — see [EffectSlice.carriesSwitch]. An adjustment's
+        // off is a value its own controls reach and name, so a switch there was a fifth control repeating four.
+        if (slice.carriesSwitch) {
             val stored = slice.storedEffect(target.effects)
             MorphicSwitch(
                 checked = stored?.enabled == true,
+                // Never off in practice, since opening an addition seeds it — kept as the honest guard for the one
+                // frame between the entry composing and the seed landing.
                 enabled = stored != null,
                 onCheckedChange = { on ->
                     // Flipping a switch is discrete, so it records at once and undo steps over it.
+                    //
+                    // The record is re-found inside the transform rather than closed over, so this writes to what
+                    // the list holds *now*; and `withEnabled` is exhaustive over the sealed type, where the
+                    // forty-line `when` this replaced had an `else` arm that meant Bloom.
                     onEffects { current ->
-                        when (slice) {
-                            EffectSlice.COLOR -> current.effectOrNull<LayerEffect.Color>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.FILTER -> current.effectOrNull<LayerEffect.Filter>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.GLOSS -> current.effectOrNull<LayerEffect.Gloss>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.PATTERN -> current.effectOrNull<LayerEffect.Pattern>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.EXTRUDE -> current.effectOrNull<LayerEffect.Extrude>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.CHROMATIC -> current.effectOrNull<LayerEffect.ChromaticSplit>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.GLOW -> current.effectOrNull<LayerEffect.Glow>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.SHADOW -> current.effectOrNull<LayerEffect.Shadow>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.RIPPLE -> current.effectOrNull<LayerEffect.Ripple>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.GRAIN -> current.effectOrNull<LayerEffect.Grain>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.PIXELATE -> current.effectOrNull<LayerEffect.Pixelate>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            EffectSlice.PROGRESSIVE_BLUR -> current.effectOrNull<LayerEffect.ProgressiveBlur>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-
-                            else -> current.effectOrNull<LayerEffect.Bloom>()
-                                ?.let { current.withEffect(it.copy(enabled = on)) }
-                        } ?: current
+                        val record = slice.storedEffect(current) ?: return@onEffects current
+                        current.map { if (it === record) it.withEnabled(on) else it }
                     }
                     onCommit()
                 },

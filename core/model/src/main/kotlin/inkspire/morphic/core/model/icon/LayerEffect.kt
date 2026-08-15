@@ -533,7 +533,14 @@ sealed interface LayerEffect {
     @Serializable
     @SerialName("pixelate")
     data class Pixelate(
-        val cellSize: Float = 0f,
+        /**
+         * **A visible default, like every other effect here.** It rested at zero, which is this effect's own
+         * identity — so adding a pixelate did nothing at all until a slider was moved, and the studio offered a
+         * control whose first impression was that it was broken. An eighth of the box puts roughly eight cells
+         * across the icon: coarse enough to read instantly as pixels, fine enough that the artwork is still the
+         * artwork.
+         */
+        val cellSize: Float = 0.12f,
         val fill: Float = 1f,
         val roundness: Float = 0f,
         override val enabled: Boolean = true,
@@ -569,7 +576,12 @@ sealed interface LayerEffect {
     @Serializable
     @SerialName("progressiveBlur")
     data class ProgressiveBlur(
-        val radius: Float = 0f,
+        /**
+         * **A visible default**, for [Pixelate.cellSize]'s reason exactly: this rested at zero, which is the value
+         * [isIdentity] reads, so the effect drew nothing until its first slider moved. Half the panel's own reach,
+         * which on a 96dp bake is a soft edge you cannot mistake for a sharp one.
+         */
+        val radius: Float = 0.05f,
         val falloff: Falloff = Falloff.RADIAL,
         val sharpArea: Float = 0.2f,
         val softness: Float = 0.4f,
@@ -637,22 +649,67 @@ val List<LayerEffect>.drawLive: Boolean
     get() = activeEffects.all { it.drawsLive }
 
 /**
- * The one effect of type [T] that is doing something, or null.
+ * This effect with its switch set — the one thing every variant can be asked that none of them declares.
  *
- * **This is the *editor's* view, where [activeEffects] is the *renderers'*.** It deliberately ignores
- * [LayerEffect.enabled], because a panel has to show the sliders of an effect you switched off — that is what
- * switching off rather than deleting is for. Anything deciding what to *draw* must read [activeEffects] instead.
+ * **An exhaustive `when` here rather than a member on each of the thirteen**, because what it replaced was worse
+ * than either: the studio's switch carried a `when` over `EffectSlice` whose **`else` arm meant Bloom**, so a new
+ * effect added without a matching arm would have silently toggled the bloom's switch instead of its own — and the
+ * two entries that no longer carry a switch at all still had arms there. Over a sealed interface the compiler
+ * refuses to let a new variant be forgotten, which is the guarantee that was missing.
+ *
+ * In the model rather than in the panel because `enabled` is the model's field, and a second consumer that wanted
+ * to toggle one would otherwise write the same thirteen cases again.
  */
-inline fun <reified T : LayerEffect> List<LayerEffect>.effectOrNull(): T? =
-    filterIsInstance<T>().firstOrNull()?.takeIf { !it.isIdentity }
+fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
+    is LayerEffect.Color -> copy(enabled = enabled)
+    is LayerEffect.Filter -> copy(enabled = enabled)
+    is LayerEffect.Bloom -> copy(enabled = enabled)
+    is LayerEffect.Gloss -> copy(enabled = enabled)
+    is LayerEffect.Pattern -> copy(enabled = enabled)
+    is LayerEffect.Extrude -> copy(enabled = enabled)
+    is LayerEffect.ChromaticSplit -> copy(enabled = enabled)
+    is LayerEffect.Glow -> copy(enabled = enabled)
+    is LayerEffect.Shadow -> copy(enabled = enabled)
+    is LayerEffect.Ripple -> copy(enabled = enabled)
+    is LayerEffect.Grain -> copy(enabled = enabled)
+    is LayerEffect.Pixelate -> copy(enabled = enabled)
+    is LayerEffect.ProgressiveBlur -> copy(enabled = enabled)
+}
 
 /**
- * These effects with the one of type [T] replaced, or removed when [effect] is null or would paint nothing.
+ * The stored effect of type [T], or null when there is no record of one.
  *
- * At most one of each type is meaningful, so this replaces rather than appends — and an effect at its defaults is
- * *dropped* rather than stored as a row of neutral numbers, which is what keeps an untouched recipe empty on disk.
+ * **This is the *editor's* view, where [activeEffects] is the *renderers'*.** It deliberately ignores both of the
+ * questions that list answers — a panel has to show the sliders of an effect you switched off, which is what
+ * switching off rather than deleting is for, and it has to go on showing them when you drag one to nothing.
+ * Anything deciding what to *draw* must read [activeEffects] instead.
+ *
+ * **It used to drop an identity effect as well, and that was the bug behind a real one.** Paired with [withEffect]
+ * doing the same, dragging a bloom's strength to zero deleted the whole record — its color, angle, radius, falloff
+ * and anchor with it — so the panel's switch greyed out mid-gesture and dragging back up produced a *fresh* effect
+ * at defaults rather than the one being edited. Identity is a statement about what an effect would paint, and the
+ * editor is not asking that question.
+ */
+inline fun <reified T : LayerEffect> List<LayerEffect>.effectOrNull(): T? =
+    filterIsInstance<T>().firstOrNull()
+
+/**
+ * These effects with the one of type [T] replaced, or **removed** when [effect] is null.
+ *
+ * At most one of each type is meaningful, so this replaces rather than appends.
+ *
+ * **An effect that would paint nothing is kept**, which reverses this function's own earlier rule. Dropping it kept
+ * an untouched recipe empty on disk — a real goal, but bought at the wrong moment: applied on *every edit*, it made
+ * "drag a slider to its floor" mean "discard every other value on this effect". Storage stays small the honest way
+ * instead, by nothing writing a record until the user asks for one; and `encodeDefaults = false` means the record
+ * a user does own costs only the fields they moved.
+ *
+ * **Position is preserved when a record already exists**, which is not tidiness: the list *is* the pipeline order,
+ * so appending an edited effect to the end would silently re-order it past everything after it — a tint that used
+ * to recolor a bloom would stop doing so, on an edit that was about neither. Only a genuinely new effect is
+ * appended, and it goes last because that is where it was added.
  */
 inline fun <reified T : LayerEffect> List<LayerEffect>.withEffect(effect: T?): List<LayerEffect> {
-    val rest = filterNot { it is T }
-    return if (effect == null || effect.isIdentity) rest else rest + effect
+    if (effect == null) return filterNot { it is T }
+    return if (any { it is T }) map { if (it is T) effect else it } else this + effect
 }

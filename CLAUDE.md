@@ -361,9 +361,21 @@ setup for.
     in `activeEffects`** so no renderer asks either question twice. `enabled` is persisted and defaults true, so with
     `encodeDefaults = false` an effect nobody switched off costs nothing on disk. **`drawsLive` is not persisted** —
     it says whether the *live* path can draw the effect at all, and a layer with any effect that cannot falls back to
-    previewing from its bake (the bake has no such limit at any API). The named `spec.color`/`spec.gradient`
-    accessors remain the **editor's** view and deliberately ignore `enabled`, since a panel must show the sliders of
-    an effect you switched off.
+    previewing from its bake (the bake has no such limit at any API).
+  - **Only the renderers may ask `isIdentity`, and that took two corrections to get right.** `effectOrNull` (the
+    editor's view) and `withEffect` (the writer) both used to drop an identity effect as well — the second so an
+    untouched recipe stayed empty on disk, a real goal bought at the wrong moment. Applied on *every edit*, it made
+    "drag a slider to its floor" mean **delete this effect**: a bloom's color, angle, radius, falloff and anchor went
+    with it, the panel's switch greyed out mid-gesture, and dragging back up produced a *fresh* effect at defaults
+    rather than the one being edited. Identity is a statement about what would be painted and the editor is not
+    asking it. Storage stays small the honest way instead — nothing writes a record until the user asks for one.
+    `withEffect` also **keeps an existing effect's position**, the list being the pipeline order: appending an edited
+    one would move it past everything after it, so a tint that used to recolor a bloom would silently stop, on an
+    edit about neither.
+  - **`withEnabled` is the one way to flip a switch**, an exhaustive `when` in the model beside the interface. The
+    studio had a forty-line `when` over `EffectSlice` whose **`else` arm meant Bloom**, so a new effect added without
+    an arm would have toggled the wrong effect's switch. Over a sealed type the compiler refuses to let one be
+    forgotten.
   - **One behavior change, accepted:** a stored recipe whose list reads `[Color, Bloom]` — what setting a tint
     before an overlay produced — now renders in that order, so its tint no longer recolors its bloom. Nothing has
     shipped, and the alternative is a canonical order no reorder control could override. Full plan for the thirteen
@@ -528,15 +540,39 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
 - **It is the only effect that draws the content *instead of* over it**, so the layer's own pixels never appear.
 - **`PositionPad` gained a range parameter** for it: a fringe is a couple of percent of the icon, so at the pad's own
   travel the whole useful span would sit under the thumb. Everything else keeps `PositionRange`.
-  - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** That
-    mapping is the rule a new effect follows: an entry owning an effect gets a **switch** in its panel header
-    (driving `enabled`), while `Opacity` and `Blend` get none, being spec *fields* whose "off" is their default
-    value. It briefly split `LayerEffect.Color` into *Recolor* and *Tint*; the switch overturned that, because two
-    entries sharing one record can express "tint off, recolor on" — a state the model cannot hold. Splitting `Color`
-    in the *model* is worse still: its four numbers compose into one matrix in a fixed sequence, so as separate
-    entries their list order would silently change the result. A tile marks itself from `activeEffects`, so an
-    effect switched off correctly reads as inactive. Every slider goes through `SliderControl` — name, value
-    readout, and a **reset** disabled at the default, so the row doubles as "have I changed this?".
+  - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** It briefly
+    split `LayerEffect.Color` into *Recolor* and *Tint*; the switch overturned that, because two entries sharing one
+    record can express "tint off, recolor on" — a state the model cannot hold. Splitting `Color` in the *model* is
+    worse still: its four numbers compose into one matrix in a fixed sequence, so as separate entries their list
+    order would silently change the result. Every slider goes through `SliderControl` — name, value readout, and a
+    **reset** disabled at the default, so the row doubles as "have I changed this?".
+  - **An entry is an *adjustment* or an *addition* (`EffectKind`), and nearly everything else falls out of that.** An
+    adjustment transforms pixels already there — `Opacity`, `Blend`, `Color`, `Filter`; an addition puts new ones in
+    — the other eleven. Deliberately **not** the same question as `ownsEffect` ("is there a stored record?"), which
+    is what decides whether the *composite* offers an entry at all; `Color` and `Filter` are the pair that separates
+    them, owning records while being adjustments. Three consequences:
+    - **Only additions carry a switch**, the line being *can this be off in a way its own controls cannot express?*
+      An addition's off is its absence and its sliders only say how much. An adjustment's off **is** a value its
+      controls reach and name — Color rests at hue 0 / saturation 1 / brightness 1 / no tint, each with a reset
+      already disabled at exactly that value, so the switch was a fifth control repeating four; and Filter's list
+      *contains* "None", so a switch is a second way to pick the same entry, exactly as "no shape" is the first tile
+      in the shape grid rather than a toggle beside it. What that costs is non-destructive A/B on an adjustment; if
+      it comes back it belongs to the whole icon as a press-and-hold, not to one entry.
+    - **Opening an addition seeds it at its own defaults, and every default is visible.** Nothing applied them
+      before — the panel showed sliders against an icon they had not been written to — so tapping an effect changed
+      nothing and taught nothing. `Pixelate.cellSize` and `ProgressiveBlur.radius` both rested at their own identity
+      and had to be given real values; the other nine already had them. **Backing out of an entry you never touched
+      removes it again**, so browsing all eleven costs nothing: the seed is uncommitted, the first real edit is what
+      records, and that one history entry covers the seed and the edit together. It lives in a `DisposableEffect`
+      because there are four ways out of an entry — its own back button, the system gesture, the target changing
+      under it, and the whole panel being closed — and only disposal catches all four.
+    - **A tile marks itself from the *switch* for an addition and from `isIdentity` for an adjustment.** It read
+      `activeEffects` for both, which folds the two together — so a tile unmarked itself as a slider passed through
+      its floor while the switch beside it still said on, two controls contradicting each other on the one gesture
+      that reaches the floor by accident. An adjustment has no switch to contradict, so identity is the only
+      meaningful answer there.
+    - `Filter` sits **beside `Color`** on the first page rather than last, where it had landed by being built last:
+      the two are the same question asked twice and are what a user moves between while grading a layer.
   - **`LayerEffect.Filter` is the first effect the pipeline was built for, and it is a fixed vocabulary rather than
     curated content** — the opposite call from icon *presets*, and the difference is what each thing is. A preset is
     a whole recipe whose quality depends on the artwork it lands on, so curating one is design work with no end; a

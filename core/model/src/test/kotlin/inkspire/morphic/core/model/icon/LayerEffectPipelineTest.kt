@@ -214,4 +214,75 @@ class LayerEffectPipelineTest {
         assertTrue(json.encodeToString(LayerEffect.serializer(), off).contains("\"enabled\":false"))
         assertEquals(off, json.decodeFromString(LayerEffect.serializer(), json.encodeToString(LayerEffect.serializer(), off)))
     }
+
+    /**
+     * **The one that was silent data loss.** `withEffect` used to drop an effect that reached identity, so dragging
+     * a bloom's strength to its floor deleted the record — the color, angle, radius, falloff and anchor with it —
+     * and dragging back up produced a fresh effect at defaults rather than the one being edited. The editor is not
+     * asking whether an effect would paint; only the renderers are, and [activeEffects] is still where they ask.
+     */
+    @Test
+    fun `an effect dialled down to nothing keeps its record and its other values`() {
+        val tuned = LayerEffect.Bloom(strength = 0.5f, angleDegrees = 135f, argb = 0xFF00FF00.toInt())
+        val list = listOf<LayerEffect>(tuned).withEffect(tuned.copy(strength = 0f))
+
+        val kept = list.effectOrNull<LayerEffect.Bloom>()
+        assertEquals(135f, kept?.angleDegrees)
+        assertEquals(0xFF00FF00.toInt(), kept?.argb)
+        // Still stored, still shown by the editor — and still correctly absent from what the renderers draw.
+        assertTrue(list.activeEffects.isEmpty())
+    }
+
+    @Test
+    fun `editing an effect leaves it where it was in the pipeline`() {
+        // The list *is* the order the effects are applied in, so appending an edited effect to the end would move
+        // it past everything after it — a tint that used to recolor a bloom would quietly stop doing so, on an edit
+        // that was about neither.
+        val edited = listOf(tint, bloom).withEffect(tint.copy(saturation = 0.2f))
+
+        assertEquals(2, edited.size)
+        assertTrue(edited.first() is LayerEffect.Color)
+        assertTrue(edited.last() is LayerEffect.Bloom)
+    }
+
+    @Test
+    fun `an effect that is not there yet is appended`() {
+        assertEquals(listOf(tint, bloom), listOf<LayerEffect>(tint).withEffect(bloom))
+    }
+
+    @Test
+    fun `a null removes the record outright`() {
+        assertEquals(listOf(bloom), listOf(tint, bloom).withEffect<LayerEffect.Color>(null))
+    }
+
+    /**
+     * Every effect the studio can add arrives visible, which is what makes tapping one teach the user anything.
+     * Pixelate and progressive blur both rested at their own identity and so drew nothing until a slider moved.
+     */
+    @Test
+    fun `every effect's own defaults paint something`() {
+        val defaults = listOf(
+            LayerEffect.Bloom(),
+            LayerEffect.Gloss(),
+            LayerEffect.Pattern(pattern = IconPattern("dots")),
+            LayerEffect.Extrude(),
+            LayerEffect.ChromaticSplit(),
+            LayerEffect.Glow(),
+            LayerEffect.Shadow(),
+            LayerEffect.Ripple(),
+            LayerEffect.Grain(),
+            LayerEffect.Pixelate(),
+            LayerEffect.ProgressiveBlur(),
+        )
+        defaults.forEach { assertFalse("${it::class.simpleName} draws nothing at its defaults", it.isIdentity) }
+    }
+
+    @Test
+    fun `the switch can be set on any effect without naming its type`() {
+        // `withEnabled` is exhaustive over the sealed interface, which is the guarantee the studio's own `when` did
+        // not have — its `else` arm meant Bloom, so a new effect would have toggled the wrong switch.
+        assertFalse(bloom.withEnabled(false).enabled)
+        assertTrue(bloom.withEnabled(false).withEnabled(true).enabled)
+        assertEquals(0.5f, (bloom.withEnabled(false) as LayerEffect.Bloom).strength)
+    }
 }
