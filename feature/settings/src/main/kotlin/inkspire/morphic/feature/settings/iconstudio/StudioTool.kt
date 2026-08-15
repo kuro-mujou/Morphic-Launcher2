@@ -91,6 +91,10 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
      * simply makes some of them inapplicable, and a bar that changes with the selection is the honest report of that
      * — a shorter bar for a target with fewer questions.
      *
+     * It is also what an **open panel** is held to: a section that stops applying is closed by the screen rather than
+     * left showing a header with no controls under it. One question, asked in both places, so the bar and the panel
+     * cannot disagree about what the selection offers.
+     *
      * [SOURCE], [TRANSFORM] and [SHAPE] are a *layer's*: the composite has no source (it is what the layers make),
      * no transform of its own, and no stack-level mask. [EFFECTS] is the one that applies to both, which is the whole
      * point of the composite existing. [PRESETS] and [MORE] were never per-layer — they act on the whole recipe — so

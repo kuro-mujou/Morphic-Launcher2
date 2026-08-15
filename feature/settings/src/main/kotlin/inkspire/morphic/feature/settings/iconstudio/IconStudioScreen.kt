@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -132,6 +133,25 @@ fun IconStudioScreen(
     // The full color picker is hosted here rather than where it is asked for, and takes the tool panel's slot when it
     // is up. See [StudioColorPickerHost] for why a control cannot render inside the section that opens it.
     val colorPicker = remember { StudioColorPickerHost() }
+
+    // **A section that stops applying to the selection closes, rather than staying open with nothing in it.**
+    // Selecting the composite tile shortens the bar to the three entries that mean something for it (see
+    // [StudioTool.appliesTo]) — but the *panel* went on showing whichever per-layer section had been open, and
+    // Source, Transform and Shape all resolve through `state.selectedLayer`, which is null there. So the panel drew
+    // its header and nothing else, and the entry that would put it away was no longer on the bar to press: a sheet
+    // of glass with one word on it and no way out.
+    //
+    // **Driven off `state.target` rather than off the rail's tap**, because it is an invariant about what may be open
+    // and not a consequence of one gesture — every route that can move the selection is covered by construction,
+    // which is the same reason the drop zone registration and the item gestures are wired where they cannot be
+    // forgotten. The color picker goes with it for the reason it closes on a bar press: it is raised *by* a control
+    // inside the section now leaving, so left up it would outlive the thing it edits.
+    LaunchedEffect(state.target) {
+        if (tool?.appliesTo(state.target) == false) {
+            tool = null
+            colorPicker.close()
+        }
+    }
 
     // Holds each kind of panel's saveable state while the other kind is showing — see the `SaveableStateProvider`
     // below. At the screen rather than inside the slot, so it outlives every swap the slot makes.
