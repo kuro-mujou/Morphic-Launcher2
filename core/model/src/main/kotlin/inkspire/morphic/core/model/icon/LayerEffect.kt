@@ -661,10 +661,22 @@ sealed interface LayerEffect {
     @Serializable
     @SerialName("ripple")
     data class Ripple(
-        val amplitude: Float = 0.03f,
-        val waves: Float = 8f,
-        val centerX: Float = 0f,
-        val centerY: Float = 0f,
+        val amplitude: Float = 0.06f,
+        val waves: Float = 10f,
+        /**
+         * **The top-right corner**, which `LayerRipple.centerPx` reaches at exactly ±0.5 — the ends of the pad's own
+         * range on both axes.
+         *
+         * A ripple centred in the box is symmetrical, and symmetry reads as a lens over the artwork rather than as
+         * something disturbing it. From a corner the crests sweep across, which is the picture the effect is for.
+         *
+         * One consequence of the corner worth knowing: [waves] counts crests across a **box's width** of distance,
+         * and the far corner is a diagonal away — about 1.4 of those — so ten waves shows nearer fourteen rings
+         * across the icon. Not a miscount; the wavelength is a fixed fraction of the box by design, so that one
+         * recipe ripples the same at every bake size.
+         */
+        val centerX: Float = 0.5f,
+        val centerY: Float = -0.5f,
         override val enabled: Boolean = true,
     ) : LayerEffect {
 
