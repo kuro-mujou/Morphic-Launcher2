@@ -483,8 +483,15 @@ private fun DrawScope.drawBloomOverlay(bloom: LayerEffect.Bloom, spec: IconLayer
     drawRect(brush = brush, alpha = bloom.strength.coerceIn(0f, 1f), blendMode = BlendMode.SrcAtop)
 }
 
-/** The Compose blend mode for [LayerBlend], or `null` for `NORMAL` — which is the default source-over. */
-private fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
+/**
+ * The Compose blend mode for [LayerBlend], or `null` for `NORMAL` — which is the default source-over.
+ *
+ * **Public because the studio's blend swatches draw through it**, which is the point of them: a tile claiming to
+ * show what a mode does has to compose with the mode the renderer will actually use. Its own mapping would be a
+ * second answer to that, and a swatch that showed `Overlay` while the layer got `Screen` is a lie no test would
+ * catch — the same argument every shared derivation in the `render` package is built on.
+ */
+fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
     LayerBlend.NORMAL -> null
     LayerBlend.MULTIPLY -> BlendMode.Multiply
     LayerBlend.SCREEN -> BlendMode.Screen

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,7 +51,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,7 +63,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +79,7 @@ import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButto
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconFilters
+import inkspire.morphic.core.icon.compose.composeBlendMode
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.GrainDrift
@@ -100,6 +111,67 @@ import kotlin.math.sin
  * A sum type rather than a nullable spec because the two carry different things and the compiler should say so —
  * `StudioTarget`'s reason, one layer up, where this is the same distinction expressed in what the panel needs.
  */
+/**
+ * Which entry of the Effects grid is open, and whether this visit to it has changed anything.
+ *
+ * **It lives above `EffectsControls` because the entry's header is pinned above the scroll**, and only the panel owns
+ * that band. The header — back, the effect's name, its switch — used to be the first thing inside the scrolling body,
+ * so on a section with more than a screenful of sliders the way back scrolled off the top and the switch went with
+ * it. A control for leaving a place has to stay where the place is.
+ *
+ * That split is what makes this a holder rather than two parameters: the panel *renders* the header, `EffectsControls`
+ * *renders* the body, and both have to read and write the same two facts. The alternative — a `MutableState` handed
+ * down, or a `() -> Boolean` for the dispose to read — says the same thing with less of a name on it.
+ *
+ * [touched] is deliberately reset by [open] rather than tracked per composition: it is a fact about *this visit* to
+ * *this* entry, which is exactly what the seed-and-abandon rule needs to know. See `EffectsControls`.
+ */
+@Stable
+internal class EffectEntryState {
+
+    /** The entry showing, or null for the grid. */
+    var open: EffectSlice? by mutableStateOf(null)
+        private set
+
+    /** Whether anything has been changed since [open] last moved — the switch counts, a slider counts. */
+    var touched: Boolean by mutableStateOf(false)
+        private set
+
+    /** Opens [slice], or returns to the grid. A fresh entry has been touched by nothing. */
+    fun open(slice: EffectSlice?) {
+        open = slice
+        touched = false
+    }
+
+    fun markTouched() {
+        touched = true
+    }
+
+    companion object {
+
+        /**
+         * Saves which entry was open, so a rotation does not drop the user back at the grid.
+         *
+         * [touched] is deliberately **not** saved: a configuration change is not the user changing anything, and
+         * restoring `true` would keep a seeded effect nobody had touched. Restoring `false` is the safe direction —
+         * at worst an abandoned entry is taken back out, which is what would have happened anyway.
+         */
+        val Saver: Saver<EffectEntryState, String> = Saver(
+            save = { it.open?.name ?: "" },
+            restore = { name ->
+                EffectEntryState().apply {
+                    open(EffectSlice.entries.firstOrNull { slice -> slice.name == name })
+                }
+            },
+        )
+    }
+}
+
+/** @see EffectEntryState */
+@Composable
+internal fun rememberEffectEntryState(): EffectEntryState =
+    rememberSaveable(saver = EffectEntryState.Saver) { EffectEntryState() }
+
 /**
  * What an entry in the Effects grid *does* to the layer — which is what decides whether it carries a switch, and
  * whether opening it seeds anything.
@@ -368,23 +440,20 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
 @Composable
 internal fun EffectsControls(
     target: EffectTarget,
+    entry: EffectEntryState,
     onEffects: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onLayer: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
-    // Saveable, so a rotation does not drop the user back at the grid. It is *not* hoisted to the ViewModel: which
-    // control is open is not part of the recipe, does not belong in undo, and nothing outside this panel asks.
-    var open by rememberSaveable { mutableStateOf<EffectSlice?>(null) }
+    // **The grid's page, held here rather than inside `EffectGrid`.** That composable is *disposed* the moment an
+    // entry opens — the arm below returns early — so a `rememberPagerState` inside it took the page with it, and
+    // coming back from an effect on page two landed on page one. Held one level up, where the panel stays composed
+    // for as long as the section is open, it is simply still there.
+    val gridPager = rememberPagerState { pageCountOf(target) }
 
     // **Closed when the target stops offering it**, which is not hypothetical: Opacity belongs to a layer, so moving
     // the selection to the whole icon with that panel open would leave sliders on screen writing to nothing.
-    val slice = open?.takeIf { it in target.slices }
-
-    // **Whether this visit to this entry has touched anything.** Keyed on the slice, so it is a fresh answer per
-    // entry opened — and the state object a given [DisposableEffect] closes over is the one from its own
-    // composition, which is what lets the effect below read the value belonging to the entry it is disposing
-    // rather than to the one that replaced it.
-    val touched = remember(slice) { mutableStateOf(false) }
+    val slice = entry.open?.takeIf { it in target.slices }
 
     // **Opening an addition applies it; abandoning it takes it back out.** Two halves of one rule, in one effect so
     // they cannot come apart:
@@ -402,16 +471,16 @@ internal fun EffectsControls(
     // not one: the header's back button, the system back gesture, the target changing under it, and the whole panel
     // being closed by the tool bar or a tap on the canvas. Only disposal catches all four.
     DisposableEffect(slice) {
-        val entry = slice
+        val opened = slice
         var seeded = false
-        if (entry != null && entry.storedEffect(target.effects) == null) {
-            entry.seeded()?.let { fresh ->
+        if (opened != null && opened.storedEffect(target.effects) == null) {
+            opened.seeded()?.let { fresh ->
                 onEffects { it + fresh }
                 seeded = true
             }
         }
         onDispose {
-            if (seeded && !touched.value) onEffects { entry!!.removedFrom(it) }
+            if (seeded && !entry.touched) onEffects { opened!!.removedFrom(it) }
         }
     }
 
@@ -419,35 +488,27 @@ internal fun EffectsControls(
     // done anything?". It has to be the *write* rather than the commit: a slider that is dragged and released back
     // where it started never commits, and the effect it was dragging is plainly wanted.
     val effectsTouched: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit = { transform ->
-        touched.value = true
+        entry.markTouched()
         onEffects(transform)
     }
     val layerTouched: ((IconLayerSpec) -> IconLayerSpec) -> Unit = { transform ->
-        touched.value = true
+        entry.markTouched()
         onLayer(transform)
     }
 
     // Back leaves the entry before it leaves the studio. Enabled only when there is somewhere to go back *to*, so
     // the studio's own handler still answers from the grid — nested handlers resolve innermost-enabled-first, which
     // is what makes this two lines rather than a shared piece of state.
-    BackHandler(enabled = slice != null) { open = null }
+    BackHandler(enabled = slice != null) { entry.open(null) }
 
     if (slice == null) {
-        EffectGrid(target = target, onOpen = { open = it })
+        EffectGrid(target = target, pagerState = gridPager, onOpen = { entry.open(it) })
         return
     }
 
+    // **No header here — it is the panel's, pinned above the scroll.** See [EffectEntryState]. This is the body
+    // alone, exactly as every other section is.
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        EffectHeader(
-            slice = slice,
-            target = target,
-            onBack = { open = null },
-            // The header's switch is an edit like any other, so it marks the entry touched — flipping a freshly
-            // seeded effect off is a decision *about* it, not an abandonment of it.
-            onEffects = effectsTouched,
-            onCommit = onCommit,
-        )
-
         // Exhaustive, so an entry cannot be added to the grid without controls behind it — the same reason the
         // tool panel's own `when` lists every section rather than falling through an `else`.
         when (slice) {
@@ -491,10 +552,9 @@ internal fun EffectsControls(
  * follows, one question further on.
  */
 @Composable
-private fun EffectGrid(target: EffectTarget, onOpen: (EffectSlice) -> Unit) {
+private fun EffectGrid(target: EffectTarget, pagerState: PagerState, onOpen: (EffectSlice) -> Unit) {
     val slices = target.slices
     val pages = remember(slices) { slices.chunked(EffectColumns * EffectRows) }
-    val pagerState = rememberPagerState { pages.size }
     val rows = remember(pages) { pages.maxOf { ceil(it.size / EffectColumns.toFloat()).toInt() } }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -518,6 +578,16 @@ private fun EffectGrid(target: EffectTarget, onOpen: (EffectSlice) -> Unit) {
         if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
     }
 }
+
+/**
+ * How many pages [target]'s entries fill.
+ *
+ * Its own function because two places need the same answer and they are a composable apart: the pager is created
+ * where it survives being left ([EffectsControls]) and the pages are laid out where they are drawn ([EffectGrid]).
+ * A count derived twice is a count that can disagree, and the symptom would be a pager that refuses its last page.
+ */
+private fun pageCountOf(target: EffectTarget): Int =
+    ceil(target.slices.size / (EffectColumns * EffectRows).toFloat()).toInt().coerceAtLeast(1)
 
 /**
  * One page of entries.
@@ -606,8 +676,14 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
 /**
  * Which entry is open, the way back to the grid, and — for an entry that owns an effect — its switch.
  *
- * A breadcrumb rather than a replacement for the panel's own header: that still says "Effects", so the two read as
- * where you are and what you are in.
+ * **Rendered by `StudioToolPanel` in its pinned header band, not here in the body**, which is what stops it scrolling
+ * away: a control for leaving a place has to stay where the place is, and Progressive blur's six sliders were already
+ * enough to carry the way back off the top. That is also why it *replaces* the panel's own title rather than sitting
+ * under it — the band holds one thing, and while you are inside an entry the entry is what you are in. The section's
+ * name is still one tap away on the bar.
+ *
+ * It stays declared here, beside the entries it names, so the Effects section keeps its own vocabulary; the host
+ * knows only that there is an entry open, which is [EffectEntryState].
  *
  * **The switch is disabled until the effect exists**, which is the honest reading of three states in one control.
  * An effect absent from the list has never been configured, so there is nothing to silence and nothing to restore;
@@ -616,7 +692,7 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
  * slider makes the panel jump under the finger that touched it.
  */
 @Composable
-private fun EffectHeader(
+internal fun EffectHeader(
     slice: EffectSlice,
     target: EffectTarget,
     onBack: () -> Unit,
@@ -696,25 +772,118 @@ private fun BlendControls(
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
-    LabeledControl("Blend") {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            LayerBlend.entries.toList().chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { blend ->
-                        ChoiceChip(
-                            label = blend.name.lowercase(),
-                            selected = spec.blend == blend,
-                            modifier = Modifier.fillMaxWidth(1f / row.size),
-                        ) {
-                            onUpdate { it.copy(blend = blend) }
-                            onCommit()
-                        }
-                    }
-                }
+    // No label of its own: the panel's header already says "Blend", and a section names its parts rather than
+    // itself — the same duplicate the Source and Shape panels had.
+    //
+    // **Flowing rather than scrolling sideways**, which is `SourceControls`' rule and its reason: six modes is a
+    // fixed, small set, and there is no reason to hide two of them past an edge. The filter row scrolls because it
+    // holds seventeen.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(FilterTileGap),
+        verticalArrangement = Arrangement.spacedBy(FilterTileGap),
+    ) {
+        LayerBlend.entries.forEach { blend ->
+            BlendTile(blend = blend, selected = spec.blend == blend) {
+                onUpdate { it.copy(blend = blend) }
+                onCommit()
             }
         }
     }
 }
+
+/**
+ * One blend mode, shown as **what it does** rather than named and left to be imagined.
+ *
+ * **The rule the rest of this studio already follows, reaching the last chooser that broke it.** The shape grid gave
+ * up its text chips because "the one control on this screen whose entire subject is what something looks like" should
+ * draw it; the source tiles are a pack's own artwork; a filter swatch is a reference gradient under that filter's
+ * matrix. A blend mode is the same kind of thing and worse as a word — *multiply* and *screen* name arithmetic, not a
+ * look, and nothing about the names says which lightens.
+ *
+ * So a tile is [FilterReferenceStops] — the very same reference image the filter swatches use, which is what makes
+ * the two comparable — with one fixed grey shape composited onto it through this mode. Every tile differs only by the
+ * mode, so the tile *is* the answer to "what would this do".
+ *
+ * **Composited offscreen**, or the blend would reach past the swatch and combine with the panel's glass: a `Multiply`
+ * with nothing beneath it in its own layer is the same trap `IconLayerStack` documents for the bottom layer of a
+ * stack.
+ *
+ * **The mode comes from the renderer's own mapping** (`composeBlendMode`), so a swatch cannot show one thing while
+ * the layer gets another.
+ *
+ * The name stays underneath: the picture says what it does, the word is what the user has to say to anyone else.
+ * Same split as a source tile, which draws a pack and labels it too.
+ */
+@Composable
+private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(FilterTileWidth)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(FilterSwatchHeight)
+                .clip(RoundedCornerShape(8.dp))
+                .then(
+                    if (selected) {
+                        Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(8.dp))
+                    } else {
+                        Modifier
+                    },
+                )
+                // Outermost of the drawing, innermost of the chain: the border above is drawn over the finished
+                // swatch rather than being blended into it.
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+        ) {
+            drawRect(brush = Brush.linearGradient(FilterReferenceStops))
+            val side = size.minDimension * BlendSwatchSide
+            drawRoundRect(
+                color = BlendSwatchSource,
+                topLeft = Offset((size.width - side) / 2f, (size.height - side) / 2f),
+                size = Size(side, side),
+                cornerRadius = CornerRadius(side * BlendSwatchCorner),
+                blendMode = blend.composeBlendMode() ?: DrawScope.DefaultBlendMode,
+            )
+        }
+        Text(
+            text = blend.name.lowercase(),
+            color = StudioContentColor.copy(alpha = if (selected) 1f else 0.7f),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+        )
+    }
+}
+
+/**
+ * The shape every blend swatch composites onto the reference.
+ *
+ * A **mid grey**, deliberately: light enough that `Screen` visibly lifts the colours under it, dark enough that
+ * `Multiply` visibly drops them, and neutral enough that `Darken` and `Lighten` differ from both by picking channels
+ * rather than by being a different colour. A white or black source would collapse half the table into identical
+ * tiles.
+ */
+private val BlendSwatchSource = Color(0xFF9E9E9E)
+
+/**
+ * The shape's side, as a share of the swatch's shorter one — leaving the reference visible around it, which is what
+ * makes the tile a comparison rather than a colour chip.
+ *
+ * **A rounded square rather than a circle**, and it is the more honest picture: what a blend mode actually combines
+ * here is one *layer* over another, and a layer in this studio is an icon-shaped thing. A disc read as an abstract
+ * colour test; this reads as the operation being demonstrated on the subject it will be used on.
+ */
+private const val BlendSwatchSide = 0.68f
+
+/** About a quarter of the side — an icon's corner, which is what makes the shape read as a layer. */
+private const val BlendSwatchCorner = 0.26f
 
 /**
  * Hue, saturation, brightness and the tint — one `LayerEffect.Color`.

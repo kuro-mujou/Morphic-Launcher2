@@ -99,6 +99,13 @@ fun StudioToolPanel(
     hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
+    // **Built here rather than in the `when` below, because two bands need it**: the pinned header, when an effect
+    // entry is open, and the body that draws that entry's controls. Deriving it twice is two answers to "which
+    // effects am I editing?" that a selection change could separate.
+    val effectTarget = state.selectedLayer?.let(EffectTarget::Layer)
+        ?: EffectTarget.Composite(state.editing.effects)
+    val effectEntry = rememberEffectEntryState()
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -124,13 +131,37 @@ fun StudioToolPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        PanelHeader(
-            tool = tool,
-            spec = state.selectedLayer.takeIf { tool.actsOnLayer },
-            // Named only where the distinction is live: a section that is not about a layer would otherwise say
-            // "Whole icon" on the composite and nothing on a layer, which reads as a state rather than a scope.
-            composite = state.editingComposite && tool.actsOnLayer,
-        )
+        // **The header band, and an open effect entry takes it over.** A section's own title is the panel's job —
+        // that is what this host settles — and an entry's header is a title with a way back and a switch beside it.
+        // It was the first thing inside the scroll, so on a long section the way *out* scrolled off the top; a
+        // control for leaving a place has to stay where the place is.
+        //
+        // This is the one section the host knows anything about, and the reason is that it is the only one with a
+        // second level to be inside of. What it knows is exactly that — [EffectEntryState] holds which entry is
+        // open, and the rendering of the header stays in `StudioEffects` beside the entries it names.
+        val openEntry = effectEntry.open?.takeIf { tool == StudioTool.EFFECTS && it in effectTarget.slices }
+        if (openEntry != null) {
+            EffectHeader(
+                slice = openEntry,
+                target = effectTarget,
+                onBack = { effectEntry.open(null) },
+                // The switch is an edit like any other, so it marks the entry touched — flipping a freshly seeded
+                // effect off is a decision *about* it, not an abandonment of it.
+                onEffects = { transform ->
+                    effectEntry.markTouched()
+                    actions.updateEffects(transform)
+                },
+                onCommit = actions.commit,
+            )
+        } else {
+            PanelHeader(
+                tool = tool,
+                spec = state.selectedLayer.takeIf { tool.actsOnLayer },
+                // Named only where the distinction is live: a section that is not about a layer would otherwise say
+                // "Whole icon" on the composite and nothing on a layer, which reads as a state rather than a scope.
+                composite = state.editingComposite && tool.actsOnLayer,
+            )
+        }
 
         // **`weight(1f, fill = false)` is what makes the header and the footer win the space they need.** The header
         // and footer are measured first and the scroll takes what is left, so a pinned row is subtracted from the
@@ -180,18 +211,15 @@ fun StudioToolPanel(
                 }
 
                 // **The one section both targets reach**, which is what the composite exists for. The target is
-                // built here rather than passed down as a nullable spec, so the panel's own `when` cannot be handed
-                // a layer's opacity control with no layer behind it.
-                StudioTool.EFFECTS -> {
-                    val target = state.selectedLayer?.let(EffectTarget::Layer)
-                        ?: EffectTarget.Composite(state.editing.effects)
-                    EffectsControls(
-                        target = target,
-                        onEffects = actions.updateEffects,
-                        onLayer = actions.update,
-                        onCommit = actions.commit,
-                    )
-                }
+                // resolved above rather than passed down as a nullable spec, so the panel's own `when` cannot be
+                // handed a layer's opacity control with no layer behind it.
+                StudioTool.EFFECTS -> EffectsControls(
+                    target = effectTarget,
+                    entry = effectEntry,
+                    onEffects = actions.updateEffects,
+                    onLayer = actions.update,
+                    onCommit = actions.commit,
+                )
 
                 StudioTool.PRESETS -> PresetsControls(
                     presets = state.presets,

@@ -36,6 +36,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,6 +132,10 @@ fun IconStudioScreen(
     // The full color picker is hosted here rather than where it is asked for, and takes the tool panel's slot when it
     // is up. See [StudioColorPickerHost] for why a control cannot render inside the section that opens it.
     val colorPicker = remember { StudioColorPickerHost() }
+
+    // Holds each kind of panel's saveable state while the other kind is showing — see the `SaveableStateProvider`
+    // below. At the screen rather than inside the slot, so it outlives every swap the slot makes.
+    val panelState = rememberSaveableStateHolder()
 
     val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -526,28 +531,46 @@ fun IconStudioScreen(
                     // The outgoing panel is composed with the state it was opened on, which is what lets a closing
                     // picker keep drawing its request after `colorPicker.request` is already null.
                 ) { (request, panel) ->
-                    when {
-                        request != null -> StudioColorPickerPanel(
-                            modifier = Modifier.padding(vertical = 6.dp),
-                            request = request,
-                            hazeState = screenHaze,
-                            onDone = colorPicker::close,
-                        )
+                    // **Each kind of panel keeps its own state while the other is showing.** `AnimatedContent`
+                    // *disposes* the content it swaps away, so the tool panel's `rememberSaveable` state — which
+                    // section of Effects is open, which page of its grid — went with it the moment a color field
+                    // raised the picker, and pressing Done came back to the top of the grid rather than to the
+                    // control that had asked for a color.
+                    //
+                    // A `SaveableStateHolder` keyed on the *kind* is what `SurfacePager` already does for its
+                    // slots, and for the same reason: the state is saved on dispose and restored when the same key
+                    // returns. Keyed on [PanelSlot] rather than on the tool, so it matches the `contentKey` above
+                    // and the two cannot disagree about what counts as the same panel.
+                    panelState.SaveableStateProvider(
+                        key = when {
+                            request != null -> PanelSlot.COLOR
+                            panel != null -> PanelSlot.TOOLS
+                            else -> PanelSlot.NONE
+                        },
+                    ) {
+                        when {
+                            request != null -> StudioColorPickerPanel(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                request = request,
+                                hazeState = screenHaze,
+                                onDone = colorPicker::close,
+                            )
 
-                        panel != null ->
-                            // Provided at the one consumer rather than at the screen root: the sections are the only
-                            // things that ask for a color, and the host is what they ask.
-                            CompositionLocalProvider(LocalStudioColorPicker provides colorPicker) {
-                                StudioToolPanel(
-                                    modifier = Modifier.padding(vertical = 6.dp),
-                                    tool = panel,
-                                    state = state,
-                                    actions = actions,
-                                    hazeState = screenHaze,
-                                )
-                            }
+                            panel != null ->
+                                // Provided at the one consumer rather than at the screen root: the sections are the
+                                // only things that ask for a color, and the host is what they ask.
+                                CompositionLocalProvider(LocalStudioColorPicker provides colorPicker) {
+                                    StudioToolPanel(
+                                        modifier = Modifier.padding(vertical = 6.dp),
+                                        tool = panel,
+                                        state = state,
+                                        actions = actions,
+                                        hazeState = screenHaze,
+                                    )
+                                }
 
-                        else -> Unit
+                            else -> Unit
+                        }
                     }
                 }
                 // Outside the transition, so it is bound to the picker being *open* rather than to whichever panel is
