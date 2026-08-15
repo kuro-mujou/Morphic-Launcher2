@@ -404,10 +404,10 @@ sealed interface LayerEffect {
     @SerialName("gloss")
     data class Gloss(
         val argb: Int = 0xFFFFFFFF.toInt(),
-        val angleDegrees: Float = 0f,
-        val curve: Float = 0f,
-        val strength: Float = 1f,
-        val anchor: ContentAnchor = ContentAnchor.BOX,
+        val angleDegrees: Float = 225f,
+        val curve: Float = -1f,
+        val strength: Float = 0.2f,
+        val anchor: ContentAnchor = ContentAnchor.CONTENT,
         override val enabled: Boolean = true,
     ) : LayerEffect {
 
