@@ -586,7 +586,14 @@ sealed interface LayerEffect {
     data class Glow(
         val argb: Int = 0xFFFFFFFF.toInt(),
         val radius: Float = 0.08f,
-        val spread: Float = 0f,
+        /**
+         * **A hair of dilation, which is what stops the halo reading as a smudge.** A blur alone leaves the glow at
+         * half strength right at the silhouette's edge, so the brightest part of it is where the artwork already
+         * covers it; growing the silhouette first gives the fade a solid ring to start from. A hundredth of the box
+         * is under a pixel at a list-row bake and a couple at a folder's — enough to seat the glow, far short of the
+         * outline a larger spread turns it into.
+         */
+        val spread: Float = 0.01f,
         val strength: Float = 1f,
         override val enabled: Boolean = true,
     ) : LayerEffect {
