@@ -303,7 +303,8 @@ Each slice is independently reviewable and leaves the studio working.
 - **Still open from slice 1:** the numeric readout is a *readout*, not an editable field. Typing an exact value is a
   text field per slider with parse, clamp and commit semantics, which is its own slice.
 - **Slice 4 split, and half of it was a capability this plan never noticed.** Bloom landed first: `LayerEffect.Gradient`
-  renamed and grown (linear or radial falloff, a position, a `ShapeAnchor`), and **one colour fading to transparent**
+  renamed and grown (linear or radial falloff, a position, a `ContentAnchor` — which is what that second consumer
+  renamed `ShapeAnchor` to), and **one colour fading to transparent**
   rather than two opaque stops — with two, source-atop *replaces* every pixel it covers, so a bloom at full strength
   obliterated the artwork it was meant to light.
 - **Gloss is an *edge*, which is what makes it its own effect rather than a bloom preset.** A bloom is a ramp or a disc
@@ -351,7 +352,7 @@ Each slice is independently reviewable and leaves the studio working.
   - **No *randomize* button**, unlike the reference. What it randomizes there cannot be read off a capture — an
     angle, an offset, a per-tile scatter — and a button writing a random number into a slider the user can drag is a
     novelty rather than a control.
-  - **No `ShapeAnchor`**, unlike Bloom and Gloss: a pattern is a texture laid over the icon and its own angle already
+  - **No `ContentAnchor`**, unlike Bloom and Gloss: a pattern is a texture laid over the icon and its own angle already
     orients it. Additive if wanted.
 - **Extrude is the first effect whose live cost scales with a slider**, and §3's "N offset draws of the layer
   silhouette" understates what that means on the live side. The bake blits a bitmap it already holds; the editor

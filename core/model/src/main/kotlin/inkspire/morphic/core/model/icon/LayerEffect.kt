@@ -197,12 +197,12 @@ sealed interface LayerEffect {
      * @property radius how far the light reaches, as a fraction of the way to the frame's corners; 1 covers it
      *   entirely. [Falloff.RADIAL] only — a linear ramp always spans its frame.
      * @property offsetX where the light sits, as a fraction of the frame from its center. Positive is toward the
-     *   frame's own right, which is the artwork's right under [ShapeAnchor.CONTENT] — so a bloom placed on a corner
+     *   frame's own right, which is the artwork's right under [ContentAnchor.CONTENT] — so a bloom placed on a corner
      *   of the artwork stays on that corner when the layer turns.
      * @property offsetY the same, downward.
      * @property anchor what the light is placed against — the icon's box, or this layer's artwork carried by its
-     *   transform. [ShapeAnchor.BOX] leaves it where it is put while the content slides underneath;
-     *   [ShapeAnchor.CONTENT] sits it on the ink and moves, zooms and turns with it. The same question a shape mask
+     *   transform. [ContentAnchor.BOX] leaves it where it is put while the content slides underneath;
+     *   [ContentAnchor.CONTENT] sits it on the ink and moves, zooms and turns with it. The same question a shape mask
      *   asks, and answered by the same enum through the same derivation, which is what stops the two drifting apart.
      * @property strength how strongly it is laid on; 0 is invisible, 1 is the full color where the ramp starts. A
      *   separate knob from [argb]'s own alpha because the color picker has no alpha channel by design, and because
@@ -218,7 +218,7 @@ sealed interface LayerEffect {
         val radius: Float = 1f,
         val offsetX: Float = 0f,
         val offsetY: Float = 0f,
-        val anchor: ShapeAnchor = ShapeAnchor.BOX,
+        val anchor: ContentAnchor = ContentAnchor.BOX,
         override val enabled: Boolean = true,
     ) : LayerEffect {
 
@@ -263,7 +263,7 @@ sealed interface LayerEffect {
         val angleDegrees: Float = 0f,
         val curve: Float = 0f,
         val strength: Float = 1f,
-        val anchor: ShapeAnchor = ShapeAnchor.BOX,
+        val anchor: ContentAnchor = ContentAnchor.BOX,
         override val enabled: Boolean = true,
     ) : LayerEffect {
 

@@ -2,7 +2,7 @@ package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.ShapeAnchor
+import inkspire.morphic.core.model.icon.ContentAnchor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -111,7 +111,7 @@ class LayerGradientTest {
     @Test
     fun `a content-anchored bloom sits on the ink rather than the box`() {
         val frame = LayerGradient.frameOf(
-            bloom(anchor = ShapeAnchor.CONTENT),
+            bloom(anchor = ContentAnchor.CONTENT),
             fit = smallInk,
             transform = identity,
             sizePx = 100,
@@ -129,7 +129,7 @@ class LayerGradientTest {
         // drifts off the ink — and drifting is invisible in the editor, which is drawing it the same wrong way.
         val turned = LayerTransform(zoom = 2f, rotationDegrees = 90f, translateXPx = 10f, translateYPx = 0f)
         val frame = LayerGradient.frameOf(
-            bloom(anchor = ShapeAnchor.CONTENT),
+            bloom(anchor = ContentAnchor.CONTENT),
             fit = smallInk,
             transform = turned,
             sizePx = 100,
@@ -149,7 +149,7 @@ class LayerGradientTest {
         // artwork's top once the layer has been turned.
         val turned = LayerTransform(zoom = 1f, rotationDegrees = 90f, translateXPx = 0f, translateYPx = 0f)
         val frame = LayerGradient.frameOf(
-            bloom(anchor = ShapeAnchor.CONTENT),
+            bloom(anchor = ContentAnchor.CONTENT),
             fit = ShapeMask.InkFit.Box,
             transform = turned,
             sizePx = 100,
@@ -165,7 +165,7 @@ class LayerGradientTest {
     @Test
     fun `the bloom's own offset is in frame units and turns with it`() {
         val turned = LayerTransform(zoom = 1f, rotationDegrees = 90f, translateXPx = 0f, translateYPx = 0f)
-        val nudged = bloom(anchor = ShapeAnchor.CONTENT).copy(offsetX = 0.5f)
+        val nudged = bloom(anchor = ContentAnchor.CONTENT).copy(offsetX = 0.5f)
         val frame = LayerGradient.frameOf(nudged, ShapeMask.InkFit.Box, turned, sizePx = 100)
 
         // Half a frame "right" in a frame turned a quarter clockwise is half a box *down* on screen — which is what
@@ -263,7 +263,7 @@ class LayerGradientTest {
         assertEquals(lit, inward.last())
     }
 
-    private fun bloom(anchor: ShapeAnchor = ShapeAnchor.BOX) =
+    private fun bloom(anchor: ContentAnchor = ContentAnchor.BOX) =
         LayerEffect.Bloom(falloff = Falloff.LINEAR, anchor = anchor)
 
     /** A quarter-box square of ink, sitting low and to the left — deliberately not centered, so a bug shows. */

@@ -76,7 +76,7 @@ import inkspire.morphic.core.model.icon.IconFilter
 import inkspire.morphic.core.model.icon.IconPattern
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.ShapeAnchor
+import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.core.model.icon.activeEffects
 import inkspire.morphic.core.model.icon.effectOrNull
@@ -908,9 +908,9 @@ private fun BloomControls(
     MorphicSwitchRow(
         label = "Fit to artwork",
         supportingText = bloom.anchor.bloomHint,
-        checked = bloom.anchor == ShapeAnchor.CONTENT,
+        checked = bloom.anchor == ContentAnchor.CONTENT,
         onCheckedChange = { on ->
-            onUpdate { it.withEffect(bloom.copy(anchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX)) }
+            onUpdate { it.withEffect(bloom.copy(anchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX)) }
             onCommit()
         },
         modifier = Modifier.fillMaxWidth(),
@@ -1678,9 +1678,9 @@ private fun GlossControls(
     MorphicSwitchRow(
         label = "Fit to artwork",
         supportingText = gloss.anchor.glossHint,
-        checked = gloss.anchor == ShapeAnchor.CONTENT,
+        checked = gloss.anchor == ContentAnchor.CONTENT,
         onCheckedChange = { on ->
-            onUpdate { it.withEffect(gloss.copy(anchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX)) }
+            onUpdate { it.withEffect(gloss.copy(anchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX)) }
             onCommit()
         },
         modifier = Modifier.fillMaxWidth(),
@@ -1688,17 +1688,17 @@ private fun GlossControls(
 }
 
 /** @see bloomHint */
-private val ShapeAnchor.glossHint: String
+private val ContentAnchor.glossHint: String
     get() = when (this) {
-        ShapeAnchor.BOX -> "The sheen stays put; moving the layer slides the artwork under it."
-        ShapeAnchor.CONTENT -> "The sheen sits on the artwork and moves, zooms and turns with it."
+        ContentAnchor.BOX -> "The sheen stays put; moving the layer slides the artwork under it."
+        ContentAnchor.CONTENT -> "The sheen sits on the artwork and moves, zooms and turns with it."
     }
 
 /** One line saying what the chosen anchor does — the shape section's rule, that a static one would look broken. */
-private val ShapeAnchor.bloomHint: String
+private val ContentAnchor.bloomHint: String
     get() = when (this) {
-        ShapeAnchor.BOX -> "The light stays put; moving the layer slides the artwork under it."
-        ShapeAnchor.CONTENT -> "The light sits on the artwork and moves, zooms and turns with it."
+        ContentAnchor.BOX -> "The light stays put; moving the layer slides the artwork under it."
+        ContentAnchor.CONTENT -> "The light sits on the artwork and moves, zooms and turns with it."
     }
 
 /**

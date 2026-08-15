@@ -1,7 +1,7 @@
 package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.ShapeAnchor
+import inkspire.morphic.core.model.icon.ContentAnchor
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
@@ -24,10 +24,10 @@ import kotlin.math.sin
 object LayerGradient {
 
     /**
-     * The square a bloom is laid out in, and how it is turned — the answer [ShapeAnchor] decides between.
+     * The square a bloom is laid out in, and how it is turned — the answer [ContentAnchor] decides between.
      *
-     * A frame rather than a pair of anchors' worth of special cases: [ShapeAnchor.BOX] is the icon's own box
-     * unturned, [ShapeAnchor.CONTENT] is the artwork's square carried by the layer's transform, and from there on
+     * A frame rather than a pair of anchors' worth of special cases: [ContentAnchor.BOX] is the icon's own box
+     * unturned, [ContentAnchor.CONTENT] is the artwork's square carried by the layer's transform, and from there on
      * both take one code path. That is the same trick [ShapeMask] plays with its matrix, reached without one.
      *
      * @property sizePx the square's side. Its half is what a linear ramp spans and what a radius is a fraction of.
@@ -43,7 +43,7 @@ object LayerGradient {
 
         /**
          * This frame with its center displaced by [x], [y] — fractions of the frame, **turned with it**, so "right"
-         * means the artwork's right rather than the screen's under [ShapeAnchor.CONTENT].
+         * means the artwork's right rather than the screen's under [ContentAnchor.CONTENT].
          *
          * Separate from [frameOf] because not every effect placed against a frame has a position of its own: a bloom
          * does, a gloss is placed by its angle. Folding it in would have meant the second one passing zeros.
@@ -55,7 +55,7 @@ object LayerGradient {
         }
 
         companion object {
-            /** The icon's own box, unturned — what [ShapeAnchor.BOX] resolves to and what a composite has. */
+            /** The icon's own box, unturned — what [ContentAnchor.BOX] resolves to and what a composite has. */
             fun box(sizePx: Int): Frame =
                 Frame(centerX = sizePx / 2f, centerY = sizePx / 2f, sizePx = sizePx.toFloat(), rotationDegrees = 0f)
         }
@@ -76,11 +76,11 @@ object LayerGradient {
      * @param fit the square the layer's artwork occupies, from [ShapeMask.inkFit].
      * @param transform the layer's own transform, already resolved against [sizePx].
      */
-    fun frameOf(anchor: ShapeAnchor, fit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int): Frame =
+    fun frameOf(anchor: ContentAnchor, fit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int): Frame =
         when (anchor) {
-            ShapeAnchor.BOX -> Frame.box(sizePx)
+            ContentAnchor.BOX -> Frame.box(sizePx)
 
-            ShapeAnchor.CONTENT -> {
+            ContentAnchor.CONTENT -> {
                 val half = sizePx / 2f
                 // The ink's offset from the box center, scaled as the content is — then turned and displaced by the
                 // rest of the transform, which is the same scale-rotate-translate order `LayerTransform.toMatrix`

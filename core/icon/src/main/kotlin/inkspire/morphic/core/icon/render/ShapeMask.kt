@@ -3,7 +3,7 @@ package inkspire.morphic.core.icon.render
 import android.graphics.Matrix
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.model.icon.IconLayerSpec
-import inkspire.morphic.core.model.icon.ShapeAnchor
+import inkspire.morphic.core.model.icon.ContentAnchor
 
 /**
  * Where a layer's shape silhouette is drawn — the fifth thing the two render paths share, and it exists for the
@@ -28,7 +28,7 @@ import inkspire.morphic.core.model.icon.ShapeAnchor
 object ShapeMask {
 
     /**
-     * The square the shape is drawn into, in fractions of the icon's box — the frame [ShapeAnchor.CONTENT] fits the
+     * The square the shape is drawn into, in fractions of the icon's box — the frame [ContentAnchor.CONTENT] fits the
      * silhouette to, before the layer's transform carries it.
      *
      * @property scale the square's side as a fraction of the box. 1 is the box itself.
@@ -67,19 +67,19 @@ object ShapeMask {
 
     /**
      * The matrix to draw [spec]'s shape drawable under, given the [content] that layer resolved to and a square box
-     * of [sizePx] — or `null` when the shape is drawn plainly at box size, which is [ShapeAnchor.BOX] and so the
+     * of [sizePx] — or `null` when the shape is drawn plainly at box size, which is [ContentAnchor.BOX] and so the
      * overwhelmingly common case.
      *
      * Returning `null` rather than an identity matrix keeps the untouched path free of matrix work entirely, the
      * same bargain [LayerTransform.isIdentity] makes one file over.
      *
-     * Two steps, for [ShapeAnchor.CONTENT]: the [inkFit] above, then the layer's own transform **post**-concatenated
+     * Two steps, for [ContentAnchor.CONTENT]: the [inkFit] above, then the layer's own transform **post**-concatenated
      * so it applies *after* the fit — matching the order the content itself goes through, which is drawn at box size
      * and then transformed. That ordering is the whole correctness argument, so it is worth not swapping for
      * `preConcat` on the grounds that it reads better.
      */
     fun matrixOf(spec: IconLayerSpec, content: ParsedLayer, sizePx: Int): Matrix? {
-        if (spec.shapeAnchor == ShapeAnchor.BOX) return null
+        if (spec.shapeAnchor == ContentAnchor.BOX) return null
 
         val fit = inkFit(content)
         val center = sizePx / 2f

@@ -269,7 +269,7 @@ enforces. Per layer:
   circle is how a colored disc goes behind a legacy icon.)* A shape is **backed by a vector drawable** (prepared
   as a resource) and referenced by a stable id; the clip mask is built from that drawable's silhouette, so adding
   a shape = drop in a drawable, no path math in code.
-  - **A shape is cut against one of two frames, and `ShapeAnchor` is which.** `BOX` (the default, and what the mask
+  - **A shape is cut against one of two frames, and `ContentAnchor` is which.** `BOX` (the default, and what the mask
     always did) fills the icon's square and stays put, so the transform slides the *content* under a fixed
     silhouette — the plate reading. `CONTENT` fits the shape to the layer's **artwork** and hands it the layer's own
     transform, so it lands on the ink and zooms, rotates and moves with it — the trim reading, which the box frame
@@ -327,7 +327,7 @@ matrix both paths now take rather than each configuring its own camera), `LayerF
 color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`),
 `IconFilters` (the table of built-in looks), `LayerGradient` (which way an angle runs, and the frame a bloom or a
 gloss is laid out in), `ShapeMask` (where the silhouette sits — which stopped being "the
-box" the moment `ShapeAnchor` existed, and so became arithmetic rather than a constant), `LayerPattern` (a tile's
+box" the moment `ContentAnchor` existed, and so became arithmetic rather than a constant), `LayerPattern` (a tile's
 size, its matrix and how a stencil becomes colored marks), `LayerExtrude` (how many copies and how far apart) and
 `LayerChromatic` (which channel leads).
 
@@ -412,12 +412,13 @@ to light. Four things worth knowing:
 - **The far end is the same color with its alpha dropped, never `Color.TRANSPARENT`.** Transparent black drags a white
   bloom through gray on the way out — a dirty edge that reads as a rendering fault. `LayerGradient.fadeOut`, shared
   because it is exactly the detail one renderer would get right and the other would not.
-- **`BloomFalloff` swaps one control for another rather than adding one.** A linear ramp spans its frame at every angle
+- **`Falloff` swaps one control for another rather than adding one.** A linear ramp spans its frame at every angle
   so it has no reach to set; a disc has no direction to run in. The panel shows Angle *or* Radius — the same rule that
-  gates the tint-style control on a tint existing.
-- **It takes `ShapeAnchor`, through the same `InkFit`**, so a bloom and a shape anchored to content on one layer land on
-  the same square. Second consumer of that enum, which now wants renaming (`ContentAnchor`?) — a mechanical commit of
-  its own, like the queued `folder/` one.
+  gates the tint-style control on a tint existing. It was `BloomFalloff` until progressive blur wanted the same pair.
+- **It takes `ContentAnchor`, through the same `InkFit`**, so a bloom and a shape anchored to content on one layer land
+  on the same square. That second consumer is what renamed the enum from `ShapeAnchor` — a frame is a frame whether a
+  silhouette or a light is laid out in it, and the holder's own field (`shapeAnchor`, `anchor`) still says which. The
+  entries carry no `@SerialName`, so nothing moved on disk.
 - **`LayerGradient` places it without a `Matrix`**, unlike `ShapeMask`: a gradient is placed by handing endpoints or a
   center to a platform constructor, so the whole frame derivation is float arithmetic and therefore JVM-testable — which
   is where the anchored cases are pinned, since drift there is invisible in an editor drawing it the same wrong way.
@@ -488,7 +489,7 @@ pipeline: drop a drawable in, add an id, the id is the on-disk contract, an unkn
   the measured size back out of layout for a bitmap a few pixels square.
 - **Scale is a fraction of the box**, for the reason offsets are — a quarter puts four tiles across the icon at every
   bake size — with a pixel floor, since a shader repeating a one-pixel bitmap is a flat wash that costs a texture.
-- **No `ShapeAnchor` and no randomize.** A pattern is a texture laid *over* the icon and its own angle orients it, so
+- **No `ContentAnchor` and no randomize.** A pattern is a texture laid *over* the icon and its own angle orients it, so
   the anchor is additive if wanted; and what the reference's randomize button randomizes cannot be read off a
   capture, where a button writing a random number into a slider the user can drag is a novelty rather than a control.
 

@@ -41,7 +41,7 @@ import kotlinx.serialization.Serializable
  * @property tiltY Rotation about the **vertical** axis: the left edge leans away and the right toward the viewer.
  * @property shapeAnchor What [shape] is cut against — the box, or this layer's own artwork carried by its transform.
  *   Means nothing when [shape] is null, which is why the studio shows the control only once a shape is chosen. See
- *   [ShapeAnchor]; it defaults to [ShapeAnchor.BOX], so stored recipes read back rendering exactly as they did.
+ *   [ContentAnchor]; it defaults to [ContentAnchor.BOX], so stored recipes read back rendering exactly as they did.
  */
 @Serializable
 data class IconLayerSpec(
@@ -55,7 +55,7 @@ data class IconLayerSpec(
     val tiltX: Float = 0f,
     val tiltY: Float = 0f,
     val shape: IconShape? = null,
-    val shapeAnchor: ShapeAnchor = ShapeAnchor.BOX,
+    val shapeAnchor: ContentAnchor = ContentAnchor.BOX,
     val opacity: Float = 1f,
     val blend: LayerBlend = LayerBlend.NORMAL,
     val normalize: Boolean = false,

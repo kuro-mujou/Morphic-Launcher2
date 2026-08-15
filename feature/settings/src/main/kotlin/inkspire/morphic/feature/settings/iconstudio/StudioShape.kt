@@ -33,7 +33,7 @@ import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
-import inkspire.morphic.core.model.icon.ShapeAnchor
+import inkspire.morphic.core.model.icon.ContentAnchor
 
 /**
  * The layer's silhouette.
@@ -57,7 +57,7 @@ import inkspire.morphic.core.model.icon.ShapeAnchor
  * which is the arrangement that makes a drag ambiguous.
  *
  * **The anchor is the second control here, and it is what a shape is cut against rather than which shape it is.**
- * See [ShapeAnchor]: the box, or the layer's own artwork carried by its transform. It appears only once a shape is
+ * See [ContentAnchor]: the box, or the layer's own artwork carried by its transform. It appears only once a shape is
  * chosen, because with no shape there is nothing to anchor and the studio's rule is that a control which changes
  * nothing is worse than a missing one — the same gate `TintMode`'s control sits behind in Effects. It is the
  * studio's first [MorphicSwitchRow], and the first switch in the launcher at all.
@@ -123,7 +123,7 @@ internal fun ShapeControls(
         // monochrome row, the pack-browse row and the tint-style control are each gated by.
         //
         // **A switch and not a pair of chips, even though the model behind it is an enum.** The two anchors are
-        // genuinely two frames, which is why `ShapeAnchor` names both rather than being a boolean — but what the
+        // genuinely two frames, which is why `ContentAnchor` names both rather than being a boolean — but what the
         // *user* is doing is turning one behavior on, against a default that is also what every icon rendered as
         // before this existed. The model keeps illegal states unrepresentable; the control says what is being asked
         // for. `MorphicSwitch` reads correctly here because the studio is a fixed-dark theme zone (see
@@ -137,9 +137,9 @@ internal fun ShapeControls(
                 // broken on exactly the icons someone tries it on first; saying what the current setting does
                 // instead tells them which of the two they are looking at.
                 supportingText = spec.shapeAnchor.hint,
-                checked = spec.shapeAnchor == ShapeAnchor.CONTENT,
+                checked = spec.shapeAnchor == ContentAnchor.CONTENT,
                 onCheckedChange = { on ->
-                    edit { it.copy(shapeAnchor = if (on) ShapeAnchor.CONTENT else ShapeAnchor.BOX) }
+                    edit { it.copy(shapeAnchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX) }
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -148,10 +148,10 @@ internal fun ShapeControls(
 }
 
 /** One line saying what the chosen anchor does — see the call site for why it changes with the state. */
-private val ShapeAnchor.hint: String
+private val ContentAnchor.hint: String
     get() = when (this) {
-        ShapeAnchor.BOX -> "The shape stays put; moving the layer slides the artwork under it."
-        ShapeAnchor.CONTENT -> "The shape sits on the artwork and moves, zooms and turns with it."
+        ContentAnchor.BOX -> "The shape stays put; moving the layer slides the artwork under it."
+        ContentAnchor.CONTENT -> "The shape sits on the artwork and moves, zooms and turns with it."
     }
 
 /**
