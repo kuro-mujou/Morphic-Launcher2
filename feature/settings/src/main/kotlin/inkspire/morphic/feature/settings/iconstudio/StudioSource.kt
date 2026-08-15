@@ -84,83 +84,86 @@ internal fun SourceControls(
     onBrowsePack: ((String) -> Unit)?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LabeledControl("Source") {
-            // **A flow row of tiles rather than a column of rows**, because the choices are *pictures*: an icon pack is
-            // recognized by its own artwork long before its name is read, so labeled text was asking the user to read
-            // a list where they could have looked at one. Flowing rather than scrolling sideways, so a device with six
-            // packs installed shows all six instead of hiding the last of them past an edge.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Absent on a custom layer, where it resolves to nothing: there is no "the app's custom layer".
-                if (spec.role != LayerRole.CUSTOM) {
-                    SourceTile(
-                        label = "System default",
-                        // **`AppDefaultMonochrome` reads as selected here too, and that is not a special case.**
-                        // Monochrome is a *refinement of* this source rather than a peer of it — the app's own
-                        // artwork either way — so the tile is genuinely the chosen one, and the row beneath is what
-                        // says which form of it.
-                        selected = spec.source == LayerSource.AppDefault ||
-                            spec.source == LayerSource.AppDefaultMonochrome,
-                        // **Which is also why the tile does not write a source itself.** Coming back from a pack or an
-                        // image has to land on the form the layer was left in, and only the ViewModel remembers that —
-                        // see `IconStudioViewModel.pickAppDefault`. Writing `AppDefault` here would drop the refinement
-                        // the row beneath controls, with the tile looking identical before and after the press.
-                        onClick = onPickAppDefault,
-                    ) {
+        // **No label over the tiles, because the panel header already carries one.** `StudioToolPanel` names the open
+        // section *and* the layer it is pointed at, so a `LabeledControl("Source")` here said the same word a second
+        // time directly beneath it — and it was naming the section rather than a control within it, which is what that
+        // helper is for. A section names its parts, never itself: `Fill` below is a part and keeps its name.
+        //
+        // **A flow row of tiles rather than a column of rows**, because the choices are *pictures*: an icon pack is
+        // recognized by its own artwork long before its name is read, so labeled text was asking the user to read
+        // a list where they could have looked at one. Flowing rather than scrolling sideways, so a device with six
+        // packs installed shows all six instead of hiding the last of them past an edge.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Absent on a custom layer, where it resolves to nothing: there is no "the app's custom layer".
+            if (spec.role != LayerRole.CUSTOM) {
+                SourceTile(
+                    label = "System default",
+                    // **`AppDefaultMonochrome` reads as selected here too, and that is not a special case.**
+                    // Monochrome is a *refinement of* this source rather than a peer of it — the app's own
+                    // artwork either way — so the tile is genuinely the chosen one, and the row beneath is what
+                    // says which form of it.
+                    selected = spec.source == LayerSource.AppDefault ||
+                        spec.source == LayerSource.AppDefaultMonochrome,
+                    // **Which is also why the tile does not write a source itself.** Coming back from a pack or an
+                    // image has to land on the form the layer was left in, and only the ViewModel remembers that —
+                    // see `IconStudioViewModel.pickAppDefault`. Writing `AppDefault` here would drop the refinement
+                    // the row beneath controls, with the tile looking identical before and after the press.
+                    onClick = onPickAppDefault,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Android,
+                        contentDescription = null,
+                        tint = StudioContentColor,
+                        modifier = Modifier.size(SourceGlyphSide),
+                    )
+                }
+            }
+
+            // Acts on every press rather than only when unselected, because pressing it again re-picks.
+            if (allowsFixedSource) {
+                SourceTile(
+                    label = "Custom image",
+                    selected = spec.source is LayerSource.CustomImage,
+                    onClick = onPickImage,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        tint = StudioContentColor,
+                        modifier = Modifier.size(SourceGlyphSide),
+                    )
+                }
+            }
+
+            // **One tile per pack, drawn as the pack's own launcher icon** — which `InstalledIconPack.preview`
+            // already carries, for exactly the reason its KDoc gives: packs are recognized by their artwork rather
+            // than by their name. An empty list is the ordinary state on a device with none, and it is also what a
+            // missing `<queries>` declaration looks like — see `IconPackManager`.
+            packs.forEach { pack ->
+                SourceTile(
+                    label = pack.label,
+                    selected = (spec.source as? LayerSource.IconPack)?.packPackage == pack.packageName,
+                    onClick = { onPickPack(pack.packageName) },
+                ) {
+                    val preview = pack.preview
+                    if (preview != null) {
+                        Image(
+                            bitmap = preview.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(SourcePackIconSide),
+                        )
+                    } else {
+                        // A pack whose own icon could not be read still has to be pickable; its label is beneath
+                        // the tile either way.
                         Icon(
-                            imageVector = Icons.Default.Android,
+                            imageVector = Icons.Default.Palette,
                             contentDescription = null,
                             tint = StudioContentColor,
                             modifier = Modifier.size(SourceGlyphSide),
                         )
-                    }
-                }
-
-                // Acts on every press rather than only when unselected, because pressing it again re-picks.
-                if (allowsFixedSource) {
-                    SourceTile(
-                        label = "Custom image",
-                        selected = spec.source is LayerSource.CustomImage,
-                        onClick = onPickImage,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Image,
-                            contentDescription = null,
-                            tint = StudioContentColor,
-                            modifier = Modifier.size(SourceGlyphSide),
-                        )
-                    }
-                }
-
-                // **One tile per pack, drawn as the pack's own launcher icon** — which `InstalledIconPack.preview`
-                // already carries, for exactly the reason its KDoc gives: packs are recognized by their artwork rather
-                // than by their name. An empty list is the ordinary state on a device with none, and it is also what a
-                // missing `<queries>` declaration looks like — see `IconPackManager`.
-                packs.forEach { pack ->
-                    SourceTile(
-                        label = pack.label,
-                        selected = (spec.source as? LayerSource.IconPack)?.packPackage == pack.packageName,
-                        onClick = { onPickPack(pack.packageName) },
-                    ) {
-                        val preview = pack.preview
-                        if (preview != null) {
-                            Image(
-                                bitmap = preview.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.size(SourcePackIconSide),
-                            )
-                        } else {
-                            // A pack whose own icon could not be read still has to be pickable; its label is beneath
-                            // the tile either way.
-                            Icon(
-                                imageVector = Icons.Default.Palette,
-                                contentDescription = null,
-                                tint = StudioContentColor,
-                                modifier = Modifier.size(SourceGlyphSide),
-                            )
-                        }
                     }
                 }
             }

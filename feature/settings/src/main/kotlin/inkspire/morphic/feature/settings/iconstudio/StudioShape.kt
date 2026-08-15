@@ -85,38 +85,40 @@ internal fun ShapeControls(
     val pagerState = rememberPagerState { pages.size }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        LabeledControl("Shape") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // **The page height is derived from the width, because it is a consequence of it and not a value
-                // anyone owns.** Tiles are square and the columns are fixed, so the width settles the cell and the
-                // cell settles two rows plus the gap between them — a formula exists, which is this codebase's own
-                // test for derive-versus-store (`derivedCell`, `CellFit`). It was a flat 168dp, and that is wrong on
-                // an ordinary phone before it is wrong on a tablet: a 393dp screen leaves ≈361dp inside the panel,
-                // so a cell is ≈84dp and two rows plus the gap want ≈176. The eight dp it was short of is not a
-                // clipped corner — a `LazyVerticalGrid` in a box too small to hold it **scrolls**, so the fixed
-                // height quietly created the vertical-scroller-inside-a-vertical-scroller that paging exists to
-                // avoid. `pageSpacing` is not subtracted: with `PageSize.Fill` it is inserted *between* pages and
-                // pages stay the full viewport width.
-                BoxWithConstraints {
-                    val cell = (maxWidth - ShapeGridSpacing * (ShapeColumns - 1)) / ShapeColumns
-                    val pageHeight = cell * ShapeRows + ShapeGridSpacing * (ShapeRows - 1)
+        // **No label over the chooser, because the panel header already carries one.** `StudioToolPanel` names the
+        // open section, so a `LabeledControl("Shape")` here put the same word twice in the same 24dp — and it was
+        // labelling the section rather than a control *within* it, which is what that helper is for. The rule is one
+        // line: a section names its parts, never itself. `Fit to artwork` beneath is a part and keeps its own name.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // **The page height is derived from the width, because it is a consequence of it and not a value
+            // anyone owns.** Tiles are square and the columns are fixed, so the width settles the cell and the
+            // cell settles two rows plus the gap between them — a formula exists, which is this codebase's own
+            // test for derive-versus-store (`derivedCell`, `CellFit`). It was a flat 168dp, and that is wrong on
+            // an ordinary phone before it is wrong on a tablet: a 393dp screen leaves ≈361dp inside the panel,
+            // so a cell is ≈84dp and two rows plus the gap want ≈176. The eight dp it was short of is not a
+            // clipped corner — a `LazyVerticalGrid` in a box too small to hold it **scrolls**, so the fixed
+            // height quietly created the vertical-scroller-inside-a-vertical-scroller that paging exists to
+            // avoid. `pageSpacing` is not subtracted: with `PageSize.Fill` it is inserted *between* pages and
+            // pages stay the full viewport width.
+            BoxWithConstraints {
+                val cell = (maxWidth - ShapeGridSpacing * (ShapeColumns - 1)) / ShapeColumns
+                val pageHeight = cell * ShapeRows + ShapeGridSpacing * (ShapeRows - 1)
 
-                    HorizontalPager(
-                        state = pagerState,
-                        pageSpacing = 8.dp,
-                        modifier = Modifier.height(pageHeight),
-                    ) { page ->
-                        ShapePage(
-                            shapes = pages[page],
-                            selected = spec.shape,
-                            onSelect = { shape -> edit { it.copy(shape = shape) } },
-                        )
-                    }
+                HorizontalPager(
+                    state = pagerState,
+                    pageSpacing = 8.dp,
+                    modifier = Modifier.height(pageHeight),
+                ) { page ->
+                    ShapePage(
+                        shapes = pages[page],
+                        selected = spec.shape,
+                        onSelect = { shape -> edit { it.copy(shape = shape) } },
+                    )
                 }
-
-                // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
-                if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
             }
+
+            // Absent at one page, where a single dot would say nothing about a pager that cannot be paged.
+            if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
         }
 
         // Nothing to anchor without a shape, so the control is absent rather than disabled — the same rule the
