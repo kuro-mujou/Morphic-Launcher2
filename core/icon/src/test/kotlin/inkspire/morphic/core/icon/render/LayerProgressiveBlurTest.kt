@@ -62,6 +62,24 @@ class LayerProgressiveBlurTest {
     }
 
     @Test
+    fun `a tiny box comes back null rather than throwing on an inverted clamp`() {
+        // The same trap `stops` had: `coerceIn(3, sizePx - 1)` throws rather than clamping once the box reaches
+        // three, and a bitmap that small is reachable — the draft of a layer tile is a few dozen pixels.
+        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.5f, sizePx = 3))
+        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.5f, sizePx = 1))
+    }
+
+    @Test
+    fun `a radius reachable only mid-drag comes back null, not a copy`() {
+        // The crash this file exists to have caught. The studio's sliders are continuous — their step governs only
+        // the stepper buttons — so a finger passes through values like this on the way up, and on a small bake they
+        // resolve to less than a pixel of blur. The caller must skip the effect entirely on a null; it used to
+        // return an immutable copy instead, which the renderer then wrapped in a `Canvas` and threw.
+        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.002f, sizePx = 48))
+        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.0005f, sizePx = 800))
+    }
+
+    @Test
     fun `the stops are the sharp edge and the point of full blur, in that order`() {
         val (sharp, blurred) = LayerProgressiveBlur.stops(blur(sharpArea = 0.2f, softness = 0.4f)).toList()
 

@@ -185,9 +185,18 @@ class IconRenderer(
         var current = bitmap
         var canvas = Canvas(current)
 
-        /** Swaps in a buffer built from the current one, which is what every non-overlay effect does. */
+        /**
+         * Swaps in a buffer built from the current one, which is what every non-overlay effect does.
+         *
+         * **[with] must return a *new, mutable* bitmap.** Returning the one it was given would recycle the buffer
+         * and then keep drawing into it, and returning an immutable one — which is what `Bitmap.copy(config, false)`
+         * hands back — makes the `Canvas` below throw outright. The identity check guards the first of those; the
+         * second has no guard but a rule, which is that an effect with nothing to do must not be given to this at
+         * all. See the `ProgressiveBlur` arm for the shape that takes.
+         */
         fun replace(with: (Bitmap) -> Bitmap) {
             val next = with(current)
+            if (next === current) return
             current.recycle()
             current = next
             canvas = Canvas(current)
@@ -222,7 +231,13 @@ class IconRenderer(
 
                 is LayerEffect.Pixelate -> replace { pixelated(it, effect, sizePx) }
 
-                is LayerEffect.ProgressiveBlur -> replace { progressivelyBlurred(it, effect, sizePx) }
+                // **The side is resolved *before* `replace`, not inside it**, so a radius too small to blur skips
+                // the buffer swap entirely rather than handing it a copy. The same shape `Filter` above takes for
+                // an id it cannot resolve, and for the same reason: an effect with nothing to do must do nothing.
+                is LayerEffect.ProgressiveBlur ->
+                    LayerProgressiveBlur.downscaledSidePx(effect.radius, sizePx)?.let { side ->
+                        replace { progressivelyBlurred(it, effect, side, sizePx) }
+                    }
 
                 // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
                 is LayerEffect.Glow -> replace {
@@ -436,10 +451,10 @@ class IconRenderer(
     private fun progressivelyBlurred(
         source: Bitmap,
         blur: LayerEffect.ProgressiveBlur,
+        sidePx: Int,
         sizePx: Int,
     ): Bitmap {
-        val side = LayerProgressiveBlur.downscaledSidePx(blur.radius, sizePx) ?: return source.copy(source.config!!, false)
-        val blurred = blurredCopy(source, side, sizePx)
+        val blurred = blurredCopy(source, sidePx, sizePx)
 
         val stops = LayerProgressiveBlur.stops(blur)
         val frame = LayerGradient.Frame.box(sizePx)

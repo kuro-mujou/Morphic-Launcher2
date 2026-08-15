@@ -24,10 +24,16 @@ object LayerProgressiveBlur {
      * the high frequencies are gone entirely — which is what a blur does anyway, so the approximation is invisible
      * in the only place it is used.
      *
-     * Null rather than the full size because "no blur" has to be distinguishable from "a blur that changes nothing":
-     * scaling to the original side and back would allocate two bitmaps to produce a copy.
+     * **Null rather than the full size, and the caller must skip the effect on it rather than copying.** A radius
+     * this small is reachable *by dragging*: the studio's sliders are continuous and their step only governs the
+     * stepper buttons, so a finger passes through values like 0.002 on its way up — and a 48dp layer tile at draft
+     * scale is a few dozen pixels, where that is a fraction of one. It is the ordinary case, not the edge one.
+     *
+     * Null also when the box itself is too small to scale down within, which is the same inverted-range trap
+     * [stops] had: `coerceIn(3, sizePx - 1)` **throws** rather than clamping once `sizePx` reaches 3.
      */
     fun downscaledSidePx(radius: Float, sizePx: Int): Int? {
+        if (sizePx <= MinSidePx) return null
         val radiusPx = radius * sizePx
         if (radiusPx < MinBlurPx) return null
         return (sizePx / radiusPx).roundToInt().coerceIn(MinSidePx, sizePx - 1)
