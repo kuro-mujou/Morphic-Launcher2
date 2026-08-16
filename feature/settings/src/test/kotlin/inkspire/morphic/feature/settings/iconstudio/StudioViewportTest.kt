@@ -166,6 +166,54 @@ class StudioViewportTest {
     }
 
     @Test
+    fun `a zoomed icon can be travelled all the way across`() {
+        // **The cage this replaced.** "Keep the centre on the canvas" is the right bound for an icon smaller than
+        // the canvas and silently becomes a trap once it is larger: reaching the right-hand edge of a bound two and
+        // a half canvases wide needs a centre well off the left, which the old rule refused — so a user could zoom
+        // in and then not travel across what they had zoomed into.
+        var workspace = IconStudioWorkspace.Default.copy(zoom = StudioZoomRange.endInclusive)
+        repeat(40) {
+            workspace = workspace.pinched(
+                canvasWidth = canvas,
+                canvasHeight = canvas,
+                topInset = topInset,
+                centroidX = 500f,
+                centroidY = 500f,
+                dragX = -300f,
+                dragY = 0f,
+                zoomBy = 1f,
+            )
+        }
+        val pushed = studioIconBound(canvas, canvas, topInset, workspace)
+
+        // Dragged as far left as it goes, the icon's *right* edge has arrived at the canvas's right edge — the whole
+        // of that side is reachable — and has not gone past it, so no blank canvas shows beside it.
+        assertEquals(canvas, pushed.left + pushed.side, Tolerance)
+    }
+
+    @Test
+    fun `a zoomed icon never leaves blank canvas beside it`() {
+        // The other end of the same rule: whatever the pan, an icon larger than the canvas covers it completely.
+        var workspace = IconStudioWorkspace.Default.copy(zoom = StudioZoomRange.endInclusive)
+        repeat(40) {
+            workspace = workspace.pinched(
+                canvasWidth = canvas,
+                canvasHeight = canvas,
+                topInset = topInset,
+                centroidX = 500f,
+                centroidY = 500f,
+                dragX = 400f,
+                dragY = 400f,
+                zoomBy = 1f,
+            )
+        }
+        val bound = studioIconBound(canvas, canvas, topInset, workspace)
+
+        assertTrue("a gap opened on the left: ${bound.left}", bound.left <= 0f)
+        assertTrue("a gap opened at the top: ${bound.top}", bound.top <= 0f)
+    }
+
+    @Test
     fun `an unmeasured canvas leaves the workspace alone`() {
         // The first frame, before layout has answered. Clamping against zero here would slam the icon into the corner
         // and the user would watch it jump on the way in.

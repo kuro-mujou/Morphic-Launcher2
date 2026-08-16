@@ -5,8 +5,6 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
@@ -19,9 +17,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.data.settings.IconStudioWorkspace
@@ -97,6 +96,11 @@ fun StudioCanvas(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
+            // **The canvas is what crops a zoomed icon, now that the icon's own box may be larger than it.** The
+            // bound below asks for its true side whatever the canvas can hold, so something has to stop it painting
+            // over the chrome — and it is this node rather than that one, because the bound *should* overflow: what
+            // a pinch to maximum means is a piece of a very large icon, and the piece is the canvas.
+            .clipToBounds()
             .then(modifier),
         contentAlignment = Alignment.TopStart,
     ) {
@@ -107,12 +111,22 @@ fun StudioCanvas(
         val canvasHeight = with(density) { maxHeight.toPx() }
         val bound = studioIconBound(canvasWidth, canvasHeight, topInsetPx, workspace)
 
+        // **Snapped to whole pixels once, and both readers take these three numbers.** The bound is the icon's
+        // square: the checkerboard is painted into it and the icon is laid out in it, and those were two derivations
+        // of one rectangle — the paint from `bound`'s raw floats, the layout from a px -> dp -> px round trip with
+        // each edge rounded on its own. They agreed to within a pixel at rest and drifted badly as the side grew,
+        // which is what made the box come out 256x253 and, zoomed, made the checkerboard a different rectangle from
+        // the icon inside it. One integer rectangle cannot disagree with itself.
+        val boundLeft = bound.left.roundToInt()
+        val boundTop = bound.top.roundToInt()
+        val boundSide = bound.side.roundToInt().coerceAtLeast(0)
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 // The bound is passed in rather than re-derived: with a viewport there is no longer any way for a
                 // second derivation to be certain of agreeing with the first.
-                .drawBehind { drawBackdrop(background, bound, checkerPx) }
+                .drawBehind { drawBackdrop(background, boundLeft, boundTop, boundSide, checkerPx) }
                 // **Two detectors, not one.** They live in separate `pointerInput` nodes so neither has to implement
                 // the other: a transform gesture must cross touch slop before it consumes, so a tap reaches its own
                 // detector untouched, and a drag is never mistaken for a dismissal.
@@ -140,14 +154,33 @@ fun StudioCanvas(
                 },
         )
 
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(bound.left.roundToInt(), bound.top.roundToInt()) }
-                .size(with(density) { bound.side.toDp() })
-                // The bound's whole job beyond holding the icon: overflow vanishes here as it would in the bake.
-                .clipToBounds(),
-        ) {
-            content()
+        // **A `Layout` reporting the canvas's size, with the icon measured square inside it** — which is the third
+        // and final shape this took, and the only one that survives a zoom past the canvas.
+        //
+        // `Modifier.size` coerced into the incoming constraints, so a bound wider than the canvas came back as the
+        // canvas's width *and* the canvas's height: not a square at all. `requiredSize` and then fixed `Constraints`
+        // made the icon's own measurement exact — and the node was still **reported** larger than its parent, which
+        // is what left the width clamped to the canvas while the height went through. Measured on device: at a 3x
+        // zoom the checkerboard drew 2262 wide and the icon 1216, the canvas's own width, centred in it.
+        //
+        // Reporting the canvas's size ends that question rather than answering it: nothing upstream ever sees an
+        // oversized child, so nothing has cause to clamp one. The icon is measured at exactly [boundSide] square and
+        // *placed* at the bound's corner, overflowing into the clip below — which is what a zoomed icon is.
+        Layout(
+            content = { content() },
+            // The bound's whole job beyond holding the icon: overflow vanishes here as it would in the bake.
+            modifier = Modifier.clipToBounds(),
+        ) { measurables, constraints ->
+            // **Every child, and none is legal.** The caller emits nothing at all until the icon has been parsed —
+            // `first()` here crashed on the frames before that with `NoSuchElementException`, which is the one way a
+            // hand-written `Layout` is more dangerous than the `Box` it replaced.
+            val square = Constraints.fixed(boundSide, boundSide)
+            val placeables = measurables.map { it.measure(square) }
+            // The canvas's own size, so nothing upstream ever sees an oversized child. Unbounded constraints have no
+            // size to report, so the bound's own is the only honest answer there.
+            val width = if (constraints.hasBoundedWidth) constraints.maxWidth else boundSide
+            val height = if (constraints.hasBoundedHeight) constraints.maxHeight else boundSide
+            layout(width, height) { placeables.forEach { it.place(boundLeft, boundTop) } }
         }
     }
 }
@@ -160,14 +193,22 @@ fun StudioCanvas(
  * transparency *and* how its silhouette reads against a dark or light surround at the same time, which is the pair
  * of questions actually being asked while shaping a layer.
  *
- * **[bound] is given rather than derived.** It used to be recomputed here from the same constants the layout used, on
+ * **The bound arrives as three integers rather than as a [StudioIconBound], and that is the point.** The icon is
+ * *laid out* in the same rectangle this paints, and while the two took the same floats by different routes — one
+ * rounding per edge, the other through Dp — they could and did come out as different rectangles. Whole pixels,
+ * computed once at the call site, are what makes "the checkerboard marks the icon's square" true rather than
+ * approximately true.
+ *
+ * **It is given rather than derived.** It used to be recomputed here from the same constants the layout used, on
  * the argument that two derivations from one node's size are certain to agree. That stopped being true the moment the
  * bound depended on a viewport the user could move: the checkerboard would have gone on marking where the icon *used*
  * to be. One derivation, two readers.
  */
 private fun DrawScope.drawBackdrop(
     background: PreviewBackground,
-    bound: StudioIconBound,
+    boundLeft: Int,
+    boundTop: Int,
+    boundSide: Int,
     checkerPx: Float,
 ) {
     val base = when (background) {
@@ -182,7 +223,11 @@ private fun DrawScope.drawBackdrop(
     }
     if (!background.checkersInsideBound) return
 
-    drawCheckerboard(Offset(bound.left, bound.top), Size(bound.side, bound.side), checkerPx)
+    drawCheckerboard(
+        Offset(boundLeft.toFloat(), boundTop.toFloat()),
+        Size(boundSide.toFloat(), boundSide.toFloat()),
+        checkerPx,
+    )
 }
 
 /**

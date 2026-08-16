@@ -49,10 +49,21 @@ private const val CenterKeep = 0f
  * How far the preview may be zoomed.
  *
  * The floor is short of the resting size rather than tiny — below about a half the icon is smaller than the layer
- * tiles that show the same thing, so there is nothing down there to see. The ceiling is where a phone's bound fills
- * the screen several times over, which is what inspecting one layer's edge actually wants.
+ * tiles that show the same thing, so there is nothing down there to see.
+ *
+ * **The ceiling is where the icon is about twice the canvas's shorter side**, which is a real inspection zoom — a
+ * layer's edge fills the screen — and is as far as it is worth going. It was **4**, where the bound is two and a
+ * half canvases across, and two things went wrong there at once. The lesser: crossing a picture that wide is a lot
+ * of panning for a 48dp icon. The greater: an icon on the baked path is rendered as a whole square and never as
+ * the visible crop, so past a point the preview is a small bitmap stretched a long way — at 4 it was a fivefold
+ * upscale, and what a user sees at maximum zoom is *less* detail than at half of it, which is the opposite of what
+ * a zoom is for.
+ *
+ * So the two ends were moved toward each other rather than either being pushed: this, and `MaxPreviewPx` one module
+ * over. Both are one-line changes and neither is a threshold — if the ceiling should be higher, the cap is what has
+ * to pay for it.
  */
-internal val StudioZoomRange = 0.5f..4f
+internal val StudioZoomRange = 0.5f..3f
 
 /**
  * The icon's bound, resolved from the canvas's size, the chrome above it and the user's [workspace].
@@ -79,15 +90,17 @@ internal fun studioIconBound(
 ): StudioIconBound {
     val side = restingSide(canvasWidth, canvasHeight) * workspace.zoom
     val center = restingCenter(canvasWidth, canvasHeight, topInset)
-    val centerX = (center.first + workspace.panX * canvasWidth).coerceIn(
-        -CenterKeep * canvasWidth,
-        canvasWidth + CenterKeep * canvasWidth,
+    // **Clamped through the same [panBound] the gesture writes through**, rather than through a second expression
+    // saying the same thing. They were two, agreeing because both said "keep the centre on the canvas"; the moment
+    // that rule gained a second regime, two copies of it would have been two chances to disagree about where a
+    // zoomed icon may sit — and the disagreement would show as an icon that snaps somewhere the drag cannot reach.
+    val panX = workspace.panX.coerceIn(panBound(center.first, canvasWidth, side))
+    val panY = workspace.panY.coerceIn(panBound(center.second, canvasHeight, side))
+    return StudioIconBound(
+        left = center.first + panX * canvasWidth - side / 2f,
+        top = center.second + panY * canvasHeight - side / 2f,
+        side = side,
     )
-    val centerY = (center.second + workspace.panY * canvasHeight).coerceIn(
-        -CenterKeep * canvasHeight,
-        canvasHeight + CenterKeep * canvasHeight,
-    )
-    return StudioIconBound(left = centerX - side / 2f, top = centerY - side / 2f, side = side)
 }
 
 /**
@@ -140,9 +153,13 @@ internal fun IconStudioWorkspace.pinched(
     val zoomedX = centroidX + (centerX - centroidX) * ratio + dragX
     val zoomedY = centroidY + (centerY - centroidY) * ratio + dragY
 
+    // **The bound at the zoom this frame lands on, not the one it started at** — the clamp's regime depends on
+    // whether the icon covers the canvas, so a pinch that grows past it has to be bounded by what it grew into.
+    val side = restingSide(canvasWidth, canvasHeight) * newZoom
+
     return copy(
-        panX = ((zoomedX - resting.first) / canvasWidth).coerceIn(panBound(resting.first, canvasWidth)),
-        panY = ((zoomedY - resting.second) / canvasHeight).coerceIn(panBound(resting.second, canvasHeight)),
+        panX = ((zoomedX - resting.first) / canvasWidth).coerceIn(panBound(resting.first, canvasWidth, side)),
+        panY = ((zoomedY - resting.second) / canvasHeight).coerceIn(panBound(resting.second, canvasHeight, side)),
         zoom = newZoom,
     )
 }
@@ -242,16 +259,39 @@ private fun clampedRailOffset(resting: Float, offset: Float, canvasExtent: Float
     (resting + offset).coerceIn(0f, (canvasExtent - railExtent).coerceAtLeast(0f)) - resting
 
 /**
- * The range a pan fraction may take on one axis, so the bound's center lands within the canvas.
+ * The range a pan fraction may take on one axis — **two regimes, decided by whether the icon is larger than the
+ * canvas**.
  *
- * Expressed as bounds on the *pan* rather than on the center because the pan is what is stored, and clamping the
- * stored value is what stops a drag banking travel it will not spend. [CenterKeep] widens both ends by the same amount
- * if the center is ever allowed off the canvas.
+ * **Smaller than the canvas: keep the centre on it.** The clamp's whole job there is that the icon cannot be lost —
+ * at worst a quarter of it sits in a corner and there is always something under the finger to drag back, which is
+ * what lets this screen ship with no "reset view" button.
+ *
+ * **Larger than the canvas: keep the canvas inside the *icon*.** That is the opposite bound and it has to be,
+ * because "the centre stays on the canvas" silently becomes a cage the moment the icon outgrows it: at a 4× zoom
+ * the bound is two and a half canvases wide, so reaching its right-hand edge needs a centre well off the left of
+ * the canvas — which the old rule refused. What a user got was an icon they had zoomed into and could not travel
+ * across, stopping a fraction of the way over. This is the ordinary photo-viewer rule and it does the ordinary
+ * thing: every part of a zoomed icon is reachable, and no part of the canvas ever shows blank beside it.
+ *
+ * The two ranges meet where the icon exactly covers the canvas, and the crossing is where the icon settles into
+ * covering it — the same small snap every viewer makes when content grows past fit.
+ *
+ * Expressed as bounds on the *pan* rather than on the centre because the pan is what is stored, and clamping the
+ * stored value is what stops a drag banking travel it will not spend. [CenterKeep] widens the small-icon regime at
+ * both ends if the centre is ever allowed off the canvas.
+ *
+ * @param resting where the bound's centre sits on this axis with nothing panned.
+ * @param extent the canvas on this axis.
+ * @param side the bound's side **at the current zoom**, which is what decides the regime.
  */
-private fun panBound(resting: Float, extent: Float): ClosedFloatingPointRange<Float> {
-    val low = (-CenterKeep * extent - resting) / extent
-    val high = (extent + CenterKeep * extent - resting) / extent
-    return low..high
+private fun panBound(resting: Float, extent: Float, side: Float): ClosedFloatingPointRange<Float> {
+    val (low, high) = if (side >= extent) {
+        // The canvas stays within the icon: its far edge no closer than the canvas's, its near edge no further.
+        (extent - side / 2f) to (side / 2f)
+    } else {
+        (-CenterKeep * extent) to (extent + CenterKeep * extent)
+    }
+    return ((low - resting) / extent)..((high - resting) / extent)
 }
 
 /** The bound's side at zoom 1 — a square on the canvas's shorter dimension, so it fits either way up. */
