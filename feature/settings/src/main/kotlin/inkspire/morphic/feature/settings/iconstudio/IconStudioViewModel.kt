@@ -7,8 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
@@ -348,6 +350,48 @@ class IconStudioViewModel(
                 current.withEditing(current.editing.copy(layers = layers))
             }
         }
+    }
+
+    /**
+     * Puts [shape] on whichever silhouette the target owns — the selected layer's, or the whole icon's.
+     *
+     * **One command for both, dispatched on the target, exactly as [updateEffects] is**, and for the same reason: the
+     * chooser behind it is the same grid either way, so a caller that had to pick which write it meant would be
+     * re-deciding what the rail already settled.
+     *
+     * **Picking a shape turns the layer's anchor to [ContentAnchor.CONTENT], which is a real behavior change and not
+     * a default.** Cutting against the box is what a *plate* wants — a fixed silhouette with the artwork sliding
+     * under it — but that is not what someone reaching for this section is usually after: they want the icon they
+     * can see trimmed to that outline, and against the box an app whose artwork sits small and off-center is cropped
+     * by a shape that never touches it, which reads as the control being broken. So the useful anchor is the one a
+     * pick lands on, and the switch beneath is how the plate reading is asked for. The model's default stays
+     * [ContentAnchor.BOX], because that is what a spec carrying *no* shape means and what every stored recipe was
+     * written against.
+     *
+     * Nothing for the composite to anchor — it has neither ink nor a transform — so that arm writes the shape alone.
+     * See `IconLayerSet.shape`.
+     *
+     * Discrete, so it records history at once, the shape [toggleSelectedVisible] and [pickPack] take.
+     */
+    fun pickShape(shape: IconShape?) {
+        _state.update { current ->
+            when (val target = current.target) {
+                StudioTarget.Composite -> current.withEditing(current.editing.copy(shape = shape))
+
+                is StudioTarget.Layer -> {
+                    val layers = current.editing.layers.toMutableList()
+                    val spec = layers.getOrNull(target.index) ?: return@update current
+                    layers[target.index] = spec.copy(
+                        shape = shape,
+                        // Left alone when the shape is cleared: there is nothing to anchor, so writing here would
+                        // only be forgetting what to return to if a shape is picked again.
+                        shapeAnchor = if (shape != null) ContentAnchor.CONTENT else spec.shapeAnchor,
+                    )
+                    current.withEditing(current.editing.copy(layers = layers))
+                }
+            }
+        }
+        commitEdit()
     }
 
     /**

@@ -22,16 +22,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * it — then the library and the leftovers. A tool rail read left to right is a reasonable first guess at a workflow, so
  * it may as well be the right one.
  *
- * **Every value except [MORE] and [PRESETS] acts on the *selected layer*, and the stack itself is no longer one of
- * them.** It was `LAYERS`, first on the bar; it is now the always-visible rail down the canvas edge
+ * **Every value except [MORE] and [PRESETS] acts on whatever the rail has selected, and the stack itself is no longer
+ * one of them.** It was `LAYERS`, first on the bar; it is now the always-visible rail down the canvas edge
  * (`StudioLayerRail`), which is where "which layer am I editing?" is answered by looking rather than by opening a
  * panel. Once the rail also reordered, hid and deleted, the entry's only remaining job was *add* — and an entry that
  * is one button is not an entry, it is a button, and it belongs where the layers are.
  *
- * That is also the same shape L1's studio never settled — it mixed per-layer tools and whole-icon tools in one flat
- * row and left the split as an open question in its own plan. Here there is nothing whole-icon left to mix in: the
- * tile shape became a per-layer shape, the background became the background layer's source, theming became a
- * foreground source, and sizing lives in `data:settings` and another screen entirely.
+ * L1's studio mixed per-layer tools and whole-icon tools in one flat row and left the split as an open question in
+ * its own plan. **The answer here is that the scope is a selection rather than a mode**: the rail says what is being
+ * edited, this bar shows what that thing can be asked (see [appliesTo]), and a tool that means something for both
+ * simply means something for both. So Shape and Effects serve a layer or the whole icon with no second vocabulary,
+ * while the rest of L1's whole-icon row went elsewhere entirely — the background is the background layer's source,
+ * theming is a foreground source, and sizing lives in `data:settings` and another screen.
  */
 enum class StudioTool(val label: String, val icon: ImageVector) {
 
@@ -47,7 +49,13 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
     /** Position, zoom and rotation. */
     TRANSFORM("Transform", Icons.Default.OpenWith),
 
-    /** The layer's silhouette: unshaped, or one of the vector-backed `IconShapes`. */
+    /**
+     * A silhouette: unshaped, or one of the vector-backed `IconShapes` — the selected layer's, or the whole icon's.
+     *
+     * The two are not the same picture, which is why the composite has one of its own rather than the section being
+     * a shortcut for setting the layers': a per-layer mask trims each layer *before* it joins the stack, so a bloom
+     * or a blend that reaches past that layer's own silhouette escapes it. Cut against the composite, nothing does.
+     */
     SHAPE("Shape", Icons.Default.Hexagon),
 
     /**
@@ -95,13 +103,14 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
      * left showing a header with no controls under it. One question, asked in both places, so the bar and the panel
      * cannot disagree about what the selection offers.
      *
-     * [SOURCE], [TRANSFORM] and [SHAPE] are a *layer's*: the composite has no source (it is what the layers make),
-     * no transform of its own, and no stack-level mask. [EFFECTS] is the one that applies to both, which is the whole
-     * point of the composite existing. [PRESETS] and [MORE] were never per-layer — they act on the whole recipe — so
-     * they stay, and the composite keeps three entries rather than one.
+     * [SOURCE] and [TRANSFORM] are a *layer's*: the composite has no source (it is what the layers make) and no
+     * transform of its own. [EFFECTS] applies to both, which is the whole point of the composite existing, and
+     * **[SHAPE] now does too** — `IconLayerSet.shape` is a real stack-level mask, and it is what makes "put every
+     * icon in a squircle" one control instead of the same shape set on each layer in turn. [PRESETS] and [MORE] were
+     * never per-layer — they act on the whole recipe — so the composite keeps four entries.
      */
     fun appliesTo(target: StudioTarget): Boolean = when (this) {
-        SOURCE, TRANSFORM, SHAPE -> target is StudioTarget.Layer
-        EFFECTS, PRESETS, MORE -> true
+        SOURCE, TRANSFORM -> target is StudioTarget.Layer
+        SHAPE, EFFECTS, PRESETS, MORE -> true
     }
 }

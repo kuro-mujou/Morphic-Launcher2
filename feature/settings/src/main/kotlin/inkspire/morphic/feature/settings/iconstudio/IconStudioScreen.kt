@@ -175,6 +175,7 @@ fun IconStudioScreen(
         StudioActions(
             selectTarget = viewModel::selectTarget,
             updateEffects = viewModel::updateEffects,
+            pickShape = viewModel::pickShape,
             update = viewModel::updateSelected,
             commit = viewModel::commitEdit,
             toggleVisible = viewModel::toggleSelectedVisible,

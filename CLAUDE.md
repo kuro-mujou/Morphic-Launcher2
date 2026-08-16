@@ -269,13 +269,21 @@ enforces. Per layer:
   circle is how a colored disc goes behind a legacy icon.)* A shape is **backed by a vector drawable** (prepared
   as a resource) and referenced by a stable id; the clip mask is built from that drawable's silhouette, so adding
   a shape = drop in a drawable, no path math in code.
-  - **A shape is cut against one of two frames, and `ContentAnchor` is which.** `BOX` (the default, and what the mask
+  - **A shape is cut against one of two frames, and `ContentAnchor` is which.** `BOX` (the model's default, and what
+    the mask
     always did) fills the icon's square and stays put, so the transform slides the *content* under a fixed
     silhouette — the plate reading. `CONTENT` fits the shape to the layer's **artwork** and hands it the layer's own
     transform, so it lands on the ink and zooms, rotates and moves with it — the trim reading, which the box frame
     could not express at all: artwork sitting small and off-center is cropped by a shape it does not touch. An enum
     rather than the `shapeFollowsArtwork` boolean it was asked for, on `SideZoneEdge`'s grounds — a mask is always
     anchored somewhere, so both states are real and neither is "off".
+  - **Picking a shape lands on `CONTENT`, and only the *model's* default is `BOX`.** The two are different questions
+    and were briefly answered by one value: a spec carrying no shape has to mean the box (it is what every stored
+    recipe was written against), but someone opening the Shape section wants the icon they can see trimmed to that
+    outline, and against the box an app whose artwork sits small and off-center is cropped by a silhouette that never
+    touches it — which reads as the control being broken rather than as a frame being wrong. So `pickShape` writes the
+    anchor with the shape, and the switch beneath is how the plate reading is asked for. Clearing the shape leaves the
+    anchor alone: there is nothing to anchor, so writing would only forget what to return to.
   - **The two are made to agree by going through the same matrix, not by matching arithmetic.** `ShapeMask` is a
     sixth shared derivation beside the five below, and a content-anchored silhouette is positioned *in the artwork's
     frame* and then carried by `LayerTransform` — the same one the content took — so it cannot drift off the ink
@@ -395,10 +403,10 @@ empty, `encodeDefaults = false`), and `IconId` already keys on the whole set, so
   one is an obvious tap, where discovering that effects can apply to everything is not. A *"this layer / whole icon"*
   switch inside the Effects panel was the alternative and is a second answer to a question the rail already answers —
   you would be editing the composite while the rail highlighted a layer.
-- **The bar shrinks with the selection, and three tools survive.** `StudioTool.appliesTo` — Source, Transform and Shape
-  are a *layer's* (the composite has no source, no transform of its own and no stack-level mask); Effects applies to
-  both, which is the point; Presets and More were never per-layer. So no "a bar of one is not a bar" special case was
-  needed.
+- **The bar shrinks with the selection, and four tools survive.** `StudioTool.appliesTo` — Source and Transform are a
+  *layer's* (the composite has no source and no transform of its own); Effects applies to both, which is the point;
+  **Shape does too**, since `IconLayerSet.shape` is a real stack-level mask; Presets and More were never per-layer. So
+  no "a bar of one is not a bar" special case was needed.
 - **Opacity and Blend drop from the grid for the composite, by the rule slice 1 already settled.** They describe how
   something *joins a stack* and the composite joins nothing — which is exactly `EffectSlice.ownsEffect`, the same
   predicate that decides which entries carry a switch. So a new effect is offered on both targets for free.
@@ -410,11 +418,31 @@ empty, `encodeDefaults = false`), and `IconId` already keys on the whole set, so
   members came off `IconLayerSpec`. Not tidying: "which of these draw?" has to have **one** answer for a layer and for
   the whole icon, and two holders with their own copies of the filter is a difference nobody would think to look for.
 - **The trap, and it is silent:** anything rebuilding the stack must `copy(layers = …)`, never `IconLayerSet(layers)` —
-  the constructor takes `effects` too, so a positional rebuild drops every whole-icon effect the moment a layer moves.
-  Pinned by a test.
+  the constructor takes `shape` and `effects` too, so a positional rebuild drops the whole icon's mask and every
+  whole-icon effect the moment a layer moves. Pinned by a test.
 - Rejected: a Photoshop-style **adjustment layer** at any height. The bake would manage it; the live path cannot sample
   its siblings without restructuring the whole stack into nesting, which is the two-renderer hazard at its worst. The
   composite is the one position that is cheap on both sides.
+
+**And the composite has a *shape* now — `IconLayerSet.shape`, the second thing that turned out to be per-icon rather
+than per-layer.** It is what makes "put every icon in a squircle" one control instead of the same shape set on each
+layer in turn, and the two are not the same picture: a per-layer mask trims each layer *before* it joins the stack, so
+a bloom or a blend reaching past that layer's own silhouette escapes it, where a stack mask catches everything. Same
+terms as the effects above — additive (defaulted null, `encodeDefaults = false`), keyed by `IconId` for free, run in
+**both** renderers as *mask then effects*, the per-layer order one scope out. Three things:
+- **No `ContentAnchor`, and that is the composite rather than a control left out.** An anchor chooses between the box
+  and *the layer's artwork carried by its transform*; the composite has neither measured ink nor a transform, which is
+  the same fact that already sends its content-anchored effects to `InkFit.Box`. So `ShapeControls` takes a nullable
+  anchor and the switch is simply absent — one section for both targets, because a duplicated shape grid is how two
+  shape lists end up disagreeing about which shapes exist.
+- **A layer tile drops it**, as it already drops the whole-icon effects, and here the reason is sharper than "it
+  obscures which layer this is": a stack mask trims every tile identically, so a custom layer sitting near a corner is
+  cropped to nothing and its tile goes blank — a layer nobody can see is one nobody can select, and the tile is the
+  only way to reach it. The layer's *own* shape stays, being what that layer genuinely looks like.
+- **`Modifier.shapeMask` stopped taking a `ResolvedLayer` and takes a shape plus a `matrixOf` lambda.** The composite
+  has no resolved layer to hand it and its matrix is always null (the box), so one masking node serves both rather
+  than a second one that could drift in how it applies the same silhouette. What each caller supplies is only
+  *where*, which stays `ShapeMask`'s answer.
 
 **`LayerEffect.Bloom` is what `Gradient` became, and it is one color fading out rather than two stops.** Light spilling
 across the layer, painted source-atop. The rename is the rule the rest of the grid follows — every other entry names a
@@ -770,7 +798,7 @@ app's context menu. Five things about it:
   which is all "live edit is non-negotiable" ever meant.
 - **There *is* a "this layer / whole icon" split now, and it is a tile in the rail rather than a scope toggle.** This
   used to say there was none, and that was right while every one of L1's six whole-icon tools had somewhere else to go:
-  the tile shape became a per-layer shape (there is still no stack-level mask), the background is the background
+  the tile shape became a per-layer shape *and* — since `IconLayerSet.shape` — a stack-level one, the background is the background
   layer's source, theming is `AppDefaultMonochrome`, sizing is `data:settings` and another screen, the skin is
   deferred, and a pack is a per-layer source. **Effects are the one that had nowhere to go** — see the whole-icon
   effects note above — so the composite became a selectable target, which is a different answer from L1's open question

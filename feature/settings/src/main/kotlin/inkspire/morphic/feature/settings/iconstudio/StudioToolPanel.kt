@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.data.settings.IconPreset
 
@@ -48,6 +49,8 @@ data class StudioActions(
     val update: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     /** Writes whichever effect list the target owns — the selected layer's, or the whole icon's. */
     val updateEffects: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    /** Writes whichever silhouette the target owns, on the same terms. See `IconStudioViewModel.pickShape`. */
+    val pickShape: (IconShape?) -> Unit,
     val commit: () -> Unit,
     val toggleVisible: () -> Unit,
     val move: (up: Boolean) -> Unit,
@@ -206,8 +209,28 @@ fun StudioToolPanel(
                     TransformControls(spec, actions.update, actions.commit)
                 }
 
-                StudioTool.SHAPE -> state.selectedLayer?.let { spec ->
-                    ShapeControls(spec, actions.update, actions.commit)
+                // **The second section both targets reach.** Read through `selectedLayer` rather than through a
+                // second nullable, so "a layer, or else the whole icon" is asked once — an `?:` here would fall
+                // through to the composite's shape for a *layer* that simply has none.
+                StudioTool.SHAPE -> when (val spec = state.selectedLayer) {
+                    null -> ShapeControls(
+                        shape = state.editing.shape,
+                        // No anchor on the composite — see `IconLayerSet.shape`. `update` is still handed over
+                        // rather than being made nullable: it is what the absent control would have driven, and on
+                        // the composite it is already a no-op, since there is no selected layer to transform.
+                        anchor = null,
+                        onPick = actions.pickShape,
+                        onUpdate = actions.update,
+                        onCommit = actions.commit,
+                    )
+
+                    else -> ShapeControls(
+                        shape = spec.shape,
+                        anchor = spec.shapeAnchor,
+                        onPick = actions.pickShape,
+                        onUpdate = actions.update,
+                        onCommit = actions.commit,
+                    )
                 }
 
                 // **The one section both targets reach**, which is what the composite exists for. The target is

@@ -643,9 +643,15 @@ private fun LayerTile(
     // job is *which layer is this?*, and a grain or a glow belonging to the icon rather than to the layer obscures
     // exactly that at 48dp — it would also drag every tile onto the baked path the moment one was added, for
     // something none of them are showing. The composite tile is where those are seen.
+    //
+    // **The whole-icon *shape* comes off for the first of those two reasons**, and it is the sharper case: a stack
+    // mask trims every tile identically, so a custom layer sitting near a corner is cropped to nothing and its tile
+    // goes blank — a layer the user cannot see is one they cannot find, and the tile is the only way to reach it.
+    // The layer's *own* shape stays, because that genuinely is what this layer looks like.
     val soloed = remember(state.editing, index) {
         state.editing.copy(
             layers = state.editing.layers.mapIndexed { i, layer -> layer.copy(visible = i == index) },
+            shape = null,
             effects = emptyList(),
         )
     }

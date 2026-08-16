@@ -1,5 +1,6 @@
 package inkspire.morphic.core.icon.compose
 
+import android.graphics.Matrix
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import inkspire.morphic.core.icon.render.ShapeMask
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 
@@ -134,7 +136,11 @@ fun IconLayerStack(
             // transform is the composited children and not whatever is behind the icon. The composite has no
             // transform and no measured ink, so anything anchored to content falls back to the box — the same
             // degrade an unmeasured layer takes, stated by passing no spec.
-            .layerEffects(layerSet.activeEffects, spec = null, inkFit = ShapeMask.InkFit.Box),
+            .layerEffects(layerSet.activeEffects, spec = null, inkFit = ShapeMask.InkFit.Box)
+            // **The set's own mask, inside those effects** — mask then effects, which is the per-layer order below
+            // and the bake's. No matrix, because the composite's only frame is the box: the same fact that sends its
+            // effects to `InkFit.Box` above.
+            .shapeMask(layerSet.shape),
     ) {
         layers.forEach { layer ->
             // Three nested nodes now, and the nesting is the whole trick. The composite (opacity / blend / color)
@@ -147,7 +153,7 @@ fun IconLayerStack(
                     .fillMaxSize()
                     .layerComposite(layer.spec)
                     .layerEffects(layer.spec.activeEffects, layer.spec, inkFit)
-                    .shapeMask(layer),
+                    .shapeMask(layer.spec.shape) { ShapeMask.matrixOf(layer.spec, layer.content, it) },
             ) {
                 Canvas(Modifier.fillMaxSize()) {
                     // **The shared matrix, not a `graphicsLayer`'s fields — and perspective is why.** Reading zoom,
@@ -516,13 +522,18 @@ fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
  * would look equivalent and is not: the content is drawn through the transform, so a rotation would turn the mask's
  * own buffer and its edges with it.
  *
- * Takes the whole [ResolvedLayer] rather than the shape, because a content-anchored mask is fitted to the ink of
- * the artwork this layer actually resolved to — the same correction that made normalization right for a themed
- * layer, and for the same reason: a layer's own content is the only honest thing to measure it against.
+ * **Two callers, which is why the position arrives as a lambda rather than as a [ResolvedLayer].** A *layer*'s mask
+ * is fitted to the ink of the artwork that layer actually resolved to — so it needs the spec and the content
+ * together — while the **composite**'s only frame is the box, and it has no content to be handed. Taking
+ * `matrixOf` keeps one masking node for both instead of a second one that could drift in how it applies the same
+ * silhouette; what each caller decides is only *where*, which stays [ShapeMask]'s answer.
+ *
+ * @param matrixOf where to draw the silhouette, given the node's pixel size — `null` meaning plainly at box size,
+ *   which is the composite always and a box-anchored layer.
  */
 @Composable
-private fun Modifier.shapeMask(layer: ResolvedLayer): Modifier {
-    val res = layer.spec.shape?.let { IconShapes.drawableResOrNull(it) } ?: return this
+private fun Modifier.shapeMask(shape: IconShape?, matrixOf: (sizePx: Int) -> Matrix? = { null }): Modifier {
+    val res = shape?.let { IconShapes.drawableResOrNull(it) } ?: return this
     val resource = LocalResources.current
     val maskDrawable = remember(res, resource) { resource.getDrawable(res, null) } ?: return this
 
@@ -539,7 +550,7 @@ private fun Modifier.shapeMask(layer: ResolvedLayer): Modifier {
                 // read the box the same way.
                 val sizePx = size.width.toInt()
                 maskDrawable.setBounds(0, 0, sizePx, sizePx)
-                val matrix = ShapeMask.matrixOf(layer.spec, layer.content, sizePx)
+                val matrix = matrixOf(sizePx)
                 val native = canvas.nativeCanvas
                 if (matrix == null) maskDrawable.draw(native)
                 else native.withMatrix(matrix) { maskDrawable.draw(this) }

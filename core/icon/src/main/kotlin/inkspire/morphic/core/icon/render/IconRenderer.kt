@@ -102,9 +102,12 @@ class IconRenderer(
             layerBitmap.recycle()
         }
 
-        // **The set's own effects, over the finished picture** — the same pipeline a layer's run through, which is
-        // the point of them being the same type. What the composite does not have is a transform or measured ink, so
-        // anything anchored to content falls back to the box, exactly as an unmeasured layer's does.
+        // **The set's own mask, then its own effects** — the same two steps in the same order a layer takes, which is
+        // what makes "shape the whole icon" mean what "shape this layer" means. Passing no matrix is the composite
+        // having no frame but the box: it has neither measured ink nor a transform, which is the same reason the
+        // effects below fall back to [ShapeMask.InkFit.Box] and [LayerTransform.Identity].
+        layerSet.shape?.let { applyShapeMask(canvas, it, sizePx, matrix = null) }
+
         return applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx)
     }
 

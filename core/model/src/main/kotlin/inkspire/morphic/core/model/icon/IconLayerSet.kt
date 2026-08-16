@@ -28,6 +28,20 @@ import kotlinx.serialization.Serializable
  *
  * Defaulted empty with `encodeDefaults = false`, so no stored recipe moved to gain it.
  *
+ * ## [shape] — the stack-level mask, and why it has no anchor
+ *
+ * The same [IconShape] a layer can carry, cut against the finished composite. It is what makes "put every icon in a
+ * squircle" one control rather than the same shape set on each layer in turn — and it is *not* the same picture as
+ * doing that, since a per-layer mask trims each layer before it joins the stack, so a blend or a bloom that reaches
+ * past a layer's own silhouette escapes the shape.
+ *
+ * **No [IconLayerSpec.shapeAnchor] here, and that is a property of the composite rather than a control left out.**
+ * An anchor chooses between the box and the layer's own *artwork carried by its transform* — the composite has
+ * neither measured ink nor a transform, which is exactly why [effects] anchored to content already fall back to the
+ * box in both renderers. Offering the switch would be offering a choice with one reachable answer.
+ *
+ * Additive on the same terms as [effects]: defaulted null, `encodeDefaults = false`.
+ *
  * ## Why the recipe lives in `core:model` and not beside the renderer
  *
  * This whole package is an icon's **recipe** — pure data describing what an icon should look like — while
@@ -43,6 +57,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class IconLayerSet(
     val layers: List<IconLayerSpec>,
+    val shape: IconShape? = null,
     val effects: List<LayerEffect> = emptyList(),
 ) {
 
@@ -102,9 +117,9 @@ data class IconLayerSet(
         reordered[j] = layers[i]
         // A swap never changes the role counts, so only the fg-above-bg order can be violated.
         //
-        // `copy` rather than the constructor, and that is not a style choice: the constructor takes [effects] too, so
-        // rebuilding positionally would silently drop the whole icon's effects every time a layer moved. Anything
-        // else assembling a new layer list must do the same.
+        // `copy` rather than the constructor, and that is not a style choice: the constructor takes [shape] and
+        // [effects] too, so rebuilding positionally would silently drop the whole icon's mask and effects every time
+        // a layer moved. Anything else assembling a new layer list must do the same.
         return if (foregroundAboveBackground(reordered)) copy(layers = reordered) else this
     }
 

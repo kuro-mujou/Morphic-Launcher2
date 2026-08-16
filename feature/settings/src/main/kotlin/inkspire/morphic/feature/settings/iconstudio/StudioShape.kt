@@ -36,12 +36,17 @@ import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.ContentAnchor
 
 /**
- * The layer's silhouette.
+ * The selected thing's silhouette — a layer's, or the whole icon's.
  *
  * **Offered on every layer, including custom ones**, which differs from L1: it shaped only the foreground and left
  * custom images to their own alpha. The renderer here masks whatever it is given, so the restriction would be one
  * the UI invented — and a shaped custom layer is an obviously useful thing (a color fill trimmed to a circle is
  * how you put a colored disc behind a legacy icon).
+ *
+ * **One section for both targets, not two**, which is what the composite being a *selection* rather than a mode
+ * buys: the chooser is the same grid of the same silhouettes, and the only difference is that the composite has no
+ * anchor to offer. That is stated by [anchor] being null rather than by a second composable — a duplicated grid is
+ * how two shape lists end up disagreeing about which shapes exist.
  *
  * **A shape is shown, not named.** This was a grid of text chips, which asks the user to read "rounded_square" and
  * picture it — for the one control on this screen whose entire subject is what something looks like. Every other
@@ -61,23 +66,22 @@ import inkspire.morphic.core.model.icon.ContentAnchor
  * chosen, because with no shape there is nothing to anchor and the studio's rule is that a control which changes
  * nothing is worse than a missing one — the same gate `TintMode`'s control sits behind in Effects. It is the
  * studio's first [MorphicSwitchRow], and the first switch in the launcher at all.
+ *
+ * **A pick arrives already fitted to the artwork**, so the switch is on when this opens after one — see
+ * `IconStudioViewModel.pickShape` for why that is the useful landing and the box is the thing to ask for.
+ *
+ * @param shape the silhouette in force, or null for none — the first tile in the grid rather than a state outside it.
+ * @param anchor what that silhouette is cut against, or **null when the target has no anchor at all**, which is the
+ *   composite: it has neither measured ink nor a transform, so the box is its only frame.
  */
 @Composable
 internal fun ShapeControls(
-    spec: IconLayerSpec,
+    shape: IconShape?,
+    anchor: ContentAnchor?,
+    onPick: (IconShape?) -> Unit,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
-    // Both edits here are discrete — a tile press, a switch flip — so each records at once and undo steps over it,
-    // the rule every source tile already follows. This section had no `onCommit` at all until now, which did not
-    // look like a bug because the *preview* was always right: the live path deliberately records nothing, so a
-    // shape change showed up on the icon immediately and then was invisible to undo, which stepped straight past
-    // it to whatever was edited before.
-    fun edit(transform: (IconLayerSpec) -> IconLayerSpec) {
-        onUpdate(transform)
-        onCommit()
-    }
-
     // **`null` is the first cell rather than a row above the grid.** "No shape" is a choice among the same set — the
     // one every layer starts on — so it belongs in the set, and a full-width row above a grid is exactly the
     // settings-list vocabulary this screen exists not to be.
@@ -109,11 +113,10 @@ internal fun ShapeControls(
                     pageSpacing = 8.dp,
                     modifier = Modifier.height(pageHeight),
                 ) { page ->
-                    ShapePage(
-                        shapes = pages[page],
-                        selected = spec.shape,
-                        onSelect = { shape -> edit { it.copy(shape = shape) } },
-                    )
+                    // **The pick is a command, not a `copy`.** It writes whichever silhouette the target owns and
+                    // records its own history — both of which are decisions about the *recipe* rather than about
+                    // this grid, and neither of which this section could make for the composite at all.
+                    ShapePage(shapes = pages[page], selected = shape, onSelect = onPick)
                 }
             }
 
@@ -121,8 +124,10 @@ internal fun ShapeControls(
             if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
         }
 
-        // Nothing to anchor without a shape, so the control is absent rather than disabled — the same rule the
-        // monochrome row, the pack-browse row and the tint-style control are each gated by.
+        // Nothing to anchor without a shape — and nothing to anchor *to* on the composite — so the control is absent
+        // rather than disabled, the same rule the monochrome row, the pack-browse row and the tint-style control are
+        // each gated by. Two conditions rather than one because they are two different facts: the first is about
+        // what the user has picked, the second about what the target can express at all.
         //
         // **A switch and not a pair of chips, even though the model behind it is an enum.** The two anchors are
         // genuinely two frames, which is why `ContentAnchor` names both rather than being a boolean — but what the
@@ -130,7 +135,7 @@ internal fun ShapeControls(
         // before this existed. The model keeps illegal states unrepresentable; the control says what is being asked
         // for. `MorphicSwitch` reads correctly here because the studio is a fixed-dark theme zone (see
         // `IconStudioScreen`), so the design system's colors are the dark ones whatever the system is set to.
-        if (spec.shape != null) {
+        if (shape != null && anchor != null) {
             MorphicSwitchRow(
                 label = "Fit to artwork",
                 // **State-dependent, which is unusual for a switch and earns it here.** The difference is invisible
@@ -138,10 +143,15 @@ internal fun ShapeControls(
                 // where the two frames provably coincide. A static description would leave the control looking
                 // broken on exactly the icons someone tries it on first; saying what the current setting does
                 // instead tells them which of the two they are looking at.
-                supportingText = spec.shapeAnchor.hint,
-                checked = spec.shapeAnchor == ContentAnchor.CONTENT,
+                supportingText = anchor.hint,
+                checked = anchor == ContentAnchor.CONTENT,
+                // Discrete, like every other press in this section, so it records at once and undo steps over it.
+                // The section had no `onCommit` at all until this control arrived, which did not look like a bug
+                // because the *preview* was always right: the live path deliberately records nothing, so a change
+                // showed on the icon immediately and was then invisible to undo.
                 onCheckedChange = { on ->
-                    edit { it.copy(shapeAnchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX) }
+                    onUpdate { it.copy(shapeAnchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX) }
+                    onCommit()
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
