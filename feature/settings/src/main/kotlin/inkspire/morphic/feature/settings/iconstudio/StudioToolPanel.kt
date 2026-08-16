@@ -51,6 +51,8 @@ data class StudioActions(
     val updateEffects: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     /** Writes whichever silhouette the target owns, on the same terms. See `IconStudioViewModel.pickShape`. */
     val pickShape: (IconShape?) -> Unit,
+    /** Points whichever thing the target names, on the same terms. See `IconStudioViewModel.setOrientation`. */
+    val setOrientation: (rotation: Float, tiltX: Float, tiltY: Float) -> Unit,
     val commit: () -> Unit,
     val toggleVisible: () -> Unit,
     val move: (up: Boolean) -> Unit,
@@ -205,8 +207,19 @@ fun StudioToolPanel(
                     )
                 }
 
-                StudioTool.TRANSFORM -> state.selectedLayer?.let { spec ->
-                    TransformControls(spec, actions.update, actions.commit)
+                // **The third section both targets reach, and the one that reaches them unequally**: the whole icon
+                // has the angles and neither of the two values that place it, so it gets a panel of its own rather
+                // than the layer's with controls disabled. See `CompositeTransformControls`.
+                StudioTool.TRANSFORM -> when (val spec = state.selectedLayer) {
+                    null -> CompositeTransformControls(
+                        rotation = state.editing.rotation,
+                        tiltX = state.editing.tiltX,
+                        tiltY = state.editing.tiltY,
+                        onOrientation = actions.setOrientation,
+                        onCommit = actions.commit,
+                    )
+
+                    else -> TransformControls(spec, actions.setOrientation, actions.update, actions.commit)
                 }
 
                 // **The second section both targets reach.** Read through `selectedLayer` rather than through a

@@ -4,7 +4,8 @@ import androidx.compose.runtime.Composable
 import inkspire.morphic.core.model.icon.IconLayerSpec
 
 /**
- * Position, zoom, rotation and tilt.
+ * A layer's position, zoom, rotation and tilt. The whole icon's is [CompositeTransformControls], which is the two
+ * angles alone.
  *
  * **Tilt is here rather than in Effects, and that is the model's call rather than this panel's.** Leaning a layer out
  * of the plane says *where the layer sits*, which is what every other control on this panel does — so it is two more
@@ -38,6 +39,7 @@ import inkspire.morphic.core.model.icon.IconLayerSpec
 @Composable
 internal fun TransformControls(
     spec: IconLayerSpec,
+    onOrientation: (rotation: Float, tiltX: Float, tiltY: Float) -> Unit,
     onUpdate: ((IconLayerSpec) -> IconLayerSpec) -> Unit,
     onCommit: () -> Unit,
 ) {
@@ -60,41 +62,99 @@ internal fun TransformControls(
         format = { "%.2f×".format(it) },
     )
 
+    OrientationSliders(
+        rotation = spec.rotation,
+        tiltX = spec.tiltX,
+        tiltY = spec.tiltY,
+        onOrientation = onOrientation,
+        onCommit = onCommit,
+    )
+}
+
+/**
+ * The whole icon's transform, which is where it faces and nothing else.
+ *
+ * **Position and Zoom are absent because they are not the composite's**, not because this panel is a reduced copy of
+ * the layer one — the reasons are in `IconLayerSet.rotation`, and they are of two kinds: an offset can only slide
+ * the icon *out* of the one square there is, and a zoom is already the icon-size setting, which every surface
+ * applies for itself. So this is the studio's rule that a control changing nothing is worse than a missing one,
+ * applied to two at once.
+ *
+ * The angles are [OrientationSliders], the same three controls the layer panel shows — one definition, so the
+ * ranges, the step and which axis each name refers to cannot come to differ between the two scopes.
+ */
+@Composable
+internal fun CompositeTransformControls(
+    rotation: Float,
+    tiltX: Float,
+    tiltY: Float,
+    onOrientation: (rotation: Float, tiltX: Float, tiltY: Float) -> Unit,
+    onCommit: () -> Unit,
+) {
+    OrientationSliders(
+        rotation = rotation,
+        tiltX = tiltX,
+        tiltY = tiltY,
+        onOrientation = onOrientation,
+        onCommit = onCommit,
+    )
+}
+
+/**
+ * Which way something faces: turned in the plane, and leaned out of it about each axis.
+ *
+ * **The three are one block because they are one question**, which is the same argument `IconLayerSpec.tiltX` makes
+ * for keeping a tilt beside a rotation rather than making it an effect — and it is what lets both scopes show the
+ * identical group, since these are exactly the values the composite has too.
+ *
+ * **Sliders and no 2D pad for the tilts, unlike Position** — the two are not a point. A pad's knob says "the thing
+ * is *here*", which is true of an offset and meaningless of a pair of angles; and unlike the offsets these two are
+ * usually wanted one at a time, since a lean about both axes at once reads as a mistake rather than as depth.
+ *
+ * The tilts are named for the axis each turns *around*, which is `Camera.rotateX`'s convention and Compose's — so
+ * Tilt X leans the top away and Tilt Y leans the left away. See `IconLayerSpec.tiltX`.
+ *
+ * **All three values go out together on every change**, which is what lets one command serve a layer and the whole
+ * icon: the writer is target-dispatched (`IconStudioViewModel.setOrientation`) and never has to merge a partial
+ * update into whichever of the two holders it landed on.
+ */
+@Composable
+private fun OrientationSliders(
+    rotation: Float,
+    tiltX: Float,
+    tiltY: Float,
+    onOrientation: (rotation: Float, tiltX: Float, tiltY: Float) -> Unit,
+    onCommit: () -> Unit,
+) {
     SliderControl(
         label = "Rotation",
-        value = spec.rotation,
+        value = rotation,
         valueRange = RotationRange,
         step = AngleStep,
         default = AngleDefault,
-        onValueChange = { value -> onUpdate { it.copy(rotation = value) } },
+        onValueChange = { value -> onOrientation(value, tiltX, tiltY) },
         onValueChangeFinished = onCommit,
         format = { "%.0f°".format(it) },
     )
 
-    // **Two sliders and no 2D pad, unlike Position** — the two tilts are not a point. A pad's knob says "the thing is
-    // *here*", which is true of an offset and meaningless of a pair of angles; and unlike the offsets these two are
-    // usually wanted one at a time, since a lean about both axes at once reads as a mistake rather than as depth.
-    //
-    // Named for the axis each turns *around*, which is `Camera.rotateX`'s convention and Compose's — so Tilt X leans
-    // the top away and Tilt Y leans the left away. See `IconLayerSpec.tiltX`.
     SliderControl(
         label = "Tilt X",
-        value = spec.tiltX,
+        value = tiltX,
         valueRange = TiltRange,
         step = AngleStep,
         default = AngleDefault,
-        onValueChange = { value -> onUpdate { it.copy(tiltX = value) } },
+        onValueChange = { value -> onOrientation(rotation, value, tiltY) },
         onValueChangeFinished = onCommit,
         format = { "%.0f°".format(it) },
     )
 
     SliderControl(
         label = "Tilt Y",
-        value = spec.tiltY,
+        value = tiltY,
         valueRange = TiltRange,
         step = AngleStep,
         default = AngleDefault,
-        onValueChange = { value -> onUpdate { it.copy(tiltY = value) } },
+        onValueChange = { value -> onOrientation(rotation, tiltX, value) },
         onValueChangeFinished = onCommit,
         format = { "%.0f°".format(it) },
     )

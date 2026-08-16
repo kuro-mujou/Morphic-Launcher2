@@ -140,7 +140,11 @@ fun IconLayerStack(
             // **The set's own mask, inside those effects** — mask then effects, which is the per-layer order below
             // and the bake's. No matrix, because the composite's only frame is the box: the same fact that sends its
             // effects to `InkFit.Box` above.
-            .shapeMask(layerSet.shape),
+            .shapeMask(layerSet.shape)
+            // **The whole icon's angles, innermost, so the mask and the effects sit outside them** — a turned or
+            // leaning icon slides under a silhouette that stays put, which is what a box-anchored mask means one
+            // scope down, and is exactly the look a fixed icon shape is for.
+            .compositeTransform(layerSet),
     ) {
         layers.forEach { layer ->
             // Three nested nodes now, and the nesting is the whole trick. The composite (opacity / blend / color)
@@ -175,6 +179,44 @@ fun IconLayerStack(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Turns and leans the finished stack — the live twin of the matrix the bake puts on its canvas before drawing the
+ * layers into it.
+ *
+ * **The same matrix, from the same place**, which is the whole reason [LayerTransform] took an `IconLayerSet`
+ * overload rather than each path configuring a camera of its own: `graphicsLayer.cameraDistance` and
+ * `android.graphics.Camera`'s z are not in the same units, so two implementations that looked equivalent would
+ * foreshorten differently — the one difference this file exists to prevent, since the editor cannot show it to you.
+ *
+ * Concatenated onto the native canvas rather than expressed as a `graphicsLayer`, for exactly that reason, and
+ * applied around `drawContent()` so what it carries is every layer at once. An unturned set — every icon nobody has
+ * angled — gets no modifier at all.
+ *
+ * **Gated on the whole transform being identity, not on [LayerTransform.isTilted]**: the composite has an in-plane
+ * rotation as well now, and a tilt test would skip the matrix for an icon that is only turned — which draws it
+ * upright with nothing to say it went wrong.
+ */
+@Composable
+private fun Modifier.compositeTransform(layerSet: IconLayerSet): Modifier {
+    val transform = LayerTransform.of(layerSet)
+    if (transform.isIdentity) return this
+
+    return this.drawWithContent {
+        // Held because `drawIntoCanvas` hands its block a `Canvas`, not this scope — the same shape the Extrude
+        // effect's own re-draws take.
+        val scope = this
+        // Square, from the width, like every other size read in this file.
+        val matrix = transform.toMatrix(size.width.toInt())
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            val depth = native.save()
+            native.concat(matrix)
+            scope.drawContent()
+            native.restoreToCount(depth)
         }
     }
 }

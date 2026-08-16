@@ -403,10 +403,11 @@ empty, `encodeDefaults = false`), and `IconId` already keys on the whole set, so
   one is an obvious tap, where discovering that effects can apply to everything is not. A *"this layer / whole icon"*
   switch inside the Effects panel was the alternative and is a second answer to a question the rail already answers —
   you would be editing the composite while the rail highlighted a layer.
-- **The bar shrinks with the selection, and four tools survive.** `StudioTool.appliesTo` — Source and Transform are a
-  *layer's* (the composite has no source and no transform of its own); Effects applies to both, which is the point;
-  **Shape does too**, since `IconLayerSet.shape` is a real stack-level mask; Presets and More were never per-layer. So
-  no "a bar of one is not a bar" special case was needed.
+- **The bar shrinks with the selection, and five of the six tools survive.** `StudioTool.appliesTo` — **Source** is
+  the only one a composite cannot answer at all, being what the layers make; Effects applies to both, which is the
+  point; **Shape** does too (`IconLayerSet.shape` is a real stack-level mask), and so does **Transform**, though what
+  it offers there is the angles alone — see the perspective note below for that rule. Presets and More were never
+  per-layer. So no "a bar of one is not a bar" special case was needed.
 - **Opacity and Blend drop from the grid for the composite, by the rule slice 1 already settled.** They describe how
   something *joins a stack* and the composite joins nothing — which is exactly `EffectSlice.ownsEffect`, the same
   predicate that decides which entries carry a switch. So a new effect is offered on both targets for free.
@@ -418,8 +419,8 @@ empty, `encodeDefaults = false`), and `IconId` already keys on the whole set, so
   members came off `IconLayerSpec`. Not tidying: "which of these draw?" has to have **one** answer for a layer and for
   the whole icon, and two holders with their own copies of the filter is a difference nobody would think to look for.
 - **The trap, and it is silent:** anything rebuilding the stack must `copy(layers = …)`, never `IconLayerSet(layers)` —
-  the constructor takes `shape` and `effects` too, so a positional rebuild drops the whole icon's mask and every
-  whole-icon effect the moment a layer moves. Pinned by a test.
+  the constructor takes the whole icon's angles, mask and effects too, so a positional rebuild drops all of them the
+  moment a layer moves. Pinned by a test.
 - Rejected: a Photoshop-style **adjustment layer** at any height. The bake would manage it; the live path cannot sample
   its siblings without restructuring the whole stack into nesting, which is the two-renderer hazard at its worst. The
   composite is the one position that is cheap on both sides.
@@ -431,8 +432,9 @@ a bloom or a blend reaching past that layer's own silhouette escapes it, where a
 terms as the effects above — additive (defaulted null, `encodeDefaults = false`), keyed by `IconId` for free, run in
 **both** renderers as *mask then effects*, the per-layer order one scope out. Three things:
 - **No `ContentAnchor`, and that is the composite rather than a control left out.** An anchor chooses between the box
-  and *the layer's artwork carried by its transform*; the composite has neither measured ink nor a transform, which is
-  the same fact that already sends its content-anchored effects to `InkFit.Box`. So `ShapeControls` takes a nullable
+  and *the layer's artwork carried by its transform*; the composite has no measured ink to fit to, and its own lean is
+  not a frame anything can be laid out in — the same fact that already sends its content-anchored effects to
+  `InkFit.Box`. So `ShapeControls` takes a nullable
   anchor and the switch is simply absent — one section for both targets, because a duplicated shape grid is how two
   shape lists end up disagreeing about which shapes exist.
 - **A layer tile drops it**, as it already drops the whole-icon effects, and here the reason is sharper than "it
@@ -502,8 +504,40 @@ question, and the shared thing got stronger rather than a seventh unverifiable o
   on a 48dp icon is nearly orthographic and so invisible.
 - **`isTilted` keeps the untilted case free of camera work**, which is every layer of every unedited icon. Tested,
   because a tilt dropped from `isIdentity` would leave `toMatrix` skipping the camera and drawing flat with no error.
-- **Not offered on the composite** — `StudioTool.appliesTo` gives it no Transform panel — so tilting a whole icon means
-  tilting its layers. A real gap rather than a decision; the fix is whether the composite gets a transform of its own.
+- **The composite has the angles now** (`IconLayerSet.rotation`/`tiltX`/`tiltY`), which closes the gap this line used
+  to record. Five things:
+  - **The composite gets the values that say *which way it faces*, and not the two that say where it is and how
+    big.** Rotation and tilt are the same kind of statement, so splitting them across scopes would make one rotation
+    two kinds of thing — the argument `IconLayerSpec.tiltX` already makes one scope down. **Zoom** is the icon-size
+    setting (`IconSizing`), per surface in `data:settings`, and a second scale here is applied on top of it, so one
+    recipe would come out a different size on every grid. **Offset** can only ever slide the icon *out* of the one
+    square there is, and under a stack shape it is worse — the mask stays put, so what appears is a crescent of
+    missing icon.
+  - **Per-layer angles substitute for neither, and they fail differently.** A tilt cannot be composed at all: layers
+    at different depths each get their own vanishing point, so a foreground slides off its background as the angle
+    grows. A rotation *can* — it is affine — right up until a layer has an offset, since a layer rotates about the box
+    center and *then* translates, so an arranged layer's position does not travel with the angle. It stops being
+    equivalent exactly when the recipe is interesting. (An earlier note here claimed rotation was excluded because it
+    would be cropped; that reason does not survive, since a *layer* has been croppable that way all along.)
+  - **So `StudioTool.appliesTo` settled a rule rather than gaining a value**: a tool applies when it has *something*
+    to offer, not only when it offers everything. Hiding Transform because two of its four controls are meaningless
+    would leave the two that are not with nowhere to be. `CompositeTransformControls` is a panel of its own rather
+    than the layer's with controls disabled, per the sections' own "absent, not disabled" rule; the three angles are
+    one shared `OrientationSliders` written once and shown by both scopes, and one target-dispatched command
+    (`setOrientation`) writes all three together, so neither holder is ever handed a partial update to merge.
+  - **The layers are drawn *through* them, in both paths** — a matrix on the bake's canvas before the loop, a native
+    `concat` around `drawContent()` live — rather than the composite being flattened and re-sampled. Cheaper, sharper,
+    and it cannot separate the layers from each other since they all take the one matrix. `LayerTransform.of` gained
+    an `IconLayerSet` overload for it, with **no `sizePx`**: the only size-dependent part of a transform is the
+    offset, which the composite has not got. The live path gates on **`isIdentity`, not `isTilted`** — a tilt test
+    would skip the matrix for an icon that is only turned, drawing it upright with nothing to say it went wrong.
+  - **Mask and effects sit outside the angles**, the per-layer order one scope out — so a turned or leaning icon
+    slides under a silhouette that stays put, which is what a box-anchored mask means and exactly the look a fixed
+    icon shape is for. A **layer tile drops them** as it drops the stack mask and the whole-icon effects: they apply
+    to every tile at once, costing the artwork the room it needs at 44dp while saying nothing about which layer it is.
+  - The bound worth knowing: a steep angle pushes the picture past the box and the output crops it — the same bound a
+    turned or leaned *layer* already has, visible while it is being set rather than a surprise later, and absent
+    entirely under a stack shape that keeps the icon clear of the corners.
 - **A content-anchored bloom or gloss does not follow a tilt.** `LayerGradient.Frame` carries a 2D rotation, so it
   tracks zoom, offset and in-plane rotation but has no perspective term. The light stays flat on a leaning layer.
 

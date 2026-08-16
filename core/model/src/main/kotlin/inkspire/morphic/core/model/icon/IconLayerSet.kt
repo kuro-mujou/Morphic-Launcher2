@@ -28,6 +28,35 @@ import kotlinx.serialization.Serializable
  *
  * Defaulted empty with `encodeDefaults = false`, so no stored recipe moved to gain it.
  *
+ * ## [rotation]/[tiltX]/[tiltY] — which way the finished icon faces
+ *
+ * The same three angles a layer carries, applied to the finished stack: the layers are drawn **through** these in
+ * both renderers, so what turns is the assembled picture rather than each layer separately.
+ *
+ * **The composite gets the values that say which way it faces, and not the two that say where it is and how big.**
+ * That is the whole line, and each half of it holds for its own reason:
+ * - **rotation and tilt** are the same kind of statement — one turns the icon in the plane, the others lean it out
+ *   of it — so splitting them across two scopes would make one rotation two different kinds of thing, which is the
+ *   argument [IconLayerSpec.tiltX] already makes for keeping them together one scope down.
+ * - **zoom** is the icon-size setting (`IconSizing`), which is per surface and lives in `data:settings`; a second
+ *   scale here would be applied *on top of* it, so one recipe would come out a different size on every grid.
+ * - **offset** can only ever slide the icon *out* of the one square there is — nothing exists beyond the box to
+ *   bring in — and under a [shape] it is worse, since the mask stays put and what appears is a crescent of missing
+ *   icon.
+ *
+ * **Per-layer angles are not a substitute for either, and the two fail differently.** A tilt cannot be composed at
+ * all: layers at different depths of one recipe each get their own vanishing point, so a foreground slides off its
+ * background as the angle grows. A rotation *can* — it is affine, so turning every layer by one angle about one
+ * center is turning the composite — right up until a layer has an offset, because a layer rotates about the box
+ * center and *then* translates, so an arranged layer's position does not travel with the angle. It stops being
+ * equivalent exactly when the recipe is interesting.
+ *
+ * A steep angle does push the picture past the box, where the output crops it — the same bound a turned or leaned
+ * *layer* already has, visible while it is being set rather than a surprise later, and absent entirely under a
+ * [shape] that keeps the icon clear of the corners.
+ *
+ * Additive on the same terms as everything else here: defaulted to zero, `encodeDefaults = false`.
+ *
  * ## [shape] — the stack-level mask, and why it has no anchor
  *
  * The same [IconShape] a layer can carry, cut against the finished composite. It is what makes "put every icon in a
@@ -36,9 +65,10 @@ import kotlinx.serialization.Serializable
  * past a layer's own silhouette escapes the shape.
  *
  * **No [IconLayerSpec.shapeAnchor] here, and that is a property of the composite rather than a control left out.**
- * An anchor chooses between the box and the layer's own *artwork carried by its transform* — the composite has
- * neither measured ink nor a transform, which is exactly why [effects] anchored to content already fall back to the
- * box in both renderers. Offering the switch would be offering a choice with one reachable answer.
+ * An anchor chooses between the box and the layer's own *artwork carried by its transform* — the composite has no
+ * measured ink to fit to, and [tiltX] is not a frame anything can be laid out in (a lean has no in-plane position or
+ * rotation, which is all a frame is made of). That is exactly why [effects] anchored to content already fall back to
+ * the box in both renderers. Offering the switch would be offering a choice with one reachable answer.
  *
  * Additive on the same terms as [effects]: defaulted null, `encodeDefaults = false`.
  *
@@ -57,6 +87,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class IconLayerSet(
     val layers: List<IconLayerSpec>,
+    val rotation: Float = 0f,
+    val tiltX: Float = 0f,
+    val tiltY: Float = 0f,
     val shape: IconShape? = null,
     val effects: List<LayerEffect> = emptyList(),
 ) {
@@ -117,9 +150,9 @@ data class IconLayerSet(
         reordered[j] = layers[i]
         // A swap never changes the role counts, so only the fg-above-bg order can be violated.
         //
-        // `copy` rather than the constructor, and that is not a style choice: the constructor takes [shape] and
-        // [effects] too, so rebuilding positionally would silently drop the whole icon's mask and effects every time
-        // a layer moved. Anything else assembling a new layer list must do the same.
+        // `copy` rather than the constructor, and that is not a style choice: the constructor takes the whole icon's
+        // angles, mask and effects too, so rebuilding positionally would silently drop all of them every time a
+        // layer moved. Anything else assembling a new layer list must do the same.
         return if (foregroundAboveBackground(reordered)) copy(layers = reordered) else this
     }
 

@@ -2,11 +2,12 @@ package inkspire.morphic.core.icon.render
 
 import android.graphics.Camera
 import android.graphics.Matrix
+import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 
 /**
- * Where one layer's content sits inside the icon's square box, in pixels — the spec's normalized transform
- * resolved against a concrete size.
+ * Where something sits inside the icon's square box, in pixels — a normalized transform resolved against a concrete
+ * size. Usually a layer's; [of]`(IconLayerSet)` is the finished icon's own, which is its angles and nothing else.
  *
  * **This exists to be the single interpretation of a layer's transform, because there are two renderers.** The
  * baked path composites to a bitmap for display; the editor renders the same layers live as Compose nodes so a
@@ -81,14 +82,29 @@ data class LayerTransform(
     companion object {
 
         /**
-         * The transform of something that is not moved at all — what the **composite** takes.
+         * The transform of something that is not moved at all.
          *
-         * The finished icon has no transform of its own (there is nothing to slide it relative to), but anything
-         * placed against it still has to be placed against *something*: `LayerGradient.frameOf` asks for one, and
-         * a null there would mean every consumer inventing this value for itself.
+         * What anything placed *against* the composite is placed against — `LayerGradient.frameOf` asks for a
+         * transform, and a null there would mean every consumer inventing this value for itself. Deliberately not
+         * the same thing as [of]`(IconLayerSet)`, which is what the composite is *drawn* through: an effect anchored
+         * to the finished icon sits in its flat box, since [Frame][LayerGradient.Frame] carries no perspective term.
          */
         val Identity: LayerTransform =
             LayerTransform(zoom = 1f, rotationDegrees = 0f, translateXPx = 0f, translateYPx = 0f)
+
+        /**
+         * The angles the finished icon is drawn through — the composite's whole transform, which is where it faces
+         * and nothing else. See `IconLayerSet.rotation` for why zoom and offset are not the composite's to have.
+         *
+         * **No `sizePx`, unlike the layer overload, and that is a fact rather than an omission**: the only
+         * size-dependent part of a transform is the offset, in fractions of the box, and the composite has none. The
+         * matrix still needs a size, which is [toMatrix]'s parameter and the caller's to supply.
+         */
+        fun of(layerSet: IconLayerSet): LayerTransform = Identity.copy(
+            rotationDegrees = layerSet.rotation,
+            tiltXDegrees = layerSet.tiltX,
+            tiltYDegrees = layerSet.tiltY,
+        )
 
         /** Resolves [spec]'s normalized transform against a square box of [sizePx]. */
         fun of(spec: IconLayerSpec, sizePx: Int): LayerTransform = LayerTransform(

@@ -648,9 +648,16 @@ private fun LayerTile(
     // mask trims every tile identically, so a custom layer sitting near a corner is cropped to nothing and its tile
     // goes blank — a layer the user cannot see is one they cannot find, and the tile is the only way to reach it.
     // The layer's *own* shape stays, because that genuinely is what this layer looks like.
+    //
+    // **The whole-icon *angles* likewise**: a turn or a lean applies to every tile at once, so at 44dp it costs the
+    // artwork the room it needs to be recognized — and clips its corners — while saying nothing about which layer
+    // this is. A layer's own rotation and tilt stay, for the reason its own shape does.
     val soloed = remember(state.editing, index) {
         state.editing.copy(
             layers = state.editing.layers.mapIndexed { i, layer -> layer.copy(visible = i == index) },
+            rotation = 0f,
+            tiltX = 0f,
+            tiltY = 0f,
             shape = null,
             effects = emptyList(),
         )

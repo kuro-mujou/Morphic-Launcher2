@@ -353,6 +353,33 @@ class IconStudioViewModel(
     }
 
     /**
+     * Points whichever thing the target names — the selected layer, or the finished icon — in a direction: turned in
+     * the plane, and leaned out of it about each axis.
+     *
+     * **All three at once, and one command for both targets**, which is [updateEffects]' shape for its reason: they
+     * are the same three sliders either way (see `OrientationSliders`), so a caller that had to choose which holder
+     * it meant would be re-deciding what the rail already settled. Taking them together also means neither holder
+     * is ever handed a partial update to merge.
+     *
+     * Live, like [updateSelected] — every frame of a drag arrives here and [commitEdit] punctuates it. That is why
+     * the layer's position and zoom still go through [updateSelected] rather than gaining commands of their own:
+     * they have one holder, so there is nothing to dispatch.
+     */
+    fun setOrientation(rotation: Float, tiltX: Float, tiltY: Float) = _state.update { current ->
+        when (val target = current.target) {
+            StudioTarget.Composite ->
+                current.withEditing(current.editing.copy(rotation = rotation, tiltX = tiltX, tiltY = tiltY))
+
+            is StudioTarget.Layer -> {
+                val layers = current.editing.layers.toMutableList()
+                val spec = layers.getOrNull(target.index) ?: return@update current
+                layers[target.index] = spec.copy(rotation = rotation, tiltX = tiltX, tiltY = tiltY)
+                current.withEditing(current.editing.copy(layers = layers))
+            }
+        }
+    }
+
+    /**
      * Puts [shape] on whichever silhouette the target owns — the selected layer's, or the whole icon's.
      *
      * **One command for both, dispatched on the target, exactly as [updateEffects] is**, and for the same reason: the

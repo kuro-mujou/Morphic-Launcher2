@@ -176,6 +176,7 @@ fun IconStudioScreen(
             selectTarget = viewModel::selectTarget,
             updateEffects = viewModel::updateEffects,
             pickShape = viewModel::pickShape,
+            setOrientation = viewModel::setOrientation,
             update = viewModel::updateSelected,
             commit = viewModel::commitEdit,
             toggleVisible = viewModel::toggleSelectedVisible,

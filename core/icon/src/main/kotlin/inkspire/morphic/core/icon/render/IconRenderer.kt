@@ -93,19 +93,26 @@ class IconRenderer(
         val output = createBitmap(sizePx, sizePx)
         val canvas = Canvas(output)
 
-        resolver.resolve(layerSet, icon, customImage, packImage).forEach { layer ->
-            val layerBitmap = renderLayer(layer, sizePx)
-            // Opacity, blend and color are applied **as the layer joins the stack**, not while its content is
-            // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the
-            // one bitmap I am in". The live path composes the same three into one paint for the same reason.
-            canvas.drawBitmap(layerBitmap, 0f, 0f, compositePaint(layer.spec))
-            layerBitmap.recycle()
+        // **The whole icon's angles are on the canvas, so the layers are drawn *through* them** rather than
+        // composited flat and then re-sampled. Cheaper — no second bitmap — and sharper, since each layer's own
+        // bitmap is the thing being transformed. It cannot separate the layers from one another either: they all
+        // take the one matrix, so nothing slides relative to anything else. See `IconLayerSet.rotation`.
+        canvas.withMatrix(LayerTransform.of(layerSet).toMatrix(sizePx)) {
+            resolver.resolve(layerSet, icon, customImage, packImage).forEach { layer ->
+                val layerBitmap = renderLayer(layer, sizePx)
+                // Opacity, blend and color are applied **as the layer joins the stack**, not while its content is
+                // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the
+                // one bitmap I am in". The live path composes the same three into one paint for the same reason.
+                canvas.drawBitmap(layerBitmap, 0f, 0f, compositePaint(layer.spec))
+                layerBitmap.recycle()
+            }
         }
 
         // **The set's own mask, then its own effects** — the same two steps in the same order a layer takes, which is
-        // what makes "shape the whole icon" mean what "shape this layer" means. Passing no matrix is the composite
-        // having no frame but the box: it has neither measured ink nor a transform, which is the same reason the
-        // effects below fall back to [ShapeMask.InkFit.Box] and [LayerTransform.Identity].
+        // what makes "shape the whole icon" mean what "shape this layer" means. Both are outside the angles above for
+        // the same reason a layer's are outside its transform: the mask trims the *finished* picture, so a turned or
+        // leaning icon slides under a silhouette that stays put. Passing no matrix says that — the frame is the
+        // box, which is also why the effects fall back to [ShapeMask.InkFit.Box] and [LayerTransform.Identity].
         layerSet.shape?.let { applyShapeMask(canvas, it, sizePx, matrix = null) }
 
         return applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx)

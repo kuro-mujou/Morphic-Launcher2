@@ -46,7 +46,13 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
      */
     SOURCE("Source", Icons.Default.Image),
 
-    /** Position, zoom and rotation. */
+    /**
+     * Where something sits: position, zoom, rotation and tilt for a layer — **the angles alone for the whole icon**.
+     *
+     * The other two are not the composite's to have rather than being left out of it: an offset can only slide the
+     * finished icon out of the square that *is* the output, and a zoom is the icon-size setting, one layer down in
+     * `data:settings`. See `IconLayerSet.rotation`.
+     */
     TRANSFORM("Transform", Icons.Default.OpenWith),
 
     /**
@@ -103,14 +109,18 @@ enum class StudioTool(val label: String, val icon: ImageVector) {
      * left showing a header with no controls under it. One question, asked in both places, so the bar and the panel
      * cannot disagree about what the selection offers.
      *
-     * [SOURCE] and [TRANSFORM] are a *layer's*: the composite has no source (it is what the layers make) and no
-     * transform of its own. [EFFECTS] applies to both, which is the whole point of the composite existing, and
-     * **[SHAPE] now does too** — `IconLayerSet.shape` is a real stack-level mask, and it is what makes "put every
-     * icon in a squircle" one control instead of the same shape set on each layer in turn. [PRESETS] and [MORE] were
-     * never per-layer — they act on the whole recipe — so the composite keeps four entries.
+     * [SOURCE] is the only one a composite cannot answer at all: it *is* what the layers make, so there is nothing
+     * to choose. [EFFECTS] applies to both, which is the whole point of the composite existing; [SHAPE] does too, a
+     * stack-level mask being what makes "put every icon in a squircle" one control instead of the same shape set on
+     * each layer in turn; and [TRANSFORM] does, though what it offers there is **the angles alone** — see this
+     * entry's own note. [PRESETS] and [MORE] were never per-layer. So the composite keeps five of the six.
+     *
+     * **A tool applies when it has *something* to offer, not only when it offers everything.** Transform is what
+     * settles that: hiding it because two of its four controls are meaningless would leave the two that are not
+     * with nowhere to be, and the panel is already the place a target's controls are chosen.
      */
     fun appliesTo(target: StudioTarget): Boolean = when (this) {
-        SOURCE, TRANSFORM -> target is StudioTarget.Layer
-        SHAPE, EFFECTS, PRESETS, MORE -> true
+        SOURCE -> target is StudioTarget.Layer
+        TRANSFORM, SHAPE, EFFECTS, PRESETS, MORE -> true
     }
 }
