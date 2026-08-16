@@ -729,12 +729,85 @@ transparent out there.
   bakes would make the icon shimmer as the studio re-rendered, and a draft would not predict the full-size result.
   That is also why there is **no seed** — a hash *of position* is the randomness, and a seed would be a second
   control offering nothing the grain size does not.
-- **`GrainDrift` is a choice, not a directionality slider** — `BloomFalloff`'s shape and reason. An angle means
-  nothing to noise pushing every way at once, so a continuous control would leave it inert at one end and change the
-  panel's height as it crossed zero. It is also honest about the mechanism: scatter uses two independent fields,
-  directed uses one and spends it along the angle, and there is no continuum between "two fields" and "one".
 - **Strength and Grain size sound alike and are not.** Strength is how far a piece moves; grain size is how big a
   piece is. Turning the second up makes the tearing coarser rather than stronger.
+
+**Then it was rebuilt against captures of the reference studio's own grain, and four of the five faults were things
+that pass every test while looking cheap.** Worth reading as a group, because each is a different way for correct
+arithmetic to produce a poor picture:
+- **The resample rounded to a whole pixel, which is the big one.** At small amplitudes *the whole displacement is
+  the fraction*, so rounding it away turned fine grain into hard aliased specks and a shallow ripple into steps.
+  `LayerSample.bilinear` is the fix and is shared by both effects — and it is **alpha-weighted**, `LayerPixelate`'s
+  lesson exactly: an icon is mostly transparent, a transparent pixel is almost always transparent *black*, so
+  blending by color alone drags every displaced edge toward black. That version passes everything except the one
+  test written for it.
+- **Value noise put a square grid through the field.** Its extremes land *on* the lattice, so the artwork tore into
+  axis-aligned chunks at every setting. Gradient noise reads zero at the lattice and does its varying between,
+  which is pinned by the one assertion that would catch a silent revert. The fade is quintic rather than a
+  smoothstep, so the field's *rate* of change is continuous too — with a smoothstep the second derivative jumps and
+  a displacement makes that visible as a crease along every lattice line.
+- **One octave is one size of detail**, which is what made the old field read as blobs. Three, at doubling
+  frequencies and halving amplitudes, is what gives it dust and clumps at once.
+- **The grain-size slider's useful half was unreachable.** The value was the cell fraction *directly* and the sizes
+  worth having are bunched near the bottom of it, so everything from dust to small clusters lived in the first four
+  percent of the travel. It is now a 0..1 *control position* mapped **geometrically** onto the fraction, so equal
+  movements of the finger are equal ratios of piece size. What is rendered is still a fraction of the box, so
+  size-independence is untouched. One consequence: a grain size of zero is the *finest* setting rather than an
+  identity, so `isIdentity` is amplitude alone — as the second clause it would have deleted the effect at one end
+  of a slider.
+- **`GrainDrift` became a continuous `directionality`, and the note this replaces was wrong.** It argued there is
+  "no continuum between two fields and one". There is: the displacement is a vector, so decompose it along and
+  across the angle and scale the across-part by `1 − directionality`. Zero is the old scatter, one is the old
+  directed, and every value between is the wind-blown look neither could express. Free on disk — an unknown *key* is
+  skipped by `ignoreUnknownKeys`, unlike an unknown polymorphic *type*, so a stored `drift` is dropped and the rest
+  of the recipe reads back.
+  - **Its angle control is *disabled* rather than absent, which is this rule's one live exception and the reason is
+    the gate.** "A control that changes nothing is worse than a missing one" holds where the gate is a discrete
+    choice made elsewhere — a shape picked, a tint set — because the layout settles before the finger arrives. Here
+    the gate is the **continuous slider directly above it**, so hiding the row made it appear and vanish *under the
+    finger dragging that slider*, moving everything below mid-gesture. `SliderControl` gained an `enabled` for it:
+    dimmed, unpressable, value still legible.
+- **Strength reaches nearly half the box** where it reached a seventh: at the old ceiling the icon merely frayed, so
+  the state a user is at maximum *for* — the artwork dispersed into a cloud of its own colors — was not on the
+  control at all.
+- **No AGSL path — and when the jank was raised, two cheaper levers were taken first.** A shader is a *third*
+  implementation of these six, and unlike every other fork in this codebase it could not be made honest by a shared
+  derivation: AGSL is another language, so `LayerGrain` can only be **transcribed** into it, not shared, and for
+  these effects the arithmetic *is* the effect. On an API 33+ device the studio would then be editing against a
+  picture no home screen draws. So the standing answer is the bake, and the levers are:
+  - **`resample` splits its rows across cores** (`BakeBands`, one fewer than the cores, capped at four). Every
+    output pixel reads only the source buffer and writes only its own slot, so there is nothing to coordinate. This
+    is the one optimisation that also speeds up **baking real icons**, where a shader would only ever have helped
+    the editor. One trap it introduces: a `sourceOf` lambda closing over mutable scratch is now shared by every
+    band — `grained` writes through `resample`'s own per-band out-parameter for that reason.
+  - **`IconPreview` caps the settled bake at `MaxPreviewPx`** and drafts from *that*. It is a cap on work rather
+    than on quality, and scoped to exactly the icons that need one: this path runs only for a recipe the live
+    renderer cannot draw, and every such effect is low-frequency by nature — a grain, a halo and a dot grid all
+    look the same scaled up from 512, because none of them has detail at the pixel. A sharp recipe draws live and
+    never reaches the cap.
+
+**And then it was slow and, on a home icon, invisible — three faults that only a device showed, each with a
+different cause.** Worth keeping together, because none of them is about the look:
+- **`cos`/`sin` per lattice corner is forty-eight transcendental calls per output pixel** — four corners, three
+  octaves, two fields, two calls each — which is tens of millions per bake on a studio canvas and the whole of a
+  four-second preview. A sixteen-entry gradient table built once replaces them. The KDoc that argued for the angle
+  ("a table leaves a handful of preferred directions") is true of one octave and not of three summed into two
+  fields.
+- **Nothing was cancellable, so `IconPreview`'s whole design was inert.** Its throttle *is* cancellation — a newer
+  recipe kills the bake in flight — but cancellation is cooperative and a loop over half a million pixels
+  cooperates in nothing. Every frame of a drag queued a draft *and* a full bake and every one ran to completion,
+  so the preview arrived as a backlog after the finger lifted and the studio starved every other icon on the same
+  dispatcher. **`IconRenderer.render` is `suspend` now**, captures its context, and the two per-pixel loops
+  `ensureActive()` once a row. Being suspend is what makes the context reachable without callers remembering to
+  pass one. An abandoned bake leaves its buffers to the collector rather than recycling them.
+- **Gradient noise is zero *at* the lattice, so a cell of about a pixel displaces nothing at all.** That is what
+  removes the grid a value field puts through the picture, and it made the finest setting vanish on any small
+  bake: a 144px home icon always hit the one-pixel floor and grained not at all, while the ~670px studio canvas
+  escaped it and showed what the surface would never draw — the two-renderer hazard's shape reached through a bake
+  size instead. The floor is **four pixels**, where every sample lands somewhere the field is doing something.
+  Pinned by a test at 144px, because the studio structurally cannot show this one. The bound it leaves is real:
+  at the finest setting a recipe is *not* identical at 144px and 670px, since structure a few pixels across cannot
+  exist on a small bitmap.
 
 **`LayerEffect.Pixelate` is the odd one of the three per-pixel effects, and shares nothing with the other two.** It
 samples one color per *cell* and then **draws** a shape — so the gaps between dots and their rounded corners are

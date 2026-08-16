@@ -180,28 +180,6 @@ data class BloomProfile(
     val offsetY: Float = -0.5f,
 )
 
-/**
- * Which way a [LayerEffect.Grain]'s noise pushes the pixels it displaces.
- *
- * **Two forms rather than a slider between them**, which is [Falloff]'s shape and its reason: an angle means
- * nothing to noise that pushes every way at once, so a continuous "directionality" would leave the angle control
- * inert at one end and the panel changing height as the slider crossed zero. A discrete choice makes the panel
- * change once, deliberately, when the user asks for the form that has a direction.
- *
- * Persisted inside the layer set, so the names are an on-disk contract.
- */
-@Serializable
-enum class GrainDrift {
-
-    /** Every pixel pushed its own way — the dissolve, and what "grain" means unqualified. */
-    @SerialName("free")
-    FREE,
-
-    /** Every pixel pushed along one axis, so the artwork tears into bands rather than into blobs. */
-    @SerialName("directed")
-    DIRECTED,
-}
-
 @Serializable
 sealed interface LayerEffect {
 
@@ -714,29 +692,48 @@ sealed interface LayerEffect {
      *
      * @property amplitude how far a pixel is pushed at the field's extreme, as a fraction of the icon's box. Also
      *   the switch: noise that displaces nothing changes nothing.
-     * @property grainSize how far apart the field's lattice points sit, again a fraction of the box — so it is the
-     *   size of the *pieces*, where [amplitude] is how far they move.
-     * @property drift whether the pieces scatter or all slide one way. See [GrainDrift].
-     * @property angleDegrees which way they slide, clockwise from straight down. [GrainDrift.DIRECTED] only — noise
-     *   that pushes every way at once has no direction to name.
+     * @property grainSize how big the torn pieces are, **0 finest through 1 coarsest** — a position on a control
+     *   rather than a length. Everything else here is a fraction of the box, and this was too; it is the one value
+     *   where that made the control unusable, because the useful sizes are bunched at the bottom of the range and
+     *   nine tenths of the slider's travel landed on pieces too big to read as grain. `LayerGrain.cellPx` maps this
+     *   onto a fraction **exponentially**, so equal movements of the finger are equal *ratios* of piece size — and
+     *   what is finally rendered is still a fraction of the box, so a recipe grains the same at every bake size.
+     * @property directionality how much the scatter is forced onto one axis: 0 pushes every way at once, 1 smears
+     *   strictly along [angleDegrees], and between them the sideways component is progressively squashed.
+     *
+     *   **A continuum rather than the two-valued `GrainDrift` this replaces**, whose stated reason — that there is
+     *   no middle ground between "two noise fields" and "one" — was simply wrong. The displacement is a vector; the
+     *   middle ground is scaling its component *perpendicular* to the axis, which is one mechanism reaching both
+     *   ends and every wind-blown look between them.
+     * @property angleDegrees which way the smear runs, clockwise from straight down. Means nothing at a
+     *   [directionality] of zero, where the noise pushes every way at once, so the studio shows it only above that.
      */
     @Serializable
     @SerialName("grain")
     data class Grain(
-        val amplitude: Float = 0.02f,
-        val grainSize: Float = 0.08f,
-        val drift: GrainDrift = GrainDrift.FREE,
+        /**
+         * **A visible default, like every other effect here**, and tuned on device rather than picked: a tenth of
+         * the box frays the artwork plainly while leaving it entirely readable, which is what an effect should look
+         * like the moment it is switched on.
+         */
+        val amplitude: Float = 0.1f,
+        /** Small clusters — coarse enough to read as pieces at an icon's size, fine enough to still be grain. */
+        val grainSize: Float = 0.3f,
+        /** Scattering every way, which is what "grain" means unqualified. The angle is spent until this leaves zero. */
+        val directionality: Float = 0f,
         val angleDegrees: Float = 0f,
         override val enabled: Boolean = true,
     ) : LayerEffect {
 
         /**
-         * Displacing nothing, or having no field to displace along.
+         * Displacing nothing.
          *
-         * The second clause guards a division: a grain size of zero is a lattice with no spacing, which
-         * `LayerGrain` would otherwise divide by.
+         * **One clause now, where a grain size of zero used to be the second.** That was a guard against dividing
+         * by a lattice with no spacing; the size is a control position now and zero is its *finest* setting, which
+         * is a real look rather than an absence — so treating it as identity would have deleted the effect at one
+         * end of a slider.
          */
-        override val isIdentity: Boolean get() = amplitude <= 0f || grainSize <= 0f
+        override val isIdentity: Boolean get() = amplitude <= 0f
 
         /** Per-pixel, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
         override val drawsLive: Boolean get() = false

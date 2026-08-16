@@ -23,7 +23,6 @@ import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.model.icon.Falloff
-import inkspire.morphic.core.model.icon.GrainDrift
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
@@ -32,6 +31,12 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.graphics.withMatrix
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
@@ -67,6 +72,16 @@ class IconRenderer(
     private val context: Context,
     private val resolver: IconLayerResolver = IconLayerResolver(),
 ) {
+    /**
+     * How many bands [resample] splits its rows into — one fewer than the cores, capped, and never below one.
+     *
+     * **One fewer, deliberately**, for `IconRenderManager`'s reason one layer up: this runs while the studio is
+     * drawing the panel whose slider is being dragged, and a split that took every core would win the bake and lose
+     * the frame. The cap keeps a many-core device from oversubscribing when real icons are baking beside the preview.
+     */
+    private val BakeBands: Int =
+        (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 4)
+
     /** Keeps a layer's pixels only where the shape silhouette is opaque. */
     private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
@@ -82,14 +97,32 @@ class IconRenderer(
      *   for every surface — and **wrong for the studio**, whose whole point is that a freshly picked image is
      *   previewed before anything is written to disk (see `CustomIconStore`). So the editor passes the same lambda
      *   it hands the live path, and the two draw the same picture rather than one of them showing a missing layer.
+     *
+     * ## Suspend, because a bake has to be **abandonable**
+     *
+     * Cancellation in coroutines is cooperative, and a `for` loop over half a million pixels cooperates in nothing:
+     * cancelling the coroutine around this used to leave it running to the end regardless. That defeated the whole
+     * of `IconPreview`'s draft-then-full design, whose throttle *is* cancellation — during a slider drag every
+     * emitted recipe queued a bake that ran to completion, so the previews arrived in a backlog after the finger
+     * lifted rather than while it moved, and the studio's runaway bakes starved every other icon on the screen of
+     * the same dispatcher.
+     *
+     * So the pixel loops check the calling context and throw when it has been cancelled. Being `suspend` is what
+     * makes that context reachable without every caller remembering to hand one in — the wiring cannot be forgotten
+     * because there is nowhere to forget it.
+     *
+     * An abandoned bake leaves its buffers to the collector rather than recycling them: the alternative is a
+     * `try`/`finally` around every intermediate in the pipeline to save an allocation that is about to be garbage
+     * anyway, on a path that only runs when the work is already being thrown away.
      */
-    fun render(
+    suspend fun render(
         icon: ParsedIcon,
         layerSet: IconLayerSet,
         sizePx: Int,
         packImage: (packPackage: String, drawableName: String?) -> Drawable? = { _, _ -> null },
         customImage: (path: String) -> Drawable? = ::decodeCustomImage,
     ): Bitmap {
+        val bake = currentCoroutineContext()
         val output = createBitmap(sizePx, sizePx)
         val canvas = Canvas(output)
 
@@ -99,7 +132,7 @@ class IconRenderer(
         // take the one matrix, so nothing slides relative to anything else. See `IconLayerSet.rotation`.
         canvas.withMatrix(LayerTransform.of(layerSet).toMatrix(sizePx)) {
             resolver.resolve(layerSet, icon, customImage, packImage).forEach { layer ->
-                val layerBitmap = renderLayer(layer, sizePx)
+                val layerBitmap = renderLayer(layer, sizePx, bake)
                 // Opacity, blend and color are applied **as the layer joins the stack**, not while its content is
                 // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the
                 // one bitmap I am in". The live path composes the same three into one paint for the same reason.
@@ -115,7 +148,7 @@ class IconRenderer(
         // box, which is also why the effects fall back to [ShapeMask.InkFit.Box] and [LayerTransform.Identity].
         layerSet.shape?.let { applyShapeMask(canvas, it, sizePx, matrix = null) }
 
-        return applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx)
+        return applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx, bake)
     }
 
     /**
@@ -144,7 +177,7 @@ class IconRenderer(
      * expresses the same sequence by nesting modifiers in reverse — see `IconLayerStack`, and expect to check both
      * if either is touched.
      */
-    private fun renderLayer(layer: ResolvedLayer, sizePx: Int): Bitmap {
+    private suspend fun renderLayer(layer: ResolvedLayer, sizePx: Int, bake: CoroutineContext): Bitmap {
         val bitmap = createBitmap(sizePx, sizePx)
         val canvas = Canvas(bitmap)
         val transform = LayerTransform.of(layer.spec, sizePx)
@@ -166,7 +199,7 @@ class IconRenderer(
         //
         // Measured once for the whole pipeline rather than per effect: it is a property of the layer's artwork, and
         // every effect that can be anchored to content is anchored to the *same* square a shape mask would use.
-        return applyEffects(bitmap, layer.spec.activeEffects, ShapeMask.inkFit(layer.content), transform, sizePx)
+        return applyEffects(bitmap, layer.spec.activeEffects, ShapeMask.inkFit(layer.content), transform, sizePx, bake)
     }
 
     /**
@@ -185,12 +218,13 @@ class IconRenderer(
      * Takes ownership of [bitmap]: a filter recycles it and hands back its replacement, so the caller must use the
      * return value and must not touch what it passed in.
      */
-    private fun applyEffects(
+    private suspend fun applyEffects(
         bitmap: Bitmap,
         effects: List<LayerEffect>,
         inkFit: ShapeMask.InkFit,
         transform: LayerTransform,
         sizePx: Int,
+        bake: CoroutineContext,
     ): Bitmap {
         var current = bitmap
         var canvas = Canvas(current)
@@ -204,7 +238,7 @@ class IconRenderer(
          * second has no guard but a rule, which is that an effect with nothing to do must not be given to this at
          * all. See the `ProgressiveBlur` arm for the shape that takes.
          */
-        fun replace(with: (Bitmap) -> Bitmap) {
+        suspend fun replace(with: suspend (Bitmap) -> Bitmap) {
             val next = with(current)
             if (next === current) return
             current.recycle()
@@ -235,11 +269,11 @@ class IconRenderer(
 
                 is LayerEffect.ChromaticSplit -> replace { split(it, effect, sizePx) }
 
-                is LayerEffect.Ripple -> replace { rippled(it, effect, sizePx) }
+                is LayerEffect.Ripple -> replace { rippled(it, effect, sizePx, bake) }
 
-                is LayerEffect.Grain -> replace { grained(it, effect, sizePx) }
+                is LayerEffect.Grain -> replace { grained(it, effect, sizePx, bake) }
 
-                is LayerEffect.Pixelate -> replace { pixelated(it, effect, sizePx) }
+                is LayerEffect.Pixelate -> replace { pixelated(it, effect, sizePx, bake) }
 
                 // **The side is resolved *before* `replace`, not inside it**, so a radius too small to blur skips
                 // the buffer swap entirely rather than handing it a copy. The same shape `Filter` above takes for
@@ -412,13 +446,13 @@ class IconRenderer(
      * The loop itself is [resample], shared with [grained] — extracted on that second consumer rather than in
      * anticipation of it, which is this codebase's usual point.
      */
-    private fun rippled(source: Bitmap, ripple: LayerEffect.Ripple, sizePx: Int): Bitmap {
+    private suspend fun rippled(source: Bitmap, ripple: LayerEffect.Ripple, sizePx: Int, bake: CoroutineContext): Bitmap {
         val centerX = LayerRipple.centerPx(ripple.centerX, sizePx)
         val centerY = LayerRipple.centerPx(ripple.centerY, sizePx)
         val amplitudePx = LayerRipple.amplitudePx(ripple, sizePx)
         val wavelengthPx = LayerRipple.wavelengthPx(ripple, sizePx)
 
-        return resample(source, sizePx) { x, y, into ->
+        return resample(source, sizePx, bake) { x, y, into ->
             val dx = x - centerX
             val dy = y - centerY
             val distance = hypot(dx, dy)
@@ -426,40 +460,42 @@ class IconRenderer(
 
             // Dead centre has no radius to travel along, so it reads from itself — which is also what stops the
             // division from being one by zero.
-            into[0] = if (distance == 0f) x else (centerX + dx / distance * sampled).roundToInt()
-            into[1] = if (distance == 0f) y else (centerY + dy / distance * sampled).roundToInt()
+            into[0] = if (distance == 0f) x.toFloat() else centerX + dx / distance * sampled
+            into[1] = if (distance == 0f) y.toFloat() else centerY + dy / distance * sampled
         }
     }
 
     /**
      * [source] with every pixel read from wherever a noise field pushes it — the artwork torn into pieces.
      *
-     * **Two independent fields, one per axis**, which is what [LayerGrain.noise]'s salt is for: sampling the same
+     * **Two independent fields, one per axis**, which is what [LayerGrain.field]'s salt is for: sampling the same
      * field twice would give every pixel the same displacement in x and y, so the whole picture would shear along
      * the diagonal instead of scattering.
      *
-     * [GrainDrift.DIRECTED] uses **one** field and spends it along the angle, which is why the two forms are a
-     * choice rather than a slider between them — there is no continuum between "two fields" and "one".
+     * Everything about *how* the pair is spent belongs to [LayerGrain.displace] — how much of it is forced onto the
+     * effect's angle, and which way that runs. This is the loop and the pixels; that is the arithmetic, where it can
+     * be checked without an emulator.
      */
-    private fun grained(source: Bitmap, grain: LayerEffect.Grain, sizePx: Int): Bitmap {
+    private suspend fun grained(source: Bitmap, grain: LayerEffect.Grain, sizePx: Int, bake: CoroutineContext): Bitmap {
         val amplitudePx = LayerGrain.amplitudePx(grain, sizePx)
         val cellPx = LayerGrain.cellPx(grain, sizePx)
-        val radians = grain.angleDegrees * Math.PI.toFloat() / 180f
-        // The studio's own convention: straight down at 0°, which puts 90° along +x.
-        val alongX = sin(radians)
-        val alongY = cos(radians)
 
-        return resample(source, sizePx) { x, y, into ->
+        return resample(source, sizePx, bake) { x, y, into ->
             val u = x / cellPx
             val v = y / cellPx
-            val first = LayerGrain.noise(u, v, salt = 0)
-
-            val (dx, dy) = when (grain.drift) {
-                GrainDrift.FREE -> first to LayerGrain.noise(u, v, salt = 1)
-                GrainDrift.DIRECTED -> (first * alongX) to (first * alongY)
-            }
-            into[0] = (x + dx * amplitudePx).roundToInt()
-            into[1] = (y + dy * amplitudePx).roundToInt()
+            // **Written into `into` and then read back out of it, rather than into a scratch array of its own.**
+            // A scratch held here would be closed over by the lambda and shared by every band — which is the one
+            // way this loop's parallelism can go wrong, and it would show as individually wrong pixels scattered
+            // through the picture rather than as anything recognisable as a race. `into` is per band by
+            // construction, so there is nothing to share.
+            LayerGrain.displace(
+                grain = grain,
+                fieldX = LayerGrain.field(u, v, salt = 0),
+                fieldY = LayerGrain.field(u, v, salt = 1),
+                into = into,
+            )
+            into[0] = x + into[0] * amplitudePx
+            into[1] = y + into[1] * amplitudePx
         }
     }
 
@@ -558,7 +594,7 @@ class IconRenderer(
      * A cell whose average is fully transparent is skipped rather than drawn — cheap, and it keeps the artwork's
      * outline made of dots rather than of a square block of them.
      */
-    private fun pixelated(source: Bitmap, pixelate: LayerEffect.Pixelate, sizePx: Int): Bitmap {
+    private fun pixelated(source: Bitmap, pixelate: LayerEffect.Pixelate, sizePx: Int, bake: CoroutineContext): Bitmap {
         val pixels = IntArray(sizePx * sizePx)
         source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
 
@@ -575,6 +611,9 @@ class IconRenderer(
         // dropping it would leave a bare strip whose width changed with the cell size.
         var top = 0f
         while (top < sizePx) {
+            // Once a row of cells, for [resample]'s reason: this reads every pixel of the source too, so it is the
+            // other loop long enough to need abandoning.
+            bake.ensureActive()
             var left = 0f
             while (left < sizePx) {
                 val argb = LayerPixelate.averageArgb(
@@ -611,25 +650,61 @@ class IconRenderer(
      * is the truthful sample. Both effects want that, which is part of why the loop is worth sharing rather than
      * being two loops that could answer it differently.
      *
-     * @param sourceOf writes the source pixel for output ([x], [y]) into [into] as `[srcX, srcY]`. An out-parameter
-     *   rather than a returned pair because this runs once per pixel — six hundred thousand times at preview size —
-     *   and a pair there is six hundred thousand allocations.
+     * **The position is a *fraction* of a pixel and is read as one** — [LayerSample.bilinear] — which is the
+     * difference between these effects looking made and looking cheap. Rounding to a whole pixel discarded exactly
+     * the part that matters at small amplitudes, where the whole displacement *is* the fraction: a fine grain came
+     * out as hard aliased specks rather than as dust, and a shallow ripple stepped instead of flowing. Four reads
+     * and a blend per pixel is what that costs.
+     *
+     * **Rows are split across cores, which is the one optimisation here that helps the home screen too.** Every
+     * output pixel reads only the *source* buffer and writes only its own slot, so the loop is parallel with no
+     * coordination at all — bands of rows, one coroutine each, and the sum of them is the same picture. It is worth
+     * a few lines rather than a shader precisely because it speeds up **baking real icons** as well as the editor's
+     * preview, where an AGSL path would only ever have helped the editor.
+     *
+     * **[BakeBands] leaves a core alone**, which is the same bargain `IconRenderManager`'s concurrency cap makes one
+     * layer up: the point of the split is a preview that keeps up with a finger, and taking every core to get there
+     * would starve the main thread drawing the panel the finger is on.
+     *
+     * @param sourceOf writes the source position for output ([x], [y]) into [into] as `[srcX, srcY]`, in pixels and
+     *   **not rounded**. An out-parameter rather than a returned pair because this runs once per pixel — six hundred
+     *   thousand times at preview size — and a pair there is six hundred thousand allocations. **Called from several
+     *   threads at once**, so it must read only what it closed over and write only [into]; every current caller does,
+     *   and the scratch each one keeps is now created per band rather than per bake.
      */
-    private fun resample(source: Bitmap, sizePx: Int, sourceOf: (x: Int, y: Int, into: IntArray) -> Unit): Bitmap {
+    private suspend fun resample(
+        source: Bitmap,
+        sizePx: Int,
+        bake: CoroutineContext,
+        sourceOf: (x: Int, y: Int, into: FloatArray) -> Unit,
+    ): Bitmap {
         val pixels = IntArray(sizePx * sizePx)
         source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
         val out = IntArray(pixels.size)
-        val at = IntArray(2)
 
-        for (y in 0 until sizePx) {
-            for (x in 0 until sizePx) {
-                sourceOf(x, y, at)
-                val sourceX = at[0]
-                val sourceY = at[1]
-                out[y * sizePx + x] = if (sourceX in 0 until sizePx && sourceY in 0 until sizePx) {
-                    pixels[sourceY * sizePx + sourceX]
-                } else {
-                    0
+        val bands = BakeBands.coerceAtMost(sizePx)
+        val rowsPerBand = (sizePx + bands - 1) / bands
+        coroutineScope {
+            for (band in 0 until bands) {
+                val from = band * rowsPerBand
+                val until = ((band + 1) * rowsPerBand).coerceAtMost(sizePx)
+                if (from >= until) continue
+
+                launch(Dispatchers.Default) {
+                    // One scratch per band, never one shared: two threads writing the same two floats is the whole
+                    // class of bug this split could otherwise introduce, and it would show as a scattering of
+                    // individually wrong pixels rather than as anything that looks like a race.
+                    val at = FloatArray(2)
+                    for (y in from until until) {
+                        // **Once a row, which is what makes this bake abandonable at all** — see [render]. A row is
+                        // short enough that a cancelled preview stops within a millisecond or so and long enough
+                        // that the check itself never shows up in the cost.
+                        bake.ensureActive()
+                        for (x in 0 until sizePx) {
+                            sourceOf(x, y, at)
+                            out[y * sizePx + x] = LayerSample.bilinear(pixels, sizePx, at[0], at[1])
+                        }
+                    }
                 }
             }
         }

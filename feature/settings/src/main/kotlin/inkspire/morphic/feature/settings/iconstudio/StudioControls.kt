@@ -137,6 +137,15 @@ internal val LayerSource.label: String
  * @param format how the number reads. Defaults to [finestFormat], matched to [step] so a press always moves the
  *   digit the readout ends on. An angle overrides it, since printing 180.00 for one is as wrong as printing 1 for
  *   an opacity.
+ * @param enabled false to show the control **spent rather than absent** — dimmed, unmoved and unpressable, with its
+ *   value still legible.
+ *
+ *   This is a deliberate exception to the studio's own "a control that changes nothing is worse than a missing one",
+ *   and it earns one where the gate is a *continuous control sitting directly above it*: the grain's angle means
+ *   nothing until its directionality leaves zero, and hiding it made a row appear and disappear **under the finger
+ *   that was dragging the slider above it**, moving everything below mid-gesture. A row that greys out states the
+ *   dependency without ever moving the panel. Where the gate is a discrete choice made elsewhere — a shape picked, a
+ *   tint set — absent is still right, because the layout settles before the finger arrives.
  */
 @Composable
 internal fun SliderControl(
@@ -148,6 +157,7 @@ internal fun SliderControl(
     onValueChangeFinished: () -> Unit,
     step: Float = finestStep(valueRange),
     format: (Float) -> String = { finestFormat(valueRange).format(it) },
+    enabled: Boolean = true,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
@@ -157,13 +167,15 @@ internal fun SliderControl(
         ) {
             Text(
                 text = label,
-                color = StudioContentColor.copy(alpha = 0.75f),
+                // Dimmed together with everything else in the row, so "spent" reads as one state rather than as a
+                // slider that happens not to respond.
+                color = StudioContentColor.copy(alpha = if (enabled) 0.75f else 0.3f),
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 text = format(value),
-                color = StudioContentColor,
+                color = StudioContentColor.copy(alpha = if (enabled) 1f else 0.4f),
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -173,7 +185,7 @@ internal fun SliderControl(
             StudioIconButton(
                 icon = Icons.Default.Refresh,
                 contentDescription = "Reset ${label.lowercase()}",
-                enabled = value != default,
+                enabled = enabled && value != default,
                 onClick = {
                     onValueChange(default)
                     onValueChangeFinished()
@@ -186,6 +198,7 @@ internal fun SliderControl(
             valueRange = valueRange,
             step = step,
             what = label.lowercase(),
+            enabled = enabled,
             onValueChange = onValueChange,
             onValueChangeFinished = onValueChangeFinished,
         )
@@ -285,6 +298,7 @@ private fun SteppedSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     what: String,
     step: Float = finestStep(valueRange),
+    enabled: Boolean = true,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
 ) {
@@ -298,7 +312,7 @@ private fun SteppedSlider(
         StudioStepperButton(
             icon = Icons.Default.Remove,
             contentDescription = "Decrease $what",
-            enabled = down != value,
+            enabled = enabled && down != value,
             onStep = { onValueChange(down) },
             onStepsFinished = onValueChangeFinished,
         )
@@ -307,12 +321,13 @@ private fun SteppedSlider(
             onValueChange = onValueChange,
             modifier = Modifier.weight(1f),
             valueRange = valueRange,
+            enabled = enabled,
             onValueChangeFinished = onValueChangeFinished,
         )
         StudioStepperButton(
             icon = Icons.Default.Add,
             contentDescription = "Increase $what",
-            enabled = up != value,
+            enabled = enabled && up != value,
             onStep = { onValueChange(up) },
             onStepsFinished = onValueChangeFinished,
         )

@@ -82,7 +82,6 @@ import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.compose.composeBlendMode
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.model.icon.Falloff
-import inkspire.morphic.core.model.icon.GrainDrift
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconFilter
 import inkspire.morphic.core.model.icon.IconPattern
@@ -1398,18 +1397,6 @@ private fun GrainControls(
 ) {
     val grain = effects.effectOrNull<LayerEffect.Grain>() ?: LayerEffect.Grain(amplitude = 0f)
 
-    LabeledControl("Drift") {
-        MorphicSegmentedButtons(
-            options = listOf("Scatter", "Along angle"),
-            selectedIndex = if (grain.drift == GrainDrift.DIRECTED) 1 else 0,
-            onSelect = { index ->
-                val drift = if (index == 1) GrainDrift.DIRECTED else GrainDrift.FREE
-                onUpdate { it.withEffect(grain.copy(drift = drift)) }
-                onCommit()
-            },
-        )
-    }
-
     SliderControl(
         label = "Strength",
         value = grain.amplitude,
@@ -1420,28 +1407,41 @@ private fun GrainControls(
     )
     SliderControl(
         label = "Grain size",
-        // Floored above zero: a lattice with no spacing is a division, and the model already calls that identity —
-        // so a slider that could reach it would silently delete the effect being tuned.
+        // The whole range, floor included: zero is the *finest* setting now rather than a lattice with no spacing,
+        // so there is nothing here to guard against — see `LayerEffect.Grain.grainSize` for what a position on this
+        // control means and why it is not the fraction it maps to.
         value = grain.grainSize,
-        valueRange = UnitFloor..0.4f,
+        valueRange = 0f..1f,
         default = GrainDefaults.grainSize,
         onValueChange = { value -> onUpdate { it.withEffect(grain.copy(grainSize = value)) } },
         onValueChangeFinished = onCommit,
     )
+    SliderControl(
+        label = "Directionality",
+        value = grain.directionality,
+        valueRange = 0f..1f,
+        default = GrainDefaults.directionality,
+        onValueChange = { value -> onUpdate { it.withEffect(grain.copy(directionality = value)) } },
+        onValueChangeFinished = onCommit,
+    )
 
-    // Only where there is a direction to name — see `GrainDrift`.
-    if (grain.drift == GrainDrift.DIRECTED) {
-        SliderControl(
-            label = "Angle",
-            value = grain.angleDegrees,
-            valueRange = 0f..360f,
-            step = AngleStep,
-            default = GrainDefaults.angleDegrees,
-            format = { "%.0f°".format(it) },
-            onValueChange = { value -> onUpdate { it.withEffect(grain.copy(angleDegrees = value)) } },
-            onValueChangeFinished = onCommit,
-        )
-    }
+    // **Present but spent when there is no direction to name, rather than absent** — the one place in this panel
+    // where the studio's "a control that changes nothing is worse than a missing one" rule is knowingly not applied,
+    // and the gate is why: it is the *continuous slider directly above*. Hidden, this row appeared and vanished
+    // under the very finger dragging that slider, shifting everything beneath it mid-gesture. Greyed out it states
+    // the dependency and the panel never moves. Where a gate is a discrete choice made elsewhere — a shape picked, a
+    // tint set — absent is still right, because the layout settles before the finger arrives.
+    SliderControl(
+        label = "Angle",
+        value = grain.angleDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = GrainDefaults.angleDegrees,
+        format = { "%.0f°".format(it) },
+        enabled = grain.directionality > 0f,
+        onValueChange = { value -> onUpdate { it.withEffect(grain.copy(angleDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
 }
 
 /**
@@ -1449,8 +1449,12 @@ private fun GrainControls(
  *
  * Deliberately more generous than [RippleReach]: a ripple past a tenth stops reading as water, where grain *wants*
  * to reach the point of tearing the artwork apart — that is the look, rather than the failure of it.
+ *
+ * **Nearly half the box, where it was a seventh.** At the old ceiling a full-strength grain frayed the edges and
+ * left the shape plainly readable, so the top of the slider was the middle of the effect: the state a user is
+ * reaching for at maximum — the icon dispersed into a cloud of its own colours — was not on the control at all.
  */
-private const val GrainReach = 0.15f
+private const val GrainReach = 0.45f
 
 /**
  * How far the waves push, how many of them, and where they start.

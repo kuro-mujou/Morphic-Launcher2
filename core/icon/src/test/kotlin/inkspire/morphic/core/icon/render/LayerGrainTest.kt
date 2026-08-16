@@ -18,8 +18,17 @@ import kotlin.math.abs
  */
 class LayerGrainTest {
 
-    private fun grain(amplitude: Float = 0.02f, grainSize: Float = 0.08f) =
-        LayerEffect.Grain(amplitude = amplitude, grainSize = grainSize)
+    private fun grain(
+        amplitude: Float = 0.02f,
+        grainSize: Float = 0.5f,
+        directionality: Float = 0f,
+        angleDegrees: Float = 0f,
+    ) = LayerEffect.Grain(
+        amplitude = amplitude,
+        grainSize = grainSize,
+        directionality = directionality,
+        angleDegrees = angleDegrees,
+    )
 
     @Test
     fun `the field stays inside minus one and one`() {
@@ -29,7 +38,7 @@ class LayerGrainTest {
         var highest = -Float.MAX_VALUE
 
         for (step in 0 until 2_000) {
-            val value = LayerGrain.noise(step * 0.37f, step * 0.61f, salt = 0)
+            val value = LayerGrain.field(step * 0.37f, step * 0.61f, salt = 0)
             lowest = minOf(lowest, value)
             highest = maxOf(highest, value)
         }
@@ -42,8 +51,8 @@ class LayerGrainTest {
     @Test
     fun `the field is deterministic, so the same recipe grains the same way every bake`() {
         assertEquals(
-            LayerGrain.noise(3.25f, 7.5f, salt = 0),
-            LayerGrain.noise(3.25f, 7.5f, salt = 0),
+            LayerGrain.field(3.25f, 7.5f, salt = 0),
+            LayerGrain.field(3.25f, 7.5f, salt = 0),
         )
     }
 
@@ -52,15 +61,30 @@ class LayerGrainTest {
         // Neighbouring samples must move *together*. A hash read per pixel would satisfy every other test here and
         // fail this one — and the difference on screen is confetti against torn pieces.
         var largestJump = 0f
-        var previous = LayerGrain.noise(0f, 4f, salt = 0)
+        var previous = LayerGrain.field(0f, 4f, salt = 0)
 
         for (step in 1..400) {
-            val value = LayerGrain.noise(step * 0.01f, 4f, salt = 0)
+            val value = LayerGrain.field(step * 0.01f, 4f, salt = 0)
             largestJump = maxOf(largestJump, abs(value - previous))
             previous = value
         }
-        // A hundredth of a cell apart, so the field cannot legitimately swing anywhere near its full range.
+        // A hundredth of a cell apart, so the field cannot legitimately swing anywhere near its full range. The
+        // bound allows for the octaves: the finest of them moves four times as fast as the base.
         assertTrue("largest jump was $largestJump", largestJump < 0.2f)
+    }
+
+    @Test
+    fun `the field is zero at a lattice point, which is what gradient noise buys`() {
+        // **The defect this replaced, and it is invisible as a bug.** Value noise puts its extremes *on* the
+        // lattice, so the field carries a square grid at the cell size and the artwork tears into axis-aligned
+        // chunks at every setting. Gradient noise reads zero at every corner and does its varying in between.
+        for (x in 0..4) {
+            for (y in 0..4) {
+                assertEquals(0f, LayerGrain.noise(x.toFloat(), y.toFloat(), salt = 0), 0.0001f)
+            }
+        }
+        // Which must not mean the field is zero everywhere — it varies between the corners.
+        assertNotEquals(0f, LayerGrain.noise(0.5f, 0.5f, salt = 0))
     }
 
     @Test
@@ -69,7 +93,7 @@ class LayerGrainTest {
         // would push every pixel along the diagonal — a shear rather than a scatter.
         val differ = (0 until 50).count { step ->
             val x = step * 0.53f
-            LayerGrain.noise(x, 1.7f, salt = 0) != LayerGrain.noise(x, 1.7f, salt = 1)
+            LayerGrain.field(x, 1.7f, salt = 0) != LayerGrain.field(x, 1.7f, salt = 1)
         }
         assertEquals(50, differ)
     }
@@ -77,25 +101,105 @@ class LayerGrainTest {
     @Test
     fun `the field changes across the lattice rather than repeating every cell`() {
         assertNotEquals(
-            LayerGrain.noise(0.5f, 0.5f, salt = 0),
-            LayerGrain.noise(1.5f, 0.5f, salt = 0),
+            LayerGrain.field(0.5f, 0.5f, salt = 0),
+            LayerGrain.field(1.5f, 0.5f, salt = 0),
         )
     }
 
     @Test
-    fun `amplitude and cell size are fractions of the box, so one recipe grains the same at every bake size`() {
-        assertEquals(1.92f, LayerGrain.amplitudePx(grain(), sizePx = 96), 0.001f)
-        assertEquals(5.76f, LayerGrain.amplitudePx(grain(), sizePx = 288), 0.001f)
+    fun `the field carries more than one size of detail`() {
+        // What the octaves are for. Sampled a whole cell apart the base octave has moved a long way; sampled a
+        // sixteenth of a cell apart, a single-octave field is nearly flat and this one is not.
+        var fineMovement = 0f
+        var previous = LayerGrain.field(2f, 2f, salt = 0)
 
-        assertEquals(7.68f, LayerGrain.cellPx(grain(), sizePx = 96), 0.001f)
-        assertEquals(23.04f, LayerGrain.cellPx(grain(), sizePx = 288), 0.001f)
+        for (step in 1..16) {
+            val value = LayerGrain.field(2f + step / 16f, 2f, salt = 0)
+            fineMovement = maxOf(fineMovement, abs(value - previous))
+            previous = value
+        }
+        assertTrue("the fine detail is missing: $fineMovement", fineMovement > 0.01f)
     }
 
     @Test
-    fun `a cell never comes back at zero, which would divide by it`() {
-        // `isIdentity` already refuses a grain size of zero; this is the guard for a stored recipe that never went
-        // through it, and for one so fine the cell rounds away on a small bake.
-        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), sizePx = 192) > 0f)
-        assertTrue(LayerGrain.cellPx(grain(grainSize = 0.0001f), sizePx = 48) > 0f)
+    fun `amplitude is a fraction of the box, so one recipe grains the same at every bake size`() {
+        assertEquals(1.92f, LayerGrain.amplitudePx(grain(), sizePx = 96), 0.001f)
+        assertEquals(5.76f, LayerGrain.amplitudePx(grain(), sizePx = 288), 0.001f)
+    }
+
+    @Test
+    fun `the cell size is geometric in the control, so the fine end has as much travel as the coarse`() {
+        // **The fix for a slider whose useful half was unreachable.** Equal steps of the control must be equal
+        // *ratios* of cell size — which is what puts dust, clusters and blocks each on a third of the travel
+        // instead of crowding the first three into the bottom few percent.
+        val size = 1000
+        val quarter = LayerGrain.cellPx(grain(grainSize = 0.25f), size)
+        val half = LayerGrain.cellPx(grain(grainSize = 0.5f), size)
+        val threeQuarters = LayerGrain.cellPx(grain(grainSize = 0.75f), size)
+
+        assertEquals(half / quarter, threeQuarters / half, 0.01f)
+        // And the ends are the two the mapping names: a few pixels at 1000, and half the box.
+        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), size) < size * 0.01f)
+        assertEquals(size * 0.5f, LayerGrain.cellPx(grain(grainSize = 1f), size), 0.5f)
+    }
+
+    @Test
+    fun `the finest grain still displaces at the size a home icon bakes at`() {
+        // **The regression this floor exists for, and it was invisible in the studio.** Gradient noise is zero *at*
+        // the lattice, so a cell of about a pixel puts every sample on a zero: at the finest setting a 144px icon
+        // displaced nothing at all while the studio's much larger canvas — where the same fraction is several
+        // pixels — showed the grain the home screen would never draw. The two-renderer hazard's own shape, reached
+        // through a bake size rather than through a second renderer.
+        val homeIcon = 144
+        val cellPx = LayerGrain.cellPx(grain(grainSize = 0f), homeIcon)
+        var largest = 0f
+
+        for (pixel in 0 until homeIcon) {
+            val value = LayerGrain.field(pixel / cellPx, pixel / cellPx, salt = 0)
+            largest = maxOf(largest, abs(value))
+        }
+        assertTrue("the field vanished at cell $cellPx", largest > 0.1f)
+    }
+
+    @Test
+    fun `with no directionality the displacement is the field itself`() {
+        val into = FloatArray(2)
+        LayerGrain.displace(grain(directionality = 0f), fieldX = 0.3f, fieldY = -0.7f, into = into)
+
+        assertEquals(0.3f, into[0], 0.0001f)
+        assertEquals(-0.7f, into[1], 0.0001f)
+    }
+
+    @Test
+    fun `full directionality puts every pixel on one line`() {
+        // 90° is along +x by the studio's convention, so the sideways component must be gone entirely — that is
+        // what "smeared" means, and it is the end the old two-valued control could reach.
+        val into = FloatArray(2)
+        LayerGrain.displace(grain(directionality = 1f, angleDegrees = 90f), 0.3f, -0.7f, into)
+
+        assertEquals(0.3f, into[0], 0.0001f)
+        assertEquals(0f, into[1], 0.0001f)
+    }
+
+    @Test
+    fun `half directionality keeps half the sideways movement`() {
+        // **The middle the enum could not express**, and the reason this is a continuum: the along-axis part is
+        // untouched at every setting, and only the across-axis part is squashed.
+        val into = FloatArray(2)
+        LayerGrain.displace(grain(directionality = 0.5f, angleDegrees = 90f), 0.3f, -0.8f, into)
+
+        assertEquals(0.3f, into[0], 0.0001f)
+        assertEquals(-0.4f, into[1], 0.0001f)
+    }
+
+    @Test
+    fun `the angle rotates the axis the smear runs along`() {
+        // Straight down at 0°, so a fully directed displacement keeps only its y component there — the mirror of
+        // the 90° case above, which is what makes the angle slider mean a rotation rather than a swap.
+        val into = FloatArray(2)
+        LayerGrain.displace(grain(directionality = 1f, angleDegrees = 0f), 0.3f, -0.7f, into)
+
+        assertEquals(0f, into[0], 0.0001f)
+        assertEquals(-0.7f, into[1], 0.0001f)
     }
 }
