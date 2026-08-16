@@ -3,6 +3,7 @@ package inkspire.morphic.core.icon.parse
 import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -31,14 +32,18 @@ class DrawableParser(private val resources: Resources) {
     fun parse(drawable: Drawable, label: String? = null): ParsedIcon = when (drawable) {
         is AdaptiveIconDrawable -> ParsedIcon(
             // getForeground()/getBackground() are nullable in the SDK; fall back / stay legacy if absent.
-            foreground = (drawable.foreground ?: drawable).toParsedLayer(resources, true, label, "foreground"),
+            foreground = (drawable.foreground ?: drawable).overshot().toParsedLayer(resources, true, label, "foreground"),
             // **The background is deliberately not measured, and not normalized.** Its ink legitimately covers the
             // whole canvas — that is what a plate is — so a measurement would say "full" and mean nothing. Leaving
             // it untouched is also a decision rather than an omission: with no mask, rescaling a plate would crop it
             // to a square, which is a visible change nobody asked for. It is not rasterized either, for the same
             // reason: nothing about it is measured, so nothing depends on it being size-independent.
-            background = drawable.background?.toParsedLayer(resources),
-            monochrome = drawable.monochromeOrNull()?.toParsedLayer(resources, true, label, "monochrome"),
+            //
+            // It **is** overshot, though, and that is geometry rather than measurement: a plate cropped differently
+            // from the foreground in front of it would put the two out of register wherever the plate has anything
+            // on it but a flat colour.
+            background = drawable.background?.overshot()?.toParsedLayer(resources),
+            monochrome = drawable.monochromeOrNull()?.overshot()?.toParsedLayer(resources, true, label, "monochrome"),
         )
 
         else -> ParsedIcon(
@@ -100,6 +105,34 @@ class DrawableParser(private val resources: Resources) {
 /** The adaptive monochrome (themed-icon) layer, or `null` below Android 13 or when the icon exposes none. */
 private fun AdaptiveIconDrawable.monochromeOrNull(): Drawable? =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) monochrome else null
+
+/**
+ * An adaptive layer expanded so that the part the platform actually *shows* fills the box.
+ *
+ * **This is the "adaptive-layer overshoot" the renderer's KDoc has been deferring, and it was visible all along as
+ * icons that looked slightly small.** An [AdaptiveIconDrawable]'s foreground and background are 108-unit canvases of
+ * which only the central 72 is the masked, guaranteed-visible area; the ring around it is bleed the platform
+ * reserves for parallax. So Android draws each layer at **1.5× the icon's size, centred**, and masks to the icon.
+ * Drawing one into the box at 1× instead — which is what happened here — leaves the artwork the designer drew
+ * covering about two thirds of the square, with transparent margin around it.
+ *
+ * That is a constant *fraction*, which is exactly why it hid for so long: at a 48dp cell it reads as an icon that
+ * is a touch small, and only at the studio's zoom does it read as what it is — the icon's box plainly larger than
+ * the icon in it.
+ *
+ * **A negative [InsetDrawable] rather than expanded bounds inside [rasterized]**, so there is one mechanism and not
+ * two: everything downstream — the rasterizing, the ink measurement, normalization, both renderers — goes on setting
+ * bounds to the box and needs to know nothing about this. What it wraps simply draws bigger than what it is given.
+ *
+ * The fraction is the platform's own ([AdaptiveIconDrawable.getExtraInsetFraction], a quarter), not a number chosen
+ * here: it is the same constant Android masks by, so the result is what the system would have drawn.
+ *
+ * **A flat colour is handed back untouched**, which is exactness rather than an optimisation: expanding a colour
+ * changes nothing about what it draws, and wrapping it would hide the [ColorDrawable] from [toParsedLayer] — so an
+ * adaptive icon's plain plate would stop being a [ParsedLayer.Color] and become a rasterised image of one.
+ */
+private fun Drawable.overshot(): Drawable =
+    if (this is ColorDrawable) this else InsetDrawable(this, -AdaptiveIconDrawable.getExtraInsetFraction())
 
 /** A [ColorDrawable] becomes a flat [ParsedLayer.Color]; every other drawable becomes an [ParsedLayer.Image]. */
 private fun Drawable.toParsedLayer(
