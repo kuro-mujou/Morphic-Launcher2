@@ -137,6 +137,36 @@ internal object ColorMatrices {
     )
 
     /**
+     * Maps the whole tonal range onto a **two-colour ramp**: what was black comes out [darkR]/[darkG]/[darkB], what
+     * was white comes out [lightR]/[lightG]/[lightB], and everything between is that line at its own luminance.
+     *
+     * **The third thing [scale] cannot express, after [mix] and [solid], and it is the one a whole family of looks is
+     * made of** — every duotone, and the green-on-green of a handheld screen. It is not a tint: a tint attenuates the
+     * colours already there, so a red icon and a blue one stay different, where this discards the hue entirely and
+     * keeps only how *light* each pixel was. Which is exactly why the two ends are worth choosing.
+     *
+     * `out = dark + luma × (light − dark)`, per channel — so the coefficients are the luminance weights times the
+     * span, and the fifth column is the dark end. **Channels are 0..255**, the fifth column's scale, and being where
+     * the dark end lands that is the half which is silent when it is wrong: a 0..1 dark end is visually black, which
+     * looks like a duotone that simply has dark shadows.
+     */
+    fun duotone(
+        darkR: Float, darkG: Float, darkB: Float,
+        lightR: Float, lightG: Float, lightB: Float,
+    ): FloatArray {
+        fun row(dark: Float, light: Float): FloatArray {
+            // The span is divided by 255 and the weights are not, because a coefficient multiplies a channel on
+            // 0..255 and must land on 0..255: `luma × (light − dark) / 255`. Scaling it back up — which reads as
+            // symmetry with the fifth column — is the arithmetic slip the duotone test exists to catch, and it
+            // produces a picture that is merely blown out rather than one that is obviously broken.
+            val span = (light - dark) / 255f
+            return floatArrayOf(LumR * span, LumG * span, LumB * span, 0f, dark)
+        }
+        return row(darkR, lightR) + row(darkG, lightG) + row(darkB, lightB) +
+            floatArrayOf(0f, 0f, 0f, 1f, 0f)
+    }
+
+    /**
      * Each output channel as a weighted mix of all three inputs — the shape a sepia or a channel-swapped look needs,
      * and the one thing [scale] cannot express, since it can only ever attenuate a channel by itself.
      */

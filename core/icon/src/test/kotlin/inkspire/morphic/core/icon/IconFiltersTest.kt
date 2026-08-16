@@ -16,6 +16,23 @@ import org.junit.Test
  */
 class IconFiltersTest {
 
+    /** Pushes a colour through a 4×5 matrix the way a graphics pipeline does — `LayerFilterTest`'s helper. */
+    private fun apply(matrix: FloatArray, r: Int, g: Int, b: Int): Triple<Int, Int, Int> {
+        fun channel(row: Int): Int {
+            val value = matrix[row * 5] * r + matrix[row * 5 + 1] * g +
+                matrix[row * 5 + 2] * b + matrix[row * 5 + 4]
+            return value.toInt().coerceIn(0, 255)
+        }
+        return Triple(channel(0), channel(1), channel(2))
+    }
+
+    /** Equal to within one level per channel — see the duotone test for why the slack is there. */
+    private fun assertNear(expected: Triple<Int, Int, Int>, actual: Triple<Int, Int, Int>) {
+        assertEquals("red", expected.first.toFloat(), actual.first.toFloat(), 1f)
+        assertEquals("green", expected.second.toFloat(), actual.second.toFloat(), 1f)
+        assertEquals("blue", expected.third.toFloat(), actual.third.toFloat(), 1f)
+    }
+
     @Test
     fun `every id is unique, because a duplicate would shadow a look with no error`() {
         val ids = IconFilters.All.map { it.filter.id }
@@ -63,6 +80,49 @@ class IconFiltersTest {
             )
         }
         assertEquals(IconFilters.All.size, IconFilters.Category.entries.sumOf { IconFilters.inCategory(it).size })
+    }
+
+    @Test
+    fun `no category is empty, because a chip with nothing behind it is a dead end`() {
+        // The picker draws a chip per category whatever the table holds, so an empty one is a tap that clears the
+        // row and offers only "None". Cheap to add a category and forget to file anything under it.
+        IconFilters.Category.entries.forEach { category ->
+            assertTrue("$category has no filters", IconFilters.inCategory(category).isNotEmpty())
+        }
+    }
+
+    @Test
+    fun `a duotone lands on its two ends and spans between them`() {
+        // **The fifth column again, which is where this is silent when wrong**: the dark end is a translation on
+        // 0..255, so a 0..1 value there gives a duotone whose shadows are simply black — plausible, and not what
+        // was authored. Handheld Green is the sharpest case, both ends being colours nothing else here produces.
+        val matrix = IconFilters.matrixOrNull(IconFilter("handheld_green"))!!
+
+        // Within a point, because [apply] truncates as a pipeline does and the weights sum to one only to within
+        // float error — the wrong-scale failure this guards against is out by fifteen to a hundred and fifty-five,
+        // so a point of slack costs it nothing.
+        assertNear(Triple(0x0F, 0x38, 0x0F), apply(matrix, 0, 0, 0))
+        assertNear(Triple(0x9B, 0xBC, 0x0F), apply(matrix, 255, 255, 255))
+
+        // And a mid-grey lands mid-ramp rather than at either end, which is what "spans" means and what a
+        // `solid` — the other matrix with colour in its fifth column — would fail.
+        val (r, g, b) = apply(matrix, 128, 128, 128)
+        assertTrue("red did not span: $r", r in 0x0F + 1..0x9B - 1)
+        assertTrue("green did not span: $g", g in 0x38 + 1..0xBC - 1)
+        // Both ends of blue are the same value here, so it is flat by construction — which is the degenerate case
+        // of the same arithmetic and would break the moment the span were applied to the wrong end.
+        assertEquals(0x0F, b)
+    }
+
+    @Test
+    fun `a duotone discards hue, which is the whole difference from a tint`() {
+        // Two colours of the same luminance must come out identical — a tint would keep them apart, and keeping
+        // them apart is exactly what stops a set of icons reading as one set.
+        val matrix = IconFilters.matrixOrNull(IconFilter("duo_indigo_peach"))!!
+
+        // Rec. 709 puts pure green at 0.715 — so 182/255 is the grey of the same luminance, to within the point
+        // that rounding leaves. A tint would hold these tens of levels apart on every channel.
+        assertNear(apply(matrix, 0, 255, 0), apply(matrix, 182, 182, 182))
     }
 
     @Test

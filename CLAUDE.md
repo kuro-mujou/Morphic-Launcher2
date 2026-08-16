@@ -644,15 +644,32 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
     an **unknown id resolving to no matrix** so a recipe from a later build degrades rather than failing. Names
     describe the look — never a person or a film, since a filter's name is shipped, stored and user-visible.
   - **`ColorMatrices` is the arithmetic, `LayerFilter` the policy.** The builders came out of `LayerFilter` when the
-    table arrived, because authoring seventeen looks as raw `floatArrayOf` is unreviewable — a look composes as
+    table arrived, because authoring dozens of looks as raw `floatArrayOf` is unreviewable — a look composes as
     `saturation(0.9).then(contrast(1.12))…`, which says what it *is*. `LayerFilter` kept the one thing that is about
-    the four sliders: the order they compose in. Two builders are new: **`contrast` pivots about mid-grey** (without
-    the offset it is a brightness control that also steepens, the usual way this is written wrong), and **`mix`**
+    the four sliders: the order they compose in. Three builders are new: **`contrast` pivots about mid-grey** (without
+    the offset it is a brightness control that also steepens, the usual way this is written wrong), **`mix`**
     weights each output channel across all three inputs, which is what a true sepia needs and what `scale`
-    structurally cannot express. The fifth column is a translation on 0..255, which is silent when wrong.
+    structurally cannot express, and **`duotone`** maps the tonal range onto a two-colour ramp. The fifth column is a
+    translation on 0..255, which is silent when wrong.
   - **A filter swatch shows the look, not the icon** — one fixed reference gradient under each filter's matrix.
-    Previewing on the real icon is seventeen bakes, and an icon that happens to be black says nothing about a warm
+    Previewing on the real icon is a bake per tile, and an icon that happens to be black says nothing about a warm
     grade; every tile being the same strip is what makes them comparable.
+  - **The library grew to 46 looks in seven categories, drawn from captures of the same reference studio the
+    effects came from**, and three things about the expansion are worth keeping:
+    - **`duotone` is the one piece of new arithmetic, and it is a whole family.** `out = dark + luma × (light −
+      dark)`, which discards hue entirely and keeps only how light each pixel was — *not* a tint, which attenuates
+      the colours already there and so leaves a red icon and a blue one different. Discarding the hue is exactly
+      what makes a screenful of icons drawn by different hands read as one set. The span is divided by 255 while
+      the weights are not, and getting that backwards produces a blown-out picture rather than an obviously broken
+      one; **the test caught it in the authored version of this**, which is why it is a shared builder with a test
+      rather than a matrix written out per entry.
+    - **A matrix cannot quantize, and that is the bound on the whole file.** The reference's retro-hardware looks
+      snap colours to a fixed palette, which is not a linear map at any size — so those entries here are the *ramp
+      between the palette's two ends* (a duotone), not a stepped approximation pretending to be the same thing. A
+      real one would be a `LayerEffect` with a per-pixel pass, like Pixelate.
+    - **The names are ours.** The reference has a "Tarantino", an "iOS" and a "MIUI"; a filter's name is shipped,
+      stored and user-visible, so borrowing one makes the launcher's vocabulary depend on somebody else's
+      trademark for no gain in clarity. Same rule, now with three worked examples.
 
 **`LayerEffect.Glow` and `LayerEffect.Shadow` are the same halo twice, and the first two effects that do not draw
 live.** Both are a blurred copy of the layer's *finished* silhouette drawn behind it — after the transform and the
@@ -1828,7 +1845,7 @@ always lands quickly. The draft fraction (a quarter of the side, a sixteenth of 
 tune on device.
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
-`SliderControl` (slice 1), the **filter** library of seventeen looks (slice 2), the **layer rail** that replaced the
+`SliderControl` (slice 1), the **filter** library, now 46 looks in seven categories (slice 2), the **layer rail** that replaced the
 `LAYERS` tool entry (slice 3), slice 4 — **`LayerEffect.Bloom`** and **`LayerEffect.Gloss`**, plus **whole-icon
 effects**, which that plan had not noticed it needed (six of the thirteen are only correct over the composite) — and
 slice 5, **perspective**, which turned out to need the live path to give up its `graphicsLayer`, slice 6, **Pattern**,
