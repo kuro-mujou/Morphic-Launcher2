@@ -147,6 +147,55 @@ internal fun IconStudioWorkspace.pinched(
     )
 }
 
+/** How far the layer rail is drawn from where it rests, in canvas pixels. See [railOffset]. */
+internal data class RailOffset(val x: Float, val y: Float)
+
+/**
+ * Where the layer rail is actually drawn: its stored offset, **clamped to what fits on the canvas**.
+ *
+ * **The clamp is applied when the offset is read, not only when it is written, and that is the whole point of this
+ * function existing beside [railDragged].** A stored offset is a promise about a rail of a particular size, and the
+ * rail changes size for reasons that are not drags — it is flipped from a column to a row, collapsed or expanded,
+ * given another layer, or handed a canvas of another shape by a rotation. Each of those can leave a perfectly good
+ * offset describing a position that is now off the edge, and clamping only on the way *in* meant the rail sailed off
+ * the screen taking its handle with it: nothing left to drag, and no menu to flip it back with. Which is the one
+ * failure a movable control must not have, since every way of fixing it is the control itself.
+ *
+ * **And it is never written back**, which is this codebase's standing rule for a stored value invalidated by
+ * something that was not about it — the same one the grid counts and the APPS list's row height are read under. So a
+ * rail flipped to a row is pinned onto the canvas, and flipping it back to a column puts it exactly where the user
+ * had dragged it rather than where the flip happened to leave it.
+ *
+ * **Both the resting place and the size are measured rather than declared**, which is what lets the caller change the
+ * rail's padding, its cap, or the side it rests on without this function learning about any of it: the resting
+ * top-left is the placed position less the offset currently applied, which is exact and not circular. See the call
+ * site in `StudioLayerRail`.
+ *
+ * A degenerate measurement — the frame before the rail has been laid out, or a canvas of nothing — returns the stored
+ * offset unclamped, for [railDragged]'s reason: clamping against zero would slam the rail into the corner for one
+ * frame on the way in.
+ *
+ * A rail *longer than the canvas* — a row on a narrow phone — resolves to the head against the start edge, since the
+ * clamped range collapses to a point. That is the best available answer rather than a fallback: the handle and the
+ * menu it opens are at the head, so what stays reachable is what fixes it.
+ */
+internal fun IconStudioWorkspace.railOffset(
+    canvasWidth: Float,
+    canvasHeight: Float,
+    railWidth: Float,
+    railHeight: Float,
+    restingLeft: Float,
+    restingTop: Float,
+): RailOffset {
+    if (canvasWidth <= 0f || canvasHeight <= 0f || railWidth <= 0f || railHeight <= 0f) {
+        return RailOffset(railX * canvasWidth, railY * canvasHeight)
+    }
+    return RailOffset(
+        x = clampedRailOffset(restingLeft, railX * canvasWidth, canvasWidth, railWidth),
+        y = clampedRailOffset(restingTop, railY * canvasHeight, canvasHeight, railHeight),
+    )
+}
+
 /**
  * This workspace after one frame of dragging the layer rail by its handle.
  *
@@ -155,13 +204,13 @@ internal fun IconStudioWorkspace.pinched(
  * guarantee there is something left to drag back. The rail is a *control*, and a control half off the screen is one
  * whose buttons cannot all be pressed. So this keeps the whole of it in, and the pan keeps only the center.
  *
- * **Both the resting place and the size are measured rather than declared**, which is what lets the caller change the
- * rail's padding, its cap, or the side it rests on without this function learning about any of it: the resting
- * top-left is the placed position less the offset currently applied, which is exact and not circular. See the call
- * site in `StudioLayerRail`.
+ * **The drag starts from where the rail is *drawn*, not from what is stored**, which is [railOffset]'s clamp applied
+ * before this one rather than instead of it. The two differ exactly when the stored offset is out of range, and
+ * starting from the stored value there would bank travel: a rail pinned at the edge by a flip would not move under the
+ * finger until the drag had paid off the distance it was clamped by. Same defect `pinched` states for the pan, one
+ * control over.
  *
- * A degenerate measurement — a frame before the rail has been laid out, or a canvas of nothing — returns the workspace
- * untouched rather than clamping against zero, which would slam the rail into the corner on the first frame of a drag.
+ * A degenerate measurement returns the workspace untouched rather than clamping against zero.
  */
 internal fun IconStudioWorkspace.railDragged(
     canvasWidth: Float,
@@ -175,16 +224,22 @@ internal fun IconStudioWorkspace.railDragged(
 ): IconStudioWorkspace {
     if (canvasWidth <= 0f || canvasHeight <= 0f || railWidth <= 0f || railHeight <= 0f) return this
 
-    val left = (restingLeft + railX * canvasWidth + dragX)
-        .coerceIn(0f, (canvasWidth - railWidth).coerceAtLeast(0f))
-    val top = (restingTop + railY * canvasHeight + dragY)
-        .coerceIn(0f, (canvasHeight - railHeight).coerceAtLeast(0f))
+    val drawn = railOffset(canvasWidth, canvasHeight, railWidth, railHeight, restingLeft, restingTop)
 
     return copy(
-        railX = (left - restingLeft) / canvasWidth,
-        railY = (top - restingTop) / canvasHeight,
+        railX = clampedRailOffset(restingLeft, drawn.x + dragX, canvasWidth, railWidth) / canvasWidth,
+        railY = clampedRailOffset(restingTop, drawn.y + dragY, canvasHeight, railHeight) / canvasHeight,
     )
 }
+
+/**
+ * [offset] reduced until the rail it moves lies wholly within the canvas, on one axis.
+ *
+ * Stated as an offset in and an offset out — rather than as a position — because the offset is what is stored and
+ * what is applied, so every caller here would otherwise convert to a position and back around this one line.
+ */
+private fun clampedRailOffset(resting: Float, offset: Float, canvasExtent: Float, railExtent: Float): Float =
+    (resting + offset).coerceIn(0f, (canvasExtent - railExtent).coerceAtLeast(0f)) - resting
 
 /**
  * The range a pan fraction may take on one axis, so the bound's center lands within the canvas.

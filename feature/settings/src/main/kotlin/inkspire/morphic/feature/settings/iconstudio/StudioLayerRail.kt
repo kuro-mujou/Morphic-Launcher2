@@ -117,6 +117,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  * menu and both persisted. The two arms below are the only thing not shared between them: a `Column` and a `Row` are
  * two layouts, and `weight` is scope-specific, so the container is written twice and everything inside it once.
  *
+ * **Changing either one re-clamps where the rail sits, which is why the offset is *resolved* and not simply read.** A
+ * stored offset describes a rail of the size it had when it was dragged — so a column dragged to the start edge, made
+ * a row, is suddenly a wide thing at a position chosen for a narrow one, and it leaves the canvas taking its handle
+ * with it. That is the one failure a movable control must not have, since the handle is what would fix it. See
+ * [railOffset], which also says why the correction is not written back.
+ *
  * **Four bands, and only one of them scrolls**: the handle, the composite tile, the layers, then `+`. The three that
  * do not are pinned because none of them is a layer — a control that adds one must not be pushed out of reach by the
  * layer it just added, and the composite is what the whole stack draws into. Collapsing shortens the one that does.
@@ -156,15 +162,31 @@ internal fun StudioLayerRail(
     val current = state.editing.layers.indices.map(state::layerKey).toSet()
     SideEffect { known = current }
 
-    // **What the rail measures about itself, so the drag can be clamped without anyone declaring its geometry.** The
-    // resting top-left is the placed position *less* the offset currently applied — exact, and not circular, because
-    // the offset is a value we already hold. That is what lets the caller change the padding, the cap or the edge the
-    // rail rests on with nothing here to keep in step.
+    // **What the rail measures about itself, so where it sits can be clamped without anyone declaring its geometry.**
+    // The resting top-left is the placed position *less* the offset currently applied — exact, and not circular,
+    // because the offset is a value we already hold. That is what lets the caller change the padding, the cap or the
+    // edge the rail rests on with nothing here to keep in step.
+    //
+    // Read by the *draw* as well as by the drag now, which is what makes an axis flip safe: the size these hold is
+    // one frame behind the flip, so the first composition after it clamps against the old shape and the next against
+    // the new. One frame, and the alternative — measuring in composition — is not available.
     var railSize by remember { mutableStateOf(Size.Zero) }
     var restingTopLeft by remember { mutableStateOf(Offset.Zero) }
 
-    val offsetX = workspace.railX * canvasWidth
-    val offsetY = workspace.railY * canvasHeight
+    // **Resolved rather than read, because the rail's size changes for reasons that are not drags** — the axis flip
+    // most of all, but also collapsing, a layer added, or a rotation. A stored offset describes a rail of the size it
+    // had when it was dragged, so every one of those can leave it pointing off the edge; [railOffset] is what keeps
+    // the drawn rail on the canvas whatever happened to it, and it deliberately does not write the correction back.
+    val offset = workspace.railOffset(
+        canvasWidth = canvasWidth,
+        canvasHeight = canvasHeight,
+        railWidth = railSize.width,
+        railHeight = railSize.height,
+        restingLeft = restingTopLeft.x,
+        restingTop = restingTopLeft.y,
+    )
+    val offsetX = offset.x
+    val offsetY = offset.y
     val vertical = workspace.railAxis == LayerRailAxis.VERTICAL
 
     // **Collapsing shrinks the viewport; it does not shorten the list.** The first cut drew only the selected layer,

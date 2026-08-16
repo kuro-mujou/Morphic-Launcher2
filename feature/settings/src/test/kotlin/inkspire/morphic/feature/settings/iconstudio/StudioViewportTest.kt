@@ -236,6 +236,113 @@ class StudioViewportTest {
     }
 
     @Test
+    fun `a rail that changed shape is pulled back onto the canvas`() {
+        // **The axis flip, which is what this clamp was moved onto the read for.** A column dragged to the start edge
+        // is a narrow thing at a position chosen for a narrow thing; made a row it is 300 wide at the same place, and
+        // clamping only on the way in left it — and its handle, at the head — off the canvas with no way back.
+        val dragged = IconStudioWorkspace.Default.railDragged(
+            canvasWidth = canvas,
+            canvasHeight = canvas,
+            railWidth = 60f,
+            railHeight = 300f,
+            restingLeft = canvas - 72f,
+            restingTop = topInset,
+            dragX = -9_000f,
+            dragY = 0f,
+        )
+
+        // Same stored offset, now read against a rail lying down and resting somewhere else.
+        val restingLeft = canvas - 300f
+        val offset = dragged.railOffset(
+            canvasWidth = canvas,
+            canvasHeight = canvas,
+            railWidth = 300f,
+            railHeight = 60f,
+            restingLeft = restingLeft,
+            restingTop = topInset,
+        )
+        val left = restingLeft + offset.x
+
+        assertTrue("the head left the canvas: $left", left >= 0f)
+        assertTrue("the tail left the canvas: ${left + 300f}", left + 300f <= canvas)
+    }
+
+    @Test
+    fun `the correction is not written back`() {
+        // Clamped on read, never on the way to storage — the rule the grid counts are read under. So flipping the
+        // rail back restores where the user dragged it rather than where the flip happened to leave it.
+        val arranged = IconStudioWorkspace.Default.copy(railX = -0.9f)
+        arranged.railOffset(
+            canvasWidth = canvas,
+            canvasHeight = canvas,
+            railWidth = 300f,
+            railHeight = 60f,
+            restingLeft = canvas - 300f,
+            restingTop = topInset,
+        )
+
+        assertEquals(-0.9f, arranged.railX, Tolerance)
+    }
+
+    @Test
+    fun `a drag from a clamped rail moves at once`() {
+        // The banking defect, one control over from the pan's. Starting the drag from the *stored* offset rather than
+        // from where the rail is drawn would leave it dead under the finger until the clamp's distance was paid off.
+        val railWidth = 300f
+        val railHeight = 60f
+        val restingLeft = canvas - railWidth
+        val offScreen = IconStudioWorkspace.Default.copy(railX = -0.9f)
+
+        val drawn = offScreen.railOffset(canvas, canvas, railWidth, railHeight, restingLeft, topInset)
+        val nudged = offScreen.railDragged(
+            canvasWidth = canvas,
+            canvasHeight = canvas,
+            railWidth = railWidth,
+            railHeight = railHeight,
+            restingLeft = restingLeft,
+            restingTop = topInset,
+            dragX = 40f,
+            dragY = 0f,
+        )
+        val moved = nudged.railOffset(canvas, canvas, railWidth, railHeight, restingLeft, topInset)
+
+        assertEquals(drawn.x + 40f, moved.x, Tolerance)
+    }
+
+    @Test
+    fun `a rail longer than the canvas keeps its head on screen`() {
+        // A row on a narrow phone: the clamped range collapses to a point, and the point to pick is the one the
+        // handle is at — the head — because that is what fixes the state.
+        val offset = IconStudioWorkspace.Default.copy(railX = -0.5f).railOffset(
+            canvasWidth = canvas,
+            canvasHeight = canvas,
+            railWidth = canvas + 200f,
+            railHeight = 60f,
+            restingLeft = -100f,
+            restingTop = topInset,
+        )
+
+        assertEquals(0f, -100f + offset.x, Tolerance)
+    }
+
+    @Test
+    fun `an unmeasured rail is drawn where it was stored`() {
+        // The frame before layout has answered, matching the drag's own degenerate case: clamping against zero here
+        // would put the rail in the corner for a frame on the way in.
+        val offset = IconStudioWorkspace.Default.copy(railX = -0.4f, railY = 0.2f).railOffset(
+            canvasWidth = canvas,
+            canvasHeight = canvas,
+            railWidth = 0f,
+            railHeight = 0f,
+            restingLeft = 0f,
+            restingTop = 0f,
+        )
+
+        assertEquals(-0.4f * canvas, offset.x, Tolerance)
+        assertEquals(0.2f * canvas, offset.y, Tolerance)
+    }
+
+    @Test
     fun `an unmeasured rail is not dragged`() {
         val untouched = IconStudioWorkspace.Default.railDragged(
             canvasWidth = canvas,
