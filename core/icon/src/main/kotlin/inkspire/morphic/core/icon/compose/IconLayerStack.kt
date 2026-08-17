@@ -403,6 +403,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     // effect would be worse than a missing one, since only the missing one is noticed.
     is LayerEffect.Glow,
     is LayerEffect.Shadow,
+    is LayerEffect.InnerShadow,
     is LayerEffect.Ripple,
     is LayerEffect.Grain,
     is LayerEffect.Pixelate,

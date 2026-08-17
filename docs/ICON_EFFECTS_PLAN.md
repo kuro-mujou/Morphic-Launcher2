@@ -689,7 +689,19 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    neither renderer can check against the other. It takes no falloff and no position, and that is the shape of the
    effect rather than controls left out: a ramp with an angle arrives from one side, which is a bloom, and an
    off-centre disc is a bloom placed.
-3. **Inner shadow** — `haloed` with the alpha inverted; brings the alpha-invert matrix.
+3. **Inner shadow** — `haloed` with the alpha inverted; brings the alpha-invert matrix. **Built, and the matrix was
+   never needed.** Destination-out over a filled buffer leaves `dstAlpha × (1 − srcAlpha)`, which *is* the alpha
+   inversion — two canvas calls, where a colour matrix would have had to reason about premultiplication to invert an
+   alpha channel. So 8a's "one primitive genuinely missing" is wrong: the primitive is a `PorterDuff` mode that was
+   already in the file, and outline's erosion is the same op run twice rather than a matrix either. What it *did*
+   need was unforeseen and is the interesting half — **the complement has to be built in a padded buffer**. An inner
+   shadow is cast by what surrounds the artwork, and a layer whose artwork reaches the icon's box has nothing
+   surrounding it *within* the bitmap; built at box size, the shadow fades in from nothing along exactly those edges,
+   so a full-bleed background plate — the commonest thing anyone recesses — would come out flat wherever it reached
+   the edge. `LayerShadow.innerMarginPx` sizes the padding from the three ways the complement's edge travels inward:
+   the blur spreads it, the choke grows it, the throw slides it. Source-atop is what clips the result back inside the
+   silhouette, so there is no second masking pass. Labelled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
+   precedent: four columns is one short word.
 4. **Inner glow** — inner shadow's twin, no toggle.
 5. **Outline** — dilate and erode; the shared silhouette helpers get extracted here, on their second consumer.
 6. **Bevel & emboss** — the one new kernel; a slice on its own.

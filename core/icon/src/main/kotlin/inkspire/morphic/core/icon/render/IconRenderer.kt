@@ -88,6 +88,16 @@ class IconRenderer(
     }
 
     /**
+     * [maskPaint]'s opposite — keeps what is drawn only where the silhouette is *transparent*.
+     *
+     * Which is how [complementOf] inverts an alpha channel without a colour matrix: destination-out over a filled
+     * buffer leaves exactly the region the artwork does not cover.
+     */
+    private val punchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+    }
+
+    /**
      * Renders the visible layers of [layerSet] for [icon] into one `sizePx` × `sizePx` bitmap.
      *
      * @param packImage this app's artwork from an installed icon pack, pre-bound to the component by the caller —
@@ -310,6 +320,9 @@ class IconRenderer(
                         sizePx = sizePx,
                     )
                 }
+
+                // The same halo again, cast by the *complement* of the silhouette and laid back inside it.
+                is LayerEffect.InnerShadow -> replace { innerShadowed(it, effect, sizePx) }
 
                 is LayerEffect.Shadow -> replace {
                     haloed(
@@ -809,6 +822,82 @@ class IconRenderer(
     }
 
     /**
+     * [source] with a blurred copy of everything **outside** it laid back **inside** its own silhouette — the recess.
+     *
+     * [haloed] turned outside in, and it shares that method's pieces rather than restating them: the same
+     * [LayerShadow] numbers, the same [dilated] for the choke, the same `extractAlpha` + [BlurMaskFilter] for the
+     * softening. Two things differ, and both fall out of the shadow being *inside*.
+     *
+     * **Source-atop rather than drawn behind**, which is what clips it to the artwork — the destination is the layer
+     * already drawn, so its alpha decides where the shadow lands and no second masking pass is needed.
+     *
+     * **The complement is built in a padded buffer, and that is the part that would be silently wrong.** An inner
+     * shadow is cast by what surrounds the artwork; a layer whose artwork reaches the icon's box has nothing
+     * surrounding it *within* the bitmap, so the shadow would fade in from nothing along exactly those edges — and a
+     * full-bleed background plate is the commonest thing anyone recesses. Padded, the region beyond the box is
+     * genuinely filled and the blur gathers from it. See [LayerShadow.innerMarginPx].
+     */
+    private fun innerShadowed(source: Bitmap, shadow: LayerEffect.InnerShadow, sizePx: Int): Bitmap {
+        val radiusPx = LayerShadow.radiusPxOrNull(shadow.radius, sizePx)
+        val spreadPx = LayerShadow.spreadPx(shadow.spread, sizePx)
+        val dxPx = LayerShadow.offsetPx(shadow.offsetX, sizePx)
+        val dyPx = LayerShadow.offsetPx(shadow.offsetY, sizePx)
+        val marginPx = LayerShadow.innerMarginPx(radiusPx, spreadPx, dxPx, dyPx)
+        val paddedPx = sizePx + marginPx * 2
+
+        val outside = complementOf(source, marginPx, paddedPx)
+        // A choke grows the *complement*, which is the same thing as shrinking the opening the shadow falls into.
+        val grown = if (spreadPx > 0f) dilated(outside, spreadPx, paddedPx) else outside
+
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+        canvas.drawBitmap(source, 0f, 0f, null)
+
+        val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = shadow.argb
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+            // Set **after** the colour, which carries its own alpha and would otherwise overwrite this.
+            alpha = (shadow.strength.coerceIn(0f, 1f) * 255).toInt()
+        }
+
+        if (radiusPx == null) {
+            // No blur asked for: a hard band, which is the flat inset a stamped label has. The complement is an
+            // ordinary bitmap rather than a mask, so its colour is replaced the way [haloed] replaces one.
+            inner.colorFilter = solidFilter(shadow.argb)
+            canvas.drawBitmap(grown, dxPx - marginPx, dyPx - marginPx, inner)
+        } else {
+            val offset = IntArray(2)
+            val blur = Paint().apply { maskFilter = BlurMaskFilter(radiusPx, BlurMaskFilter.Blur.NORMAL) }
+            val mask = grown.extractAlpha(blur, offset)
+            canvas.drawBitmap(mask, offset[0] + dxPx - marginPx, offset[1] + dyPx - marginPx, inner)
+            mask.recycle()
+        }
+
+        if (grown !== outside) grown.recycle()
+        outside.recycle()
+        return out
+    }
+
+    /**
+     * Everything [source] is **not**, in a [paddedPx] square with [source] drawn [marginPx] in from its corner.
+     *
+     * **A filled rectangle with the silhouette punched out of it**, which is an alpha inversion reached without one:
+     * destination-out leaves `dstAlpha × (1 − srcAlpha)`, so a solid buffer minus the artwork is exactly the region
+     * around it. The plan expected this to need an alpha-inverting colour matrix; a matrix would have had to reason
+     * about premultiplication to invert an alpha channel, where two canvas calls simply do not.
+     *
+     * The colour is arbitrary and never seen — only the alpha survives, the caller replacing the colour or drawing
+     * the extracted mask.
+     */
+    private fun complementOf(source: Bitmap, marginPx: Int, paddedPx: Int): Bitmap {
+        val out = createBitmap(paddedPx, paddedPx)
+        val canvas = Canvas(out)
+        canvas.drawColor(OpaqueBlack)
+        canvas.drawBitmap(source, marginPx.toFloat(), marginPx.toFloat(), punchPaint)
+        return out
+    }
+
+    /**
      * [source] grown by [spreadPx] — its own silhouette swept around a ring, which is a dilation approximated the
      * only way a canvas offers.
      *
@@ -905,6 +994,11 @@ class IconRenderer(
         canvas.drawBitmap(mask, 0f, 0f, maskPaint)
         mask.recycle()
     }
+
+    /**
+     * Any opaque colour will do for a buffer whose alpha is the only thing that survives — see [complementOf].
+     */
+    private val OpaqueBlack = 0xFF000000.toInt()
 
     private fun decodeCustomImage(path: String): Drawable? =
         BitmapFactory.decodeFile(path)?.toDrawable(context.resources)

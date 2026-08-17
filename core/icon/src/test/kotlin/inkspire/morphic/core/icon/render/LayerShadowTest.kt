@@ -68,4 +68,42 @@ class LayerShadowTest {
         assertEquals(7.68f, LayerShadow.offsetPx(offset = 0.04f, sizePx = 192), 0.001f)
         assertEquals(-7.68f, LayerShadow.offsetPx(offset = -0.04f, sizePx = 192), 0.001f)
     }
+
+    /**
+     * The margin covers every way the complement's edge reaches inward, which is what an inner shadow at the icon's
+     * own box edge is drawn from. Too small and the shadow fades in from nothing along exactly those edges — and a
+     * full-bleed background plate, which reaches every one of them, is the commonest thing anyone recesses.
+     */
+    @Test
+    fun `an inner margin covers the blur, the choke and the throw together`() {
+        val margin = LayerShadow.innerMarginPx(radiusPx = 10f, spreadPx = 4f, dxPx = 3f, dyPx = 0f)
+
+        assertTrue("$margin must clear the blur's own reach", margin >= 20)
+        assertTrue("$margin must clear the choke and the throw on top of it", margin >= 27)
+    }
+
+    @Test
+    fun `the throw counts once rather than per axis, being one displacement`() {
+        // A shadow thrown diagonally moves the complement by that much on each axis, not by their sum — so the
+        // margin each edge needs is the larger of the two.
+        assertEquals(
+            LayerShadow.innerMarginPx(radiusPx = null, spreadPx = 0f, dxPx = 9f, dyPx = 0f),
+            LayerShadow.innerMarginPx(radiusPx = null, spreadPx = 0f, dxPx = 9f, dyPx = 9f),
+        )
+    }
+
+    @Test
+    fun `a throw counts whichever way it goes`() {
+        assertEquals(
+            LayerShadow.innerMarginPx(radiusPx = null, spreadPx = 0f, dxPx = 9f, dyPx = 0f),
+            LayerShadow.innerMarginPx(radiusPx = null, spreadPx = 0f, dxPx = -9f, dyPx = 0f),
+        )
+    }
+
+    @Test
+    fun `an unblurred, unchoked, unthrown inner shadow still pads by a pixel`() {
+        // Never zero, so the padded buffer is never the same bitmap by another name — the caller offsets by the
+        // margin unconditionally and a zero would make that arithmetic a special case nobody wrote.
+        assertTrue(LayerShadow.innerMarginPx(radiusPx = null, spreadPx = 0f, dxPx = 0f, dyPx = 0f) >= 1)
+    }
 }

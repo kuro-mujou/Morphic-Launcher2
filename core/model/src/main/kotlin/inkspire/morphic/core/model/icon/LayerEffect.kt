@@ -773,6 +773,76 @@ sealed interface LayerEffect {
     }
 
     /**
+     * Everything *outside* the layer, blurred, thrown, and laid back **inside** its own silhouette in [argb] — a
+     * shadow falling on the inside of an opening, so the artwork reads as pressed into the surface rather than
+     * sitting on it.
+     *
+     * **[Shadow] turned outside in, and the mechanism says so literally**: that one blurs the silhouette and puts it
+     * behind, this one blurs the silhouette's *complement* and puts it in front, clipped to the silhouette. Its own
+     * effect for [Glow] and [Shadow]'s reason — at most one effect of a type is meaningful, and an icon that both
+     * casts a shadow and is recessed into its own plate is an ordinary thing to want.
+     *
+     * **Labelled "Inset" in the studio, not "Inner shadow".** The tile grid is four across and cannot hold two words,
+     * which is the same trade [ProgressiveBlur] made in coming out as "Focus". The type keeps the name every
+     * reference uses so that code and documentation stay searchable.
+     *
+     * **The outside has to be given room to exist**, which is the one non-obvious thing about drawing it. For a layer
+     * whose artwork reaches the icon's own box there is no outside *within* the bitmap, so a shadow gathered from
+     * what the bitmap holds would fade in from nothing along exactly the edges a full-bleed plate is recessed at —
+     * which is the commonest thing anyone applies this to. The renderer builds the complement in a padded buffer for
+     * that reason; see `LayerShadow.innerMarginPx`.
+     *
+     * @property argb what gathers inside the edge. Black is the recess everyone means; a light colour lifts the edge
+     *   instead, which is the same control read the other way.
+     * @property radius how soft the shadow is, as a fraction of the icon's box. Zero is a hard band, which is a real
+     *   look — the flat inset a stamped label has.
+     * @property spread how far the complement is grown *before* it is blurred — the choke, which pushes the shadow
+     *   further in from the edge. The same dilation [Glow.spread] performs, on the other region.
+     * @property offsetX how far the shadow is thrown, as a fraction of the box. **The band appears on the opposite
+     *   side to the throw**, and that is the geometry rather than a sign error: displacing the outside down and right
+     *   slides it over the artwork's top-left interior, which is where a light from the top-left leaves a recess
+     *   dark. So this agrees with [Shadow.offsetX] about where the light is.
+     * @property offsetY the same, downward.
+     * @property strength how strongly it is laid on, and how it is turned down.
+     */
+    @Serializable
+    @SerialName("innerShadow")
+    data class InnerShadow(
+        val argb: Int = 0xFF000000.toInt(),
+        /**
+         * **Softer than a cast shadow's**, which is not a copied number: a cast shadow is read against the wallpaper
+         * with the whole icon in front of it, where this one is read *inside* the artwork and has only the width of
+         * the recess to be visible in. Too tight and it reads as a dark outline rather than as depth.
+         */
+        val radius: Float = 0.06f,
+        /**
+         * **No choke on arrival**, unlike [Glow.spread]'s hair of dilation. A glow needs one because a blur alone
+         * leaves it half-strength exactly where the artwork covers it; the complement of a silhouette is a solid
+         * region right up against that edge, so the blur already has everything it needs to gather from.
+         */
+        val spread: Float = 0f,
+        /** Thrown down and to the right, which puts the recess's dark band under the top-left edge. @see Shadow.offsetX */
+        val offsetX: Float = 0.03f,
+        val offsetY: Float = 0.03f,
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Turned down to nothing.
+         *
+         * **One clause, like [Shadow]'s and for the same reason.** With no radius, no spread and no throw the
+         * complement lines up exactly against the silhouette and nothing shows — but that is a picture rather than
+         * an absence, and any one of the three brings it back, so testing for it would be three ways to say what the
+         * strength already says.
+         */
+        override val isIdentity: Boolean get() = strength <= 0f
+
+        /** @see Glow.drawsLive */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * Concentric waves pushing the layer's pixels toward and away from a centre — the layer seen through water.
      *
      * **The first *per-pixel* effect**, and the third that cannot draw live: it reads each output pixel from
@@ -1076,6 +1146,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.ChromaticSplit -> copy(enabled = enabled)
     is LayerEffect.Glow -> copy(enabled = enabled)
     is LayerEffect.Shadow -> copy(enabled = enabled)
+    is LayerEffect.InnerShadow -> copy(enabled = enabled)
     is LayerEffect.Ripple -> copy(enabled = enabled)
     is LayerEffect.Grain -> copy(enabled = enabled)
     is LayerEffect.Pixelate -> copy(enabled = enabled)

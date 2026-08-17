@@ -1,5 +1,7 @@
 package inkspire.morphic.core.icon.render
 
+import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /**
@@ -45,6 +47,31 @@ object LayerShadow {
 
     /** A displacement in pixels — the shadow's throw, from a fraction of the box. */
     fun offsetPx(offset: Float, sizePx: Int): Float = offset * sizePx
+
+    /**
+     * How much room an **inner** shadow's complement needs beyond the icon's box, in pixels.
+     *
+     * **The complement has to exist before it can be blurred, and inside the box it may not.** An inner shadow is
+     * cast by everything *outside* the artwork; for a layer whose artwork reaches the box — a background plate, which
+     * is the commonest thing anyone recesses — there is no outside within the bitmap at all. Built at box size, the
+     * shadow would fade in from nothing along exactly those edges, so a full-bleed plate would come out recessed on
+     * the sides its artwork happened not to reach and flat everywhere else. Built in a padded buffer, the region
+     * beyond the box is genuinely filled and the blur has something to gather from.
+     *
+     * The three terms are the three ways the complement's edge reaches inward: the blur spreads it, the choke grows
+     * it, and the throw slides it. [BlurReach] is generous rather than exact — `BlurMaskFilter`'s radius is not a
+     * hard cutoff, and a margin a few pixels too large costs a fringe of a buffer that is thrown away.
+     *
+     * At least one pixel, so the padded buffer is never the same bitmap by another name.
+     */
+    fun innerMarginPx(radiusPx: Float?, spreadPx: Float, dxPx: Float, dyPx: Float): Int {
+        val blur = (radiusPx ?: 0f) * BlurReach
+        val thrown = maxOf(abs(dxPx), abs(dyPx))
+        return ceil(blur + spreadPx + thrown).toInt().coerceAtLeast(1)
+    }
+
+    /** How far past its stated radius a `BlurMaskFilter` still puts visible coverage, as a multiple of it. */
+    private const val BlurReach = 2f
 
     /** Below this `BlurMaskFilter` has nothing to soften, and it refuses zero outright. */
     private const val MinBlurPx = 0.5f

@@ -310,11 +310,12 @@ enforces. Per layer:
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Vignette` (light gathering in
   from the edges), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
-  displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
+  displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it),
+  `LayerEffect.InnerShadow` (the silhouette's complement blurred *inside* it), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
   blur — the six that do **not** draw live), `LayerEffect.Filter` (one of the built-in looks, by id) and
   `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **All thirteen the plan set out are
-  built, plus the first two of the phase-2 six**; see the notes below for each, and
+  built, plus the first three of the phase-2 six**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
   checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
   deliberately *not* the "extract the falloff" the proposal asked for.
@@ -750,6 +751,27 @@ retires the deferral this file carried from B3, and the first real exercise of s
 - **The halo is clipped to the icon's box**, which is inherent rather than an oversight — the output is one square
   and always was. A radius large enough to reach the edge is one the user can see reaching it.
 - `minSdk` reaching 31 would retire the fork for these two; 33 would retire it for the three still to come.
+
+**`LayerEffect.InnerShadow` is `Shadow` turned outside in, and the third phase-2 effect.** Everything *outside* the
+layer, blurred, thrown, and laid back **inside** its own silhouette — so the artwork reads as pressed into the surface
+rather than sitting on it. Its own effect on `Glow`/`Shadow`'s precedent: at most one effect of a type is meaningful,
+and an icon that both casts a shadow and is recessed into its own plate is ordinary. Four things:
+- **The alpha inversion needed no matrix, which overturns the plan's own prediction.** `punchPaint` is `DST_OUT` over
+  a filled buffer, leaving `dstAlpha × (1 − srcAlpha)` — the complement, in two canvas calls. A colour matrix would
+  have had to reason about premultiplication to invert an alpha channel, where this simply does not. Outline's
+  erosion is the same op run twice, so that effect owes no new primitive either.
+- **The complement is built in a *padded* buffer, and this is the part that is silently wrong without it.** An inner
+  shadow is cast by what surrounds the artwork; a layer reaching the icon's box has nothing surrounding it within the
+  bitmap, so the shadow would fade in from nothing along exactly those edges — and a full-bleed background plate,
+  which reaches all four, is the commonest thing anyone recesses. `LayerShadow.innerMarginPx` sizes it from the three
+  ways the complement's edge travels inward: the blur spreads it, the choke grows it, the throw slides it.
+- **Source-atop is what puts it inside**, with the layer already drawn as the destination — so its alpha decides
+  where the shadow lands and no second masking pass exists to disagree with the first.
+- **The band appears opposite the throw, and that is geometry rather than a sign error.** Displacing the outside down
+  and right slides it over the artwork's top-left interior, which is where a light from the top-left leaves a recess
+  dark — so this and `Shadow` agree about where the light is while their bands sit on opposite edges, which is what a
+  real light does to a bump and a dent. It is labelled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
+  precedent that four columns is one short word.
 
 **`LayerEffect.Ripple` is the first *per-pixel* effect, and the first that leaves the canvas entirely.** Concentric
 waves push each output pixel to read from somewhere else along its own radius — arithmetic over an `IntArray`, which
@@ -1941,8 +1963,10 @@ architectural item was proposed as "extract the falloff onto the base effect"; i
 falloff** — Bloom's falloff is the light's own geometry, so nothing moves, and what is being asked for is a per-effect
 **mask**, which is ~20 lines in `applyEffects` (run the effect into a buffer, composite it back through a ramp's
 alpha) plus a restructure of each live-drawable effect. It goes **last**, because its cost multiplies by the number of
-effects. **Built so far: `LayerEffect.Duotone` and `LayerEffect.Vignette`** (see their notes above). Order for the rest:
-inner shadow, inner glow, outline, bevel, mask. One number worth watching: four of the six do not draw live, taking the total to ten
+effects. **Built so far: `LayerEffect.Duotone`, `LayerEffect.Vignette` and `LayerEffect.InnerShadow`** (see their notes
+above). Order for the rest: inner glow, outline, bevel, mask. **One plan claim is already overturned** — the
+"missing alpha-inverting matrix" was never needed: destination-out over a filled buffer *is* the inversion, and
+outline's erosion is that same op twice. One number worth watching: four of the six do not draw live, taking the total to ten
 of nineteen, and `drawsLive` is all-or-nothing per icon — so most recipes worth making will preview from the bake, and
 the live path narrows to the plain ones.
 

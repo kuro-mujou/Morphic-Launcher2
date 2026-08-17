@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.BlurLinear
 import androidx.compose.material.icons.filled.FlipToBack
+import androidx.compose.material.icons.filled.FlipToFront
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.GridOn
@@ -293,6 +294,19 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     /** The finished silhouette blurred, thrown and drawn behind. Baked, never live. */
     SHADOW("Shadow", Icons.Default.FlipToBack, EffectKind.ADDITION),
 
+    /**
+     * The same shadow cast by the silhouette's complement and laid back inside it — see `LayerEffect.InnerShadow`.
+     *
+     * **Labelled "Inset" because the tile cannot hold "Inner shadow"**, which is the trade `PROGRESSIVE_BLUR` made
+     * in coming out as "Focus": four columns is one short word, and an ellipsised label names nothing. The word is
+     * the look rather than the mechanism, which is this grid's rule anyway — and it is what CSS calls the same
+     * thing, so it is not a word invented here.
+     *
+     * Beside [SHADOW] rather than beside [GLOW], because those two are what it is one of: the same halo, outside and
+     * in.
+     */
+    INNER_SHADOW("Inset", Icons.Default.FlipToFront, EffectKind.ADDITION),
+
     /** Concentric waves pushing the layer's pixels about. Per-pixel, so baked, never live. */
     RIPPLE("Ripple", Icons.Default.Waves, EffectKind.ADDITION),
 
@@ -356,6 +370,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
         GLOW -> effects.filterIsInstance<LayerEffect.Glow>().firstOrNull()
         SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
+        INNER_SHADOW -> effects.filterIsInstance<LayerEffect.InnerShadow>().firstOrNull()
         RIPPLE -> effects.filterIsInstance<LayerEffect.Ripple>().firstOrNull()
         GRAIN -> effects.filterIsInstance<LayerEffect.Grain>().firstOrNull()
         PIXELATE -> effects.filterIsInstance<LayerEffect.Pixelate>().firstOrNull()
@@ -415,6 +430,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         CHROMATIC -> ChromaticDefaults
         GLOW -> GlowDefaults
         SHADOW -> ShadowDefaults
+        INNER_SHADOW -> InnerShadowDefaults
         RIPPLE -> RippleDefaults
         GRAIN -> GrainDefaults
         PIXELATE -> PixelateDefaults
@@ -529,6 +545,7 @@ internal fun EffectsControls(
             EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
             EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
+            EffectSlice.INNER_SHADOW -> InnerShadowControls(target.effects, onEffects, onCommit)
             EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
             EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
             EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
@@ -1696,6 +1713,71 @@ private fun ShadowControls(
 }
 
 /**
+ * The recess's colour, how strong it is, how soft, how far it is choked in, and where it is thrown.
+ *
+ * **[ShadowControls]' four controls plus a choke**, and the pairing is the honest one: a cast shadow has a radius and
+ * a throw, and this has those *and* the spread its outer twin gives to a glow — because the region it is cast by is
+ * the whole of the outside, so growing it is a meaningful thing to ask for where growing a cast silhouette is what a
+ * glow already does.
+ *
+ * **The throw runs the other way visually, and that is not a sign to flip.** Displacing the outside down and right
+ * slides it over the artwork's top-left interior, so the band appears there — which is where a light from the
+ * top-left leaves a recess dark. Both effects therefore agree about where the light is while their bands sit on
+ * opposite edges, which is exactly what a real light does to a bump and a dent.
+ */
+@Composable
+private fun InnerShadowControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val inset = effects.effectOrNull<LayerEffect.InnerShadow>() ?: LayerEffect.InnerShadow()
+
+    LabeledControl("Color") {
+        ColorField(argb = inset.argb) { argb ->
+            onUpdate { it.withEffect(inset.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = inset.strength,
+        valueRange = 0f..1f,
+        default = InnerShadowDefaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(inset.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Radius",
+        value = inset.radius,
+        // From zero, like a cast shadow's and unlike a glow's: a hard band is the flat inset a stamped label has,
+        // and the renderer reads no radius as "skip the blur" rather than as nothing.
+        valueRange = 0f..HaloReach,
+        default = InnerShadowDefaults.radius,
+        onValueChange = { value -> onUpdate { it.withEffect(inset.copy(radius = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Choke",
+        value = inset.spread,
+        valueRange = 0f..HaloReach,
+        default = InnerShadowDefaults.spread,
+        onValueChange = { value -> onUpdate { it.withEffect(inset.copy(spread = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    LabeledControl("Throw") {
+        PositionPad(
+            x = inset.offsetX,
+            y = inset.offsetY,
+            onValueChange = { x, y -> onUpdate { it.withEffect(inset.copy(offsetX = x, offsetY = y)) } },
+            onCommit = onCommit,
+            range = ThrowRange,
+        )
+    }
+}
+
+/**
  * How far a halo may reach, as a fraction of the box.
  *
  * A fifth is generous — the output is one square and anything past the edge is clipped, so a larger bound would only
@@ -2163,6 +2245,7 @@ private val ExtrudeDefaults = LayerEffect.Extrude()
 private val ChromaticDefaults = LayerEffect.ChromaticSplit()
 private val GlowDefaults = LayerEffect.Glow()
 private val ShadowDefaults = LayerEffect.Shadow()
+private val InnerShadowDefaults = LayerEffect.InnerShadow()
 private val RippleDefaults = LayerEffect.Ripple()
 private val GrainDefaults = LayerEffect.Grain()
 private val PixelateDefaults = LayerEffect.Pixelate()
