@@ -21,7 +21,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -115,13 +114,37 @@ fun StudioColorPickerPanel(
     // request, so opening a different field re-seeds rather than carrying the previous color's position over.
     var current by remember(request) { mutableStateOf(request.argb) }
 
-    // Keyed on the request for the same reason, and `rememberSaveable` so a rotation mid-edit does not lose what was
-    // typed — the one thing `TextFieldState` is hoisted for; see the design-system note on this component.
-    val hexField = rememberSaveable(request, saver = TextFieldState.Saver) { TextFieldState(request.argb.hex) }
+    // **A plain `remember`, and it must stay one.** This was `rememberSaveable(request, saver = …)`, on the
+    // design-system rule that a hoisted `TextFieldState` is what survives a configuration change — and here that
+    // rule bought nothing and cost the panel its correctness.
+    //
+    // **Inputs cannot defeat a restore.** `rememberSaveable` is `remember(*inputs) { consumeRestored() ?: init() }`,
+    // so a *new* request re-runs the block and the block hands back the **previous** session's text before `init` is
+    // ever reached. Every picker session lives at the same composition position under one `PanelSlot.COLOR` holder
+    // key, so what came back was whatever colour the last picker had been left on — from a different field, on a
+    // different layer, minutes earlier.
+    //
+    // **And it did not merely display it.** `snapshotFlow` emits on collection, so the stale text arrived at the
+    // effect below, parsed, differed from `current`, and was pushed through `request.onPick` — overwriting the
+    // colour the user had just chosen on the swatch row with one they had not. Picking a swatch and then opening the
+    // picker to adjust it reverted the swatch.
+    //
+    // **What saveable was for is unreachable anyway**, which is what makes this a plain deletion rather than a
+    // trade. `StudioColorPickerHost.request` is a `remember`, so after process death there is no request and this
+    // panel is not composed at all — the only way it ever comes back is a close-and-reopen, which is precisely the
+    // case where restoring is wrong. There was never a live session for the saved text to be restored *into*.
+    //
+    // Keyed on the request, so opening any field seeds from that field's own colour.
+    val hexField = remember(request) { TextFieldState(request.argb.hex) }
 
     // **Typing wins while it parses; the picker wins otherwise.** Both write `current`, so the two can only disagree
     // while the text is unfinished — and then the guard leaves it alone, which is what stops a drag from deleting
     // half-typed input and what stops the field fighting a value it just produced.
+    //
+    // **`snapshotFlow` emits on collection, so this fires once on open with whatever the field holds** — which is
+    // harmless *only* because the field is seeded from the same `request.argb` that `current` is. The two agree, the
+    // `parsed != current` guard is false, and nothing is pushed back through `onPick`. A field seeded from anywhere
+    // else turns that first emission into a write of a colour the user never chose; see the note above it.
     LaunchedEffect(hexField, request) {
         snapshotFlow { hexField.text.toString() }.collect { text ->
             val parsed = parseHexColor(text)
