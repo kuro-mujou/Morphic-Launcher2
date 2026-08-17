@@ -402,6 +402,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     // what a caller gets for using [IconLayerStack] *directly*, and drawing nothing is the honest answer: a wrong
     // effect would be worse than a missing one, since only the missing one is noticed.
     is LayerEffect.Outline,
+    is LayerEffect.Bevel,
     is LayerEffect.Glow,
     is LayerEffect.Shadow,
     is LayerEffect.InnerShadow,

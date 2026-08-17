@@ -324,6 +324,13 @@ class IconRenderer(
 
                 is LayerEffect.Outline -> replace { outlined(it, effect, sizePx) }
 
+                // The radius is resolved *before* `replace`, so a bevel too narrow to have a slope skips the buffer
+                // swap entirely rather than being handed a copy — `ProgressiveBlur`'s arm and its reason.
+                is LayerEffect.Bevel ->
+                    LayerBevel.radiusPxOrNull(effect, sizePx)?.let { radius ->
+                        replace { bevelled(it, effect, radius, sizePx, bake) }
+                    }
+
                 // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
                 // thrown and laid on plainly, or light centred on the edge and screened onto it.
                 is LayerEffect.InnerShadow -> replace {
@@ -771,6 +778,43 @@ class IconRenderer(
         source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
         val out = IntArray(pixels.size)
 
+        overRows(sizePx, bake) { y ->
+            // One scratch per row, never one shared across the bands: two threads writing the same two floats is
+            // the whole class of bug this split could introduce, and it would show as a scattering of individually
+            // wrong pixels rather than as anything that looks like a race. A `FloatArray(2)` per row is a few
+            // hundred allocations across a bake, which is nothing beside the pixels themselves.
+            val at = FloatArray(2)
+            for (x in 0 until sizePx) {
+                sourceOf(x, y, at)
+                out[y * sizePx + x] = LayerSample.bilinear(pixels, sizePx, at[0], at[1])
+            }
+        }
+
+        val bitmap = createBitmap(sizePx, sizePx)
+        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
+        return bitmap
+    }
+
+    /**
+     * Runs [row] for every row of a `sizePx` square, split across cores.
+     *
+     * **Extracted on its second consumer**, which is the bevel — [resample] had held this inline while it was the
+     * only per-pixel pass whose rows were independent. What the two share is the whole of the concurrency: every
+     * output pixel reads only buffers nobody writes and writes only its own slot, so bands of rows need no
+     * coordination at all and the sum of them is the same picture.
+     *
+     * **[BakeBands] leaves a core alone**, the same bargain `IconRenderManager`'s concurrency cap makes one layer up:
+     * the point of the split is a preview that keeps up with a finger, and taking every core to get there would
+     * starve the main thread drawing the panel the finger is on.
+     *
+     * **[row] is called from several threads at once**, so it must read only what it closed over and write only slots
+     * belonging to its own `y`. Anything mutable it needs belongs *inside* it, per row.
+     *
+     * The cancellation check is once a row, which is what makes a bake abandonable at all — see [render]. A row is
+     * short enough that a cancelled preview stops within a millisecond or so, and long enough that the check never
+     * shows up in the cost.
+     */
+    private suspend fun overRows(sizePx: Int, bake: CoroutineContext, row: (y: Int) -> Unit) {
         val bands = BakeBands.coerceAtMost(sizePx)
         val rowsPerBand = (sizePx + bands - 1) / bands
         coroutineScope {
@@ -780,27 +824,13 @@ class IconRenderer(
                 if (from >= until) continue
 
                 launch(Dispatchers.Default) {
-                    // One scratch per band, never one shared: two threads writing the same two floats is the whole
-                    // class of bug this split could otherwise introduce, and it would show as a scattering of
-                    // individually wrong pixels rather than as anything that looks like a race.
-                    val at = FloatArray(2)
                     for (y in from until until) {
-                        // **Once a row, which is what makes this bake abandonable at all** — see [render]. A row is
-                        // short enough that a cancelled preview stops within a millisecond or so and long enough
-                        // that the check itself never shows up in the cost.
                         bake.ensureActive()
-                        for (x in 0 until sizePx) {
-                            sourceOf(x, y, at)
-                            out[y * sizePx + x] = LayerSample.bilinear(pixels, sizePx, at[0], at[1])
-                        }
+                        row(y)
                     }
                 }
             }
         }
-
-        val bitmap = createBitmap(sizePx, sizePx)
-        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
-        return bitmap
     }
 
     /**
@@ -850,6 +880,115 @@ class IconRenderer(
         if (grown !== source) grown.recycle()
         return out
     }
+
+    /**
+     * [source] read as a raised surface and lit — the bevel.
+     *
+     * **The one effect here built from a *neighbourhood* rather than a point**, which is why it does not go through
+     * [resample]: that helper asks "which single pixel does this one read?" and answers with a bilinear sample,
+     * where this asks how the surface is *tilted* at each pixel and answers with a colour. What the two do share is
+     * the row split, which is [overRows].
+     *
+     * Three steps, and each is somewhere else. The **height map** is the layer's own alpha blurred, which is
+     * `extractAlpha` doing the same job it does for a halo. The **slope** is a Sobel gradient of that, scaled by
+     * [LayerBevel.slopeScale] so the bevel's strength does not follow its width. The **lighting** is
+     * [LayerBevel.relief], which is where every sign that could be wrong lives.
+     *
+     * **Two bands, two blend modes, and that is why they are two buffers.** A slope facing the light is *screened*
+     * so it brightens the artwork's own colours; one facing away is *multiplied* so it deepens them. One buffer
+     * could not be both, and painting them plainly instead would lay flat white and black over the icon rather than
+     * lighting it. Each is trimmed to the artwork first, for [insetHaloed]'s reason — a multiply against nothing
+     * would otherwise darken the transparent surround into existence.
+     */
+    private suspend fun bevelled(
+        source: Bitmap,
+        bevel: LayerEffect.Bevel,
+        radiusPx: Float,
+        sizePx: Int,
+        bake: CoroutineContext,
+    ): Bitmap {
+        val heights = blurredAlpha(source, radiusPx, sizePx)
+        val light = LayerBevel.light(bevel.angleDegrees, bevel.altitudeDegrees)
+        val scale = LayerBevel.slopeScale(radiusPx)
+
+        val highlight = IntArray(sizePx * sizePx)
+        val shade = IntArray(sizePx * sizePx)
+
+        overRows(sizePx, bake) { y ->
+            for (x in 0 until sizePx) {
+                // Sobel over the height field, divided by its own weight so the result is a rise per pixel. Sampled
+                // through `clamp`, so the box's own border reads as a continuation of itself rather than as a cliff
+                // — an edge treated as a drop would light the whole rim of every full-bleed layer.
+                val slopeX = scale * (
+                    heights.at(x + 1, y - 1, sizePx) + 2f * heights.at(x + 1, y, sizePx) +
+                        heights.at(x + 1, y + 1, sizePx) - heights.at(x - 1, y - 1, sizePx) -
+                        2f * heights.at(x - 1, y, sizePx) - heights.at(x - 1, y + 1, sizePx)
+                    ) / 8f
+                val slopeY = scale * (
+                    heights.at(x - 1, y + 1, sizePx) + 2f * heights.at(x, y + 1, sizePx) +
+                        heights.at(x + 1, y + 1, sizePx) - heights.at(x - 1, y - 1, sizePx) -
+                        2f * heights.at(x, y - 1, sizePx) - heights.at(x + 1, y - 1, sizePx)
+                    ) / 8f
+
+                val relief = LayerBevel.relief(slopeX, slopeY, light)
+                val at = y * sizePx + x
+                if (relief > 0f) {
+                    highlight[at] = LayerBevel.banded(bevel.highlightArgb, relief * bevel.highlightStrength)
+                } else if (relief < 0f) {
+                    shade[at] = LayerBevel.banded(bevel.shadowArgb, -relief * bevel.shadowStrength)
+                }
+            }
+        }
+
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        drawBand(canvas, highlight, source, PorterDuff.Mode.SCREEN, sizePx)
+        drawBand(canvas, shade, source, PorterDuff.Mode.MULTIPLY, sizePx)
+        return out
+    }
+
+    /**
+     * One of a bevel's two bands, trimmed to the artwork and composited with [blend].
+     *
+     * The trim is [insetHaloed]'s and for its reason: a multiply whose destination is transparent leaves the source
+     * standing, so an untrimmed shadow band would darken the surround into a visible square.
+     */
+    private fun drawBand(canvas: Canvas, band: IntArray, source: Bitmap, blend: PorterDuff.Mode, sizePx: Int) {
+        val bitmap = createBitmap(sizePx, sizePx)
+        bitmap.setPixels(band, 0, sizePx, 0, 0, sizePx, sizePx)
+        Canvas(bitmap).drawBitmap(source, 0f, 0f, maskPaint)
+        canvas.drawBitmap(bitmap, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            xfermode = PorterDuffXfermode(blend)
+        })
+        bitmap.recycle()
+    }
+
+    /**
+     * [source]'s own alpha, blurred by [radiusPx] and aligned back to the box — the bevel's height map.
+     *
+     * `extractAlpha` hands back a mask **grown** to fit the blur, with the offset it grew by; drawing it back at that
+     * offset is what re-aligns it with the layer, and forgetting to would slide the whole relief up and to the left
+     * of the artwork casting it.
+     */
+    private fun blurredAlpha(source: Bitmap, radiusPx: Float, sizePx: Int): FloatArray {
+        val offset = IntArray(2)
+        val blur = Paint().apply { maskFilter = BlurMaskFilter(radiusPx, BlurMaskFilter.Blur.NORMAL) }
+        val mask = source.extractAlpha(blur, offset)
+
+        val aligned = createBitmap(sizePx, sizePx)
+        Canvas(aligned).drawBitmap(mask, offset[0].toFloat(), offset[1].toFloat(), Paint(Paint.ANTI_ALIAS_FLAG))
+        mask.recycle()
+
+        val pixels = IntArray(sizePx * sizePx)
+        aligned.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+        aligned.recycle()
+        return FloatArray(pixels.size) { (pixels[it] ushr 24) / 255f }
+    }
+
+    /** The height at ([x], [y]), with the box's own border reading as a continuation rather than as a cliff. */
+    private fun FloatArray.at(x: Int, y: Int, sizePx: Int): Float =
+        this[y.coerceIn(0, sizePx - 1) * sizePx + x.coerceIn(0, sizePx - 1)]
 
     /**
      * [source] with a hard band of colour following its silhouette — the stroke.

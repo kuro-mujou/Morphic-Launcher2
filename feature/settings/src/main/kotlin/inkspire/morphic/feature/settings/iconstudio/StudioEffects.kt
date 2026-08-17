@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.TripOrigin
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Vignette
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Texture
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.Tonality
@@ -282,6 +283,15 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
      */
     VIGNETTE("Vignette", Icons.Default.Vignette, EffectKind.ADDITION),
 
+    /**
+     * The layer read as a raised surface and lit — see `LayerEffect.Bevel`.
+     *
+     * **Last of the light group, because it is the one whose subject is a *surface* rather than a wash.** Bloom,
+     * gloss and vignette all lay light over the artwork; this derives light from the artwork's own shape, which is
+     * a different question asked with the same vocabulary — an angle, and how strongly.
+     */
+    BEVEL("Bevel", Icons.Default.ViewInAr, EffectKind.ADDITION),
+
     /** A repeating texture laid over the artwork — see `IconPatterns`. */
     PATTERN("Pattern", Icons.Default.Grain, EffectKind.ADDITION),
 
@@ -386,6 +396,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
         VIGNETTE -> effects.filterIsInstance<LayerEffect.Vignette>().firstOrNull()
+        BEVEL -> effects.filterIsInstance<LayerEffect.Bevel>().firstOrNull()
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
         EXTRUDE -> effects.filterIsInstance<LayerEffect.Extrude>().firstOrNull()
         CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
@@ -448,6 +459,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         BLOOM -> BloomDefaults
         GLOSS -> GlossDefaults
         VIGNETTE -> VignetteDefaults
+        BEVEL -> BevelDefaults
         PATTERN -> PatternDefaults
         EXTRUDE -> ExtrudeDefaults
         CHROMATIC -> ChromaticDefaults
@@ -565,6 +577,7 @@ internal fun EffectsControls(
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
             EffectSlice.VIGNETTE -> VignetteControls(target.effects, onEffects, onCommit)
+            EffectSlice.BEVEL -> BevelControls(target.effects, onEffects, onCommit)
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
             EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
             EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
@@ -1922,6 +1935,95 @@ private fun OutlineControls(
 private const val OutlineFloor = 0.005f
 
 /**
+ * Where the light is, and what each of the two slopes it finds is painted.
+ *
+ * **Six controls and no depth**, which is the one a user coming from a drawing program will look for. A depth slider
+ * scales the slope where the strengths scale the bands, and the picture cannot tell those apart — halving one and
+ * doubling the other lands in the same place. What depth is genuinely for is a bevel that stays as strong as it is
+ * widened, and that is guaranteed rather than offered: `LayerBevel.slopeScale` cancels the width out, so Size moves
+ * the bevel's reach and nothing else.
+ *
+ * **Altitude decides what *kind* of relief this is**, which is worth knowing because its name does not say so: a
+ * low light rakes across the surface and throws strongly-sided bands, raising it takes the sidedness away, and
+ * directly overhead every slope shades equally — the uniform rim of a pillow emboss, which is a look rather than an
+ * absence. The strengths decide how strongly what it finds is painted.
+ *
+ * The two colours sit beside their own strengths rather than in a pair at the top, so each band reads as one thing
+ * to set — which is what makes an asymmetric bevel, the difference between something raised and something carved,
+ * an obvious thing to reach for rather than an arrangement to work out.
+ */
+@Composable
+private fun BevelControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val bevel = effects.effectOrNull<LayerEffect.Bevel>() ?: LayerEffect.Bevel()
+
+    SliderControl(
+        label = "Size",
+        value = bevel.size,
+        // Floored above zero for `UnitFloor`'s reason: no slope *is* this effect's identity, so the bottom of the
+        // track should leave a tight bevel rather than a silently absent one.
+        valueRange = OutlineFloor..HaloReach,
+        default = BevelDefaults.size,
+        onValueChange = { value -> onUpdate { it.withEffect(bevel.copy(size = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Angle",
+        value = bevel.angleDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = BevelDefaults.angleDegrees,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(bevel.copy(angleDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Altitude",
+        value = bevel.altitudeDegrees,
+        // All the way up, because overhead is a look rather than an off switch: the light stops favouring a side,
+        // and what is left is every slope shading equally — the uniform rim of a pillow emboss. Pinned by a test,
+        // since the obvious reading is that a bevel flattens away as its light is raised, and it does not.
+        valueRange = 0f..90f,
+        step = AngleStep,
+        default = BevelDefaults.altitudeDegrees,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(bevel.copy(altitudeDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    LabeledControl("Highlight") {
+        ColorField(argb = bevel.highlightArgb) { argb ->
+            onUpdate { it.withEffect(bevel.copy(highlightArgb = argb)) }
+        }
+    }
+    SliderControl(
+        label = "Highlight strength",
+        value = bevel.highlightStrength,
+        valueRange = 0f..1f,
+        default = BevelDefaults.highlightStrength,
+        onValueChange = { value -> onUpdate { it.withEffect(bevel.copy(highlightStrength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    LabeledControl("Shadow") {
+        ColorField(argb = bevel.shadowArgb) { argb ->
+            onUpdate { it.withEffect(bevel.copy(shadowArgb = argb)) }
+        }
+    }
+    SliderControl(
+        label = "Shadow strength",
+        value = bevel.shadowStrength,
+        valueRange = 0f..1f,
+        default = BevelDefaults.shadowStrength,
+        onValueChange = { value -> onUpdate { it.withEffect(bevel.copy(shadowStrength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
  * How far a halo may reach, as a fraction of the box.
  *
  * A fifth is generous — the output is one square and anything past the edge is clipped, so a larger bound would only
@@ -2379,6 +2481,7 @@ private val DuotoneDefaults = LayerEffect.Duotone()
 private val BloomDefaults = LayerEffect.Bloom()
 private val GlossDefaults = LayerEffect.Gloss()
 private val VignetteDefaults = LayerEffect.Vignette()
+private val BevelDefaults = LayerEffect.Bevel()
 
 /**
  * The one addition with no all-default constructor: a pattern has to *be* one, and there is no neutral tile. Dots for

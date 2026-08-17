@@ -724,7 +724,20 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    beyond its own bounds — so live, a full-bleed plate would be stroked on the sides its artwork happened not to
    reach and left bare on the rest. One answer for all three positions, since a control whose live-ness changed as
    it was switched would make the preview flicker between mechanisms.
-6. **Bevel & emboss** — the one new kernel; a slice on its own.
+6. **Bevel & emboss** — the one new kernel; a slice on its own. **Built**, and 8a was right that it does not fit
+   `resample`: that helper asks which single pixel an output reads and answers with a bilinear sample, where a Sobel
+   reads a neighbourhood and answers with a *colour*. What the two do share is the row split, so `overRows` came out
+   of `resample` on this second consumer and the per-band scratch became per-row. Three things the build settled:
+   **there is no depth control**, because a depth slider scales the slope where the strengths scale the bands and
+   the picture cannot tell those apart — what depth is genuinely for is guaranteed instead, `LayerBevel.slopeScale`
+   cancelling the blur radius out so Size moves the bevel's reach and nothing else (without it, widening a bevel
+   would *fade* it, since a blurred edge's gradient falls as it spreads). **The lighting is measured against the
+   flat case**, which is what confines the effect to the edges — a plain Lambert term lights every surface facing the
+   viewer, so the icon's flat interior would come out uniformly brightened and the whole thing would read as a
+   brightness control with an odd rim. And **the altitude control was documented backwards until a test caught it**:
+   overhead light does not flatten the relief away, it removes the *sidedness* — a tilted surface still catches less
+   of an overhead light than a flat one, so every slope shades equally and what is left is the uniform rim of a
+   pillow emboss. A real look, so the slider runs the whole way up.
 7. **Effect mask** — last, renamed, once the list is stable.
 
 ### 8e. The consequence worth watching

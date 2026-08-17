@@ -311,13 +311,15 @@ enforces. Per layer:
   from the edges), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Outline` (a hard band following the silhouette),
+  `LayerEffect.Bevel` (the silhouette read as a raised surface and lit),
   `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it),
   `LayerEffect.InnerShadow` and `LayerEffect.InnerGlow` (the silhouette's complement blurred *inside* it, laid on
   or screened), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
-  blur — the six that do **not** draw live), `LayerEffect.Filter` (one of the built-in looks, by id) and
-  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **All thirteen the plan set out are
-  built, plus five of the phase-2 six**; see the notes below for each, and
+  blur), `LayerEffect.Filter` (one of the built-in looks, by id) and
+  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **Ten of the nineteen do not draw live** —
+  everything that needs a blur or a per-pixel pass — which is what `drawsLive` and the bake-backed preview exist for.
+  **All thirteen the plan set out are built, and so are all six of phase 2**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
   checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
   deliberately *not* the "extract the falloff" the proposal asked for.
@@ -727,6 +729,30 @@ Four things:
   ramp gathers at corners the glyph never reaches and source-atop clips it to nothing, so the control would open on
   no visible change. `ContentAnchor.BOX` is how the icon's own frame is asked for, and on a background plate filling
   the box the two coincide.
+
+**`LayerEffect.Bevel` is the sixth phase-2 effect and the only one that was not made of parts already here.** The
+layer's own alpha, blurred, read as a **height map**; the slopes near its edges catch or miss a light; what they catch
+is painted as a highlight and a shadow. Every parameter is about a *light* rather than a shape. Five things:
+- **It does not fit `resample`, and the plan predicted that correctly.** That helper asks which single pixel an output
+  reads and answers with a bilinear sample; a Sobel reads a *neighbourhood* and answers with a colour. What the two do
+  share is the row split, so **`overRows` came out of `resample` on this second consumer** and the per-band scratch
+  became per-row — a `FloatArray(2)` per row is nothing beside the pixels.
+- **There is no depth control, which is the one departure from what was asked for.** A depth slider scales the slope
+  where the two strengths scale the bands, and the picture cannot tell those apart — halving one and doubling the
+  other lands in the same place. What depth is genuinely for is guaranteed rather than offered: `LayerBevel.slopeScale`
+  cancels the blur radius out of the gradient, so Size moves the bevel's *reach* and nothing else. Without it, size
+  would have been an intensity control too and backwards, since a blurred edge's gradient falls as it widens.
+- **The lighting is measured against the flat case**, and that subtraction is what confines the effect to the edges. A
+  plain Lambert term lights every surface facing the viewer, so the icon's flat interior would come out uniformly
+  brightened and the whole thing would read as a brightness control with an odd rim.
+- **Two bands, two blend modes, two buffers.** A slope facing the light is *screened* so it brightens the artwork's own
+  colours, one facing away is *multiplied* so it deepens them; one buffer could not be both, and painting them plainly
+  would lay flat white and black over the icon rather than lighting it. Each is trimmed to the artwork first, for
+  `insetHaloed`'s reason — a multiply against nothing darkens the transparent surround into a visible square.
+- **The altitude control was documented backwards until a test caught it.** Overhead light does not flatten the relief
+  away; it removes the *sidedness*. A tilted surface still catches less of an overhead light than a flat one, so every
+  slope shades equally and what is left is the uniform rim of a pillow emboss — a real look, so the slider runs the
+  whole way up. Pinned, because the obvious reading is the wrong one and nothing about the picture would say so.
 
 **`LayerEffect.Outline` is the fifth phase-2 effect and cost no drawing code at all.** A hard band following the
 layer's finished silhouette — what separates an icon from a busy wallpaper when nothing softer will. Every piece was
@@ -2005,8 +2031,9 @@ falloff** — Bloom's falloff is the light's own geometry, so nothing moves, and
 **mask**, which is ~20 lines in `applyEffects` (run the effect into a buffer, composite it back through a ramp's
 alpha) plus a restructure of each live-drawable effect. It goes **last**, because its cost multiplies by the number of
 effects. **Built so far: `LayerEffect.Duotone`, `LayerEffect.Vignette`, `LayerEffect.InnerShadow` and
-`LayerEffect.InnerGlow` and `LayerEffect.Outline`** (see their notes above). Order for the rest: bevel, then the
-mask. **One plan claim is already overturned** — the
+`LayerEffect.InnerGlow`, `LayerEffect.Outline` and `LayerEffect.Bevel`** — **all six are built** (see their notes
+above). What is left of §8 is the **effect mask**, which was always last because its cost multiplies by the number
+of effects. **One plan claim is already overturned** — the
 "missing alpha-inverting matrix" was never needed: destination-out over a filled buffer *is* the inversion, and
 outline's erosion is that same op twice. One number worth watching: four of the six do not draw live, taking the total to ten
 of nineteen, and `drawsLive` is all-or-nothing per icon — so most recipes worth making will preview from the bake, and
