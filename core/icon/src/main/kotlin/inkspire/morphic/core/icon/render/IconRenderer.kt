@@ -256,6 +256,14 @@ class IconRenderer(
                     applyGloss(canvas, effect, LayerGradient.sweep(frame, effect.angleDegrees, effect.curve), sizePx)
                 }
 
+                is LayerEffect.Vignette ->
+                    applyVignette(
+                        canvas,
+                        effect,
+                        LayerGradient.frameOf(effect.anchor, inkFit, transform, sizePx),
+                        sizePx,
+                    )
+
                 is LayerEffect.Pattern -> applyPattern(canvas, effect, sizePx)
 
                 is LayerEffect.Color ->
@@ -439,6 +447,38 @@ class IconRenderer(
     }
 
     /**
+     * Gathers [vignette]'s colour in from the edges of [frame], clipped to what the layer has already drawn.
+     *
+     * **The same source-atop overlay [applyBloom] is, with the ramp run the other way**: the clear end at the middle
+     * and the colour at the rim, where a bloom has the colour at a point and clears outward. The disc always spans
+     * the frame to its corners — [LayerGradient.radial] at 1 — and where the colour *starts* is the stops' job, so
+     * the reach and the softness move the shading without resizing the gradient under it.
+     */
+    private fun applyVignette(
+        canvas: Canvas,
+        vignette: LayerEffect.Vignette,
+        frame: LayerGradient.Frame,
+        sizePx: Int,
+    ) {
+        val radial = LayerGradient.radial(frame, radiusFraction = 1f)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(
+                radial.centerX,
+                radial.centerY,
+                radial.radiusPx,
+                intArrayOf(LayerGradient.fadeOut(vignette.argb), vignette.argb),
+                LayerGradient.rampStops(vignette.clearArea, vignette.softness),
+                // Clamped, which is what puts the full colour in the corners: the disc reaches them at a stop of 1,
+                // and everything the square holds beyond that stays at the last colour rather than repeating.
+                Shader.TileMode.CLAMP,
+            )
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+            alpha = (vignette.strength.coerceIn(0f, 1f) * 255).toInt()
+        }
+        canvas.drawRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), paint)
+    }
+
+    /**
      * [source] with every pixel read from somewhere else along its own radius — the layer seen through water.
      *
      * **The first per-pixel effect, and the first that leaves the canvas entirely.** Everything up to now has been
@@ -526,7 +566,7 @@ class IconRenderer(
     ): Bitmap {
         val blurred = blurredCopy(source, sidePx, sizePx)
 
-        val stops = LayerProgressiveBlur.stops(blur)
+        val stops = LayerGradient.rampStops(blur.sharpArea, blur.softness)
         val frame = LayerGradient.Frame.box(sizePx)
         Canvas(blurred).drawRect(
             0f,

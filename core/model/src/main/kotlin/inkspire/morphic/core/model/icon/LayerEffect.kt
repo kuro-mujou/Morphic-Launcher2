@@ -474,6 +474,78 @@ sealed interface LayerEffect {
     }
 
     /**
+     * [argb] gathering in from the edges and clearing toward the middle — the corners weighted down, which is the
+     * finishing move that makes a flat plate read as a photographed object.
+     *
+     * **A [Bloom]'s radial ramp run the other way**, and that is the whole mechanism: a bloom is colour at a point
+     * fading outward, a vignette is nothing at the middle gathering outward. It is its own effect rather than a flag
+     * on that one for [Gloss]'s reason — the two are different *looks*, a user goes looking for this one by name, and
+     * at most one effect of a type is meaningful, so folding them would mean an icon could carry a light or a
+     * vignette and never both.
+     *
+     * **The middle stays clear rather than the edges being darkened by a rectangle**, which is what source-atop
+     * buys: the ramp lands on the layer's own alpha, so a vignette on a rounded plate follows the plate's corners
+     * instead of squaring them off.
+     *
+     * @property argb what gathers at the edges. Black is the vignette everyone means, and any colour is a legitimate
+     *   thing to ask for — a white one lifts the corners instead, which is the same control used the other way. Its
+     *   alpha is ignored; the clear end is this colour with the alpha gone, so the ramp fades out of the picture
+     *   rather than through grey.
+     * @property reach how far in from the edge the colour comes, as a fraction of the frame — so bigger is more of
+     *   it. Named for what the control does rather than for what the ramp holds: the renderers read [clearArea],
+     *   which is this from the other end.
+     * @property softness how much of the frame the ramp takes to arrive, as a fraction. Zero is a hard ring, which
+     *   is a real look rather than a degenerate one.
+     * @property strength how strongly it is laid on, and how it is turned down.
+     * @property anchor what the ramp is laid out against — the icon's box, or this layer's artwork carried by its
+     *   transform. The same enum a shape mask, a bloom and a gloss take, through the same derivation.
+     */
+    @Serializable
+    @SerialName("vignette")
+    data class Vignette(
+        val argb: Int = 0xFF000000.toInt(),
+        /**
+         * **Reaching a third of the way in**, which at the corners is plainly a vignette and at the edge midpoints
+         * is a suggestion — the proportion that reads as one on a square, where a square's corner is half again as
+         * far out as its edge.
+         */
+        val reach: Float = 0.35f,
+        /** Half the frame spent arriving, so it reads as shading rather than as a ring drawn around the artwork. */
+        val softness: Float = 0.5f,
+        /**
+         * **Laid on hard, unlike a bloom's 0.6.** A vignette is a *finish* — it is supposed to be felt rather than
+         * seen — so at anything less than full the default arrives at the edge of noticeable and reads as the
+         * control not having worked. Turning it down is the obvious move once it is visible.
+         */
+        val strength: Float = 1f,
+        /**
+         * **The artwork, like a bloom's**, so opening this on any layer shows something: box-anchored on a small
+         * glyph the ramp gathers at corners the glyph never reaches, and source-atop then clips it to nothing. The
+         * icon's own frame is what [ContentAnchor.BOX] is for, and on a background plate that fills the box the two
+         * coincide anyway.
+         */
+        val anchor: ContentAnchor = ContentAnchor.CONTENT,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * How much of the frame the ramp leaves alone, which is what [LayerGradient.rampStops] is asked for.
+         *
+         * **The inversion lives here rather than in each renderer**, [Bloom.placementX]'s arrangement and its reason:
+         * a projection of the model's own field is the model's arithmetic, and two paths each doing it are two
+         * chances to do it once. Getting it backwards draws a perfectly plausible picture with the light in the
+         * middle, which is the one axis neither renderer can check against the other.
+         */
+        val clearArea: Float get() = (1f - reach).coerceIn(0f, 1f)
+
+        /** Turned down to nothing, or reaching nowhere in from the edge — either way the layer comes back untouched. */
+        override val isIdentity: Boolean get() = strength <= 0f || reach <= 0f
+
+        /** A radial shader drawn source-atop, which both paths can do at any API. */
+        override val drawsLive: Boolean get() = true
+    }
+
+    /**
      * A repeating texture laid over the layer: [pattern]'s marks, tiled, in [argb]. Source-atop like the other two
      * overlays, so it decorates the artwork rather than covering the icon with wallpaper.
      *
@@ -998,6 +1070,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.Filter -> copy(enabled = enabled)
     is LayerEffect.Bloom -> copy(enabled = enabled)
     is LayerEffect.Gloss -> copy(enabled = enabled)
+    is LayerEffect.Vignette -> copy(enabled = enabled)
     is LayerEffect.Pattern -> copy(enabled = enabled)
     is LayerEffect.Extrude -> copy(enabled = enabled)
     is LayerEffect.ChromaticSplit -> copy(enabled = enabled)

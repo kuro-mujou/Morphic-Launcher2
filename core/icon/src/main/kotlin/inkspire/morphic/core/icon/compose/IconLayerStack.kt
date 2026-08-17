@@ -350,6 +350,15 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
         }
     }
 
+    is LayerEffect.Vignette -> Modifier.drawWithContent {
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(bounds = Rect(0f, 0f, size.width, size.height), paint = Paint())
+            drawContent()
+            drawVignetteOverlay(effect, spec, inkFit)
+            canvas.restore()
+        }
+    }
+
     // **The one effect that draws the content more than once, and it is why `MaxSteps` exists.** Every copy is a
     // re-run of the layer's own drawing rather than a blit of a finished bitmap, which the bake gets for free by
     // already holding one. Back to front, then the layer itself on top — the same order, and the same picture, as
@@ -496,6 +505,39 @@ private fun DrawScope.drawGlossOverlay(gloss: LayerEffect.Gloss, spec: IconLayer
             radius = sweep.radiusPx,
         ),
         alpha = gloss.strength.coerceIn(0f, 1f),
+        blendMode = BlendMode.SrcAtop,
+    )
+}
+
+/**
+ * Gathers a vignette's colour in from the frame's edges, clipped to what has been drawn — the live twin of
+ * `IconRenderer.applyVignette`.
+ *
+ * The disc spans the frame to its corners either way and the *stops* are what move; both come from [LayerGradient],
+ * as does the inversion from reach to clear area — which is the model's, so the two paths cannot come to shade from
+ * opposite ends.
+ */
+private fun DrawScope.drawVignetteOverlay(
+    vignette: LayerEffect.Vignette,
+    spec: IconLayerSpec?,
+    inkFit: ShapeMask.InkFit,
+) {
+    val sizePx = size.width.toInt()
+    val transform = spec?.let { LayerTransform.of(it, sizePx) } ?: LayerTransform.Identity
+    val frame = LayerGradient.frameOf(vignette.anchor, inkFit, transform, sizePx)
+    val radial = LayerGradient.radial(frame, radiusFraction = 1f)
+    val stops = LayerGradient.rampStops(vignette.clearArea, vignette.softness)
+
+    drawRect(
+        brush = Brush.radialGradient(
+            colorStops = arrayOf(
+                stops[0] to Color(LayerGradient.fadeOut(vignette.argb)),
+                stops[1] to Color(vignette.argb),
+            ),
+            center = Offset(radial.centerX, radial.centerY),
+            radius = radial.radiusPx,
+        ),
+        alpha = vignette.strength.coerceIn(0f, 1f),
         blendMode = BlendMode.SrcAtop,
     )
 }

@@ -307,13 +307,14 @@ enforces. Per layer:
 - **effects** — a sealed list, never columns, and an **ordered pipeline** rather than a bag (see the pipeline note
   below). `LayerEffect.Color` (hue → saturation → brightness → tint, composed into **one** matrix, so monochrome is
   `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` and `LayerEffect.Gloss` (light
-  spilling across the layer, and light struck across it with an edge), `LayerEffect.Pattern` (a tiled texture),
+  spilling across the layer, and light struck across it with an edge), `LayerEffect.Vignette` (light gathering in
+  from the edges), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
   blur — the six that do **not** draw live), `LayerEffect.Filter` (one of the built-in looks, by id) and
   `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **All thirteen the plan set out are
-  built, plus the first of the phase-2 six**; see the notes below for each, and
+  built, plus the first two of the phase-2 six**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
   checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
   deliberately *not* the "extract the falloff" the proposal asked for.
@@ -700,6 +701,29 @@ hands read as one set. Five things:
   So zero strength is not where it sits untouched, and its "off" is its absence — which is a switch. And the
   library's own DUOTONE category is not a duplication for the reason `Color` and `Filter` are not: one is a fixed
   vocabulary somebody authored, the other is *this* icon's two colours.
+
+**`LayerEffect.Vignette` is a bloom's radial ramp run the other way, and the second phase-2 effect.** Colour
+gathering in from the edges with the middle left clear, source-atop like the other two overlays — so it follows a
+rounded plate's own corners instead of squaring the icon off with a rectangle. Its own effect rather than a flag on
+Bloom for Gloss's reason: they are different *looks*, a user goes looking for this one by name, and at most one
+effect of a type is meaningful, so folding them would mean an icon could carry a light or a vignette and never both.
+Four things:
+- **`LayerGradient.rampStops` is the extraction it earned**, moved off `LayerProgressiveBlur` on its second consumer.
+  The disc always spans the frame to its corners (`radial` at 1) and what the controls move is the *stops*, which is
+  precisely what the focus ramp had been doing — and it is not a blur's question, so leaving it there would have had
+  an effect that is not a blur importing a file named for one. The crash guard came with it: a clear area of 1 asks
+  for a band from 1.001 to 1, and `coerceIn` throws outright on an inverted range.
+- **Reach is inverted in the *model*, not in each renderer** — `Vignette.clearArea`, which is `Bloom.placementX`'s
+  arrangement and its reason. A projection of the model's own field is the model's arithmetic, and two paths each
+  doing it are two chances to do it once; backwards it draws a perfectly plausible picture lit in the middle, on the
+  one axis neither renderer can check against the other.
+- **No falloff and no position, and that is the effect's shape rather than controls left out.** A ramp with an angle
+  arrives from one side, which is a bloom; an off-centre disc is a bloom placed. Either would make this the entry
+  beside it with a switch on.
+- **It anchors to the artwork by default**, like a bloom and unlike a shape mask: box-anchored on a small glyph the
+  ramp gathers at corners the glyph never reaches and source-atop clips it to nothing, so the control would open on
+  no visible change. `ContentAnchor.BOX` is how the icon's own frame is asked for, and on a background plate filling
+  the box the two coincide.
 
 **`LayerEffect.Glow` and `LayerEffect.Shadow` are the same halo twice, and the first two effects that do not draw
 live.** Both are a blurred copy of the layer's *finished* silhouette drawn behind it — after the transform and the
@@ -1917,8 +1941,8 @@ architectural item was proposed as "extract the falloff onto the base effect"; i
 falloff** — Bloom's falloff is the light's own geometry, so nothing moves, and what is being asked for is a per-effect
 **mask**, which is ~20 lines in `applyEffects` (run the effect into a buffer, composite it back through a ramp's
 alpha) plus a restructure of each live-drawable effect. It goes **last**, because its cost multiplies by the number of
-effects. **Built so far: `LayerEffect.Duotone`** (see its note above). Order for the rest: vignette, inner shadow,
-inner glow, outline, bevel, mask. One number worth watching: four of the six do not draw live, taking the total to ten
+effects. **Built so far: `LayerEffect.Duotone` and `LayerEffect.Vignette`** (see their notes above). Order for the rest:
+inner shadow, inner glow, outline, bevel, mask. One number worth watching: four of the six do not draw live, taking the total to ten
 of nineteen, and `drawsLive` is all-or-nothing per icon — so most recipes worth making will preview from the bake, and
 the live path narrows to the plain ones.
 

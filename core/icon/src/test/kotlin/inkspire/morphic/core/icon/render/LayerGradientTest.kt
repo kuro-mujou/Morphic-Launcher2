@@ -292,6 +292,43 @@ class LayerGradientTest {
         assertEquals(lit, inward.last())
     }
 
+    @Test
+    fun `the ramp's stops are the end of the clear region and the point of full strength, in that order`() {
+        val (clear, full) = LayerGradient.rampStops(clear = 0.2f, softness = 0.4f).toList()
+
+        assertEquals(0.2f, clear, 0.001f)
+        assertEquals(0.6f, full, 0.001f)
+    }
+
+    @Test
+    fun `no softness is a hard edge rather than an invalid gradient`() {
+        // Two coincident stops are undefined, and a softness of zero is a legitimate request — a hard ring for a
+        // vignette, a hard boundary for a focus — so they are kept a hair apart instead of the request being refused.
+        val (clear, full) = LayerGradient.rampStops(clear = 0.5f, softness = 0f).toList()
+
+        assertTrue("stops must ascend", full > clear)
+        assertTrue("and only just", full - clear < 0.01f)
+    }
+
+    @Test
+    fun `a ramp that would run past the end is clamped, still ascending`() {
+        val (clear, full) = LayerGradient.rampStops(clear = 0.9f, softness = 0.9f).toList()
+
+        assertEquals(1f, full, 0.001f)
+        assertTrue(full > clear)
+    }
+
+    @Test
+    fun `a clear area of everything still leaves an ascending pair`() {
+        // The degenerate end, and the one that was a crash: a clear area of 1 asks for a band from 1.001 to 1, and
+        // `coerceIn` throws outright on an inverted range — so a slider dragged to its own top took the bake down
+        // rather than drawing an unaffected icon.
+        val (clear, full) = LayerGradient.rampStops(clear = 1f, softness = 0f).toList()
+
+        assertTrue(full > clear)
+        assertTrue(full <= 1f)
+    }
+
     /**
      * A bloom with **no placement of its own on either falloff**, so the anchoring tests isolate what they are about.
      *

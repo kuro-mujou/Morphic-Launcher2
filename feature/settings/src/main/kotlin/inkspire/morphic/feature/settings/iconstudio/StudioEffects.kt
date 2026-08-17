@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Vignette
 import androidx.compose.material.icons.filled.Texture
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.Tonality
@@ -268,6 +269,15 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     /** A sheen struck across the artwork, with a bowed edge between what is lit and what is not. */
     GLOSS("Gloss", Icons.Default.WbTwilight, EffectKind.ADDITION),
 
+    /**
+     * Colour gathering in from the edges, the middle left clear — see `LayerEffect.Vignette`.
+     *
+     * **Third of the three light overlays and grouped with them**, which is what the grid is for: bloom, gloss and
+     * vignette are the same source-atop ramp arranged three ways, and a user reaching for one is comparing it
+     * against the other two.
+     */
+    VIGNETTE("Vignette", Icons.Default.Vignette, EffectKind.ADDITION),
+
     /** A repeating texture laid over the artwork — see `IconPatterns`. */
     PATTERN("Pattern", Icons.Default.Grain, EffectKind.ADDITION),
 
@@ -340,6 +350,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         DUOTONE -> effects.filterIsInstance<LayerEffect.Duotone>().firstOrNull()
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
+        VIGNETTE -> effects.filterIsInstance<LayerEffect.Vignette>().firstOrNull()
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
         EXTRUDE -> effects.filterIsInstance<LayerEffect.Extrude>().firstOrNull()
         CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
@@ -398,6 +409,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         DUOTONE -> DuotoneDefaults
         BLOOM -> BloomDefaults
         GLOSS -> GlossDefaults
+        VIGNETTE -> VignetteDefaults
         PATTERN -> PatternDefaults
         EXTRUDE -> ExtrudeDefaults
         CHROMATIC -> ChromaticDefaults
@@ -511,6 +523,7 @@ internal fun EffectsControls(
             EffectSlice.DUOTONE -> DuotoneControls(target.effects, onEffects, onCommit)
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
+            EffectSlice.VIGNETTE -> VignetteControls(target.effects, onEffects, onCommit)
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
             EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
             EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
@@ -2012,6 +2025,84 @@ private val ContentAnchor.bloomHint: String
     }
 
 /**
+ * The vignette's colour, how far in it comes, how softly, and how strongly.
+ *
+ * **No angle and no position pad**, which is the shape of the effect rather than a control left out: a vignette is
+ * symmetrical about its frame by definition, so a direction would make it a bloom and an offset would make it a
+ * bloom placed off-centre. That is the entry beside it, and the two would then be one effect with a switch.
+ *
+ * **No falloff either**, unlike a bloom's. A ramp with an angle *has* no edge to gather at — it arrives from one
+ * side, which is a bloom again — so the linear form of this would not be a vignette at all.
+ *
+ * Reach and softness are the same pair a Focus reads, through the same `LayerGradient.rampStops`; what differs is
+ * only which end the control names, and the model does that conversion so neither renderer has to.
+ */
+@Composable
+private fun VignetteControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // The effect's own defaults when absent, so the frame before the seed lands shows what is about to arrive.
+    val vignette = effects.effectOrNull<LayerEffect.Vignette>() ?: LayerEffect.Vignette()
+
+    // Not clearable: a vignette must be *some* colour, and it is turned off by the header's switch. Black is what
+    // the word means, and a light one lifting the corners is the same control used the other way.
+    LabeledControl("Color") {
+        ColorField(argb = vignette.argb) { argb ->
+            onUpdate { it.withEffect(vignette.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = vignette.strength,
+        valueRange = 0f..1f,
+        default = VignetteDefaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(vignette.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Reach",
+        value = vignette.reach,
+        // Floored above zero for `UnitFloor`'s stated reason — reaching nowhere *is* this effect's identity, so a
+        // slider dragged to the bottom should leave a very small vignette rather than a silently absent one.
+        valueRange = UnitFloor..1f,
+        default = VignetteDefaults.reach,
+        onValueChange = { value -> onUpdate { it.withEffect(vignette.copy(reach = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Softness",
+        value = vignette.softness,
+        // From zero, unlike Reach: a hard ring is a real look, and `rampStops` keeps the two stops a hair apart so
+        // asking for one cannot produce an undefined gradient.
+        valueRange = 0f..1f,
+        default = VignetteDefaults.softness,
+        onValueChange = { value -> onUpdate { it.withEffect(vignette.copy(softness = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    MorphicSwitchRow(
+        label = "Fit to artwork",
+        supportingText = vignette.anchor.vignetteHint,
+        checked = vignette.anchor == ContentAnchor.CONTENT,
+        onCheckedChange = { on ->
+            onUpdate { it.withEffect(vignette.copy(anchor = if (on) ContentAnchor.CONTENT else ContentAnchor.BOX)) }
+            onCommit()
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** @see bloomHint */
+private val ContentAnchor.vignetteHint: String
+    get() = when (this) {
+        ContentAnchor.BOX -> "Gathers at the icon's own edges, wherever the layer sits."
+        ContentAnchor.CONTENT -> "Gathers at the artwork's edges and moves, zooms and turns with it."
+    }
+
+/**
  * Four across, two rows to a page — eight entries before a second page is needed, against four today.
  *
  * Three columns was the first cut and made the tiles too big: a phone hands each one most of 110dp, which is a
@@ -2061,6 +2152,7 @@ private const val UnitFloor = 0.05f
 private val DuotoneDefaults = LayerEffect.Duotone()
 private val BloomDefaults = LayerEffect.Bloom()
 private val GlossDefaults = LayerEffect.Gloss()
+private val VignetteDefaults = LayerEffect.Vignette()
 
 /**
  * The one addition with no all-default constructor: a pattern has to *be* one, and there is no neutral tile. Dots for

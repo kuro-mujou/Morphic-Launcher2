@@ -1,25 +1,21 @@
 package inkspire.morphic.core.icon.render
 
-import inkspire.morphic.core.model.icon.BlurProfile
-import inkspire.morphic.core.model.icon.LayerEffect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * How strong a progressive blur is and where along its ramp the layer stops being sharp.
+ * How far a progressive blur's copy is scaled down before being grown back.
  *
  * The last of the arithmetic-only derivations, here for [LayerShadowTest]'s reason: only the bake draws this, so
- * nothing is competing with it — the numbers are separated because a wrong one produces a plausible-looking blur
+ * nothing is competing with it — the number is separated because a wrong one produces a plausible-looking blur
  * rather than an error, and because `IconRenderer` needs an emulator for every line.
+ *
+ * The ramp's own stops moved to [LayerGradientTest] with the function, when a vignette turned out to ask the
+ * same question of the same two numbers.
  */
 class LayerProgressiveBlurTest {
-
-    private fun blur(sharpArea: Float = 0.2f, softness: Float = 0.4f) =
-        LayerEffect.ProgressiveBlur(
-            radial = BlurProfile(radius = 0.05f, sharpArea = sharpArea, softness = softness),
-        )
 
     @Test
     fun `a bigger radius scales further down, which is what makes it blurrier`() {
@@ -80,41 +76,5 @@ class LayerProgressiveBlurTest {
         // return an immutable copy instead, which the renderer then wrapped in a `Canvas` and threw.
         assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.002f, sizePx = 48))
         assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.0005f, sizePx = 800))
-    }
-
-    @Test
-    fun `the stops are the sharp edge and the point of full blur, in that order`() {
-        val (sharp, blurred) = LayerProgressiveBlur.stops(blur(sharpArea = 0.2f, softness = 0.4f)).toList()
-
-        assertEquals(0.2f, sharp, 0.001f)
-        assertEquals(0.6f, blurred, 0.001f)
-    }
-
-    @Test
-    fun `no softness is a hard edge rather than an invalid gradient`() {
-        // Two coincident stops are undefined, and a softness of zero is a legitimate request — so they are kept a
-        // hair apart instead of the request being refused.
-        val (sharp, blurred) = LayerProgressiveBlur.stops(blur(sharpArea = 0.5f, softness = 0f)).toList()
-
-        assertTrue("stops must ascend", blurred > sharp)
-        assertTrue("and only just", blurred - sharp < 0.01f)
-    }
-
-    @Test
-    fun `a ramp that would run past the end is clamped, still ascending`() {
-        val (sharp, blurred) = LayerProgressiveBlur.stops(blur(sharpArea = 0.9f, softness = 0.9f)).toList()
-
-        assertEquals(1f, blurred, 0.001f)
-        assertTrue(blurred > sharp)
-    }
-
-    @Test
-    fun `a sharp area of everything still leaves an ascending pair`() {
-        // The degenerate end: nothing gets blurred, and the gradient must still be constructible rather than
-        // throwing on two stops at 1.
-        val (sharp, blurred) = LayerProgressiveBlur.stops(blur(sharpArea = 1f, softness = 0f)).toList()
-
-        assertTrue(blurred > sharp)
-        assertTrue(blurred <= 1f)
     }
 }

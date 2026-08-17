@@ -677,7 +677,18 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    **`strength` is a matrix interpolation, not a blended copy** (`ColorMatrices.towards`): applying a matrix is linear
    in the matrix, so interpolating the entries interpolates the outputs — which is what let the effect carry a partial
    grade without a second buffer and therefore without losing its live path.
-2. **Vignette** — `LayerGradient.radial` exists; a bloom's ramp run outward instead of inward, live.
+2. **Vignette** — `LayerGradient.radial` exists; a bloom's ramp run outward instead of inward, live. **Built**, and
+   it cost one move and no new arithmetic: the disc spans the frame to its corners at a radius of 1 and the *stops*
+   are what the controls move, which is exactly what `LayerProgressiveBlur.stops` had been doing for the focus ramp.
+   So that function became **`LayerGradient.rampStops(clear, softness)`** — the second consumer earning the
+   extraction, and it is not a blur's question ("how much stays untouched, how far past that to full") so leaving it
+   there would have had an effect that is not a blur importing a file named for one. The crash guard came with it: a
+   clear area of 1 asks for a band from 1.001 to 1 and `coerceIn` throws on an inverted range, so the tests moved
+   too. **Reach is inverted in the model, not in each renderer** (`Vignette.clearArea`, `Bloom.placementX`'s
+   arrangement) — getting it backwards draws a perfectly plausible picture lit in the middle, on the one axis
+   neither renderer can check against the other. It takes no falloff and no position, and that is the shape of the
+   effect rather than controls left out: a ramp with an angle arrives from one side, which is a bloom, and an
+   off-centre disc is a bloom placed.
 3. **Inner shadow** — `haloed` with the alpha inverted; brings the alpha-invert matrix.
 4. **Inner glow** — inner shadow's twin, no toggle.
 5. **Outline** — dilate and erode; the shared silhouette helpers get extracted here, on their second consumer.

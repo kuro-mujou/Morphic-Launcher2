@@ -231,6 +231,35 @@ object LayerGradient {
     }
 
     /**
+     * Where a two-stop ramp's stops sit, ascending, as fractions of its own extent: the end of the untouched region,
+     * and the point at which the effect reaches full strength.
+     *
+     * Below the first the gradient clamps to nothing and above the second to everything, which is why two stops are
+     * enough for what reads as three regions.
+     *
+     * **Here rather than on [LayerProgressiveBlur], which is where it was written, because a vignette asks the
+     * identical question** — how much of the frame stays clear, and how far past that the colour takes to arrive.
+     * Extract-on-the-second-consumer, and this file is already the one that answers "where does a ramp sit"; the
+     * blur's own name would otherwise be imported by an effect that is not one.
+     *
+     * **Separated by at least a hair**, because a gradient with two coincident stops is undefined — and a softness
+     * of zero is a legitimate request for a hard edge, not an invalid one.
+     *
+     * **[clear] is capped short of the end to leave room for that hair**, which is not fussiness: without it a clear
+     * area of 1 asks for a band from 1.001 to 1, and `coerceIn` throws outright on an inverted range. A slider
+     * dragged to its own top would have taken the bake down rather than drawing an unaffected icon.
+     *
+     * @param clear how much of the ramp's extent is left alone, 0..1. A progressive blur's sharp area; a vignette's
+     *   clear middle, which is its reach read from the other end.
+     * @param softness how far past [clear] the ramp takes to reach full, as a fraction of the same extent.
+     */
+    fun rampStops(clear: Float, softness: Float): FloatArray {
+        val start = clear.coerceIn(0f, 1f - MinBand)
+        val end = (start + softness.coerceAtLeast(0f)).coerceIn(start + MinBand, 1f)
+        return floatArrayOf(start, end)
+    }
+
+    /**
      * The far end of a bloom: [argb]'s own color with no alpha left.
      *
      * **Not `Color.TRANSPARENT`**, and the difference is visible. Transparent black is `0x00000000`, so a ramp to it
@@ -267,4 +296,7 @@ object LayerGradient {
 
     /** Small enough to be invisible, large enough that no platform constructor refuses it. */
     private const val MinRadiusPx = 0.01f
+
+    /** The narrowest a [rampStops] transition may be — a hard edge, without the two stops actually coinciding. */
+    private const val MinBand = 0.001f
 }
