@@ -668,8 +668,10 @@ class IconRenderer(
         val drift = LayerGrain.driftOf(grain)
 
         return resample(source, sizePx, bake) { x, y, into ->
-            val u = x / cellPx
-            val v = y / cellPx
+            // Pixel *centres*, which is [LayerGrain.latticeAt]'s whole job: the field is zero at every lattice point,
+            // so sampling corners drops every cellPx-th sample onto nothing.
+            val u = LayerGrain.latticeAt(x, cellPx)
+            val v = LayerGrain.latticeAt(y, cellPx)
             // **Written into `into` and then read back out of it, rather than into a scratch array of its own.**
             // A scratch held here would be closed over by the lambda and shared by every band — which is the one
             // way this loop's parallelism can go wrong, and it would show as individually wrong pixels scattered

@@ -166,7 +166,7 @@ object LayerGrain {
      * spacing makes equal movements of the finger equal *ratios*, so the fine end gets as much travel as the coarse.
      *
      * **The floor is now the *reason* for the fine end rather than a clamp on it.** [FinestCell] is derived from
-     * [MinCellPx] and the smallest size an icon is baked at, so the clamp below binds only at the very bottom of the
+     * [MinCellPx] and the size the finest grain is guaranteed at, so the clamp below binds only at the very bottom of the
      * control instead of across its first third — see [FinestCell] for what that cost on a device and in the studio.
      *
      * **Floored at [MinCellPx], and that floor is load-bearing in a way a one-pixel one was not.** Gradient noise
@@ -236,47 +236,86 @@ object LayerGrain {
     private const val SaltStride = 977
 
     /**
-     * The smallest lattice worth sampling, in pixels.
+     * Where pixel [pixel] sits on the lattice, in cells — **its centre, not its corner**.
      *
-     * **Four rather than one, and the difference is the effect existing.** The field is zero at each lattice point,
-     * so a cell of one pixel puts every sample on a zero and displaces nothing; two puts half of them there. Four is
-     * where every sample lands somewhere the field is actually doing something, whatever the phase.
+     * A pixel is an area and its centre is where it should be sampled, which is textbook and at coarse cells makes no
+     * visible difference at all. At fine ones it decides whether the effect exists: gradient noise reads **zero at
+     * every lattice point**, and sampling corners puts every `cellPx`-th sample exactly on one. At a four-pixel cell
+     * that is a quarter of them landing on nothing; at two, half; at one, all of them, which is why the floor below
+     * used to have to be four.
+     *
+     * Offset by half a *pixel* rather than half a cell, deliberately: the correction is about where a pixel is, so it
+     * cannot depend on how large the cells happen to be. At any cell size the samples then straddle the lattice
+     * instead of landing on it.
+     *
+     * Shared with the test rather than written into the renderer's loop, because it is one line whose being wrong is
+     * invisible — the picture still looks like noise, it is merely weaker than it should be.
      */
-    private const val MinCellPx = 4f
+    fun latticeAt(pixel: Int, cellPx: Float): Float = (pixel + 0.5f) / cellPx
 
     /**
-     * The smallest bitmap the launcher ever bakes an icon into — roughly a home cell's icon, 48dp at 3× density.
+     * The smallest lattice worth sampling, in pixels.
      *
-     * An estimate rather than a plumbed value, and it only has to be the right *order*: what it decides is where
-     * [FinestCell] sits, and being out by a few pixels there moves the finest grain by a few percent. Plumbing the
-     * real number would mean the noise field taking a dependency on the icon-sizing settings of every surface, to
-     * answer a question about what a slider's bottom end should mean.
+     * **Two, and it is [latticeAt] that made two possible.** The field is zero at each lattice point, so while the
+     * renderer sampled pixel *corners* a cell of one pixel put every sample on a zero and displaced nothing, and two
+     * put half of them there — four was the smallest cell at which every sample landed somewhere the field was doing
+     * something, whatever the phase. Sampling pixel centres removes the coincidence entirely: at a two-pixel cell the
+     * samples fall on quarter and three-quarter phases, both well away from the zeros.
+     *
+     * **Two rather than one, because one is not a lattice.** At a single-pixel cell every sample sits at the centre of
+     * its own cell, so neighbouring pixels share nothing and the field degenerates into per-pixel confetti — which is
+     * the look this whole construction exists to avoid. Two is the finest structure a bitmap can actually carry.
+     *
+     * It is one of [FinestCell]'s two inputs, so halving it would halve the finest grain the slider can ask for at
+     * every bake size at once — see [GrainFidelityPx] for why that is not the knob that was turned.
      */
-    private const val SmallestBakePx = 144f
+    private const val MinCellPx = 2f
+
+    /**
+     * The bake size at which the finest setting is guaranteed to render exactly as asked.
+     *
+     * **Three things coincide at 144 and the control is honest only while they do**: it is roughly the smallest
+     * bitmap the launcher bakes an icon into (a home cell's icon, 48dp at 3× density), it is the size the studio
+     * *drafts* at (`IconPreview.DraftPx`), and it is this. So the finest grain the slider can ask for is the finest
+     * grain the smallest icon can draw — and also the finest the picture being dragged against can show.
+     *
+     * **Raising it to 288 was tried and reverted, and the failure is worth keeping.** It bought a genuinely finer
+     * grain — 5.3px cells on the studio canvas rather than 10.7 — and the author noticed within a minute that the
+     * preview had stopped responding below a grain size of about 0.15. Not speed: the draft is 144px, so the bottom
+     * sixth of the ramp clamped *there* and every draft in that range came back identical. Which is precisely the
+     * defect this file spent an evening removing, reintroduced by the same mistake in a new place — reasoning about
+     * the cost to *home icons* while forgetting that the picture the user actually drags against is the same size.
+     *
+     * So the rule is not "144" but **the largest of the three**: anything finer than the draft can show is a control
+     * that does nothing under the finger, whatever it does on release. Finer grain is available, and its real price is
+     * a larger [inkspire.morphic.core.icon.compose.IconPreview] draft — four times the pixels at 288, against a
+     * measured 19ms at 144 — which is a decision about drag latency rather than about noise.
+     *
+     * An estimate rather than a plumbed value, and it only has to be the right *order*.
+     */
+    private const val GrainFidelityPx = 144f
 
     /**
      * The two ends of [cellPx]'s ramp, as fractions of the box.
      *
-     * **The fine end is derived from [MinCellPx] rather than chosen, and that is the fix for a slider whose bottom
-     * third was redundant.** It used to be `0.006` — a cell of *four tenths of a pixel* on a home icon and nine
-     * tenths on the studio's own draft, both far under the floor. So every grain size below ≈0.35 clamped to the same
-     * 4px cell and rendered the *same picture*: on a device the control did nothing across a third of its travel, and
-     * in the studio the draft preview stopped responding entirely down there — which reads as the preview having
+     * **The fine end is derived from [MinCellPx] and [GrainFidelityPx] rather than chosen**, which is the fix for a
+     * slider whose bottom third was redundant. It used to be `0.006` — a cell of *four tenths of a pixel* on a home
+     * icon and nine tenths on the studio's own draft, both far under the floor — so every grain size below ≈0.35
+     * clamped to the same cell and drew the *same picture*: on a device the control did nothing across a third of its
+     * travel, and in the studio the preview stopped responding entirely down there, which reads as the preview having
      * frozen rather than as a slider with nothing left to say. (Its own KDoc claimed "a few pixels at 256"; at 256 it
-     * was one and a half.)
+     * was one and a half. That claim is the reason nobody checked.)
      *
-     * Anchoring it to the smallest bake makes the floor bind nowhere but the very bottom, so every position on the
-     * slider is a different picture — **and it restores the promise this file is built on**, that one recipe grains
-     * the same at every bake size. That promise was already broken down here and the class note admitted it: a
-     * clamped cell is a constant number of *pixels*, so the same recipe came out as coarse dust on a 144px icon and
-     * as an invisible shimmer on a 768px canvas. Nothing above the floor has that problem, because a fraction of the
-     * box is a fraction of the box.
+     * Derived, the fine end is *by construction* the finest grain that renders as asked at [GrainFidelityPx] — so
+     * above that size every position on the slider is a different picture, and one recipe grains the same at every
+     * such size, which is the promise this file is built on. Below it the bottom of the control clamps; see
+     * [GrainFidelityPx] for how much of it and why that is the accepted trade.
      *
-     * What is given up is grain finer than about a thirtieth of the box — which was never drawable, so it is an
-     * unreachable setting being removed rather than a look. **The stored value's meaning changes**: a saved
-     * `grainSize` now maps to a coarser cell than it did. Affordable only because nothing has shipped.
+     * What is given up is grain finer than a seventy-second of the box, which is beyond what a small icon can carry
+     * anyway. **The stored value's meaning changes** whenever these two move, since a saved `grainSize` is a position
+     * on this ramp rather than a size. Affordable only because nothing has shipped.
      */
-    private const val FinestCell = MinCellPx / SmallestBakePx
+    private const val FinestCell = MinCellPx / GrainFidelityPx
     private const val CoarsestCell = 0.5f
 
     private const val Root2 = 1.4142135f

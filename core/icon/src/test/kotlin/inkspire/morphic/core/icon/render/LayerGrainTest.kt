@@ -148,8 +148,8 @@ class LayerGrainTest {
         val threeQuarters = LayerGrain.cellPx(grain(grainSize = 0.75f), size)
 
         assertEquals(half / quarter, threeQuarters / half, 0.01f)
-        // And the ends are the two the mapping names: about a thirtieth of the box, and half of it.
-        assertEquals(size / 36f, LayerGrain.cellPx(grain(grainSize = 0f), size), size / 400f)
+        // And the ends are the two the mapping names: about a seventy-second of the box, and half of it.
+        assertEquals(size / 72f, LayerGrain.cellPx(grain(grainSize = 0f), size), size / 800f)
         assertEquals(size * 0.5f, LayerGrain.cellPx(grain(grainSize = 1f), size), 0.5f)
     }
 
@@ -162,10 +162,10 @@ class LayerGrainTest {
      * stopped responding entirely down there. Nothing failed; the control was simply inert, which is indistinguishable
      * from a preview that has stopped updating.
      *
-     * Checked at **144px**, which is both a home icon and — since this was found — the floor on the studio's draft
-     * (`IconPreview.DraftPx`). The two were tied together deliberately: the guarantee below is only worth having if
-     * the picture the user drags against is never smaller than the smallest picture a surface draws. It genuinely does
-     * not hold beneath that, and cannot: a cell finer than four pixels is not finer grain, it is no grain.
+     * Checked at **144px**, which is three things at once and has to stay so: a home icon, the size the studio drafts
+     * at (`IconPreview.DraftPx`), and `GrainFidelityPx`. Raising the last above the others was tried, and the bottom
+     * sixth of the control immediately went inert *in the draft* — a slider doing nothing under the finger, which is
+     * this file's original defect wearing a different hat. A finer ramp has to be paid for with a larger draft.
      */
     @Test
     fun `moving the control changes the cell at every bake size, not only large ones`() {
@@ -184,9 +184,34 @@ class LayerGrainTest {
 
     @Test
     fun `the finest grain is drawable at the smallest size an icon is baked at`() {
-        // Which is the whole reason the fine end is derived rather than chosen: below the floor the field's zeros land
-        // on every sample, so a finer setting is not finer grain — it is the same grain, or none.
-        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), sizePx = 144) >= 4f)
+        // Which is the whole reason the fine end is derived rather than chosen: below the floor a finer setting is
+        // not finer grain — it is the same grain clamped, and below that it is confetti.
+        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), sizePx = 144) >= 2f)
+    }
+
+    /**
+     * That a pixel is sampled at its **centre**, which is what lets the lattice go as fine as it does.
+     *
+     * **Invisible when wrong, which is the only reason this is worth a test.** Gradient noise reads zero at every
+     * lattice point, so sampling a pixel's corner drops every `cellPx`-th sample onto nothing — at a two-pixel cell,
+     * half of them. The picture that comes out still looks like noise; it is simply weaker and coarser than the
+     * recipe asked for, and no assertion about smoothness, determinism or range would notice.
+     */
+    @Test
+    fun `a pixel is sampled at its centre, so no sample lands on a lattice zero`() {
+        // At a two-pixel cell the corners fall on the lattice every other pixel. Centres cannot: they sit at quarter
+        // and three-quarter phases whatever the pixel.
+        for (pixel in 0 until 16) {
+            val phase = LayerGrain.latticeAt(pixel, cellPx = 2f) % 1f
+            assertNotEquals(0f, phase)
+        }
+        // And the whole point of it: a field sampled that way still moves at the floor, where corners would not.
+        var largest = 0f
+        for (pixel in 0 until 64) {
+            val at = LayerGrain.latticeAt(pixel, cellPx = 2f)
+            largest = maxOf(largest, abs(LayerGrain.field(at, at, salt = 0)))
+        }
+        assertTrue("the field vanished at a two-pixel cell", largest > 0.1f)
     }
 
     @Test
@@ -201,8 +226,8 @@ class LayerGrainTest {
         var largest = 0f
 
         for (pixel in 0 until homeIcon) {
-            val value = LayerGrain.field(pixel / cellPx, pixel / cellPx, salt = 0)
-            largest = maxOf(largest, abs(value))
+            val at = LayerGrain.latticeAt(pixel, cellPx)
+            largest = maxOf(largest, abs(LayerGrain.field(at, at, salt = 0)))
         }
         assertTrue("the field vanished at cell $cellPx", largest > 0.1f)
     }
