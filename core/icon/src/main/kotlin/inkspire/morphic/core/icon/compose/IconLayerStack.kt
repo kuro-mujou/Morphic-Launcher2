@@ -302,12 +302,13 @@ private fun Modifier.layerEffects(
  */
 @Composable
 private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit): Modifier = when (effect) {
-    // Two effects, one drawing: both resolve to a colour matrix over everything drawn so far, and only where the
-    // matrix comes from differs — composed from four sliders, or looked up by id.
-    is LayerEffect.Color, is LayerEffect.Filter -> {
+    // Three effects, one drawing: each resolves to a colour matrix over everything drawn so far, and only where the
+    // matrix comes from differs — composed from four sliders, mapped onto two chosen colours, or looked up by id.
+    is LayerEffect.Color, is LayerEffect.Duotone, is LayerEffect.Filter -> {
         val matrix = remember(effect) {
             when (effect) {
                 is LayerEffect.Color -> LayerFilter.colorMatrixOf(effect)
+                is LayerEffect.Duotone -> LayerFilter.duotoneMatrixOf(effect)
                 // Null for an id this build does not know, which then draws nothing rather than failing.
                 is LayerEffect.Filter -> IconFilters.matrixOrNull(effect.filter)
             }

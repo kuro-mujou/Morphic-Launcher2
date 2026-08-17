@@ -311,9 +311,12 @@ enforces. Per layer:
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
-  blur — the six that do **not** draw live) and `LayerEffect.Filter` (one of the built-in looks, by id). **All
-  thirteen the plan set out are built**; see the notes below for each, and
-  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md).
+  blur — the six that do **not** draw live), `LayerEffect.Filter` (one of the built-in looks, by id) and
+  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **All thirteen the plan set out are
+  built, plus the first of the phase-2 six**; see the notes below for each, and
+  [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
+  checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
+  deliberately *not* the "extract the falloff" the proposal asked for.
 - **source** — including a **custom image** on any layer, which is how an app's own artwork is replaced outright.
 
 **Rendering — hybrid:**
@@ -670,6 +673,33 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
     - **The names are ours.** The reference has a "Tarantino", an "iOS" and a "MIUI"; a filter's name is shipped,
       stored and user-visible, so borrowing one makes the launcher's vocabulary depend on somebody else's
       trademark for no gain in clarity. Same rule, now with three worked examples.
+
+**`LayerEffect.Duotone` is the fourteenth, the first of the phase-2 six, and the one the filter library had already
+built.** The layer's tonal range mapped onto a ramp between two *chosen* colours — `ColorMatrices.duotone` exactly,
+which eight of the 46 authored looks already run on. It is **not a tint**, and that distinction is the whole reason it
+exists: a tint attenuates the colours already there, so a red icon and a blue one stay different, where this discards
+the hue entirely and keeps only how light each pixel was — which is what makes a screenful of icons drawn by different
+hands read as one set. Five things:
+- **Named for the look, not the mechanism** — the plan called it a *gradient map*, and a gradient map has arbitrary
+  stops where this deliberately has two colours and no midpoint. Same rename Bloom took from `Gradient`.
+- **No midpoint or bias slider, and that is a bound rather than a control left out.** Shifting the balance between the
+  ends is a non-linear remap of luminance *before* the interpolation, which a 4×5 matrix structurally cannot hold — so
+  a bias would demote the effect to a per-pixel pass and cost it both its live path and the composability that lets it
+  stack with everything. If it is ever wanted it is a second effect.
+- **`strength` is an interpolation of the *matrix*, not of two drawn copies** (`ColorMatrices.towards`). Applying a
+  matrix is linear in the matrix, so `(1−t)·A + t·B` applied to a pixel *is* the cross-fade of the two results — which
+  is what let a partial grade cost no second buffer. The fifth column needs no special case there, unlike in `then`,
+  being a term of the same linear expression rather than something multiplied through.
+- **`LayerFilter.duotoneMatrixOf` is the extraction the second consumer earned**, the exact move `solidMatrixOf` made:
+  `IconFilters` had been unpacking two ARGB ints into six channels privately, and a *user* picking the same two
+  colours was about to do it again — on the **fifth column**, at 0..255, where a 0..1 value is visually black rather
+  than obviously broken. The table keeps a two-colour alias because a table of looks reads better in colours than in
+  channels, which is what its old note was really about.
+- **An addition rather than an adjustment**, which looks arguable and is not: `carriesSwitch`'s test is whether the
+  entry's *resting* state is its off state, and this arrives at the full ramp because that is what makes it legible.
+  So zero strength is not where it sits untouched, and its "off" is its absence — which is a switch. And the
+  library's own DUOTONE category is not a duplication for the reason `Color` and `Filter` are not: one is a fixed
+  vocabulary somebody authored, the other is *this* icon's two colours.
 
 **`LayerEffect.Glow` and `LayerEffect.Shadow` are the same halo twice, and the first two effects that do not draw
 live.** Both are a blurred copy of the layer's *finished* silhouette drawn behind it — after the transform and the
@@ -1876,7 +1906,23 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   carries no menu and cannot be dragged).
 
 **The icon effects expansion is complete — every slice of
-[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), all thirteen effects.** Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
+[docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), all thirteen effects — and phase 2 has started.** That
+second list is **§8** of the same plan: six more effects and one architectural item, assessed against the built code
+rather than against captures. **Four of the six are re-pointing what already exists** — `ColorMatrices.duotone` *is* a
+gradient map, `LayerGradient.radial` places a vignette, `IconRenderer.haloed` is an inner shadow inverted, and
+`dilated` is an outline's outward half — so the only genuinely new kernel is **bevel & emboss** (a Sobel over a
+blurred alpha, which does not fit `resample` because that helper samples one point where a Sobel reads a
+neighbourhood). The one primitive missing is an **alpha-inverting matrix**, which three of the six want. The
+architectural item was proposed as "extract the falloff onto the base effect"; it is **neither an extraction nor a
+falloff** — Bloom's falloff is the light's own geometry, so nothing moves, and what is being asked for is a per-effect
+**mask**, which is ~20 lines in `applyEffects` (run the effect into a buffer, composite it back through a ramp's
+alpha) plus a restructure of each live-drawable effect. It goes **last**, because its cost multiplies by the number of
+effects. **Built so far: `LayerEffect.Duotone`** (see its note above). Order for the rest: vignette, inner shadow,
+inner glow, outline, bevel, mask. One number worth watching: four of the six do not draw live, taking the total to ten
+of nineteen, and `drawsLive` is all-or-nothing per icon — so most recipes worth making will preview from the bake, and
+the live path narrows to the plain ones.
+
+Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and
 a displacement is arithmetic over an `IntArray` at every API level. Gating six effects to API 31/33 was considered
 and rejected — it would deny glow and drop shadow to every device below Android 12 to solve a problem only the

@@ -51,6 +51,25 @@ internal object ColorMatrices {
         return out
     }
 
+    /**
+     * This matrix mixed [amount] of the way toward [other] — 0 leaves it alone, 1 is [other] outright.
+     *
+     * **Interpolating the entries interpolates the outputs**, and that is the fact worth knowing: applying a matrix
+     * is linear *in the matrix*, so `(1−t)·A + t·B` applied to a pixel is exactly `(1−t)·(A·p) + t·(B·p)`. Which is
+     * what lets a colour effect carry a strength while staying one matrix — the obvious alternative, drawing the
+     * layer twice and cross-fading the results, is a second buffer in the bake and an API floor away from being
+     * drawable live at all.
+     *
+     * The fifth column needs no special case here, unlike in [then]: it is a term of the same linear expression
+     * rather than something being multiplied through, so it interpolates like every other entry.
+     */
+    fun FloatArray.towards(other: FloatArray, amount: Float): FloatArray {
+        val mix = amount.coerceIn(0f, 1f)
+        if (mix <= 0f) return copyOf()
+        if (mix >= 1f) return other.copyOf()
+        return FloatArray(size) { this[it] + (other[it] - this[it]) * mix }
+    }
+
     /** Per-channel multipliers — brightness (all three equal) and a multiply tint (the tint's channels) are both this. */
     fun scale(r: Float, g: Float, b: Float) = floatArrayOf(
         r, 0f, 0f, 0f, 0f,

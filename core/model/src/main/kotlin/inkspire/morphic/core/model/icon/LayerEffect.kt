@@ -255,6 +255,73 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer's tonal range mapped onto a ramp between two chosen colors: what was darkest comes out [darkArgb],
+     * what was lightest comes out [lightArgb], and everything between is that line at its own luminance.
+     *
+     * **This is not a tint, and the difference is the whole point of it.** A tint attenuates the colors already
+     * there, so a red app icon and a blue one stay different; this discards the hue entirely and keeps only how
+     * *light* each pixel was — which is exactly what makes a screenful of icons drawn by different hands read as one
+     * set. It is the theming control, where [Color]'s four sliders are the grading one.
+     *
+     * **Named for what it is rather than for the mechanism**, which is the same rule that renamed `Gradient` to
+     * [Bloom]. The plan called it a *gradient map*; a gradient map has arbitrary stops, and this deliberately has
+     * exactly two colors and no midpoint — so "duotone" is the honest word, and it is the one users already have for
+     * this look.
+     *
+     * **The `IconFilter` library's own duotone category is the same look authored rather than picked**, which is not
+     * a duplication for the reason [Color] and [Filter] are not: one is a fixed vocabulary somebody chose, the other
+     * is this icon's two colors. They share `LayerFilter.duotoneMatrixOf` so the picked pair and the authored ones
+     * cannot come out looking like different effects.
+     *
+     * **No midpoint or bias slider, and that is a bound rather than an omission.** Shifting the balance between the
+     * two ends is a non-linear remap of luminance *before* the interpolation, which a 4×5 color matrix structurally
+     * cannot express — so a bias would demote this to a per-pixel pass and cost it both live drawing and the
+     * composability that lets it stack with everything. If it is ever genuinely wanted it is a second effect, not a
+     * slider added here.
+     *
+     * @property darkArgb what black maps to. The alpha byte is ignored: a ramp has no opacity of its own and the
+     *   layer's own alpha survives untouched, which is what keeps this a recoloring rather than a fill.
+     * @property lightArgb what white maps to.
+     * @property strength how far the mapping is taken, 0..1 — the layer untouched through to the full ramp. It is a
+     *   **matrix interpolation** rather than a second copy blended over the first (see `ColorMatrices.towards`),
+     *   which is what keeps the whole effect one matrix and therefore drawable live.
+     */
+    @Serializable
+    @SerialName("duotone")
+    data class Duotone(
+        /**
+         * **A cool dark and a warm light, because the two ends being opposite in temperature is what makes the
+         * mapping legible at a glance.** A pair close in hue reads as a tint — which is the one thing this effect is
+         * not — so arriving on one would teach the user the wrong thing about the control they just opened. Deep
+         * violet and warm sand rather than either of the pairs `IconFilters` already ships, so opening this does not
+         * look like having picked a filter.
+         */
+        val darkArgb: Int = 0xFF241B4E.toInt(),
+        /** @see darkArgb */
+        val lightArgb: Int = 0xFFFFD9A0.toInt(),
+        /**
+         * **The full ramp**, like every other addition's visible default: a partial map reads as a wash over the
+         * app's own colors, where the whole of what this effect is for is that the app's colors stop mattering.
+         * Backing off is the obvious next move; arriving there is not.
+         */
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Taken none of the way is the only way this paints nothing.
+         *
+         * **There is no pair of colors that leaves an icon unchanged**, which is why the strength exists at all: a
+         * black-to-white ramp is a grayscale conversion rather than an identity, so without it the effect would have
+         * had no floor and its own reset would have been the only way back.
+         */
+        override val isIdentity: Boolean get() = strength <= 0f
+
+        /** One color matrix, which both paths already share through `LayerFilter`. */
+        override val drawsLive: Boolean get() = true
+    }
+
+    /**
      * Light spilling across the layer: [argb] fading out to nothing, painted **over it and clipped to it** —
      * source-atop, so it colors the artwork rather than covering the icon with a rectangle.
      *
@@ -927,6 +994,7 @@ val List<LayerEffect>.drawLive: Boolean
  */
 fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.Color -> copy(enabled = enabled)
+    is LayerEffect.Duotone -> copy(enabled = enabled)
     is LayerEffect.Filter -> copy(enabled = enabled)
     is LayerEffect.Bloom -> copy(enabled = enabled)
     is LayerEffect.Gloss -> copy(enabled = enabled)

@@ -2,6 +2,7 @@ package inkspire.morphic.core.icon
 
 import inkspire.morphic.core.icon.render.ColorMatrices
 import inkspire.morphic.core.icon.render.ColorMatrices.then
+import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.model.icon.IconFilter
 
 /**
@@ -59,19 +60,13 @@ object IconFilters {
     /**
      * A two-colour ramp from two ARGB literals, which is how every [Category.DUOTONE] entry is authored.
      *
-     * The unpacking lives here rather than in [ColorMatrices] for `LayerFilter.solidMatrixOf`'s reason inverted:
-     * that module is the arithmetic and takes channels, and a table is far more readable written as the two colours
-     * a designer would name. The alpha byte is ignored — a ramp has no opacity of its own, the layer's alpha
-     * survives untouched.
+     * **The unpacking moved to [LayerFilter.duotoneMatrixOf] when it gained a second consumer** —
+     * `LayerEffect.Duotone` is a user picking the two colours a table entry here has authored, so both were about to
+     * pull the channels out of an int their own way. This stays as an alias because the *table* reads better in two
+     * colours than in six channels, which is what the note it replaces was really about.
      */
-    private fun duotone(darkArgb: Int, lightArgb: Int): FloatArray = ColorMatrices.duotone(
-        darkR = (darkArgb shr 16 and 0xFF).toFloat(),
-        darkG = (darkArgb shr 8 and 0xFF).toFloat(),
-        darkB = (darkArgb and 0xFF).toFloat(),
-        lightR = (lightArgb shr 16 and 0xFF).toFloat(),
-        lightG = (lightArgb shr 8 and 0xFF).toFloat(),
-        lightB = (lightArgb and 0xFF).toFloat(),
-    )
+    private fun duotone(darkArgb: Int, lightArgb: Int): FloatArray =
+        LayerFilter.duotoneMatrixOf(darkArgb, lightArgb)
 
     /** A grayscale tinted toward one colour — the shape every tinted [Category.MONOCHROME] entry takes. */
     private fun tintedMono(r: Float, g: Float, b: Float, contrast: Float = 1f): FloatArray =

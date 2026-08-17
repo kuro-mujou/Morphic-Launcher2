@@ -1,6 +1,7 @@
 package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.icon.render.ColorMatrices.then
+import inkspire.morphic.core.icon.render.ColorMatrices.towards
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.TintMode
 
@@ -69,4 +70,37 @@ object LayerFilter {
         g = (argb shr 8 and 0xFF).toFloat(),
         b = (argb and 0xFF).toFloat(),
     )
+
+    /**
+     * The matrix mapping a whole tonal range onto the ramp from [darkArgb] to [lightArgb].
+     *
+     * **Here rather than in `IconFilters` because there are two consumers now**, which is what that file's own KDoc
+     * reserved: it authors a table of two-colour looks, and [LayerEffect.Duotone] lets a user pick the same two, so
+     * both were about to unpack the channels out of an int their own way. That is [solidMatrixOf]'s argument exactly,
+     * and it protects the same thing — the channels are the matrix's **fifth column**, on 0..255, where a 0..1 value
+     * is visually black rather than obviously broken.
+     *
+     * The alpha byte of each colour is ignored: a ramp has no opacity of its own, and the layer's own alpha survives
+     * untouched.
+     */
+    fun duotoneMatrixOf(darkArgb: Int, lightArgb: Int): FloatArray = ColorMatrices.duotone(
+        darkR = (darkArgb shr 16 and 0xFF).toFloat(),
+        darkG = (darkArgb shr 8 and 0xFF).toFloat(),
+        darkB = (darkArgb and 0xFF).toFloat(),
+        lightR = (lightArgb shr 16 and 0xFF).toFloat(),
+        lightG = (lightArgb shr 8 and 0xFF).toFloat(),
+        lightB = (lightArgb and 0xFF).toFloat(),
+    )
+
+    /**
+     * The matrix for [duotone] — its full ramp, taken [LayerEffect.Duotone.strength] of the way from leaving the
+     * layer alone.
+     *
+     * **The partial grade is an interpolation of the *matrix*, not of two drawn copies** — see
+     * [ColorMatrices.towards] for why those are the same picture. It is what keeps a strength slider from costing
+     * this effect its live path.
+     */
+    fun duotoneMatrixOf(duotone: LayerEffect.Duotone): FloatArray =
+        ColorMatrices.identity()
+            .towards(duotoneMatrixOf(duotone.darkArgb, duotone.lightArgb), duotone.strength)
 }

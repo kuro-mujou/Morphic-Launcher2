@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Texture
@@ -242,6 +243,20 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     FILTER("Filter", Icons.Default.PhotoFilter, EffectKind.ADJUSTMENT),
 
     /**
+     * The layer's tones mapped onto a ramp between two chosen colors — see `LayerEffect.Duotone`.
+     *
+     * **Beside [COLOR] and [FILTER] because the three are one question asked three ways**: how should these pixels
+     * read? Color grades what is there, a filter applies a look somebody authored, and this replaces the app's own
+     * palette with two colors of the user's. They are what a user moves between while theming a layer.
+     *
+     * **An addition rather than an adjustment**, which looks arguable and is not. The test [carriesSwitch] states is
+     * whether the entry's *resting* state is its off state: an adjustment rests at an identity its own sliders name,
+     * where this arrives at the full ramp because that is what makes it legible. So zero strength is not where it
+     * sits when untouched, and its "off" is its absence — which is a switch.
+     */
+    DUOTONE("Duotone", Icons.Default.Palette, EffectKind.ADDITION),
+
+    /**
      * Light or shade spilling across the artwork — the two-stop overlay, linear or radial.
      *
      * **This is the entry that used to read "Gradient"**, and the rename is the rule rather than a preference: every
@@ -322,6 +337,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     fun storedEffect(effects: List<LayerEffect>): LayerEffect? = when (this) {
         OPACITY, BLEND -> null
         COLOR -> effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
+        DUOTONE -> effects.filterIsInstance<LayerEffect.Duotone>().firstOrNull()
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
@@ -379,6 +395,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
      */
     fun seeded(): LayerEffect? = when (this) {
         OPACITY, BLEND, COLOR, FILTER -> null
+        DUOTONE -> DuotoneDefaults
         BLOOM -> BloomDefaults
         GLOSS -> GlossDefaults
         PATTERN -> PatternDefaults
@@ -491,6 +508,7 @@ internal fun EffectsControls(
 
             EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
+            EffectSlice.DUOTONE -> DuotoneControls(target.effects, onEffects, onCommit)
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
@@ -1063,6 +1081,54 @@ private val FilterReferenceStops = listOf(
 private val FilterTileWidth = 72.dp
 private val FilterSwatchHeight = 48.dp
 private val FilterTileGap = 8.dp
+
+/**
+ * The two ends of the ramp, and how far the mapping is taken.
+ *
+ * **Two colors and no midpoint**, which is `LayerEffect.Duotone`'s own bound rather than a control left out: shifting
+ * the balance between the ends is a non-linear remap of luminance, and a color matrix cannot hold one — so a bias
+ * slider would cost this effect its live drawing to add a knob nobody named.
+ *
+ * **Neither field is clearable.** A duotone must have both ends to be a ramp at all, and "no dark end" has no
+ * meaning the mapping could act on. Strength is where it is turned down and the header's switch is where it is
+ * turned off — the same division every other addition here uses.
+ *
+ * **The swatch rows are the whole of the picture, so there is no tile grid like [FilterControls]'.** A filter is
+ * chosen from a fixed table and has to be *shown* before it can be picked; this one is described by two colors the
+ * user already sees on the canvas, so a preview strip would be a second, smaller copy of the icon behind it.
+ */
+@Composable
+private fun DuotoneControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    // The effect's own defaults when absent, so the frame before the seed lands shows the duotone that is about to
+    // arrive rather than a different one — `BloomControls`' arrangement and its reason.
+    val duotone = effects.effectOrNull<LayerEffect.Duotone>() ?: LayerEffect.Duotone()
+
+    // Dark first, because that is the end the ramp is measured from and the order the arithmetic reads in.
+    LabeledControl("Shadows") {
+        ColorField(argb = duotone.darkArgb) { argb ->
+            onUpdate { it.withEffect(duotone.copy(darkArgb = argb)) }
+        }
+    }
+
+    LabeledControl("Highlights") {
+        ColorField(argb = duotone.lightArgb) { argb ->
+            onUpdate { it.withEffect(duotone.copy(lightArgb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = duotone.strength,
+        valueRange = 0f..1f,
+        default = DuotoneDefaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(duotone.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
 
 /**
  * The bloom's falloff, its color, and how strongly it is laid on.
@@ -1992,6 +2058,7 @@ private const val UnitFloor = 0.05f
  * The adjustments need no entry: an unseeded effect arrives at its identity, so `LayerEffect.Color()`'s own neutral
  * *is* both answers, and the sliders that read `1f` and `0f` for hue, saturation and brightness were right all along.
  */
+private val DuotoneDefaults = LayerEffect.Duotone()
 private val BloomDefaults = LayerEffect.Bloom()
 private val GlossDefaults = LayerEffect.Gloss()
 

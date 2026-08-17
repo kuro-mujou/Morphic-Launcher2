@@ -261,6 +261,12 @@ class IconRenderer(
                 is LayerEffect.Color ->
                     LayerFilter.colorMatrixOf(effect)?.let { m -> replace { filtered(it, m, sizePx) } }
 
+                // Unconditional where the two above are not: a duotone has no pair of colours that resolves to
+                // nothing, so there is no null to guard. Its own floor is the strength, which `activeEffects`
+                // has already filtered on before this loop is reached.
+                is LayerEffect.Duotone ->
+                    LayerFilter.duotoneMatrixOf(effect).let { m -> replace { filtered(it, m, sizePx) } }
+
                 // An id this build does not know draws nothing rather than failing.
                 is LayerEffect.Filter ->
                     IconFilters.matrixOrNull(effect.filter)?.let { m -> replace { filtered(it, m, sizePx) } }
