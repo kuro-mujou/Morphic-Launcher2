@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.BorderOuter
 import androidx.compose.material.icons.filled.BlurLinear
 import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.FlipToFront
@@ -91,6 +92,7 @@ import inkspire.morphic.core.model.icon.IconFilter
 import inkspire.morphic.core.model.icon.IconPattern
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
+import inkspire.morphic.core.model.icon.OutlinePosition
 import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.core.model.icon.activeEffects
@@ -289,6 +291,15 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     /** The layer's color channels displaced and added back together — lens fringing. */
     CHROMATIC("Chromatic", Icons.Default.Tonality, EffectKind.ADDITION),
 
+    /**
+     * A hard band following the finished silhouette — see `LayerEffect.Outline`.
+     *
+     * **First of the five silhouette entries**, which the grid keeps together: an outline, a glow, a shadow, a
+     * recess and a rim are one dilation arranged five ways, and a user reaching for one is choosing among them.
+     * It leads because it is the hard-edged one the other four are softenings of.
+     */
+    OUTLINE("Outline", Icons.Default.BorderOuter, EffectKind.ADDITION),
+
     /** A soft halo around the finished silhouette. Baked, never live — see `LayerEffect.Glow`. */
     GLOW("Glow", Icons.Default.BlurOn, EffectKind.ADDITION),
 
@@ -378,6 +389,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         PATTERN -> effects.filterIsInstance<LayerEffect.Pattern>().firstOrNull()
         EXTRUDE -> effects.filterIsInstance<LayerEffect.Extrude>().firstOrNull()
         CHROMATIC -> effects.filterIsInstance<LayerEffect.ChromaticSplit>().firstOrNull()
+        OUTLINE -> effects.filterIsInstance<LayerEffect.Outline>().firstOrNull()
         GLOW -> effects.filterIsInstance<LayerEffect.Glow>().firstOrNull()
         SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
         INNER_SHADOW -> effects.filterIsInstance<LayerEffect.InnerShadow>().firstOrNull()
@@ -439,6 +451,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         PATTERN -> PatternDefaults
         EXTRUDE -> ExtrudeDefaults
         CHROMATIC -> ChromaticDefaults
+        OUTLINE -> OutlineDefaults
         GLOW -> GlowDefaults
         SHADOW -> ShadowDefaults
         INNER_SHADOW -> InnerShadowDefaults
@@ -555,6 +568,7 @@ internal fun EffectsControls(
             EffectSlice.PATTERN -> PatternControls(target.effects, onEffects, onCommit)
             EffectSlice.EXTRUDE -> ExtrudeControls(target.effects, onEffects, onCommit)
             EffectSlice.CHROMATIC -> ChromaticControls(target.effects, onEffects, onCommit)
+            EffectSlice.OUTLINE -> OutlineControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
             EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
             EffectSlice.INNER_SHADOW -> InnerShadowControls(target.effects, onEffects, onCommit)
@@ -1842,6 +1856,72 @@ private fun InnerGlowControls(
 }
 
 /**
+ * The stroke's colour, how strong it is, how thick, and which side of the edge it sits on.
+ *
+ * **No softness**, which is the one control a user might look for and the one that would be a duplicate: a softened
+ * stroke outside the edge is [GlowControls] and inside it is [InnerGlowControls], both of which offer a choke this
+ * could not. Hard is what makes a stroke a stroke.
+ *
+ * **Width is the total thickness whichever position is chosen**, so switching between them changes where the band
+ * sits and not how heavy it looks — the model halves it for a centred stroke, which is the arithmetic that would
+ * otherwise make the position control secretly a width control too.
+ */
+@Composable
+private fun OutlineControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val outline = effects.effectOrNull<LayerEffect.Outline>() ?: LayerEffect.Outline()
+
+    LabeledControl("Position") {
+        MorphicSegmentedButtons(
+            options = listOf("Inside", "Center", "Outside"),
+            selectedIndex = OutlinePosition.entries.indexOf(outline.position),
+            onSelect = { index ->
+                onUpdate { it.withEffect(outline.copy(position = OutlinePosition.entries[index])) }
+                onCommit()
+            },
+        )
+    }
+
+    LabeledControl("Color") {
+        ColorField(argb = outline.argb) { argb ->
+            onUpdate { it.withEffect(outline.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = outline.strength,
+        valueRange = 0f..1f,
+        default = OutlineDefaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(outline.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Width",
+        value = outline.width,
+        // Floored above zero for `UnitFloor`'s reason — no width *is* this effect's identity, so the bottom of the
+        // track should leave a hairline rather than a silently absent stroke. The ceiling is a halo's, the two
+        // reaching in the same units.
+        valueRange = OutlineFloor..HaloReach,
+        default = OutlineDefaults.width,
+        onValueChange = { value -> onUpdate { it.withEffect(outline.copy(width = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
+ * The thinnest stroke worth offering, as a fraction of the box.
+ *
+ * A tenth of [UnitFloor], because a stroke is measured against a *whole* icon where that constant's four consumers
+ * are fractions of their own effects: at 0.05 the thinnest stroke on offer would already be heavier than the default,
+ * so the useful half of the control would be missing entirely.
+ */
+private const val OutlineFloor = 0.005f
+
+/**
  * How far a halo may reach, as a fraction of the box.
  *
  * A fifth is generous — the output is one square and anything past the edge is clipped, so a larger bound would only
@@ -2307,6 +2387,7 @@ private val VignetteDefaults = LayerEffect.Vignette()
 private val PatternDefaults = LayerEffect.Pattern(pattern = IconPatterns.Dots)
 private val ExtrudeDefaults = LayerEffect.Extrude()
 private val ChromaticDefaults = LayerEffect.ChromaticSplit()
+private val OutlineDefaults = LayerEffect.Outline()
 private val GlowDefaults = LayerEffect.Glow()
 private val ShadowDefaults = LayerEffect.Shadow()
 private val InnerShadowDefaults = LayerEffect.InnerShadow()

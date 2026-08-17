@@ -180,6 +180,31 @@ data class BloomProfile(
     val offsetY: Float = -0.5f,
 )
 
+/**
+ * Which side of the layer's edge a [LayerEffect.Outline]'s stroke sits on.
+ *
+ * **Three values rather than a boolean**, because the middle one is not a mixture of a preference — it is where a
+ * drawing program puts a stroke by default, and it is the only one whose look does not change the silhouette's
+ * apparent size: an outside stroke fattens the icon, an inside one eats into it, and a centred one does half of each.
+ *
+ * Persisted inside the layer set, so the names are an on-disk contract.
+ */
+@Serializable
+enum class OutlinePosition {
+
+    /** Grows inward from the edge, so the icon keeps its size and the artwork loses a rim of itself. */
+    @SerialName("inside")
+    INSIDE,
+
+    /** Half in and half out — the stroke straddles the edge, which is what a drawing program means by a stroke. */
+    @SerialName("center")
+    CENTER,
+
+    /** Grows outward, so the artwork survives whole and the icon reads slightly larger. */
+    @SerialName("outside")
+    OUTSIDE,
+}
+
 @Serializable
 sealed interface LayerEffect {
 
@@ -687,6 +712,84 @@ sealed interface LayerEffect {
 
         /** Three colour matrices added together, which both paths can do at any API. */
         override val drawsLive: Boolean get() = true
+    }
+
+    /**
+     * A hard band of [argb] following the layer's finished silhouette — a stroke around the artwork, which is what
+     * separates an icon from a busy wallpaper when nothing softer will.
+     *
+     * **The same three dilations every other silhouette effect is built from, and no new drawing at all.** An
+     * outside stroke is the silhouette grown and drawn behind, which is [Glow] with no blur; an inside stroke is the
+     * silhouette's *complement* grown and trimmed back to the artwork, which is [InnerGlow] with no blur; a centred
+     * one is half of each, in that order — the inner band changes no alpha, so the outward growth still measures
+     * from the artwork's own edge. That the effect needed nothing new is the plan's prediction holding, one step
+     * further than it expected: erosion turned out to be the complement taken twice rather than a colour matrix.
+     *
+     * **Hard-edged by definition, which is what makes it a stroke rather than a halo.** A softened one is exactly
+     * [Glow] or [InnerGlow] with a radius, so a softness control here would be a second way to reach those.
+     *
+     * @property argb the stroke.
+     * @property width how thick it is **in total**, as a fraction of the icon's box — so a centred stroke of a given
+     *   width looks the same thickness as an outside one of the same width, rather than twice it. [perSideWidth] is
+     *   what the renderer reads.
+     * @property position which side of the edge it sits on. See [OutlinePosition].
+     * @property strength how strongly it is laid on, and how it is turned down.
+     */
+    @Serializable
+    @SerialName("outline")
+    data class Outline(
+        /**
+         * **White, where [Shadow] and [Extrude] are black.** What an outline is *for* here is separating the icon
+         * from whatever photograph is behind it, and a light stroke does that against the widest range of
+         * wallpapers — a dark one disappears into a dark one, which is the case a user reaches for this in.
+         */
+        val argb: Int = 0xFFFFFFFF.toInt(),
+        /**
+         * **A thirtieth of the box**, which is three pixels on a 96px list icon and nine on a 288px folder one:
+         * plainly a stroke at every size the launcher bakes, and short of the weight at which it starts reading as a
+         * plate behind the artwork rather than an edge on it.
+         */
+        val width: Float = 0.033f,
+        /**
+         * **Outside**, because that is the position that keeps the artwork whole. An inside stroke eats a rim off
+         * the app's own icon, which is a deliberate look rather than the one to hand somebody on arrival.
+         */
+        val position: OutlinePosition = OutlinePosition.OUTSIDE,
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * How far the stroke reaches on **each** side of the edge — which is [width] for the one-sided positions and
+         * half of it for [OutlinePosition.CENTER], that one spending its thickness in both directions.
+         *
+         * **The halving lives here rather than in the renderer**, [Vignette.clearArea]'s arrangement and its reason:
+         * it is a projection of the model's own fields, and a renderer doing it is a renderer that could forget. The
+         * failure would be silent and specific — a centred stroke exactly twice as thick as the same number asked
+         * for anywhere else, which reads as the position control also changing the width.
+         */
+        val perSideWidth: Float
+            get() = if (position == OutlinePosition.CENTER) width / 2f else width
+
+        /** Turned down to nothing, or with no thickness — a stroke of no width is not a stroke. */
+        override val isIdentity: Boolean get() = strength <= 0f || width <= 0f
+
+        /**
+         * **False, and not because of a blur — this one has none.**
+         *
+         * An outside stroke could be drawn live: it is the silhouette re-drawn around a ring, which is what [Extrude]
+         * already accepts the cost of. The *inside* one cannot be, and that is what decides it for all three. Its
+         * complement has to be built in a buffer larger than the layer — see `LayerShadow.innerMarginPx` — so that a
+         * layer whose artwork reaches the icon's box still has an outside to be stroked against. A Compose node
+         * cannot reliably draw beyond its own bounds, so the live path would stroke a full-bleed plate on the sides
+         * its artwork happened not to reach and leave the rest bare.
+         *
+         * That is the two-renderer hazard in its worst form: not a missing effect, which is noticed, but the *same*
+         * effect drawn correctly in one place and subtly incompletely in the other. One answer for all three
+         * positions rather than a per-position flag, since a control whose live-ness changed as it was switched
+         * would make the preview flicker between mechanisms.
+         */
+        override val drawsLive: Boolean get() = false
     }
 
     /**
@@ -1203,6 +1306,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.Pattern -> copy(enabled = enabled)
     is LayerEffect.Extrude -> copy(enabled = enabled)
     is LayerEffect.ChromaticSplit -> copy(enabled = enabled)
+    is LayerEffect.Outline -> copy(enabled = enabled)
     is LayerEffect.Glow -> copy(enabled = enabled)
     is LayerEffect.Shadow -> copy(enabled = enabled)
     is LayerEffect.InnerShadow -> copy(enabled = enabled)

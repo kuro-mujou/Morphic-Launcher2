@@ -712,6 +712,18 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    and building it confirmed the reason — a centre glow is `Bloom(RADIAL, CONTENT)`, which additionally offers a
    position and a falloff this could not. Labelled **"Rim"**.
 5. **Outline** — dilate and erode; the shared silhouette helpers get extracted here, on their second consumer.
+   **Built, and it needed no drawing code of its own** — the helpers had already been extracted by inner glow, and a
+   stroke turns out to be those two with the blur switched off. An outside stroke is `haloed` with a null radius, an
+   inside one is `insetHaloed` with a null radius, and a centred one is **both, inward first** — which is the one
+   ordering fact worth knowing: `insetHaloed` trims its band to the artwork so it changes no alpha, leaving the
+   silhouette that `haloed` then grows outward still the artwork's own edge. The other way round the outward band
+   fattens the silhouette first, and the inward one is then measured from the *stroke's* edge, putting the whole
+   thing a width too far out. `Outline.perSideWidth` halves the total for the centred case, in the model on
+   `Vignette.clearArea`'s grounds. **`drawsLive` is false and not because of a blur**, which is a new reason: the
+   inside stroke's complement has to be built in a buffer *larger* than the layer, and a Compose node cannot draw
+   beyond its own bounds — so live, a full-bleed plate would be stroked on the sides its artwork happened not to
+   reach and left bare on the rest. One answer for all three positions, since a control whose live-ness changed as
+   it was switched would make the preview flicker between mechanisms.
 6. **Bevel & emboss** — the one new kernel; a slice on its own.
 7. **Effect mask** — last, renamed, once the list is stable.
 

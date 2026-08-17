@@ -27,6 +27,7 @@ import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
+import inkspire.morphic.core.model.icon.OutlinePosition
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import androidx.core.graphics.drawable.toDrawable
@@ -320,6 +321,8 @@ class IconRenderer(
                         sizePx = sizePx,
                     )
                 }
+
+                is LayerEffect.Outline -> replace { outlined(it, effect, sizePx) }
 
                 // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
                 // thrown and laid on plainly, or light centred on the edge and screened onto it.
@@ -846,6 +849,54 @@ class IconRenderer(
         canvas.drawBitmap(source, 0f, 0f, null)
         if (grown !== source) grown.recycle()
         return out
+    }
+
+    /**
+     * [source] with a hard band of colour following its silhouette — the stroke.
+     *
+     * **No drawing of its own at all**, which is the whole of why this effect was cheap: an outside stroke is
+     * [haloed] with no blur, an inside stroke is [insetHaloed] with no blur, and a centred one is both. The
+     * dilation each of those already performs *is* the stroke once nothing softens it.
+     *
+     * **The centred case runs inside first, and the order is load-bearing.** [insetHaloed] trims its band to the
+     * artwork, so it changes no alpha at all — which means the silhouette [haloed] then grows outward is still the
+     * artwork's own edge. The other way round, the outward band would have fattened the silhouette first and the
+     * inward one would then be measured from the *stroke's* edge, putting the whole thing a width too far out.
+     */
+    private fun outlined(source: Bitmap, outline: LayerEffect.Outline, sizePx: Int): Bitmap {
+        val widthPx = LayerShadow.spreadPx(outline.perSideWidth, sizePx)
+
+        fun outward(from: Bitmap): Bitmap = haloed(
+            source = from,
+            argb = outline.argb,
+            strength = outline.strength,
+            // No blur is what makes a halo a stroke — the dilation's own edge, undisturbed.
+            radiusPx = null,
+            spreadPx = widthPx,
+            dxPx = 0f,
+            dyPx = 0f,
+            sizePx = sizePx,
+        )
+
+        fun inward(from: Bitmap): Bitmap = insetHaloed(
+            source = from,
+            argb = outline.argb,
+            strength = outline.strength,
+            radiusPx = null,
+            spreadPx = widthPx,
+            dxPx = 0f,
+            dyPx = 0f,
+            blend = null,
+            sizePx = sizePx,
+        )
+
+        return when (outline.position) {
+            OutlinePosition.OUTSIDE -> outward(source)
+            OutlinePosition.INSIDE -> inward(source)
+            OutlinePosition.CENTER -> inward(source).let { inner ->
+                outward(inner).also { inner.recycle() }
+            }
+        }
     }
 
     /**

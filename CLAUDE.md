@@ -310,13 +310,14 @@ enforces. Per layer:
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Vignette` (light gathering in
   from the edges), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
-  displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it),
+  displaced), `LayerEffect.Outline` (a hard band following the silhouette),
+  `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it),
   `LayerEffect.InnerShadow` and `LayerEffect.InnerGlow` (the silhouette's complement blurred *inside* it, laid on
   or screened), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
   blur — the six that do **not** draw live), `LayerEffect.Filter` (one of the built-in looks, by id) and
   `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **All thirteen the plan set out are
-  built, plus four of the phase-2 six**; see the notes below for each, and
+  built, plus five of the phase-2 six**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
   checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
   deliberately *not* the "extract the falloff" the proposal asked for.
@@ -726,6 +727,29 @@ Four things:
   ramp gathers at corners the glyph never reaches and source-atop clips it to nothing, so the control would open on
   no visible change. `ContentAnchor.BOX` is how the icon's own frame is asked for, and on a background plate filling
   the box the two coincide.
+
+**`LayerEffect.Outline` is the fifth phase-2 effect and cost no drawing code at all.** A hard band following the
+layer's finished silhouette — what separates an icon from a busy wallpaper when nothing softer will. Every piece was
+already there once inner glow had extracted them: an **outside** stroke is `haloed` with a null radius, an **inside**
+one is `insetHaloed` with a null radius, and a **centred** one is both. The dilation each of those performs *is* the
+stroke once nothing softens it. Four things:
+- **Inward first for the centred case, and the order is load-bearing.** `insetHaloed` trims its band to the artwork,
+  so it changes no alpha — which leaves the silhouette `haloed` then grows outward still the *artwork's* own edge.
+  The other way round the outward band fattens the silhouette first and the inward one is measured from the stroke's
+  edge, putting the whole thing a width too far out.
+- **`perSideWidth` halves the total for a centred stroke, in the model** on `Vignette.clearArea`'s grounds. `width`
+  is the thickness a user sees whichever position is chosen, so switching moves the band without also changing its
+  weight; done in the renderer, the failure would read as the position control secretly being a width control.
+- **`drawsLive` is false for a new reason — there is no blur here.** An outside stroke *could* draw live, being what
+  `Extrude` already accepts the cost of. The inside one cannot: its complement must be built in a buffer larger than
+  the layer (see `LayerShadow.innerMarginPx`) and a Compose node cannot reliably draw beyond its own bounds, so a
+  full-bleed plate would be stroked on the sides its artwork happened not to reach and left bare on the rest. That is
+  the two-renderer hazard at its worst — not a *missing* effect, which is noticed, but the same effect drawn
+  correctly in one place and subtly incompletely in the other. One answer for all three positions, since a control
+  whose live-ness changed as it was switched would flicker the preview between mechanisms.
+- **No softness control**, which is the one a user might look for and the one that would duplicate: softened outside
+  is `Glow`, softened inside is `InnerGlow`, and both offer a choke this could not. Hard is what makes a stroke a
+  stroke.
 
 **`LayerEffect.Glow` and `LayerEffect.Shadow` are the same halo twice, and the first two effects that do not draw
 live.** Both are a blurred copy of the layer's *finished* silhouette drawn behind it — after the transform and the
@@ -1981,7 +2005,8 @@ falloff** — Bloom's falloff is the light's own geometry, so nothing moves, and
 **mask**, which is ~20 lines in `applyEffects` (run the effect into a buffer, composite it back through a ramp's
 alpha) plus a restructure of each live-drawable effect. It goes **last**, because its cost multiplies by the number of
 effects. **Built so far: `LayerEffect.Duotone`, `LayerEffect.Vignette`, `LayerEffect.InnerShadow` and
-`LayerEffect.InnerGlow`** (see their notes above). Order for the rest: outline, bevel, mask. **One plan claim is already overturned** — the
+`LayerEffect.InnerGlow` and `LayerEffect.Outline`** (see their notes above). Order for the rest: bevel, then the
+mask. **One plan claim is already overturned** — the
 "missing alpha-inverting matrix" was never needed: destination-out over a filled buffer *is* the inversion, and
 outline's erosion is that same op twice. One number worth watching: four of the six do not draw live, taking the total to ten
 of nineteen, and `drawsLive` is all-or-nothing per icon — so most recipes worth making will preview from the bake, and
