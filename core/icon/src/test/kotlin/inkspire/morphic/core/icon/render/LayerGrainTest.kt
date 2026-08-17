@@ -138,9 +138,45 @@ class LayerGrainTest {
         val threeQuarters = LayerGrain.cellPx(grain(grainSize = 0.75f), size)
 
         assertEquals(half / quarter, threeQuarters / half, 0.01f)
-        // And the ends are the two the mapping names: a few pixels at 1000, and half the box.
-        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), size) < size * 0.01f)
+        // And the ends are the two the mapping names: about a thirtieth of the box, and half of it.
+        assertEquals(size / 36f, LayerGrain.cellPx(grain(grainSize = 0f), size), size / 400f)
         assertEquals(size * 0.5f, LayerGrain.cellPx(grain(grainSize = 1f), size), 0.5f)
+    }
+
+    /**
+     * That **every position on the slider is a different grain**, at the sizes icons are really baked at.
+     *
+     * **The defect this pins was reported as the preview freezing.** The fine end of the ramp used to be a cell of
+     * well under a pixel, so on any real bake the whole bottom third of the control clamped to the 4px floor and drew
+     * the *same picture* — a slider doing nothing across a third of its travel on a device, and a studio draft that
+     * stopped responding entirely down there. Nothing failed; the control was simply inert, which is indistinguishable
+     * from a preview that has stopped updating.
+     *
+     * Checked at **144px**, which is both a home icon and — since this was found — the floor on the studio's draft
+     * (`IconPreview.DraftPx`). The two were tied together deliberately: the guarantee below is only worth having if
+     * the picture the user drags against is never smaller than the smallest picture a surface draws. It genuinely does
+     * not hold beneath that, and cannot: a cell finer than four pixels is not finer grain, it is no grain.
+     */
+    @Test
+    fun `moving the control changes the cell at every bake size, not only large ones`() {
+        for (size in listOf(144, 768)) {
+            var previous = LayerGrain.cellPx(grain(grainSize = 0f), size)
+            for (step in 1..20) {
+                val cell = LayerGrain.cellPx(grain(grainSize = step / 20f), size)
+                assertTrue(
+                    "at ${size}px the control did nothing between ${(step - 1) / 20f} and ${step / 20f}",
+                    cell > previous,
+                )
+                previous = cell
+            }
+        }
+    }
+
+    @Test
+    fun `the finest grain is drawable at the smallest size an icon is baked at`() {
+        // Which is the whole reason the fine end is derived rather than chosen: below the floor the field's zeros land
+        // on every sample, so a finer setting is not finer grain — it is the same grain, or none.
+        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), sizePx = 144) >= 4f)
     }
 
     @Test

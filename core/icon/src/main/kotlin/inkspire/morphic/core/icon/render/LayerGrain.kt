@@ -142,6 +142,10 @@ object LayerGrain {
      * clusters, which is most of what anyone wants — lived in the first four percent of the slider. Geometric
      * spacing makes equal movements of the finger equal *ratios*, so the fine end gets as much travel as the coarse.
      *
+     * **The floor is now the *reason* for the fine end rather than a clamp on it.** [FinestCell] is derived from
+     * [MinCellPx] and the smallest size an icon is baked at, so the clamp below binds only at the very bottom of the
+     * control instead of across its first third — see [FinestCell] for what that cost on a device and in the studio.
+     *
      * **Floored at [MinCellPx], and that floor is load-bearing in a way a one-pixel one was not.** Gradient noise
      * reads *zero at every lattice point* — which is what removes the grid a value field puts through the picture,
      * and what makes a cell of about a pixel catastrophic: the samples land on the integers, every one of them
@@ -208,10 +212,6 @@ object LayerGrain {
     /** Keeps one axis's octaves clear of the other's — see [field]. */
     private const val SaltStride = 977
 
-    /** The two ends of [cellPx]'s ramp, as fractions of the box: a few pixels at 256, and half the icon. */
-    private const val FinestCell = 0.006f
-    private const val CoarsestCell = 0.5f
-
     /**
      * The smallest lattice worth sampling, in pixels.
      *
@@ -220,6 +220,41 @@ object LayerGrain {
      * where every sample lands somewhere the field is actually doing something, whatever the phase.
      */
     private const val MinCellPx = 4f
+
+    /**
+     * The smallest bitmap the launcher ever bakes an icon into — roughly a home cell's icon, 48dp at 3× density.
+     *
+     * An estimate rather than a plumbed value, and it only has to be the right *order*: what it decides is where
+     * [FinestCell] sits, and being out by a few pixels there moves the finest grain by a few percent. Plumbing the
+     * real number would mean the noise field taking a dependency on the icon-sizing settings of every surface, to
+     * answer a question about what a slider's bottom end should mean.
+     */
+    private const val SmallestBakePx = 144f
+
+    /**
+     * The two ends of [cellPx]'s ramp, as fractions of the box.
+     *
+     * **The fine end is derived from [MinCellPx] rather than chosen, and that is the fix for a slider whose bottom
+     * third was redundant.** It used to be `0.006` — a cell of *four tenths of a pixel* on a home icon and nine
+     * tenths on the studio's own draft, both far under the floor. So every grain size below ≈0.35 clamped to the same
+     * 4px cell and rendered the *same picture*: on a device the control did nothing across a third of its travel, and
+     * in the studio the draft preview stopped responding entirely down there — which reads as the preview having
+     * frozen rather than as a slider with nothing left to say. (Its own KDoc claimed "a few pixels at 256"; at 256 it
+     * was one and a half.)
+     *
+     * Anchoring it to the smallest bake makes the floor bind nowhere but the very bottom, so every position on the
+     * slider is a different picture — **and it restores the promise this file is built on**, that one recipe grains
+     * the same at every bake size. That promise was already broken down here and the class note admitted it: a
+     * clamped cell is a constant number of *pixels*, so the same recipe came out as coarse dust on a 144px icon and
+     * as an invisible shimmer on a 768px canvas. Nothing above the floor has that problem, because a fraction of the
+     * box is a fraction of the box.
+     *
+     * What is given up is grain finer than about a thirtieth of the box — which was never drawable, so it is an
+     * unreachable setting being removed rather than a look. **The stored value's meaning changes**: a saved
+     * `grainSize` now maps to a coarser cell than it did. Affordable only because nothing has shipped.
+     */
+    private const val FinestCell = MinCellPx / SmallestBakePx
+    private const val CoarsestCell = 0.5f
 
     private const val Root2 = 1.4142135f
     private const val TwoPi = 6.2831855f
