@@ -31,6 +31,7 @@ include(":core:model")
 include(":core:common")
 include(":core:database")
 include(":core:designsystem")
+include(":core:graphics")
 include(":core:icon")
 include(":core:navigation")
 

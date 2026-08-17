@@ -17,11 +17,12 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
-import androidx.core.graphics.scale
+
 import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.IconShapes
+import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
@@ -352,8 +353,8 @@ class IconRenderer(
                 // the buffer swap entirely rather than handing it a copy. The same shape `Filter` above takes for
                 // an id it cannot resolve, and for the same reason: an effect with nothing to do must do nothing.
                 is LayerEffect.ProgressiveBlur ->
-                    LayerProgressiveBlur.downscaledSidePx(effect.radius, sizePx)?.let { side ->
-                        replace { progressivelyBlurred(it, effect, side, sizePx) }
+                    LayerProgressiveBlur.boxRadiusPxOrNull(effect.radius, sizePx)?.let { box ->
+                        replace { progressivelyBlurred(it, effect, box, sizePx) }
                     }
 
                 // The same halo twice: a glow spreads and does not move, a shadow moves and does not spread.
@@ -647,8 +648,9 @@ class IconRenderer(
      * [source] blurred, and then let through only where a ramp says so — sharp in one region, soft away from it.
      *
      * **The one effect built from two mechanisms**, which is why it is last: a blurred copy *and* a gradient that
-     * decides how much of it shows. Both pieces already existed — [LayerGradient] places the ramp exactly as it does
-     * a bloom's, and the blur is [blurredCopy] below — so what is new here is only the joining.
+     * decides how much of it shows. [LayerGradient] places the ramp exactly as it does a bloom's, and the blur is
+     * [BitmapBlur] — a real one, since this effect shipped with a `Bitmap.scale` down-and-up standing in for it and
+     * the result was visibly terraced rather than soft. See [LayerProgressiveBlur.boxRadiusPxOrNull].
      *
      * **Destination-in on the blurred copy, then the sharp one underneath.** The ramp's *alpha* is the mixture, so
      * the blurred layer is erased back to nothing across the sharp region and left whole across the soft one; laying
@@ -659,10 +661,10 @@ class IconRenderer(
     private fun progressivelyBlurred(
         source: Bitmap,
         blur: LayerEffect.ProgressiveBlur,
-        sidePx: Int,
+        boxRadiusPx: Int,
         sizePx: Int,
     ): Bitmap {
-        val blurred = blurredCopy(source, sidePx, sizePx)
+        val blurred = BitmapBlur.blurred(source, boxRadiusPx)
 
         val stops = LayerGradient.rampStops(blur.sharpArea, blur.softness)
         val frame = LayerGradient.Frame.box(sizePx)
@@ -713,19 +715,6 @@ class IconRenderer(
                 RadialGradient(radial.centerX, radial.centerY, radial.radiusPx, colors, stops, Shader.TileMode.CLAMP)
             }
         }
-    }
-
-    /**
-     * [source] blurred, by scaling it down to [sidePx] and back up with bilinear filtering.
-     *
-     * See [LayerProgressiveBlur.downscaledSidePx] for why this rather than a box blur: the alternative was a second
-     * copy of the one in `data:wallpaper`, which `core:icon` cannot reach without depending on a `data` module.
-     */
-    private fun blurredCopy(source: Bitmap, sidePx: Int, sizePx: Int): Bitmap {
-        val small = source.scale(sidePx, sidePx, filter = true)
-        val grown = small.scale(sizePx, sizePx, filter = true)
-        small.recycle()
-        return grown
     }
 
     /**

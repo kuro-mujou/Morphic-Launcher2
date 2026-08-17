@@ -31,6 +31,7 @@ import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
 import inkspire.morphic.data.wallpaper.WallpaperSource
 import inkspire.morphic.data.wallpaper.WallpaperState
+import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.data.wallpaper.WallpaperTarget
 import java.io.File
 import kotlin.math.roundToInt
@@ -179,13 +180,30 @@ internal class WallpaperRepositoryImpl(
         wallpaper.first().image?.let { decodeFile(it.path) }
     }
 
-    /** The file at [path] decoded small and blurred, or null if it has gone missing under us. */
+    /**
+     * The file at [path] decoded and blurred, or null if it has gone missing under us.
+     *
+     * **How much of the picture survives now follows the blur**, which is the correction: it used to be a flat
+     * eighth of the screen — a sample step of 2 on the decode and a further downscale of 4 — at *every* strength.
+     * So a frosted surface always showed an eighth-resolution wallpaper stretched back up, and at low strengths,
+     * where there is little or no blur to hide it, that read as a low-quality image rather than as glass. The
+     * blur was never what was wrong there.
+     *
+     * The whole reduction is now one number from [BitmapBlur.downscaleFor], taken as far as possible in the
+     * **decode** — `inSampleSize` is free where a later `scale` is not — with whatever is left over done on the
+     * bitmap. A strength of zero reduces by nothing at all and the surface samples the wallpaper itself.
+     */
     private fun blurBackdrop(path: String, strength: Float): Bitmap? {
-        val sharp = decodeFile(path, BACKDROP_SAMPLE_STEP) ?: return null
-        // Radius and passes come from one 0..1 preference so a slider never has to speak in pixels; the ceiling is
-        // L1's, tuned against a bitmap already downscaled by the same factor.
-        val radius = (strength.coerceIn(0f, 1f) * MAX_BLUR_RADIUS).roundToInt()
-        return downscaleAndBlur(sharp, downscale = BACKDROP_DOWNSCALE, radius = radius, passes = BLUR_PASSES)
+        // The reach in the wallpaper's own pixels, so one preference means the same softness on every screen.
+        val radiusPx = strength.coerceIn(0f, 1f) * MAX_BLUR_RADIUS_PX
+        val total = BitmapBlur.downscaleFor(radiusPx)
+        // `inSampleSize` only honours powers of two, so the decode takes the largest one it can and the residue is
+        // left to the scale below rather than being rounded away.
+        val step = Integer.highestOneBit(total.coerceAtLeast(1))
+
+        val sharp = decodeFile(path, step) ?: return null
+        val radius = BitmapBlur.boxRadiusFor(radiusPx / total)
+        return downscaleAndBlur(sharp, downscale = total / step, radius = radius, passes = BLUR_PASSES)
     }
 
     /**
@@ -545,11 +563,15 @@ internal class WallpaperRepositoryImpl(
          * from being fully materialized, and the blur's downscale is what makes the passes cheap. A backdrop is
          * upscaled at draw time regardless, so the resolution lost here is resolution the blur was about to destroy.
          */
-        const val BACKDROP_SAMPLE_STEP = 2
-        const val BACKDROP_DOWNSCALE = 4
-
-        /** L1's ceiling: the radius a strength of 1.0 maps to, in pixels of the already-downscaled bitmap. */
-        const val MAX_BLUR_RADIUS = 12
+        /**
+         * How far a strength of 1.0 blurs, in pixels of the **wallpaper**.
+         *
+         * In the picture's own pixels rather than the reduced copy's, which is what makes the preference mean one
+         * thing: the reduction is now chosen *from* this number, so a radius expressed against the reduced bitmap
+         * would have been defined in terms of itself. L1's ceiling of 12 was against a bitmap already an eighth of
+         * the screen, so this is that reach restored to full size.
+         */
+        const val MAX_BLUR_RADIUS_PX = 96f
 
         /** Three box passes approximate a gaussian closely enough that no one can tell. L1's number. */
         const val BLUR_PASSES = 3

@@ -13,6 +13,9 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.common)
 
+    // The blur, shared with `data:wallpaper` — see `BitmapBlur` for why neither module owns it.
+    implementation(projects.core.graphics)
+
     implementation(libs.androidx.core.ktx)
 
     implementation(libs.androidx.compose.foundation)

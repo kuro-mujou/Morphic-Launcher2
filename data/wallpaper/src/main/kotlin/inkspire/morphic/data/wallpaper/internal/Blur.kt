@@ -1,6 +1,7 @@
 package inkspire.morphic.data.wallpaper.internal
 
 import android.graphics.Bitmap
+import inkspire.morphic.core.graphics.BitmapBlur
 import androidx.core.graphics.scale
 import kotlin.math.roundToInt
 
@@ -30,29 +31,31 @@ private const val NEUTRAL_GRAY = 0xFF808080.toInt()
  */
 
 /**
- * [source] downscaled by [downscale] and box-blurred [passes] times, which approximates a gaussian.
+ * [source] reduced by [downscale] and blurred by [radius] — the picture a frosted surface samples.
  *
- * **Cheap because the blur runs on the small bitmap, not the big one.** A backdrop is upscaled at draw time anyway, so
- * a low-resolution blur is not a compromise — it is the same picture. The two together are what make this affordable
- * to compute on a wallpaper change rather than per frame.
+ * **The kernel is [BitmapBlur]'s now, shared with `core:icon`.** This file had the only real blur in the launcher and
+ * the icon renderer could not reach it — a `core` module cannot depend on a `data` one — so that one approximated a
+ * blur with a `Bitmap.scale` down and back up, and looked terraced. Moving the arithmetic to `core:graphics` gave
+ * both callers the same one; what stays here is the *decision*, which is how much of the picture to keep.
  *
- * A [radius] below 1 returns the plain downscale, which is the honest reading of "no blur at this strength" and saves
- * the passes.
+ * **The reduction follows the blur rather than being a constant, and that is the fix for the backdrop's own worst
+ * artifact.** It used to be a flat eighth of the screen at every strength — so even at a strength of zero, where no
+ * blur is applied at all, a frosted surface was showing an eighth-resolution copy of the wallpaper stretched back up.
+ * That reads as a low-quality image rather than as glass, and no amount of blur strength could rescue it because the
+ * blur was never what was wrong. See [BitmapBlur.downscaleFor].
+ *
+ * A [radius] below 1 is nothing to do, and at that point [downscale] is 1 too, so what comes back is the picture
+ * itself.
  */
 internal fun downscaleAndBlur(source: Bitmap, downscale: Int, radius: Int, passes: Int): Bitmap {
-    val w = (source.width / downscale).coerceAtLeast(1)
-    val h = (source.height / downscale).coerceAtLeast(1)
-    val small = source.scale(w, h)
+    val w = (source.width / downscale.coerceAtLeast(1)).coerceAtLeast(1)
+    val h = (source.height / downscale.coerceAtLeast(1)).coerceAtLeast(1)
+    val small = if (w == source.width && h == source.height) source else source.scale(w, h)
     if (radius < 1) return small
+
     val pixels = IntArray(w * h)
     small.getPixels(pixels, 0, w, 0, 0, w, h)
-    val scratch = IntArray(w * h)
-    // Separable: a horizontal pass then a vertical one is O(n) per pass instead of O(radius²) per pixel, and the two
-    // together are what makes each repeat a full 2-D blur.
-    repeat(passes) {
-        blurPass(pixels, scratch, w, h, radius, horizontal = true)
-        blurPass(scratch, pixels, w, h, radius, horizontal = false)
-    }
+    BitmapBlur.blur(pixels, w, h, radius, passes)
     return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
         setPixels(pixels, 0, w, 0, 0, w, h)
     }
@@ -97,58 +100,4 @@ internal fun dominantColor(source: Bitmap): Int {
     val g = (sumG / sumW).roundToInt().coerceIn(0, 0xFF)
     val b = (sumB / sumW).roundToInt().coerceIn(0, 0xFF)
     return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-}
-
-/**
- * One separable box-blur pass over [src] into [dst], along rows when [horizontal] and down columns otherwise.
- *
- * A **sliding window**: each output pixel adds the one entering the window and subtracts the one leaving, so the cost
- * is independent of [radius]. `count` is tracked rather than assumed because the window is clipped at both ends — the
- * edges average only real pixels instead of repeating the border, which is what stops a bright edge from smearing
- * inward. L1's arithmetic, kept exactly.
- */
-private fun blurPass(src: IntArray, dst: IntArray, w: Int, h: Int, radius: Int, horizontal: Boolean) {
-    val lineCount = if (horizontal) h else w
-    val lineLen = if (horizontal) w else h
-    val step = if (horizontal) 1 else w
-    for (line in 0 until lineCount) {
-        val base = if (horizontal) line * w else line
-        var sa = 0
-        var sr = 0
-        var sg = 0
-        var sb = 0
-        // Seed with only the in-bounds pixels of the first window, [0 .. min(radius, lineLen - 1)].
-        var count = 0
-        val initialHi = minOf(radius, lineLen - 1)
-        for (j in 0..initialHi) {
-            val p = src[base + j * step]
-            sa += (p ushr 24) and 0xFF
-            sr += (p ushr 16) and 0xFF
-            sg += (p ushr 8) and 0xFF
-            sb += p and 0xFF
-            count++
-        }
-        for (i in 0 until lineLen) {
-            dst[base + i * step] =
-                ((sa / count) shl 24) or ((sr / count) shl 16) or ((sg / count) shl 8) or (sb / count)
-            val outIdx = i - radius
-            if (outIdx >= 0) {
-                val p = src[base + outIdx * step]
-                sa -= (p ushr 24) and 0xFF
-                sr -= (p ushr 16) and 0xFF
-                sg -= (p ushr 8) and 0xFF
-                sb -= p and 0xFF
-                count--
-            }
-            val inIdx = i + radius + 1
-            if (inIdx < lineLen) {
-                val p = src[base + inIdx * step]
-                sa += (p ushr 24) and 0xFF
-                sr += (p ushr 16) and 0xFF
-                sg += (p ushr 8) and 0xFF
-                sb += p and 0xFF
-                count++
-            }
-        }
-    }
 }

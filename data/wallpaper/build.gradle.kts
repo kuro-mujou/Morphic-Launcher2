@@ -12,6 +12,9 @@ dependencies {
     implementation(projects.core.model) // Orientation, for the rotating pair's two halves
     implementation(projects.core.common) // AppDispatchers + Koin + coroutines (api-exposed)
 
+    // The blur, shared with `core:icon` — see `BitmapBlur` for why neither module owns it.
+    implementation(projects.core.graphics)
+
     // `Bitmap.scale`, for the one place a cropped image is resized to the screen. The same dependency `core:icon`
     // takes for its own bitmap work.
     implementation(libs.androidx.core.ktx)

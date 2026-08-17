@@ -6,11 +6,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * How far a progressive blur's copy is scaled down before being grown back.
+ * How wide a box a progressive blur softens its copy with.
  *
  * The last of the arithmetic-only derivations, here for [LayerShadowTest]'s reason: only the bake draws this, so
  * nothing is competing with it — the number is separated because a wrong one produces a plausible-looking blur
  * rather than an error, and because `IconRenderer` needs an emulator for every line.
+ *
+ * **This used to describe a *downscale factor*, because the blur used to be a `Bitmap.scale` down and back
+ * up.** That is not a blur — bilinear downscaling samples a 2×2 neighbourhood, so a 30× reduction threw away
+ * almost everything it was meant to average, and edges came out terraced. `BitmapBlur` replaced it.
  *
  * The ramp's own stops moved to [LayerGradientTest] with the function, when a vignette turned out to ask the
  * same question of the same two numbers.
@@ -18,63 +22,58 @@ import org.junit.Test
 class LayerProgressiveBlurTest {
 
     @Test
-    fun `a bigger radius scales further down, which is what makes it blurrier`() {
-        // The whole of the blur is how small the image gets before being grown back, so this is the one number that
-        // decides how soft the result is — and it runs the *opposite* way to the slider, which is worth pinning.
-        val gentle = LayerProgressiveBlur.downscaledSidePx(radius = 0.02f, sizePx = 400)!!
-        val heavy = LayerProgressiveBlur.downscaledSidePx(radius = 0.08f, sizePx = 400)!!
+    fun `a bigger radius asks for a bigger box, which is what makes it blurrier`() {
+        val gentle = LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.02f, sizePx = 400)!!
+        val heavy = LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.08f, sizePx = 400)!!
 
-        assertTrue("gentle $gentle should stay larger than heavy $heavy", gentle > heavy)
+        assertTrue("gentle $gentle should stay smaller than heavy $heavy", gentle < heavy)
     }
 
     @Test
-    fun `the downscale is a fraction of the box, so one recipe blurs the same at every bake size`() {
-        // A twentieth of the box is a radius of 20px at 400 and 40px at 800, so both land on the same side.
-        assertEquals(
-            LayerProgressiveBlur.downscaledSidePx(radius = 0.05f, sizePx = 400),
-            LayerProgressiveBlur.downscaledSidePx(radius = 0.05f, sizePx = 800),
-        )
+    fun `the radius is a fraction of the box, so one recipe blurs the same at every bake size`() {
+        // A twentieth of the box is 20px at 400 and 40px at 800 — twice the reach on twice the picture, which is
+        // the same blur relative to the icon.
+        val small = LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.05f, sizePx = 400)!!
+        val large = LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.05f, sizePx = 800)!!
+
+        assertEquals(2f, large.toFloat() / small.toFloat(), 0.2f)
     }
 
     @Test
-    fun `no radius comes back null rather than the full size`() {
-        // Null is what lets the renderer skip the work entirely: scaling to the original side and back would
-        // allocate two bitmaps to produce a copy.
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0f, sizePx = 192))
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = -1f, sizePx = 192))
+    fun `no radius comes back null rather than a box of nothing`() {
+        // Null is what lets the renderer skip the work entirely: a blur by zero is a copy, and the pipeline must
+        // not be handed one.
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0f, sizePx = 192))
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = -1f, sizePx = 192))
     }
 
     @Test
     fun `a radius too small to soften anything is null too`() {
         // Under a pixel of blur there is nothing to average, and the bound is in pixels because which *fraction*
         // reaches it depends entirely on the bake size.
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.001f, sizePx = 192))
-        assertTrue(LayerProgressiveBlur.downscaledSidePx(radius = 0.001f, sizePx = 4096) != null)
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.001f, sizePx = 192))
+        assertTrue(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.001f, sizePx = 4096) != null)
     }
 
     @Test
-    fun `the downscale never reaches the full size, which would be a copy rather than a blur`() {
-        val side = LayerProgressiveBlur.downscaledSidePx(radius = 0.005f, sizePx = 400)!!
-
-        assertTrue("$side must be smaller than 400", side < 400)
-        assertTrue("$side must leave something to interpolate", side >= 3)
-    }
-
-    @Test
-    fun `a tiny box comes back null rather than throwing on an inverted clamp`() {
-        // The same trap `stops` had: `coerceIn(3, sizePx - 1)` throws rather than clamping once the box reaches
-        // three, and a bitmap that small is reachable — the draft of a layer tile is a few dozen pixels.
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.5f, sizePx = 3))
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.5f, sizePx = 1))
+    fun `a tiny bitmap comes back null rather than being blurred into nothing`() {
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.5f, sizePx = 2))
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.5f, sizePx = 1))
     }
 
     @Test
     fun `a radius reachable only mid-drag comes back null, not a copy`() {
-        // The crash this file exists to have caught. The studio's sliders are continuous — their step governs only
-        // the stepper buttons — so a finger passes through values like this on the way up, and on a small bake they
-        // resolve to less than a pixel of blur. The caller must skip the effect entirely on a null; it used to
-        // return an immutable copy instead, which the renderer then wrapped in a `Canvas` and threw.
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.002f, sizePx = 48))
-        assertNull(LayerProgressiveBlur.downscaledSidePx(radius = 0.0005f, sizePx = 800))
+        // The crash this file exists to have caught, in its current form. The studio's sliders are continuous —
+        // their step governs only the stepper buttons — so a finger passes through values like this on the way up,
+        // and on a small bake they resolve to less than a pixel of blur.
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.002f, sizePx = 48))
+        assertNull(LayerProgressiveBlur.boxRadiusPxOrNull(radius = 0.0005f, sizePx = 800))
+    }
+
+    @Test
+    fun `the box never exceeds the bitmap it is applied to`() {
+        val box = LayerProgressiveBlur.boxRadiusPxOrNull(radius = 4f, sizePx = 64)!!
+
+        assertTrue("$box must stay within the bitmap", box <= 64)
     }
 }

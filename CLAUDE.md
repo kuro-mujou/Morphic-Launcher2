@@ -730,6 +730,29 @@ Four things:
   no visible change. `ContentAnchor.BOX` is how the icon's own frame is asked for, and on a background plate filling
   the box the two coincide.
 
+**Blur is one kernel now — `core:graphics`'s `BitmapBlur` — and it was two, one of which was not a blur.** Three
+separable box passes with a sliding window, which is a close gaussian approximation and, being O(pixels) *independent
+of the radius*, is cheap enough that nothing has to be reduced first. Its own module because `core:icon` and
+`data:wallpaper` both blur and neither may depend on the other. Four things:
+- **The icon renderer was faking it.** `progressivelyBlurred` scaled the layer down and back up with bilinear
+  filtering, and that is not the same operation: bilinear downscaling reads a 2×2 neighbourhood, so a 30× reduction
+  throws away almost every pixel it is supposed to average. The Focus effect came out visibly *terraced* —
+  stair-stepped edges and upscale blocks — and its KDoc asserted the opposite. Found by looking at a device.
+- **The wallpaper backdrop's reduction is now proportional to the blur, where it was a constant eighth.** That
+  constant is why a frosted surface looked like a low-resolution copy of the wallpaper *at every strength, including
+  zero* — where no blur is applied at all, so nothing about the blur could have been at fault.
+  `BitmapBlur.downscaleFor` keeps enough radius on the reduced bitmap for the passes to be doing the smoothing rather
+  than the upscale, and the reduction is taken as far as possible in the **decode** (`inSampleSize` is free where a
+  later `scale` is not).
+- **The blur is premultiplied, which the wallpaper's version never needed and an icon cannot do without.**
+  `getPixels` hands back un-premultiplied ARGB and a transparent pixel is almost always transparent *black*, so
+  averaging the channels directly drags black into everything near an edge — `LayerPixelate.averageArgb`'s trap, one
+  operation over. A wallpaper is opaque, so this costs it nothing and it is not two code paths.
+- **It is not an argument for `minSdk` 31.** `RenderEffect` was considered for both and fixes neither: the icon path
+  is `IconRenderer`, a *software* bitmap pipeline running off the main thread, where a `RenderNode` blur means a
+  `HardwareRenderer` and a readback; and the backdrop's worst artifact appears at a strength where there is no blur
+  to improve. Both were resolution and kernel choices, and both are fixed at `minSdk` 26.
+
 **A layer's blend mode is arithmetic now, not a `PorterDuffXfermode` — `LayerComposite`.** The bake handed
 `LayerBlend` straight to a `PorterDuffXfermode`, and one of those five is not the blend of the same name:
 `PorterDuff.Mode.MULTIPLY` is `[Sa × Da, Sc × Dc]`, so the result **alpha is the product too**. A foreground set to
@@ -1000,10 +1023,14 @@ come out antialiased for free, where an `IntArray` would owe its own coverage ar
 **`LayerEffect.ProgressiveBlur` is the thirteenth and the only one built from two mechanisms** — a blurred copy *and*
 a ramp deciding how much of it shows. Both pieces already existed (`LayerGradient` places the ramp exactly as it does
 a bloom's), so what was new is the joining.
-- **The blur is a downscale and an upscale, not a box blur.** A box blur would have been a second copy of the one in
-  `data:wallpaper`'s `Blur.kt`, which `core:icon` cannot reach without depending on a `data` module — and scaling
-  down and back up with bilinear filtering is the platform doing the same averaging in two calls, with no arithmetic
-  to get wrong. It approximates a Gaussian rather than being one, which is invisible in the only place it is used.
+- **The blur is `BitmapBlur`'s, and the thing it replaced was not a blur at all.** It shipped as a `Bitmap.scale`
+  down followed by one back up, on the reasoning — written into its own KDoc — that bilinear filtering is "the
+  platform doing the same averaging in two calls". It is not: bilinear *downscaling* samples a 2×2 neighbourhood per
+  output pixel, so the 30× reduction a mid-slider radius asked for discarded almost everything it was meant to
+  average. On a device it came out **terraced** — aliased stair-stepping along every edge and the tent-shaped blocks
+  of the upscale. The excuse for it was that `core:icon` could not reach `data:wallpaper`'s kernel; the answer was to
+  give the kernel a home neither owns (`core:graphics`), which also costs *less*, a sliding-window box pass being
+  O(pixels) and independent of the radius.
 - **The ramp is masked onto the *blurred* copy, `DST_IN`, with the sharp one underneath.** Masking the sharp copy
   instead would leave the two overlapping at every partial alpha and the icon looking doubled rather than blurred.
 - **`BloomFalloff` became `Falloff`** on this second consumer, since the blur asks the identical linear-or-radial
