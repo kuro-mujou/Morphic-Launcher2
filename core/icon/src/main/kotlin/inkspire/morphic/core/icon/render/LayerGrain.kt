@@ -96,6 +96,28 @@ object LayerGrain {
     }
 
     /**
+     * The line a directional grain runs along, plus how much of the scatter is forced onto it — everything [displace]
+     * needs that is the same for every pixel of a bake.
+     *
+     * **It exists because the trig was inside the per-pixel loop.** `displace` used to take the effect and resolve the
+     * angle itself, so a bake spent two transcendental calls per output pixel on a value that cannot change within it —
+     * over a million of them on a studio canvas. That is the same mistake, one function along, that [dot]'s KDoc
+     * records as "the whole of why a preview took seconds to arrive": the angle is a property of the *recipe*, so it
+     * belongs where the recipe is read once.
+     *
+     * @property directionality already coerced, so the loop does not repeat that either.
+     */
+    data class Drift(val directionality: Float, val axisX: Float, val axisY: Float)
+
+    /** [Drift] for this grain — resolved **once per bake**, never per pixel. */
+    fun driftOf(grain: LayerEffect.Grain): Drift {
+        val directionality = grain.directionality.coerceIn(0f, 1f)
+        // The studio's own convention: straight down at 0°, which puts 90° along +x.
+        val radians = grain.angleDegrees * Math.PI.toFloat() / 180f
+        return Drift(directionality, axisX = sin(radians), axisY = cos(radians))
+    }
+
+    /**
      * The displacement a field pair produces, in **field units** (−1..1 per axis), written into [into].
      *
      * **This is where `directionality` is spent, and the whole of it is one decomposition.** The raw vector
@@ -107,19 +129,20 @@ object LayerGrain {
      *
      * An out-parameter rather than a returned pair, because this runs once per pixel of a bake and a `Pair` there
      * is an allocation per pixel. Same shape `IconRenderer.resample` takes for its own sample position.
+     *
+     * It takes a [Drift] rather than the effect for the same reason: what it needs from the recipe is two floats, and
+     * deriving them here meant deriving them a million times. See [driftOf].
      */
-    fun displace(grain: LayerEffect.Grain, fieldX: Float, fieldY: Float, into: FloatArray) {
-        val directionality = grain.directionality.coerceIn(0f, 1f)
+    fun displace(drift: Drift, fieldX: Float, fieldY: Float, into: FloatArray) {
+        val directionality = drift.directionality
         if (directionality <= 0f) {
             into[0] = fieldX
             into[1] = fieldY
             return
         }
 
-        // The studio's own convention: straight down at 0°, which puts 90° along +x.
-        val radians = grain.angleDegrees * Math.PI.toFloat() / 180f
-        val axisX = sin(radians)
-        val axisY = cos(radians)
+        val axisX = drift.axisX
+        val axisY = drift.axisY
 
         val along = fieldX * axisX + fieldY * axisY
         val acrossX = fieldX - along * axisX

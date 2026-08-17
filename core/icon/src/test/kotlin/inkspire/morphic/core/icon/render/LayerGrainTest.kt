@@ -30,6 +30,16 @@ class LayerGrainTest {
         angleDegrees = angleDegrees,
     )
 
+    /**
+     * The drift a grain resolves to — what a bake resolves **once** and hands to every pixel.
+     *
+     * The displacement tests go through this rather than through the effect because that is the whole API now: the
+     * angle's `sin`/`cos` used to be computed inside `displace`, i.e. twice per output pixel, on a value that cannot
+     * change within a bake. See [LayerGrain.driftOf].
+     */
+    private fun drift(directionality: Float, angleDegrees: Float = 0f) =
+        LayerGrain.driftOf(grain(directionality = directionality, angleDegrees = angleDegrees))
+
     @Test
     fun `the field stays inside minus one and one`() {
         // The renderer multiplies this by an amplitude in pixels, so a value outside the range would push further
@@ -200,7 +210,7 @@ class LayerGrainTest {
     @Test
     fun `with no directionality the displacement is the field itself`() {
         val into = FloatArray(2)
-        LayerGrain.displace(grain(directionality = 0f), fieldX = 0.3f, fieldY = -0.7f, into = into)
+        LayerGrain.displace(drift(directionality = 0f), fieldX = 0.3f, fieldY = -0.7f, into = into)
 
         assertEquals(0.3f, into[0], 0.0001f)
         assertEquals(-0.7f, into[1], 0.0001f)
@@ -211,7 +221,7 @@ class LayerGrainTest {
         // 90° is along +x by the studio's convention, so the sideways component must be gone entirely — that is
         // what "smeared" means, and it is the end the old two-valued control could reach.
         val into = FloatArray(2)
-        LayerGrain.displace(grain(directionality = 1f, angleDegrees = 90f), 0.3f, -0.7f, into)
+        LayerGrain.displace(drift(directionality = 1f, angleDegrees = 90f), 0.3f, -0.7f, into)
 
         assertEquals(0.3f, into[0], 0.0001f)
         assertEquals(0f, into[1], 0.0001f)
@@ -222,7 +232,7 @@ class LayerGrainTest {
         // **The middle the enum could not express**, and the reason this is a continuum: the along-axis part is
         // untouched at every setting, and only the across-axis part is squashed.
         val into = FloatArray(2)
-        LayerGrain.displace(grain(directionality = 0.5f, angleDegrees = 90f), 0.3f, -0.8f, into)
+        LayerGrain.displace(drift(directionality = 0.5f, angleDegrees = 90f), 0.3f, -0.8f, into)
 
         assertEquals(0.3f, into[0], 0.0001f)
         assertEquals(-0.4f, into[1], 0.0001f)
@@ -233,7 +243,7 @@ class LayerGrainTest {
         // Straight down at 0°, so a fully directed displacement keeps only its y component there — the mirror of
         // the 90° case above, which is what makes the angle slider mean a rotation rather than a swap.
         val into = FloatArray(2)
-        LayerGrain.displace(grain(directionality = 1f, angleDegrees = 0f), 0.3f, -0.7f, into)
+        LayerGrain.displace(drift(directionality = 1f, angleDegrees = 0f), 0.3f, -0.7f, into)
 
         assertEquals(0f, into[0], 0.0001f)
         assertEquals(-0.7f, into[1], 0.0001f)

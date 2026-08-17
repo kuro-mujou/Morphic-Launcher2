@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,10 +22,13 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.render.IconRenderer
 import inkspire.morphic.core.model.icon.IconLayerSet
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * One icon as the editor should see it: drawn live where that is possible, and **from the bake where it is not**.
@@ -81,32 +85,37 @@ fun IconPreview(
  *
  * ## Draft first, then full — which is the throttle *and* the resolution split, in one mechanism
  *
- * Every new recipe is baked twice: once **downscaled**, immediately, and then — once nothing newer has arrived for
- * [SettleMs] — once at full size. The bake runs in a `LaunchedEffect` keyed on the recipe, so a newer one cancels
- * the older outright: during a drag the draft keeps landing and every full-size pass is cancelled in its wait, and
- * when the finger stops the wait elapses and the sharp one replaces the draft.
+ * Every recipe is baked twice: once **downscaled**, immediately, and then — once nothing newer has arrived for
+ * [SettleMs] — once at full size. A loop takes the newest recipe, drafts it, waits, and sharpens it.
  *
- * **This is what "settled" actually means, rather than a proxy for it.** The plan proposed threading a
- * gesture-in-flight signal down from the studio (`onUpdate` without `onCommit`); none is needed, because "no newer
- * recipe has arrived" *is* the condition and a keyed effect already knows it. One mechanism decides both what to
- * skip and what resolution to skip it at, so the two cannot disagree.
+ * **The draft is never abandoned; only the full-size pass is.** That asymmetry is the correction this file's own
+ * design needed, and it is worth stating plainly because the old shape looked obviously right: the bake lived in a
+ * `LaunchedEffect` *keyed on the recipe*, so anything newer cancelled whatever was running. Conflating by
+ * cancellation works only while the work is shorter than the gap between two emissions — and nothing was checking
+ * that. A slider thumb emits per pointer event, about seven milliseconds apart on a 144Hz phone, so for any effect
+ * whose draft costs more than that, **every draft was killed before it finished and the preview did not move at all
+ * until the finger lifted.** It was reported as the preview freezing on a drag while the +/- buttons worked, which
+ * sounds like two bugs and is one: a discrete step leaves a gap long enough for a draft to land.
  *
- * **There is one timer, and it was not always needed.** The original had none: cancellation alone conflated a
- * drag's frames, because the full-size bake was slow enough that a newer recipe always killed it first. Once the
- * bake got fast — rows split across cores, a capped preview size — it began *finishing* between two frames of a
- * slider, so the preview alternated soft draft and sharp bake several times a second. That reads as flashing. The
- * wait restores the property the speed took away, and it is a different question from the cancellation around it:
- * that asks "has something newer arrived?", this asks "is the user still going?".
+ * Letting the draft finish and *then* taking whatever the newest recipe is gives the property actually wanted —
+ * the preview updates as fast as the machine can draft, never slower and never not at all — while still coalescing,
+ * since everything emitted mid-draft collapses into one value. The full-size pass keeps the old behaviour, because
+ * there the old argument holds: it is slow, it is superseded the moment the recipe moves, and a stale sharp icon is
+ * worth nothing.
  *
- * **No queue, still.** A drag emits far more frames than any bake can service, and conflating them is the whole
- * requirement.
+ * **The settle is a second, different question.** The loop asks "has something newer arrived?"; [SettleMs] asks "is
+ * the user still going?" — which nothing else can see, and without which a full-size pass fast enough to finish
+ * between two slider frames makes the preview alternate soft and sharp several times a second. That reads as
+ * flashing.
  *
- * **And cancellation only became real when [IconRenderer.render] learned to cooperate with it.** This design was
- * correct and inert: coroutine cancellation is cooperative, so a bake that never checks runs to the end however
- * dead its coroutine is. Every frame of a drag therefore queued a full draft *and* a full-size bake, all of which
- * completed in turn — which is why the preview arrived in a backlog seconds after the finger lifted rather than
- * following it, and why the studio's bakes starved every other icon sharing the dispatcher. The lesson is worth
- * keeping: a `LaunchedEffect` key gives you the *intent* to abandon work, never the fact of it.
+ * **No queue.** A drag emits far more frames than any bake can service, and conflating them is the whole requirement.
+ *
+ * **And abandoning only became real when [IconRenderer.render] learned to cooperate with it.** Cancellation is
+ * cooperative, so a bake that never checks runs to the end however dead its coroutine is. Every frame of a drag
+ * therefore queued a full draft *and* a full-size bake, all of which completed in turn — which is why the preview
+ * once arrived in a backlog seconds after the finger lifted, and why the studio's bakes starved every other icon
+ * sharing the dispatcher. The lesson is worth keeping: cancelling a coroutine gives you the *intent* to abandon
+ * work, never the fact of it.
  *
  * **Deliberately not [inkspire.morphic.core.icon.render.IconRenderManager].** That cache is keyed on the resolved
  * layer set, which is exactly what changes on every frame of a drag — so a preview going through it would evict
@@ -141,43 +150,65 @@ private fun BakedIconPreview(
         val request = Request(icon, layerSet, sizePx, customImage, packImage)
         var baked by remember { mutableStateOf<ImageBitmap?>(null) }
 
-        // **The request is the key, and the restart is the throttle.** `LaunchedEffect` cancels the running coroutine
-        // when its key changes, which is exactly the conflation this needs: a newer recipe kills the bake in flight
-        // and starts its own. `Request` is a data class, so a recomposition that changes nothing compares equal and
-        // nothing restarts.
-        //
-        // **This was a `snapshotFlow` + `collectLatest` and did not work**, which is worth keeping written down: that
-        // block read `layerSet` and `sizePx` as plain captured parameters, and `snapshotFlow` only re-runs its block
-        // when *snapshot state* it read is invalidated. Having read none, it emitted once and never again — so the
-        // preview baked whatever recipe was current when the icon first fell back and then sat there. The rule is
-        // that a `snapshotFlow` over captured values is a one-shot; keying an effect needs no such care.
-        LaunchedEffect(renderer, request) {
-            if (request.sizePx !in 1..MaxBakePx) return@LaunchedEffect
+        // **What the pipeline is fed, rather than what it is keyed on** — see the loop below for why that distinction
+        // is the whole of this. A `StateFlow` conflates by equality, so a recomposition that changes nothing emits
+        // nothing, which is what keying on the request used to buy.
+        val latest = remember { MutableStateFlow(request) }
+        SideEffect { latest.value = request }
 
-            // **Two caps, not one**, because the settled bake and the draft are paid at different moments — see
-            // [MaxPreviewPx] and [MaxDraftPx]. The settled one may be large enough to survive being zoomed into;
-            // the draft stays small however large that is, so a drag costs the same whatever the canvas is doing.
-            val fullPx = request.sizePx.coerceAtMost(MaxPreviewPx)
-            val draftPx = (fullPx * DraftScale).roundToInt()
-                .coerceAtLeast(MinDraftPx)
-                .coerceAtMost(MaxDraftPx)
-                .coerceAtMost(fullPx)
-            // Only worth a first pass while it is meaningfully cheaper — on a thumbnail the draft *is* the full
-            // size, and baking twice would be two bakes for one picture.
-            if (draftPx < fullPx) {
-                baked = renderer.bake(request, draftPx)
-                // **The settle, and it has to be a wait rather than a `yield`.** A yield was enough while the
-                // full-size bake was slow: a newer recipe always arrived first and cancelled it, so a drag showed
-                // drafts and nothing else. Once the bake got fast enough to finish *between* two frames of a slider,
-                // the preview began alternating soft draft and sharp full several times a second — which reads as
-                // flashing, and is the resolution changing back and forth rather than anything being redrawn wrongly.
-                //
-                // Waiting first makes "settled" mean what it says: during a drag every full-size pass is cancelled
-                // here and only drafts are shown, so the softness is *constant* and the picture is stable. The
-                // suspension is also still where cancellation is observed, which is what the yield was for.
-                delay(SettleMs.milliseconds)
+        // **The draft runs to completion; only the full-size pass is abandoned.** This used to be `LaunchedEffect`
+        // keyed on the request, so *every* bake was cancelled the moment a newer recipe arrived — and that starves
+        // outright as soon as one draft costs more than the gap between two emissions. A slider thumb emits per
+        // pointer event, which on a 144Hz phone is about seven milliseconds apart, so on a heavy effect **no draft
+        // ever finished and the preview did not move at all until the finger lifted**. Pressing the +/- buttons
+        // worked, and looked like a different bug: a step leaves a gap long enough for a draft to land.
+        //
+        // Conflation by cancellation only works while the work is shorter than the interval, and nothing was checking
+        // that. Finishing the draft and *then* taking whatever the newest recipe is gives the property actually
+        // wanted — the preview updates as fast as the machine can draft, never slower and never not at all — and it
+        // still coalesces, because everything emitted while a draft is in flight collapses into one value.
+        //
+        // The full-size pass keeps the old behaviour, because there the old reasoning holds: it is slow, it is
+        // superseded the instant the recipe moves, and a stale sharp icon is worth nothing.
+        //
+        // **This was a `snapshotFlow` + `collectLatest` before either**, which is worth keeping written down: that
+        // block read `layerSet` and `sizePx` as plain captured parameters, and `snapshotFlow` only re-runs its block
+        // when *snapshot state* it read is invalidated. Having read none, it emitted once and never again.
+        LaunchedEffect(renderer) {
+            var rendered: Request? = null
+            while (true) {
+                val next = latest.first { it != rendered }
+                rendered = next
+                if (next.sizePx !in 1..MaxBakePx) continue
+
+                // **The draft has a size of its own rather than a fraction of the settled one** — see [DraftPx].
+                // The settled bake may be large enough to survive being zoomed into; the draft stays fixed however
+                // large that is, so a drag costs the same whatever the canvas is doing.
+                val fullPx = next.sizePx.coerceAtMost(MaxPreviewPx)
+                val draftPx = DraftPx.coerceAtMost(fullPx)
+
+                // Only worth a first pass while it is meaningfully cheaper — on a thumbnail the draft *is* the full
+                // size, and baking twice would be two bakes for one picture.
+                if (draftPx < fullPx) {
+                    baked = renderer.bake(next, draftPx)
+                    // **The settle: is the user still going?** A different question from "has something newer
+                    // arrived", which is what the loop above answers. Without the wait, a full-size pass that is fast
+                    // enough to finish between two slider frames makes the preview alternate soft and sharp several
+                    // times a second, which reads as flashing.
+                    if (withTimeoutOrNull(SettleMs) { latest.first { it != rendered } } != null) continue
+                }
+
+                // Abandoned outright if the recipe moves under it — the one place cancellation is still right.
+                coroutineScope {
+                    val full = launch { baked = renderer.bake(next, fullPx) }
+                    val superseded = launch {
+                        latest.first { it != rendered }
+                        full.cancel()
+                    }
+                    full.join()
+                    superseded.cancel()
+                }
             }
-            baked = renderer.bake(request, fullPx)
         }
 
         Canvas(Modifier.fillMaxSize()) {
@@ -258,15 +289,6 @@ private fun DrawScope.drawPreview(bitmap: ImageBitmap) {
 }
 
 /**
- * How large a draft is, against the settled bake.
- *
- * A sixth of the side is a thirty-sixth of the pixels, and the effects this exists for are all O(n) in them — so a
- * draft lands in roughly a thirty-sixth of the time, which is what keeps a drag moving. **This is the one number to
- * tune on device**: too large and the drag stutters, too small and the picture being judged is not the picture.
- */
-private const val DraftScale = 0.16f
-
-/**
  * The largest a *preview* is baked at, however large the node showing it.
  *
  * **A cap on work, not on quality, and it is scoped to exactly the icons that need one.** This whole path runs only
@@ -289,14 +311,31 @@ private const val DraftScale = 0.16f
 private const val MaxPreviewPx = 1024
 
 /**
- * The largest a **draft** is, whatever [MaxPreviewPx] allows the settled bake.
+ * **The** size a draft is baked at — the one number the cheap pass is tuned by.
  *
- * **Capped separately, because the two are paid at different moments.** The settled bake happens once, after the
- * finger has stopped, and can afford to be large; a draft happens on every frame of a drag and its whole job is to
- * be cheap. Deriving one from the other is what made raising the settled cap slow the *drag* down — which is the
- * thing the draft exists to protect.
+ * It was three interacting numbers (a fraction of the settled bake, a floor, and a cap) and they **contradicted each
+ * other**: the floor asked for 144 and the cap immediately pulled it back to 128, so the floor was dead code and the
+ * paragraph explaining it was false. One value cannot disagree with itself.
+ *
+ * **Fixed rather than a fraction of the settled bake**, because the two are paid at different moments: the settled
+ * pass happens once, after the finger has stopped, and can afford to be large, while a draft happens on every step of
+ * a drag and its whole job is to be cheap. Deriving one from the other is what made raising the settled cap slow the
+ * *drag* down — the thing the draft exists to protect.
+ *
+ * **And 144 rather than as small as possible, because a draft can be too small to be true.** It is roughly the
+ * smallest bitmap any surface bakes an icon into (a home cell's icon, 48dp at 3× density), which buys one property
+ * worth the pixels: *the draft can represent anything a surface can*. Below that an effect can cease to exist rather
+ * than merely soften — `LayerGrain`'s lattice has a four-pixel floor, so at a small enough draft a whole stretch of
+ * its size slider clamps to one cell and every draft in that range comes back **identical**, which on a device reads
+ * as the preview having frozen. It was reported exactly that way.
+ *
+ * Measured on a Snapdragon-class phone, one grain bake: **~15ms at 128px, ~19ms at 144, 332ms at 768**. So the
+ * invariant costs about four milliseconds a draft, and the settled pass is what a large recipe really costs.
+ *
+ * A node whose settled bake is already smaller — a layer tile — is left alone by the `coerceAtMost(fullPx)` at the
+ * call site: it bakes once, at its real size, rather than drafting larger than the thing it is drafting for.
  */
-private const val MaxDraftPx = 128
+private const val DraftPx = 144
 
 /**
  * How coarsely the bake size follows the node's.
@@ -321,8 +360,6 @@ private const val BakeQuantum = 64
  */
 private const val SettleMs = 140L
 
-/** Below this a draft has no detail left to judge, so there is nothing to gain by going smaller. */
-private const val MinDraftPx = 48
 
 /**
  * A bound on what will be allocated, against an unbounded constraint.

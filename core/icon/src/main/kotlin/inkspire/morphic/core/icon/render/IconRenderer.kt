@@ -84,6 +84,32 @@ class IconRenderer(
     private val BakeBands: Int =
         (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 4)
 
+    /**
+     * The per-pixel and per-row callbacks the parallel passes take — **`fun interface`s rather than function types,
+     * and that is a performance decision rather than a style one.**
+     *
+     * Kotlin's function types are generic (`Function3<Integer, Integer, FloatArray, Unit>`) and it does not specialise
+     * them over primitives, so `(x: Int, y: Int, into: FloatArray) -> Unit` **boxes both `Int`s at every call**. In
+     * [resample] that call is the innermost statement of the hottest loop in this class: at preview size it ran six
+     * hundred thousand times per effect, allocating over a million `Integer`s — on the order of twenty megabytes of
+     * garbage per bake, which is paid twice over, once in the allocation and again when the collector runs and takes
+     * the main thread's cores with it.
+     *
+     * A `fun interface` compiles to one method with primitive parameters, so the loop allocates nothing and a lambda
+     * at the call site still reads exactly as it did. [Rows] matters far less than [SourceOf] — it is one call per row
+     * rather than per pixel — but the two are the same mechanism and one rule is easier to keep than two.
+     */
+    private fun interface SourceOf {
+        /** Writes the source position for output ([x], [y]) into [into] as `[srcX, srcY]`, in pixels, unrounded. */
+        fun into(x: Int, y: Int, into: FloatArray)
+    }
+
+    /** @see SourceOf */
+    private fun interface Rows {
+        /** Runs one output row. Called from several threads at once, one `y` each. */
+        fun row(y: Int)
+    }
+
     /** Keeps a layer's pixels only where the shape silhouette is opaque. */
     private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
@@ -637,6 +663,9 @@ class IconRenderer(
     private suspend fun grained(source: Bitmap, grain: LayerEffect.Grain, sizePx: Int, bake: CoroutineContext): Bitmap {
         val amplitudePx = LayerGrain.amplitudePx(grain, sizePx)
         val cellPx = LayerGrain.cellPx(grain, sizePx)
+        // Resolved here rather than inside the loop: it is two transcendental calls, and the angle it reads cannot
+        // change within a bake. See [LayerGrain.driftOf].
+        val drift = LayerGrain.driftOf(grain)
 
         return resample(source, sizePx, bake) { x, y, into ->
             val u = x / cellPx
@@ -647,7 +676,7 @@ class IconRenderer(
             // through the picture rather than as anything recognisable as a race. `into` is per band by
             // construction, so there is nothing to share.
             LayerGrain.displace(
-                grain = grain,
+                drift = drift,
                 fieldX = LayerGrain.field(u, v, salt = 0),
                 fieldY = LayerGrain.field(u, v, salt = 1),
                 into = into,
@@ -822,7 +851,7 @@ class IconRenderer(
         source: Bitmap,
         sizePx: Int,
         bake: CoroutineContext,
-        sourceOf: (x: Int, y: Int, into: FloatArray) -> Unit,
+        sourceOf: SourceOf,
     ): Bitmap {
         val pixels = IntArray(sizePx * sizePx)
         source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
@@ -835,7 +864,7 @@ class IconRenderer(
             // hundred allocations across a bake, which is nothing beside the pixels themselves.
             val at = FloatArray(2)
             for (x in 0 until sizePx) {
-                sourceOf(x, y, at)
+                sourceOf.into(x, y, at)
                 out[y * sizePx + x] = LayerSample.bilinear(pixels, sizePx, at[0], at[1])
             }
         }
@@ -864,7 +893,7 @@ class IconRenderer(
      * short enough that a cancelled preview stops within a millisecond or so, and long enough that the check never
      * shows up in the cost.
      */
-    private suspend fun overRows(sizePx: Int, bake: CoroutineContext, row: (y: Int) -> Unit) {
+    private suspend fun overRows(sizePx: Int, bake: CoroutineContext, row: Rows) {
         val bands = BakeBands.coerceAtMost(sizePx)
         val rowsPerBand = (sizePx + bands - 1) / bands
         coroutineScope {
@@ -876,7 +905,7 @@ class IconRenderer(
                 launch(Dispatchers.Default) {
                     for (y in from until until) {
                         bake.ensureActive()
-                        row(y)
+                        row.row(y)
                     }
                 }
             }
