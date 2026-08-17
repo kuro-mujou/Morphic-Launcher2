@@ -64,6 +64,10 @@ import kotlinx.serialization.Serializable
  * doing that, since a per-layer mask trims each layer before it joins the stack, so a blend or a bloom that reaches
  * past a layer's own silhouette escapes the shape.
  *
+ * **This one escapes nothing, which is what makes it a boundary rather than one more mask** — so it is applied
+ * *twice*, and the second pass is [effectTrimShape]. A layer's shape sits before that layer's effects deliberately;
+ * the stack's sits before **and** after its own.
+ *
  * **No [IconLayerSpec.shapeAnchor] here, and that is a property of the composite rather than a control left out.**
  * An anchor chooses between the box and the layer's own *artwork carried by its transform* — the composite has no
  * measured ink to fit to, and [tiltX] is not a frame anything can be laid out in (a lean has no in-plane position or
@@ -104,6 +108,27 @@ data class IconLayerSet(
 
     /** The whole-icon effects that actually draw, in the order they are applied. @see activeEffects */
     val activeEffects: List<LayerEffect> get() = effects.activeEffects
+
+    /**
+     * The shape the **finished** icon is trimmed back to, or `null` when nothing could have escaped [shape].
+     *
+     * **The stack mask catches everything, and that only happens if it is applied after the effects as well as
+     * before.** Before, because everything derived from a silhouette — an outline, a bevel, an inner shadow — has to
+     * read the *shaped* icon rather than the square it was cut from, or it traces a boundary the icon does not have.
+     * After, because a good half of the effect list grows alpha outward: a blur spreads it, a glow and an extrusion
+     * put copies beside it, a chromatic split displaces it. Applied only before, all of that lands outside the shape
+     * and is stopped instead by the one edge left — the **box** — so a rounded icon comes out ringed by a squared-off
+     * fringe of haze with corners the shape was chosen to remove.
+     *
+     * **Shared rather than re-decided in each renderer**, for the reason every derivation in `core:icon`'s `render`
+     * package is: a path that forgot the trim would draw a perfectly plausible icon, and the effects that need it most
+     * are the ones the live path cannot draw at all — the studio previews those from the bake, so the editor could not
+     * show you the difference.
+     *
+     * Null with no effects, which is every unedited icon: one mask rather than two, and the icon's antialiased edge is
+     * not multiplied by the silhouette twice.
+     */
+    val effectTrimShape: IconShape? get() = shape?.takeIf { activeEffects.isNotEmpty() }
 
     /**
      * Whether the **live** render path can draw this whole icon, or whether the studio must preview it from the bake.

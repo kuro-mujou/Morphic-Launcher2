@@ -163,14 +163,27 @@ class IconRenderer(
             layerBitmap.recycle()
         }
 
-        // **The set's own mask, then its own effects** — the same two steps in the same order a layer takes, which is
-        // what makes "shape the whole icon" mean what "shape this layer" means. Both are outside the angles above for
-        // the same reason a layer's are outside its transform: the mask trims the *finished* picture, so a turned or
-        // leaning icon slides under a silhouette that stays put. Passing no matrix says that — the frame is the
-        // box, which is also why the effects fall back to [ShapeMask.InkFit.Box] and [LayerTransform.Identity].
-        layerSet.shape?.let { applyShapeMask(canvas, it, sizePx, matrix = null) }
+        // **The set's own mask, then its own effects, then the mask again.** The first two are the order a layer takes
+        // — which is what makes "shape the whole icon" mean what "shape this layer" means — and both sit outside the
+        // angles above for the reason a layer's sit outside its transform: the mask trims the *finished* picture, so a
+        // turned or leaning icon slides under a silhouette that stays put. Passing no matrix says that: the frame is
+        // the box, which is also why the effects fall back to [ShapeMask.InkFit.Box] and [LayerTransform.Identity].
+        //
+        // **The third step is the one a layer does not take**, and [IconLayerSet.effectTrimShape] is where the rule
+        // lives. A stack shape is the icon's boundary rather than one more mask, and half the effect list grows alpha
+        // outward — so without it a blur's soft edge escapes the silhouette and is stopped by the box instead, ringing
+        // a rounded icon with squared-off haze. One silhouette, built once and applied at both ends.
+        val mask = layerSet.shape?.let { shapeMaskOrNull(it, sizePx, matrix = null) }
+        mask?.let { applyShapeMask(canvas, it) }
 
-        return applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx, bake)
+        val finished =
+            applyEffects(output, layerSet.activeEffects, ShapeMask.InkFit.Box, LayerTransform.Identity, sizePx, bake)
+
+        if (mask != null) {
+            if (layerSet.effectTrimShape != null) applyShapeMask(Canvas(finished), mask)
+            mask.recycle()
+        }
+        return finished
     }
 
     /**
@@ -1253,20 +1266,41 @@ class IconRenderer(
     /**
      * Cuts the layer down to [shape]'s silhouette, drawn under [matrix] — `null` meaning plainly at box size.
      *
+     * The one-shot form, for the caller that masks once: build, apply, discard. The whole icon's own mask is applied
+     * at both ends of its effect pipeline (see [render]), so it holds the silhouette itself rather than rasterising the
+     * same drawable twice.
+     */
+    private fun applyShapeMask(canvas: Canvas, shape: IconShape, sizePx: Int, matrix: Matrix?) {
+        val mask = shapeMaskOrNull(shape, sizePx, matrix) ?: return
+        applyShapeMask(canvas, mask)
+        mask.recycle()
+    }
+
+    /**
+     * [shape]'s silhouette as a bitmap, or `null` for an id this build does not know — which stale stored data can
+     * still produce, and which then masks nothing rather than failing.
+     *
      * The bounds are always the full box: [matrix] is what places the silhouette, so the drawable is asked for its
      * authoring square either way and the anchor is expressed in one place rather than two.
      */
-    private fun applyShapeMask(canvas: Canvas, shape: IconShape, sizePx: Int, matrix: Matrix?) {
-        val res = IconShapes.drawableResOrNull(shape) ?: return
-        val shapeDrawable = context.getDrawable(res) ?: return
+    private fun shapeMaskOrNull(shape: IconShape, sizePx: Int, matrix: Matrix?): Bitmap? {
+        val res = IconShapes.drawableResOrNull(shape) ?: return null
+        // **`mutate` because the instance is fresh and its constant state is not.** `getDrawable` hands back a new
+        // `Drawable` over a *shared* state, and a `VectorDrawable` — which every shape is — caches a rendered bitmap
+        // in there, so two bakes masking with the same shape at two sizes would fight over that one cache.
+        val shapeDrawable = context.getDrawable(res)?.mutate() ?: return null
         val mask = createBitmap(sizePx, sizePx)
         Canvas(mask).let { maskCanvas ->
             shapeDrawable.setBounds(0, 0, sizePx, sizePx)
             if (matrix == null) shapeDrawable.draw(maskCanvas)
             else maskCanvas.withMatrix(matrix) { shapeDrawable.draw(this) }
         }
+        return mask
+    }
+
+    /** Keeps only what [mask]'s silhouette covers. The mask stays the caller's, since one can be applied twice. */
+    private fun applyShapeMask(canvas: Canvas, mask: Bitmap) {
         canvas.drawBitmap(mask, 0f, 0f, maskPaint)
-        mask.recycle()
     }
 
     /**

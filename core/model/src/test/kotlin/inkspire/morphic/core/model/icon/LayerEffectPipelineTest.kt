@@ -176,6 +176,42 @@ class LayerEffectPipelineTest {
         assertEquals(2, set.effects.size)
     }
 
+    /**
+     * That the whole icon's shape is applied a **second** time, after its effects.
+     *
+     * The failure this pins is silent in the direction that matters: with only the leading mask, every effect that
+     * grows alpha outward — a blur's soft edge, a glow, an extrusion, a chromatic fringe — escapes the silhouette and
+     * is stopped by the box instead, so a rounded icon comes out ringed by squared-off haze. Both renderers ask this
+     * one question, and the effects it matters most for are the ones the live path cannot draw at all, so the studio's
+     * own preview could not show a path that had forgotten it.
+     */
+    @Test
+    fun `a stack shape is what the finished effects are trimmed back to`() {
+        val squircle = IconShape("squircle")
+        val shaped = IconLayerSet.Base.copy(shape = squircle, effects = listOf(bloom))
+
+        assertEquals(squircle, shaped.effectTrimShape)
+    }
+
+    @Test
+    fun `there is nothing to trim without an effect that draws`() {
+        // Two ways to have no pipeline, and neither should cost a second mask — the icon's antialiased edge would be
+        // multiplied by the silhouette twice for nothing.
+        val squircle = IconShape("squircle")
+
+        assertEquals(null, IconLayerSet.Base.copy(shape = squircle).effectTrimShape)
+        // A switched-off effect draws nothing, so it earns no trim either. Guards the obvious mistake of asking
+        // `effects` rather than `activeEffects`.
+        val off = IconLayerSet.Base.copy(shape = squircle, effects = listOf(bloom.copy(enabled = false)))
+        assertEquals(null, off.effectTrimShape)
+    }
+
+    @Test
+    fun `an unshaped icon is trimmed by nothing, whatever it carries`() {
+        // The box is the only edge there is, which is what a glow escaping into the corners is *for*.
+        assertEquals(null, IconLayerSet.Base.copy(effects = listOf(bloom)).effectTrimShape)
+    }
+
     @Test
     fun `reordering layers keeps the icon's own effects`() {
         // The trap this field brought with it: everything that rebuilds the stack must `copy` rather than call the

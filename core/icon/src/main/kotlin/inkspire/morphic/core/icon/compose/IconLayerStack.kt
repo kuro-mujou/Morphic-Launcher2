@@ -132,6 +132,12 @@ fun IconLayerStack(
     Box(
         modifier
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            // **The set's own mask again, outside its effects** — the step a layer does not take, because a stack
+            // shape is the icon's *boundary* rather than one more mask. Half the effect list grows alpha outward, so
+            // without this the icon's soft edges escape the silhouette and are stopped by the box instead. Which
+            // shape, and when there is nothing to trim, is [IconLayerSet.effectTrimShape]'s answer for both paths —
+            // and it matters most for the effects this path cannot draw at all, where only the bake shows the result.
+            .shapeMask(layerSet.effectTrimShape)
             // **The set's own effects, applied to the finished stack.** Inside the offscreen layer, so what they
             // transform is the composited children and not whatever is behind the icon. The composite has no
             // transform and no measured ink, so anything anchored to content falls back to the box — the same
