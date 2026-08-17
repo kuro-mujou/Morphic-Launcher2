@@ -339,14 +339,32 @@ enforces. Per layer:
 **Two renderers is the standing hazard, and the shared derivations are what keep them honest — nine of them now.** An
 icon that looks right while being edited and wrong on every surface is a bug the editor structurally cannot show you,
 so the agreement is made of shared *things* rather than shared intentions: `ParsedIconLoader` (what the layers are),
-`IconLayerResolver` (which draw, and what each means), `LayerTransform` (where they sit, including the perspective
-matrix both paths now take rather than each configuring its own camera), `LayerFilter` (the
+`IconLayerResolver` (which draw, what each means, **and which drawable instance each render owns**), `LayerTransform`
+(where they sit, including the perspective
+matrix both paths take rather than each configuring its own camera), `LayerFilter` (the
 color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`),
 `IconFilters` (the table of built-in looks), `LayerGradient` (which way an angle runs, and the frame a bloom or a
 gloss is laid out in), `ShapeMask` (where the silhouette sits — which stopped being "the
 box" the moment `ContentAnchor` existed, and so became arithmetic rather than a constant), `LayerPattern` (a tile's
 size, its matrix and how a stencil becomes colored marks), `LayerExtrude` (how many copies and how far apart) and
 `LayerChromatic` (which channel leads).
+
+**And a `Drawable` is mutable state, which is a hazard of a different shape: the two paths sharing one *object*
+rather than disagreeing about arithmetic.** Drawing one is `setBounds(0, 0, sizePx, sizePx)` then `draw`, and the
+bounds live on the instance — so while a `ParsedIcon` was parsed once per app and handed to every consumer, the studio
+canvas, each tile in the layer rail and any surface icon baking at that moment were all writing their own size into
+the same object, three of them on background threads. The symptom is a picture rather than an exception, which is why
+it survived: a bake at 768 overwritten by a tile's 128 draws the artwork at 128, and a drawable draws from its bounds'
+origin, so the icon lands at a sixth of its size in the **top-left corner** of an otherwise empty square — then a
+whole-icon shape masks the box it was told about rather than the artwork, and a blur spreads out of it into the space
+where the icon should have been. `IconLayerResolver.owned()` gives each resolution its own instances
+(`newDrawable().mutate()`, passing through when there is no constant state), and shape and pattern drawables get
+`mutate()` for the same reason one step down: `getDrawable` hands back a fresh instance over a **shared** constant
+state, and a `VectorDrawable` caches a rendered bitmap in there. It goes in the resolver because that is the one seam
+both paths already pass through — fixing one renderer would leave the other writing to the shared object, which is the
+same race with one fewer participant. **It was latent for months and a real blur is what surfaced it**: the window is
+however long the artwork takes to draw, so two `Bitmap.scale` calls rarely lost the race and three box passes over
+half a million pixels lose it every time.
 
 **What each new one is for is worth reading as a group, because the pattern repeats**: an effect earns a derivation
 exactly when its two implementations would differ in something *invisible*. A tile at half the intended scale is
@@ -439,7 +457,18 @@ than per-layer.** It is what makes "put every icon in a squircle" one control in
 layer in turn, and the two are not the same picture: a per-layer mask trims each layer *before* it joins the stack, so
 a bloom or a blend reaching past that layer's own silhouette escapes it, where a stack mask catches everything. Same
 terms as the effects above — additive (defaulted null, `encodeDefaults = false`), keyed by `IconId` for free, run in
-**both** renderers as *mask then effects*, the per-layer order one scope out. Three things:
+**both** renderers as *mask, then effects, then the mask again*. Four things:
+- **The third step is the one a layer does not take, and "catches everything" is only true because of it.** A layer's
+  shape sits before that layer's effects deliberately — an outer halo must escape it. The stack's is the icon's
+  *boundary*, and half the effect list grows alpha outward, so applied once it was escaped exactly as a layer's is:
+  a rounded icon carrying a blur came out ringed by squared-off haze, the spread stopped by the only edge left, the
+  **box**. Both passes are load-bearing and for different reasons — before, so that anything derived from a
+  silhouette (an outline, a bevel, an inner shadow) reads the shaped icon rather than the square it was cut from;
+  after, so nothing the pipeline grew reaches outside it. `IconLayerSet.effectTrimShape` is which shape and when
+  there is nothing to trim, shared rather than decided twice: a renderer that forgot the second pass would draw a
+  perfectly plausible icon, and the effects needing it most are the ones the live path cannot draw at all, so the
+  studio structurally could not show the difference. Null with no effects, so an unedited icon pays for one mask and
+  its antialiased edge is not multiplied by the silhouette twice.
 - **No `ContentAnchor`, and that is the composite rather than a control left out.** An anchor chooses between the box
   and *the layer's artwork carried by its transform*; the composite has no measured ink to fit to, and its own lean is
   not a frame anything can be laid out in — the same fact that already sends its content-anchored effects to
@@ -974,11 +1003,22 @@ arithmetic to produce a poor picture:
     is the one optimisation that also speeds up **baking real icons**, where a shader would only ever have helped
     the editor. One trap it introduces: a `sourceOf` lambda closing over mutable scratch is now shared by every
     band — `grained` writes through `resample`'s own per-band out-parameter for that reason.
-  - **`IconPreview` caps the settled bake at `MaxPreviewPx`** and drafts from *that*. It is a cap on work rather
-    than on quality, and scoped to exactly the icons that need one: this path runs only for a recipe the live
-    renderer cannot draw, and every such effect is low-frequency by nature — a grain, a halo and a dot grid all
-    look the same scaled up from 512, because none of them has detail at the pixel. A sharp recipe draws live and
-    never reaches the cap.
+  - **Its callbacks are `fun interface`s, not function types, and that is arithmetic rather than style.** Kotlin's
+    function types are generic and never specialised over primitives, so `(x: Int, y: Int, into: FloatArray) -> Unit`
+    **boxes both `Int`s at every call** — in the innermost statement of the hottest loop in the renderer, which is
+    over a million allocations and some nineteen megabytes of garbage per settled bake, paid twice over when the
+    collector then takes the main thread's cores. Also speeds up real icons rather than only the editor.
+  - **Anything a bake reads once per recipe must be resolved once per bake.** `LayerGrain.displace` computed
+    `sin`/`cos` per *pixel* from an angle that cannot change within a bake; `driftOf` resolves it up front. That is
+    the same mistake one function along from the one `dot`'s KDoc records as "the whole of why a preview took
+    seconds to arrive", so it is worth treating as a category rather than an incident.
+  - **`IconPreview` caps the settled bake at `MaxPreviewPx`** and drafts at a fixed `DraftPx`. It is a cap on work
+    rather than on quality, and scoped to exactly the icons that need one: this path runs only for a recipe the live
+    renderer cannot draw. **The reasoning that a halo and a dot grid "look the same scaled up" does not extend to
+    grain, and that claim was wrong here for months** — grain's lattice has a pixel floor, so a small enough draft
+    cannot represent a fine setting at all and comes back identical across a whole stretch of the slider. Which is
+    why `DraftPx` is a floor rather than a fraction; see the grain notes below. A sharp recipe draws live and never
+    reaches the cap.
 
 **And then it was slow and, on a home icon, invisible — three faults that only a device showed, each with a
 different cause.** Worth keeping together, because none of them is about the look:
@@ -987,21 +1027,38 @@ different cause.** Worth keeping together, because none of them is about the loo
   four-second preview. A sixteen-entry gradient table built once replaces them. The KDoc that argued for the angle
   ("a table leaves a handful of preferred directions") is true of one octave and not of three summed into two
   fields.
-- **Nothing was cancellable, so `IconPreview`'s whole design was inert.** Its throttle *is* cancellation — a newer
-  recipe kills the bake in flight — but cancellation is cooperative and a loop over half a million pixels
-  cooperates in nothing. Every frame of a drag queued a draft *and* a full bake and every one ran to completion,
+- **Nothing was cancellable, so `IconPreview`'s whole design was inert.** Its throttle *was* cancellation outright —
+  a newer recipe killed the bake in flight — but cancellation is cooperative and a loop over half a million pixels
+  cooperates in nothing. (That throttle has since been corrected in a second way: only the *full-size* pass is
+  abandoned now, because cancelling the draft too starves whenever one costs more than the gap between two slider
+  emissions. See the preview notes below.) Every frame of a drag queued a draft *and* a full bake and every one ran to completion,
   so the preview arrived as a backlog after the finger lifted and the studio starved every other icon on the same
   dispatcher. **`IconRenderer.render` is `suspend` now**, captures its context, and the two per-pixel loops
   `ensureActive()` once a row. Being suspend is what makes the context reachable without callers remembering to
   pass one. An abandoned bake leaves its buffers to the collector rather than recycling them.
-- **Gradient noise is zero *at* the lattice, so a cell of about a pixel displaces nothing at all.** That is what
-  removes the grid a value field puts through the picture, and it made the finest setting vanish on any small
-  bake: a 144px home icon always hit the one-pixel floor and grained not at all, while the ~670px studio canvas
-  escaped it and showed what the surface would never draw — the two-renderer hazard's shape reached through a bake
-  size instead. The floor is **four pixels**, where every sample lands somewhere the field is doing something.
-  Pinned by a test at 144px, because the studio structurally cannot show this one. The bound it leaves is real:
-  at the finest setting a recipe is *not* identical at 144px and 670px, since structure a few pixels across cannot
-  exist on a small bitmap.
+- **Gradient noise is zero *at* the lattice, and the renderer was sampling pixel *corners*.** So every `cellPx`-th
+  sample landed exactly on a zero — a quarter of them at a four-pixel cell, all of them at one — which made the
+  finest setting vanish on any small bake: a 144px home icon grained not at all while the ~670px studio canvas
+  escaped it and showed what the surface would never draw, the two-renderer hazard's shape reached through a bake
+  size instead. `LayerGrain.latticeAt` samples the **centre** (offset half a *pixel*, not half a cell, since the
+  correction is about where a pixel is), which removes the coincidence and lets the floor be **two pixels** rather
+  than four. Two rather than one because at a one-pixel cell every sample sits at the centre of its own cell, so
+  neighbours share nothing and the field is per-pixel confetti — the look the whole smooth-field construction
+  exists to avoid.
+- **The size ramp is *derived* from that floor, which is what retired a slider whose bottom third did nothing.**
+  `FinestCell = MinCellPx / GrainFidelityPx` — the finest grain any real bake can draw — where it used to be a
+  chosen `0.006`, four tenths of a pixel on a home icon, so every setting below ≈0.35 clamped to one cell and drew
+  the *same picture*. On a device the control was inert across a third of its travel; in the studio the preview
+  stopped responding down there, which reads as the preview having frozen rather than as a slider with nothing to
+  say. Derived, the promise this file rests on — one recipe grains the same at every bake size — holds as a
+  fraction of the box everywhere from `GrainFidelityPx` up.
+- **`GrainFidelityPx` is 144 because three sizes coincide there, and the rule is the largest of them**: the smallest
+  bitmap a surface bakes, the size the studio *drafts* at, and the finest grain offered. Raising it to 288 was tried
+  — it bought genuinely finer grain and immediately made the bottom sixth of the slider inert **in the draft**,
+  i.e. under the finger. That is the same defect one paragraph up, reintroduced by reasoning about the cost to home
+  icons while forgetting the preview is the same size. Finer grain is still available and its real price is a larger
+  draft, which is a drag-latency decision rather than a noise one. `LayerGrainTest` reads `IconPreview.DraftPx`
+  rather than repeating 144, so moving one without the other fails a test instead of reaching a device.
 
 **`LayerEffect.Pixelate` is the odd one of the three per-pixel effects, and shares nothing with the other two.** It
 samples one color per *cell* and then **draws** a shape — so the gaps between dots and their rounded corners are
@@ -2112,11 +2169,19 @@ forget to ask is one that silently shows a lie. Five things worth knowing:
   the effect rather than the layer count. `IconLayerSet.drawsLive` is the one question asked.
 - **`IconLayerSpec.drawsLive` keeps a real job** and is not made vestigial by that: a *layer tile* in the rail solos
   one layer, so it falls back on that layer's own effects. One property, two scopes, each asking about what it draws.
-- **Draft first, then full — and that is the throttle *and* the resolution split in one mechanism.** Every recipe is
-  baked downscaled immediately and then at full size; `collectLatest` cancels the in-flight collector when a newer one
-  arrives, so a drag keeps landing drafts while the full-size bake is cancelled before it starts, and a stopped finger
-  lets it complete. **The plan's gesture-in-flight signal turned out to be unnecessary** — "nothing newer has arrived"
-  *is* what settled means, where `onCommit` is a proxy any non-slider edit would answer differently.
+- **Draft first, then full — the throttle *and* the resolution split in one mechanism — and the draft is never
+  abandoned.** Every recipe is baked downscaled immediately and then, once nothing newer has arrived for `SettleMs`,
+  at full size. **Only the full-size pass is cancelled by a newer recipe**, and that asymmetry is a correction: the
+  bake used to live in a `LaunchedEffect` keyed on the recipe, so anything newer killed whatever was running.
+  Conflating by cancellation works only while the work is shorter than the gap between two emissions, and nothing
+  checked that — a slider thumb emits per pointer event, **about 7ms apart on a 144Hz phone against a measured 15ms
+  draft**, so for any effect heavy enough to reach this path *no draft ever finished and the preview did not move at
+  all until the finger lifted*. It was reported as the preview freezing on a drag while the +/- buttons worked, which
+  sounds like two bugs and is one: a discrete step leaves a gap long enough for a draft to land. Letting the draft
+  finish and then taking the newest recipe gives the property actually wanted — as fast as the machine can draft,
+  never slower and never not at all — and still coalesces, since everything emitted mid-draft collapses into one
+  value. **The plan's gesture-in-flight signal turned out to be unnecessary** — "nothing newer has arrived" *is* what
+  settled means, where `onCommit` is a proxy any non-slider edit would answer differently.
 - **Deliberately not `IconRenderManager`.** Its cache is keyed on the resolved layer set, which is exactly what changes
   every frame of a drag — a preview going through it would evict every real icon on the device within seconds. The
   editor wants one slot and has one. Its coalescing and concurrency cap are moot here too: there is one bake in flight
@@ -2132,8 +2197,12 @@ forget to ask is one that silently shows a lie. Five things worth knowing:
 
 What is **not** built is the *"working"* hint for a bake that runs genuinely long: it wants measuring against the
 heaviest effect on the slowest device to hand, and the draft is what makes its absence survivable since something
-always lands quickly. The draft fraction (a quarter of the side, a sixteenth of the pixels) is the other number to
-tune on device.
+always lands quickly. **The draft is one number, `DraftPx`, and it was three that contradicted each other** — a
+fraction of the settled bake, a floor and a cap, where the floor asked for 144 and the cap pulled it straight back to
+128, so the floor was dead code and the paragraph explaining it was false. It is 144 rather than as small as possible
+because a draft can be too small to be *true*: roughly the smallest bitmap a surface bakes, so the draft can represent
+anything a surface can. Measured on a Snapdragon-class phone, one grain bake: **~15ms at 128px, ~19ms at 144, 332ms at
+768**.
 
 Built so far: the ordered effect **pipeline** (slice 0), the paged effect **panel** with per-effect switches and
 `SliderControl` (slice 1), the **filter** library, now 46 looks in seven categories (slice 2), the **layer rail** that replaced the
