@@ -1,5 +1,6 @@
 package inkspire.morphic.core.icon.render
 
+import inkspire.morphic.core.model.icon.LayerEffect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -95,11 +96,64 @@ class LayerBevelTest {
         assertEquals(reliefAt(4f), reliefAt(24f), 0.0001f)
     }
 
+    /**
+     * The regression that took the icon off the screen.
+     *
+     * The bands were composited as two bitmaps through `PorterDuff.Mode.SCREEN` and `MULTIPLY`, which are **not** the
+     * blends of those names: multiply is `[Sa × Da, Sc × Dc]`, so the result alpha is the product as well. A band
+     * transparent across most of the artwork therefore multiplied its alpha by zero, and everything the band did not
+     * cover was erased — the whole icon, except the shaded slopes. Blending per channel cannot do that, and this is
+     * the assertion that says so.
+     */
     @Test
-    fun `a band carries the colour it was given and the alpha it was asked for`() {
-        assertEquals(0x80FF8040.toInt(), LayerBevel.banded(0xFFFF8040.toInt(), amount = 128f / 255f))
-        // Clamped at both ends, since a strength and a relief multiplied together are not obliged to be sensible.
-        assertEquals(0xFFFFFFFF.toInt(), LayerBevel.banded(0x00FFFFFF, amount = 4f))
-        assertEquals(0x00000000, LayerBevel.banded(0xFF000000.toInt(), amount = -1f))
+    fun `lighting never touches the artwork's own alpha`() {
+        val bevel = LayerEffect.Bevel()
+        val opaque = 0xFF3366CC.toInt()
+
+        assertEquals(0xFF, LayerBevel.lit(opaque, relief = 0.7f, bevel = bevel) ushr 24)
+        assertEquals(0xFF, LayerBevel.lit(opaque, relief = -0.7f, bevel = bevel) ushr 24)
+        // Including a half-covered edge pixel, which must stay exactly half covered.
+        assertEquals(0x80, LayerBevel.lit(0x803366CC.toInt(), relief = -1f, bevel = bevel) ushr 24)
+    }
+
+    @Test
+    fun `a flat surface comes back exactly as it went in`() {
+        val pixel = 0xFF3366CC.toInt()
+
+        assertEquals(pixel, LayerBevel.lit(pixel, relief = 0f, bevel = LayerEffect.Bevel()))
+    }
+
+    @Test
+    fun `a lit slope brightens the artwork and a shaded one deepens it`() {
+        val bevel = LayerEffect.Bevel(highlightStrength = 1f, shadowStrength = 1f)
+        val pixel = 0xFF3366CC.toInt()
+
+        val lit = LayerBevel.lit(pixel, relief = 0.5f, bevel = bevel)
+        val shaded = LayerBevel.lit(pixel, relief = -0.5f, bevel = bevel)
+
+        // Channel by channel, because "brighter" and "darker" are the whole claim.
+        for (shift in intArrayOf(16, 8, 0)) {
+            val base = (pixel shr shift) and 0xFF
+            assertTrue(((lit shr shift) and 0xFF) > base)
+            assertTrue(((shaded shr shift) and 0xFF) < base)
+        }
+    }
+
+    @Test
+    fun `a band at no strength leaves the artwork alone, whatever the slope`() {
+        val off = LayerEffect.Bevel(highlightStrength = 0f, shadowStrength = 0f)
+        val pixel = 0xFF3366CC.toInt()
+
+        assertEquals(pixel, LayerBevel.lit(pixel, relief = 1f, bevel = off))
+        assertEquals(pixel, LayerBevel.lit(pixel, relief = -1f, bevel = off))
+    }
+
+    @Test
+    fun `a white highlight at full strength screens to white, and a black shadow multiplies to black`() {
+        val full = LayerEffect.Bevel(highlightStrength = 1f, shadowStrength = 1f)
+        val pixel = 0xFF3366CC.toInt()
+
+        assertEquals(0xFFFFFFFF.toInt(), LayerBevel.lit(pixel, relief = 1f, bevel = full))
+        assertEquals(0xFF000000.toInt(), LayerBevel.lit(pixel, relief = -1f, bevel = full))
     }
 }

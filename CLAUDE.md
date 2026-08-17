@@ -745,10 +745,18 @@ is painted as a highlight and a shadow. Every parameter is about a *light* rathe
 - **The lighting is measured against the flat case**, and that subtraction is what confines the effect to the edges. A
   plain Lambert term lights every surface facing the viewer, so the icon's flat interior would come out uniformly
   brightened and the whole thing would read as a brightness control with an odd rim.
-- **Two bands, two blend modes, two buffers.** A slope facing the light is *screened* so it brightens the artwork's own
-  colours, one facing away is *multiplied* so it deepens them; one buffer could not be both, and painting them plainly
-  would lay flat white and black over the icon rather than lighting it. Each is trimmed to the artwork first, for
-  `insetHaloed`'s reason — a multiply against nothing darkens the transparent surround into a visible square.
+- **The two bands are blended per pixel, and that is a fix rather than an economy.** A slope facing the light is
+  *screened* and one facing away is *multiplied*; the obvious way to get that — two band bitmaps drawn with
+  `PorterDuff.Mode.SCREEN` and `MULTIPLY` — **erased the icon on device**. Those modes are not the blends of the same
+  name: multiply is `[Sa × Da, Sc × Dc]`, so the result *alpha* is the product too, and a band transparent across most
+  of the artwork multiplies its alpha to nothing. What was left was the shaded slopes alone on an empty canvas.
+  `LayerBevel.lit` does both blends per channel, keeps the artwork's alpha by construction, and needs no band buffers
+  and no trim — where the canvas fix would have been `BlendMode`, API 29 against a `minSdk` of 26.
+  - **The same trap is live in `LayerBlend`, unfixed**: `compositePaint` maps `MULTIPLY` and the rest onto
+    `PorterDuff.Mode`, so a layer set to multiply zeroes the alpha of everything beneath it wherever that layer is
+    transparent — on a device, every app's background plate disappears. The **live path is correct** (Compose's
+    `BlendMode` is a true separable blend), so the studio shows the icon intact and only the home screen is wrong,
+    which is the two-renderer hazard in its worst form and the one case the `IconLayers` playground would catch.
 - **The altitude control was documented backwards until a test caught it.** Overhead light does not flatten the relief
   away; it removes the *sidedness*. A tilted surface still catches less of an overhead light than a flat one, so every
   slope shades equally and what is left is the uniform rim of a pillow emboss — a real look, so the slider runs the

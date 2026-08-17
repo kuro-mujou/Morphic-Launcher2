@@ -738,6 +738,12 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    overhead light does not flatten the relief away, it removes the *sidedness* — a tilted surface still catches less
    of an overhead light than a flat one, so every slope shades equally and what is left is the uniform rim of a
    pillow emboss. A real look, so the slider runs the whole way up.
+   **And one thing only the device showed**: the two bands were composited as bitmaps through
+   `PorterDuff.Mode.SCREEN` and `MULTIPLY`, which are *not* the blends of those names — multiply is
+   `[Sa × Da, Sc × Dc]`, so the result alpha is the product and a band transparent across most of the artwork erased
+   it. `LayerBevel.lit` blends per channel instead and cannot touch the alpha. The same mapping is still in
+   `LayerBlend` for a layer's own blend mode, where the live path is correct and the bake is not — see the note in
+   CLAUDE.md.
 7. **Effect mask** — last, renamed, once the list is stable.
 
 ### 8e. The consequence worth watching

@@ -894,11 +894,16 @@ class IconRenderer(
      * [LayerBevel.slopeScale] so the bevel's strength does not follow its width. The **lighting** is
      * [LayerBevel.relief], which is where every sign that could be wrong lives.
      *
-     * **Two bands, two blend modes, and that is why they are two buffers.** A slope facing the light is *screened*
-     * so it brightens the artwork's own colours; one facing away is *multiplied* so it deepens them. One buffer
-     * could not be both, and painting them plainly instead would lay flat white and black over the icon rather than
-     * lighting it. Each is trimmed to the artwork first, for [insetHaloed]'s reason — a multiply against nothing
-     * would otherwise darken the transparent surround into existence.
+     * **The two bands are blended per pixel rather than composited as buffers**, which is a correction rather than
+     * an economy. A slope facing the light is *screened* and one facing away is *multiplied*, and the obvious way to
+     * get that — two band bitmaps drawn with `PorterDuff.Mode.SCREEN` and `MULTIPLY` — **erased the icon**. Those
+     * modes are not the blends of the same name: multiply is `[Sa × Da, Sc × Dc]`, so the result *alpha* is the
+     * product too, and a band that is transparent across most of the artwork multiplies its alpha by zero. What was
+     * left on screen was the shaded slopes alone, on a canvas of nothing.
+     *
+     * Doing both blends in [LayerBevel.lit] keeps the artwork's own alpha untouched by construction, needs no band
+     * buffers and no trim, and works at every API — where the honest canvas fix would have been `BlendMode`, which
+     * is API 29 against a `minSdk` of 26.
      */
     private suspend fun bevelled(
         source: Bitmap,
@@ -911,11 +916,21 @@ class IconRenderer(
         val light = LayerBevel.light(bevel.angleDegrees, bevel.altitudeDegrees)
         val scale = LayerBevel.slopeScale(radiusPx)
 
-        val highlight = IntArray(sizePx * sizePx)
-        val shade = IntArray(sizePx * sizePx)
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+        val out = IntArray(pixels.size)
 
         overRows(sizePx, bake) { y ->
             for (x in 0 until sizePx) {
+                val at = y * sizePx + x
+                val pixel = pixels[at]
+                // Nothing to light where there is no surface. Also the common case by far, an icon being mostly
+                // transparent, so it is worth skipping the twelve neighbourhood reads below.
+                if (pixel ushr 24 == 0) {
+                    out[at] = pixel
+                    continue
+                }
+
                 // Sobel over the height field, divided by its own weight so the result is a rise per pixel. Sampled
                 // through `clamp`, so the box's own border reads as a continuation of itself rather than as a cliff
                 // — an edge treated as a drop would light the whole rim of every full-bleed layer.
@@ -930,38 +945,13 @@ class IconRenderer(
                         2f * heights.at(x, y - 1, sizePx) - heights.at(x + 1, y - 1, sizePx)
                     ) / 8f
 
-                val relief = LayerBevel.relief(slopeX, slopeY, light)
-                val at = y * sizePx + x
-                if (relief > 0f) {
-                    highlight[at] = LayerBevel.banded(bevel.highlightArgb, relief * bevel.highlightStrength)
-                } else if (relief < 0f) {
-                    shade[at] = LayerBevel.banded(bevel.shadowArgb, -relief * bevel.shadowStrength)
-                }
+                out[at] = LayerBevel.lit(pixel, LayerBevel.relief(slopeX, slopeY, light), bevel)
             }
         }
 
-        val out = createBitmap(sizePx, sizePx)
-        val canvas = Canvas(out)
-        canvas.drawBitmap(source, 0f, 0f, null)
-        drawBand(canvas, highlight, source, PorterDuff.Mode.SCREEN, sizePx)
-        drawBand(canvas, shade, source, PorterDuff.Mode.MULTIPLY, sizePx)
-        return out
-    }
-
-    /**
-     * One of a bevel's two bands, trimmed to the artwork and composited with [blend].
-     *
-     * The trim is [insetHaloed]'s and for its reason: a multiply whose destination is transparent leaves the source
-     * standing, so an untrimmed shadow band would darken the surround into a visible square.
-     */
-    private fun drawBand(canvas: Canvas, band: IntArray, source: Bitmap, blend: PorterDuff.Mode, sizePx: Int) {
         val bitmap = createBitmap(sizePx, sizePx)
-        bitmap.setPixels(band, 0, sizePx, 0, 0, sizePx, sizePx)
-        Canvas(bitmap).drawBitmap(source, 0f, 0f, maskPaint)
-        canvas.drawBitmap(bitmap, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            xfermode = PorterDuffXfermode(blend)
-        })
-        bitmap.recycle()
+        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
+        return bitmap
     }
 
     /**

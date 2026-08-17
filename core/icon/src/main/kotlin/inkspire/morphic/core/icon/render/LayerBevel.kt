@@ -80,10 +80,44 @@ object LayerBevel {
         return (lit - light.z).coerceIn(-1f, 1f)
     }
 
-    /** [argb] with its alpha replaced by [amount] of full — how each band's colour reaches the canvas. */
-    fun banded(argb: Int, amount: Float): Int {
-        val alpha = (amount.coerceIn(0f, 1f) * 255f).toInt()
-        return (alpha shl 24) or (argb and 0x00FFFFFF)
+    /**
+     * [argb] lit by a surface catching [relief] of the light — screened where it faces the light, multiplied where
+     * it faces away, and returned untouched where the surface is flat.
+     *
+     * **The blending is arithmetic here rather than a `PorterDuff` mode on a canvas, and that is a fix rather than a
+     * preference.** `PorterDuff.Mode.MULTIPLY` is not the multiply *blend*: it is defined as `[Sa × Da, Sc × Dc]`, so
+     * the result **alpha is the product too**. Compositing a band that is transparent across most of the icon
+     * therefore multiplied the artwork's alpha by zero and erased everything the band did not cover — the icon
+     * vanished, leaving only the shaded slopes. The true blends need the destination left alone where the source is
+     * transparent, which is what doing it per channel gives, at every API and with no second buffer.
+     *
+     * **The alpha is the artwork's, always.** A bevel lights a surface; it does not decide where the surface is.
+     */
+    fun lit(argb: Int, relief: Float, bevel: LayerEffect.Bevel): Int = when {
+        relief > 0f -> blended(argb, bevel.highlightArgb, relief * bevel.highlightStrength, screen = true)
+        relief < 0f -> blended(argb, bevel.shadowArgb, -relief * bevel.shadowStrength, screen = false)
+        else -> argb
+    }
+
+    /**
+     * [dst] with [band] laid on at [amount], screened or multiplied, keeping [dst]'s own alpha.
+     *
+     * Both blends are computed at full strength and then mixed back toward the original by [amount], which is what
+     * makes a band's strength mean "how much of this blend" rather than "how opaque a rectangle of this colour".
+     */
+    private fun blended(dst: Int, band: Int, amount: Float, screen: Boolean): Int {
+        val mix = amount.coerceIn(0f, 1f)
+        if (mix <= 0f) return dst
+
+        fun channel(shift: Int): Int {
+            val d = (dst shr shift) and 0xFF
+            val s = (band shr shift) and 0xFF
+            val full = if (screen) 255 - (255 - d) * (255 - s) / 255 else d * s / 255
+            return (d + (full - d) * mix).toInt().coerceIn(0, 255)
+        }
+
+        return (dst and 0xFF000000.toInt()) or
+            (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 
     /** The blur radius a bevel's size asks for, as a fraction of the box — the same reading every halo takes. */
