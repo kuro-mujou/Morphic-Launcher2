@@ -45,6 +45,8 @@ class IconLayerResolver {
         val drawn = layerSet.layers
             .filter { it.visible }
             .mapNotNull { spec -> spec.resolveLayer(icon, customImage, packImage) }
+            // Each render draws its own drawables, never the cache's — see [owned].
+            .map { it.owned() }
 
         // **Every app's artwork ends up the same size, and nothing about the icon changes that.** The fit reads each
         // layer's own opaque bounds against the box — it does not consult the background, is not affected by turning
@@ -53,6 +55,43 @@ class IconLayerResolver {
     }
 }
 
+
+/**
+ * The layer holding a drawable **this render owns**, rather than the one the parse cache holds.
+ *
+ * ## A `Drawable` is mutable state, and both renderers write to it
+ *
+ * Drawing one means `setBounds(0, 0, sizePx, sizePx)` and then `draw`, in the bake and in the live path alike — and
+ * the bounds live on the *instance*. A [ParsedIcon] is cached per app and handed to every consumer, so before this
+ * every renderer on screen was writing its own size into the same object: the studio canvas, each tile in the layer
+ * rail, and any surface icon baking at the same moment. Four writers, four sizes, three of them on background threads.
+ *
+ * **The failure is a picture, not a crash, which is what made it look like a rendering bug.** A bake that sets 768 and
+ * is then overwritten by a tile's 128 draws the artwork at 128 — and a drawable draws from its bounds' origin, so what
+ * lands is the icon at a sixth of its size in the **top-left corner** of the box, with the rest of the square empty. A
+ * whole-icon shape then masks the box it was told about rather than the artwork, clipping the small icon on whichever
+ * side the silhouette crosses it, and a blur spreads out of it into the space where the icon should have been.
+ *
+ * **It was always latent and a real blur is what surfaced it.** The window is however long the artwork takes to draw,
+ * so while a blur was two `Bitmap.scale` calls the odds of another renderer landing inside it were slim; three box
+ * passes over half a million pixels holds it open long enough to hit every time. Which is the honest description of a
+ * data race — the bug was there, and something merely made it likely.
+ *
+ * `newDrawable` shares the constant state, so the artwork itself is not copied — a `BitmapDrawable` copy points at the
+ * same bitmap. `mutate` is what makes the state private as well, which matters for the drawables that cache *inside*
+ * it: a `VectorDrawable` keeps a rendered bitmap in its constant state, so two copies at two sizes would go on
+ * fighting over that instead of over the bounds. A drawable with no constant state cannot be copied and is passed
+ * through as it is, which is no worse than before.
+ *
+ * **Here rather than in each renderer**, because this is the one seam both paths already go through to learn what a
+ * layer is made of — and a fix applied in one renderer would have left the other still writing to the shared object,
+ * which is the same race with one fewer participant.
+ */
+private fun ResolvedLayer.owned(): ResolvedLayer {
+    val image = content as? ParsedLayer.Image ?: return this
+    val own = image.drawable.constantState?.newDrawable()?.mutate() ?: return this
+    return copy(content = image.copy(drawable = own))
+}
 
 /**
  * The layer with its artwork scaled to the size every app's artwork is drawn at, or unchanged when there is nothing

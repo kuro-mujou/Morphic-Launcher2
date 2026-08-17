@@ -1238,7 +1238,9 @@ class IconRenderer(
      */
     private fun applyPattern(canvas: Canvas, pattern: LayerEffect.Pattern, sizePx: Int) {
         val res = IconPatterns.drawableResOrNull(pattern.pattern) ?: return
-        val drawable = context.getDrawable(res) ?: return
+        // `mutate` for [shapeMaskOrNull]'s reason — a pattern is a vector too, and `LayerPattern.tile` rasterizes it
+        // at a size derived from the bake's, so two bakes would thrash one shared cache.
+        val drawable = context.getDrawable(res)?.mutate() ?: return
         val tile = LayerPattern.tile(drawable, pattern, LayerPattern.tileSizePx(pattern.scale, sizePx))
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

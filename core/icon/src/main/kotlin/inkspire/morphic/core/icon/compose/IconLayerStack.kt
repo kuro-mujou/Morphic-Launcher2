@@ -451,7 +451,10 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     is LayerEffect.Pattern -> {
         val res = IconPatterns.drawableResOrNull(effect.pattern)
         val resource = LocalResources.current
-        val drawable = remember(res, resource) { res?.let { resource.getDrawable(it, null) } }
+        // `mutate` for `IconLayerResolver.owned`'s reason: the instance is fresh but its constant state is shared, and
+        // a vector caches a rendered bitmap in there — so this tile and a bake's copy of the same pattern would fight
+        // over one cache at two sizes.
+        val drawable = remember(res, resource) { res?.let { resource.getDrawable(it, null)?.mutate() } }
 
         if (drawable == null) {
             // An id this build does not know. Nothing drawn, matching the bake — a recipe from a later build loses
@@ -630,7 +633,9 @@ fun LayerBlend.composeBlendMode(): BlendMode? = when (this) {
 private fun Modifier.shapeMask(shape: IconShape?, matrixOf: (sizePx: Int) -> Matrix? = { null }): Modifier {
     val res = shape?.let { IconShapes.drawableResOrNull(it) } ?: return this
     val resource = LocalResources.current
-    val maskDrawable = remember(res, resource) { resource.getDrawable(res, null) } ?: return this
+    // `mutate` for the pattern's reason above — and it matters more here, since a shape is masked at every scope and
+    // every tile, so one shape's constant state can have half a dozen readers at as many sizes.
+    val maskDrawable = remember(res, resource) { resource.getDrawable(res, null)?.mutate() } ?: return this
 
     return this
         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }

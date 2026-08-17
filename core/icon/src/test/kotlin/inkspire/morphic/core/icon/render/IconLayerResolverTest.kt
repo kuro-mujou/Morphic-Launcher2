@@ -12,6 +12,7 @@ import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.TintMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -469,23 +470,88 @@ class IconLayerResolverTest {
         val resolved = resolver.resolve(set, bareIcon(metrics(1f)), customImage = { null }) { _, _ -> fromPack }
             .single { it.spec.role == LayerRole.FOREGROUND }
 
+        // The very instance, because a [StubDrawable] has no constant state to be copied from — a real one would
+        // arrive as a copy of itself. See the test below and `IconLayerResolver.owned`.
         assertEquals(fromPack, (resolved.content as ParsedLayer.Image).drawable)
     }
+
+    // --- every render owns the drawables it draws ---
+
+    /**
+     * That a resolved layer carries a drawable of its **own** rather than the parse cache's.
+     *
+     * **The bug this pins had a picture rather than an exception for a symptom, which is why it survived so long.** A
+     * `Drawable`'s bounds are per-instance mutable state and every render writes its own size into them, so while a
+     * `ParsedIcon` was shared by the studio canvas, each tile in the layer rail and any surface icon baking at that
+     * moment, whichever renderer wrote last decided the size the others drew at. A bake at 768 overwritten by a tile's
+     * 128 drew the artwork at 128 — from the bounds' origin, so the icon landed at a sixth of its size in the top-left
+     * corner of an otherwise empty square, clipped by a shape mask that had been told about the box.
+     *
+     * Nothing here can observe the race itself; what it can observe is the invariant that removes it, which is that no
+     * two resolutions ever hand out the same object.
+     */
+    @Test
+    fun `a layer draws its own copy of the artwork, never the parse cache's`() {
+        val cached = CopyableStubDrawable()
+        val set = IconLayerSet(
+            listOf(
+                IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.Empty),
+                IconLayerSpec(role = LayerRole.FOREGROUND, source = LayerSource.AppDefault),
+            ),
+        )
+        val icon = ParsedIcon(foreground = ParsedLayer.Image(cached), background = null)
+
+        val first = resolver.artworkOf(set, icon)
+        val second = resolver.artworkOf(set, icon)
+
+        assertNotSame(cached, first)
+        // And two renders are not each other's either, which is the half that matters: the canvas and a tile resolve
+        // separately and draw at different sizes, concurrently.
+        assertNotSame(first, second)
+    }
+
+    /** The drawable one resolution ended up with for the foreground. */
+    private fun IconLayerResolver.artworkOf(set: IconLayerSet, icon: ParsedIcon) =
+        (resolve(set, icon, customImage = { null })
+            .single { it.spec.role == LayerRole.FOREGROUND }
+            .content as ParsedLayer.Image).drawable
 }
 
 /**
- * A drawable that draws nothing, so a test can hold [ParsedLayer.Image] without an emulator. Nothing calls a method
- * on it — the code under test only passes it through — so the stubs never run.
+ * A drawable that draws nothing, so a test can hold [ParsedLayer.Image] without an emulator.
+ *
+ * **It is no longer only passed through**, which is what [getConstantState] is doing here: the resolver asks every
+ * image layer for a copy of itself, and in `android.jar`'s stubs an unoverridden `Drawable` method throws rather than
+ * returning its documented default. Answering `null` *is* that default — a drawable with no constant state cannot be
+ * copied — so this stays the honest stub while making the seventeen tests that merely hold one keep working.
  *
  * `internal` rather than file-private because [ShapeMaskTest] wants exactly this and a second copy of it would be
- * two stubs to keep in step for no gain.
+ * two stubs to keep in step for no gain. `open` so [CopyableStubDrawable] can answer that one question differently.
  */
-internal class StubDrawable : android.graphics.drawable.Drawable() {
+internal open class StubDrawable : android.graphics.drawable.Drawable() {
     override fun draw(canvas: android.graphics.Canvas) = Unit
     override fun setAlpha(alpha: Int) = Unit
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
+    override fun getConstantState(): ConstantState? = null
     @Deprecated("Deprecated in Java", ReplaceWith("android.graphics.PixelFormat.TRANSLUCENT"))
     override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+}
+
+/**
+ * A stub that **can** be copied — a constant state handing back new instances, which is what every real drawable in
+ * this pipeline has and what [StubDrawable] deliberately has not.
+ *
+ * [mutate] returns `this` rather than throwing, since the platform's own implementation is what makes a shared state
+ * private and there is no shared state here to make private.
+ */
+private class CopyableStubDrawable : StubDrawable() {
+    private val state = object : ConstantState() {
+        override fun newDrawable(): android.graphics.drawable.Drawable = CopyableStubDrawable()
+        override fun getChangingConfigurations(): Int = 0
+    }
+
+    override fun getConstantState(): ConstantState = state
+    override fun mutate(): android.graphics.drawable.Drawable = this
 }
 
 /**
