@@ -141,15 +141,25 @@ class IconRenderer(
         // composited flat and then re-sampled. Cheaper — no second bitmap — and sharper, since each layer's own
         // bitmap is the thing being transformed. It cannot separate the layers from one another either: they all
         // take the one matrix, so nothing slides relative to anything else. See `IconLayerSet.rotation`.
-        canvas.withMatrix(LayerTransform.of(layerSet).toMatrix(sizePx)) {
-            resolver.resolve(layerSet, icon, customImage, packImage).forEach { layer ->
-                val layerBitmap = renderLayer(layer, sizePx, bake)
-                // Opacity, blend and color are applied **as the layer joins the stack**, not while its content is
-                // drawn — which is what makes a blend mode mean "against everything beneath" rather than "against the
-                // one bitmap I am in". The live path composes the same three into one paint for the same reason.
-                canvas.drawBitmap(layerBitmap, 0f, 0f, compositePaint(layer.spec))
-                layerBitmap.recycle()
+        val placement = LayerTransform.of(layerSet).toMatrix(sizePx)
+        resolver.resolve(layerSet, icon, customImage, packImage).forEach { layer ->
+            val layerBitmap = renderLayer(layer, sizePx, bake)
+            // Opacity and blend are applied **as the layer joins the stack**, not while its content is drawn —
+            // which is what makes a blend mode mean "against everything beneath" rather than "against the one
+            // bitmap I am in". The live path composes both into one paint for the same reason.
+            //
+            // **A blended layer takes a different route, and it is a correction rather than an optimisation.**
+            // Handing a [LayerBlend] to a `PorterDuffXfermode` looked like the whole job and was wrong for one of
+            // the five: `PorterDuff.Mode.MULTIPLY` multiplies the *alpha* as well, so a layer set to multiply erased
+            // everything beneath it wherever it was itself transparent. See [LayerComposite].
+            if (layer.spec.blend == LayerBlend.NORMAL) {
+                canvas.withMatrix(placement) {
+                    drawBitmap(layerBitmap, 0f, 0f, opacityPaint(layer.spec))
+                }
+            } else {
+                blendOnto(output, layerBitmap, layer.spec, placement, sizePx, bake)
             }
+            layerBitmap.recycle()
         }
 
         // **The set's own mask, then its own effects** — the same two steps in the same order a layer takes, which is
@@ -163,22 +173,60 @@ class IconRenderer(
     }
 
     /**
-     * Alpha and blend mode for one layer, or `null` when it composites plainly.
+     * Alpha for one layer joining the stack plainly, or `null` when it joins at full strength.
      *
      * **The color matrix used to ride here and now does not.** Recoloring is an effect, so it belongs in the layer's
      * own pipeline where its position relative to the other effects is the user's; opacity and blend stay because
      * they describe how the finished layer *joins the stack*, which is not something an effect can be ordered
      * against. Moving it changes nothing on a layer that only recolors — a color filter is per-pixel, so filtering
      * into the buffer and then compositing gives the same pixels as compositing through the filter.
+     *
+     * **The blend mode used to ride here too, as a `PorterDuffXfermode`, and that was a bug rather than a
+     * simplification** — see [LayerComposite]. A layer that blends now goes through [blendOnto] instead, so what is
+     * left here is exactly the case a canvas can be trusted with.
      */
-    private fun compositePaint(spec: IconLayerSpec): Paint? {
-        val mode = spec.blend.porterDuff()
-        if (spec.opacity == 1f && mode == null) return null
+    private fun opacityPaint(spec: IconLayerSpec): Paint? {
+        if (spec.opacity == 1f) return null
 
         return Paint(Paint.ANTI_ALIAS_FLAG).apply {
             alpha = (spec.opacity.coerceIn(0f, 1f) * 255).toInt()
-            mode?.let { xfermode = PorterDuffXfermode(it) }
         }
+    }
+
+    /**
+     * Lays [layerBitmap] onto [output] through the layer's blend mode, in place.
+     *
+     * **The layer is placed through [placement] first**, because the whole icon's own angles are a matrix on the
+     * canvas and a per-pixel blend has no canvas to inherit it from. The scratch is what the canvas would have drawn,
+     * and the blend then happens between two buffers in the same frame.
+     *
+     * The rows split across cores like every other per-pixel pass here — each one reads only [src] and writes only
+     * its own slots of [into], so there is nothing to coordinate.
+     */
+    private suspend fun blendOnto(
+        output: Bitmap,
+        layerBitmap: Bitmap,
+        spec: IconLayerSpec,
+        placement: Matrix,
+        sizePx: Int,
+        bake: CoroutineContext,
+    ) {
+        val placed = createBitmap(sizePx, sizePx)
+        Canvas(placed).withMatrix(placement) { drawBitmap(layerBitmap, 0f, 0f, null) }
+
+        val into = IntArray(sizePx * sizePx)
+        output.getPixels(into, 0, sizePx, 0, 0, sizePx, sizePx)
+        val src = IntArray(into.size)
+        placed.getPixels(src, 0, sizePx, 0, 0, sizePx, sizePx)
+        placed.recycle()
+
+        overRows(sizePx, bake) { y ->
+            for (x in 0 until sizePx) {
+                val at = y * sizePx + x
+                into[at] = LayerComposite.blend(into[at], src[at], spec.blend, spec.opacity)
+            }
+        }
+        output.setPixels(into, 0, sizePx, 0, 0, sizePx, sizePx)
     }
 
     /**
@@ -1240,16 +1288,4 @@ class IconRenderer(
     private fun decodeCustomImage(path: String): Drawable? =
         BitmapFactory.decodeFile(path)?.toDrawable(context.resources)
 
-    /**
-     * The Porter-Duff mode for [LayerBlend], or `null` for [LayerBlend.NORMAL] — which is source-over, i.e. what a
-     * paint with no xfermode already does.
-     */
-    private fun LayerBlend.porterDuff(): PorterDuff.Mode? = when (this) {
-        LayerBlend.NORMAL -> null
-        LayerBlend.MULTIPLY -> PorterDuff.Mode.MULTIPLY
-        LayerBlend.SCREEN -> PorterDuff.Mode.SCREEN
-        LayerBlend.OVERLAY -> PorterDuff.Mode.OVERLAY
-        LayerBlend.DARKEN -> PorterDuff.Mode.DARKEN
-        LayerBlend.LIGHTEN -> PorterDuff.Mode.LIGHTEN
-    }
 }

@@ -730,6 +730,30 @@ Four things:
   no visible change. `ContentAnchor.BOX` is how the icon's own frame is asked for, and on a background plate filling
   the box the two coincide.
 
+**A layer's blend mode is arithmetic now, not a `PorterDuffXfermode` — `LayerComposite`.** The bake handed
+`LayerBlend` straight to a `PorterDuffXfermode`, and one of those five is not the blend of the same name:
+`PorterDuff.Mode.MULTIPLY` is `[Sa × Da, Sc × Dc]`, so the result **alpha is the product too**. A foreground set to
+multiply therefore multiplied the alpha of everything beneath it by zero wherever the foreground was transparent, and
+on a device **every app's background plate vanished from the home screen** — only the apps whose artwork fills its box
+kept one. Five things:
+- **The live path was correct throughout**, Compose's `BlendMode` being a true separable blend. So the studio showed
+  the icon intact and only the *baked* icon was wrong: the two-renderer hazard in the worst form this codebase has hit,
+  and the one kind of divergence the editor structurally cannot show you. Found by driving the device, not by reading.
+- **`MULTIPLY` was the only one broken**, which is worth knowing before assuming the rest: `SCREEN`, `OVERLAY`,
+  `DARKEN` and `LIGHTEN` all document the union alpha `Sa + Da − Sa·Da` and the proper separable colour formula. The
+  fix routes all five through one implementation anyway, because a mode-by-mode judgement about which platform
+  constant is trustworthy is exactly the thing that goes stale.
+- **No API fork, which is the point.** `Paint.setBlendMode` is API 29 against a `minSdk` of 26, so the obvious repair
+  would have been two implementations of the thing that had just proved it goes wrong when there are two. Instead the
+  bake does the blend itself at every API, from the **W3C compositing formulas** that `android.graphics.BlendMode` and
+  Compose's `BlendMode` both implement — so agreeing with the spec is what makes the two paths agree with each other.
+- **Only a blended layer pays for it.** `LayerBlend.NORMAL` — every layer of every unedited icon — still goes onto the
+  canvas in one `drawBitmap`. A blended one is placed through the whole-icon matrix into a scratch first, because a
+  per-pixel blend has no canvas to inherit that matrix from.
+- **The two failure directions are the two tests that matter**: a transparent *source* must leave the backdrop exactly
+  as it was (the erasure), and a transparent *destination* must leave the source standing rather than the bottom layer
+  of a stack vanishing for want of something to blend against.
+
 **`LayerEffect.Bevel` is the sixth phase-2 effect and the only one that was not made of parts already here.** The
 layer's own alpha, blurred, read as a **height map**; the slopes near its edges catch or miss a light; what they catch
 is painted as a highlight and a shadow. Every parameter is about a *light* rather than a shape. Five things:
@@ -752,11 +776,7 @@ is painted as a highlight and a shadow. Every parameter is about a *light* rathe
   of the artwork multiplies its alpha to nothing. What was left was the shaded slopes alone on an empty canvas.
   `LayerBevel.lit` does both blends per channel, keeps the artwork's alpha by construction, and needs no band buffers
   and no trim — where the canvas fix would have been `BlendMode`, API 29 against a `minSdk` of 26.
-  - **The same trap is live in `LayerBlend`, unfixed**: `compositePaint` maps `MULTIPLY` and the rest onto
-    `PorterDuff.Mode`, so a layer set to multiply zeroes the alpha of everything beneath it wherever that layer is
-    transparent — on a device, every app's background plate disappears. The **live path is correct** (Compose's
-    `BlendMode` is a true separable blend), so the studio shows the icon intact and only the home screen is wrong,
-    which is the two-renderer hazard in its worst form and the one case the `IconLayers` playground would catch.
+  - **The same trap was live in `LayerBlend` and is now fixed** — see `LayerComposite`.
 - **The altitude control was documented backwards until a test caught it.** Overhead light does not flatten the relief
   away; it removes the *sidedness*. A tilted surface still catches less of an overhead light than a flat one, so every
   slope shades equally and what is left is the uniform rim of a pillow emboss — a real look, so the slider runs the
