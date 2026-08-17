@@ -843,6 +843,65 @@ sealed interface LayerEffect {
     }
 
     /**
+     * Everything *outside* the layer, blurred and laid back **inside** its own silhouette in [argb], **screened**
+     * rather than painted — light gathering along the inside of the edge, which is what a rim light looks like.
+     *
+     * **[InnerShadow]'s twin, exactly as [Glow] is [Shadow]'s**, and the parameters differ the same way: a shadow is
+     * thrown so it has an offset, a glow is centred on the edge it lights so it has none. Two effects rather than one
+     * for the same reason again — at most one effect of a type is meaningful, and an icon lit along its inside edge
+     * *and* recessed is a thing to want.
+     *
+     * **Screened, which is the one real difference from [InnerShadow].** Both trim the halo to the artwork first, so
+     * the clipping is the same; what changes is how it is laid on. Shade replaces what is under it, where light adds
+     * to it — so a screened rim brightens the artwork's own colours at the edge instead of covering them with a band
+     * of white, and a coloured rim tints rather than obscures.
+     *
+     * **Labelled "Rim" in the studio**, on "Inset"'s and "Focus"' precedent that a tile at four columns is one short
+     * word. Light gathered along an inside edge is a rim, so the label names the look — which is this grid's rule
+     * anyway. The type keeps the name every reference uses.
+     *
+     * **There is no "from the centre" mode, and the reference's toggle for one was deliberately dropped.** A glow
+     * radiating from the middle of the artwork outward, clipped to its alpha, is `Bloom(falloff = RADIAL, anchor =
+     * CONTENT)` — already built, already reachable, and with a position and a falloff this could not offer. A control
+     * that reaches a state the model holds elsewhere is the second way to say one thing this codebase keeps removing.
+     *
+     * @property argb the light. White is a highlight; a saturated one is the neon edge this is usually reached for.
+     * @property radius how far the light reaches in from the edge, as a fraction of the icon's box.
+     * @property spread how far the complement is grown before it is blurred — the choke, which pushes the light
+     *   further in. [InnerShadow.spread]'s control on the same region.
+     * @property strength how strongly it is laid on, and how it is turned down.
+     */
+    @Serializable
+    @SerialName("innerGlow")
+    data class InnerGlow(
+        val argb: Int = 0xFFFFFFFF.toInt(),
+        /**
+         * **The same reach [Glow] takes, and wider than [InnerShadow]'s.** Light has to have some width to fade
+         * across before it reads as light rather than as a bright outline — and inside the silhouette there is none
+         * of the risk an outer halo has of running off the box, so the width is free.
+         */
+        val radius: Float = 0.08f,
+        /** No choke on arrival, for [InnerShadow.spread]'s reason: the complement is already solid at the edge. */
+        val spread: Float = 0f,
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Turned down to nothing, or reaching nowhere.
+         *
+         * **The second clause is real here where [InnerShadow]'s is not**, and the difference is the offset: with no
+         * radius and no spread the complement lines up exactly against the silhouette and the trim leaves nothing, and
+         * unlike a recess there is no throw that could slide it back into view. [Glow] and [Shadow] differ in exactly
+         * the same place, for exactly the same reason.
+         */
+        override val isIdentity: Boolean get() = strength <= 0f || (radius <= 0f && spread <= 0f)
+
+        /** @see Glow.drawsLive */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * Concentric waves pushing the layer's pixels toward and away from a centre — the layer seen through water.
      *
      * **The first *per-pixel* effect**, and the third that cannot draw live: it reads each output pixel from
@@ -1147,6 +1206,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.Glow -> copy(enabled = enabled)
     is LayerEffect.Shadow -> copy(enabled = enabled)
     is LayerEffect.InnerShadow -> copy(enabled = enabled)
+    is LayerEffect.InnerGlow -> copy(enabled = enabled)
     is LayerEffect.Ripple -> copy(enabled = enabled)
     is LayerEffect.Grain -> copy(enabled = enabled)
     is LayerEffect.Pixelate -> copy(enabled = enabled)

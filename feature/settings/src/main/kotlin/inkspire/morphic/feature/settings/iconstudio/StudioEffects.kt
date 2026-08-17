@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoFilter
+import androidx.compose.material.icons.filled.TripOrigin
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Vignette
 import androidx.compose.material.icons.filled.Texture
@@ -307,6 +308,15 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
      */
     INNER_SHADOW("Inset", Icons.Default.FlipToFront, EffectKind.ADDITION),
 
+    /**
+     * The same halo again, centred on the inside edge and screened onto it — see `LayerEffect.InnerGlow`.
+     *
+     * **Labelled "Rim"**, on [INNER_SHADOW]'s own precedent: light gathered along an inside edge is a rim light, so
+     * the word names the look rather than the mechanism, and it fits a tile at four columns where "Inner glow" does
+     * not. Beside [INNER_SHADOW] because those two are the pair, exactly as [GLOW] and [SHADOW] are outside.
+     */
+    INNER_GLOW("Rim", Icons.Default.TripOrigin, EffectKind.ADDITION),
+
     /** Concentric waves pushing the layer's pixels about. Per-pixel, so baked, never live. */
     RIPPLE("Ripple", Icons.Default.Waves, EffectKind.ADDITION),
 
@@ -371,6 +381,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         GLOW -> effects.filterIsInstance<LayerEffect.Glow>().firstOrNull()
         SHADOW -> effects.filterIsInstance<LayerEffect.Shadow>().firstOrNull()
         INNER_SHADOW -> effects.filterIsInstance<LayerEffect.InnerShadow>().firstOrNull()
+        INNER_GLOW -> effects.filterIsInstance<LayerEffect.InnerGlow>().firstOrNull()
         RIPPLE -> effects.filterIsInstance<LayerEffect.Ripple>().firstOrNull()
         GRAIN -> effects.filterIsInstance<LayerEffect.Grain>().firstOrNull()
         PIXELATE -> effects.filterIsInstance<LayerEffect.Pixelate>().firstOrNull()
@@ -431,6 +442,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         GLOW -> GlowDefaults
         SHADOW -> ShadowDefaults
         INNER_SHADOW -> InnerShadowDefaults
+        INNER_GLOW -> InnerGlowDefaults
         RIPPLE -> RippleDefaults
         GRAIN -> GrainDefaults
         PIXELATE -> PixelateDefaults
@@ -546,6 +558,7 @@ internal fun EffectsControls(
             EffectSlice.GLOW -> GlowControls(target.effects, onEffects, onCommit)
             EffectSlice.SHADOW -> ShadowControls(target.effects, onEffects, onCommit)
             EffectSlice.INNER_SHADOW -> InnerShadowControls(target.effects, onEffects, onCommit)
+            EffectSlice.INNER_GLOW -> InnerGlowControls(target.effects, onEffects, onCommit)
             EffectSlice.RIPPLE -> RippleControls(target.effects, onEffects, onCommit)
             EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
             EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
@@ -1778,6 +1791,57 @@ private fun InnerShadowControls(
 }
 
 /**
+ * The rim's colour, how strong it is, how far it reaches in, and how far it is choked.
+ *
+ * **[InnerShadowControls] without the throw**, which is [GlowControls]' relationship to [ShadowControls] one scope
+ * in: a rim is centred on the edge it lights by definition, and light pushed to one side is a recess in a bright
+ * colour — which is the entry beside it.
+ *
+ * **No "edge or centre" choice**, unlike the reference's. A glow radiating from the middle of the artwork outward is
+ * `Bloom` with a radial falloff anchored to content, which is already built and offers a position and a falloff this
+ * could not; a toggle reaching a state the model holds elsewhere is the second way to say one thing.
+ */
+@Composable
+private fun InnerGlowControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val rim = effects.effectOrNull<LayerEffect.InnerGlow>() ?: LayerEffect.InnerGlow()
+
+    LabeledControl("Color") {
+        ColorField(argb = rim.argb) { argb ->
+            onUpdate { it.withEffect(rim.copy(argb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = rim.strength,
+        valueRange = 0f..1f,
+        default = InnerGlowDefaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(rim.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Radius",
+        value = rim.radius,
+        valueRange = 0f..HaloReach,
+        default = InnerGlowDefaults.radius,
+        onValueChange = { value -> onUpdate { it.withEffect(rim.copy(radius = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Choke",
+        value = rim.spread,
+        valueRange = 0f..HaloReach,
+        default = InnerGlowDefaults.spread,
+        onValueChange = { value -> onUpdate { it.withEffect(rim.copy(spread = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
  * How far a halo may reach, as a fraction of the box.
  *
  * A fifth is generous — the output is one square and anything past the edge is clipped, so a larger bound would only
@@ -2246,6 +2310,7 @@ private val ChromaticDefaults = LayerEffect.ChromaticSplit()
 private val GlowDefaults = LayerEffect.Glow()
 private val ShadowDefaults = LayerEffect.Shadow()
 private val InnerShadowDefaults = LayerEffect.InnerShadow()
+private val InnerGlowDefaults = LayerEffect.InnerGlow()
 private val RippleDefaults = LayerEffect.Ripple()
 private val GrainDefaults = LayerEffect.Grain()
 private val PixelateDefaults = LayerEffect.Pixelate()

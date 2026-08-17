@@ -321,8 +321,35 @@ class IconRenderer(
                     )
                 }
 
-                // The same halo again, cast by the *complement* of the silhouette and laid back inside it.
-                is LayerEffect.InnerShadow -> replace { innerShadowed(it, effect, sizePx) }
+                // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
+                // thrown and laid on plainly, or light centred on the edge and screened onto it.
+                is LayerEffect.InnerShadow -> replace {
+                    insetHaloed(
+                        source = it,
+                        argb = effect.argb,
+                        strength = effect.strength,
+                        radiusPx = LayerShadow.radiusPxOrNull(effect.radius, sizePx),
+                        spreadPx = LayerShadow.spreadPx(effect.spread, sizePx),
+                        dxPx = LayerShadow.offsetPx(effect.offsetX, sizePx),
+                        dyPx = LayerShadow.offsetPx(effect.offsetY, sizePx),
+                        blend = null,
+                        sizePx = sizePx,
+                    )
+                }
+
+                is LayerEffect.InnerGlow -> replace {
+                    insetHaloed(
+                        source = it,
+                        argb = effect.argb,
+                        strength = effect.strength,
+                        radiusPx = LayerShadow.radiusPxOrNull(effect.radius, sizePx),
+                        spreadPx = LayerShadow.spreadPx(effect.spread, sizePx),
+                        dxPx = 0f,
+                        dyPx = 0f,
+                        blend = PorterDuff.Mode.SCREEN,
+                        sizePx = sizePx,
+                    )
+                }
 
                 is LayerEffect.Shadow -> replace {
                     haloed(
@@ -822,57 +849,87 @@ class IconRenderer(
     }
 
     /**
-     * [source] with a blurred copy of everything **outside** it laid back **inside** its own silhouette — the recess.
+     * [source] with a blurred copy of everything **outside** it laid back **inside** its own silhouette — a recess
+     * when [blend] is plain, a rim light when it screens.
      *
      * [haloed] turned outside in, and it shares that method's pieces rather than restating them: the same
      * [LayerShadow] numbers, the same [dilated] for the choke, the same `extractAlpha` + [BlurMaskFilter] for the
-     * softening. Two things differ, and both fall out of the shadow being *inside*.
+     * softening. Three things about it are worth knowing.
      *
-     * **Source-atop rather than drawn behind**, which is what clips it to the artwork — the destination is the layer
-     * already drawn, so its alpha decides where the shadow lands and no second masking pass is needed.
+     * **One function for both inner effects**, extracted when the rim arrived — the second consumer, as usual. They
+     * differ in exactly two arguments: a recess is thrown so it takes an offset and lays its band on plainly, a rim
+     * is centred on the edge it lights so it takes none and screens. Everything between the complement and the trim
+     * is identical, which is precisely the kind of near-copy that drifts if it is written twice.
+     *
+     * **The halo is trimmed in its own buffer rather than by the composite**, which is what made that possible. The
+     * first cut relied on source-atop to do the clipping *and* the compositing at once — correct for a shadow and
+     * impossible for anything that has to add light, since the mode is then spent. Destination-in first, any mode
+     * after.
      *
      * **The complement is built in a padded buffer, and that is the part that would be silently wrong.** An inner
-     * shadow is cast by what surrounds the artwork; a layer whose artwork reaches the icon's box has nothing
-     * surrounding it *within* the bitmap, so the shadow would fade in from nothing along exactly those edges — and a
+     * halo is cast by what surrounds the artwork; a layer whose artwork reaches the icon's box has nothing
+     * surrounding it *within* the bitmap, so it would fade in from nothing along exactly those edges — and a
      * full-bleed background plate is the commonest thing anyone recesses. Padded, the region beyond the box is
      * genuinely filled and the blur gathers from it. See [LayerShadow.innerMarginPx].
+     *
+     * @param blend how the trimmed halo joins the layer — `null` for plain source-over, which is a recess, and
+     *   [PorterDuff.Mode.SCREEN] for light that brightens the artwork's own colours rather than covering them.
      */
-    private fun innerShadowed(source: Bitmap, shadow: LayerEffect.InnerShadow, sizePx: Int): Bitmap {
-        val radiusPx = LayerShadow.radiusPxOrNull(shadow.radius, sizePx)
-        val spreadPx = LayerShadow.spreadPx(shadow.spread, sizePx)
-        val dxPx = LayerShadow.offsetPx(shadow.offsetX, sizePx)
-        val dyPx = LayerShadow.offsetPx(shadow.offsetY, sizePx)
+    private fun insetHaloed(
+        source: Bitmap,
+        argb: Int,
+        strength: Float,
+        radiusPx: Float?,
+        spreadPx: Float,
+        dxPx: Float,
+        dyPx: Float,
+        blend: PorterDuff.Mode?,
+        sizePx: Int,
+    ): Bitmap {
         val marginPx = LayerShadow.innerMarginPx(radiusPx, spreadPx, dxPx, dyPx)
         val paddedPx = sizePx + marginPx * 2
 
         val outside = complementOf(source, marginPx, paddedPx)
-        // A choke grows the *complement*, which is the same thing as shrinking the opening the shadow falls into.
+        // A choke grows the *complement*, which is the same thing as shrinking the opening the halo falls into.
         val grown = if (spreadPx > 0f) dilated(outside, spreadPx, paddedPx) else outside
 
-        val out = createBitmap(sizePx, sizePx)
-        val canvas = Canvas(out)
-        canvas.drawBitmap(source, 0f, 0f, null)
-
-        val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = shadow.argb
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
-            // Set **after** the colour, which carries its own alpha and would otherwise overwrite this.
-            alpha = (shadow.strength.coerceIn(0f, 1f) * 255).toInt()
-        }
+        // **The halo is built in its own buffer and trimmed there**, which is what let one function serve both
+        // effects. Trimming with destination-in first means the composite below is free to be *any* mode: a recess
+        // lays its band on plainly, a rim screens its light onto the artwork's own colours, and neither has to
+        // double as the clip the way a lone source-atop did.
+        val halo = createBitmap(sizePx, sizePx)
+        val haloCanvas = Canvas(halo)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = argb }
 
         if (radiusPx == null) {
             // No blur asked for: a hard band, which is the flat inset a stamped label has. The complement is an
             // ordinary bitmap rather than a mask, so its colour is replaced the way [haloed] replaces one.
-            inner.colorFilter = solidFilter(shadow.argb)
-            canvas.drawBitmap(grown, dxPx - marginPx, dyPx - marginPx, inner)
+            paint.colorFilter = solidFilter(argb)
+            haloCanvas.drawBitmap(grown, dxPx - marginPx, dyPx - marginPx, paint)
         } else {
             val offset = IntArray(2)
             val blur = Paint().apply { maskFilter = BlurMaskFilter(radiusPx, BlurMaskFilter.Blur.NORMAL) }
             val mask = grown.extractAlpha(blur, offset)
-            canvas.drawBitmap(mask, offset[0] + dxPx - marginPx, offset[1] + dyPx - marginPx, inner)
+            haloCanvas.drawBitmap(mask, offset[0] + dxPx - marginPx, offset[1] + dyPx - marginPx, paint)
             mask.recycle()
         }
+        // Trimmed to the artwork, which is the whole of what makes this halo an *inner* one.
+        haloCanvas.drawBitmap(source, 0f, 0f, maskPaint)
 
+        val out = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(out)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        canvas.drawBitmap(
+            halo,
+            0f,
+            0f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                blend?.let { xfermode = PorterDuffXfermode(it) }
+                alpha = (strength.coerceIn(0f, 1f) * 255).toInt()
+            },
+        )
+
+        halo.recycle()
         if (grown !== outside) grown.recycle()
         outside.recycle()
         return out

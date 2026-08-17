@@ -311,11 +311,12 @@ enforces. Per layer:
   from the edges), `LayerEffect.Pattern` (a tiled texture),
   `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
   displaced), `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it),
-  `LayerEffect.InnerShadow` (the silhouette's complement blurred *inside* it), `LayerEffect.Ripple`
+  `LayerEffect.InnerShadow` and `LayerEffect.InnerGlow` (the silhouette's complement blurred *inside* it, laid on
+  or screened), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
   blur — the six that do **not** draw live), `LayerEffect.Filter` (one of the built-in looks, by id) and
   `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **All thirteen the plan set out are
-  built, plus the first three of the phase-2 six**; see the notes below for each, and
+  built, plus four of the phase-2 six**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
   checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
   deliberately *not* the "extract the falloff" the proposal asked for.
@@ -772,6 +773,22 @@ and an icon that both casts a shadow and is recessed into its own plate is ordin
   dark — so this and `Shadow` agree about where the light is while their bands sit on opposite edges, which is what a
   real light does to a bump and a dent. It is labelled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
   precedent that four columns is one short word.
+
+**`LayerEffect.InnerGlow` is that one's twin, and where the inner halo became one function.** Light gathering along
+the inside of the edge — the complement blurred and trimmed as a recess is, then **screened** onto the artwork rather
+than laid over it, so it brightens the colours already there instead of covering them with a band. Two effects rather
+than one on `Glow`/`Shadow`'s precedent, and the parameters differ the same way: a recess is thrown so it has an
+offset, a rim is centred on the edge it lights so it has none. Three things:
+- **`IconRenderer.insetHaloed` is the extraction the second consumer earned**, and the two differ in exactly two
+  arguments (the offset, and the blend). Everything between the complement and the trim is identical, which is
+  precisely the near-copy that drifts when written twice.
+- **The trim moved into the halo's own buffer, and that is what made one function possible.** The first cut leaned on
+  source-atop to clip *and* composite at once — correct for a shadow, impossible for anything that adds light, since
+  the mode is then spent. Destination-in first, any mode after.
+- **No "edge or centre" toggle**, dropped from the proposal and confirmed by building it: a glow radiating from the
+  middle of the artwork is `Bloom(falloff = RADIAL, anchor = CONTENT)`, already built and additionally offering a
+  position and a falloff this could not. Labelled **"Rim"**, on "Inset"'s precedent — light along an inside edge is a
+  rim, and that names the look rather than the mechanism.
 
 **`LayerEffect.Ripple` is the first *per-pixel* effect, and the first that leaves the canvas entirely.** Concentric
 waves push each output pixel to read from somewhere else along its own radius — arithmetic over an `IntArray`, which
@@ -1963,8 +1980,8 @@ architectural item was proposed as "extract the falloff onto the base effect"; i
 falloff** — Bloom's falloff is the light's own geometry, so nothing moves, and what is being asked for is a per-effect
 **mask**, which is ~20 lines in `applyEffects` (run the effect into a buffer, composite it back through a ramp's
 alpha) plus a restructure of each live-drawable effect. It goes **last**, because its cost multiplies by the number of
-effects. **Built so far: `LayerEffect.Duotone`, `LayerEffect.Vignette` and `LayerEffect.InnerShadow`** (see their notes
-above). Order for the rest: inner glow, outline, bevel, mask. **One plan claim is already overturned** — the
+effects. **Built so far: `LayerEffect.Duotone`, `LayerEffect.Vignette`, `LayerEffect.InnerShadow` and
+`LayerEffect.InnerGlow`** (see their notes above). Order for the rest: outline, bevel, mask. **One plan claim is already overturned** — the
 "missing alpha-inverting matrix" was never needed: destination-out over a filled buffer *is* the inversion, and
 outline's erosion is that same op twice. One number worth watching: four of the six do not draw live, taking the total to ten
 of nineteen, and `drawsLive` is all-or-nothing per icon — so most recipes worth making will preview from the bake, and

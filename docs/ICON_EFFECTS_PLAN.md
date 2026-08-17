@@ -702,7 +702,15 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    the blur spreads it, the choke grows it, the throw slides it. Source-atop is what clips the result back inside the
    silhouette, so there is no second masking pass. Labelled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
    precedent: four columns is one short word.
-4. **Inner glow** — inner shadow's twin, no toggle.
+4. **Inner glow** — inner shadow's twin, no toggle. **Built**, and it is where the inner halo became one function
+   for both: `IconRenderer.insetHaloed`, extracted on the second consumer as usual. They differ in exactly two
+   arguments — a recess is thrown so it takes an offset and lays its band on plainly, a rim is centred on the edge it
+   lights so it takes none and **screens**, brightening the artwork's own colours instead of covering them. What made
+   that possible was moving the trim: the first cut leaned on source-atop to clip *and* composite at once, which is
+   correct for a shadow and impossible for anything adding light, since the mode is then spent. Destination-in into
+   the halo's own buffer first, any mode after. The "edge vs centre" toggle stayed dropped for 8b's stated reason,
+   and building it confirmed the reason — a centre glow is `Bloom(RADIAL, CONTENT)`, which additionally offers a
+   position and a falloff this could not. Labelled **"Rim"**.
 5. **Outline** — dilate and erode; the shared silhouette helpers get extracted here, on their second consumer.
 6. **Bevel & emboss** — the one new kernel; a slice on its own.
 7. **Effect mask** — last, renamed, once the list is stable.
