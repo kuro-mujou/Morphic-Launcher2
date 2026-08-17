@@ -569,3 +569,126 @@ Worth naming now, because both groups are three effects that are one mechanism e
   - **`BloomFalloff` became `Falloff`** on this second consumer, since the blur asks the identical linear-or-radial
     question. Renaming the type costs nothing on disk: the `@SerialName`s are the contract and each effect's field
     is still `falloff`.
+
+---
+
+## 8. Phase 2 — six more effects, and one mechanism
+
+A second list, proposed after the thirteen landed and checked against the built code rather than against the
+captures. Six of the seven items are effects; the seventh is an architectural change and is the one whose design did
+not survive the check.
+
+**The headline is that four of the six are re-pointing code that already exists**, which is what §5's "no change to
+the render architecture" bought: `ColorMatrices.duotone` already *is* a gradient map, `LayerGradient.radial` already
+places a vignette, `IconRenderer.haloed` already is an inner shadow inverted, and `IconRenderer.dilated` is already
+an outline's outward half. Only Bevel needs a kernel nobody has written.
+
+### 8a. What each one needs
+
+| Effect | Mechanism | Already built | `drawsLive` |
+|---|---|---|---|
+| **Gradient map** | one colour matrix | `ColorMatrices.duotone` | **yes** |
+| **Vignette** | radial ramp, source-atop | `LayerGradient.radial` | **yes** |
+| **Inner shadow** | inverted alpha, blurred, masked in | `haloed`, `dilated` | no — blur |
+| **Inner glow** | the same, offset zero, screened | inner shadow's | no — blur |
+| **Outline** | dilate, erode, difference | `dilated`, `LayerShadow.spreadSteps` | no |
+| **Bevel & emboss** | Sobel over a blurred alpha, then lighting | `extractAlpha` for the height map | no — per-pixel |
+
+**The one primitive genuinely missing is an alpha-inverting matrix.** `ColorMatrices.invert` flips the three colour
+channels and leaves row 4 alone, which is right for a look and useless for a silhouette; inner shadow, inner glow and
+an outline's inside position all need the alpha flipped instead. It is four lines, and it arrives with whichever of
+the three is built first.
+
+**Erosion is `invert → dilate → invert`**, which is why the outline's three positions cost one mechanism rather than
+three: `dilated` grows a silhouette, and growing the *hole* is shrinking the shape. Outside is the dilation drawn
+behind, inside is the difference against the erosion, centre is half of each.
+
+**Bevel is the only one that does not fit `resample`.** That helper's `sourceOf` contract is "which input pixel does
+this output pixel read", and it hardcodes `LayerSample.bilinear` on the single point returned — where a Sobel reads
+a *neighbourhood* and the output is a lit colour rather than a sampled one. So it wants its own band-parallel loop
+beside `resample` rather than a generalisation of it, on the same extract-on-the-second-consumer grounds that kept
+the displacement pass private until Grain arrived. Its height map is free: `extractAlpha` with a `BlurMaskFilter` is
+what the "Size" parameter means, and `haloed` already produces exactly that.
+
+### 8b. Three things the proposal asks for that should not be built
+
+- **Gradient map's bias/midpoint slider.** A 4×5 matrix cannot remap luminance non-linearly before interpolating, so
+  bias demotes the effect from a matrix to a per-pixel pass — trading its live drawing, and the composability that
+  makes it stack with everything, for a control the effect was not asked for by name. The two colours *are* the
+  effect. If bias is ever genuinely wanted it is a separate, baked effect rather than a slider added to this one.
+- **Gradient map's blend-mode dropdown and per-effect opacity.** Opacity and blend describe how a layer *joins a
+  stack*, which is why they are `IconLayerSpec` fields and why the composite does not offer them (§5, slice 1). A
+  per-effect copy is a second answer to the same question, and the two would disagree about which one switched a
+  layer off. What the dropdown is *reaching* for — a partial grade — is `strength`, and a strength is expressible as
+  a matrix: interpolating two 4×5 matrices interpolates their outputs, because applying one is linear in the matrix.
+  So the effect keeps a strength slider, stays one matrix, and stays live.
+- **Inner glow's "Edge vs Center" toggle.** *Edge* is the effect. *Center* — a glow radiating from the middle of the
+  artwork outward, masked to its alpha — is `Bloom(falloff = RADIAL, anchor = CONTENT)` exactly, which is already
+  built and already reachable. A toggle that reaches a state the model holds elsewhere is the second way to say one
+  thing that this codebase keeps removing: the monochrome toggle beside the saturation slider, the strength slider
+  beside a chromatic split's offset.
+
+**What is kept from the proposal against the temptation to fold it**: inner glow stays a *separate effect* from inner
+shadow despite being one mechanism, on Glow and Shadow's own precedent — at most one effect of a type is meaningful,
+so folding them means an icon can have a recessed stamp or a neon edge and never both, and wanting both is ordinary.
+The parameters differ honestly too, the same way those two do: a shadow is thrown so it has an offset, a glow is not
+so it has none.
+
+### 8c. The effect mask, and why it is not "extracting the falloff"
+
+The proposal's architectural item is: lift the Linear/Radial falloff off Bloom and Focus onto the base effect, so any
+effect can be masked, and evaluate every effect as `mix(original, effect, falloff)`.
+
+**The bake mechanism is real and is about twenty lines in one place.** `applyEffects` already distinguishes overlays
+(paint onto what is there) from buffer replacers (produce a new bitmap and swap it in). A mask is: run the effect
+into a buffer, then composite that buffer back over the *pre-effect* one through a ramp's alpha. Overlays join the
+same path by being given a buffer, which they do not have today only because they never needed one. `LayerGradient`
+and `LayerProgressiveBlur.stops` already supply every parameter the proposal lists — centre, radius, softness,
+invert — so there is no new arithmetic at all, and `IconLayerSet`'s own effects get it for free.
+
+Four things about it are not as proposed:
+
+- **It must not be called `Falloff`, and it is not an extraction.** On Bloom and Focus a falloff is the light's *own
+  geometry* — a ramp has an angle and a disc has a radius, and neither can answer the other's question, which is what
+  that enum's KDoc is about. A mask is a third thing that happens to reuse the same two shapes. Bloom's falloff
+  cannot become one without changing what Bloom draws, so nothing moves; a field is *added*, to every variant.
+- **`LayerEffect` is a sealed interface with no state**, so there is no base class to put it on. It is a
+  `mask: EffectMask? = null` on each variant plus an exhaustive `withMask` beside `withEnabled` — free on disk under
+  `encodeDefaults = false`, and the compiler refuses to let a variant be forgotten, which is that helper's whole
+  point. The tempting alternative, a `Masked(inner, mask)` wrapper, keeps the variants untouched and breaks
+  `effectOrNull<T>()` and `withEffect<T>()` at every call site instead.
+- **`mix(original, effect, falloff)` is a fragment-shader framing and this pipeline is not one.** The bake's answer is
+  the buffer composite above. The *live* path's is to restructure each of the seven live-drawable effects from one
+  `saveLayer` into a two-layer masked composite — possible at every API, no gate, but per-effect work that grows with
+  the list.
+- **So it goes last, not first.** Its cost multiplies by the number of effects, so it is cheaper once the list has
+  settled. Building it first would mean paying for it again on each of the six above.
+
+### 8d. Order
+
+By cost, cheapest first, which also happens to put the two that draw live at the front:
+
+1. **Gradient map** — `duotone` exists; one matrix, one strength, live. **Built, and it landed as `Duotone`** — a
+   gradient map has arbitrary stops, this deliberately has exactly two colours and no midpoint (8b), so the name that
+   describes the look is the honest one. The rename is Bloom's rule reapplied: every entry in the grid names a look
+   rather than a mechanism. Two things came out of building it. **`LayerFilter.duotoneMatrixOf` is the extraction the
+   second consumer earned** — `IconFilters` had been unpacking two ARGB ints into six channels privately, and a user
+   picking the same two colours was about to do it again, on the fifth column, where it is silent when wrong. And
+   **`strength` is a matrix interpolation, not a blended copy** (`ColorMatrices.towards`): applying a matrix is linear
+   in the matrix, so interpolating the entries interpolates the outputs — which is what let the effect carry a partial
+   grade without a second buffer and therefore without losing its live path.
+2. **Vignette** — `LayerGradient.radial` exists; a bloom's ramp run outward instead of inward, live.
+3. **Inner shadow** — `haloed` with the alpha inverted; brings the alpha-invert matrix.
+4. **Inner glow** — inner shadow's twin, no toggle.
+5. **Outline** — dilate and erode; the shared silhouette helpers get extracted here, on their second consumer.
+6. **Bevel & emboss** — the one new kernel; a slice on its own.
+7. **Effect mask** — last, renamed, once the list is stable.
+
+### 8e. The consequence worth watching
+
+Four of the six do not draw live, taking the total to **ten of nineteen**. `IconLayerSet.drawsLive` is all-or-nothing
+for the whole icon (§7), so most recipes worth making will preview through `IconRenderer` under the `MaxPreviewPx`
+cap and the draft. That machine is built and it works — but the live path is the editor's alone, nothing else has
+ever drawn through it, and each baked-only effect narrows what it is still used for. §6's settled "incremental, not
+collapse" is not overturned by this; it is the number to keep an eye on, and the point at which it stops being
+settled is when a *plain* recipe becomes the unusual one.
