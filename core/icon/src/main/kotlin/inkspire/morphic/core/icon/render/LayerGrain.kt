@@ -19,7 +19,7 @@ import kotlin.math.sin
  * than in pixels. That is also why there is no seed: a hash of position *is* the randomness, and a seed would be a
  * second control offering nothing the grain size does not.
  *
- * ## Three things make this grain rather than static, and each was a defect before
+ * ## Four things make this grain rather than static, and each was a defect before
  *
  * **Gradient noise, not value noise.** Value noise picks a number *at* each lattice point and interpolates between
  * them, so its peaks and troughs land exactly on the lattice — which puts a visible square grid through the field
@@ -35,6 +35,10 @@ import kotlin.math.sin
  * zero first, so the field's rate of change is continuous too. With a smoothstep the second derivative jumps, which
  * a displacement makes visible as a faint crease along every lattice line — the artefact that is easy to mistake
  * for the grain itself.
+ *
+ * **Pixel centres, not pixel corners** — [latticeAt]. The three above are about the field; this one is about where it
+ * is read. Since the field is zero *at* the lattice, sampling corners drops every `cellPx`-th sample onto nothing,
+ * which costs nothing visible at coarse cells and is the whole effect at fine ones.
  */
 object LayerGrain {
 
@@ -157,6 +161,24 @@ object LayerGrain {
     fun amplitudePx(grain: LayerEffect.Grain, sizePx: Int): Float = grain.amplitude * sizePx
 
     /**
+     * Where pixel [pixel] sits on the lattice, in cells — **its centre, not its corner**.
+     *
+     * A pixel is an area and its centre is where it should be sampled, which is textbook and at coarse cells makes no
+     * visible difference at all. At fine ones it decides whether the effect exists: gradient noise reads **zero at
+     * every lattice point**, and sampling corners puts every `cellPx`-th sample exactly on one. At a four-pixel cell
+     * that is a quarter of them landing on nothing; at two, half; at one, all of them, which is why the floor below
+     * used to have to be four.
+     *
+     * Offset by half a *pixel* rather than half a cell, deliberately: the correction is about where a pixel is, so it
+     * cannot depend on how large the cells happen to be. At any cell size the samples then straddle the lattice
+     * instead of landing on it.
+     *
+     * Shared with the test rather than written into the renderer's loop, because it is one line whose being wrong is
+     * invisible — the picture still looks like noise, it is merely weaker than it should be.
+     */
+    fun latticeAt(pixel: Int, cellPx: Float): Float = (pixel + 0.5f) / cellPx
+
+    /**
      * How far apart the field's lattice points sit, in pixels — the size of the pieces the artwork tears into.
      *
      * **Exponential in the control's position, which is the fix for a slider whose useful half was unreachable.**
@@ -165,21 +187,16 @@ object LayerGrain {
      * clusters, which is most of what anyone wants — lived in the first four percent of the slider. Geometric
      * spacing makes equal movements of the finger equal *ratios*, so the fine end gets as much travel as the coarse.
      *
-     * **The floor is now the *reason* for the fine end rather than a clamp on it.** [FinestCell] is derived from
-     * [MinCellPx] and the size the finest grain is guaranteed at, so the clamp below binds only at the very bottom of the
-     * control instead of across its first third — see [FinestCell] for what that cost on a device and in the studio.
+     * **The floor is the *reason* for the fine end rather than a clamp on it.** [FinestCell] is derived from
+     * [MinCellPx] and [GrainFidelityPx], so at any size from [GrainFidelityPx] up the coercion below never binds and
+     * every position on the control is a different picture. It used to bind across the first third of the travel, and
+     * [FinestCell] records what that cost.
      *
-     * **Floored at [MinCellPx], and that floor is load-bearing in a way a one-pixel one was not.** Gradient noise
-     * reads *zero at every lattice point* — which is what removes the grid a value field puts through the picture,
-     * and what makes a cell of about a pixel catastrophic: the samples land on the integers, every one of them
-     * reads a zero, and the effect disappears entirely. That is exactly what happened to a home-screen icon, which
-     * bakes at a size where the finest setting always reached the floor, while the studio's much larger canvas
-     * escaped it and showed the grain the surface would not.
-     *
-     * **So the fine end is bounded by the bake, and that bound is real rather than a policy.** Structure finer than
-     * a few pixels cannot exist on a small bitmap, so a recipe at the finest setting is *not* identical at 144px and
-     * at 750px — the one place this file's "same at every bake size" promise cannot hold, because what it promises
-     * is unrepresentable down there.
+     * **The coercion stays, because [sizePx] is not the control's to know.** A bake *below* [GrainFidelityPx] — a
+     * 128px layer tile, a thumbnail — is still asked for cells finer than it can carry, and there the clamp is what
+     * keeps the field a field; [MinCellPx] says what it would otherwise degenerate into. So the promise this file is
+     * built on, that one recipe grains the same at every bake size, holds as a *fraction of the box* everywhere above
+     * that size and gives out below it, on the bottom sliver of the control only.
      */
     fun cellPx(grain: LayerEffect.Grain, sizePx: Int): Float {
         val position = grain.grainSize.coerceIn(0f, 1f)
@@ -235,23 +252,6 @@ object LayerGrain {
     /** Keeps one axis's octaves clear of the other's — see [field]. */
     private const val SaltStride = 977
 
-    /**
-     * Where pixel [pixel] sits on the lattice, in cells — **its centre, not its corner**.
-     *
-     * A pixel is an area and its centre is where it should be sampled, which is textbook and at coarse cells makes no
-     * visible difference at all. At fine ones it decides whether the effect exists: gradient noise reads **zero at
-     * every lattice point**, and sampling corners puts every `cellPx`-th sample exactly on one. At a four-pixel cell
-     * that is a quarter of them landing on nothing; at two, half; at one, all of them, which is why the floor below
-     * used to have to be four.
-     *
-     * Offset by half a *pixel* rather than half a cell, deliberately: the correction is about where a pixel is, so it
-     * cannot depend on how large the cells happen to be. At any cell size the samples then straddle the lattice
-     * instead of landing on it.
-     *
-     * Shared with the test rather than written into the renderer's loop, because it is one line whose being wrong is
-     * invisible — the picture still looks like noise, it is merely weaker than it should be.
-     */
-    fun latticeAt(pixel: Int, cellPx: Float): Float = (pixel + 0.5f) / cellPx
 
     /**
      * The smallest lattice worth sampling, in pixels.

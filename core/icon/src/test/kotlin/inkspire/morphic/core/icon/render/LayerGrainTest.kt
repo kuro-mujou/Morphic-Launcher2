@@ -1,5 +1,6 @@
 package inkspire.morphic.core.icon.render
 
+import inkspire.morphic.core.icon.compose.DraftPx
 import inkspire.morphic.core.model.icon.LayerEffect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -162,14 +163,16 @@ class LayerGrainTest {
      * stopped responding entirely down there. Nothing failed; the control was simply inert, which is indistinguishable
      * from a preview that has stopped updating.
      *
-     * Checked at **144px**, which is three things at once and has to stay so: a home icon, the size the studio drafts
-     * at (`IconPreview.DraftPx`), and `GrainFidelityPx`. Raising the last above the others was tried, and the bottom
-     * sixth of the control immediately went inert *in the draft* — a slider doing nothing under the finger, which is
-     * this file's original defect wearing a different hat. A finer ramp has to be paid for with a larger draft.
+     * **Checked against [DraftPx] itself rather than against a repeated `144`, and that is the point of the import.**
+     * Three sizes coincide there today — a home icon, the size the studio drafts at, and `GrainFidelityPx` — and the
+     * guarantee is only worth anything while the ramp is no finer than the *draft*, since that is the picture a finger
+     * is dragging against. Raising `GrainFidelityPx` above it was tried: the bottom sixth of the control went inert in
+     * the draft, which is this file's original defect wearing a different hat. Reading the constant is what makes that
+     * fail a test rather than reach a device — writing the number again is exactly how it got through the first time.
      */
     @Test
-    fun `moving the control changes the cell at every bake size, not only large ones`() {
-        for (size in listOf(144, 768)) {
+    fun `moving the control changes the cell at every size the draft has to show`() {
+        for (size in listOf(DraftPx, 768)) {
             var previous = LayerGrain.cellPx(grain(grainSize = 0f), size)
             for (step in 1..20) {
                 val cell = LayerGrain.cellPx(grain(grainSize = step / 20f), size)
@@ -180,13 +183,6 @@ class LayerGrainTest {
                 previous = cell
             }
         }
-    }
-
-    @Test
-    fun `the finest grain is drawable at the smallest size an icon is baked at`() {
-        // Which is the whole reason the fine end is derived rather than chosen: below the floor a finer setting is
-        // not finer grain — it is the same grain clamped, and below that it is confetti.
-        assertTrue(LayerGrain.cellPx(grain(grainSize = 0f), sizePx = 144) >= 2f)
     }
 
     /**
@@ -216,11 +212,13 @@ class LayerGrainTest {
 
     @Test
     fun `the finest grain still displaces at the size a home icon bakes at`() {
-        // **The regression this floor exists for, and it was invisible in the studio.** Gradient noise is zero *at*
-        // the lattice, so a cell of about a pixel puts every sample on a zero: at the finest setting a 144px icon
-        // displaced nothing at all while the studio's much larger canvas — where the same fraction is several
-        // pixels — showed the grain the home screen would never draw. The two-renderer hazard's own shape, reached
-        // through a bake size rather than through a second renderer.
+        // **End to end, where the test above is the mechanism.** The finest position on the control, resolved at the
+        // smallest size an icon is baked at, has to actually move the pixels — which is what a cell size alone does
+        // not tell you, since `cellPx` coerces to the floor and so can never report anything too small to work.
+        //
+        // The regression it guards was invisible in the studio: at the finest setting a 144px icon displaced nothing
+        // at all, while the much larger canvas showed grain the home screen would never draw. The two-renderer
+        // hazard's own shape, reached through a bake size rather than through a second renderer.
         val homeIcon = 144
         val cellPx = LayerGrain.cellPx(grain(grainSize = 0f), homeIcon)
         var largest = 0f

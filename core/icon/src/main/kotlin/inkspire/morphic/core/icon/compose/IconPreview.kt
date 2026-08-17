@@ -334,8 +334,14 @@ private const val MaxPreviewPx = 1024
  *
  * A node whose settled bake is already smaller — a layer tile — is left alone by the `coerceAtMost(fullPx)` at the
  * call site: it bakes once, at its real size, rather than drafting larger than the thing it is drafting for.
+ *
+ * **`internal` so a test can hold an effect to it**, which is the shape the invariant above needed. It was stated here
+ * as prose and nowhere else, and prose cannot fail: `LayerGrain`'s ramp was later pushed finer than this size can
+ * draw, which made the bottom of its slider inert *under the finger* — the very defect this floor had just been raised
+ * to fix. `LayerGrainTest` reads this value rather than repeating 144, so moving one without the other now fails a
+ * test instead of a device.
  */
-private const val DraftPx = 144
+internal const val DraftPx = 144
 
 /**
  * How coarsely the bake size follows the node's.
