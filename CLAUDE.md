@@ -2350,7 +2350,12 @@ where L1 had two** — its second `MAIN`+`LAUNCHER` filter is redundant, since a
 categories are a superset of its own. Permissions stay where L2 puts them, with the module that needs them:
 `QUERY_ALL_PACKAGES` is still not requested anywhere, `data:apps` requests **`REQUEST_DELETE_PACKAGES`** (see the
 menu notes — without it Uninstall silently does nothing, and L1 only got away without it because
-`QUERY_ALL_PACKAGES` covered it), and the wallpaper section's live-wallpaper shelf got the narrow `<queries>` it
+`QUERY_ALL_PACKAGES` covered it), `data:wallpaper` requests **`READ_MEDIA_IMAGES`** (plus the pre-33 `READ_EXTERNAL_STORAGE`
+capped at 32) because watching the image collection is the only way a screenshot can be noticed — those two were
+declared with the capture flow and then **deleted by the commit that added the rotating service**, which rewrote that
+manifest to make room for it, and nothing failed loudly: `RequestPermission` on an undeclared permission is refused
+immediately and without a dialog, and the capture screen treats a refusal as a cancel, so Start bounced back and read as
+a dead button — and the wallpaper section's live-wallpaper shelf got the narrow `<queries>` it
 had been silently missing (without it that query is filtered to this app's own services, so
 the shelf renders permanently empty — being the home app exempts `LauncherApps` from visibility filtering, not
 `PackageManager.queryIntentServices`). One consequence worth knowing: **shortcuts only exist once we are the active
