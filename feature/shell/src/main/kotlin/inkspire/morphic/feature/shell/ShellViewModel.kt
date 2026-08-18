@@ -185,46 +185,58 @@ class ShellViewModel(
     }
 
     /**
-     * The blurred wallpaper, at both strengths, re-collected only when something about *the picture* changes.
+     * The blurred wallpaper at both of the strengths frosted surfaces render at, each re-collected only when **its own**
+     * strength moves.
      *
-     * **Two strengths taken from one read of the effect, which is what keeps them from drifting.** The panel strength
-     * is the stored one — this is the line that finally makes the effects section's blur slider do something — and the
-     * film's is what `fullScreenFilm` replaces it with, asked of the same value rather than restated as a constant
-     * here. So the number the full-screen layer *renders* at and the number its picture is *blurred* at come from one
-     * expression, and a change to that policy cannot leave the picture behind.
+     * **Two strengths taken from one read of the effect, which is what keeps them from drifting.** The panel strength is
+     * the stored one — this is the line that makes the effects section's blur slider do something — and the film's is
+     * what `fullScreenFilm` replaces it with, asked of the same value rather than restated as a constant here. So the
+     * number the full-screen layer *renders* at and the number its picture is *blurred* at come from one expression, and
+     * a change to that policy cannot leave the picture behind.
      *
-     * `distinctUntilChanged` on the pair, so a tint or a lens parameter moving re-blurs nothing: those are draw-time
-     * reads of the effect and the picture is unchanged by them. Switching between two variants that share a strength
-     * (which the defaults do) is likewise free.
+     * **A subscription per picture, not one over the pair, and that is what stops a slider drag re-baking the film.**
+     * Keyed on the pair, moving the panel's strength restarted both collections — so the film re-decoded and re-blurred
+     * at a strength that had not moved and could not, being a constant. `distinctUntilChanged` per strength is the fix,
+     * and it is the same correction the orientation needed one layer down: **de-duplicate where the value is owned**,
+     * because a key made of several things cannot say which of them changed.
      *
-     * `flatMapLatest`, so a strength commit cancels an in-flight blur rather than queueing one behind it; the flows it
-     * switches to are the repository's, which re-emit on their own when the displayed wallpaper changes.
+     * That also states the cost honestly. A panel strength commit costs *one* decode, the panel's; the film's picture is
+     * baked once for the life of the shell and again only if the displayed wallpaper changes. Only the first collection
+     * pays for both.
      *
-     * **The orientation is handed over as a flow rather than joined into that key**, which is what keeps a rotation from
-     * re-blurring anything: for every source but the rotating pair it names the same file, and only the repository can
-     * tell — so it does the comparison, where a key here would restart the collection and re-decode. Measured on a
+     * De-duplication is per strength rather than on the effect as a whole, so a tint or a lens parameter moving
+     * re-blurs nothing: those are draw-time reads and the picture is unchanged by them. Switching between two variants
+     * that share a strength (which the defaults do) is likewise free.
+     *
+     * `flatMapLatest`, so a strength commit cancels an in-flight blur rather than queueing one behind it; the flow it
+     * switches to is the repository's, which re-emits on its own when the displayed wallpaper changes.
+     *
+     * **The orientation is handed over as a flow rather than joined into either key**, which is what keeps a rotation
+     * from re-blurring anything: for every source but the rotating pair it names the same file, and only the repository
+     * can tell — so it does the comparison, where a key here would restart the collection and re-decode. Measured on a
      * device: turning the phone cost two decodes of the wallpaper, one of them very nearly full-screen.
      *
-     * The cost worth knowing: two decodes per change rather than one, and at a panel strength of **exactly zero** the
-     * panel's picture is the whole screen — which is what "no blur" means, and the only strength that reaches full
-     * resolution (`blurBackdrop` halves anything it blurs at all). The film's is an eighth of the screen and rounds to
-     * nothing beside it.
+     * The one cost left: at a panel strength of **exactly zero** the panel's picture is the whole screen, which is what
+     * "no blur" means and the only strength that reaches full resolution (`blurBackdrop` halves anything it blurs at
+     * all). The film's is an eighth of the screen and rounds to nothing beside it.
+     */
+    private fun backdropImages(settingsRepository: SettingsRepository): Flow<BackdropImages> = combine(
+        blurredWallpaper(settingsRepository.backdropEffect.map { it.blurStrength }),
+        blurredWallpaper(settingsRepository.backdropEffect.map { it.fullScreenFilm.blurStrength }),
+        ::BackdropImages,
+    )
+
+    /**
+     * The wallpaper blurred at [strength], re-read only when that strength actually moves.
+     *
+     * Split out so the two pictures cannot share a subscription — see [backdropImages]. Collecting the effect twice
+     * costs a second decode of one small JSON slice per write of it, which is what buys each picture the right to be
+     * left alone; `DataStore` serves both collectors from the value it already holds rather than reading the file twice.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun backdropImages(settingsRepository: SettingsRepository): Flow<BackdropImages> =
-        settingsRepository.backdropEffect
-            .map { BlurStrengths(panel = it.blurStrength, film = it.fullScreenFilm.blurStrength) }
-            .distinctUntilChanged()
-            .flatMapLatest { strengths ->
-                combine(
-                    wallpaperRepository.backdrop(strengths.panel, orientation),
-                    wallpaperRepository.backdrop(strengths.film, orientation),
-                    ::BackdropImages,
-                )
-            }
-
-    /** The two blurs [backdropImages] asks for, as one value so the flow above de-duplicates on both at once. */
-    private data class BlurStrengths(val panel: Float, val film: Float)
+    private fun blurredWallpaper(strength: Flow<Float>): Flow<Bitmap?> = strength
+        .distinctUntilChanged()
+        .flatMapLatest { wallpaperRepository.backdrop(it, orientation) }
 
     private companion object {
         /** Keeps the store subscription alive across a configuration change instead of tearing it down and back up. */

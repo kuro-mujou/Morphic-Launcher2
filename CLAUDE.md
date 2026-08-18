@@ -2492,7 +2492,11 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
     occlude it whatever decoration was picked, so `fullScreenFilm` replaces both parameters — and the layer names
     `BackdropRole.FILM` on the line below the one that names the fixed effect, because those are one decision made
     twice: the strength it renders at and the strength its picture was blurred at have to be the same number.
-  - **The cost is a second decode per change**, and at a panel strength of **exactly zero** that picture is the whole
+  - **A panel strength commit costs one decode, the panel's** — each picture has its own subscription keyed on its own
+    strength, so the film's is baked once and again only when the displayed wallpaper changes. Keyed on the *pair*, as
+    the first cut was, moving the slider restarted both and the film re-blurred at a strength that cannot move; the rule
+    is to **de-duplicate where the value is owned**, since a key made of several things cannot say which of them changed.
+    At a panel strength of **exactly zero** that picture is the whole
     screen — which is what "no blur" means, and the only strength that reaches full resolution. Everything the launcher
     actually blurs is halved first (`MIN_BLURRED_DOWNSCALE`): a blur wide enough to see has destroyed detail at its own
     radius, so the halving is free to the eye, and it is what keeps the four live buffers of a full-resolution blur —
