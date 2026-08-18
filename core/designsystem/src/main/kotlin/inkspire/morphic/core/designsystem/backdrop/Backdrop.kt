@@ -1,10 +1,12 @@
 package inkspire.morphic.core.designsystem.backdrop
 
 import android.os.Build
+import android.graphics.Bitmap
 import android.view.View
 import androidx.annotation.RequiresApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -18,6 +20,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -91,13 +94,14 @@ enum class BackdropRole {
  * wallpaper at two blurs, so the cost is a second decode on a wallpaper change and not a second image per surface.
  *
  * @property panel the picture a bounded frosted surface samples.
- * @property film the picture the full-screen frost samples.
+ * @property film the picture the full-screen frost samples. Defaults to [panel] for a caller that draws no full-screen
+ *   frost at all — a settings preview of one panel, which has only one strength to show and no film to get wrong.
  * @property tintColor the wallpaper's representative color, which every wash is blended toward — see
  *   [wallpaperTone]. `Color.Unspecified` when it could not be read, which makes the washes plain white and black.
  */
 class BackdropState(
     val panel: BackdropImage,
-    val film: BackdropImage,
+    val film: BackdropImage = panel,
     val tintColor: Color = Color.Unspecified,
 ) {
 
@@ -107,6 +111,55 @@ class BackdropState(
         BackdropRole.FILM -> film
     }
 }
+
+/**
+ * [panelImage], [filmImage], [accentColor] and [windowSize] as the [BackdropState] frosted surfaces sample, or null
+ * while an image or the window is missing.
+ *
+ * Here rather than at its first call site because there are two zones now — the launcher shell, and the settings
+ * preview of one effect — and what they must not do differently is the pairing: **each picture is given the mapping
+ * derived from its *own* dimensions**, which is what [BackdropImage] exists to make unavoidable. `downscaleFor`
+ * reduces in proportion to the blur, so two pictures at two strengths are routinely *different sizes*, and a shared
+ * mapping would draw one of them at the wrong scale. That does not fail; it renders the wallpaper very slightly
+ * displaced behind the glass, which is the one artifact in this subsystem that reads as a mystery rather than as a bug.
+ *
+ * Both conversions want caching and neither belongs in a state holder: the `Bitmap` → `ImageBitmap` wrap, and the
+ * screen→bitmap mapping, which is a closure that would otherwise be rebuilt on every recomposition and hand every
+ * frosted surface a new lambda to invalidate against.
+ *
+ * Both images or neither: they read the same file through the same "is our wallpaper what is on screen?" gate, so a
+ * half-answer is not a state the repository can produce, and treating it as one would mean inventing a picture for the
+ * role that came back empty. A null [accentColor] is not a reason to return null — it only makes the washes plain
+ * white and black — which is why it becomes `Color.Unspecified` rather than a second early return.
+ */
+@Composable
+fun rememberBackdropState(
+    panelImage: Bitmap?,
+    accentColor: Int?,
+    windowSize: IntSize,
+    filmImage: Bitmap? = panelImage,
+): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize) {
+    if (panelImage == null || filmImage == null || windowSize.width == 0 || windowSize.height == 0) {
+        null
+    } else {
+        BackdropState(
+            panel = panelImage.asBackdropImage(windowSize),
+            film = filmImage.asBackdropImage(windowSize),
+            tintColor = accentColor?.let { Color(it) } ?: Color.Unspecified,
+        )
+    }
+}
+
+/** This bitmap wrapped for Compose, with the screen→bitmap mapping its own dimensions imply. */
+private fun Bitmap.asBackdropImage(windowSize: IntSize): BackdropImage = BackdropImage(
+    image = asImageBitmap(),
+    screenToBitmap = screenToBitmapMapping(
+        bitmapWidth = width,
+        bitmapHeight = height,
+        screenWidth = windowSize.width,
+        screenHeight = windowSize.height,
+    ),
+)
 
 /**
  * The backdrop every frosted surface samples, or null when there is nothing to sample.
