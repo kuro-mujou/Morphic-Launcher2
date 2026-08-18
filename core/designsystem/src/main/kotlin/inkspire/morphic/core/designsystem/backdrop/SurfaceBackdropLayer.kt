@@ -23,6 +23,12 @@ import androidx.compose.ui.graphics.graphicsLayer
  * (`BackdropEffect.fullScreenFilm`): a strength or tint slider that can make a screenful of text unreadable is not a
  * preference worth offering, so choosing the variant chooses the whole look and the sliders govern smaller panels.
  *
+ * **Which is why it samples [BackdropRole.FILM] and not the panels' picture.** Those two statements are one decision
+ * made twice — the fixed effect names a blur strength, and the film image is the wallpaper blurred *at* that strength —
+ * so they are written on adjacent lines and must move together. Reading the panels' image here would put the user's
+ * blur slider back in charge of this layer by the back door, and at a slider of zero it would hand a screenful of text
+ * a sharp photograph to sit on.
+ *
  * | Effect | This layer |
  * |---|---|
  * | `Plain` | blur, no wash |
@@ -62,6 +68,7 @@ fun SurfaceBackdropLayer(
                 effect = LocalBackdropEffect.current.fullScreenFilm,
                 scrimColor = scrimColor,
                 refracts = false,
+                role = BackdropRole.FILM,
             ),
     )
 }

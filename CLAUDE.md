@@ -1339,8 +1339,15 @@ a canvas the *user* switches between black and white.
 - **The frosted backdrop is `core:designsystem/backdrop`, and it samples by *position*.** `Modifier.wallpaperBackdrop`
   draws the crop of the pre-blurred wallpaper that sits behind wherever the node currently is, so a surface that moves
   slides *over* the picture rather than carrying a patch of it — which is the whole difference between glass and a
-  texture. `BackdropState` is **one shared image plus a mapping**, not a bitmap per surface, so two frosted surfaces
-  side by side continue each other and the cost is one blur for the screen. It is a `Modifier.Node` and not a
+  texture. `BackdropState` is **shared images plus a mapping, not a bitmap per surface**, so two frosted surfaces
+  side by side continue each other and the cost is a blur for the screen rather than one per node. There are **two**
+  pictures, and the split is `BackdropRole`: a *panel* samples the wallpaper blurred at the user's own strength (the
+  effects section's slider), the **full-screen film** samples it at the fixed strength `fullScreenFilm` names. One image
+  cannot be both — at a panel blur of zero it is the sharp wallpaper, and a sharp sheet occludes nothing. **The picture
+  and its mapping are one type (`BackdropImage`) for a reason that is invisible when broken:** `downscaleFor` reduces in
+  proportion to the blur, so the two are routinely *different sizes*, and a mapping applied to the wrong one draws a
+  crop at the wrong scale — which reads as the wallpaper sitting slightly off behind the glass rather than as a
+  mismatched pair of arguments. It is a `Modifier.Node` and not a
   `drawBehind` because of exactly that motion: the outline and clip `Path` are cached against size and shape, so a
   position-only change rebuilds nothing. Ported from L1's `Backdrop.kt`, with four differences:
   - **Every effect blurs; what they differ in is the *wash* — which is why `None` is now `Plain(strength)`.** The model
@@ -2458,12 +2465,30 @@ and the dock. Three places it does not copy L1, and one earlier note that is now
 **The effects section is the seventh, and the second in Personalization** — L1's `EffectsTab`, and structurally the
 same screen: a chooser, then the sliders belonging to whatever is chosen. It is also the first thing to *write*
 `backdropEffect`, which S5f-2 left read-only on purpose. Five things worth knowing:
-- **The chooser is the whole control today, and the sliders are dormant.** The frost behind an arriving surface is fixed
-  per variant (`fullScreenFilm`), and those two layers are the only frosted surfaces there are — so nothing reads a
-  strength or a tint. What the sliders are *for* is a frosted **panel** (a popup menu, the widget picker), which is also
-  where liquid glass's rim lives. **Kept rather than cut, at the author's call**, because they return with the first
-  panel; the opposing reading is this section's own rule that a control changing nothing is worse than a missing one.
-  `Plain`'s slider lost its subtitle for that reason — a description of an effect it no longer has is worse than none.
+- **Every slider is live, and the last one to become so was Blur.** They were written against a frosted **panel** that
+  did not exist yet, and kept rather than cut on the author's call; the context menu, the home bottom sheet and the
+  container panel are that panel. Tint, and every liquid-glass parameter, worked from the moment those landed — they are
+  draw-time reads of the stored effect. **Blur was the one that could not**, because the *picture* every surface sampled
+  was blurred at the film's fixed strength: the slider moved a number nothing rendered. `ShellViewModel` now asks the
+  repository for the wallpaper at **both** strengths and `BackdropRole` says which surface takes which, so the slider
+  governs panels while the frost stays fixed. `Plain`'s slider lost its subtitle back when it had nothing to say; the
+  control itself is now the honest one in the section.
+  - **The frost is still not tunable, and that is the whole point of two pictures.** A surface arriving over HOME has to
+    occlude it whatever decoration was picked, so `fullScreenFilm` replaces both parameters — and the layer names
+    `BackdropRole.FILM` on the line below the one that names the fixed effect, because those are one decision made
+    twice: the strength it renders at and the strength its picture was blurred at have to be the same number.
+  - **The cost is a second decode per change**, and at a panel strength of **exactly zero** that picture is the whole
+    screen — which is what "no blur" means, and the only strength that reaches full resolution. Everything the launcher
+    actually blurs is halved first (`MIN_BLURRED_DOWNSCALE`): a blur wide enough to see has destroyed detail at its own
+    radius, so the halving is free to the eye, and it is what keeps the four live buffers of a full-resolution blur —
+    decode, pixels, scratch, result, 13MB each on a 1216×2688 screen — out of the first few percent of the slider, where
+    the effect is least visible. The film's picture is an eighth of the screen and rounds to nothing beside it.
+  - **The orientation reaches `WallpaperRepository.backdrop` as a *flow*, and that is a measured fix rather than a
+    style.** Only the rotating pair is two files; for a picked or captured image the path is the same string whichever
+    way the phone is held. As a value it was a subscription key, so every rotation restarted the collection, the
+    "did the source change?" comparison had nothing to compare against, and the launcher re-decoded and re-blurred a
+    picture identical to the one it held — two decodes per turn of the device, one of them nearly full-screen. Passed as
+    a flow it reaches that comparison instead.
 - **The sliders come from the sealed variant, not from a ten-field bag.** L1 held every parameter of every effect at
   once; here the `when` is over `BackdropEffect` itself, so the compiler checks the mapping is total. The bill: a
   write is a **whole-value** write, and switching *between* variants discards the previous one's parameters. Within a

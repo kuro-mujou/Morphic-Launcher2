@@ -1,6 +1,8 @@
 package inkspire.morphic.core.designsystem.backdrop
 
+import android.os.Build
 import android.view.View
+import androidx.annotation.RequiresApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -41,24 +43,70 @@ import inkspire.morphic.core.model.BackdropEffect
 import kotlin.math.roundToInt
 
 /**
- * The pre-blurred wallpaper a frosted surface samples, and how to find its own piece of it.
+ * One pre-blurred picture, and the mapping that finds a node's own piece of it.
  *
- * **A shared image plus a mapping, rather than a bitmap per surface** — which is the whole reason a frosted surface is
- * affordable. Every one of them draws a *crop* of this one image, positioned so its piece lines up with the wallpaper
- * around it; two frosted surfaces side by side therefore continue each other rather than each showing the same blur.
+ * **The two are one type because separating them is the way this subsystem misaligns.** The mapping is derived from
+ * *this* bitmap's dimensions ([screenToBitmapMapping]); apply it to a bitmap of another size and every frosted surface
+ * draws its crop at the wrong scale — which on screen reads as the wallpaper sitting a little off behind the glass,
+ * not as a mismatched pair of arguments. That was a convention while there was one picture. There is more than one
+ * now, so it is a type.
  *
- * @property image the wallpaper, already blurred and downscaled by `WallpaperRepository.loadBackdrop`. Low resolution
- *   on purpose: it is upscaled at draw time, and a blur has no detail left to lose.
+ * @property image the wallpaper, already blurred and reduced by `WallpaperRepository.backdrop`. How much smaller than
+ *   the screen it is depends on the blur it was made for — a heavy blur has no detail left to lose, and a light one
+ *   is close to full resolution because a sharp crop is exactly what it has to be.
  * @property screenToBitmap maps a rectangle in **screen** coordinates onto the matching sub-rectangle of [image] — see
  *   [screenToBitmapMapping] for why it is screen and not window coordinates.
+ */
+class BackdropImage(
+    val image: ImageBitmap,
+    val screenToBitmap: (Rect) -> Rect,
+)
+
+/**
+ * Which of [BackdropState]'s pictures a frosted surface samples.
+ *
+ * **Two, because two kinds of surface answer to different strengths, and neither can borrow the other's picture.** A
+ * *panel* renders the user's own choice — the effects section's blur slider is theirs. The full-screen *film* is fixed
+ * (`BackdropEffect.fullScreenFilm`), because a surface arriving over HOME has to occlude it whatever decoration was
+ * picked. One image cannot serve both: at a panel blur of zero it is the sharp wallpaper, and a sharp sheet occludes
+ * nothing at all.
+ */
+enum class BackdropRole {
+
+    /** A bounded frosted surface — a menu, a sheet, a container. Blurred at the user's own strength. */
+    PANEL,
+
+    /** The full-screen sheet a surface arrives over. Blurred at the fixed strength `fullScreenFilm` names. */
+    FILM,
+}
+
+/**
+ * The pre-blurred wallpaper frosted surfaces sample, and how each finds its own piece of it.
+ *
+ * **A shared image plus a mapping, rather than a bitmap per surface** — which is the whole reason a frosted surface is
+ * affordable. Every one of them draws a *crop*, positioned so its piece lines up with the wallpaper around it; two
+ * frosted surfaces side by side therefore continue each other rather than each showing the same blur.
+ *
+ * **Two pictures rather than one, and that is [BackdropRole]'s doing rather than a cache.** They are the same
+ * wallpaper at two blurs, so the cost is a second decode on a wallpaper change and not a second image per surface.
+ *
+ * @property panel the picture a bounded frosted surface samples.
+ * @property film the picture the full-screen frost samples.
  * @property tintColor the wallpaper's representative color, which every wash is blended toward — see
  *   [wallpaperTone]. `Color.Unspecified` when it could not be read, which makes the washes plain white and black.
  */
 class BackdropState(
-    val image: ImageBitmap,
-    val screenToBitmap: (Rect) -> Rect,
+    val panel: BackdropImage,
+    val film: BackdropImage,
     val tintColor: Color = Color.Unspecified,
-)
+) {
+
+    /** The picture for [role] — the one seam a caller has to get right, and the only one there is. */
+    fun imageFor(role: BackdropRole): BackdropImage = when (role) {
+        BackdropRole.PANEL -> panel
+        BackdropRole.FILM -> film
+    }
+}
 
 /**
  * The backdrop every frosted surface samples, or null when there is nothing to sample.
@@ -96,6 +144,9 @@ val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> { BackdropEff
  *
  * @param effect overrides the global [LocalBackdropEffect] for this one surface. Null follows the global choice, which
  *   is what almost everything should do.
+ * @param role which of [BackdropState]'s pictures to sample. [BackdropRole.PANEL] for anything the user's own blur
+ *   slider governs, which is everything bounded; the full-screen frost overrides it, and overrides [effect] in the
+ *   same breath, because the two have to name the same strength — see [SurfaceBackdropLayer].
  * @param refracts whether this surface can be a **lens**. False for one whose edges are the screen's: liquid glass
  *   bends light in a band at its rim, and across a whole screen that band falls under the system bars — so a
  *   full-screen surface renders it as its blur plus its saturation boost instead, which is the part of the effect
@@ -106,6 +157,7 @@ fun Modifier.wallpaperBackdrop(
     effect: BackdropEffect? = null,
     scrimColor: Color = Color.Black.copy(alpha = 0.3f),
     refracts: Boolean = true,
+    role: BackdropRole = BackdropRole.PANEL,
 ): Modifier = composed {
     // A thin `composed` layer that only reads the (rarely-changing) locals and hands them to the node through the
     // element. That is what makes an effect or backdrop change re-fire `update()` → `invalidateDraw()`: a reused node
@@ -120,6 +172,7 @@ fun Modifier.wallpaperBackdrop(
         scrimColor = scrimColor,
         wallpaperTone = wallpaperTone(),
         refracts = refracts,
+        role = role,
     )
 }
 
@@ -222,18 +275,20 @@ private data class BackdropElement(
     val scrimColor: Color,
     val wallpaperTone: Color,
     val refracts: Boolean,
+    val role: BackdropRole,
 ) : ModifierNodeElement<BackdropNode>() {
 
-    override fun create() = BackdropNode(shape, effect, backdrop, view, scrimColor, wallpaperTone, refracts)
+    override fun create() = BackdropNode(shape, effect, backdrop, view, scrimColor, wallpaperTone, refracts, role)
 
     override fun update(node: BackdropNode) =
-        node.update(shape, effect, backdrop, view, scrimColor, wallpaperTone, refracts)
+        node.update(shape, effect, backdrop, view, scrimColor, wallpaperTone, refracts, role)
 
     override fun InspectorInfo.inspectableProperties() {
         name = "wallpaperBackdrop"
         properties["shape"] = shape
         properties["effect"] = effect
         properties["scrimColor"] = scrimColor
+        properties["role"] = role
     }
 }
 
@@ -252,6 +307,7 @@ private class BackdropNode(
     private var scrimColor: Color,
     private var wallpaperTone: Color,
     private var refracts: Boolean,
+    private var role: BackdropRole,
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode {
@@ -279,6 +335,7 @@ private class BackdropNode(
         scrimColor: Color,
         wallpaperTone: Color,
         refracts: Boolean,
+        role: BackdropRole,
     ) {
         if (shape != this.shape) {
             this.shape = shape
@@ -290,6 +347,7 @@ private class BackdropNode(
         this.scrimColor = scrimColor
         this.wallpaperTone = wallpaperTone
         this.refracts = refracts
+        this.role = role
         invalidateDraw()
     }
 
@@ -312,26 +370,28 @@ private class BackdropNode(
     }
 
     override fun ContentDrawScope.draw() {
-        val bd = backdrop
+        // The picture *and* the mapping in one read, which is what `BackdropImage` exists to make unavoidable: a crop
+        // resolved against one bitmap and drawn from another is a misalignment nobody would look for in a lambda.
+        val picture = backdrop?.imageFor(role)
         val outline = outlineFor(size, layoutDirection, this)
         // The one thing that means "nothing to sample" now: no backdrop at all. An effect can no longer say it —
         // every variant blurs, and `Plain` is the one with no wash rather than no picture.
-        if (bd == null || size.width <= 0f || size.height <= 0f) {
+        if (picture == null || size.width <= 0f || size.height <= 0f) {
             drawOutline(outline, color = scrimColor)
             drawContent()
             return
         }
         val window = Rect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height)
-        val src = bd.screenToBitmap(window)
+        val src = picture.screenToBitmap(window)
         // A lens only where there is a rim to bend light at — see `refracts`. Without one, glass falls through to the
         // crop below, which draws it through its saturation boost; that is the half of the effect that survives at
         // full screen, and the whole of it below API 33.
         val glassEffect = (effect as? BackdropEffect.LiquidGlass)?.takeIf { refracts }
         if (glassEffect != null && liquidGlassSupported) {
-            drawGlass(bd.image, src, glassEffect, outline)
+            drawGlass(picture.image, src, glassEffect, outline)
         } else {
             // Every other effect — and liquid glass with no rim, or below API 33 where L1 falls back to this too.
-            drawBlurredCrop(bd.image, src)
+            drawBlurredCrop(picture.image, src)
         }
         drawContent()
     }
@@ -347,6 +407,7 @@ private class BackdropNode(
      * slider never has to speak in pixels, and the ceilings they map onto are a drawing decision. The depth is capped
      * at half the smaller side, since a band deeper than that would have the two rims overlap in the middle.
      */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun ContentDrawScope.drawGlass(
         img: ImageBitmap,
         src: Rect,

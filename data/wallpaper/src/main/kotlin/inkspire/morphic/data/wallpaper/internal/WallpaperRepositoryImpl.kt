@@ -110,14 +110,19 @@ internal class WallpaperRepositoryImpl(
         .distinctUntilChanged()
         .flowOn(dispatchers.io)
 
-    override fun backdrop(strength: Float, orientation: Orientation): Flow<Bitmap?> = displayedWallpaperChanges
-        .map { backdropSourcePath(it, orientation) }
-        // On the *path*, not on the bitmap: re-blurring an unchanged file would hand every frosted surface a new,
-        // equal image and invalidate all of them for nothing. It also means an unrelated state write (a rotating half
-        // being set while a static image is displayed) costs a comparison rather than a decode.
-        .distinctUntilChanged()
-        .map { path -> path?.let { blurBackdrop(it, strength) } }
-        .flowOn(dispatchers.io)
+    override fun backdrop(strength: Float, orientation: Flow<Orientation>): Flow<Bitmap?> =
+        combine(displayedWallpaperChanges, orientation, ::Pair)
+            .map { (state, current) -> backdropSourcePath(state, current) }
+            // On the *path*, not on the bitmap: re-blurring an unchanged file would hand every frosted surface a new,
+            // equal image and invalidate all of them for nothing. It also means an unrelated state write (a rotating
+            // half being set while a static image is displayed) costs a comparison rather than a decode.
+            //
+            // **This is also why the orientation arrives as a flow** — see the interface. Rotating the device only
+            // changes which picture is on screen for the *rotating pair*; for a picked or captured image the path is
+            // the same string, so it has to reach this comparison rather than restarting the collection above it.
+            .distinctUntilChanged()
+            .map { path -> path?.let { blurBackdrop(it, strength) } }
+            .flowOn(dispatchers.io)
 
     override suspend fun decodePreview(uri: Uri): Bitmap? = withContext(dispatchers.io) {
         decodeSampled(uri, PREVIEW_CAP)

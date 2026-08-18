@@ -335,12 +335,21 @@ interface WallpaperRepository {
      * Re-emits only when the *source* changes, so nothing re-blurs because an unrelated preference moved. A change of
      * [strength] is a new collection rather than an emission — the caller re-invokes with the new value.
      *
+     * **[orientation] is a flow, and that is the difference between a rotation costing nothing and costing a decode.**
+     * It matters to step 1 alone: the rotating pair is two files, so turning the device genuinely changes which picture
+     * is on screen. For a picked or captured image the answer is the same file whichever way the phone is held — so if
+     * the orientation were a *value*, every rotation would be a new collection, the "did the source change?" comparison
+     * below would restart with nothing to compare against, and the launcher would re-decode and re-blur a picture
+     * identical to the one it already had. At a low strength that picture is nearly the whole screen, so the bill for
+     * turning the phone was two full-resolution decodes. Passed as a flow it reaches the comparison instead, which
+     * answers "no change" for two of the three sources and "different file" for the one where that is true.
+     *
      * @param strength `0f..1f`, mapped to a blur radius and pass count internally so callers pass a preference and not
      *   a pixel count. Zero is a valid strength meaning "sample it sharp", which is not the same as no backdrop.
-     * @param orientation which half of the rotating pair to sample; ignored by the other two sources, whose stored
-     *   image is already this screen's.
+     * @param orientation which half of the rotating pair to sample, as it changes; ignored by the other two sources,
+     *   whose stored image is already this screen's.
      */
-    fun backdrop(strength: Float, orientation: Orientation): Flow<Bitmap?>
+    fun backdrop(strength: Float, orientation: Flow<Orientation>): Flow<Bitmap?>
 
     /**
      * Stores the [crop] region of [uri] as the [orientation] half of the rotating pair, at [outWidth] × [outHeight].

@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.backdrop.BackdropImage
 import inkspire.morphic.core.designsystem.backdrop.BackdropState
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
@@ -174,7 +175,7 @@ fun LauncherShell(
                 onEditIcon = onEditIcon,
                 onUninstall = viewModel::uninstall,
                 // Rasterized icons become `ImageBitmap` here rather than in the ViewModel, which deliberately deals
-                // in platform bitmaps — the same line `ShellState.backdropImage` draws.
+                // in platform bitmaps — the same line `ShellState.backdropImages` draws.
                 loadShortcuts = { component ->
                     viewModel.shortcuts(component).map { shortcut ->
                         MenuAction(
@@ -221,7 +222,7 @@ fun LauncherShell(
         // different rules (its icon preview punches through to the real window instead). L1 provided these inside its
         // `HomeScreen`, which is exactly why its settings feature needed a second provider of its own.
         CompositionLocalProvider(
-            LocalBackdrop provides rememberBackdropState(state.backdropImage, state.backdropAccent, windowSize),
+            LocalBackdrop provides rememberBackdropState(state.backdropImages, state.backdropAccent, windowSize),
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
             LocalDragCoordinator provides coordinator,
@@ -400,34 +401,52 @@ private fun TopActionOverlay(
 }
 
 /**
- * [image], [accent] and [windowSize] as the [BackdropState] frosted surfaces sample, or null while the image or the
+ * [images], [accent] and [windowSize] as the [BackdropState] frosted surfaces sample, or null while an image or the
  * window is missing.
  *
  * Split out because it is two conversions that both want caching and neither belongs in the state holder: the
  * `Bitmap` → `ImageBitmap` wrap, and the screen→bitmap mapping, which is a closure that would otherwise be rebuilt on
  * every recomposition and hand every frosted surface a new lambda to invalidate against.
  *
+ * **Each picture is given the mapping derived from its *own* dimensions**, which is the whole reason [BackdropImage]
+ * pairs the two. The panel image and the film image are the same wallpaper at different blurs, and
+ * `BitmapBlur.downscaleFor` reduces in proportion to the blur — so they are routinely *different sizes*, and a single
+ * shared mapping would draw one of them at the wrong scale. That does not fail; it renders the wallpaper very slightly
+ * displaced behind the glass, which is the one artifact in this subsystem that reads as a mystery rather than as a bug.
+ *
+ * Both images or neither: they read the same file through the same "is our wallpaper what is on screen?" gate, so a
+ * half-answer is not a state the repository can produce, and treating it as one would mean inventing a picture for the
+ * role that came back empty.
+ *
  * A null [accent] is not a reason to return null — it only makes the washes plain white and black — which is why it is
  * `Color.Unspecified` here rather than a second early return.
  */
 @Composable
-private fun rememberBackdropState(image: Bitmap?, accent: Int?, windowSize: IntSize): BackdropState? =
-    remember(image, accent, windowSize) {
-        if (image == null || windowSize.width == 0 || windowSize.height == 0) {
+private fun rememberBackdropState(images: BackdropImages, accent: Int?, windowSize: IntSize): BackdropState? =
+    remember(images, accent, windowSize) {
+        val panel = images.panel
+        val film = images.film
+        if (panel == null || film == null || windowSize.width == 0 || windowSize.height == 0) {
             null
         } else {
             BackdropState(
-                image = image.asImageBitmap(),
-                screenToBitmap = screenToBitmapMapping(
-                    bitmapWidth = image.width,
-                    bitmapHeight = image.height,
-                    screenWidth = windowSize.width,
-                    screenHeight = windowSize.height,
-                ),
+                panel = panel.asBackdropImage(windowSize),
+                film = film.asBackdropImage(windowSize),
                 tintColor = accent?.let { Color(it) } ?: Color.Unspecified,
             )
         }
     }
+
+/** This bitmap wrapped for Compose, with the screen→bitmap mapping its own dimensions imply. */
+private fun Bitmap.asBackdropImage(windowSize: IntSize): BackdropImage = BackdropImage(
+    image = asImageBitmap(),
+    screenToBitmap = screenToBitmapMapping(
+        bitmapWidth = width,
+        bitmapHeight = height,
+        screenWidth = windowSize.width,
+        screenHeight = windowSize.height,
+    ),
+)
 
 /**
  * The drag-toolkit [SurfaceBinding] for a stored [SideBinding] — its content, and the one-finger policy each way.

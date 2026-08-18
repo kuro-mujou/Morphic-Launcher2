@@ -46,12 +46,13 @@ import kotlinx.coroutines.launch
  *   first frame looks exactly as it used to and then corrects if the wallpaper is bright.
  * @property backdropEffect how frosted surfaces render over the wallpaper. Handed down as-is rather than resolved,
  *   because *what* it means is a drawing decision and belongs to the modifier that draws it.
- * @property backdropImage the wallpaper pre-blurred for [backdropEffect], or null when the launcher has nothing it can
- *   honestly claim is on screen — see `WallpaperRepository.backdrop`. An `android.graphics.Bitmap` and not an
- *   `ImageBitmap` on purpose: the conversion is a Compose concern, and a state holder that returns Compose graphics
- *   types is one step from doing composition work.
+ * @property backdropImages the wallpaper pre-blurred at the two strengths frosted surfaces render at — the user's own,
+ *   and the full-screen frost's fixed one. Both null when the launcher has nothing it can honestly claim is on screen
+ *   (see `WallpaperRepository.backdrop`), which is one condition for both, since they read the same file.
+ *   `android.graphics.Bitmap` and not `ImageBitmap` on purpose: the conversion is a Compose concern, and a state holder
+ *   that returns Compose graphics types is one step from doing composition work.
  * @property backdropAccent the wallpaper's representative color as ARGB, which every frosted wash is blended toward.
- *   Null when unreadable, which makes the washes plain white and black. Separate from [backdropImage] because it has a
+ *   Null when unreadable, which makes the washes plain white and black. Separate from [backdropImages] because it has a
  *   separate source — the system usually answers it without any image being read at all.
  */
 data class ShellState(
@@ -59,8 +60,25 @@ data class ShellState(
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
     val brightness: WallpaperBrightness = WallpaperBrightness.DARK,
     val backdropEffect: BackdropEffect = BackdropEffect.Plain(),
-    val backdropImage: Bitmap? = null,
+    val backdropImages: BackdropImages = BackdropImages(),
     val backdropAccent: Int? = null,
+)
+
+/**
+ * The wallpaper at the two blurs the launcher draws it at.
+ *
+ * **Two because a panel and the full-screen frost answer to different strengths** — the effects section's slider is the
+ * panels', where the frost is fixed so that a surface arriving over HOME occludes it whatever was picked (see
+ * `BackdropEffect.fullScreenFilm`). A single image cannot be both: at a panel blur of zero it is the sharp wallpaper,
+ * and a sharp sheet occludes nothing.
+ *
+ * A pair rather than two fields on [ShellState] because they are produced together, by one flow, and go on to be
+ * consumed together — `BackdropState` keeps the same pairing one layer up, where each picture also carries the mapping
+ * derived from its own dimensions.
+ */
+data class BackdropImages(
+    val panel: Bitmap? = null,
+    val film: Bitmap? = null,
 )
 
 /**
@@ -157,8 +175,8 @@ class ShellViewModel(
             settingsRepository.backdropEffect,
             backdropImages(settingsRepository),
             wallpaperRepository.accentColor,
-        ) { (register, wraps), brightness, effect, image, accent ->
-            ShellState(register, wraps, brightness, effect, image, accent)
+        ) { (register, wraps), brightness, effect, images, accent ->
+            ShellState(register, wraps, brightness, effect, images, accent)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ShellState())
 
     /** Reports the orientation the shell is being drawn in, so the rotating pair's right half is sampled. */
@@ -167,36 +185,46 @@ class ShellViewModel(
     }
 
     /**
-     * The blurred wallpaper, re-collected only when something about *the picture* changes.
+     * The blurred wallpaper, at both strengths, re-collected only when something about *the picture* changes.
      *
-     * **Keyed on the *film's* blur strength, which is a constant** — so today this re-collects only when the
-     * orientation or the displayed wallpaper changes, and never because a preference moved. The full-screen frost is
-     * not tunable (see `BackdropEffect.fullScreenFilm`), and every variant blurs by the same amount, so switching
-     * between them is a redraw with a different wash rather than a re-decode.
+     * **Two strengths taken from one read of the effect, which is what keeps them from drifting.** The panel strength
+     * is the stored one — this is the line that finally makes the effects section's blur slider do something — and the
+     * film's is what `fullScreenFilm` replaces it with, asked of the same value rather than restated as a constant
+     * here. So the number the full-screen layer *renders* at and the number its picture is *blurred* at come from one
+     * expression, and a change to that policy cannot leave the picture behind.
      *
-     * It stays keyed on a strength rather than dropping the key, because the moment a *panel* wants the user's own
-     * strength there will be two, and this is the seam that takes it: `distinctUntilChanged` already means a value
-     * that does not move costs nothing.
+     * `distinctUntilChanged` on the pair, so a tint or a lens parameter moving re-blurs nothing: those are draw-time
+     * reads of the effect and the picture is unchanged by them. Switching between two variants that share a strength
+     * (which the defaults do) is likewise free.
      *
-     * **Every effect gets an image now, `Plain` included.** This used to map `None` to null and load nothing, on the
-     * model that an effect could decline to sample; the full-screen frost overturned that — a surface arriving over
-     * HOME has to occlude it whatever decoration is chosen, so the choice is only ever *which wash*, never *whether
-     * there is a picture*. Null now means one thing, which is what `WallpaperRepository.backdrop` itself means by it:
-     * there is no wallpaper this launcher may read.
+     * `flatMapLatest`, so a strength commit cancels an in-flight blur rather than queueing one behind it; the flows it
+     * switches to are the repository's, which re-emit on their own when the displayed wallpaper changes.
      *
-     * `blurStrength` is a property on the sealed `BackdropEffect` rather than a `when` here, so the next reader of it
-     * does not write the same `when` again.
+     * **The orientation is handed over as a flow rather than joined into that key**, which is what keeps a rotation from
+     * re-blurring anything: for every source but the rotating pair it names the same file, and only the repository can
+     * tell — so it does the comparison, where a key here would restart the collection and re-decode. Measured on a
+     * device: turning the phone cost two decodes of the wallpaper, one of them very nearly full-screen.
      *
-     * `flatMapLatest`, so a strength drag (S5f-3) cancels the in-flight blur rather than queueing one per frame; the
-     * flow it switches to is the repository's, which re-emits on its own when the displayed wallpaper changes.
+     * The cost worth knowing: two decodes per change rather than one, and at a panel strength of **exactly zero** the
+     * panel's picture is the whole screen — which is what "no blur" means, and the only strength that reaches full
+     * resolution (`blurBackdrop` halves anything it blurs at all). The film's is an eighth of the screen and rounds to
+     * nothing beside it.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun backdropImages(settingsRepository: SettingsRepository): Flow<Bitmap?> =
-        combine(
-            settingsRepository.backdropEffect.map { it.fullScreenFilm.blurStrength }.distinctUntilChanged(),
-            orientation,
-            ::Pair,
-        ).flatMapLatest { (strength, current) -> wallpaperRepository.backdrop(strength, current) }
+    private fun backdropImages(settingsRepository: SettingsRepository): Flow<BackdropImages> =
+        settingsRepository.backdropEffect
+            .map { BlurStrengths(panel = it.blurStrength, film = it.fullScreenFilm.blurStrength) }
+            .distinctUntilChanged()
+            .flatMapLatest { strengths ->
+                combine(
+                    wallpaperRepository.backdrop(strengths.panel, orientation),
+                    wallpaperRepository.backdrop(strengths.film, orientation),
+                    ::BackdropImages,
+                )
+            }
+
+    /** The two blurs [backdropImages] asks for, as one value so the flow above de-duplicates on both at once. */
+    private data class BlurStrengths(val panel: Float, val film: Float)
 
     private companion object {
         /** Keeps the store subscription alive across a configuration change instead of tearing it down and back up. */
