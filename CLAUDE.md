@@ -1445,6 +1445,11 @@ surface falls back to its scrim. **That third test is where L1 kept a second cop
 backdrop. The id comparison does the same job without the copy *and* one more the snapshot could not — a wallpaper set
 outside the launcher makes the ids differ, where L1's snapshot went on claiming to match. It is the **same gate**
 `brightness` uses, deliberately: "is our file what is on screen" is one question, and two answers to it would drift.
+**One trap in that gate, fixed, and silent while it was live.** The id is only recorded when an apply actually
+included `FLAG_SYSTEM` — recording it unconditionally meant a *lock-only* apply wrote down the id of a home wallpaper it
+had not touched, so the gate compared that id against itself and answered true on no evidence, leaving the frost
+blurring an image that was not on screen and the brightness fallback theming against it. L1 reads the same id regardless
+of its own `which`, so it came across with the port.
 It is also a **flow** where L1's was a one-shot read, because two of those four answers change with no action from us.
 **The rotating pair is a *live* wallpaper, and that shapes three things.** Android has no per-orientation static
 wallpaper — `setBitmap` takes one image and the system crops it — so drawing a different picture in landscape means being

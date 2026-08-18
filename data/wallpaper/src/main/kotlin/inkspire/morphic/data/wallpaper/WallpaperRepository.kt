@@ -285,7 +285,10 @@ interface WallpaperRepository {
     )
 
     /**
-     * Sets the stored image as the system wallpaper on [target], and records the id the system gave it.
+     * Sets the stored image as the system wallpaper on [target], and records the id the system gave it — **but only
+     * when [target] included the home wallpaper.** `appliedSystemId` is evidence about the picture the launcher's chrome
+     * sits on, which is the home one; a lock-only apply writes nothing there and leaves whatever was already claimed
+     * alone, since it neither made nor broke that claim. Nothing records the lock wallpaper, because nothing asks.
      *
      * A no-op when nothing has been chosen, **and when the stored image is a [WallpaperSource.CAPTURED] one** — that
      * is a picture *of* the wallpaper, so setting it would either change nothing or re-encode the last capture. L1

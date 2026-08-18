@@ -177,6 +177,17 @@ internal class WallpaperRepositoryImpl(
             .onFailure { Timber.w(it, "Failed to set the system wallpaper") }
             .isSuccess
         if (!set) return@withContext
+        // **Only a write that included FLAG_SYSTEM says anything about the home wallpaper**, which is the one
+        // `appliedSystemId` is evidence about — the chrome sits on it. Recording the id unconditionally meant a
+        // *lock-only* apply wrote down the id of a home wallpaper it had not touched, so `ownsSystemWallpaper` then
+        // compared that id against itself and answered true on no evidence at all: the frost blurred an image that was
+        // not on screen, and the brightness fallback themed the chrome against it. L1 reads the same id regardless of
+        // its own `which`, so this came across with the port.
+        //
+        // Left *untouched* rather than cleared, which is the tempting one-liner and is wrong: applying to BOTH and then
+        // re-applying the same image to LOCK alone would throw away a claim that is true. Nothing records the lock
+        // wallpaper because nothing asks about it — the launcher's chrome never sits on it.
+        if (which and WallpaperManager.FLAG_SYSTEM == 0) return@withContext
         val systemId = manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM)
         updateState { it.copy(appliedSystemId = systemId) }
     }
