@@ -1343,7 +1343,8 @@ a canvas the *user* switches between black and white.
   side by side continue each other and the cost is a blur for the screen rather than one per node. There are **two**
   pictures, and the split is `BackdropRole`: a *panel* samples the wallpaper blurred at the user's own strength (the
   effects section's slider), the **full-screen film** samples it at the fixed strength `fullScreenFilm` names. One image
-  cannot be both — at a panel blur of zero it is the sharp wallpaper, and a sharp sheet occludes nothing. **The picture
+  cannot be both — at a panel blur of zero it is the sharp wallpaper, and a sharp sheet occludes nothing. One `rememberBackdropState` builds both, shared by the shell and the effects preview once
+  there were two zones doing it. **The picture
   and its mapping are one type (`BackdropImage`) for a reason that is invisible when broken:** `downscaleFor` reduces in
   proportion to the blur, so the two are routinely *different sizes*, and a mapping applied to the wrong one draws a
   crop at the wrong scale — which reads as the wallpaper sitting slightly off behind the glass rather than as a
@@ -2526,9 +2527,30 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
   reaches storage. Its first chip is `PLAIN`, not `NONE` — see the model note below.
 - **Liquid glass is hidden, not disabled, below API 33**, with L1's sentence explaining why. An effect that silently
   comes out as a plain blur is worse than one that is not offered.
-- **No live icon preview**, unlike every surface section. Those preview a *cell*, which a pane can draw on its own; an
-  effect previews a frosted surface over the wallpaper, and the settings pane deliberately has no backdrop — that is
-  the shell's, one zone over. Faking one would mean the second provider L1 ended up with. L1 had no preview here.
+- **It has a live preview now, and it is a real frosted panel rather than a drawing of one** (`BackdropPreview`). This
+  said there could be none, on two grounds that have since been answered: the pane punches through to the window for the
+  wallpaper (`BlendMode.Src` over `PunchThroughPane`, the same trick every icon preview here uses, which needed
+  `Theme.Wallpaper` to exist), and the card is drawn by `wallpaperBackdrop` itself — sampling by screen position, so its
+  crop is continuous with the sharp wallpaper punched through around it. Nothing is approximated; it is a panel at the
+  size a menu is, with two lines of text on it, because legibility over a photograph is what the effect is *for*. L1 had
+  no preview here at all. Four things:
+  - **`LocalBackdrop` is provided at the *pane*, not at the settings zone's root**, which is the narrower half of the
+    shell's own rule rather than an exception to it. The shell provides it at a zone boundary because every surface in
+    that zone samples the wallpaper; here exactly one thing does, and it is a preview rather than a surface, so anything
+    higher would invite a second pane to frost itself against a picture nobody asked for. L1's mistake was different
+    again — it provided the *launcher's* backdrop inside `HomeScreen`, so its settings feature needed a duplicate.
+  - **The wash and all six liquid-glass parameters preview per frame; blur lands on release.** That split is not a
+    compromise, it is where the parameters live: everything but blur is a draw-time read of the effect, so the pane keeps
+    the dragged value in state and hands it to the card. Blur lives in the *bitmap*, which is baked off-thread, and
+    re-baking one per frame needs a preview-sized bake path (a cached decode, since a JPEG decode is 10–20ms) that is a
+    separate piece of work. So `SettingsCommitSlider`'s `onPreview` drives the first set and its `onCommit` the second.
+  - **The picture is the launcher's own panel picture, at the stored strength** — the same repository request
+    `ShellViewModel` makes, deliberately, so the preview shows what the panels show rather than something made for it.
+    Null renders the card's scrim, which is exactly what a real surface does with nothing to sample.
+  - **It pins in a `stickyHeader`**, `SurfaceDetail`'s arrangement and for its reason: the sliders are read *through* the
+    picture, so reaching one must not scroll it away. That is why this pane became a `LazyColumn`, and it is safe with
+    the punch only because `PunchThroughPane` nulls the overscroll factory — a stretch re-composites the content and the
+    punch stops reaching the window for as long as it lasts.
 
 The `busy` flag is L2's own rather than a port, because L1's picker went to its crop screen and the work happened
 behind that. "Choose image" is `PickVisualMedia` and opens the **crop screen** — `feature:settings`' own `NavKey`

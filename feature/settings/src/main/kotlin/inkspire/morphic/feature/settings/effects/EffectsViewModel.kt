@@ -1,13 +1,22 @@
 package inkspire.morphic.feature.settings.effects
 
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.designsystem.backdrop.liquidGlassSupported
 import inkspire.morphic.core.model.BackdropBlurTone
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.data.wallpaper.WallpaperRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,10 +54,18 @@ internal val BackdropEffect.option: BackdropOption
  *   a variant carries only its own.
  * @property liquidGlassAvailable whether this device can render the shader (API 33+). False hides the chip and shows
  *   the reason, rather than offering an effect that would silently come out as a plain blur.
+ * @property backdropImage the wallpaper blurred at the **stored** strength — what the preview samples. Null when there
+ *   is nothing the launcher may claim is on screen, which the preview renders as its scrim exactly as a real surface
+ *   does. Blurred at the stored strength rather than a dragged one, which is what makes the blur slider's effect on the
+ *   preview land on release: the blur lives in the bitmap, and re-baking one per frame is a different piece of work.
+ * @property backdropAccent the wallpaper's representative color, which the washes are blended toward. Without it
+ *   `MaterialYou` previews as gray, since this launcher's `ColorScheme` is monochrome by design.
  */
 internal data class EffectsState(
     val effect: BackdropEffect = BackdropEffect.Default,
     val liquidGlassAvailable: Boolean = true,
+    val backdropImage: Bitmap? = null,
+    val backdropAccent: Int? = null,
 )
 
 /**
@@ -65,15 +82,53 @@ internal data class EffectsState(
  */
 internal class EffectsViewModel(
     private val settingsRepository: SettingsRepository,
+    private val wallpaperRepository: WallpaperRepository,
 ) : ViewModel() {
 
-    val state: StateFlow<EffectsState> = settingsRepository.backdropEffect
-        .map { EffectsState(effect = it, liquidGlassAvailable = liquidGlassSupported) }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-            EffectsState(liquidGlassAvailable = liquidGlassSupported),
+    /**
+     * Which way the device is held, reported by the pane.
+     *
+     * The backdrop cannot derive it — a **rotating** wallpaper is two pictures, so "the wallpaper" is not one image
+     * until you say which orientation. Reported rather than read here for the reason every other surface reports its
+     * own: the composable is where the window is, and a state holder that reaches for one has a `Context` in it.
+     */
+    private val orientation = MutableStateFlow(Orientation.PORTRAIT)
+
+    val state: StateFlow<EffectsState> = combine(
+        settingsRepository.backdropEffect,
+        previewBackdrop(),
+        wallpaperRepository.accentColor,
+    ) { effect, image, accent ->
+        EffectsState(
+            effect = effect,
+            liquidGlassAvailable = liquidGlassSupported,
+            backdropImage = image,
+            backdropAccent = accent,
         )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        EffectsState(liquidGlassAvailable = liquidGlassSupported),
+    )
+
+    /** Reports the orientation the pane is drawn in, so a rotating pair's right half is previewed. */
+    fun setOrientation(value: Orientation) {
+        orientation.value = value
+    }
+
+    /**
+     * The wallpaper blurred at the stored strength — the picture the preview samples.
+     *
+     * The same shape `ShellViewModel` uses for a panel, and deliberately the *same request*, so the preview is showing
+     * the picture the launcher's own panels are showing rather than one made for it. Keyed on the strength alone, so a
+     * tint or a lens parameter moving re-blurs nothing — those are draw-time reads, which is exactly why they preview
+     * per frame while this one lands on commit.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun previewBackdrop(): Flow<Bitmap?> = settingsRepository.backdropEffect
+        .map { it.blurStrength }
+        .distinctUntilChanged()
+        .flatMapLatest { wallpaperRepository.backdrop(it, orientation) }
 
     /** Switches to [option], carrying the current parameters across wherever the variant is the same. */
     fun select(option: BackdropOption) {

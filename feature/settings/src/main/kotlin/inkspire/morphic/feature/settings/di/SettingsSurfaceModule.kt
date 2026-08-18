@@ -30,7 +30,7 @@ val settingsSurfaceModule = module {
     viewModel { GridSizeViewModel(get(), get(), get()) }
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
-    viewModel { EffectsViewModel(get()) }
+    viewModel { EffectsViewModel(get(), get()) }
 
     // The one ViewModel here taking a parameter: the studio cannot work out *what it is editing* for itself, and
     // that arrives as the destination. Passed at `koinViewModel { parametersOf(route) }` rather than read from a
