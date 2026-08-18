@@ -163,13 +163,18 @@ internal class WallpaperRepositoryImpl(
         val scaled = cropAndScale(decoded, crop, outWidth, outHeight)
         val file = writeImage(scaled)
         updateState {
-            // The id is reset, not kept: this is a different image from the one we applied, so the section must
-            // offer "Apply" again rather than claiming the new pick is already on the system. A capture resets it
-            // for a second reason - it can never be applied at all, so any id it inherited would be a claim about
-            // an image that is no longer stored.
-            WallpaperState(
+            // **A `copy`, and every field left out of it is left out deliberately.** This built a whole new
+            // `WallpaperState` and so erased three things a pick has no business touching: the rotating pair (whose
+            // files stayed on disk with nothing referring to them), the copy of whatever is on the home screen, and
+            // `appliedSystemId` — which is a fact about the *home wallpaper*, not about the pick. Resetting that last
+            // one is what made "pick an image, apply it to the lock screen" erase the frost: the gate went false, the
+            // backdrop went null, and every frosted surface fell back to its scrim while the home screen carried on
+            // showing a wallpaper we still had a perfectly good copy of.
+            //
+            // What a pick *does* say is that the chosen image is no longer the one we applied, which is `imageApplied`.
+            it.copy(
                 image = WallpaperImage(file.absolutePath, scaled.width, scaled.height, source),
-                appliedSystemId = 0,
+                imageApplied = false,
             )
         }
     }
@@ -210,7 +215,28 @@ internal class WallpaperRepositoryImpl(
         // wallpaper because nothing asks about it — the launcher's chrome never sits on it.
         if (which and WallpaperManager.FLAG_SYSTEM == 0) return@withContext
         val systemId = manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM)
-        updateState { it.copy(appliedSystemId = systemId) }
+        // **And keep the picture, not just the id.** `WallpaperFiles.IMAGE` is one fixed name that every pick
+        // overwrites, so without a copy the launcher forgets the wallpaper it is sitting on the moment the user chooses
+        // another one. A failed copy records null rather than leaving the previous one in place: a stale picture paired
+        // with a fresh id is the one state the backdrop would draw *confidently* and wrongly, where null falls back to
+        // the scrim, which is visible and fixable.
+        val kept = keepAsAppliedHome(image)
+        updateState { it.copy(imageApplied = true, appliedHome = kept, appliedSystemId = systemId) }
+    }
+
+    /**
+     * [image] copied to the slot the backdrop samples, described at its new path — or null if the copy failed.
+     *
+     * L1's `owned_applied.jpg`, and the reason it kept one. Taken *after* a successful `setBitmap`, so the copy exists
+     * exactly when the claim it supports does.
+     */
+    private fun keepAsAppliedHome(image: WallpaperImage): WallpaperImage? {
+        val dir = File(appContext.filesDir, WallpaperFiles.DIR).apply { mkdirs() }
+        val target = File(dir, WallpaperFiles.APPLIED_HOME)
+        return runCatching {
+            File(image.path).copyTo(target, overwrite = true)
+            image.copy(path = target.absolutePath)
+        }.onFailure { Timber.w(it, "Could not keep a copy of the applied wallpaper") }.getOrNull()
     }
 
     override suspend fun loadImage(): Bitmap? = withContext(dispatchers.io) {
@@ -269,11 +295,15 @@ internal class WallpaperRepositoryImpl(
             val pair = state.rotating
             return (pair[orientation] ?: pair.portrait ?: pair.landscape)?.path
         }
-        val image = state.image ?: return null
         // A capture is a picture *of* the displayed wallpaper — it can never be applied, so the "did we apply it?"
         // gate below would reject it always, and sampling it is the one job it has.
-        if (image.source == WallpaperSource.CAPTURED) return image.path
-        return if (ownsSystemWallpaper(state)) image.path else null
+        if (state.image?.source == WallpaperSource.CAPTURED) return state.image.path
+        // **The copy we kept, never `state.image`.** The pick is whatever the user last chose, which may be an image
+        // they have not applied to the home screen — or have applied to the *lock* screen, which cannot change what the
+        // chrome sits on. Sampling it would blur a picture that is not on screen; sampling nothing would erase a
+        // backdrop that is perfectly valid. The copy is the only one of the three that is true.
+        val applied = state.appliedHome ?: return null
+        return if (ownsSystemWallpaper(state)) applied.path else null
     }
 
     /**
@@ -369,7 +399,7 @@ internal class WallpaperRepositoryImpl(
     private fun resolveBrightness(state: WallpaperState): WallpaperBrightness {
         systemBrightness(WallpaperManager.getInstance(appContext))?.let { return it }
         if (!ownsSystemWallpaper(state)) return WallpaperBrightness.DARK
-        val path = state.image?.path ?: return WallpaperBrightness.DARK
+        val path = state.appliedHome?.path ?: return WallpaperBrightness.DARK
         val bitmap = decodeFile(path, BRIGHTNESS_SAMPLE_STEP) ?: return WallpaperBrightness.DARK
         return brightnessOf(meanLuminance(bitmap))
     }

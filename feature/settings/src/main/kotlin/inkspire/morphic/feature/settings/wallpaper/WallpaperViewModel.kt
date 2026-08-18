@@ -27,9 +27,11 @@ import kotlinx.coroutines.launch
  *   "something, still loading".
  * @property preview that image decoded, for the section to draw. Null while it loads, and null for good if the file
  *   went missing under us (a wipe of app storage), which is why it is separate from [image] rather than implied by it.
- * @property applied whether *this launcher* set the current system wallpaper — the difference between "Apply" and
- *   "Re-apply". Read from `WallpaperState.appliedSystemId`, which is an id rather than a boolean because the same
- *   field will later detect a wallpaper set outside the launcher.
+ * @property applied whether the image on screen here is the one this launcher put on the **home** wallpaper — the
+ *   difference between "Apply" and "Re-apply". Read from `WallpaperState.imageApplied` and *not* from
+ *   `appliedSystemId`: that id says whether the wallpaper we set is still the one the system shows, which stays true
+ *   when the user picks a new image, so reading it here would offer "Re-apply" for an image that has never been
+ *   applied.
  * @property applicable whether the stored image can be set on the system at all. False for a capture, which is a
  *   picture *of* the wallpaper — the repository declines it, and the section shows why instead of a dead button.
  * @property rotatingPortrait the portrait half of the rotating pair, decoded for its slot, or null if unset.
@@ -94,7 +96,7 @@ class WallpaperViewModel(
                 WallpaperSectionState(
                     image = stored.image,
                     preview = stored.image?.let { wallpaperRepository.loadImage() },
-                    applied = stored.appliedSystemId != 0,
+                    applied = stored.imageApplied,
                     rotatingPortrait = stored.rotating.portrait
                         ?.let { wallpaperRepository.loadRotatingImage(Orientation.PORTRAIT) },
                     rotatingLandscape = stored.rotating.landscape

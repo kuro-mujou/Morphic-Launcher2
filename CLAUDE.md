@@ -1418,9 +1418,10 @@ a canvas the *user* switches between black and white.
 store. **It keeps its own one-key DataStore too**, which is a correction to the plan's original line ("borrowing settings
 to persist path pointers"): a path to a file we wrote and the id the system gave the wallpaper we set is bookkeeping, and
 S0 had already refused that on the way in. The **effect params** (`BackdropEffect`) are the genuinely preference-shaped
-half and stay in `data:settings`. State is **two fields where L1 had six** — L1's juggled two image sets and a snapshot
-copy of whichever was applied, both of which exist *for* the frosted backdrop; `appliedSystemId` is an id rather than a
-boolean because it also detects a wallpaper set outside the launcher. Built: **all three sources** — pick from a `Uri`
+half and stay in `data:settings`. State is **four fields where L1 had six**, and two of the four are the
+ones L1 had for the frosted backdrop: a **snapshot copy** of the image as applied to home (`appliedHome`) and a latch
+saying whether the current pick is that image (`imageApplied`). `appliedSystemId` is an id rather than a boolean because
+it also detects a wallpaper set outside the launcher. Built: **all three sources** — pick from a `Uri`
 and frame it on the crop screen, **capture** a screenshot of the wallpaper itself, or set the **rotating pair**, one
 image per orientation — each sample-decoded, scaled to the screen and stored through one write path, plus apply to
 HOME / LOCK / BOTH. `WallpaperSource` is what separates them: a capture is a
@@ -1440,10 +1441,18 @@ transaction, so picking an image while an apply was finishing could lose one of 
 sources-before-effects ordering was arranged around. Our rotating service active → that orientation's half; a
 **capture** → always (it *is* a picture of what is displayed, and gating it on being applied would reject it forever);
 a picked image → only if `appliedSystemId` still matches the live wallpaper id; otherwise nothing, and every frosted
-surface falls back to its scrim. **That third test is where L1 kept a second copy of the file and L2 does not**: its
-`appliedSingle` was a snapshot frozen at Apply time so an edited-but-unapplied pick could not desynchronize the
-backdrop. The id comparison does the same job without the copy *and* one more the snapshot could not — a wallpaper set
-outside the launcher makes the ids differ, where L1's snapshot went on claiming to match. It is the **same gate**
+surface falls back to its scrim. **That third test needs both halves, and this file claimed for a while that it needed only
+one.** L1 froze a snapshot of the applied image (`appliedSingle`) so an edited-but-unapplied pick could not
+desynchronize the backdrop, and the id comparison was taken to replace it. It does not: the id answers *"is the
+wallpaper on the system still the one we set?"* — which the snapshot could not, since a wallpaper changed outside the
+launcher left L1's copy claiming to match — but it says nothing about whether **we still have that picture**, and
+`WallpaperFiles.IMAGE` is one fixed name that every pick overwrites. So `appliedHome` is a real copy, taken after a
+successful apply that included `FLAG_SYSTEM`. Three things went wrong without it, and the third is what surfaced it:
+picking an image killed the backdrop until it was applied; `setImage` built a **whole new `WallpaperState`**, so a pick
+also erased the rotating pair's references and left its files orphaned; and "pick, then apply to the *lock* screen" —
+which cannot change the home screen at all — erased the frost outright. **Which is also why the pick's own
+applied-ness is its own field**: `appliedSystemId` stays true across a new pick, so it must not be reset by one, and the
+section's "Apply" / "Re-apply" reads `imageApplied` instead (L1's `singleDirty`, inverted). It is the **same gate**
 `brightness` uses, deliberately: "is our file what is on screen" is one question, and two answers to it would drift.
 **Two traps in that gate, both fixed and both silent while they were live.** The id is only recorded when an apply
 actually included `FLAG_SYSTEM` — recording it unconditionally meant a *lock-only* apply wrote down the id of a home

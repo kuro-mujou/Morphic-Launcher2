@@ -148,9 +148,9 @@ data class RotatingImages(
  * **Much smaller than L1's `WallpaperState`, and deliberately so.** That one carried six fields (`appliedMode`,
  * `single`, `rotate`, `appliedSingle`, `singleDirty`, `appliedSystemWallpaperId`) because it juggled *two* image sets
  * (a single image and a per-orientation rotating pair) and kept a **snapshot copy** of whichever was applied so a
- * frosted backdrop could keep sampling the real system wallpaper. Neither exists here yet: this slice owns one image,
- * and the effects that need the snapshot arrive with `BackdropEffect`. Adding a field then is additive; carrying five
- * unread ones now would be five things to reason about with nothing checking them.
+ * frosted backdrop could keep sampling the real system wallpaper. Two of those six are here now, and the snapshot is
+ * one of them — arriving with the effects exactly as this note predicted, having been mistaken in between for something
+ * [appliedSystemId] had replaced. It had not: see that property and [appliedHome], which answer different questions.
  *
  * @property image the wallpaper the user chose, or null if they never have.
  * @property rotating the per-orientation pair the launcher's own live wallpaper draws, empty until the user sets one.
@@ -172,6 +172,8 @@ data class RotatingImages(
 data class WallpaperState(
     val image: WallpaperImage? = null,
     val rotating: RotatingImages = RotatingImages(),
+    val imageApplied: Boolean = false,
+    val appliedHome: WallpaperImage? = null,
     val appliedSystemId: Int = 0,
 ) {
     companion object {
@@ -185,6 +187,16 @@ object WallpaperFiles {
 
     /** The chosen image, cropped and scaled to the screen. L1's `owned.jpg`. */
     const val IMAGE = "single.jpg"
+
+    /**
+     * A copy of [IMAGE] as it was applied to the **home** wallpaper — what a frosted surface samples. L1's
+     * `owned_applied.jpg`.
+     *
+     * A second file rather than a second reference, because [IMAGE] is a fixed name that every pick overwrites: the
+     * moment a user chooses a new image the previous one is *gone*, and it is the previous one the home screen is still
+     * showing until they apply. See `WallpaperState.appliedHome`.
+     */
+    const val APPLIED_HOME = "applied_home.jpg"
 
     /** The rotating pair, one per orientation — L1's `owned_portrait.jpg` / `owned_landscape.jpg`. */
     const val ROTATING_PORTRAIT = "rotating_portrait.jpg"
@@ -315,16 +327,19 @@ interface WallpaperRepository {
      * 2. **The stored image is a [WallpaperSource.CAPTURED] one** → it, unconditionally. A capture *is* a picture of
      *    whatever is displayed, which is the only reason it exists — gating it on having been applied would reject it
      *    always, since [apply] refuses a capture by design.
-     * 3. **The stored image is picked, and provably still on the system** (`appliedSystemId` matching the live
-     *    wallpaper id) → it.
+     * 3. **We kept a copy of what we applied to the home wallpaper, and it is provably still on the system**
+     *    (`appliedHome` present, `appliedSystemId` matching the live wallpaper id) → that copy, never the current pick.
+     *    The two differ whenever someone has chosen an image without applying it to home — including applying one to
+     *    the *lock* screen, which cannot change what the launcher's chrome sits on.
      * 4. Otherwise null.
      *
-     * **Step 3 is where L1 kept a second copy of the file and this does not.** Its `appliedSingle` was a snapshot
-     * frozen at Apply time so that picking a new image without applying it did not desynchronize the backdrop from the
-     * real wallpaper. The id comparison answers the same question without the copy, and answers one more that the
-     * snapshot could not: a wallpaper set *outside* the launcher makes the ids differ, where L1's snapshot went on
-     * claiming to match. It is the same gate [brightness] uses, deliberately — "is our image what is on screen" should
-     * have one answer, not two.
+     * **Step 3 needs both halves, and this once claimed it needed only one.** L1 kept a snapshot copy of the applied
+     * image (`appliedSingle`) so that picking a new one without applying it could not desynchronize the backdrop from
+     * the real wallpaper; the id comparison was taken to replace it. It does not. The id answers *"is the wallpaper on
+     * the system still the one we set?"* — a question the snapshot could not answer, since a wallpaper changed outside
+     * the launcher left L1's copy claiming to match — but it says nothing about whether we **still have that picture**,
+     * and one fixed filename means every pick overwrites it. So both: the id, and `appliedHome`. It is the same gate
+     * [brightness] uses, deliberately — "is our image what is on screen" should have one answer, not two.
      *
      * Blurred here rather than at the draw call because it is expensive and wants a background thread, and because the
      * result is reused for every frosted surface on screen. L1's `loadBackdropBlur`, same shape.
