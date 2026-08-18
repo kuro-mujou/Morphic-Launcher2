@@ -1,7 +1,6 @@
 package inkspire.morphic.data.wallpaper.internal
 
 import android.graphics.Bitmap
-import inkspire.morphic.core.graphics.BitmapBlur
 import androidx.core.graphics.scale
 import kotlin.math.roundToInt
 
@@ -15,51 +14,21 @@ private const val GRAY_FLOOR = 8.0
 private const val NEUTRAL_GRAY = 0xFF808080.toInt()
 
 /**
- * L1's `Blur.kt`, both halves: the downscale-then-box-blur a frosted surface samples, and the representative color
- * `BackdropEffect.MaterialYou` tints itself with.
+ * L1's `Blur.kt`, and the half of it that is still here: the representative color `BackdropEffect.MaterialYou` washes
+ * a frosted surface in.
  *
- * **Where it lives is a correction to the port plan.** That said `Blur.kt` "belongs beside the graphics/icon code, in
- * neither repository's module", which was right when the wallpaper lived inside `data:settings` — image processing has
- * no business in a preferences store. `data:wallpaper` is not that: it exists *because* it decodes bitmaps, and
- * `cropAndScale` plus the sampled decode are already in the file next door. Moving these somewhere abstract would
- * separate them from their only caller to satisfy a sentence written about a module that no longer holds it.
+ * **The blur half has left, and it left in two directions.** The kernel went to `core:graphics` (`BitmapBlur`), so
+ * `core:icon` could have the same one; the *reduction* went to the decode, where `inSampleSize` is free. What used to
+ * sit between them — a wrapper that reduced a bitmap and then blurred it — had nothing left to decide, so the two
+ * statements now stand together in `WallpaperRepositoryImpl.blurBackdrop`. That is also what retired the bug the
+ * wrapper hid: the reduction was split between a power-of-two decode and a residual `scale`, and integer division
+ * threw the residue away silently, so the radius was computed for a bitmap smaller than the one it ran on.
  *
- * **The two functions read the same image and must not be confused for each other**, which is the trap S5f-1 nearly
- * walked into: [dominantColor] is deliberately **saturation-weighted** so a vivid accent beats washed-out gray, which
- * is right for "what color is this wallpaper?" and wrong for "how bright is it?". The brightness signal therefore has
- * its own unweighted luminance mean in the repository rather than reusing this.
+ * **What survives must not be confused with the brightness read**, which is the trap S5f-1 nearly walked into:
+ * [dominantColor] is deliberately **saturation-weighted** so a vivid accent beats washed-out gray, which is right for
+ * "what color is this wallpaper?" and wrong for "how bright is it?". The brightness signal therefore has its own
+ * unweighted luminance mean in the repository rather than reusing this.
  */
-
-/**
- * [source] reduced by [downscale] and blurred by [radius] — the picture a frosted surface samples.
- *
- * **The kernel is [BitmapBlur]'s now, shared with `core:icon`.** This file had the only real blur in the launcher and
- * the icon renderer could not reach it — a `core` module cannot depend on a `data` one — so that one approximated a
- * blur with a `Bitmap.scale` down and back up, and looked terraced. Moving the arithmetic to `core:graphics` gave
- * both callers the same one; what stays here is the *decision*, which is how much of the picture to keep.
- *
- * **The reduction follows the blur rather than being a constant, and that is the fix for the backdrop's own worst
- * artifact.** It used to be a flat eighth of the screen at every strength — so even at a strength of zero, where no
- * blur is applied at all, a frosted surface was showing an eighth-resolution copy of the wallpaper stretched back up.
- * That reads as a low-quality image rather than as glass, and no amount of blur strength could rescue it because the
- * blur was never what was wrong. See [BitmapBlur.downscaleFor].
- *
- * A [radius] below 1 is nothing to do, and at that point [downscale] is 1 too, so what comes back is the picture
- * itself.
- */
-internal fun downscaleAndBlur(source: Bitmap, downscale: Int, radius: Int, passes: Int): Bitmap {
-    val w = (source.width / downscale.coerceAtLeast(1)).coerceAtLeast(1)
-    val h = (source.height / downscale.coerceAtLeast(1)).coerceAtLeast(1)
-    val small = if (w == source.width && h == source.height) source else source.scale(w, h)
-    if (radius < 1) return small
-
-    val pixels = IntArray(w * h)
-    small.getPixels(pixels, 0, w, 0, 0, w, h)
-    BitmapBlur.blur(pixels, w, h, radius, passes)
-    return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
-        setPixels(pixels, 0, w, 0, 0, w, h)
-    }
-}
 
 /**
  * A representative accent color (ARGB) for [source] — what `BackdropEffect.MaterialYou` washes a frosted surface in.

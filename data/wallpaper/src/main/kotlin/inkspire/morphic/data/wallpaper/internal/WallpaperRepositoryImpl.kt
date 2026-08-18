@@ -181,29 +181,41 @@ internal class WallpaperRepositoryImpl(
     }
 
     /**
-     * The file at [path] decoded and blurred, or null if it has gone missing under us.
+     * The file at [path] decoded and blurred by [strength], or null if it has gone missing under us.
      *
-     * **How much of the picture survives now follows the blur**, which is the correction: it used to be a flat
-     * eighth of the screen — a sample step of 2 on the decode and a further downscale of 4 — at *every* strength.
-     * So a frosted surface always showed an eighth-resolution wallpaper stretched back up, and at low strengths,
-     * where there is little or no blur to hide it, that read as a low-quality image rather than as glass. The
-     * blur was never what was wrong there.
+     * **How much of the picture survives follows the blur**, which is the correction the constant reduction needed: it
+     * used to be a flat eighth of the screen at *every* strength, so a frosted surface always showed an
+     * eighth-resolution wallpaper stretched back up — and at low strengths, where there is little or no blur to hide
+     * it, that read as a low-quality image rather than as glass. The blur was never what was wrong there.
      *
-     * The whole reduction is now one number from [BitmapBlur.downscaleFor], taken as far as possible in the
-     * **decode** — `inSampleSize` is free where a later `scale` is not — with whatever is left over done on the
-     * bitmap. A strength of zero reduces by nothing at all and the surface samples the wallpaper itself.
+     * **The whole reduction is taken in the decode**, where `inSampleSize` is free and a later `scale` is not — so it
+     * is the largest power of two [BitmapBlur.downscaleFor] allows rather than that number itself, and the radius is
+     * measured against the reduction *actually* taken. Splitting it (a power-of-two decode plus a residual scale) is
+     * what the first cut did, and integer division threw the residue away every time: the radius was computed for a
+     * bitmap smaller than the one it ran on, so every strength between two powers of two quietly under-blurred. That
+     * was invisible while the only caller asked for one strength; it stopped being invisible the moment the effects
+     * section's slider reached this.
+     *
+     * A strength of zero reduces by nothing and blurs by nothing, so what comes back is the wallpaper itself — the
+     * decode's own bitmap, which nothing else holds, so handing it over transfers ownership rather than sharing it.
      */
     private fun blurBackdrop(path: String, strength: Float): Bitmap? {
         // The reach in the wallpaper's own pixels, so one preference means the same softness on every screen.
         val radiusPx = strength.coerceIn(0f, 1f) * MAX_BLUR_RADIUS_PX
-        val total = BitmapBlur.downscaleFor(radiusPx)
-        // `inSampleSize` only honours powers of two, so the decode takes the largest one it can and the residue is
-        // left to the scale below rather than being rounded away.
-        val step = Integer.highestOneBit(total.coerceAtLeast(1))
-
-        val sharp = decodeFile(path, step) ?: return null
-        val radius = BitmapBlur.boxRadiusFor(radiusPx / total)
-        return downscaleAndBlur(sharp, downscale = total / step, radius = radius, passes = BLUR_PASSES)
+        // Reduced in proportion to the blur, then floored at [MIN_BLURRED_DOWNSCALE] once anything is blurred at all.
+        // The floor is the same premise `downscaleFor` runs on rather than a compromise with it, and it is what keeps
+        // the worst case off the slider: a full-resolution blur wants the decode, a pixel array, a scratch array and a
+        // result bitmap live at once — four buffers of 13MB on a 1216x2688 screen — and that sat in the first few
+        // percent of the travel, where the effect is least visible. `boxRadiusFor` floors a positive sigma at one box
+        // pixel, so *any* strength above zero blurs, which makes the test for the sharp case the strength itself.
+        val proportional = BitmapBlur.downscaleFor(radiusPx)
+        val downscale = Integer.highestOneBit(
+            if (radiusPx > 0f) maxOf(proportional, MIN_BLURRED_DOWNSCALE) else proportional,
+        )
+        val sharp = decodeFile(path, downscale) ?: return null
+        val radius = BitmapBlur.boxRadiusFor(radiusPx / downscale)
+        if (radius < 1) return sharp
+        return BitmapBlur.blurred(sharp, radius, BLUR_PASSES)
     }
 
     /**
@@ -557,13 +569,6 @@ internal class WallpaperRepositoryImpl(
         const val BRIGHTNESS_GRID = 32
 
         /**
-         * How much smaller the backdrop is than the wallpaper — the decode step and the blur's own downscale.
-         *
-         * Two reductions rather than one because they buy different things: the decode step keeps a screen-sized JPEG
-         * from being fully materialized, and the blur's downscale is what makes the passes cheap. A backdrop is
-         * upscaled at draw time regardless, so the resolution lost here is resolution the blur was about to destroy.
-         */
-        /**
          * How far a strength of 1.0 blurs, in pixels of the **wallpaper**.
          *
          * In the picture's own pixels rather than the reduced copy's, which is what makes the preference mean one
@@ -575,5 +580,15 @@ internal class WallpaperRepositoryImpl(
 
         /** Three box passes approximate a gaussian closely enough that no one can tell. L1's number. */
         const val BLUR_PASSES = 3
+
+        /**
+         * The least a picture is reduced by **once it is blurred at all** — see `blurBackdrop`.
+         *
+         * Not a quality compromise: a blur wide enough to be visible has destroyed detail at its own radius, so the
+         * halving is free to the eye. A strength of *zero* is exempt, and deliberately — there the picture is the
+         * wallpaper itself, which is exactly what a sharp frosted panel is asking for, and reducing it would answer
+         * "no blur" with a soft upscale.
+         */
+        const val MIN_BLURRED_DOWNSCALE = 2
     }
 }

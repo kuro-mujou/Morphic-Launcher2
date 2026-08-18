@@ -771,8 +771,12 @@ of the radius*, is cheap enough that nothing has to be reduced first. Its own mo
   constant is why a frosted surface looked like a low-resolution copy of the wallpaper *at every strength, including
   zero* — where no blur is applied at all, so nothing about the blur could have been at fault.
   `BitmapBlur.downscaleFor` keeps enough radius on the reduced bitmap for the passes to be doing the smoothing rather
-  than the upscale, and the reduction is taken as far as possible in the **decode** (`inSampleSize` is free where a
-  later `scale` is not).
+  than the upscale, and the reduction is taken **entirely in the decode** (`inSampleSize` is free where a later `scale`
+  is not) — so it is the largest power of two that number allows, and the radius is measured against the reduction
+  *actually* taken. Splitting it between a power-of-two decode and a residual `scale` is what the first cut did, and
+  integer division threw the residue away every time, so the radius was computed for a bitmap smaller than the one it
+  ran on and every strength between two powers of two quietly under-blurred. Invisible while one caller asked for one
+  strength; not invisible once a slider reached it.
 - **The blur is premultiplied, which the wallpaper's version never needed and an icon cannot do without.**
   `getPixels` hands back un-premultiplied ARGB and a transparent pixel is almost always transparent *black*, so
   averaging the channels directly drags black into everything near an edge — `LayerPixelate.averageArgb`'s trap, one
