@@ -338,6 +338,11 @@ interface WallpaperRepository {
      * Re-emits only when the *source* changes, so nothing re-blurs because an unrelated preference moved. A change of
      * [strength] is a new collection rather than an emission — the caller re-invokes with the new value.
      *
+     * **"Source" is the file's identity, not its name**, and that distinction is load-bearing: the stored images live at
+     * fixed paths and are overwritten in place, so a capture taken over a capture — or a half of the rotating pair
+     * replaced while that pair is live — changes the picture without changing the path, and would otherwise leave every
+     * frosted surface showing the previous wallpaper until the launcher restarted.
+     *
      * **[orientation] is a flow, and that is the difference between a rotation costing nothing and costing a decode.**
      * It matters to step 1 alone: the rotating pair is two files, so turning the device genuinely changes which picture
      * is on screen. For a picked or captured image the answer is the same file whichever way the phone is held — so if

@@ -81,10 +81,24 @@ internal class WallpaperRepositoryImpl(
     private val store = appContext.wallpaperDataStore
     private val json = Json { ignoreUnknownKeys = true }
 
-    override val wallpaper: Flow<WallpaperState> = store.data
+    /**
+     * The stored blob on **every** write, equal or not — the internal signal, where [wallpaper] is the public one.
+     *
+     * **The two differ by a `distinctUntilChanged`, and that operator is why a replaced image went unnoticed.** A
+     * capture taken twice on the same screen produces a byte-identical [WallpaperState]: same path (the file is
+     * overwritten), same dimensions, same source, `appliedSystemId` reset to 0 both times. So the de-duped flow
+     * swallowed the second one, and nothing downstream ever learned that the *picture* had changed. Same for replacing
+     * a half of the rotating pair while it is live.
+     *
+     * De-duplicating a *value* is right for a consumer that renders it, which is what [wallpaper] is for. It is wrong
+     * for a consumer whose real subject is a **file the value only names** — see [backdrop], which asks the file itself
+     * whether anything moved.
+     */
+    private val storedState: Flow<WallpaperState> = store.data
         .map { prefs -> decodeState(prefs[StateKey]) }
-        .distinctUntilChanged()
         .flowOn(dispatchers.io)
+
+    override val wallpaper: Flow<WallpaperState> = storedState.distinctUntilChanged()
 
     /**
      * Our stored state, re-emitted on every reason **what is displayed** could have changed.
@@ -98,7 +112,7 @@ internal class WallpaperRepositoryImpl(
      * is behind the chrome right now?" — and two change signals for one question is how they end up disagreeing.
      */
     private val displayedWallpaperChanges: Flow<WallpaperState> =
-        combine(wallpaper, systemColorChanges()) { state, _ -> state }
+        combine(storedState, systemColorChanges()) { state, _ -> state }
 
     override val brightness: Flow<WallpaperBrightness> = displayedWallpaperChanges
         .map { resolveBrightness(it) }
@@ -112,16 +126,23 @@ internal class WallpaperRepositoryImpl(
 
     override fun backdrop(strength: Float, orientation: Flow<Orientation>): Flow<Bitmap?> =
         combine(displayedWallpaperChanges, orientation, ::Pair)
-            .map { (state, current) -> backdropSourcePath(state, current) }
-            // On the *path*, not on the bitmap: re-blurring an unchanged file would hand every frosted surface a new,
-            // equal image and invalidate all of them for nothing. It also means an unrelated state write (a rotating
-            // half being set while a static image is displayed) costs a comparison rather than a decode.
+            .map { (state, current) -> backdropSourcePath(state, current)?.let(::backdropSource) }
+            // On the *source*, not on the bitmap: re-blurring an unchanged file would hand every frosted surface a
+            // new, equal image and invalidate all of them for nothing. It also means an unrelated state write (a
+            // rotating half being set while a static image is displayed) costs a comparison rather than a decode.
+            //
+            // **The source is the file's identity and not just its name**, which is the fix for a stale backdrop: the
+            // stored images live at fixed paths and are *overwritten*, so a capture taken over a capture, or a
+            // rotating half replaced while that pair is live, leaves the string identical and the picture different.
+            // Asked of the file rather than remembered in the state — the same reason `ownsSystemWallpaper` asks the
+            // system and `isRotatingActive` asks the wallpaper manager, and the reason no write site has to remember
+            // to bump anything.
             //
             // **This is also why the orientation arrives as a flow** — see the interface. Rotating the device only
             // changes which picture is on screen for the *rotating pair*; for a picked or captured image the path is
             // the same string, so it has to reach this comparison rather than restarting the collection above it.
             .distinctUntilChanged()
-            .map { path -> path?.let { blurBackdrop(it, strength) } }
+            .map { source -> source?.let { blurBackdrop(it.path, strength) } }
             .flowOn(dispatchers.io)
 
     override suspend fun decodePreview(uri: Uri): Bitmap? = withContext(dispatchers.io) {
@@ -254,6 +275,19 @@ internal class WallpaperRepositoryImpl(
         if (image.source == WallpaperSource.CAPTURED) return image.path
         return if (ownsSystemWallpaper(state)) image.path else null
     }
+
+    /**
+     * A file the backdrop may sample, with enough of its identity to tell one write of it from the next.
+     *
+     * `lastModified` *and* `length`, because either alone is weak: two images can be the same size, and a filesystem's
+     * timestamp granularity is coarse enough that a fast overwrite can land in the same tick. Together they are a
+     * cheap `stat` and no decode.
+     */
+    private data class BackdropSource(val path: String, val modifiedAt: Long, val length: Long)
+
+    /** [path] with its current identity read off the filesystem. A missing file reads as zeroes, and decodes as null. */
+    private fun backdropSource(path: String): BackdropSource =
+        File(path).let { BackdropSource(path, it.lastModified(), it.length()) }
 
     /**
      * Whether the image this launcher stored is still the one the system is showing.
