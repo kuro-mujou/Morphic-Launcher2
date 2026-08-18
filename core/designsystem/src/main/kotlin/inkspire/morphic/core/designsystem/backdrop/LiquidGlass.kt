@@ -4,6 +4,7 @@ import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
+import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -169,4 +170,5 @@ internal class LiquidGlass {
  * chooser does not offer, so it asks this and says why instead. The renderer checks it too, since a stored preference
  * outlives the device it was chosen on — a backup restored onto an older phone is exactly that case.
  */
-val liquidGlassSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+val liquidGlassSupported: Boolean @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.TIRAMISU)
+    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
