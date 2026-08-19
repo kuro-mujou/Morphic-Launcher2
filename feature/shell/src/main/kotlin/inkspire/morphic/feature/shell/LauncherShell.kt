@@ -74,7 +74,7 @@ import org.koin.compose.koinInject
 /**
  * The launcher itself: **HOME in the center, side surfaces off its edges**, panned between by a swipe.
  *
- * This is the real version of what `app/dev/SurfacePagerPlaygroundScreen` prototyped. That harness proved the gesture
+ * This is the real version of what a dev-harness playground once prototyped. That harness proved the gesture
  * and the finger-policy table against *simulated* surfaces — colored boxes standing in for layouts that didn't exist.
  * They all exist now, so the boxes are the real screens; the playground stays in the dev harness as the regression
  * test for the gesture itself.
@@ -182,7 +182,7 @@ fun LauncherShell(
                 },
                 // **Navigation arrives as an action, not as a `Navigator`.** `feature:shell` composes the launcher's
                 // surfaces; which *destination* settings is belongs to `app`, which owns the back stack — the same
-                // reason `SettingsScreen` takes `onOpenDevHarness` rather than learning that route exists.
+                // reason a screen takes an action rather than learning which route it goes to.
                 onOpenSettings = onOpenSettings,
             )
         }

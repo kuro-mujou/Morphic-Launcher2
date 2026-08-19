@@ -24,20 +24,7 @@ import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropScreen
 import inkspire.morphic.feature.shell.LauncherShell
-import inkspire.morphic.launcher.dev.DevRootScreen
 import kotlinx.serialization.Serializable
-
-/**
- * The dev harness, as a destination.
- *
- * **Declared here rather than in `core:navigation` on purpose.** It is not a product screen — it is scaffolding only
- * `app` knows about — and a `core` module has no business exporting it to every consumer. That this key works
- * perfectly well from outside the navigation module is the point: `entryProvider` is a mapping, not a registry, so
- * any module can contribute a destination. L1 put *everything* in its navigation module, which is how an 11-value
- * settings enum ended up on `feature:home`'s compile classpath.
- */
-@Serializable
-private data object DevHarnessRoute : NavKey
 
 /**
  * The launcher's navigation host: the back stack, the [inkspire.morphic.core.navigation.Navigator] over it, and the
@@ -129,10 +116,7 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         initialSection = route.section,
                         initialLayout = route.layout,
                         // Settings is **one** destination: its sections are panes, two of which share the screen on a
-                        // tablet, so which one is showing is that screen's own state. The dev harness is the only
-                        // thing it needs from out here, and it is passed as an action — which keeps
-                        // `feature:settings` from ever learning that destination exists.
-                        onOpenDevHarness = { navigator.goTo(DevHarnessRoute) },
+                        // tablet, so which one is showing is that screen's own state.
                     )
                 }
                 // Declared by `feature:settings`, mapped here — which is the whole point of `entryProvider` being a
@@ -166,7 +150,6 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<ContainerSettingsRoute.Widget> { route ->
                     ContainerSettingsScreen(route = route, onBack = { navigator.goBack() })
                 }
-                entry<DevHarnessRoute> { DevRootScreen() }
             },
         )
     }

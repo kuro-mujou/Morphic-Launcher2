@@ -93,7 +93,7 @@ import org.koin.androidx.compose.koinViewModel
  *   Zero before the surface has been measured, which [WidgetSpan.forMinSize] answers with no label at all rather
  *   than a wrong one.
  * @param onAddWidget **null while nothing can place a widget yet**, which hides the Add button rather than
- *   disabling it — the same nullable-lambda shape `SettingsScreen.onOpenDevHarness` and `AppsScreen`'s settings
+ *   disabling it — the same nullable-lambda shape `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
  *   appears with nothing else here changing.
  * @param onAddIconContainer adds an empty icon container. Nullable on [onAddWidget]'s terms, and the caller passes

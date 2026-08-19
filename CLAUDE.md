@@ -375,9 +375,9 @@ home screen are seen together — which is the whole argument.
 Only the drawing API differs, which is unavoidable and is exactly why those nine exist. The per-layer order is **content → shape mask →
 effects, in list order → composite**, the same on both sides for different-looking reasons — statement order in
 one, modifier nesting in the other. Two consequences: the live stack must composite **offscreen** (or a `MULTIPLY`
-on the bottom layer blends against the studio canvas rather than against nothing), and the `IconLayers` dev-harness
-playground draws one set both ways side by side, because comparing pixels needs instrumentation this project has no
-setup for.
+on the bottom layer blends against the studio canvas rather than against nothing), and the two paths were compared
+side by side in an `IconLayers` dev-harness page until that harness was deleted — so the check is now the studio
+against a real surface, by eye, because comparing pixels needs instrumentation this project has no setup for.
 - **`effects` is a pipeline now, not a bag, and that is what makes room for more than two.** Both renderers used to
   read `spec.color` and `spec.gradient` *by name* and apply them in a sequence each hardcoded — gradient into the
   layer, color matrix onto the paint that joined it to the stack — so the list's order meant nothing. They now walk
@@ -1586,8 +1586,12 @@ brightness question through the same system API as every other wallpaper.
   package. Do **not** mix generic components and app-icon widgets in one package like L1 did.
 - **Port per-consumer.** L1's `core:designsystem` is ~50 files / 5.4k LOC — pull a group only when the
   screen that needs it is built, not up front.
-- A **dev gallery** (`app` → `dev/DevGalleryScreen`) hosts every `Morphic*` component + the palette under a
-  light/dark toggle; add each new component to it.
+- **The dev harness is gone** (deleted 2026-08-19): the component gallery, the palette page and the nine playgrounds
+  that prototyped the drag toolkit, the grids and the surface pan. They had done their job — every one of those
+  subsystems now has a real surface exercising it — and a harness nobody opens is a second set of call sites to keep
+  compiling. Notes below that say a playground *proved* or *prototyped* something are history and still true; there is
+  simply nowhere to go and look any more. **What went with it, and is worth knowing:** the `IconLayers` page was the
+  only place the two icon render paths were drawn side by side, so the live/bake comparison is now by eye on a device.
 - **`MorphicColorPicker`** (a saturation/value panel over a hue bar) has **no alpha channel**, deliberately: every
   color the launcher lets a user pick already sits somewhere carrying opacity, and offering a second way to set
   it is how a color silently loses its transparency. Its hue is held as *state* rather than re-derived from the
@@ -1632,8 +1636,8 @@ architecture" and drifted into monolith ViewModels (a 500-line sealed-`HomeEvent
 in `app`), applying the `launcher.android.feature` convention plugin — which is why that plugin pre-wires
 core:model/common/designsystem + lifecycle-viewmodel + koin-compose + Compose. A feature adds only the extra
 deps it needs (e.g. `feature:home` adds `data:apps` + `data:layout`). The `app` module is the shell: it starts
-Koin with every module's DI graph and hosts the entry points (currently the `dev/DevRootScreen` harness). New UI
-starts in a `feature:*` module from day one — do **not** prototype it in `app` and "extract later".
+Koin with every module's DI graph and hosts the entry points. New UI starts in a `feature:*` module from day one — do
+**not** prototype it in `app` and "extract later".
 
 **Repository vs command split.** A repository is *read/refresh* access to data (e.g. `AppRepository` streams the
 app cache). A side-effecting *command* gets its own honest type rather than being bolted onto a repository — e.g.
@@ -1701,7 +1705,7 @@ takes — an app the UI could not resolve must not be deleted on that evidence �
 unavailable (SD card, locked work profile) survive rather than lose its place.
 
 **B4 `core:designsystem` — well along.** Theme + `Morphic*` components, plus the interaction primitives, all
-validated in the `app/dev` harness (`DevRootScreen`): the drag toolkit (`DragCoordinator`, `FreeGridPlanner`,
+validated in the `app/dev` harness while it existed: the drag toolkit (`DragCoordinator`, `FreeGridPlanner`,
 MovingGap, `launcherItemGestures`, `DropFootprint`/`FloatingDragIcon`), `LauncherPager`, `SurfacePager`
 (HOME↔side-surface pan; per-edge one/two-finger `OneFingerSwipe` policy — `ALWAYS`/`AT_EDGE`/`NEVER`, with
 `AT_EDGE`'s nested-scroll hand-off wired — see the surface-swipe rules below), and the
@@ -1761,7 +1765,7 @@ Its own module (`feature:home`, `inkspire.morphic.feature.home`); plain-MVVM `Ho
 apps + `LayoutRepository.folders`. The main area renders on the paged `CoordinateDragPager` at the **real blueprint
 size** (`HomePagerGrid.toGridConfig(device)` — device-aware, `cellMultiplier = 2`, apps are 2×2 logical footprints
 snapped to the visual lattice; device detected in the UI, fed to the VM for seeding). Portrait only. Hosted as
-the default `DevRootScreen` screen.
+the launcher's home surface.
 - **Launch** on tap → `AppLauncher` (`data:apps`, a one-method command separate from `AppRepository`'s reads;
   resolves the per-profile user from `ComponentKey.userSerial`, unlike L1's hardcoded personal user).
 - **Drag-to-rearrange** persists through `LayoutRepository.apply` (optimistic → no flicker; `FreeGridPlanner`
@@ -2821,15 +2825,15 @@ Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](d
 **Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`
-declares its own dev-harness key, since `entryProvider` is a mapping and not a registry. `feature:shell`'s
+once declared its own dev-harness key, which is what proved `entryProvider` is a mapping and not a registry — a
+destination can be contributed by any module, so `feature:settings` keeps its own routes. `feature:shell`'s
 `LauncherShell` is the launcher — `SurfacePager` with `HomeScreen` center and side surfaces from the register — and it
 owns the **launcher theme boundary**, which is why `HomeScreen`/`AppsScreen` no longer theme themselves. It also owns
 the **full-screen frost**, which `SurfacePager` takes as an `overlay` slot between the center and the sides: not panned
 with either, and driven by `SurfacePagerState.progress` (the pan collapsed to "how far in is the other surface",
 unsigned and edge-agnostic) so the content slides while the frost fades. The launcher
-boots into it; the dev harness (all playgrounds + the component gallery) is kept as a peer destination reached from a
-row in settings, so no dev chrome ships on a real surface. A gear chip over HOME is the admitted scaffolding standing in
-for the P7 long-press menu.
+boots into it. The dev harness that used to sit beside it as a peer destination is deleted, and with it the
+floating button in settings that opened it — so there is no dev chrome in the app at all.
 
 **The drag is the launcher's, not a surface's — so an app can be dragged from APPS onto HOME.** `feature:shell` hosts
 the **one** `DragCoordinator` and provides it through `LocalDragCoordinator`; every surface reads it. Each surface used

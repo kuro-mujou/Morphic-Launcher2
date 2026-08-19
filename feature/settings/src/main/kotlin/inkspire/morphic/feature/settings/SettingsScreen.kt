@@ -24,9 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -86,9 +84,6 @@ private val ListPaneWidth = 360.dp
  *
  * @param onBack leaves settings entirely. In single-pane, system back first closes an open detail — L1's two-step,
  *   and the honest one: the detail is a place, so back should leave it before leaving the surface.
- * @param onOpenDevHarness opens `app`'s dev destination, offered as a floating button exactly as L1 offered its
- *   design gallery. Passed in because the harness is scaffolding `app` owns, which is what keeps this module from
- *   ever learning it exists.
  */
 @Composable
 fun SettingsScreen(
@@ -96,7 +91,6 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     initialSection: SettingsSection? = null,
     initialLayout: AppsLayout? = null,
-    onOpenDevHarness: (() -> Unit)? = null,
 ) {
     val twoPane = currentDeviceConfiguration().isTablet
     // **Seeded from the route, and only from the *first* arrival** — `rememberSaveable`'s initializer runs once, so
@@ -126,7 +120,6 @@ fun SettingsScreen(
                 appsLayout = appsLayout,
                 onOpenSection = openSection,
                 onBack = onBack,
-                onOpenDevHarness = onOpenDevHarness,
                 modifier = modifier,
             )
         } else {
@@ -138,7 +131,6 @@ fun SettingsScreen(
                 appsLayout = appsLayout,
                 onOpenSection = openSection,
                 onBack = onBack,
-                onOpenDevHarness = onOpenDevHarness,
                 modifier = modifier,
             )
         }
@@ -159,7 +151,6 @@ private fun SettingsSinglePane(
     onSelect: (SettingsSection) -> Unit,
     onCloseDetail: () -> Unit,
     onBack: () -> Unit,
-    onOpenDevHarness: (() -> Unit)?,
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
@@ -185,7 +176,6 @@ private fun SettingsSinglePane(
                 },
             )
         },
-        floatingActionButton = { DevHarnessButton(onOpenDevHarness) },
     ) { innerPadding ->
         AnimatedContent(
             targetState = selected,
@@ -227,7 +217,6 @@ private fun SettingsTwoPane(
     selected: SettingsSection,
     onSelect: (SettingsSection) -> Unit,
     onBack: () -> Unit,
-    onOpenDevHarness: (() -> Unit)?,
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
@@ -247,7 +236,6 @@ private fun SettingsTwoPane(
                 navigationIcon = { BackButton(onBack) },
             )
         },
-        floatingActionButton = { DevHarnessButton(onOpenDevHarness) },
     ) { innerPadding ->
         Row(
             modifier = Modifier
@@ -363,23 +351,6 @@ private fun PunchThroughPane(insetSides: WindowInsetsSides, content: @Composable
 private fun BackButton(onClick: () -> Unit) {
     IconButton(onClick = onClick) {
         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-    }
-}
-
-/**
- * Dev-only way into the harness, mirroring L1's design-gallery button. Absent when the host offers no harness.
- *
- * It pads itself, because the scaffold's own inset reservation is zeroed — that reservation is what normally lifts a
- * FAB off the navigation bar, and the button is measured with this padding, so the scaffold places it clear.
- */
-@Composable
-private fun DevHarnessButton(onClick: (() -> Unit)?) {
-    if (onClick == null) return
-    FloatingActionButton(
-        onClick = onClick,
-        modifier = Modifier.uiInsetsPadding(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
-    ) {
-        Icon(imageVector = Icons.Filled.Build, contentDescription = "Dev harness")
     }
 }
 

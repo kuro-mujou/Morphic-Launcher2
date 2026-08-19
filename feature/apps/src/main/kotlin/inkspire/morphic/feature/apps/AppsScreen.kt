@@ -76,7 +76,8 @@ import org.koin.androidx.compose.koinViewModel
  *   surface can be reached from different home edges with different layouts. Wire it there, not here.
  * @param onOpenLayoutSettings goes to the settings for [layout]. **Nullable, and null means the row is absent** —
  *   not disabled — which is what the dev harness gets, since a destination it has no back stack for would be a row
- *   that does nothing. Same shape, and the same reason, as `SettingsScreen`'s own `onOpenDevHarness`.
+ *   that does nothing — the same nullable-lambda shape `WidgetPickerSheet` uses for a capability its host may not
+ *   have.
  */
 @Composable
 fun AppsScreen(
