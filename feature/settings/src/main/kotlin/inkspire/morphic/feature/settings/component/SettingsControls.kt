@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,7 +113,17 @@ internal fun SettingsCommitSlider(
     onPreview: (Float) -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
-    var dragged by remember(value) { mutableStateOf<Float?>(null) }
+    // **A stable state object, cleared by a *write*, and never `remember(value)`.** Keying the `remember` on the
+    // incoming value looks like the obvious way to say "a fresh value ends the drag", and it is a trap: it
+    // **recreates** the state, so a callback Compose had already memoised goes on using the dead one. That was not
+    // theoretical — a stepper's step and its release ended up holding different instances, the step wrote into the live
+    // state and the release read `null` from the dead one, and **every press silently failed to commit**. Found on a
+    // device by logging `identityHashCode` at both ends. A `LaunchedEffect` clears the one object every closure shares.
+    // The cost is that the reset lands a frame after the value arrives, which is invisible: the value it clears for is
+    // the one just committed, so the number does not change.
+    val draggedState = remember { mutableStateOf<Float?>(null) }
+    var dragged by draggedState
+    LaunchedEffect(value) { draggedState.value = null }
     val shown = dragged ?: value
 
     Column(Modifier.fillMaxWidth().padding(vertical = RowGapV / 2)) {
@@ -148,7 +159,7 @@ internal fun SettingsCommitSlider(
  * ruler; instead the track stays continuous and each thumb's value is rounded to whole dp as it moves. The thumb
  * settles on integers without the track advertising them.
  *
- * Commit-on-release, the `remember(value)` key and [onPreview] work as in [SettingsCommitSlider], and for the same
+ * Commit-on-release, the drag state's lifetime and [onPreview] work as in [SettingsCommitSlider], and for the same
  * reasons.
  */
 @Composable
@@ -162,7 +173,11 @@ internal fun SettingsCommitRangeSlider(
     onPreview: (IntRange) -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
-    var dragged by remember(value) { mutableStateOf<IntRange?>(null) }
+    // A stable object cleared by a write, never `remember(value)` — see [SettingsCommitSlider] for what recreating it
+    // costs, which was a stepper whose presses silently failed to commit.
+    val draggedState = remember { mutableStateOf<IntRange?>(null) }
+    var dragged by draggedState
+    LaunchedEffect(value) { draggedState.value = null }
     val shown = dragged ?: value
 
     Column(Modifier.fillMaxWidth().padding(vertical = RowGapV / 2)) {

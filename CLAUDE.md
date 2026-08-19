@@ -2598,7 +2598,17 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
   black and white, where a settings pane follows the theme. Both are in `feature:settings`, so sharing the arithmetic is
   an import rather than an extraction. The tint amount is the one row with **no name**: the swatch row above it is the
   label, and heading it "Tint" under a heading reading "Tint" says one thing twice.
-  - **The steppers hold to repeat, through `Modifier.repeatingPress`** — extracted from the studio's `StudioStepperButton`
+  - **A drag's state is one object for the row's life, cleared by a *write* — never `remember(value)`.** Keying that
+  `remember` on the incoming value reads as the obvious way to say "a fresh value ends the drag", and it **recreates**
+  the state: a callback Compose has already memoised then goes on using the dead instance. On a stepper the step and the
+  release ended up holding *different* instances, so the step wrote into the live state and the release read `null` from
+  the dead one — **every press silently failed to commit**, which then presented as the tint reverting, the blur
+  vanishing and the two controls fighting, all of them downstream of one lost write. Found with adb by logging
+  `identityHashCode` at both ends; three rounds of reasoning about it from the code had each fixed a real but different
+  bug. A `LaunchedEffect(value)` clears the one object every closure shares, and the frame of lag that buys is invisible
+  because the value it clears *for* is the one just committed. `SettingsCommitSlider` and `SettingsRangeSlider` carried
+  the same pattern and are fixed with it — a drag never reached it, having one gesture and one write.
+- **The steppers hold to repeat, through `Modifier.repeatingPress`** — extracted from the studio's `StudioStepperButton`
     on this second consumer, because what would drift is the part nobody would think to check: it fires on the *press*
     (a release-fired repeat shows nothing for the whole first tap), waits the platform long-press timeout before the
     first repeat (so a tap can never become two), keys the gesture on `Unit` and reads `enabled` from inside it (keying

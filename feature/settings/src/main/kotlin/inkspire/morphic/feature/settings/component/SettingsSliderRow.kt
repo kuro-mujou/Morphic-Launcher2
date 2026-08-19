@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,7 +90,17 @@ internal fun SettingsSliderRow(
     // The dragged value, keyed on the incoming one so a commit — or a change from anywhere else — re-seeds it. The same
     // in-and-out shape `SettingsCommitSlider` uses, and the reason the readout can track a finger that has written
     // nothing yet.
-    var dragged by remember(value) { mutableStateOf<Float?>(null) }
+    // **A stable state object, cleared by a *write*, and never `remember(value)`.** Keying the `remember` on the
+    // incoming value looks like the obvious way to say "a fresh value ends the drag", and it is a trap: it
+    // **recreates** the state, so a callback Compose had already memoised goes on using the dead one. That was not
+    // theoretical — a stepper's step and its release ended up holding different instances, the step wrote into the live
+    // state and the release read `null` from the dead one, and **every press silently failed to commit**. Found on a
+    // device by logging `identityHashCode` at both ends. A `LaunchedEffect` clears the one object every closure shares.
+    // The cost is that the reset lands a frame after the value arrives, which is invisible: the value it clears for is
+    // the one just committed, so the number does not change.
+    val draggedState = remember { mutableStateOf<Float?>(null) }
+    var dragged by draggedState
+    LaunchedEffect(value) { draggedState.value = null }
     val shown = dragged ?: value
 
     // **A step reads `dragged` rather than the captured `shown`.** A repeat can fire faster than a recomposition, so a
