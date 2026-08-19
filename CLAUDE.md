@@ -1351,11 +1351,16 @@ a canvas the *user* switches between black and white.
   mismatched pair of arguments. It is a `Modifier.Node` and not a
   `drawBehind` because of exactly that motion: the outline and clip `Path` are cached against size and shape, so a
   position-only change rebuilds nothing. Ported from L1's `Backdrop.kt`, with four differences:
-  - **Every effect blurs; what they differ in is the *wash* — which is why `None` is now `Plain(strength)`.** The model
-    used to let an effect decline to sample the wallpaper at all, and the full-screen frost overturned that: a surface
-    arriving over HOME has to occlude it whatever decoration the user picked, so the only choice ever really on offer
-    was *which wash*. `blurStrength` is therefore total, and "nothing to sample" means one thing — `LocalBackdrop` being
-    null, i.e. the launcher has no wallpaper it may read. The `@SerialName` stays `"none"`, so no stored blob moved.
+  - **Every effect blurs; what they differ in is the *wash*, and the wash is now a parameter rather than a variant.**
+    The model used to let an effect decline to sample the wallpaper at all, and the full-screen frost overturned that: a
+    surface arriving over HOME has to occlude it whatever decoration the user picked, so the only choice ever really on
+    offer was *which wash*. That first made `None` into `Plain(strength)`; then `Plain`, the two `Blur` tones and
+    `MaterialYou` collapsed into one `Blur` carrying a **`BackdropTint`**, since four variants that blur identically and
+    differ by a color are four names for one effect. `blurStrength` is therefore total over two variants, and "nothing to
+    sample" means one thing — `LocalBackdrop` being null, i.e. the launcher has no wallpaper it may read. **A storage
+    break, free pre-launch:** `@SerialName("blur")` is kept, so an old blur blob is not an unknown *type* — it fails on
+    `tint`, which was a `Float` and is an enum, and the slice falls back to its default with a log. Nothing can be
+    silently mis-read, which is the property that mattered.
   - **All four effects carry the wallpaper's hue, and that is the one deliberate exception to the monochrome palette
     rule.** The rule makes *chrome* grayscale so the wallpaper and the icons carry the color; an effect the user picks,
     whose whole subject is the wallpaper, is not chrome. So L1's two-stage blend is ported exactly: a **wallpaper tone**
@@ -2518,13 +2523,46 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
     "did the source change?" comparison had nothing to compare against, and the launcher re-decoded and re-blurred a
     picture identical to the one it held — two decodes per turn of the device, one of them nearly full-screen. Passed as
     a flow it reaches that comparison instead.
-- **The sliders come from the sealed variant, not from a ten-field bag.** L1 held every parameter of every effect at
-  once; here the `when` is over `BackdropEffect` itself, so the compiler checks the mapping is total. The bill: a
-  write is a **whole-value** write, and switching *between* variants discards the previous one's parameters. Within a
-  variant nothing is lost — flipping a blur's tone keeps its strength and tint, which is the comparison users make.
-- **`BackdropOption` is the chip vocabulary, and it is not the stored enum coming back.** "Light blur" and "Dark blur"
-  are two things to pick between but one model variant with a `tone`, so the split lives in the section and never
-  reaches storage. Its first chip is `PLAIN`, not `NONE` — see the model note below.
+- **Two entries where there were five, because four of them were one effect.** `Plain`, "Light blur", "Dark blur" and
+  "Material You" all blurred the wallpaper identically and differed only in the color painted on top — so the color
+  became **`BackdropTint`** (`NONE / LIGHT / DARK / WALLPAPER / CUSTOM`), a parameter of `BackdropEffect.Blur`, and the
+  sealed type is down to the two effects that are genuinely unlike: a blur, and a lens. `EffectKind` is the chooser's
+  two-value vocabulary and still the section's own rather than the model's, as `BackdropOption` was. Four consequences:
+  - **A `MorphicSegmentedButtons`, not a `FlowRow` of chips.** Five options were a chip row; two mutually-exclusive ones
+    are what a segmented control is for. This reverses the register section's "chips beat the segmented control"
+    finding rather than contradicting it — that was about *six* options per edge.
+  - **The parameters now survive a change of wash**, which is what the merge really bought. Switching between variants
+    discards them (the sealed type's trade, stated in `SettingsRepository.setBackdropEffect`), and a wash used to be a
+    variant — so trying Light and coming back to Dark reset a tuned strength. It is a `copy` now. Switching between the
+    two remaining *effects* still carries what they share: `Blur.strength` and `LiquidGlass.blur` are the same quantity
+    under two names, so `select` carries it across.
+  - **An enum plus a stored `customTintArgb`, not a `Custom(argb)` variant.** A payload-carrying variant would discard
+    the mixed color the moment another swatch was picked, so browsing the five would cost the user their color; the
+    field lives beside the choice and `CUSTOM` returns to it. Same shape as the icon studio keeping an effect's
+    parameters while its switch is off.
+  - **One tint ceiling where there were two.** Light/dark stopped at 0.6 (past which a wash is a sheet rather than a
+    frost) and Material You went to 0.9 (its hue *is* the effect). A custom color makes that undecidable from the
+    option — a pale color at 60% covers less than black at 40% — so the bound is the higher one and the **preview** is
+    what tells a user they have gone too far, which is a thing it can now do.
+- **`BackdropTint.washColor` resolves a tint to a color, in `core:designsystem` and not the model** — the
+  `DeviceConfiguration` split again: a tint names a choice, where turning one into a color needs the mode's
+  `surfaceVariant` and the wallpaper's accent. Public **because the swatches draw the same colors the renderer paints**;
+  a chooser that resolved its own would eventually advertise a wash the surface does not use. The swatches are drawn
+  **opaque** while the surface paints them at `tintAmount`, since a swatch answers *which color* and the slider under it
+  answers *how much* — at a low amount all five would otherwise look like the same pale nothing.
+- **The controls are the icon studio's slider shape** (`SettingsSliderRow`): name, value and reset over a track flanked
+  by a stepper each side. A wash at 28% and one at 30% are hard to tell apart on a photograph, so a readout and a reset
+  are worth more here than on a control whose result is a column count. It shares the studio's *arithmetic* — `snappedStep`
+  and `finestStep`, which are what make a press land on 1.00 rather than 0.987 and would be silently wrong written twice
+  — and **not** its chrome, since the studio fixes its content color to white for a canvas the user switches between
+  black and white, where a settings pane follows the theme. Both are in `feature:settings`, so sharing the arithmetic is
+  an import rather than an extraction. The tint amount is the one row with **no name**: the swatch row above it is the
+  label, and heading it "Tint" under a heading reading "Tint" says one thing twice.
+- **The custom color picker expands inline, never in a dialog.** A `Popup` is a separate platform window, so it would
+  cover the preview *and* fall outside the pane's offscreen layer, which is what the punch-through draws through — and
+  mixing a color you cannot see applied is the one thing a picker here must not ask for. `MorphicColorPicker` reports
+  every change and has no gesture-end, so each change **previews** and a button commits; writing per change would be a
+  JSON encode and a file write per frame, which is what `SettingsCommitSlider` exists to avoid.
 - **Liquid glass is hidden, not disabled, below API 33**, with L1's sentence explaining why. An effect that silently
   comes out as a plain blur is worse than one that is not offered.
 - **It has a live preview now, and it is a real frosted panel rather than a drawing of one** (`BackdropPreview`). This

@@ -14,7 +14,7 @@ private const val GRAY_FLOOR = 8.0
 private const val NEUTRAL_GRAY = 0xFF808080.toInt()
 
 /**
- * L1's `Blur.kt`, and the half of it that is still here: the representative color `BackdropEffect.MaterialYou` washes
+ * L1's `Blur.kt`, and the half of it that is still here: the representative color `BackdropTint.WALLPAPER` washes
  * a frosted surface in.
  *
  * **The blur half has left, and it left in two directions.** The kernel went to `core:graphics` (`BitmapBlur`), so
@@ -31,7 +31,7 @@ private const val NEUTRAL_GRAY = 0xFF808080.toInt()
  */
 
 /**
- * A representative accent color (ARGB) for [source] — what `BackdropEffect.MaterialYou` washes a frosted surface in.
+ * A representative accent color (ARGB) for [source] — what `BackdropTint.WALLPAPER` washes a frosted surface in.
  *
  * **A saturation-weighted average, not a plain one**, and that is the whole trick: a plain mean of a photograph is
  * mud, because every colorful pixel is dragged toward the gray majority. Weighting each pixel by its own chroma

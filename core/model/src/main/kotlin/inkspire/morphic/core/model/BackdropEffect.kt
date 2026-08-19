@@ -4,12 +4,50 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The tone of a frosted [BackdropEffect.Blur] — which color its translucent overlay leans toward.
+ * **What color a frosted blur is washed in** — the choice the effects section offers as five swatches.
  *
- * - [LIGHT]: a white overlay; frosts toward light.
- * - [DARK]: a black overlay; frosts toward dark.
+ * This replaces `BackdropBlurTone`, which had two values because light and dark were the only washes a *variant* could
+ * express: "no wash" was a separate variant (a `Plain`) and so was the wallpaper's own hue (`MaterialYou`). Four
+ * variants that blurred identically and differed only in the color painted over the blur is four names for one effect,
+ * and it made the chooser five entries long for two genuinely different things. A wash is a *parameter* of a blur, so
+ * it is one here, and the sealed type is down to the two effects that really are unlike: a blur, and a lens.
+ *
+ * **An enum plus a stored color rather than a sealed type with a payload**, which is the one design call worth stating.
+ * A `Custom(argb)` variant would carry the color, and selecting Light would then *discard* it — so trying the other
+ * swatches and coming back would hand the user a fresh default instead of the color they mixed. The color lives in
+ * [BackdropEffect.Blur.customTintArgb] beside the choice, exactly as the icon studio keeps an effect's parameters while
+ * its switch is off, and picking [CUSTOM] again returns to it.
  */
-enum class BackdropBlurTone { LIGHT, DARK }
+enum class BackdropTint {
+
+    /**
+     * No wash at all — the wallpaper, blurred, and nothing over it.
+     *
+     * The old `Plain` variant, and the naming difference is worth keeping: that one was renamed *away* from `None`
+     * because it still blurred, so "none" read as a bug. Here the blur is the effect and the tint is genuinely absent,
+     * which makes [NONE] the honest name.
+     */
+    NONE,
+
+    /** A white-leaning wash: frosts toward light. */
+    LIGHT,
+
+    /** A black-leaning wash: frosts toward dark. */
+    DARK,
+
+    /**
+     * The **wallpaper's own** representative color — the one wash whose subject is the picture under it.
+     *
+     * `MaterialYou`'s, and the deliberate exception to the design system's monochrome rule: that rule keeps *chrome*
+     * grayscale so the wallpaper and the icons carry the color, and this is a decoration the user picked whose whole
+     * point is the wallpaper's hue. Labelled "Material You" in the section — the model names what it *is*, the chooser
+     * names what a user recognises.
+     */
+    WALLPAPER,
+
+    /** A color the user mixed, held in [BackdropEffect.Blur.customTintArgb]. */
+    CUSTOM,
+}
 
 /**
  * How the frosted backdrop behind launcher surfaces renders over whatever sits beneath it (wallpaper,
@@ -27,64 +65,36 @@ enum class BackdropBlurTone { LIGHT, DARK }
  *
  * **Every variant blurs; what they differ in is the *wash* over that blur.** That is the model the full-screen
  * backdrop layer forced, and it is the honest one: a surface floating over the wallpaper has to occlude what is
- * behind it whatever decoration the user picked, so "blur or not" was never really the choice being offered. [Plain]
- * is the variant with no wash at all — which is why it is not called `None`.
+ * behind it whatever decoration the user picked, so "blur or not" was never really the choice being offered. Which
+ * wash — including none at all — is [BackdropTint], a parameter of [Blur] rather than a variant of its own.
  */
 @Serializable
 sealed interface BackdropEffect {
 
     /**
-     * A blur with **no wash over it** — the wallpaper, softened, and nothing else.
+     * **A blurred wallpaper with a wash over it** — the effect that four variants used to be.
      *
-     * **Named for what it does, not for what it lacks.** It was `None`, from a model in which the effect decided
-     * whether a surface sampled the wallpaper *at all*; under the current one every variant blurs and the effect
-     * chooses the wash, so "none" would have meant "it still blurs, but no color" — the kind of name that reads as
-     * a bug six months on. The `@SerialName` deliberately stays `"none"`: it is a discriminator in a user's stored
-     * blob, and this is a rename rather than a change of meaning to anything already saved.
+     * `Plain`, `Blur(LIGHT)`, `Blur(DARK)` and `MaterialYou` blurred identically and differed only in the color painted
+     * on top, so they are one variant with a [BackdropTint] now. What that buys is not only a shorter chooser: the
+     * parameters *survive* a change of wash, where switching variants discarded them (see
+     * `SettingsRepository.setBackdropEffect`) — so a user who has tuned a strength and an amount can try all five
+     * washes without losing either.
      *
-     * @property strength Blur amount, `0..1` — the one thing left to tune once there is no wash.
-     */
-    @Serializable
-    @SerialName("none")
-    data class Plain(val strength: Float = 0.5f) : BackdropEffect
-
-    /**
-     * A frosted blur.
-     *
-     * @property tone Whether the overlay leans [BackdropBlurTone.LIGHT] (white) or [BackdropBlurTone.DARK] (black).
      * @property strength Blur amount, `0..1`.
-     * @property tint Overlay alpha, `0..1` — applied as white when [tone] is [BackdropBlurTone.LIGHT], black when [BackdropBlurTone.DARK].
+     * @property tint Which color the wash is. [BackdropTint.NONE] means there is none, which is the old `Plain`.
+     * @property tintAmount The wash's alpha, `0..1`. Meaningless when [tint] is [BackdropTint.NONE], which is why the
+     *   section shows no control for it there rather than one that does nothing.
+     * @property customTintArgb The color [BackdropTint.CUSTOM] uses, kept whichever tint is selected so that choosing
+     *   [BackdropTint.CUSTOM] again returns to the color the user mixed rather than to a default. Its alpha is ignored —
+     *   [tintAmount] is the alpha, and two ways to set one thing is how they come to disagree.
      */
     @Serializable
     @SerialName("blur")
     data class Blur(
-        val tone: BackdropBlurTone,
         val strength: Float = 0.5f,
-        val tint: Float = 0.22f,
-    ) : BackdropEffect
-
-    /**
-     * A blur washed in the **wallpaper's own primary color** — the one effect whose subject is that color.
-     *
-     * **The deliberate exception to the monochrome palette rule**, and worth stating as one. That rule makes chrome
-     * grayscale *so that* the wallpaper and the app icons carry the color, which reads as an argument against a
-     * wallpaper-hued wash — but it is a rule about chrome the user did not ask for, and this is an effect they pick.
-     * The color it takes is the wallpaper's, so it is the wallpaper carrying the color rather than the theme
-     * inventing one.
-     *
-     * **Not the OS dynamic palette, which is how L1 got this above API 31.** L1's launcher ran a normal M3 dynamic
-     * scheme, so `colorScheme.primary` *was* a wallpaper-derived hue; L2 feeds MaterialTheme a **monochrome** scheme
-     * bridged from `MorphicColors`, so the same expression returns gray. `WallpaperRepository.accentColor` reads the
-     * wallpaper directly instead, on every API. [Blur] carries the same hue at lower strength — see `tintOf`.
-     *
-     * @property strength Blur amount, `0..1`.
-     * @property tint Overlay alpha, `0..1`.
-     */
-    @Serializable
-    @SerialName("material_you")
-    data class MaterialYou(
-        val strength: Float = 0.5f,
-        val tint: Float = 0.5f,
+        val tint: BackdropTint = BackdropTint.DARK,
+        val tintAmount: Float = 0.28f,
+        val customTintArgb: Int = DEFAULT_CUSTOM_TINT,
     ) : BackdropEffect
 
     /**
@@ -94,7 +104,7 @@ sealed interface BackdropEffect {
      * bounded rounded rect; across a whole screen that rim falls under the system bars, where it costs a shader and
      * shows almost nothing. A full-screen surface therefore renders this as its blur plus its [vibrancy] — a
      * saturation boost, which is what makes a frosted sheet read as glass rather than as fog, and what separates it
-     * from [Plain]. That is also iOS's own recipe for its materials, and it works on every API where the rim does
+     * from an untinted [Blur]. That is also iOS's own recipe for its materials, and it works on every API where the rim does
      * not. See `Modifier.wallpaperBackdrop`'s `refracts`.
      *
      * The rim remains what a *panel* gets — a popup menu, the widget picker — on API 33+.
@@ -120,15 +130,13 @@ sealed interface BackdropEffect {
     /**
      * How much the sampled wallpaper is blurred for this effect, `0..1`.
      *
-     * **Every variant has one now, [Plain] included**, which is the whole of the model change: there is no longer a
-     * value of this type that means "sample nothing". A surface with nothing to sample is a surface with no
+ * **Both variants have one**, which is the whole of an earlier model change: there is no longer a
+ * value of this type that means "sample nothing". A surface with nothing to sample is a surface with no
      * *backdrop* — `LocalBackdrop` being null — which is a different question and one this type never answered.
      */
     val blurStrength: Float
         get() = when (this) {
-            is Plain -> strength
             is Blur -> strength
-            is MaterialYou -> strength
             is LiquidGlass -> blur
         }
 
@@ -152,22 +160,21 @@ sealed interface BackdropEffect {
      * The frost behind an arriving surface is deliberately **not tunable**. It is what a screenful of content is read
      * against, and a strength or tint slider that can make that content unreadable is not a preference worth
      * offering — so choosing the variant chooses the whole look, and the per-variant sliders govern the smaller
-     * frosted panels instead. Switching between `Plain`, the two blurs, Material You and glass is the entire control
-     * a user has over it, which is the design this exists to express.
+ * frosted panels instead. Choosing between a blur and a lens, and which wash the blur carries, is the entire
+ * control a user has over it, which is the design this exists to express.
      *
      * **Every variant blurs by the same amount**, and that is load-bearing rather than tidy: the blurred bitmap is
      * produced upstream from this strength, so one shared value means switching variants never re-blurs anything. It
      * is a redraw with a different wash over an identical picture, not a re-decode.
      *
-     * What each variant keeps is exactly what distinguishes it: nothing for [Plain], the tone for a [Blur], the
-     * wallpaper's hue for [MaterialYou], and the saturation boost for [LiquidGlass] — whose refraction parameters are
-     * dropped because a lens needs a rim and there is none at this size (see `wallpaperBackdrop`'s `refracts`).
+ * What each variant keeps is exactly what distinguishes it: the **wash** for a [Blur] — its color and, where that
+ * is [BackdropTint.CUSTOM], which color — and the saturation boost for [LiquidGlass], whose refraction parameters
+ * are dropped because a lens needs a rim and there is none at this size (see `wallpaperBackdrop`'s `refracts`). A
+ * blur tinted [BackdropTint.NONE] therefore casts a film with no wash on it, which is what `Plain`'s used to be.
      */
     val fullScreenFilm: BackdropEffect
         get() = when (this) {
-            is Plain -> Plain(strength = FULL_SCREEN_BLUR)
-            is Blur -> Blur(tone = tone, strength = FULL_SCREEN_BLUR, tint = FULL_SCREEN_TINT)
-            is MaterialYou -> MaterialYou(strength = FULL_SCREEN_BLUR, tint = FULL_SCREEN_HUE_TINT)
+            is Blur -> copy(strength = FULL_SCREEN_BLUR, tintAmount = FULL_SCREEN_TINT)
             is LiquidGlass -> LiquidGlass(blur = FULL_SCREEN_BLUR, vibrancy = FULL_SCREEN_VIBRANCY)
         }
 
@@ -185,14 +192,8 @@ sealed interface BackdropEffect {
          */
         private const val FULL_SCREEN_BLUR = 0.6f
 
-        /** The white or black wash a full-screen [Blur] carries — a little above the per-surface default's 0.28. */
+        /** The wash a full-screen [Blur] carries — a little above the per-surface default of 0.28. */
         private const val FULL_SCREEN_TINT = 0.35f
-
-        /**
-         * [MaterialYou]'s, which is higher because its wash *is* the effect: a hue at the blurs' alpha reads as a
-         * tinted blur rather than as a colored sheet, which is the whole thing the variant is for.
-         */
-        private const val FULL_SCREEN_HUE_TINT = 0.45f
 
         /** [LiquidGlass]'s saturation boost at full screen — the half of the effect that survives without a rim. */
         private const val FULL_SCREEN_VIBRANCY = 0.6f
@@ -208,6 +209,15 @@ sealed interface BackdropEffect {
          * launcher an image (see `WallpaperRepository.backdrop`), and every frosted surface falls back to its own
          * flat color until then. A fresh install therefore looks exactly as it did before this landed.
          */
-        val Default: BackdropEffect = Blur(tone = BackdropBlurTone.DARK, strength = 0.5f, tint = 0.28f)
+        val Default: BackdropEffect = Blur()
+
+        /**
+         * Where [BackdropTint.CUSTOM] starts before anyone has mixed anything: a mid grey.
+         *
+         * Neutral on purpose. A custom wash arriving pre-tinted would look like a choice the user had made, and grey is
+         * the one color that reads as "not yet decided" against any wallpaper. Opaque, since [Blur.tintAmount] is the
+         * alpha and this carries only the hue.
+         */
+        const val DEFAULT_CUSTOM_TINT: Int = 0xFF808080.toInt()
     }
 }

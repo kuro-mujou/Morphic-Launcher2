@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.model.BackdropBlurTone
+import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.BackdropEffect
 import kotlin.math.roundToInt
 
@@ -178,9 +178,11 @@ val LocalBackdrop = staticCompositionLocalOf<BackdropState?> { null }
  * The unwashed variant as the default: an unprovided local means "nobody set this up", and a surface outside the
  * shell (the dev harness, a preview) should not reach for someone's stored decoration. It renders flat there anyway,
  * because [LocalBackdrop] is null too and *that* is what decides whether there is anything to sample — which is the
- * distinction `BackdropEffect` stopped carrying when `None` became [BackdropEffect.Plain].
+ * distinction `BackdropEffect` stopped carrying when a wash became a parameter rather than a variant.
  */
-val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> { BackdropEffect.Plain() }
+val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> {
+    BackdropEffect.Blur(tint = BackdropTint.NONE)
+}
 
 /**
  * Draws the blurred wallpaper behind this node's content, clipped to [shape] — the frosted-surface modifier.
@@ -239,11 +241,15 @@ fun Modifier.wallpaperBackdrop(
  * desaturated version of the wallpaper's color rather than a second hue mixed in.
  *
  * Falls back to `surfaceVariant` when nothing could be read, which makes every wash below plain white or black.
+ *
+ * **[accent] is a parameter, defaulted to the backdrop's**, for one caller that has the color but not the backdrop: the
+ * effects section draws the five tints as swatches, and `LocalBackdrop` is provided only around its *preview* (a control
+ * has no business frosting itself). Reading the local there would have shown the Material You swatch as grey while the
+ * preview beside it washed with the real hue — a chooser disagreeing with the thing it chooses.
  */
 @Composable
-private fun wallpaperTone(): Color {
+fun wallpaperTone(accent: Color? = LocalBackdrop.current?.tintColor): Color {
     val surfaceTone = MaterialTheme.colorScheme.surfaceVariant
-    val accent = LocalBackdrop.current?.tintColor
     return if (accent != null && accent.isSpecified) lerp(surfaceTone, accent, ACCENT_BLEND) else surfaceTone
 }
 
@@ -264,17 +270,35 @@ fun backdropTint(effect: BackdropEffect = LocalBackdropEffect.current): Color = 
  * exception: an effect the user picks, whose whole subject is the wallpaper.
  */
 private fun tintOf(effect: BackdropEffect, tone: Color): Color = when (effect) {
-    // The variant whose whole definition is "no wash" — see `BackdropEffect.Plain`.
-    is BackdropEffect.Plain -> Color.Transparent
-    is BackdropEffect.Blur -> when (effect.tone) {
-        BackdropBlurTone.LIGHT -> lerp(Color.White, tone, LIGHT_DARK_TINT_HUE).copy(alpha = effect.tint)
-        BackdropBlurTone.DARK -> lerp(Color.Black, tone, LIGHT_DARK_TINT_HUE).copy(alpha = effect.tint)
-    }
-    is BackdropEffect.MaterialYou -> tone.copy(alpha = effect.tint)
+    is BackdropEffect.Blur -> effect.tint.washColor(tone, effect.customTintArgb).copy(alpha = effect.tintAmount)
     // No wash either, and for a different reason from `Plain`'s: glass tints nothing, it *refracts* and it lifts
     // saturation (`BackdropEffect.saturation`). A film of color over it would be the one thing that stops it
     // reading as glass.
     is BackdropEffect.LiquidGlass -> Color.Transparent
+}
+
+/**
+ * **What color a [BackdropTint] actually is**, opaque — the alpha is [BackdropEffect.Blur.tintAmount]'s and applied by
+ * the caller.
+ *
+ * **Here rather than in the model**, for the reason `DeviceConfiguration` is split in two: a tint names a *choice*,
+ * where turning one into a color needs things the model cannot see — the mode's own `surfaceVariant` (through [tone])
+ * and the wallpaper's accent. So `core:model` carries the enum and this carries what it looks like.
+ *
+ * **Public because the effects section draws these as swatches**, and a swatch that resolved its color separately from
+ * the renderer is how a chooser comes to advertise a wash the surface does not paint. One function, two callers, no
+ * chance of drift.
+ *
+ * All three of the neutral washes carry the wallpaper's hue at [LIGHT_DARK_TINT_HUE] — see [tintOf] for why that is a
+ * deliberate exception to the monochrome rule rather than a leak of one.
+ */
+fun BackdropTint.washColor(tone: Color, customArgb: Int): Color = when (this) {
+    // Not a color at all, which is the honest answer: `NONE` means the blur is the whole effect.
+    BackdropTint.NONE -> Color.Transparent
+    BackdropTint.LIGHT -> lerp(Color.White, tone, LIGHT_DARK_TINT_HUE)
+    BackdropTint.DARK -> lerp(Color.Black, tone, LIGHT_DARK_TINT_HUE)
+    BackdropTint.WALLPAPER -> tone
+    BackdropTint.CUSTOM -> Color(customArgb)
 }
 
 /**

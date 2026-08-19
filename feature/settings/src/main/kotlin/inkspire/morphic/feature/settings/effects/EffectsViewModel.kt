@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.designsystem.backdrop.liquidGlassSupported
-import inkspire.morphic.core.model.BackdropBlurTone
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.settings.SettingsRepository
@@ -22,29 +21,22 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * The chooser's vocabulary — one row per thing a user can pick, which is **not** one per model variant.
+ * The chooser's vocabulary — **two entries, where there were five.**
  *
- * `BackdropEffect.Blur` is one variant with a `tone`, because light and dark share every parameter and differ in a
- * color; but "Light blur" and "Dark blur" are two things to pick between, exactly as they were in L1's flat enum. So
- * the split lives here, in the section that draws the chips, rather than being pushed back into the model.
+ * `Plain`, "Light blur", "Dark blur" and "Material You" were four ways to say *blurred wallpaper with a wash on it*,
+ * differing only in the color of the wash; that is a [BackdropTint] now, so what is left to choose between is the two
+ * things that are genuinely unlike each other. A blur softens what is behind it. A lens bends it.
  *
- * **This is not the stored enum coming back.** What is persisted is still the sealed `BackdropEffect`; this exists for
- * the length of one screen and never reaches storage. The distinction matters because collapsing L1's
- * `WallpaperEffect` + `WallpaperEffectParams` pair into one sealed type is a decision `core:model` already made, and a
- * chip list is not a reason to undo it.
+ * Still the section's own type rather than the model's, for the reason the five-entry version was: what is persisted is
+ * the sealed `BackdropEffect`, and a chooser is a screen's way of naming things, not storage's.
  */
-internal enum class BackdropOption { PLAIN, LIGHT_BLUR, DARK_BLUR, MATERIAL_YOU, LIQUID_GLASS }
+internal enum class EffectKind { BLUR, GLASS }
 
-/** Which chip [this] shows as selected. */
-internal val BackdropEffect.option: BackdropOption
+/** Which entry [this] shows as selected. */
+internal val BackdropEffect.kind: EffectKind
     get() = when (this) {
-        is BackdropEffect.Plain -> BackdropOption.PLAIN
-        is BackdropEffect.Blur -> when (tone) {
-            BackdropBlurTone.LIGHT -> BackdropOption.LIGHT_BLUR
-            BackdropBlurTone.DARK -> BackdropOption.DARK_BLUR
-        }
-        is BackdropEffect.MaterialYou -> BackdropOption.MATERIAL_YOU
-        is BackdropEffect.LiquidGlass -> BackdropOption.LIQUID_GLASS
+        is BackdropEffect.Blur -> EffectKind.BLUR
+        is BackdropEffect.LiquidGlass -> EffectKind.GLASS
     }
 
 /**
@@ -130,27 +122,33 @@ internal class EffectsViewModel(
         .distinctUntilChanged()
         .flatMapLatest { wallpaperRepository.backdrop(it, orientation) }
 
-    /** Switches to [option], carrying the current parameters across wherever the variant is the same. */
-    fun select(option: BackdropOption) {
+    /**
+     * Switches to [kind], **carrying the blur across**, which is the one parameter both effects have.
+     *
+     * `Blur.strength` and `LiquidGlass.blur` are the same quantity under two names — how far the sampled wallpaper is
+     * softened — so a user who has settled on a softness keeps it when they go to see what the lens does with it.
+     * Everything else is genuinely per-effect and cannot be carried: the sealed type's trade, stated in
+     * `SettingsRepository.setBackdropEffect` and much smaller now that there are two variants rather than five.
+     *
+     * Selecting the kind that is already current is a no-op rather than a reset, so a stray tap on the segmented
+     * control cannot discard a tuned lens.
+     */
+    fun select(kind: EffectKind) {
         val current = state.value.effect
-        val next = when (option) {
-            BackdropOption.PLAIN -> current as? BackdropEffect.Plain ?: BackdropEffect.Plain()
-            BackdropOption.LIGHT_BLUR -> current.asBlur(BackdropBlurTone.LIGHT)
-            BackdropOption.DARK_BLUR -> current.asBlur(BackdropBlurTone.DARK)
-            BackdropOption.MATERIAL_YOU -> current as? BackdropEffect.MaterialYou ?: BackdropEffect.MaterialYou()
-            BackdropOption.LIQUID_GLASS -> current as? BackdropEffect.LiquidGlass ?: BackdropEffect.LiquidGlass()
-        }
-        set(next)
+        if (current.kind == kind) return
+        val blur = current.blurStrength
+        set(
+            when (kind) {
+                EffectKind.BLUR -> BackdropEffect.Blur(strength = blur)
+                EffectKind.GLASS -> BackdropEffect.LiquidGlass(blur = blur)
+            },
+        )
     }
 
     /** Writes [effect] — what every slider's commit calls, having built the new value with `copy`. */
     fun set(effect: BackdropEffect) {
         viewModelScope.launch { settingsRepository.setBackdropEffect(effect) }
     }
-
-    /** [tone]'s blur, keeping this effect's strength and tint when it is already a blur. */
-    private fun BackdropEffect.asBlur(tone: BackdropBlurTone): BackdropEffect.Blur =
-        (this as? BackdropEffect.Blur)?.copy(tone = tone) ?: BackdropEffect.Blur(tone = tone)
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

@@ -59,7 +59,7 @@ data class ShellState(
     val register: SurfaceRegister = SurfaceRegister.Default,
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
     val brightness: WallpaperBrightness = WallpaperBrightness.DARK,
-    val backdropEffect: BackdropEffect = BackdropEffect.Plain(),
+    val backdropEffect: BackdropEffect = BackdropEffect.Default,
     val backdropImages: BackdropImages = BackdropImages(),
     val backdropAccent: Int? = null,
 )

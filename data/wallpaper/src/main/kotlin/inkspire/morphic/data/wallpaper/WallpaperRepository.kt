@@ -244,7 +244,7 @@ interface WallpaperRepository {
 
     /**
      * The wallpaper's **representative color** as ARGB, or null when it cannot be read — what
-     * `BackdropEffect.MaterialYou` washes a frosted surface in.
+     * `BackdropTint.WALLPAPER` washes a frosted surface in.
      *
      * The third reading of "what is displayed", beside [brightness] and [backdrop], and it takes the same two-step:
      * `WallpaperColors.getPrimaryColor` first, because the OS computed it over the wallpaper *actually* on screen

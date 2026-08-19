@@ -1,13 +1,19 @@
 package inkspire.morphic.feature.settings.effects
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,16 +22,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.backdrop.washColor
+import inkspire.morphic.core.designsystem.backdrop.wallpaperTone
+import inkspire.morphic.core.designsystem.component.button.MorphicButton
+import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
+import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.Orientation
-import inkspire.morphic.feature.settings.component.SettingsChip
-import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
+import inkspire.morphic.feature.settings.component.SettingsSliderRow
 import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
@@ -35,23 +51,26 @@ private val RowGap = 8.dp
 /**
  * **Effects**: how frosted surfaces render over the wallpaper — the one global choice, and its parameters.
  *
- * The port of L1's `EffectsTab`, and structurally the same screen: a chooser, then the sliders belonging to whatever
- * is chosen. Three differences, each following from a decision made before this:
+ * The port of L1's `EffectsTab`, and structurally the same screen: a chooser, then the controls belonging to whatever is
+ * chosen. Four differences, each following from a decision made before this:
  *
- * - **The sliders come from the *variant*, not from a ten-field bag.** L1 held every parameter of every effect at once
+ * - **Two entries where there were five.** `Plain`, the two blurs and Material You blurred identically and differed only
+ *   in the color of the wash, so the wash became a `BackdropTint` and they became one entry — see [EffectKind]. What is
+ *   left to choose between is a blur and a lens, which is what a *segmented control* is for; five options were a
+ *   `FlowRow` of chips, and two are not.
+ * - **The controls come from the *variant*, not from a ten-field bag.** L1 held every parameter of every effect at once
  *   and used a `when` to decide which subset to draw; here the selected `BackdropEffect` carries only its own, so the
- *   `when` is over the sealed type and the compiler checks the mapping is total. The bill is stated in
- *   `SettingsRepository.setBackdropEffect`: switching *between* variants discards the previous one's parameters.
- * - **Chips, not L1's `SettingsOptionRow`.** Five short mutually-exclusive labels are what `SettingsChip` in a
- *   `FlowRow` is for, and it is what the register and APPS sections already use for the same shape of choice.
- * - **A live preview, which this section went without for a while** — see [BackdropPreview] for what changed and why
- *   the backdrop it samples is provided at the *pane* rather than at the settings zone's root. It pins above the
- *   controls in a `stickyHeader`, the arrangement `SurfaceDetail` uses for the same reason: the sliders are read
- *   *through* the picture, so scrolling to reach one must not scroll the picture away. That is also why this is a
- *   `LazyColumn` rather than the `Column` + `verticalScroll` it was. L1 had no preview here at all.
+ *   `when` is over the sealed type and the compiler checks the mapping is total.
+ * - **A live preview, pinned above the controls** — see [BackdropPreview] for what it is and why the backdrop it samples
+ *   is provided at the *pane*. It pins in a `stickyHeader`, the arrangement `SurfaceDetail` uses for the same reason: the
+ *   controls are read *through* the picture, so scrolling to reach one must not scroll the picture away. That is also why
+ *   this is a `LazyColumn`. L1 had no preview here at all.
+ * - **The sliders are the icon studio's shape** — name, value and reset over a track flanked by a stepper each side (see
+ *   [SettingsSliderRow]). A wash at 28% and one at 30% are hard to tell apart on a photograph, which makes a readout and
+ *   a reset worth more here than on a control whose result is a number of columns.
  *
  * **Liquid glass is hidden rather than disabled below API 33.** An effect that silently comes out as a plain blur is
- * worse than one that is not offered, so the chip goes and the reason is stated — L1's wording, kept.
+ * worse than one that is not offered, so the entry goes and the reason is stated — L1's wording, kept.
  */
 @Composable
 internal fun EffectsDetail(modifier: Modifier = Modifier) {
@@ -68,10 +87,10 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
     }
 
     // **The dragged effect, which is what the preview draws.** Null means "nothing is being dragged", so the preview
-    // follows the stored value; a slider's `onPreview` fills it per frame and its `onCommit` writes the real thing,
-    // after which the stored value catches up and this can be dropped. Every parameter but the blur is a draw-time
-    // read, so this is the whole of what makes them preview live.
-    var dragged by remember { mutableStateOf<BackdropEffect?>(null) }
+    // follows the stored value; a slider's `onPreview` fills it per frame and its `onCommit` writes the real thing, after
+    // which the stored value catches up and this can be dropped. Every parameter but the blur is a draw-time read, so
+    // this is the whole of what makes them preview live.
+    var dragged by remember(state.effect) { mutableStateOf<BackdropEffect?>(null) }
     val previewed = dragged ?: state.effect
 
     LazyColumn(modifier = modifier.fillMaxSize()) {
@@ -79,38 +98,26 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
             Column(modifier = Modifier.fillMaxWidth().padding(ScreenPadding)) {
                 Text("Effects", style = MaterialTheme.typography.headlineSmall, color = colors.content)
                 Text(
-                    text = "How folders and other surfaces drawn over the wallpaper are frosted.",
+                    text = "How surfaces drawn over the wallpaper are frosted.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.contentMuted,
                 )
 
                 SettingsSectionHeader("Effect")
-                val options = BackdropOption.entries.filter {
-                    it != BackdropOption.LIQUID_GLASS || state.liquidGlassAvailable
-                }
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(RowGap),
-                    verticalArrangement = Arrangement.spacedBy(RowGap),
-                ) {
-                    val selected = state.effect.option
-                    options.forEach { option ->
-                        SettingsChip(
-                            label = option.label,
-                            selected = option == selected,
-                            // A chip is a whole new variant, so anything mid-drag is about the one being left.
-                            onClick = {
-                                dragged = null
-                                viewModel.select(option)
-                            },
-                        )
-                    }
-                }
-                if (!state.liquidGlassAvailable) {
+                // Below API 33 there is one entry, and a segmented control of one is a label. The `if` is what keeps it
+                // from drawing as a single dead-looking button.
+                if (state.liquidGlassAvailable) {
+                    MorphicSegmentedButtons(
+                        options = EffectKind.entries.map { it.label },
+                        selectedIndex = state.effect.kind.ordinal,
+                        onSelect = { viewModel.select(EffectKind.entries[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
                     Text(
                         text = "Liquid glass is only available on Android 13 and above.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.contentMuted,
-                        modifier = Modifier.padding(top = RowGap),
                     )
                 }
             }
@@ -131,14 +138,22 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
         }
 
         item(key = "controls") {
-            Column(modifier = Modifier.fillMaxWidth().padding(ScreenPadding)) {
-                // Exhaustive over the sealed type rather than over the chips, so a new variant fails to compile here
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(ScreenPadding),
+                verticalArrangement = Arrangement.spacedBy(RowGap),
+            ) {
+                // Exhaustive over the sealed type rather than over the chooser, so a new variant fails to compile here
                 // until it has controls — the same rule `AppsScreen` follows for an unbuilt layout.
                 when (val effect = state.effect) {
-                    is BackdropEffect.Plain -> PlainControls(effect, viewModel::set) { dragged = it }
-                    is BackdropEffect.Blur -> BlurControls(effect, viewModel::set) { dragged = it }
-                    is BackdropEffect.MaterialYou -> MaterialYouControls(effect, viewModel::set) { dragged = it }
-                    is BackdropEffect.LiquidGlass -> LiquidGlassControls(effect, viewModel::set) { dragged = it }
+                    is BackdropEffect.Blur -> BlurControls(
+                        effect = effect,
+                        // The swatches resolve their colors the way the renderer does, which needs the wallpaper's
+                        // accent — and they sit outside the preview, so it is handed to them rather than read.
+                        tone = wallpaperTone(state.backdropAccent?.let(::Color)),
+                        onSet = viewModel::set,
+                        onPreview = { dragged = it },
+                    )
+                    is BackdropEffect.LiquidGlass -> GlassControls(effect, viewModel::set) { dragged = it }
                 }
             }
         }
@@ -146,166 +161,311 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
 }
 
 /**
- * The unwashed blur's one control.
+ * The blur's controls: how far it softens, and what is washed over it.
  *
- * **It has one now, which is the visible half of `None` becoming `Plain`.** Under the old model this variant sampled
- * nothing, so the section showed a note explaining why it was empty; every effect blurs now, and the amount is the
- * only thing left to choose once there is no wash over it.
- *
- * **Dormant, along with every other slider in this section**, and the whole section shares one reason: the frost
- * behind an arriving surface is fixed per variant (`BackdropEffect.fullScreenFilm`), and those two layers are the only
- * frosted surfaces there are. What these sliders are *for* is a frosted **panel** — a popup menu, the widget picker —
- * which is also where liquid glass's rim lives. Kept rather than cut, at the author's call, because they come back
- * with the first panel; the alternative reading is this section's own rule that a control which changes nothing is
- * worse than a missing one. No subtitle here claims otherwise, which is the least this can do meanwhile.
+ * **The wash is two controls and they are not interchangeable** — a color, chosen from five swatches, and an amount. The
+ * color is a discrete choice, so it commits on the tap; the amount is a drag, so it previews per frame and commits on
+ * release. Splitting them is what lets the amount slider carry no name of its own: the swatch row directly above it *is*
+ * the label, and a row headed "Tint" containing a control also headed "Tint" says one thing twice.
  */
 @Composable
-private fun PlainControls(
-    effect: BackdropEffect.Plain,
-    onSet: (BackdropEffect) -> Unit,
-    onPreview: (BackdropEffect) -> Unit,
-) {
-    SettingsSectionHeader("Amount")
-    SettingsCommitSlider(
-        title = "Blur",
-        value = effect.strength,
-        valueRange = 0f..1f,
-        valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(strength = it)) },
-        onPreview = { onPreview(effect.copy(strength = it)) },
-    )
-}
-
-@Composable
-private fun BlurControls(
+private fun ColumnScope.BlurControls(
     effect: BackdropEffect.Blur,
+    tone: Color,
     onSet: (BackdropEffect) -> Unit,
     onPreview: (BackdropEffect) -> Unit,
 ) {
-    SettingsSectionHeader("Amount")
-    SettingsCommitSlider(
-        title = "Blur",
+    SettingsSliderRow(
+        label = "Blur",
+        what = "blur",
         value = effect.strength,
         valueRange = 0f..1f,
+        default = BlurDefaults.strength,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(strength = it)) },
         onPreview = { onPreview(effect.copy(strength = it)) },
     )
-    SettingsCommitSlider(
-        title = "Tint",
-        subtitle = "How much of the wash sits over the blur",
-        value = effect.tint,
-        // L1's ceiling for the light/dark tints, and it is a legibility bound rather than a taste one: past ~60% the
-        // wash stops being a frost and becomes an opaque sheet, which is the look the backdrop exists to replace.
-        valueRange = 0f..MAX_TINT,
-        valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(tint = it)) },
-        onPreview = { onPreview(effect.copy(tint = it)) },
+
+    SettingsSectionHeader("Tint")
+    TintSwatches(
+        selected = effect.tint,
+        customArgb = effect.customTintArgb,
+        tone = tone,
+        onSelect = { onSet(effect.copy(tint = it)) },
     )
+
+    if (effect.tint == BackdropTint.CUSTOM) {
+        CustomTintPicker(
+            argb = effect.customTintArgb,
+            onPreview = { onPreview(effect.copy(customTintArgb = it)) },
+            onCommit = { onSet(effect.copy(customTintArgb = it)) },
+        )
+    }
+
+    // **Absent rather than disabled**, which is this section's rule where the gate is a discrete choice made elsewhere: a
+    // tint of NONE has no wash for an amount to describe, and the layout settles on the tap that chose it rather than
+    // under a finger already on a slider. (The studio's grain angle is the documented exception, and its gate is a
+    // *continuous* control directly above it.)
+    if (effect.tint != BackdropTint.NONE) {
+        SettingsSliderRow(
+            what = "tint",
+            value = effect.tintAmount,
+            valueRange = 0f..MaxTintAmount,
+            default = BlurDefaults.tintAmount,
+            valueLabel = ::percent,
+            onCommit = { onSet(effect.copy(tintAmount = it)) },
+            onPreview = { onPreview(effect.copy(tintAmount = it)) },
+        )
+    }
 }
 
+/**
+ * The five washes, as the colors they are.
+ *
+ * **Swatches rather than chips, because these *are* colors** — a row of five words asks the reader to remember what
+ * "Material You" resolves to on this wallpaper, where a filled circle simply shows them. The colors come from
+ * [washColor], the same resolution the renderer uses, so a swatch cannot advertise a wash the surface does not paint.
+ *
+ * They are drawn **opaque**, at full strength, while the surface paints them at `tintAmount`. That is deliberate: the
+ * swatch answers "which color?" and the slider below answers "how much?", and a swatch dimmed to the current amount
+ * would answer neither well — at a low amount all five would look like the same pale nothing.
+ *
+ * `NONE` has no color to show, so it is drawn as an outlined empty circle: the absence of a wash, rather than a wash that
+ * happens to be invisible.
+ */
 @Composable
-private fun MaterialYouControls(
-    effect: BackdropEffect.MaterialYou,
-    onSet: (BackdropEffect) -> Unit,
-    onPreview: (BackdropEffect) -> Unit,
+private fun TintSwatches(
+    selected: BackdropTint,
+    customArgb: Int,
+    tone: Color,
+    onSelect: (BackdropTint) -> Unit,
 ) {
-    SettingsSectionHeader("Amount")
-    SettingsCommitSlider(
-        title = "Blur",
-        value = effect.strength,
-        valueRange = 0f..1f,
-        valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(strength = it)) },
-        onPreview = { onPreview(effect.copy(strength = it)) },
-    )
-    SettingsCommitSlider(
-        title = "Tint",
-        subtitle = "Wallpaper-toned wash over the blur",
-        value = effect.tint,
-        // Higher than the blurs' ceiling, as in L1: this wash *is* the effect, where theirs is a correction to one.
-        valueRange = 0f..MAX_MATERIAL_YOU_TINT,
-        valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(tint = it)) },
-        onPreview = { onPreview(effect.copy(tint = it)) },
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(RowGap),
+    ) {
+        BackdropTint.entries.forEach { tint ->
+            TintSwatch(
+                color = tint.washColor(tone, customArgb),
+                label = tint.label,
+                selected = tint == selected,
+                onClick = { onSelect(tint) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
 }
 
+/**
+ * One swatch: a filled circle over its name, ringed when it is the selected one.
+ *
+ * The ring is drawn *outside* the fill rather than over it, so it never changes the color being shown — which a border
+ * on the circle itself would, at the edge where a dark wash meets a dark ring.
+ */
 @Composable
-private fun LiquidGlassControls(
+private fun TintSwatch(
+    color: Color,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalMorphicColors.current
+    Column(
+        modifier = modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(SwatchRing)
+                .clip(CircleShape)
+                .border(
+                    width = if (selected) SelectedRing else UnselectedRing,
+                    color = if (selected) colors.accent else colors.contentMuted.copy(alpha = 0.4f),
+                    shape = CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(SwatchFill)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) colors.content else colors.contentMuted,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+    }
+}
+
+/**
+ * The color picker for [BackdropTint.CUSTOM], expanded in place under the swatches.
+ *
+ * **Inline rather than in a dialog**, and that is not a style choice: a `Popup` is a separate platform window, so it
+ * would sit *over* the preview this pane exists to show — and the punch-through the preview draws through belongs to this
+ * pane's own offscreen layer, which a second window is not part of. Mixing a color you cannot see applied is the one
+ * thing a color picker here must not ask of anyone.
+ *
+ * **Live while dragging, written when accepted.** `MorphicColorPicker` reports every change and has no notion of a
+ * gesture ending, so every change previews (the card re-washes under the finger) and the button below is what commits.
+ * The alternative — writing per change — is a JSON encode and a file write per frame, which is exactly what
+ * `SettingsCommitSlider` exists to avoid. Leaving without accepting keeps the stored color, and the preview snapping back
+ * is what says so.
+ */
+@Composable
+private fun CustomTintPicker(argb: Int, onPreview: (Int) -> Unit, onCommit: (Int) -> Unit) {
+    var picked by remember(argb) { mutableStateOf(argb) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+    ) {
+        MorphicColorPicker(
+            argb = picked,
+            onArgbChange = {
+                picked = it
+                onPreview(it)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        MorphicButton(
+            onClick = { onCommit(picked) },
+            style = MorphicButtonStyle.Tonal,
+            enabled = picked != argb,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Use this colour")
+        }
+    }
+}
+
+/** The lens's six controls: what it is made of, then how it catches the light. */
+@Composable
+private fun ColumnScope.GlassControls(
     effect: BackdropEffect.LiquidGlass,
     onSet: (BackdropEffect) -> Unit,
     onPreview: (BackdropEffect) -> Unit,
 ) {
     SettingsSectionHeader("Lens")
-    SettingsCommitSlider(
-        title = "Blur",
-        subtitle = "Kept low — a heavy blur has no structure left to bend",
+    SettingsSliderRow(
+        label = "Blur",
+        what = "blur",
         value = effect.blur,
         valueRange = 0f..1f,
+        default = GlassDefaults.blur,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(blur = it)) },
         onPreview = { onPreview(effect.copy(blur = it)) },
     )
-    SettingsCommitSlider(
-        title = "Refraction",
-        subtitle = "How far the rim bends what is behind it",
+    SettingsSliderRow(
+        label = "Refraction",
+        what = "refraction",
         value = effect.refraction,
         valueRange = 0f..1f,
+        default = GlassDefaults.refraction,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(refraction = it)) },
         onPreview = { onPreview(effect.copy(refraction = it)) },
     )
-    SettingsCommitSlider(
-        title = "Depth",
-        subtitle = "How far in from the edge the lens reaches",
+    SettingsSliderRow(
+        label = "Depth",
+        what = "depth",
         value = effect.depth,
         valueRange = 0f..1f,
+        default = GlassDefaults.depth,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(depth = it)) },
         onPreview = { onPreview(effect.copy(depth = it)) },
     )
+
     SettingsSectionHeader("Light")
-    SettingsCommitSlider(
-        title = "Vibrancy",
+    SettingsSliderRow(
+        label = "Vibrancy",
+        what = "vibrancy",
         value = effect.vibrancy,
         valueRange = 0f..1f,
+        default = GlassDefaults.vibrancy,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(vibrancy = it)) },
         onPreview = { onPreview(effect.copy(vibrancy = it)) },
     )
-    SettingsCommitSlider(
-        title = "Sheen",
-        subtitle = "Rim highlight",
+    SettingsSliderRow(
+        label = "Sheen",
+        what = "sheen",
         value = effect.sheen,
         valueRange = 0f..1f,
+        default = GlassDefaults.sheen,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(sheen = it)) },
         onPreview = { onPreview(effect.copy(sheen = it)) },
     )
-    SettingsCommitSlider(
-        title = "Dispersion",
-        subtitle = "Rainbow fringe at the corners",
+    SettingsSliderRow(
+        label = "Dispersion",
+        what = "dispersion",
         value = effect.dispersion,
         valueRange = 0f..1f,
+        default = GlassDefaults.dispersion,
         valueLabel = ::percent,
         onCommit = { onSet(effect.copy(dispersion = it)) },
         onPreview = { onPreview(effect.copy(dispersion = it)) },
     )
 }
 
-/** The chip's text. Kept beside the enum's use rather than on it — a label is this screen's, not the option's. */
-private val BackdropOption.label: String
+/** The chooser's labels. Kept beside their use rather than on the enum — a label is this screen's, not the value's. */
+private val EffectKind.label: String
     get() = when (this) {
-        BackdropOption.PLAIN -> "Plain"
-        BackdropOption.LIGHT_BLUR -> "Light blur"
-        BackdropOption.DARK_BLUR -> "Dark blur"
-        BackdropOption.MATERIAL_YOU -> "Material You"
-        BackdropOption.LIQUID_GLASS -> "Liquid glass"
+        EffectKind.BLUR -> "Blur"
+        EffectKind.GLASS -> "Liquid glass"
     }
 
-/** Every parameter here is a `0f..1f` strength, so every one of them reads as a percentage. */
+/**
+ * The swatches' labels.
+ *
+ * "Material You" for [BackdropTint.WALLPAPER], which is the one place a label and its model name deliberately differ:
+ * the model says what the wash *is* (the wallpaper's own color) where the chooser says what a user recognises. "None"
+ * rather than "Transparent" — what is absent is the wash, and the blur behind it is not transparent at all.
+ */
+private val BackdropTint.label: String
+    get() = when (this) {
+        BackdropTint.NONE -> "None"
+        BackdropTint.LIGHT -> "Light"
+        BackdropTint.DARK -> "Dark"
+        BackdropTint.WALLPAPER -> "Material You"
+        BackdropTint.CUSTOM -> "Custom"
+    }
+
+/** Every value here is a `0f..1f` strength, so every one of them reads as a percentage. */
 private fun percent(value: Float): String = "${(value * 100).toInt()}%"
 
-private const val MAX_TINT = 0.6f
-private const val MAX_MATERIAL_YOU_TINT = 0.9f
+/**
+ * Where each reset goes, read from the model rather than restated.
+ *
+ * The studio's own lesson: a reset pinned to a number typed at the call site drifts from the value the effect actually
+ * arrives at, and then lights up on a control nobody has touched. Constructing the defaults is the cheapest way to be
+ * sure — the constructor is the only place those numbers live.
+ */
+private val BlurDefaults = BackdropEffect.Blur()
+private val GlassDefaults = BackdropEffect.LiquidGlass()
+
+/**
+ * The most a wash may cover, `0f..0.9f`.
+ *
+ * **One ceiling where there were two.** The light and dark washes stopped at 0.6 on the reasoning that past ~60% a wash
+ * is an opaque sheet rather than a frost, while Material You went to 0.9 because its hue *is* the effect. Merged, the
+ * option cannot decide it — a custom color may be anything, and a pale one at 60% covers less than black at 40%. So the
+ * bound is the higher of the two and the **preview** is what tells a user they have gone too far, which is a thing it can
+ * now do.
+ */
+private const val MaxTintAmount = 0.9f
+
+/** How large the swatches are: the ring, and the fill inside it. */
+private val SwatchRing = 40.dp
+private val SwatchFill = 30.dp
+private val SelectedRing = 2.dp
+private val UnselectedRing = 1.dp
