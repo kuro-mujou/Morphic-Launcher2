@@ -40,8 +40,9 @@ enum class BackdropTint {
      *
      * `MaterialYou`'s, and the deliberate exception to the design system's monochrome rule: that rule keeps *chrome*
      * grayscale so the wallpaper and the icons carry the color, and this is a decoration the user picked whose whole
-     * point is the wallpaper's hue. Labeled "Material You" in the section — the model names what it *is*, the chooser
-     * names what a user recognizes.
+     * point is the wallpaper's hue. Labeled **"Wallpaper"** in the section, not "Material You": that is Google's name
+     * for the *OS* palette, and this deliberately is not one — the launcher bridges a monochrome `ColorScheme`, so the
+     * color is read off the wallpaper rather than taken from a dynamic scheme.
      */
     WALLPAPER,
 
@@ -93,7 +94,7 @@ sealed interface BackdropEffect {
     data class Blur(
         val strength: Float = 0.5f,
         val tint: BackdropTint = BackdropTint.DARK,
-        val tintAmount: Float = 0.28f,
+        val tintAmount: Float = 0.3f,
         val customTintArgb: Int = DEFAULT_CUSTOM_TINT,
     ) : BackdropEffect
 
@@ -124,7 +125,7 @@ sealed interface BackdropEffect {
         val refraction: Float = 0.4f,
         val depth: Float = 0.3f,
         val dispersion: Float = 0f,
-        val sheen: Float = 0.4f,
+        val sheen: Float = 0.2f,
     ) : BackdropEffect
 
     /**
@@ -192,7 +193,7 @@ sealed interface BackdropEffect {
          */
         private const val FULL_SCREEN_BLUR = 0.6f
 
-        /** The wash a full-screen [Blur] carries — a little above the per-surface default of 0.28. */
+        /** The wash a full-screen [Blur] carries — a little above the per-surface default of 0.30. */
         private const val FULL_SCREEN_TINT = 0.35f
 
         /** [LiquidGlass]'s saturation boost at full screen — the half of the effect that survives without a rim. */

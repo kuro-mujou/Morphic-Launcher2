@@ -2553,7 +2553,15 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
   `surfaceVariant` and the wallpaper's accent. Public **because the swatches draw the same colors the renderer paints**;
   a chooser that resolved its own would eventually advertise a wash the surface does not use. The swatches are drawn
   **opaque** while the surface paints them at `tintAmount`, since a swatch answers *which color* and the slider under it
-  answers *how much* — at a low amount all five would otherwise look like the same pale nothing.
+  answers *how much* — at a low amount all five would otherwise look like the same pale nothing. The wallpaper wash is
+  labeled **"Wallpaper"**, not "Material You" and not "Themed": that is Google's name for the *OS* palette, which this
+  deliberately is not (the launcher bridges a monochrome scheme, so the color is read off the wallpaper), and naming the
+  source is both truer and the one label that fits a fifth of a phone's width on one line.
+- **The pane titles nothing** — not itself, not the picture, not the chooser. The app bar names the section, and a
+  frosted panel and two buttons reading "Blur" and "Liquid glass" say what they are without a word over them. The
+  headings that remain name something a reader could not otherwise guess: `Tint` over five color swatches, `Lens` and
+  `Light` splitting the lens parameters. The chooser sits *under* the preview, which is the order the eye wants — the
+  picture is what you came to look at, and the chooser is the first thing you reach for to change it.
 - **The controls are the icon studio's slider shape** (`SettingsSliderRow`): name, value and reset over a track flanked
   by a stepper each side. A wash at 28% and one at 30% are hard to tell apart on a photograph, so a readout and a reset
   are worth more here than on a control whose result is a column count. It shares the studio's *arithmetic* — `snappedStep`

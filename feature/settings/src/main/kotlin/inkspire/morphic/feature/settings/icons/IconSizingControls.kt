@@ -8,6 +8,7 @@ import inkspire.morphic.feature.settings.component.SettingsCommitRangeSlider
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
+import kotlin.math.roundToInt
 
 /**
  * Which icon field a control writes.
@@ -83,7 +84,10 @@ internal fun IconSizingControls(
             subtitle = if (slot == GridSlot.APPS_LIST) "Scale of the default size" else "Portion of each cell the icon fills",
             value = sizing.iconPercent,
             valueRange = IconSizingRanges.IconPercent,
-            valueLabel = { "${(it * 100).toInt()}%" },
+            // Rounded rather than truncated: a hundredth is not representable in binary, so flooring reads 0.29f back
+            // as 28%. Only a drag reaches this one, so it merely under-reported by up to a percent — the same
+            // expression on a *stepper* made presses look random. See `percent` in the effects section.
+            valueLabel = { "${(it * 100).roundToInt()}%" },
             onPreview = { onPreview(sizing.copy(iconPercent = it)) },
             onCommit = { onChange(IconSizingField.IconPercent, it) },
         )

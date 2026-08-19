@@ -42,6 +42,7 @@ import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSliderRow
+import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
@@ -61,10 +62,12 @@ private val RowGap = 8.dp
  * - **The controls come from the *variant*, not from a ten-field bag.** L1 held every parameter of every effect at once
  *   and used a `when` to decide which subset to draw; here the selected `BackdropEffect` carries only its own, so the
  *   `when` is over the sealed type and the compiler checks the mapping is total.
- * - **A live preview, pinned above the controls** — see [BackdropPreview] for what it is and why the backdrop it samples
- *   is provided at the *pane*. It pins in a `stickyHeader`, the arrangement `SurfaceDetail` uses for the same reason: the
- *   controls are read *through* the picture, so scrolling to reach one must not scroll the picture away. That is also why
- *   this is a `LazyColumn`. L1 had no preview here at all.
+ * - **A live preview, first on the pane and pinned there** — see [BackdropPreview] for what it is and why the backdrop
+ *   it samples is provided at the *pane*. It pins in a `stickyHeader`, the arrangement `SurfaceDetail` uses for the same
+ *   reason: the controls are read *through* the picture, so scrolling to reach one must not scroll the picture away. That
+ *   is also why this is a `LazyColumn`. **Nothing is titled** — not the pane, not the picture, not the chooser: the app
+ *   bar names the section, and a frosted panel and two buttons reading "Blur" and "Liquid glass" say what they are
+ *   without a word over them. L1 had no preview here at all.
  * - **The sliders are the icon studio's shape** — name, value and reset over a track flanked by a stepper each side (see
  *   [SettingsSliderRow]). A wash at 28% and one at 30% are hard to tell apart on a photograph, which makes a readout and
  *   a reset worth more here than on a control whose result is a number of columns.
@@ -94,40 +97,20 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
     val previewed = dragged ?: state.effect
 
     LazyColumn(modifier = modifier.fillMaxSize()) {
-        item(key = "chooser") {
-            Column(modifier = Modifier.fillMaxWidth().padding(ScreenPadding)) {
-                Text("Effects", style = MaterialTheme.typography.headlineSmall, color = colors.content)
-                Text(
-                    text = "How surfaces drawn over the wallpaper are frosted.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.contentMuted,
-                )
-
-                SettingsSectionHeader("Effect")
-                // Below API 33 there is one entry, and a segmented control of one is a label. The `if` is what keeps it
-                // from drawing as a single dead-looking button.
-                if (state.liquidGlassAvailable) {
-                    MorphicSegmentedButtons(
-                        options = EffectKind.entries.map { it.label },
-                        selectedIndex = state.effect.kind.ordinal,
-                        onSelect = { viewModel.select(EffectKind.entries[it]) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    Text(
-                        text = "Liquid glass is only available on Android 13 and above.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.contentMuted,
-                    )
-                }
-            }
-        }
-
-        // Pinned, and opaque behind the heading so the controls do not scroll *through* it. The picture punches to the
+        // **The preview comes first and carries no heading.** The app bar already reads "Effects" and a picture of a
+        // frosted panel does not need to be told it is a preview — what it is is self-evident, and a word above it costs
+        // a row of the one thing this pane is for. It is pinned, so the controls scroll *under* it: they are read
+        // through the picture, which is `SurfaceDetail`'s reason for the same arrangement.
+        //
+        // Opaque behind the padding so scrolling content does not show through it. The picture itself punches to the
         // wallpaper inside its own box, which is why that background does not defeat it.
         stickyHeader(key = "preview") { _ ->
-            Column(modifier = Modifier.fillMaxWidth().background(colors.background)) {
-                SettingsSectionHeader("Preview", Modifier.padding(horizontal = ScreenPadding))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.background)
+                    .padding(top = RowGap),
+            ) {
                 BackdropPreview(
                     effect = previewed,
                     image = state.backdropImage,
@@ -142,6 +125,27 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth().padding(ScreenPadding),
                 verticalArrangement = Arrangement.spacedBy(RowGap),
             ) {
+                // **The chooser sits under the preview, unlabeled**, which is the order the eye wants: the picture is
+                // what you came to look at, and this is the first thing you reach for to change it. A "Effect" heading
+                // over two buttons reading "Blur" and "Liquid glass" names the category they are already named by.
+                //
+                // Below API 33 there is one entry, and a segmented control of one is a label — so the `if` is what
+                // keeps it from drawing as a single dead-looking button.
+                if (state.liquidGlassAvailable) {
+                    MorphicSegmentedButtons(
+                        options = EffectKind.entries.map { it.label },
+                        selectedIndex = state.effect.kind.ordinal,
+                        onSelect = { viewModel.select(EffectKind.entries[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Text(
+                        text = "Liquid glass is only available on Android 13 and above.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.contentMuted,
+                    )
+                }
+
                 // Exhaustive over the sealed type rather than over the chooser, so a new variant fails to compile here
                 // until it has controls — the same rule `AppsScreen` follows for an unbuilt layout.
                 when (val effect = state.effect) {
@@ -223,7 +227,7 @@ private fun ColumnScope.BlurControls(
  * The five washes, as the colors they are.
  *
  * **Swatches rather than chips, because these *are* colors** — a row of five words asks the reader to remember what
- * "Material You" resolves to on this wallpaper, where a filled circle simply shows them. The colors come from
+ * "Wallpaper" resolves to on this one, where a filled circle simply shows them. The colors come from
  * [washColor], the same resolution the renderer uses, so a swatch cannot advertise a wash the surface does not paint.
  *
  * They are drawn **opaque**, at full strength, while the surface paints them at `tintAmount`. That is deliberate: the
@@ -427,21 +431,37 @@ private val EffectKind.label: String
 /**
  * The swatches' labels.
  *
- * "Material You" for [BackdropTint.WALLPAPER], which is the one place a label and its model name deliberately differ:
- * the model says what the wash *is* (the wallpaper's own color) where the chooser says what a user recognizes. "None"
- * rather than "Transparent" — what is absent is the wash, and the blur behind it is not transparent at all.
+ * **"Wallpaper", not "Material You"** — and not "Themed" either, though that was the suggestion. Material You is
+ * Google's name for the *OS* palette, which is exactly what this wash is not: `LauncherTheme` bridges a monochrome
+ * `ColorScheme`, so `colorScheme.primary` here is gray, and the color comes from `WallpaperRepository.accentColor`
+ * reading the wallpaper itself. "Themed" points at the same wrong thing in a shorter word. Naming the *source* says
+ * what the swatch will actually be, matches the model's own `WALLPAPER`, and keeps the launcher's vocabulary free of a
+ * borrowed trademark — the rule `IconFilters` states for filter names, now applied to a wash.
+ *
+ * It also fits one line, which "Material You" did not: five labels across a phone left that one wrapping and hanging
+ * below the other four.
+ *
+ * "None" rather than "Transparent" — what is absent is the wash, and the blur behind it is not transparent at all.
  */
 private val BackdropTint.label: String
     get() = when (this) {
         BackdropTint.NONE -> "None"
         BackdropTint.LIGHT -> "Light"
         BackdropTint.DARK -> "Dark"
-        BackdropTint.WALLPAPER -> "Material You"
+        BackdropTint.WALLPAPER -> "Wallpaper"
         BackdropTint.CUSTOM -> "Custom"
     }
 
-/** Every value here is a `0f..1f` strength, so every one of them reads as a percentage. */
-private fun percent(value: Float): String = "${(value * 100).toInt()}%"
+/**
+ * Every value here is a `0f..1f` strength, so every one of them reads as a percentage.
+ *
+ * **Rounded, not truncated, and that is a bug fix rather than a nicety.** A stepper moves the value by exactly one
+ * hundredth (`finestStep`), but a hundredth is not representable in binary: 0.29f is 0.28999999…, so `toInt()` floored
+ * it to 28 — the value had moved and the number had not, and the *next* press then read as a jump of two. Presses
+ * appeared to land at random. The studio's own readout never had this because `"%.2f"` rounds, which is what this now
+ * does.
+ */
+private fun percent(value: Float): String = "${(value * 100).roundToInt()}%"
 
 /**
  * Where each reset goes, read from the model rather than restated.
