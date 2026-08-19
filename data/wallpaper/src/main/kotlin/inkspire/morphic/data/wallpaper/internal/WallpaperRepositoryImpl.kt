@@ -35,12 +35,14 @@ import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.data.wallpaper.WallpaperTarget
 import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -144,6 +146,54 @@ internal class WallpaperRepositoryImpl(
             .distinctUntilChanged()
             .map { source -> source?.let { blurBackdrop(it.path, strength) } }
             .flowOn(dispatchers.io)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun backdropPreview(strength: Flow<Float>, orientation: Flow<Orientation>): Flow<Bitmap?> =
+        combine(displayedWallpaperChanges, orientation, ::Pair)
+            .map { (state, current) -> backdropSourcePath(state, current)?.let(::backdropSource) }
+            // The decode is keyed on the *picture* and nothing else, which is the point of this method — see the
+            // interface. A strength change must not reach this far up.
+            .distinctUntilChanged()
+            .flatMapLatest { source -> previewFrames(source, strength) }
+            .flowOn(dispatchers.io)
+
+    /**
+     * One decode of [source], then a blur per strength — the frames a drag is drawn from.
+     *
+     * **Three buffers are kept for the life of the collection and none are allocated per frame.** The decoded pixels
+     * are read once and copied into the working array each time (an `arraycopy`, no allocation); the passes' scratch is
+     * lent to [BitmapBlur.blur] for exactly this reason. What is left per frame is the one thing that cannot be reused:
+     * the result bitmap, because a caller holding the *same* instance has no way to notice it changed — Compose keys on
+     * the instance, so a mutated-in-place bitmap would blur and never redraw. Ping-ponging two of them would fix that
+     * and is the next step if this ever janks; at a quarter of the screen it is ~800KB a frame of short-lived garbage.
+     *
+     * A radius below one is the sharp case and hands back **the decode itself**, deliberately: it is the same picture,
+     * and a caller that keys on the instance correctly sees no change. Nothing mutates it.
+     */
+    private fun previewFrames(source: BackdropSource?, strength: Flow<Float>): Flow<Bitmap?> {
+        val sharp = source?.let { decodeFile(it.path, PREVIEW_DOWNSCALE) } ?: return flowOf(null)
+        val width = sharp.width
+        val height = sharp.height
+        val decoded = IntArray(width * height).also { sharp.getPixels(it, 0, width, 0, 0, width, height) }
+        val working = IntArray(decoded.size)
+        val scratch = IntArray(decoded.size)
+
+        return strength.distinctUntilChanged().map { value ->
+            // The reach in the *wallpaper's* pixels, divided by the reduction actually held — so one strength is the
+            // same softness here as on a surface, which is the only property this preview has to keep.
+            val radiusPx = value.coerceIn(0f, 1f) * MAX_BLUR_RADIUS_PX / PREVIEW_DOWNSCALE
+            val radius = BitmapBlur.boxRadiusFor(radiusPx)
+            if (radius < 1) {
+                sharp
+            } else {
+                decoded.copyInto(working)
+                BitmapBlur.blur(working, width, height, radius, BLUR_PASSES, scratch)
+                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+                    setPixels(working, 0, width, 0, 0, width, height)
+                }
+            }
+        }
+    }
 
     override suspend fun decodePreview(uri: Uri): Bitmap? = withContext(dispatchers.io) {
         decodeSampled(uri, PREVIEW_CAP)
@@ -660,6 +710,17 @@ internal class WallpaperRepositoryImpl(
 
         /** Three box passes approximate a gaussian closely enough that no one can tell. L1's number. */
         const val BLUR_PASSES = 3
+
+        /**
+         * How much smaller than the screen a **drag's** preview is kept — see `backdropPreview`.
+         *
+         * A quarter, which is the compromise the whole method rests on. It has to be one number, since varying it with
+         * the strength would mean re-decoding at every strength; it has to be small enough that a blur fits in a frame
+         * (a quarter of a 1216×2688 screen is ~200k pixels, a few milliseconds for three separable passes); and it has
+         * to be large enough that the picture is not obviously coarse while a finger is on the slider. An eighth was
+         * cheaper and looked it.
+         */
+        const val PREVIEW_DOWNSCALE = 4
 
         /**
          * The least a picture is reduced by **once it is blurred at all** — see `blurBackdrop`.

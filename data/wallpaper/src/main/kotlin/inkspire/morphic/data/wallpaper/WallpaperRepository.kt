@@ -375,6 +375,32 @@ interface WallpaperRepository {
     fun backdrop(strength: Float, orientation: Flow<Orientation>): Flow<Bitmap?>
 
     /**
+     * The same wallpaper as [backdrop], re-blurred for **every** strength [strength] emits — the picture a *drag* is
+     * read against.
+     *
+     * **One decode, many blurs, which is the whole difference from [backdrop].** That one is a subscription per
+     * strength: a new value means a new collection, a fresh decode at a reduction chosen for that radius, and one blur.
+     * Correct for a setting that changes when somebody lets go of a slider, and hopeless at frame rate — a JPEG decode
+     * is 10–20ms, so a drag would queue a backlog and arrive after the finger lifted. Here the decode happens when the
+     * *picture* changes and the blur happens when the *strength* does, which is the only shape that can keep up.
+     *
+     * **A `Flow<Float>` rather than a value, and that is the mechanism rather than a style.** As a subscription key a
+     * strength would re-decode; as a flow it reaches the blur. It is also what makes the rate self-limiting: a
+     * `StateFlow` of the dragged value conflates, so this produces as many frames as the machine can and skips the
+     * values it was too slow for, rather than falling behind.
+     *
+     * **Fixed reduction, where [backdrop] ties it to the radius.** A preview blurred at a strength-dependent size would
+     * have to re-decode at every strength, which is the thing being avoided — so it is one size, and the radius is
+     * measured against it so the *softness* still matches what a surface will show. The bill is resolution at the sharp
+     * end: below about an eighth of the slider [backdrop] keeps more of the picture than this does, so a preview drawn
+     * from this is softer than the real thing there. That is why it is for the drag alone; the caller shows the settled
+     * picture the moment the finger lifts, and this one is never what a decision is made against.
+     *
+     * Same source rules as [backdrop] — same file, same gate, null for the same reasons.
+     */
+    fun backdropPreview(strength: Flow<Float>, orientation: Flow<Orientation>): Flow<Bitmap?>
+
+    /**
      * Stores the [crop] region of [uri] as the [orientation] half of the rotating pair, at [outWidth] × [outHeight].
      *
      * **Merges rather than replaces**: setting the landscape half leaves the portrait one alone, because the pair is

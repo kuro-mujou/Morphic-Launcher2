@@ -48,11 +48,13 @@ import inkspire.morphic.core.model.BackdropEffect
  * — it provided the launcher's backdrop *inside* `HomeScreen`, so its settings feature needed a duplicate to get any at
  * all.)
  *
- * **Blur lands on release; everything else tracks the drag.** The wash and all six liquid-glass parameters are
- * draw-time reads of [effect], so passing the dragged value here previews them per frame. Blur is not: it lives in
- * [image], which is baked off-thread, and re-baking one per frame is a different piece of work — so the picture arrives
- * at the strength that was last committed. Documented rather than hidden, because a preview that lies about which
- * control it is following is worse than one that is a beat behind.
+ * **Everything tracks the drag now, blur included — but blur changes the *picture*, so it arrives smaller.** The wash
+ * and all six liquid-glass parameters are draw-time reads of [effect], so passing the dragged value previews them for
+ * free. Blur lives in [image], which has to be re-blurred, so a drag is fed a quarter-size copy that can be blurred
+ * inside a frame (`WallpaperRepository.backdropPreview`) and the full-size one returns the moment the finger lifts. The
+ * caller decides which is in [image]; this composable only draws what it is handed. The visible bill is at the *sharp*
+ * end — below about an eighth of the slider the settled picture keeps more of the wallpaper than the dragging one — and
+ * it resolves on release, which is why it is the drag that gets the smaller picture rather than the resting state.
  *
  * @param effect the effect to draw — the *dragged* value where a slider is being moved, so this previews what the user
  *   is doing rather than what is stored.

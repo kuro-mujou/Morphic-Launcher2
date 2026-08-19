@@ -96,6 +96,17 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
     var dragged by remember(state.effect) { mutableStateOf<BackdropEffect?>(null) }
     val previewed = dragged ?: state.effect
 
+    // A commit landing is the end of the gesture, so stop reporting a dragged strength and let the live blur follow the
+    // store again. Keyed on the same value that clears `dragged` above, because they are the same event.
+    LaunchedEffect(state.effect) { viewModel.previewStrength(null) }
+
+    // **Which picture the card samples, and the one thing the pane knows that the state holder does not.** A dragged
+    // *blur* needs the quarter-size picture that can be re-blurred per frame; a dragged tint or lens parameter is a
+    // draw-time read of the same picture, so dropping to the smaller one would cost resolution for nothing. Comparing
+    // the strengths is what tells the two apart, and it settles back the moment the commit lands.
+    val draggingBlur = dragged != null && dragged?.blurStrength != state.effect.blurStrength
+    val previewImage = if (draggingBlur) state.draggingImage else state.backdropImage
+
     LazyColumn(modifier = modifier.fillMaxSize()) {
         // **The preview comes first and carries no heading.** The app bar already reads "Effects" and a picture of a
         // frosted panel does not need to be told it is a preview — what it is is self-evident, and a word above it costs
@@ -113,7 +124,7 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
             ) {
                 BackdropPreview(
                     effect = previewed,
-                    image = state.backdropImage,
+                    image = previewImage,
                     accent = state.backdropAccent,
                     modifier = Modifier.padding(horizontal = ScreenPadding),
                 )
@@ -155,9 +166,12 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                         // accent — and they sit outside the preview, so it is handed to them rather than read.
                         tone = wallpaperTone(state.backdropAccent?.let(::Color)),
                         onSet = viewModel::set,
-                        onPreview = { dragged = it },
+                        onPreview = { dragged = it; viewModel.previewStrength(it.blurStrength) },
                     )
-                    is BackdropEffect.LiquidGlass -> GlassControls(effect, viewModel::set) { dragged = it }
+                    is BackdropEffect.LiquidGlass -> GlassControls(effect, viewModel::set) {
+                        dragged = it
+                        viewModel.previewStrength(it.blurStrength)
+                    }
                 }
             }
         }

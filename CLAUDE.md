@@ -2589,11 +2589,26 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
     that zone samples the wallpaper; here exactly one thing does, and it is a preview rather than a surface, so anything
     higher would invite a second pane to frost itself against a picture nobody asked for. L1's mistake was different
     again — it provided the *launcher's* backdrop inside `HomeScreen`, so its settings feature needed a duplicate.
-  - **The wash and all six liquid-glass parameters preview per frame; blur lands on release.** That split is not a
-    compromise, it is where the parameters live: everything but blur is a draw-time read of the effect, so the pane keeps
-    the dragged value in state and hands it to the card. Blur lives in the *bitmap*, which is baked off-thread, and
-    re-baking one per frame needs a preview-sized bake path (a cached decode, since a JPEG decode is 10–20ms) that is a
-    separate piece of work. So `SettingsCommitSlider`'s `onPreview` drives the first set and its `onCommit` the second.
+  - **Every parameter previews per frame, blur included — and blur is the only one that costs anything.** The wash and
+    all six liquid-glass parameters are draw-time reads of the effect, so the pane keeps the dragged value in state and
+    hands it to the card. Blur lives in the *bitmap*, so it needs a second picture: `WallpaperRepository.backdropPreview`
+    decodes the wallpaper **once** at a quarter of the screen and re-blurs that per emission, where `backdrop` is a
+    subscription per strength (a fresh decode each time, which at 10–20ms a decode cannot keep up with a finger). Three
+    things make it work, and each is the interesting part:
+    - **The strength arrives as a `Flow`, and the holder is a `StateFlow`.** As a subscription key it would re-decode; as
+      a flow it reaches the blur. And a `StateFlow` **conflates**, so the blur runs on the newest value and drops the
+      ones it was too slow for — a drag produces as many frames as the machine can and never a backlog. That is the
+      correction `IconPreview` needed the hard way, had for free here by picking the right holder.
+    - **The buffers are lent, not allocated.** `BitmapBlur.blur` takes an optional `scratch`, and the decoded pixels are
+      copied into a working array rather than re-read — so a frame allocates only its result bitmap. Ping-ponging two of
+      those is the next step if it ever janks, and it needs a way for a caller to notice a bitmap it already holds has
+      changed, which Compose's instance-keyed `remember` does not give.
+    - **The reduction is fixed and the radius is measured against it**, so a strength is the same *softness* here as on a
+      surface. It cannot follow the radius the way `backdrop`'s does — that would re-decode per strength, the thing being
+      avoided — so the bill is resolution at the sharp end: below about an eighth of the slider the settled picture holds
+      more of the wallpaper than the dragging one. The pane draws the dragging picture **only while the blur strength
+      differs from the stored one**, which is also what keeps a tint drag on the full-size picture: comparing the two
+      strengths is the one thing the pane knows and the state holder does not.
   - **The picture is the launcher's own panel picture, at the stored strength** — the same repository request
     `ShellViewModel` makes, deliberately, so the preview shows what the panels show rather than something made for it.
     Null renders the card's scrim, which is exactly what a real surface does with nothing to sample.

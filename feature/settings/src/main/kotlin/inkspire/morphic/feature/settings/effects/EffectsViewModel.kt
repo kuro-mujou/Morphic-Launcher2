@@ -46,18 +46,22 @@ internal val BackdropEffect.kind: EffectKind
  *   a variant carries only its own.
  * @property liquidGlassAvailable whether this device can render the shader (API 33+). False hides the chip and shows
  *   the reason, rather than offering an effect that would silently come out as a plain blur.
- * @property backdropImage the wallpaper blurred at the **stored** strength — what the preview samples. Null when there
- *   is nothing the launcher may claim is on screen, which the preview renders as its scrim exactly as a real surface
- *   does. Blurred at the stored strength rather than a dragged one, which is what makes the blur slider's effect on the
- *   preview land on release: the blur lives in the bitmap, and re-baking one per frame is a different piece of work.
- * @property backdropAccent the wallpaper's representative color, which the washes are blended toward. Without it
- *   `MaterialYou` previews as gray, since this launcher's `ColorScheme` is monochrome by design.
+ * @property backdropImage the wallpaper blurred at the **stored** strength, at the size a surface samples — what the
+ *   preview settles on. Null when there is nothing the launcher may claim is on screen, which the preview renders as its
+ *   scrim exactly as a real surface does.
+ * @property backdropAccent the wallpaper's representative color, which the washes are blended toward. Without it the
+ *   wallpaper wash previews as gray, since this launcher's `ColorScheme` is monochrome by design.
+ * @property draggingImage the same wallpaper at the strength a **finger** is on, kept at a quarter of the screen so it
+ *   can be re-blurred inside a frame — see `WallpaperRepository.backdropPreview`. The pane draws it only while the blur
+ *   slider is actually moving, and [backdropImage] the rest of the time: this one is a frame of a gesture, not a picture
+ *   to decide against, and at the sharp end of the slider it holds less of the wallpaper than the settled one does.
  */
 internal data class EffectsState(
     val effect: BackdropEffect = BackdropEffect.Default,
     val liquidGlassAvailable: Boolean = true,
     val backdropImage: Bitmap? = null,
     val backdropAccent: Int? = null,
+    val draggingImage: Bitmap? = null,
 )
 
 /**
@@ -86,16 +90,28 @@ internal class EffectsViewModel(
      */
     private val orientation = MutableStateFlow(Orientation.PORTRAIT)
 
+    /**
+     * The blur strength a finger is on, or null when none is.
+     *
+     * A `StateFlow` rather than a channel of events, and that is what makes the live preview self-limiting: it
+     * **conflates**, so the blur downstream runs on the newest value and silently drops the ones it was too slow for.
+     * A drag therefore produces as many frames as the machine can manage and never a backlog — the correction
+     * `IconPreview` needed the hard way, had for free here by picking the right holder.
+     */
+    private val draggedStrength = MutableStateFlow<Float?>(null)
+
     val state: StateFlow<EffectsState> = combine(
         settingsRepository.backdropEffect,
-        previewBackdrop(),
+        settledBackdrop(),
         wallpaperRepository.accentColor,
-    ) { effect, image, accent ->
+        draggingBackdrop(settingsRepository),
+    ) { effect, settled, accent, dragging ->
         EffectsState(
             effect = effect,
             liquidGlassAvailable = liquidGlassSupported,
-            backdropImage = image,
+            backdropImage = settled,
             backdropAccent = accent,
+            draggingImage = dragging,
         )
     }.stateIn(
         viewModelScope,
@@ -103,24 +119,49 @@ internal class EffectsViewModel(
         EffectsState(liquidGlassAvailable = liquidGlassSupported),
     )
 
+    /**
+     * Reports the blur strength under the finger, or null when the gesture is over.
+     *
+     * Called from the slider's `onPreview`, beside the pane's own dragged-effect state — the pane needs the whole effect
+     * to draw the wash live, and this needs the one number that costs a re-blur.
+     */
+    fun previewStrength(value: Float?) {
+        draggedStrength.value = value
+    }
+
     /** Reports the orientation the pane is drawn in, so a rotating pair's right half is previewed. */
     fun setOrientation(value: Orientation) {
         orientation.value = value
     }
 
     /**
-     * The wallpaper blurred at the stored strength — the picture the preview samples.
+     * The wallpaper blurred at the **stored** strength — the picture the preview settles on.
      *
-     * The same shape `ShellViewModel` uses for a panel, and deliberately the *same request*, so the preview is showing
-     * the picture the launcher's own panels are showing rather than one made for it. Keyed on the strength alone, so a
-     * tint or a lens parameter moving re-blurs nothing — those are draw-time reads, which is exactly why they preview
-     * per frame while this one lands on commit.
+     * The same shape `ShellViewModel` uses for a panel, and deliberately the *same request*, so what the preview settles
+     * to is the picture the launcher's own panels are showing rather than one made for it. Keyed on the strength alone,
+     * so a tint or a lens parameter moving re-blurs nothing — those are draw-time reads.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun previewBackdrop(): Flow<Bitmap?> = settingsRepository.backdropEffect
+    private fun settledBackdrop(): Flow<Bitmap?> = settingsRepository.backdropEffect
         .map { it.blurStrength }
         .distinctUntilChanged()
         .flatMapLatest { wallpaperRepository.backdrop(it, orientation) }
+
+    /**
+     * The wallpaper blurred at whatever strength the finger is on — one decode, a blur per frame.
+     *
+     * **The strength it follows falls back to the stored one**, so the picture is valid before any drag begins and the
+     * decode happens once when the pane opens rather than at the start of every gesture. Which also means this flow is
+     * always live while the pane is: the *pane* decides when to draw from it, because only the pane knows whether the
+     * finger is on the blur slider or on a tint.
+     */
+    private fun draggingBackdrop(settingsRepository: SettingsRepository): Flow<Bitmap?> {
+        val strengths = combine(
+            draggedStrength,
+            settingsRepository.backdropEffect.map { it.blurStrength },
+        ) { dragged, stored -> dragged ?: stored }
+        return wallpaperRepository.backdropPreview(strengths.distinctUntilChanged(), orientation)
+    }
 
     /**
      * Switches to [kind], **carrying the blur across**, which is the one parameter both effects have.

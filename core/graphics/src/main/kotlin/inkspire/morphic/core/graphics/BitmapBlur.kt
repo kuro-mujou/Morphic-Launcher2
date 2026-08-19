@@ -61,12 +61,25 @@ object BitmapBlur {
      *
      * Public alongside [blurred] because a caller that already holds an array should not have to round-trip through a
      * bitmap to use this, and because it is the form the tests can reach.
+     *
+     * **[scratch] can be lent, and the one caller that lends it is a slider.** The passes need a second buffer the size
+     * of the picture, and allocating one per call is nothing when a blur happens on a wallpaper change — and is the
+     * whole cost when it happens on every frame of a drag. A caller blurring the *same* picture repeatedly keeps one
+     * array and hands it in, which leaves a per-frame blur allocating nothing but its result. Its contents are
+     * meaningless on the way in and on the way out; it is workspace, not an argument.
      */
-    fun blur(pixels: IntArray, width: Int, height: Int, radiusPx: Int, passes: Int = DEFAULT_PASSES) {
+    fun blur(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        radiusPx: Int,
+        passes: Int = DEFAULT_PASSES,
+        scratch: IntArray = IntArray(pixels.size),
+    ) {
         if (radiusPx < 1 || width < 1 || height < 1 || passes < 1) return
+        require(scratch.size >= pixels.size) { "scratch is smaller than the picture" }
 
         premultiply(pixels)
-        val scratch = IntArray(pixels.size)
         repeat(passes) {
             pass(pixels, scratch, width, height, radiusPx, horizontal = true)
             pass(scratch, pixels, width, height, radiusPx, horizontal = false)
