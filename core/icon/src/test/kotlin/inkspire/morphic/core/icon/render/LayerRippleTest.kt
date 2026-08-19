@@ -18,7 +18,7 @@ class LayerRippleTest {
         LayerEffect.Ripple(amplitude = amplitude, waves = waves)
 
     @Test
-    fun `the centre of a wave reads from where it already is`() {
+    fun `the center of a wave reads from where it already is`() {
         // `sin` is zero at every whole wavelength, so those rings are undisplaced — which is what makes a ripple a
         // set of moving rings rather than a uniform swell.
         val amplitude = 10f
@@ -71,7 +71,7 @@ class LayerRippleTest {
     }
 
     @Test
-    fun `a centre of zero is the middle of the box`() {
+    fun `a center of zero is the middle of the box`() {
         assertEquals(96f, LayerRipple.centerPx(center = 0f, sizePx = 192), 0.001f)
         // And a fraction moves it by that share of the box, positive toward the far edge.
         assertEquals(144f, LayerRipple.centerPx(center = 0.25f, sizePx = 192), 0.001f)

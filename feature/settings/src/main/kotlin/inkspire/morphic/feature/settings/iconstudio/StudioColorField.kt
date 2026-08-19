@@ -101,7 +101,7 @@ private fun ColorFieldBody(
  * One color dot, or — for a null [argb] — the **no color** one.
  *
  * **That one is marked rather than merely hollow**, which is the fix for a real misreading. It was transparent
- * inside a faint ring, and transparent over the panel's own dark glass is a *grey dot*: the row read as seven
+ * inside a faint ring, and transparent over the panel's own dark glass is a *gray dot*: the row read as seven
  * colors of which the first happened to be dim, and picking it looked like picking a color rather than declining
  * one. Nothing about the shape said "none".
  *
@@ -171,7 +171,7 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
  * **It is bounded by the dot rather than sized against it**, which matters once the swatch is selected: the color
  * shrinks by [ColorSwatchInset] to make room for the ring, and this asks for more than the space left. `Modifier.size`
  * coerces into the constraints it is given, so the glyph shrinks with the circle instead of spilling out of it —
- * which is the behaviour wanted anyway, the mark being part of the content that gives up room to the ring.
+ * which is the behavior wanted anyway, the mark being part of the content that gives up room to the ring.
  */
 private val NoColorGlyph = 24.dp
 

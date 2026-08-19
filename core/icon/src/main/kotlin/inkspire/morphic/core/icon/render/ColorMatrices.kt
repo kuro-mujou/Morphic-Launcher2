@@ -4,16 +4,16 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * The 4×5 colour-matrix arithmetic, and nothing about what it is used *for*.
+ * The 4×5 color-matrix arithmetic, and nothing about what it is used *for*.
  *
  * Split out of [LayerFilter] when the filter library arrived, because the two want the same builders for different
- * reasons: `LayerFilter` composes a fixed sequence the four recolouring sliders mean, `IconFilters` composes a
+ * reasons: `LayerFilter` composes a fixed sequence the four recoloring sliders mean, `IconFilters` composes a
  * table of authored looks. One copy of the multiply is the whole point — a second would be a second chance to get
  * the fifth column wrong, and that column is silent when it is.
  *
  * **The fifth column is a translation on a 0..255 scale**, which is Android's convention and Compose's too, since
  * `ColorFilter.colorMatrix` hands the array straight to `android.graphics.ColorMatrixColorFilter`. A 0..1 value
- * there comes out very nearly black rather than the colour asked for. [offset], [contrast] and [invert] are the
+ * there comes out very nearly black rather than the color asked for. [offset], [contrast] and [invert] are the
  * builders that use it; everything else leaves it at zero.
  *
  * Pure Kotlin, so every matrix here is unit-testable without an emulator.
@@ -36,7 +36,7 @@ internal object ColorMatrices {
      * This matrix applied first, then [next] — so a chain reads in the order the effects happen.
      *
      * The fifth column is a translation rather than a coefficient, so it accumulates [next]'s own offset instead of
-     * multiplying through. Getting that backwards is silent: colours come out subtly shifted rather than wrong.
+     * multiplying through. Getting that backwards is silent: colors come out subtly shifted rather than wrong.
      */
     fun FloatArray.then(next: FloatArray): FloatArray {
         val out = FloatArray(20)
@@ -56,7 +56,7 @@ internal object ColorMatrices {
      *
      * **Interpolating the entries interpolates the outputs**, and that is the fact worth knowing: applying a matrix
      * is linear *in the matrix*, so `(1−t)·A + t·B` applied to a pixel is exactly `(1−t)·(A·p) + t·(B·p)`. Which is
-     * what lets a colour effect carry a strength while staying one matrix — the obvious alternative, drawing the
+     * what lets a color effect carry a strength while staying one matrix — the obvious alternative, drawing the
      * layer twice and cross-fading the results, is a second buffer in the bake and an API floor away from being
      * drawable live at all.
      *
@@ -87,7 +87,7 @@ internal object ColorMatrices {
     )
 
     /**
-     * Pivots each channel about mid-grey: above 1 steepens, below 1 flattens.
+     * Pivots each channel about mid-gray: above 1 steepens, below 1 flattens.
      *
      * The offset is what keeps the pivot at the middle rather than at black — without it a "contrast" control is a
      * brightness control that also steepens, which is the usual way this one is written wrong.
@@ -141,11 +141,11 @@ internal object ColorMatrices {
     }
 
     /**
-     * Replaces the colour with a constant and keeps the alpha — a flat silhouette of whatever it is applied to.
+     * Replaces the color with a constant and keeps the alpha — a flat silhouette of whatever it is applied to.
      * `SRC_IN` tinting expressed as a matrix, so it stays one shared `FloatArray` for both renderers rather than a
      * second kind of filter each would build its own way.
      *
-     * **Channels are 0..255 here**, being the fifth column. Zeroing the colour coefficients is also what makes this
+     * **Channels are 0..255 here**, being the fifth column. Zeroing the color coefficients is also what makes this
      * *spend* whatever composed before it: hue, saturation and brightness all act on inputs this then ignores.
      */
     fun solid(r: Float, g: Float, b: Float) = floatArrayOf(
@@ -156,12 +156,12 @@ internal object ColorMatrices {
     )
 
     /**
-     * Maps the whole tonal range onto a **two-colour ramp**: what was black comes out [darkR]/[darkG]/[darkB], what
+     * Maps the whole tonal range onto a **two-color ramp**: what was black comes out [darkR]/[darkG]/[darkB], what
      * was white comes out [lightR]/[lightG]/[lightB], and everything between is that line at its own luminance.
      *
      * **The third thing [scale] cannot express, after [mix] and [solid], and it is the one a whole family of looks is
      * made of** — every duotone, and the green-on-green of a handheld screen. It is not a tint: a tint attenuates the
-     * colours already there, so a red icon and a blue one stay different, where this discards the hue entirely and
+     * colors already there, so a red icon and a blue one stay different, where this discards the hue entirely and
      * keeps only how *light* each pixel was. Which is exactly why the two ends are worth choosing.
      *
      * `out = dark + luma × (light − dark)`, per channel — so the coefficients are the luminance weights times the

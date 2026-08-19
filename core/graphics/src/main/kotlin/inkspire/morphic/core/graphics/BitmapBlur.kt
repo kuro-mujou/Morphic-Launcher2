@@ -32,7 +32,7 @@ import kotlin.math.sqrt
  * hands back *un*premultiplied ARGB, where a fully transparent pixel is almost always transparent **black**.
  * Averaging those channels directly pulls black into every pixel near an edge, so a blurred icon gains a dark fringe
  * that reads as a rendering fault — the same trap `LayerPixelate.averageArgb` documents for cell averaging, one
- * operation over. Premultiplying first weights each colour by its own coverage, which is what makes the average
+ * operation over. Premultiplying first weights each color by its own coverage, which is what makes the average
  * mean anything; the alpha channel is blurred alongside and the result is divided back out.
  *
  * A wallpaper is opaque, so this costs it nothing and it is not two code paths.
@@ -110,10 +110,10 @@ object BitmapBlur {
      */
     private const val MIN_RADIUS_AFTER_DOWNSCALE = 3f
 
-    /** Past an eighth there is nothing recognisable left to blur, however wide the radius. */
+    /** Past an eighth there is nothing recognizable left to blur, however wide the radius. */
     private const val MAX_DOWNSCALE = 8
 
-    /** Colours weighted by their own coverage, so an average over a transparent edge means something. */
+    /** Colors weighted by their own coverage, so an average over a transparent edge means something. */
     private fun premultiply(pixels: IntArray) {
         for (i in pixels.indices) {
             val argb = pixels[i]
@@ -130,7 +130,7 @@ object BitmapBlur {
         }
     }
 
-    /** The inverse, applied once at the end. A pixel the blur left fully transparent has no colour to recover. */
+    /** The inverse, applied once at the end. A pixel the blur left fully transparent has no color to recover. */
     private fun unpremultiply(pixels: IntArray) {
         for (i in pixels.indices) {
             val argb = pixels[i]

@@ -121,12 +121,12 @@ fun StudioColorPickerPanel(
     // **Inputs cannot defeat a restore.** `rememberSaveable` is `remember(*inputs) { consumeRestored() ?: init() }`,
     // so a *new* request re-runs the block and the block hands back the **previous** session's text before `init` is
     // ever reached. Every picker session lives at the same composition position under one `PanelSlot.COLOR` holder
-    // key, so what came back was whatever colour the last picker had been left on — from a different field, on a
+    // key, so what came back was whatever color the last picker had been left on — from a different field, on a
     // different layer, minutes earlier.
     //
     // **And it did not merely display it.** `snapshotFlow` emits on collection, so the stale text arrived at the
     // effect below, parsed, differed from `current`, and was pushed through `request.onPick` — overwriting the
-    // colour the user had just chosen on the swatch row with one they had not. Picking a swatch and then opening the
+    // color the user had just chosen on the swatch row with one they had not. Picking a swatch and then opening the
     // picker to adjust it reverted the swatch.
     //
     // **What saveable was for is unreachable anyway**, which is what makes this a plain deletion rather than a
@@ -134,7 +134,7 @@ fun StudioColorPickerPanel(
     // panel is not composed at all — the only way it ever comes back is a close-and-reopen, which is precisely the
     // case where restoring is wrong. There was never a live session for the saved text to be restored *into*.
     //
-    // Keyed on the request, so opening any field seeds from that field's own colour.
+    // Keyed on the request, so opening any field seeds from that field's own color.
     val hexField = remember(request) { TextFieldState(request.argb.hex) }
 
     // **Typing wins while it parses; the picker wins otherwise.** Both write `current`, so the two can only disagree
@@ -144,7 +144,7 @@ fun StudioColorPickerPanel(
     // **`snapshotFlow` emits on collection, so this fires once on open with whatever the field holds** — which is
     // harmless *only* because the field is seeded from the same `request.argb` that `current` is. The two agree, the
     // `parsed != current` guard is false, and nothing is pushed back through `onPick`. A field seeded from anywhere
-    // else turns that first emission into a write of a colour the user never chose; see the note above it.
+    // else turns that first emission into a write of a color the user never chose; see the note above it.
     LaunchedEffect(hexField, request) {
         snapshotFlow { hexField.text.toString() }.collect { text ->
             val parsed = parseHexColor(text)

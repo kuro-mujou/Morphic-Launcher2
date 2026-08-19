@@ -143,7 +143,7 @@ internal val LayerSource.label: String
  *   This is a deliberate exception to the studio's own "a control that changes nothing is worse than a missing one",
  *   and it earns one where the gate is a *continuous control sitting directly above it*: the grain's angle means
  *   nothing until its directionality leaves zero, and hiding it made a row appear and disappear **under the finger
- *   that was dragging the slider above it**, moving everything below mid-gesture. A row that greys out states the
+ *   that was dragging the slider above it**, moving everything below mid-gesture. A row that grays out states the
  *   dependency without ever moving the panel. Where the gate is a discrete choice made elsewhere — a shape picked, a
  *   tint set — absent is still right, because the layout settles before the finger arrives.
  */
@@ -427,7 +427,7 @@ internal fun PositionPad(
 
             // **The pad says where, the readout says how far** — the same pairing every slider here has, and it was
             // missing for the same reason the bloom's linear position had no number: a pad is a picture, and a knob
-            // three pixels off centre is indistinguishable from one on it. A user cannot report a value they cannot
+            // three pixels off center is indistinguishable from one on it. A user cannot report a value they cannot
             // read, and cannot tell a nudged position from a resting one by looking.
             //
             // Both axes through [finestFormat] on the pad's own range, so a chromatic split's couple of percent
@@ -499,7 +499,7 @@ private val NudgeSlot = 40.dp
  *
  * Shared vocabulary since the effects grid grew a pager of its own; the two must not drift into different dots.
  *
- * **Centred under the pages it counts.** It filled the width and packed to the start, which left two or three dots
+ * **Centered under the pages it counts.** It filled the width and packed to the start, which left two or three dots
  * huddled in a corner of a panel they belonged to the whole of — reading as something left over rather than as the
  * position marker for what is above them. Centring is also what makes the count legible at a glance: dots either
  * side of a middle is a length the eye measures, where a left-packed row has to be counted.

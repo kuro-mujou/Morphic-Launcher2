@@ -78,7 +78,7 @@ import inkspire.morphic.core.model.icon.LayerEffect
  *   drawable via [IconShapes] and applied the same way — as a destination-in mask over the finished layer — but
  *   *where* it lands stopped being "the box" the moment a shape could be anchored to the artwork, and that is
  *   arithmetic, so it went the way the others did rather than being written twice.
- * - [LayerPattern] decides a tile's pixel size, the matrix that turns it, and how a stencil becomes coloured marks.
+ * - [LayerPattern] decides a tile's pixel size, the matrix that turns it, and how a stencil becomes colored marks.
  * - [LayerExtrude] decides how many copies a slab is made of and how far apart they sit.
  * - [LayerChromatic] decides which channel leads and which trails.
  *
@@ -308,8 +308,8 @@ private fun Modifier.layerEffects(
  */
 @Composable
 private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit): Modifier = when (effect) {
-    // Three effects, one drawing: each resolves to a colour matrix over everything drawn so far, and only where the
-    // matrix comes from differs — composed from four sliders, mapped onto two chosen colours, or looked up by id.
+    // Three effects, one drawing: each resolves to a color matrix over everything drawn so far, and only where the
+    // matrix comes from differs — composed from four sliders, mapped onto two chosen colors, or looked up by id.
     is LayerEffect.Color, is LayerEffect.Duotone, is LayerEffect.Filter -> {
         val matrix = remember(effect) {
             when (effect) {
@@ -388,7 +388,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
             // depth and denser again at a larger size. Flattened, `strength` is the slab's own opacity and both
             // couplings go.
             //
-            // The old comment's worry was the colour matrix, and it does not apply: `solid` replaces the colour and
+            // The old comment's worry was the color matrix, and it does not apply: `solid` replaces the color and
             // keeps the alpha, so filtering the assembled union gives the same flat silhouette as filtering each
             // copy. What is genuinely given up is the density gradient the compounding made — darker at the base,
             // fading at the tip — which was an artifact of the technique rather than a thing that was asked for.
@@ -502,7 +502,7 @@ private fun DrawScope.drawPatternOverlay(pattern: LayerEffect.Pattern, drawable:
  * Paints a sheen over whatever has been drawn, clipped to it — the live twin of `IconRenderer.applyGloss`.
  *
  * Every decision is [LayerGradient.sweep]'s: where the disc sits, where its stops fall, and which side of the rim is
- * lit. What is left here is turning four ARGB ints into Compose colours and handing them to a brush.
+ * lit. What is left here is turning four ARGB ints into Compose colors and handing them to a brush.
  */
 private fun DrawScope.drawGlossOverlay(gloss: LayerEffect.Gloss, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit) {
     val sizePx = size.width.toInt()
@@ -523,7 +523,7 @@ private fun DrawScope.drawGlossOverlay(gloss: LayerEffect.Gloss, spec: IconLayer
 }
 
 /**
- * Gathers a vignette's colour in from the frame's edges, clipped to what has been drawn — the live twin of
+ * Gathers a vignette's color in from the frame's edges, clipped to what has been drawn — the live twin of
  * `IconRenderer.applyVignette`.
  *
  * The disc spans the frame to its corners either way and the *stops* are what move; both come from [LayerGradient],

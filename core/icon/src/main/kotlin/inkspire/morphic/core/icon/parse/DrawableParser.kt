@@ -41,7 +41,7 @@ class DrawableParser(private val resources: Resources) {
             //
             // It **is** overshot, though, and that is geometry rather than measurement: a plate cropped differently
             // from the foreground in front of it would put the two out of register wherever the plate has anything
-            // on it but a flat colour.
+            // on it but a flat color.
             background = drawable.background?.overshot()?.toParsedLayer(resources),
             monochrome = drawable.monochromeOrNull()?.overshot()?.toParsedLayer(resources, true, label, "monochrome"),
         )
@@ -112,7 +112,7 @@ private fun AdaptiveIconDrawable.monochromeOrNull(): Drawable? =
  * **This is the "adaptive-layer overshoot" the renderer's KDoc has been deferring, and it was visible all along as
  * icons that looked slightly small.** An [AdaptiveIconDrawable]'s foreground and background are 108-unit canvases of
  * which only the central 72 is the masked, guaranteed-visible area; the ring around it is bleed the platform
- * reserves for parallax. So Android draws each layer at **1.5× the icon's size, centred**, and masks to the icon.
+ * reserves for parallax. So Android draws each layer at **1.5× the icon's size, centered**, and masks to the icon.
  * Drawing one into the box at 1× instead — which is what happened here — leaves the artwork the designer drew
  * covering about two thirds of the square, with transparent margin around it.
  *
@@ -127,7 +127,7 @@ private fun AdaptiveIconDrawable.monochromeOrNull(): Drawable? =
  * The fraction is the platform's own ([AdaptiveIconDrawable.getExtraInsetFraction], a quarter), not a number chosen
  * here: it is the same constant Android masks by, so the result is what the system would have drawn.
  *
- * **A flat colour is handed back untouched**, which is exactness rather than an optimisation: expanding a colour
+ * **A flat color is handed back untouched**, which is exactness rather than an optimization: expanding a color
  * changes nothing about what it draws, and wrapping it would hide the [ColorDrawable] from [toParsedLayer] — so an
  * adaptive icon's plain plate would stop being a [ParsedLayer.Color] and become a rasterised image of one.
  */

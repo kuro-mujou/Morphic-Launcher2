@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
  * convenience**, which is the whole reason it is not "the same effect copied onto every layer": a glow derives from
  * the finished silhouette, so a per-layer one glows around the foreground *inside* the background plate, where it
  * cannot be seen; a displacement applied per layer produces two independent distortion fields that visibly shear
- * apart at the edge of the glyph; and even a colour matrix is not the same thing applied before compositing as
+ * apart at the edge of the glyph; and even a color matrix is not the same thing applied before compositing as
  * after, the moment opacity or a blend mode is in play.
  *
  * **The same [LayerEffect] type, deliberately.** The composite is a thing with pixels and nothing beneath it — which

@@ -91,7 +91,7 @@ internal fun studioIconBound(
     val side = restingSide(canvasWidth, canvasHeight) * workspace.zoom
     val center = restingCenter(canvasWidth, canvasHeight, topInset)
     // **Clamped through the same [panBound] the gesture writes through**, rather than through a second expression
-    // saying the same thing. They were two, agreeing because both said "keep the centre on the canvas"; the moment
+    // saying the same thing. They were two, agreeing because both said "keep the center on the canvas"; the moment
     // that rule gained a second regime, two copies of it would have been two chances to disagree about where a
     // zoomed icon may sit — and the disagreement would show as an icon that snaps somewhere the drag cannot reach.
     val panX = workspace.panX.coerceIn(panBound(center.first, canvasWidth, side))
@@ -262,13 +262,13 @@ private fun clampedRailOffset(resting: Float, offset: Float, canvasExtent: Float
  * The range a pan fraction may take on one axis — **two regimes, decided by whether the icon is larger than the
  * canvas**.
  *
- * **Smaller than the canvas: keep the centre on it.** The clamp's whole job there is that the icon cannot be lost —
+ * **Smaller than the canvas: keep the center on it.** The clamp's whole job there is that the icon cannot be lost —
  * at worst a quarter of it sits in a corner and there is always something under the finger to drag back, which is
  * what lets this screen ship with no "reset view" button.
  *
  * **Larger than the canvas: keep the canvas inside the *icon*.** That is the opposite bound and it has to be,
- * because "the centre stays on the canvas" silently becomes a cage the moment the icon outgrows it: at a 4× zoom
- * the bound is two and a half canvases wide, so reaching its right-hand edge needs a centre well off the left of
+ * because "the center stays on the canvas" silently becomes a cage the moment the icon outgrows it: at a 4× zoom
+ * the bound is two and a half canvases wide, so reaching its right-hand edge needs a center well off the left of
  * the canvas — which the old rule refused. What a user got was an icon they had zoomed into and could not travel
  * across, stopping a fraction of the way over. This is the ordinary photo-viewer rule and it does the ordinary
  * thing: every part of a zoomed icon is reachable, and no part of the canvas ever shows blank beside it.
@@ -276,11 +276,11 @@ private fun clampedRailOffset(resting: Float, offset: Float, canvasExtent: Float
  * The two ranges meet where the icon exactly covers the canvas, and the crossing is where the icon settles into
  * covering it — the same small snap every viewer makes when content grows past fit.
  *
- * Expressed as bounds on the *pan* rather than on the centre because the pan is what is stored, and clamping the
+ * Expressed as bounds on the *pan* rather than on the center because the pan is what is stored, and clamping the
  * stored value is what stops a drag banking travel it will not spend. [CenterKeep] widens the small-icon regime at
- * both ends if the centre is ever allowed off the canvas.
+ * both ends if the center is ever allowed off the canvas.
  *
- * @param resting where the bound's centre sits on this axis with nothing panned.
+ * @param resting where the bound's center sits on this axis with nothing panned.
  * @param extent the canvas on this axis.
  * @param side the bound's side **at the current zoom**, which is what decides the regime.
  */

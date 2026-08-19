@@ -65,9 +65,9 @@ class LayerBevelTest {
     }
 
     /**
-     * The behaviour at the top of the altitude control, and it is **not** that the bevel switches off.
+     * The behavior at the top of the altitude control, and it is **not** that the bevel switches off.
      *
-     * Directly overhead there is no horizontal component left, so the light no longer favours one side — but a
+     * Directly overhead there is no horizontal component left, so the light no longer favors one side — but a
      * tilted surface still catches less of an overhead light than a flat one does, so *every* slope shades. What
      * comes out is a uniform darkened rim rather than a lit side and an unlit one, which is a real look and the
      * reason the slider runs the whole way up.

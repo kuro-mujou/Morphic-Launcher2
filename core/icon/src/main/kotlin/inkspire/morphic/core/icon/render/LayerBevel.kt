@@ -35,7 +35,7 @@ object LayerBevel {
      * So the horizontal part is **negated**: the vector wanted here points back at the source.
      *
      * **Altitude is measured up from the surface**, so 0 is a light skimming along it and 90 is one directly
-     * overhead. At 90 the horizontal part vanishes and the light stops favouring any side — but a tilted surface
+     * overhead. At 90 the horizontal part vanishes and the light stops favoring any side — but a tilted surface
      * still catches less of an overhead light than a flat one, so what is left is *every* slope shading equally: a
      * uniform darkened rim rather than nothing. That is a real look, and it is why the studio's altitude control
      * runs the whole way up.
@@ -103,7 +103,7 @@ object LayerBevel {
      * [dst] with [band] laid on at [amount], screened or multiplied, keeping [dst]'s own alpha.
      *
      * Both blends are computed at full strength and then mixed back toward the original by [amount], which is what
-     * makes a band's strength mean "how much of this blend" rather than "how opaque a rectangle of this colour".
+     * makes a band's strength mean "how much of this blend" rather than "how opaque a rectangle of this color".
      */
     private fun blended(dst: Int, band: Int, amount: Float, screen: Boolean): Int {
         val mix = amount.coerceIn(0f, 1f)

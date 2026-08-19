@@ -210,7 +210,7 @@ internal fun StudioRailMenu(
  * **Reorder and hide leave the menu open; delete closes it.** The first three are things done *repeatedly* and judged
  * by looking — moving a layer two places is two presses, and hiding one is a question about the icon you have to see
  * answered — so closing after each would make the menu a thing to keep reopening. It also makes the disabled rows work
- * for you: the first row greys out at the moment the layer reaches the top, which answers "how far can this go?" while
+ * for you: the first row grays out at the moment the layer reaches the top, which answers "how far can this go?" while
  * you are asking it. Delete closes because the layer it acted on is gone, and a menu left up would silently re-point at
  * whatever the selection fell to.
  *

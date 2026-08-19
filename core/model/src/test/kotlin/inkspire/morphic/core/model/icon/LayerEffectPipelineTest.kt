@@ -28,7 +28,7 @@ class LayerEffectPipelineTest {
     @Test
     fun `effects are applied in the order they are listed`() {
         assertEquals(listOf(tint, bloom), spec(tint, bloom).activeEffects)
-        // The same two the other way round is a different pipeline, not the same one normalised.
+        // The same two the other way round is a different pipeline, not the same one normalized.
         assertEquals(listOf(bloom, tint), spec(bloom, tint).activeEffects)
     }
 

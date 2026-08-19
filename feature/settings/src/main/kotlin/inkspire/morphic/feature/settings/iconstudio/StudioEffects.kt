@@ -275,7 +275,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     GLOSS("Gloss", Icons.Default.WbTwilight, EffectKind.ADDITION),
 
     /**
-     * Colour gathering in from the edges, the middle left clear — see `LayerEffect.Vignette`.
+     * Color gathering in from the edges, the middle left clear — see `LayerEffect.Vignette`.
      *
      * **Third of the three light overlays and grouped with them**, which is what the grid is for: bloom, gloss and
      * vignette are the same source-atop ramp arranged three ways, and a user reaching for one is comparing it
@@ -319,7 +319,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     /**
      * The same shadow cast by the silhouette's complement and laid back inside it — see `LayerEffect.InnerShadow`.
      *
-     * **Labelled "Inset" because the tile cannot hold "Inner shadow"**, which is the trade `PROGRESSIVE_BLUR` made
+     * **Labeled "Inset" because the tile cannot hold "Inner shadow"**, which is the trade `PROGRESSIVE_BLUR` made
      * in coming out as "Focus": four columns is one short word, and an ellipsised label names nothing. The word is
      * the look rather than the mechanism, which is this grid's rule anyway — and it is what CSS calls the same
      * thing, so it is not a word invented here.
@@ -330,9 +330,9 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     INNER_SHADOW("Inset", Icons.Default.FlipToFront, EffectKind.ADDITION),
 
     /**
-     * The same halo again, centred on the inside edge and screened onto it — see `LayerEffect.InnerGlow`.
+     * The same halo again, centered on the inside edge and screened onto it — see `LayerEffect.InnerGlow`.
      *
-     * **Labelled "Rim"**, on [INNER_SHADOW]'s own precedent: light gathered along an inside edge is a rim light, so
+     * **Labeled "Rim"**, on [INNER_SHADOW]'s own precedent: light gathered along an inside edge is a rim light, so
      * the word names the look rather than the mechanism, and it fits a tile at four columns where "Inner glow" does
      * not. Beside [INNER_SHADOW] because those two are the pair, exactly as [GLOW] and [SHADOW] are outside.
      */
@@ -858,7 +858,7 @@ private fun BlendControls(
  * look, and nothing about the names says which lightens.
  *
  * So a tile is [FilterReferenceStops] — the very same reference image the filter swatches use, which is what makes
- * the two comparable — with one fixed grey shape composited onto it through this mode. Every tile differs only by the
+ * the two comparable — with one fixed gray shape composited onto it through this mode. Every tile differs only by the
  * mode, so the tile *is* the answer to "what would this do".
  *
  * **Composited offscreen**, or the blend would reach past the swatch and combine with the panel's glass: a `Multiply`
@@ -922,20 +922,20 @@ private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit)
 /**
  * The shape every blend swatch composites onto the reference.
  *
- * A **mid grey**, deliberately: light enough that `Screen` visibly lifts the colours under it, dark enough that
+ * A **mid gray**, deliberately: light enough that `Screen` visibly lifts the colors under it, dark enough that
  * `Multiply` visibly drops them, and neutral enough that `Darken` and `Lighten` differ from both by picking channels
- * rather than by being a different colour. A white or black source would collapse half the table into identical
+ * rather than by being a different color. A white or black source would collapse half the table into identical
  * tiles.
  */
 private val BlendSwatchSource = Color(0xFF9E9E9E)
 
 /**
  * The shape's side, as a share of the swatch's shorter one — leaving the reference visible around it, which is what
- * makes the tile a comparison rather than a colour chip.
+ * makes the tile a comparison rather than a color chip.
  *
  * **A rounded square rather than a circle**, and it is the more honest picture: what a blend mode actually combines
  * here is one *layer* over another, and a layer in this studio is an icon-shaped thing. A disc read as an abstract
- * colour test; this reads as the operation being demonstrated on the subject it will be used on.
+ * color test; this reads as the operation being demonstrated on the subject it will be used on.
  */
 private const val BlendSwatchSide = 0.68f
 
@@ -950,7 +950,7 @@ private const val BlendSwatchCorner = 0.26f
  * effects would mean their order in the list silently changed the result, which is the failure this shape does not
  * have: they compose into one matrix, in one pass, in a fixed sequence.
  *
- * The sliders sit above the tint because that sequence is the order they act in — recolouring happens first and a
+ * The sliders sit above the tint because that sequence is the order they act in — recoloring happens first and a
  * [TintMode.SOLID] tint then overwrites the channels it produced.
  */
 @Composable
@@ -989,7 +989,7 @@ private fun ColorControls(
     )
 
     LabeledControl("Tint") {
-        // Clearable because a tint is the one recolouring that cannot be undone by returning a slider to its
+        // Clearable because a tint is the one recoloring that cannot be undone by returning a slider to its
         // middle — without a way off, picking one would be a one-way door.
         ClearableColorField(
             argb = color.tintArgb,
@@ -1000,9 +1000,9 @@ private fun ColorControls(
     // **Only once a tint exists**, which is the difference between a mode and a dead control: with no tint set there
     // is nothing for either option to do, and the pair would be two buttons that change nothing.
     //
-    // *Shaded* keeps the layer's own light and dark and pushes it toward the colour; *Solid* keeps only the shape and
+    // *Shaded* keeps the layer's own light and dark and pushes it toward the color; *Solid* keeps only the shape and
     // fills it flat. Solid is what makes app-shipped themed icons agree with each other — they arrive black, white or
-    // coloured depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
+    // colored depending on who built them, and only their alpha is meant to be meaningful — and it is the one mode a
     // multiply cannot reach, since black multiplied by anything is still black. See `TintMode`.
     if (color.tintArgb != null) {
         LabeledControl("Tint style") {
@@ -1019,14 +1019,14 @@ private fun ColorControls(
 }
 
 /**
- * The built-in colour looks: a category to narrow by, then the looks in it.
+ * The built-in color looks: a category to narrow by, then the looks in it.
  *
  * **Two levels, because a flat list of seventeen named swatches is a wall.** The category row is presentation and
  * nothing more — a stored recipe holds an id and has never heard of a category — so regrouping the table later
  * costs nothing and breaks no saved icon.
  *
  * **A swatch shows the look, not the icon.** Every other chooser in this studio draws its own subject, and a
- * filter's subject is what it does to colour — so each tile is a fixed reference gradient with that filter's matrix
+ * filter's subject is what it does to color — so each tile is a fixed reference gradient with that filter's matrix
  * over it. Previewing on the *icon* would have been the obvious alternative and is worse twice over: seventeen live
  * previews of the real stack is seventeen bakes, and an icon that happens to be black tells you nothing about a
  * warm grade. The reference strip is the same for every tile, so the tiles differ only by what the filter did.
@@ -1137,8 +1137,8 @@ private fun FilterTile(label: String, matrix: FloatArray?, selected: Boolean, on
 /**
  * What every swatch is a picture of.
  *
- * Chosen to span the axes a colour matrix moves things along — a warm end, a neutral middle and a cool end, with
- * enough saturation to show a desaturating look and enough range to show a contrast one. A single flat colour
+ * Chosen to span the axes a color matrix moves things along — a warm end, a neutral middle and a cool end, with
+ * enough saturation to show a desaturating look and enough range to show a contrast one. A single flat color
  * would leave half the table looking identical.
  */
 private val FilterReferenceStops = listOf(
@@ -1359,12 +1359,12 @@ private fun BloomPosition(
 /**
  * How soft the blurred end gets, how much stays sharp, and where the sharp part is.
  *
- * **Labelled *Focus* rather than "Progressive blur"**, which is the reference's name for the mechanism rather than
+ * **Labeled *Focus* rather than "Progressive blur"**, which is the reference's name for the mechanism rather than
  * for the look. What a user is doing here is choosing what stays in focus; the blur is how that is expressed. It is
  * also the only entry whose name would not fit a tile at four columns.
  *
  * **The falloff swaps the placement control**, [BloomControls]' rule and the second use of the same enum: a band
- * across the layer is placed by the direction it runs, a disc within it by where its centre sits, and neither value
+ * across the layer is placed by the direction it runs, a disc within it by where its center sits, and neither value
  * can answer the other's question.
  *
  * **Softness of zero is a real answer**, not a degenerate one — a hard edge between sharp and blurred is a look, and
@@ -1564,7 +1564,7 @@ private fun GrainControls(
     // **Present but spent when there is no direction to name, rather than absent** — the one place in this panel
     // where the studio's "a control that changes nothing is worse than a missing one" rule is knowingly not applied,
     // and the gate is why: it is the *continuous slider directly above*. Hidden, this row appeared and vanished
-    // under the very finger dragging that slider, shifting everything beneath it mid-gesture. Greyed out it states
+    // under the very finger dragging that slider, shifting everything beneath it mid-gesture. Grayed out it states
     // the dependency and the panel never moves. Where a gate is a discrete choice made elsewhere — a shape picked, a
     // tint set — absent is still right, because the layout settles before the finger arrives.
     SliderControl(
@@ -1588,16 +1588,16 @@ private fun GrainControls(
  *
  * **Nearly half the box, where it was a seventh.** At the old ceiling a full-strength grain frayed the edges and
  * left the shape plainly readable, so the top of the slider was the middle of the effect: the state a user is
- * reaching for at maximum — the icon dispersed into a cloud of its own colours — was not on the control at all.
+ * reaching for at maximum — the icon dispersed into a cloud of its own colors — was not on the control at all.
  */
 private const val GrainReach = 0.45f
 
 /**
  * How far the waves push, how many of them, and where they start.
  *
- * **No colour**, unlike every other effect in this panel — a ripple moves the layer's own pixels rather than adding
+ * **No color**, unlike every other effect in this panel — a ripple moves the layer's own pixels rather than adding
  * any, so there is nothing to tint. It is the first entry here whose whole subject is *where* the artwork is instead
- * of what colour it comes out.
+ * of what color it comes out.
  *
  * **Waves steps by one**, because it counts crests: a slider that could land on 8.37 of them would be offering a
  * precision the picture cannot show.
@@ -1644,21 +1644,21 @@ private fun RippleControls(
 /**
  * How far a crest may push a pixel, as a fraction of the box.
  *
- * A tenth is already extreme — past it the crests overlap far enough that the artwork stops being recognisable and
+ * A tenth is already extreme — past it the crests overlap far enough that the artwork stops being recognizable and
  * the effect reads as damage rather than as water.
  */
 private const val RippleReach = 0.1f
 
 /**
- * The halo's colour, how strong it is, how far it fades and how far it is grown first.
+ * The halo's color, how strong it is, how far it fades and how far it is grown first.
  *
  * **Spread and radius are two different things and both are needed**, which is the one non-obvious control here. A
  * blur alone leaves the halo at about half strength right at the silhouette's edge and fading immediately, so a glow
  * built from radius alone reads as a smudge; spread grows the silhouette *before* the blur, giving the fade a solid
  * ring to start from. Radius is how soft, spread is how big.
  *
- * **No offset**, unlike [ShadowControls]: a glow is centred on the silhouette by definition, and a halo pushed to one
- * side is a coloured shadow — which is the other entry.
+ * **No offset**, unlike [ShadowControls]: a glow is centered on the silhouette by definition, and a halo pushed to one
+ * side is a colored shadow — which is the other entry.
  */
 @Composable
 private fun GlowControls(
@@ -1701,7 +1701,7 @@ private fun GlowControls(
 }
 
 /**
- * The shadow's colour, how strong it is, how soft, and where it is thrown.
+ * The shadow's color, how strong it is, how soft, and where it is thrown.
  *
  * **A radius of zero is a legitimate answer here**, unlike a glow's: a hard-edged silhouette offset behind the layer
  * is a perfectly good shadow, and it is the one a long-shadow look is built from. The renderer reads that as "skip
@@ -1753,7 +1753,7 @@ private fun ShadowControls(
 }
 
 /**
- * The recess's colour, how strong it is, how soft, how far it is choked in, and where it is thrown.
+ * The recess's color, how strong it is, how soft, how far it is choked in, and where it is thrown.
  *
  * **[ShadowControls]' four controls plus a choke**, and the pairing is the honest one: a cast shadow has a radius and
  * a throw, and this has those *and* the spread its outer twin gives to a glow — because the region it is cast by is
@@ -1818,13 +1818,13 @@ private fun InnerShadowControls(
 }
 
 /**
- * The rim's colour, how strong it is, how far it reaches in, and how far it is choked.
+ * The rim's color, how strong it is, how far it reaches in, and how far it is choked.
  *
  * **[InnerShadowControls] without the throw**, which is [GlowControls]' relationship to [ShadowControls] one scope
- * in: a rim is centred on the edge it lights by definition, and light pushed to one side is a recess in a bright
- * colour — which is the entry beside it.
+ * in: a rim is centered on the edge it lights by definition, and light pushed to one side is a recess in a bright
+ * color — which is the entry beside it.
  *
- * **No "edge or centre" choice**, unlike the reference's. A glow radiating from the middle of the artwork outward is
+ * **No "edge or center" choice**, unlike the reference's. A glow radiating from the middle of the artwork outward is
  * `Bloom` with a radial falloff anchored to content, which is already built and offers a position and a falloff this
  * could not; a toggle reaching a state the model holds elsewhere is the second way to say one thing.
  */
@@ -1869,14 +1869,14 @@ private fun InnerGlowControls(
 }
 
 /**
- * The stroke's colour, how strong it is, how thick, and which side of the edge it sits on.
+ * The stroke's color, how strong it is, how thick, and which side of the edge it sits on.
  *
  * **No softness**, which is the one control a user might look for and the one that would be a duplicate: a softened
  * stroke outside the edge is [GlowControls] and inside it is [InnerGlowControls], both of which offer a choke this
  * could not. Hard is what makes a stroke a stroke.
  *
  * **Width is the total thickness whichever position is chosen**, so switching between them changes where the band
- * sits and not how heavy it looks — the model halves it for a centred stroke, which is the arithmetic that would
+ * sits and not how heavy it looks — the model halves it for a centered stroke, which is the arithmetic that would
  * otherwise make the position control secretly a width control too.
  */
 @Composable
@@ -1948,7 +1948,7 @@ private const val OutlineFloor = 0.005f
  * directly overhead every slope shades equally — the uniform rim of a pillow emboss, which is a look rather than an
  * absence. The strengths decide how strongly what it finds is painted.
  *
- * The two colours sit beside their own strengths rather than in a pair at the top, so each band reads as one thing
+ * The two colors sit beside their own strengths rather than in a pair at the top, so each band reads as one thing
  * to set — which is what makes an asymmetric bevel, the difference between something raised and something carved,
  * an obvious thing to reach for rather than an arrangement to work out.
  */
@@ -1983,7 +1983,7 @@ private fun BevelControls(
     SliderControl(
         label = "Altitude",
         value = bevel.altitudeDegrees,
-        // All the way up, because overhead is a look rather than an off switch: the light stops favouring a side,
+        // All the way up, because overhead is a look rather than an off switch: the light stops favoring a side,
         // and what is left is every slope shading equally — the uniform rim of a pillow emboss. Pinned by a test,
         // since the obvious reading is that a bevel flattens away as its light is raised, and it does not.
         valueRange = 0f..90f,
@@ -2051,7 +2051,7 @@ private fun ChromaticControls(
     onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
     onCommit: () -> Unit,
 ) {
-    // Seeded at no offset when absent, which is also this effect's own "off" — so the pad opens centred and the
+    // Seeded at no offset when absent, which is also this effect's own "off" — so the pad opens centered and the
     // first drag is what brings the effect into being.
     val split = effects.effectOrNull<LayerEffect.ChromaticSplit>()
         ?: LayerEffect.ChromaticSplit(offsetX = 0f, offsetY = 0f)
@@ -2071,12 +2071,12 @@ private fun ChromaticControls(
  * How far a fringe may reach, either way.
  *
  * A tenth of [PositionRange]: past a few percent of the icon the three channels stop reading as one object with
- * coloured edges and start reading as three overlapping icons, which is a different — and much less useful — effect.
+ * colored edges and start reading as three overlapping icons, which is a different — and much less useful — effect.
  */
 private val ChromaticRange = -0.05f..0.05f
 
 /**
- * The slab's colour, how deep it runs, which way, and how strongly.
+ * The slab's color, how deep it runs, which way, and how strongly.
  *
  * **Depth is bounded well short of the box**, and that bound is about cost rather than taste: the extrusion is drawn
  * as many copies of the layer, `LayerExtrude` caps how many, and past the cap the copies spread far enough apart for
@@ -2084,7 +2084,7 @@ private val ChromaticRange = -0.05f..0.05f
  * bake size.
  *
  * **Black by default**, unlike every other overlay here, because an extrusion is a *shadowed* side rather than a
- * light — it is the one place in this panel where the resting colour is the dark one.
+ * light — it is the one place in this panel where the resting color is the dark one.
  */
 @Composable
 private fun ExtrudeControls(
@@ -2131,7 +2131,7 @@ private fun ExtrudeControls(
 }
 
 /**
- * Which texture, in what colour, how large, which way round, and how strongly.
+ * Which texture, in what color, how large, which way round, and how strongly.
  *
  * **The tiles are chosen from a row and the rest is sliders**, which is the filter panel's arrangement rather than
  * the shape chooser's paged grid: six entries fit a scroll, and unlike shapes they are not the *whole* control —
@@ -2140,7 +2140,7 @@ private fun ExtrudeControls(
  * **"None" is the first tile rather than a clear button**, the shape and filter choosers' shared answer: having no
  * texture is a choice among the same set, and the one every layer starts on.
  *
- * **A swatch draws the tile itself, tiled** — the same thing the icon will get, at the same stencil-into-colour
+ * **A swatch draws the tile itself, tiled** — the same thing the icon will get, at the same stencil-into-color
  * treatment, so what is being chosen is visible rather than named. That costs one small bitmap per tile, which is
  * what makes it affordable where a filter's seventeen live icon previews were not.
  *
@@ -2155,7 +2155,7 @@ private fun PatternControls(
     onCommit: () -> Unit,
 ) {
     val current = effects.effectOrNull<LayerEffect.Pattern>()
-    // Seeded from whatever is stored so switching tiles keeps the scale, angle and colour already tuned — the tile
+    // Seeded from whatever is stored so switching tiles keeps the scale, angle and color already tuned — the tile
     // is one field of the effect, not a different effect.
     val pattern = current ?: LayerEffect.Pattern(pattern = IconPatterns.Dots)
 
@@ -2271,7 +2271,7 @@ private fun PatternTile(pattern: IconPattern?, argb: Int, selected: Boolean, onC
 private val PatternTileSide = 56.dp
 
 /**
- * The sheen's colour, how hard it is struck, where from, and how its edge bows.
+ * The sheen's color, how hard it is struck, where from, and how its edge bows.
  *
  * **The curve slider is signed and rests at zero**, which is the whole of what separates a gloss from a bloom in the
  * controls: zero is a straight edge, and dragging either way bows it the two opposite directions. A reset at zero
@@ -2353,11 +2353,11 @@ private val ContentAnchor.bloomHint: String
     }
 
 /**
- * The vignette's colour, how far in it comes, how softly, and how strongly.
+ * The vignette's color, how far in it comes, how softly, and how strongly.
  *
  * **No angle and no position pad**, which is the shape of the effect rather than a control left out: a vignette is
  * symmetrical about its frame by definition, so a direction would make it a bloom and an offset would make it a
- * bloom placed off-centre. That is the entry beside it, and the two would then be one effect with a switch.
+ * bloom placed off-center. That is the entry beside it, and the two would then be one effect with a switch.
  *
  * **No falloff either**, unlike a bloom's. A ramp with an angle *has* no edge to gather at — it arrives from one
  * side, which is a bloom again — so the linear form of this would not be a vignette at all.
@@ -2374,7 +2374,7 @@ private fun VignetteControls(
     // The effect's own defaults when absent, so the frame before the seed lands shows what is about to arrive.
     val vignette = effects.effectOrNull<LayerEffect.Vignette>() ?: LayerEffect.Vignette()
 
-    // Not clearable: a vignette must be *some* colour, and it is turned off by the header's switch. Black is what
+    // Not clearable: a vignette must be *some* color, and it is turned off by the header's switch. Black is what
     // the word means, and a light one lifting the corners is the same control used the other way.
     LabeledControl("Color") {
         ColorField(argb = vignette.argb) { argb ->

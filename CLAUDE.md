@@ -309,7 +309,7 @@ enforces. Per layer:
   `saturation = 0` plus a tint rather than a variant of its own), `LayerEffect.Bloom` and `LayerEffect.Gloss` (light
   spilling across the layer, and light struck across it with an edge), `LayerEffect.Vignette` (light gathering in
   from the edges), `LayerEffect.Pattern` (a tiled texture),
-  `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the colour channels
+  `LayerEffect.Extrude` (the silhouette repeated behind itself), `LayerEffect.ChromaticSplit` (the color channels
   displaced), `LayerEffect.Outline` (a hard band following the silhouette),
   `LayerEffect.Bevel` (the silhouette read as a raised surface and lit),
   `LayerEffect.Glow` and `LayerEffect.Shadow` (the silhouette blurred behind it),
@@ -317,7 +317,7 @@ enforces. Per layer:
   or screened), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
   blur), `LayerEffect.Filter` (one of the built-in looks, by id) and
-  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colours). **Ten of the nineteen do not draw live** —
+  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colors). **Ten of the nineteen do not draw live** —
   everything that needs a blur or a per-pixel pass — which is what `drawsLive` and the bake-backed preview exist for.
   **All thirteen the plan set out are built, and so are all six of phase 2**; see the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
@@ -401,7 +401,7 @@ setup for.
     editor's view) and `withEffect` (the writer) both used to drop an identity effect as well — the second so an
     untouched recipe stayed empty on disk, a real goal bought at the wrong moment. Applied on *every edit*, it made
     "drag a slider to its floor" mean **delete this effect**: a bloom's color, angle, radius, falloff and anchor went
-    with it, the panel's switch greyed out mid-gesture, and dragging back up produced a *fresh* effect at defaults
+    with it, the panel's switch grayed out mid-gesture, and dragging back up produced a *fresh* effect at defaults
     rather than the one being edited. Identity is a statement about what would be painted and the editor is not
     asking it. Storage stays small the honest way instead — nothing writes a record until the user asks for one.
     `withEffect` also **keeps an existing effect's position**, the list being the pipeline order: appending an edited
@@ -684,10 +684,10 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
   - **`ColorMatrices` is the arithmetic, `LayerFilter` the policy.** The builders came out of `LayerFilter` when the
     table arrived, because authoring dozens of looks as raw `floatArrayOf` is unreviewable — a look composes as
     `saturation(0.9).then(contrast(1.12))…`, which says what it *is*. `LayerFilter` kept the one thing that is about
-    the four sliders: the order they compose in. Three builders are new: **`contrast` pivots about mid-grey** (without
+    the four sliders: the order they compose in. Three builders are new: **`contrast` pivots about mid-gray** (without
     the offset it is a brightness control that also steepens, the usual way this is written wrong), **`mix`**
     weights each output channel across all three inputs, which is what a true sepia needs and what `scale`
-    structurally cannot express, and **`duotone`** maps the tonal range onto a two-colour ramp. The fifth column is a
+    structurally cannot express, and **`duotone`** maps the tonal range onto a two-color ramp. The fifth column is a
     translation on 0..255, which is silent when wrong.
   - **A filter swatch shows the look, not the icon** — one fixed reference gradient under each filter's matrix.
     Previewing on the real icon is a bake per tile, and an icon that happens to be black says nothing about a warm
@@ -696,13 +696,13 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
     effects came from**, and three things about the expansion are worth keeping:
     - **`duotone` is the one piece of new arithmetic, and it is a whole family.** `out = dark + luma × (light −
       dark)`, which discards hue entirely and keeps only how light each pixel was — *not* a tint, which attenuates
-      the colours already there and so leaves a red icon and a blue one different. Discarding the hue is exactly
+      the colors already there and so leaves a red icon and a blue one different. Discarding the hue is exactly
       what makes a screenful of icons drawn by different hands read as one set. The span is divided by 255 while
       the weights are not, and getting that backwards produces a blown-out picture rather than an obviously broken
       one; **the test caught it in the authored version of this**, which is why it is a shared builder with a test
       rather than a matrix written out per entry.
     - **A matrix cannot quantize, and that is the bound on the whole file.** The reference's retro-hardware looks
-      snap colours to a fixed palette, which is not a linear map at any size — so those entries here are the *ramp
+      snap colors to a fixed palette, which is not a linear map at any size — so those entries here are the *ramp
       between the palette's two ends* (a duotone), not a stepped approximation pretending to be the same thing. A
       real one would be a `LayerEffect` with a per-pixel pass, like Pixelate.
     - **The names are ours.** The reference has a "Tarantino", an "iOS" and a "MIUI"; a filter's name is shipped,
@@ -710,13 +710,13 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
       trademark for no gain in clarity. Same rule, now with three worked examples.
 
 **`LayerEffect.Duotone` is the fourteenth, the first of the phase-2 six, and the one the filter library had already
-built.** The layer's tonal range mapped onto a ramp between two *chosen* colours — `ColorMatrices.duotone` exactly,
+built.** The layer's tonal range mapped onto a ramp between two *chosen* colors — `ColorMatrices.duotone` exactly,
 which eight of the 46 authored looks already run on. It is **not a tint**, and that distinction is the whole reason it
-exists: a tint attenuates the colours already there, so a red icon and a blue one stay different, where this discards
+exists: a tint attenuates the colors already there, so a red icon and a blue one stay different, where this discards
 the hue entirely and keeps only how light each pixel was — which is what makes a screenful of icons drawn by different
 hands read as one set. Five things:
 - **Named for the look, not the mechanism** — the plan called it a *gradient map*, and a gradient map has arbitrary
-  stops where this deliberately has two colours and no midpoint. Same rename Bloom took from `Gradient`.
+  stops where this deliberately has two colors and no midpoint. Same rename Bloom took from `Gradient`.
 - **No midpoint or bias slider, and that is a bound rather than a control left out.** Shifting the balance between the
   ends is a non-linear remap of luminance *before* the interpolation, which a 4×5 matrix structurally cannot hold — so
   a bias would demote the effect to a per-pixel pass and cost it both its live path and the composability that lets it
@@ -727,16 +727,16 @@ hands read as one set. Five things:
   being a term of the same linear expression rather than something multiplied through.
 - **`LayerFilter.duotoneMatrixOf` is the extraction the second consumer earned**, the exact move `solidMatrixOf` made:
   `IconFilters` had been unpacking two ARGB ints into six channels privately, and a *user* picking the same two
-  colours was about to do it again — on the **fifth column**, at 0..255, where a 0..1 value is visually black rather
-  than obviously broken. The table keeps a two-colour alias because a table of looks reads better in colours than in
+  colors was about to do it again — on the **fifth column**, at 0..255, where a 0..1 value is visually black rather
+  than obviously broken. The table keeps a two-color alias because a table of looks reads better in colors than in
   channels, which is what its old note was really about.
 - **An addition rather than an adjustment**, which looks arguable and is not: `carriesSwitch`'s test is whether the
   entry's *resting* state is its off state, and this arrives at the full ramp because that is what makes it legible.
   So zero strength is not where it sits untouched, and its "off" is its absence — which is a switch. And the
   library's own DUOTONE category is not a duplication for the reason `Color` and `Filter` are not: one is a fixed
-  vocabulary somebody authored, the other is *this* icon's two colours.
+  vocabulary somebody authored, the other is *this* icon's two colors.
 
-**`LayerEffect.Vignette` is a bloom's radial ramp run the other way, and the second phase-2 effect.** Colour
+**`LayerEffect.Vignette` is a bloom's radial ramp run the other way, and the second phase-2 effect.** Color
 gathering in from the edges with the middle left clear, source-atop like the other two overlays — so it follows a
 rounded plate's own corners instead of squaring the icon off with a rectangle. Its own effect rather than a flag on
 Bloom for Gloss's reason: they are different *looks*, a user goes looking for this one by name, and at most one
@@ -752,7 +752,7 @@ Four things:
   doing it are two chances to do it once; backwards it draws a perfectly plausible picture lit in the middle, on the
   one axis neither renderer can check against the other.
 - **No falloff and no position, and that is the effect's shape rather than controls left out.** A ramp with an angle
-  arrives from one side, which is a bloom; an off-centre disc is a bloom placed. Either would make this the entry
+  arrives from one side, which is a bloom; an off-center disc is a bloom placed. Either would make this the entry
   beside it with a switch on.
 - **It anchors to the artwork by default**, like a bloom and unlike a shape mask: box-anchored on a small glyph the
   ramp gathers at corners the glyph never reaches and source-atop clips it to nothing, so the control would open on
@@ -796,7 +796,7 @@ kept one. Five things:
   the icon intact and only the *baked* icon was wrong: the two-renderer hazard in the worst form this codebase has hit,
   and the one kind of divergence the editor structurally cannot show you. Found by driving the device, not by reading.
 - **`MULTIPLY` was the only one broken**, which is worth knowing before assuming the rest: `SCREEN`, `OVERLAY`,
-  `DARKEN` and `LIGHTEN` all document the union alpha `Sa + Da − Sa·Da` and the proper separable colour formula. The
+  `DARKEN` and `LIGHTEN` all document the union alpha `Sa + Da − Sa·Da` and the proper separable color formula. The
   fix routes all five through one implementation anyway, because a mode-by-mode judgement about which platform
   constant is trustworthy is exactly the thing that goes stale.
 - **No API fork, which is the point.** `Paint.setBlendMode` is API 29 against a `minSdk` of 26, so the obvious repair
@@ -814,7 +814,7 @@ kept one. Five things:
 layer's own alpha, blurred, read as a **height map**; the slopes near its edges catch or miss a light; what they catch
 is painted as a highlight and a shadow. Every parameter is about a *light* rather than a shape. Five things:
 - **It does not fit `resample`, and the plan predicted that correctly.** That helper asks which single pixel an output
-  reads and answers with a bilinear sample; a Sobel reads a *neighbourhood* and answers with a colour. What the two do
+  reads and answers with a bilinear sample; a Sobel reads a *neighbourhood* and answers with a color. What the two do
   share is the row split, so **`overRows` came out of `resample` on this second consumer** and the per-band scratch
   became per-row — a `FloatArray(2)` per row is nothing beside the pixels.
 - **There is no depth control, which is the one departure from what was asked for.** A depth slider scales the slope
@@ -841,13 +841,13 @@ is painted as a highlight and a shadow. Every parameter is about a *light* rathe
 **`LayerEffect.Outline` is the fifth phase-2 effect and cost no drawing code at all.** A hard band following the
 layer's finished silhouette — what separates an icon from a busy wallpaper when nothing softer will. Every piece was
 already there once inner glow had extracted them: an **outside** stroke is `haloed` with a null radius, an **inside**
-one is `insetHaloed` with a null radius, and a **centred** one is both. The dilation each of those performs *is* the
+one is `insetHaloed` with a null radius, and a **centered** one is both. The dilation each of those performs *is* the
 stroke once nothing softens it. Four things:
-- **Inward first for the centred case, and the order is load-bearing.** `insetHaloed` trims its band to the artwork,
+- **Inward first for the centered case, and the order is load-bearing.** `insetHaloed` trims its band to the artwork,
   so it changes no alpha — which leaves the silhouette `haloed` then grows outward still the *artwork's* own edge.
   The other way round the outward band fattens the silhouette first and the inward one is measured from the stroke's
   edge, putting the whole thing a width too far out.
-- **`perSideWidth` halves the total for a centred stroke, in the model** on `Vignette.clearArea`'s grounds. `width`
+- **`perSideWidth` halves the total for a centered stroke, in the model** on `Vignette.clearArea`'s grounds. `width`
   is the thickness a user sees whichever position is chosen, so switching moves the band without also changing its
   weight; done in the renderer, the failure would read as the position control secretly being a width control.
 - **`drawsLive` is false for a new reason — there is no blur here.** An outside stroke *could* draw live, being what
@@ -892,7 +892,7 @@ layer, blurred, thrown, and laid back **inside** its own silhouette — so the a
 rather than sitting on it. Its own effect on `Glow`/`Shadow`'s precedent: at most one effect of a type is meaningful,
 and an icon that both casts a shadow and is recessed into its own plate is ordinary. Four things:
 - **The alpha inversion needed no matrix, which overturns the plan's own prediction.** `punchPaint` is `DST_OUT` over
-  a filled buffer, leaving `dstAlpha × (1 − srcAlpha)` — the complement, in two canvas calls. A colour matrix would
+  a filled buffer, leaving `dstAlpha × (1 − srcAlpha)` — the complement, in two canvas calls. A color matrix would
   have had to reason about premultiplication to invert an alpha channel, where this simply does not. Outline's
   erosion is the same op run twice, so that effect owes no new primitive either.
 - **The complement is built in a *padded* buffer, and this is the part that is silently wrong without it.** An inner
@@ -905,23 +905,23 @@ and an icon that both casts a shadow and is recessed into its own plate is ordin
 - **The band appears opposite the throw, and that is geometry rather than a sign error.** Displacing the outside down
   and right slides it over the artwork's top-left interior, which is where a light from the top-left leaves a recess
   dark — so this and `Shadow` agree about where the light is while their bands sit on opposite edges, which is what a
-  real light does to a bump and a dent. It is labelled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
+  real light does to a bump and a dent. It is labeled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
   precedent that four columns is one short word.
 
 **`LayerEffect.InnerGlow` is that one's twin, and where the inner halo became one function.** Light gathering along
 the inside of the edge — the complement blurred and trimmed as a recess is, then **screened** onto the artwork rather
-than laid over it, so it brightens the colours already there instead of covering them with a band. Two effects rather
+than laid over it, so it brightens the colors already there instead of covering them with a band. Two effects rather
 than one on `Glow`/`Shadow`'s precedent, and the parameters differ the same way: a recess is thrown so it has an
-offset, a rim is centred on the edge it lights so it has none. Three things:
+offset, a rim is centered on the edge it lights so it has none. Three things:
 - **`IconRenderer.insetHaloed` is the extraction the second consumer earned**, and the two differ in exactly two
   arguments (the offset, and the blend). Everything between the complement and the trim is identical, which is
   precisely the near-copy that drifts when written twice.
 - **The trim moved into the halo's own buffer, and that is what made one function possible.** The first cut leaned on
   source-atop to clip *and* composite at once — correct for a shadow, impossible for anything that adds light, since
   the mode is then spent. Destination-in first, any mode after.
-- **No "edge or centre" toggle**, dropped from the proposal and confirmed by building it: a glow radiating from the
+- **No "edge or center" toggle**, dropped from the proposal and confirmed by building it: a glow radiating from the
   middle of the artwork is `Bloom(falloff = RADIAL, anchor = CONTENT)`, already built and additionally offering a
-  position and a falloff this could not. Labelled **"Rim"**, on "Inset"'s precedent — light along an inside edge is a
+  position and a falloff this could not. Labeled **"Rim"**, on "Inset"'s precedent — light along an inside edge is a
   rim, and that names the look rather than the mechanism.
 
 **`LayerEffect.Ripple` is the first *per-pixel* effect, and the first that leaves the canvas entirely.** Concentric
@@ -929,7 +929,7 @@ waves push each output pixel to read from somewhere else along its own radius �
 the bake does at any API and Compose needs AGSL and API 33 for. Four things:
 - **The plan grouped it with Pixelate and Grain as "one loop with three answers", and that is two-thirds right.**
   Ripple and Grain are resamplings; **Pixelate is not** — as the reference draws it the cells have gaps and rounded
-  corners, so it *redraws* the layer as a field of shapes with one color sampled per cell. A coordinate-quantising
+  corners, so it *redraws* the layer as a field of shapes with one color sampled per cell. A coordinate-quantizing
   pixelate would give solid blocks and could express neither control. So Ripple went first, against the plan's order,
   to put the displacement pass under its natural first consumer rather than under the odd one out.
 - **The pass is not extracted yet**, which is this codebase's own extract-on-the-second-consumer rule applied rather
@@ -1004,7 +1004,7 @@ arithmetic to produce a poor picture:
   picture no home screen draws. So the standing answer is the bake, and the levers are:
   - **`resample` splits its rows across cores** (`BakeBands`, one fewer than the cores, capped at four). Every
     output pixel reads only the source buffer and writes only its own slot, so there is nothing to coordinate. This
-    is the one optimisation that also speeds up **baking real icons**, where a shader would only ever have helped
+    is the one optimization that also speeds up **baking real icons**, where a shader would only ever have helped
     the editor. One trap it introduces: a `sourceOf` lambda closing over mutable scratch is now shared by every
     band — `grained` writes through `resample`'s own per-band out-parameter for that reason.
   - **Its callbacks are `fun interface`s, not function types, and that is arithmetic rather than style.** Kotlin's
@@ -1044,9 +1044,9 @@ different cause.** Worth keeping together, because none of them is about the loo
   sample landed exactly on a zero — a quarter of them at a four-pixel cell, all of them at one — which made the
   finest setting vanish on any small bake: a 144px home icon grained not at all while the ~670px studio canvas
   escaped it and showed what the surface would never draw, the two-renderer hazard's shape reached through a bake
-  size instead. `LayerGrain.latticeAt` samples the **centre** (offset half a *pixel*, not half a cell, since the
+  size instead. `LayerGrain.latticeAt` samples the **center** (offset half a *pixel*, not half a cell, since the
   correction is about where a pixel is), which removes the coincidence and lets the floor be **two pixels** rather
-  than four. Two rather than one because at a one-pixel cell every sample sits at the centre of its own cell, so
+  than four. Two rather than one because at a one-pixel cell every sample sits at the center of its own cell, so
   neighbours share nothing and the field is per-pixel confetti — the look the whole smooth-field construction
   exists to avoid.
 - **The size ramp is *derived* from that floor, which is what retired a slider whose bottom third did nothing.**
@@ -1100,7 +1100,7 @@ a bloom's), so what was new is the joining.
 - **The first stop is capped short of the end**, and that is a crash rather than a nicety: a sharp area of 1 asks for
   a band from 1.001 to 1, and `coerceIn` throws on an inverted range. A slider dragged to its own top would have taken
   the bake down. Found by the test, not on device.
-- Labelled **"Focus"** in the panel, since what a user is choosing is what stays in focus — the blur is how that is
+- Labeled **"Focus"** in the panel, since what a user is choosing is what stays in focus — the blur is how that is
   expressed. It is also the one name that would not fit a tile at four columns.
 
 **Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
@@ -1269,7 +1269,7 @@ a canvas the *user* switches between black and white.
     proportion is the entire point.
   - **Expressive motion is still kept** — the knob travels on `motionScheme.defaultSpatialSpec`, the colors
     cross-fade on `defaultEffectsSpec`: spatial for what moves, effects for what does not. Colors come from the
-    **slider's** `trackInactive`/`trackActive`/`thumb` roles so the two controls are made of the same greys, with
+    **slider's** `trackInactive`/`trackActive`/`thumb` roles so the two controls are made of the same grays, with
     alpha on the *on* track because at full strength `trackActive` **is** `thumb` and the knob would vanish into
     the rail. Off, the knob is `contentMuted` on a `trackInactive` rail — light-on-dark in the dark theme and
     dark-on-light in the light one, which a fixed pair of colors would not have given.

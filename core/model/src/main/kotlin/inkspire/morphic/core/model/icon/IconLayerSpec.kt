@@ -37,7 +37,7 @@ import kotlinx.serialization.Serializable
  *
  *   **It is a transform, not an effect, and that is why it lives here beside [rotation].** Leaning a layer out of
  *   the plane is the same *kind* of thing as turning it in the plane — it says where the layer sits — so splitting
- *   them across two mechanisms would mean one rotation being orderable against a colour matrix and the other not.
+ *   them across two mechanisms would mean one rotation being orderable against a color matrix and the other not.
  * @property tiltY Rotation about the **vertical** axis: the left edge leans away and the right toward the viewer.
  * @property shapeAnchor What [shape] is cut against — the box, or this layer's own artwork carried by its transform.
  *   Means nothing when [shape] is null, which is why the studio shows the control only once a shape is chosen. See

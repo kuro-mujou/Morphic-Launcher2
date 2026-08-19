@@ -10,14 +10,14 @@ import kotlin.math.sin
  * with the arithmetic — it is pulled out of `IconRenderer` because *that* class needs an emulator for every line,
  * and a displacement that is subtly wrong produces a plausible-looking ripple rather than an error.
  *
- * **The whole effect is one function of distance.** Everything else — where the centre is, which direction a pixel
+ * **The whole effect is one function of distance.** Everything else — where the center is, which direction a pixel
  * lies in, what to do at the edges — is geometry the renderer does around it, and none of it is the part that can be
  * quietly wrong.
  */
 object LayerRipple {
 
     /**
-     * Where a pixel [distancePx] from the centre reads from, along the same radius.
+     * Where a pixel [distancePx] from the center reads from, along the same radius.
      *
      * Positive is further out. A crest pulls pixels inward and a trough pushes them out, which is what makes the
      * layer appear to bulge — the displacement is *of the sampling*, so the picture moves the opposite way to the
@@ -40,7 +40,7 @@ object LayerRipple {
     fun wavelengthPx(ripple: LayerEffect.Ripple, sizePx: Int): Float =
         (sizePx / ripple.waves).coerceAtLeast(MinWavelengthPx)
 
-    /** Where the waves start, in pixels from the box's own centre. */
+    /** Where the waves start, in pixels from the box's own center. */
     fun centerPx(center: Float, sizePx: Int): Float = sizePx / 2f + center * sizePx
 
     /** Below a pixel a wave has no room to rise and fall, so it would alias into noise rather than ripple. */

@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * How big a pixelate's cells are and what colour each dot comes out.
+ * How big a pixelate's cells are and what color each dot comes out.
  *
  * **The averaging is what these exist for.** Straight ARGB averaging passes a casual read and produces a dark fringe
  * around every piece of artwork, because a transparent pixel is almost always transparent *black* and gets counted
@@ -22,14 +22,14 @@ class LayerPixelateTest {
     private fun solid(size: Int, argb: Int) = IntArray(size * size) { argb }
 
     @Test
-    fun `a uniform block averages to its own colour`() {
+    fun `a uniform block averages to its own color`() {
         val pixels = solid(4, opaqueRed)
 
         assertEquals(opaqueRed, LayerPixelate.averageArgb(pixels, sizePx = 4, left = 0, top = 0, cellPx = 4))
     }
 
     @Test
-    fun `transparent pixels dilute the alpha without darkening the colour`() {
+    fun `transparent pixels dilute the alpha without darkening the color`() {
         // The assertion this file is for. Half the block is transparent black; the dot must come out *red at half
         // alpha*, not dark red — averaging the channels straight would give a red of 128.
         val pixels = IntArray(4) { if (it < 2) opaqueRed else transparentBlack }
@@ -52,7 +52,7 @@ class LayerPixelateTest {
     }
 
     @Test
-    fun `two opaque colours average between them`() {
+    fun `two opaque colors average between them`() {
         val red = 0xFFFF0000.toInt()
         val blue = 0xFF0000FF.toInt()
         val pixels = intArrayOf(red, blue, red, blue)
@@ -89,7 +89,7 @@ class LayerPixelateTest {
 
     @Test
     fun `a full fill leaves no gap, and a half fill leaves a quarter cell either side`() {
-        // The inset is *half* the gap, since the dot is centred — getting that wrong halves or doubles every gap.
+        // The inset is *half* the gap, since the dot is centered — getting that wrong halves or doubles every gap.
         assertEquals(0f, LayerPixelate.insetPx(cellPx = 20f, fill = 1f), 0.001f)
         assertEquals(5f, LayerPixelate.insetPx(cellPx = 20f, fill = 0.5f), 0.001f)
     }

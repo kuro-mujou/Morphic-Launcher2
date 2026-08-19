@@ -40,8 +40,8 @@ enum class BackdropTint {
      *
      * `MaterialYou`'s, and the deliberate exception to the design system's monochrome rule: that rule keeps *chrome*
      * grayscale so the wallpaper and the icons carry the color, and this is a decoration the user picked whose whole
-     * point is the wallpaper's hue. Labelled "Material You" in the section — the model names what it *is*, the chooser
-     * names what a user recognises.
+     * point is the wallpaper's hue. Labeled "Material You" in the section — the model names what it *is*, the chooser
+     * names what a user recognizes.
      */
     WALLPAPER,
 
@@ -212,9 +212,9 @@ sealed interface BackdropEffect {
         val Default: BackdropEffect = Blur()
 
         /**
-         * Where [BackdropTint.CUSTOM] starts before anyone has mixed anything: a mid grey.
+         * Where [BackdropTint.CUSTOM] starts before anyone has mixed anything: a mid gray.
          *
-         * Neutral on purpose. A custom wash arriving pre-tinted would look like a choice the user had made, and grey is
+         * Neutral on purpose. A custom wash arriving pre-tinted would look like a choice the user had made, and gray is
          * the one color that reads as "not yet decided" against any wallpaper. Opaque, since [Blur.tintAmount] is the
          * alpha and this carries only the hue.
          */

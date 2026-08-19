@@ -8,7 +8,7 @@ import kotlin.math.floor
  * **Pulled out of `IconRenderer.resample` because it is alpha arithmetic, which is the kind that is silently
  * wrong.** That is the same argument `LayerPixelate.averageArgb` makes and the same trap: an icon is mostly
  * transparent, and a transparent pixel is almost always transparent *black*, so blending four samples by their
- * colours alone drags every edge toward black. What comes out is a dark fringe around the artwork, which reads as a
+ * colors alone drags every edge toward black. What comes out is a dark fringe around the artwork, which reads as a
  * rendering fault rather than as a blend done the naive way.
  *
  * **Why this exists at all**: both [LayerRipple] and [LayerGrain] displace by fractions of a pixel, and rounding
@@ -19,7 +19,7 @@ import kotlin.math.floor
 internal object LayerSample {
 
     /**
-     * The colour at ([x], [y]) in [pixels], a [size]×[size] row-major buffer, blended from the four pixels around it.
+     * The color at ([x], [y]) in [pixels], a [size]×[size] row-major buffer, blended from the four pixels around it.
      *
      * **Outside the buffer reads as transparent, never clamped**, which is `IconRenderer.resample`'s own rule one
      * level down: clamping would smear the outermost row outward wherever a displacement reaches past the box, and
@@ -32,9 +32,9 @@ internal object LayerSample {
         val fracX = x - left
         val fracY = y - top
 
-        // Premultiplied, which is the whole point: each sample's contribution to the colour is weighted by its own
+        // Premultiplied, which is the whole point: each sample's contribution to the color is weighted by its own
         // alpha as well as by its distance, and the sum is divided by the alpha that accumulated. A fully
-        // transparent neighbour then contributes nothing to the colour rather than contributing black to it.
+        // transparent neighbour then contributes nothing to the color rather than contributing black to it.
         var alpha = 0f
         var red = 0f
         var green = 0f

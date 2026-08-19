@@ -6,7 +6,7 @@ import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.model.icon.IconFilter
 
 /**
- * The built-in colour looks, and the matrix each resolves to.
+ * The built-in color looks, and the matrix each resolves to.
  *
  * **`IconShapes`' shape, for `IconShapes`' reason.** Adding a filter is: compose a matrix, give it an id and a
  * name, list it. The [IconFilter.id]s are the stable on-disk contract; the labels and the grouping are
@@ -22,7 +22,7 @@ import inkspire.morphic.core.model.icon.IconFilter
  *
  * **What a matrix can and cannot be, which is the bound on this whole file.** A 4×5 matrix is one linear map over
  * the channels, so a grade, a duotone, an inversion and a channel mix are all expressible and *quantization is
- * not*: a look that snaps colours to a fixed palette — a four-tone handheld screen, an eight-bit console — cannot
+ * not*: a look that snaps colors to a fixed palette — a four-tone handheld screen, an eight-bit console — cannot
  * be one of these however it is written, and would have to be a `LayerEffect` with a per-pixel pass of its own.
  * Where the reference does that, the entry here is the **ramp between the palette's two ends**, which is what a
  * duotone is, rather than a stepped approximation pretending to be the same thing.
@@ -58,17 +58,17 @@ object IconFilters {
         Entry(IconFilter(id), label, category, matrix)
 
     /**
-     * A two-colour ramp from two ARGB literals, which is how every [Category.DUOTONE] entry is authored.
+     * A two-color ramp from two ARGB literals, which is how every [Category.DUOTONE] entry is authored.
      *
      * **The unpacking moved to [LayerFilter.duotoneMatrixOf] when it gained a second consumer** —
-     * `LayerEffect.Duotone` is a user picking the two colours a table entry here has authored, so both were about to
+     * `LayerEffect.Duotone` is a user picking the two colors a table entry here has authored, so both were about to
      * pull the channels out of an int their own way. This stays as an alias because the *table* reads better in two
-     * colours than in six channels, which is what the note it replaces was really about.
+     * colors than in six channels, which is what the note it replaces was really about.
      */
     private fun duotone(darkArgb: Int, lightArgb: Int): FloatArray =
         LayerFilter.duotoneMatrixOf(darkArgb, lightArgb)
 
-    /** A grayscale tinted toward one colour — the shape every tinted [Category.MONOCHROME] entry takes. */
+    /** A grayscale tinted toward one color — the shape every tinted [Category.MONOCHROME] entry takes. */
     private fun tintedMono(r: Float, g: Float, b: Float, contrast: Float = 1f): FloatArray =
         ColorMatrices.saturation(0f)
             .then(ColorMatrices.contrast(contrast))
@@ -105,8 +105,8 @@ object IconFilters {
             ColorMatrices.saturation(0.15f).then(ColorMatrices.contrast(1.45f)),
         ),
         entry(
-            // The silver-retention look: colour mostly drained, contrast way up. Half a grade rather than a
-            // monochrome, which is the whole point of it — what colour survives reads as accidental.
+            // The silver-retention look: color mostly drained, contrast way up. Half a grade rather than a
+            // monochrome, which is the whole point of it — what color survives reads as accidental.
             "bleach_bypass", "Bleach Bypass", Category.CINEMATIC,
             ColorMatrices.saturation(0.4f).then(ColorMatrices.contrast(1.38f)),
         ),
@@ -174,7 +174,7 @@ object IconFilters {
                 .then(ColorMatrices.offset(10f, 4f, -8f)),
         ),
 
-        // --- Duotone: the hue is discarded and the *range* is recoloured, which is what makes a set of icons
+        // --- Duotone: the hue is discarded and the *range* is recolored, which is what makes a set of icons
         // drawn by different hands read as one set. See `ColorMatrices.duotone` for why this is not a tint ---
         entry("duo_indigo_peach", "Indigo Peach", Category.DUOTONE, duotone(0xFF1B1F5C.toInt(), 0xFFFFCBA4.toInt())),
         entry("duo_teal_sand", "Teal Sand", Category.DUOTONE, duotone(0xFF0C3B3C.toInt(), 0xFFF2E2C4.toInt())),
@@ -188,7 +188,7 @@ object IconFilters {
         // --- Monochrome ---
         entry("classic_mono", "Classic Mono", Category.MONOCHROME, ColorMatrices.saturation(0f)),
         entry(
-            // A true sepia mixes channels rather than tinting a grey, which is why `scale` cannot express it.
+            // A true sepia mixes channels rather than tinting a gray, which is why `scale` cannot express it.
             "warm_sepia", "Warm Sepia", Category.MONOCHROME,
             ColorMatrices.mix(
                 0.393f, 0.769f, 0.189f,
@@ -202,13 +202,13 @@ object IconFilters {
                 .then(ColorMatrices.contrast(1.1f))
                 .then(ColorMatrices.scale(0.95f, 0.99f, 1.08f)),
         ),
-        // A grey pulled toward one colour, which is a different thing from a duotone above it: the dark end stays
+        // A gray pulled toward one color, which is a different thing from a duotone above it: the dark end stays
         // black, so what is tinted is the *midtones*. Five of them, because which one suits an icon is not
         // something a rule can decide.
-        entry("mono_mint", "Mint Grey", Category.MONOCHROME, tintedMono(0.86f, 1.06f, 0.98f)),
-        entry("mono_ember", "Ember Grey", Category.MONOCHROME, tintedMono(1.16f, 0.86f, 0.84f)),
-        entry("mono_rust", "Rust Grey", Category.MONOCHROME, tintedMono(1.12f, 0.92f, 0.74f, contrast = 1.1f)),
-        entry("mono_gold", "Gold Grey", Category.MONOCHROME, tintedMono(1.14f, 1f, 0.66f)),
+        entry("mono_mint", "Mint Gray", Category.MONOCHROME, tintedMono(0.86f, 1.06f, 0.98f)),
+        entry("mono_ember", "Ember Gray", Category.MONOCHROME, tintedMono(1.16f, 0.86f, 0.84f)),
+        entry("mono_rust", "Rust Gray", Category.MONOCHROME, tintedMono(1.12f, 0.92f, 0.74f, contrast = 1.1f)),
+        entry("mono_gold", "Gold Gray", Category.MONOCHROME, tintedMono(1.14f, 1f, 0.66f)),
         entry(
             // The hardest reduction here: no midtones to speak of, which is what makes a glyph read as printed.
             "ink_press", "Ink Press", Category.MONOCHROME,
@@ -259,7 +259,7 @@ object IconFilters {
                 .then(ColorMatrices.offset(16f, 10f, 4f)),
         ),
         // **The two screen looks are duotones, and that is as close as a matrix gets.** What they imitate is a
-        // display with four colours in it, and quantizing to a palette is not a linear operation — no 4×5 matrix
+        // display with four colors in it, and quantizing to a palette is not a linear operation — no 4×5 matrix
         // can do it, so the honest version is the ramp between the two ends of that palette rather than a
         // stepped approximation that would have to be a whole new kind of effect. Named for what they look like:
         // a filter's name is shipped and stored, so it cannot be somebody's console.
@@ -280,7 +280,7 @@ object IconFilters {
             ColorMatrices.saturation(0f).then(ColorMatrices.invert()),
         ),
         entry(
-            // Inverted *after* the colour is drained and then re-tinted, so a dark glyph comes back light and
+            // Inverted *after* the color is drained and then re-tinted, so a dark glyph comes back light and
             // carrying a hue — which is what makes an inversion usable rather than merely startling.
             "negative_warm", "Warm Negative", Category.INVERTED,
             ColorMatrices.invert().then(ColorMatrices.scale(1.06f, 1f, 0.9f)),

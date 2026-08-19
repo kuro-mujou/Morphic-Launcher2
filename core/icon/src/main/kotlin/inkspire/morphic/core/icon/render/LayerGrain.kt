@@ -15,7 +15,7 @@ import kotlin.math.sin
  *
  * **Deterministic, and defined in fractions of the box.** The same recipe has to grain identically every time it is
  * baked — otherwise the icon would shimmer as the studio re-bakes, and a draft would not predict the full-size
- * result — and identically at 96px and 288px, which is why the field is sampled in normalised coordinates rather
+ * result — and identically at 96px and 288px, which is why the field is sampled in normalized coordinates rather
  * than in pixels. That is also why there is no seed: a hash of position *is* the randomness, and a seed would be a
  * second control offering nothing the grain size does not.
  *
@@ -33,10 +33,10 @@ import kotlin.math.sin
  *
  * **A quintic fade, not a smoothstep.** `6t⁵ − 15t⁴ + 10t³` has zero *second* derivative at the lattice as well as
  * zero first, so the field's rate of change is continuous too. With a smoothstep the second derivative jumps, which
- * a displacement makes visible as a faint crease along every lattice line — the artefact that is easy to mistake
+ * a displacement makes visible as a faint crease along every lattice line — the artifact that is easy to mistake
  * for the grain itself.
  *
- * **Pixel centres, not pixel corners** — [latticeAt]. The three above are about the field; this one is about where it
+ * **Pixel centers, not pixel corners** — [latticeAt]. The three above are about the field; this one is about where it
  * is read. Since the field is zero *at* the lattice, sampling corners drops every `cellPx`-th sample onto nothing,
  * which costs nothing visible at coarse cells and is the whole effect at fine ones.
  */
@@ -161,9 +161,9 @@ object LayerGrain {
     fun amplitudePx(grain: LayerEffect.Grain, sizePx: Int): Float = grain.amplitude * sizePx
 
     /**
-     * Where pixel [pixel] sits on the lattice, in cells — **its centre, not its corner**.
+     * Where pixel [pixel] sits on the lattice, in cells — **its center, not its corner**.
      *
-     * A pixel is an area and its centre is where it should be sampled, which is textbook and at coarse cells makes no
+     * A pixel is an area and its center is where it should be sampled, which is textbook and at coarse cells makes no
      * visible difference at all. At fine ones it decides whether the effect exists: gradient noise reads **zero at
      * every lattice point**, and sampling corners puts every `cellPx`-th sample exactly on one. At a four-pixel cell
      * that is a quarter of them landing on nothing; at two, half; at one, all of them, which is why the floor below
@@ -259,10 +259,10 @@ object LayerGrain {
      * **Two, and it is [latticeAt] that made two possible.** The field is zero at each lattice point, so while the
      * renderer sampled pixel *corners* a cell of one pixel put every sample on a zero and displaced nothing, and two
      * put half of them there — four was the smallest cell at which every sample landed somewhere the field was doing
-     * something, whatever the phase. Sampling pixel centres removes the coincidence entirely: at a two-pixel cell the
+     * something, whatever the phase. Sampling pixel centers removes the coincidence entirely: at a two-pixel cell the
      * samples fall on quarter and three-quarter phases, both well away from the zeros.
      *
-     * **Two rather than one, because one is not a lattice.** At a single-pixel cell every sample sits at the centre of
+     * **Two rather than one, because one is not a lattice.** At a single-pixel cell every sample sits at the center of
      * its own cell, so neighbouring pixels share nothing and the field degenerates into per-pixel confetti — which is
      * the look this whole construction exists to avoid. Two is the finest structure a bitmap can actually carry.
      *

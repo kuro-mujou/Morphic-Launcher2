@@ -161,7 +161,7 @@ fun StudioCanvas(
         // canvas's width *and* the canvas's height: not a square at all. `requiredSize` and then fixed `Constraints`
         // made the icon's own measurement exact — and the node was still **reported** larger than its parent, which
         // is what left the width clamped to the canvas while the height went through. Measured on device: at a 3x
-        // zoom the checkerboard drew 2262 wide and the icon 1216, the canvas's own width, centred in it.
+        // zoom the checkerboard drew 2262 wide and the icon 1216, the canvas's own width, centered in it.
         //
         // Reporting the canvas's size ends that question rather than answering it: nothing upstream ever sees an
         // oversized child, so nothing has cause to clamp one. The icon is measured at exactly [boundSide] square and

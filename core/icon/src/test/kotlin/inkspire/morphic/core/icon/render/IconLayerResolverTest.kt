@@ -25,7 +25,7 @@ import org.junit.Test
  * **These are the tests that would have caught the bug this file was written for.** The resolver drained the
  * foreground's color on apps with no themed layer and handed the app's *own* themed artwork through untouched, on the
  * reasoning that the themed slot holds a silhouette. It holds whatever the app put there — so an app shipping color
- * came out in color while every other icon went grey, i.e. the feature inverted itself on exactly the apps that had
+ * came out in color while every other icon went gray, i.e. the feature inverted itself on exactly the apps that had
  * bothered to support it. Nothing failed; the icons were simply wrong, on a device, for some apps.
  *
  * Runs on the plain JVM with no emulator: every layer here is a [ParsedLayer.Color], so no `Drawable` is ever
@@ -49,7 +49,7 @@ class IconLayerResolverTest {
     /** A set whose foreground is monochrome, carrying [color] as that layer's own color effect. */
     /**
      * @param normalize stated by the tests that are about the *fit*, since it is off by default — leaving it out
-     *   there would let them keep passing while asserting nothing. The colour tests want it off, which is also what
+     *   there would let them keep passing while asserting nothing. The color tests want it off, which is also what
      *   an unconfigured recipe looks like.
      */
     private fun monochromeSet(color: LayerEffect.Color? = null, normalize: Boolean = false) = IconLayerSet(
@@ -89,11 +89,11 @@ class IconLayerResolverTest {
 
     /**
      * The property the two arms above exist to guarantee, stated as one thing: whichever artwork answers the source,
-     * the result is grey. A user selecting "monochrome" is asking for one outcome, and a setting that delivers it on
+     * the result is gray. A user selecting "monochrome" is asking for one outcome, and a setting that delivers it on
      * some apps and not others is worse than one that does not exist.
      */
     @Test
-    fun `monochrome means grey on both branches, which is the whole of what the word promises`() {
+    fun `monochrome means gray on both branches, which is the whole of what the word promises`() {
         val withThemed = resolveForeground(monochromeSet(), icon(monochrome = ParsedLayer.Color(themedArgb)))
         val withoutThemed = resolveForeground(monochromeSet(), icon(monochrome = null))
 
@@ -125,7 +125,7 @@ class IconLayerResolverTest {
 
         assertEquals(TintMode.MULTIPLY, resolved.color?.tintMode)
         // The tint itself is kept — only its mode changes, so the color the user picked still shows through as a
-        // multiply over greyscale.
+        // multiply over grayscale.
         assertEquals(0xFF3366CC.toInt(), resolved.color?.tintArgb)
     }
 
@@ -555,7 +555,7 @@ private class CopyableStubDrawable : StubDrawable() {
 }
 
 /**
- * The colour effect the resolver left on a layer.
+ * The color effect the resolver left on a layer.
  *
  * A local accessor because this file asks for it a dozen times, and `IconLayerSpec` deliberately no longer carries
  * one: the named per-effect helpers came off it when [IconLayerSet] gained effects of its own, so that "which of

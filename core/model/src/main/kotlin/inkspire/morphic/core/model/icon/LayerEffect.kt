@@ -63,7 +63,7 @@ enum class TintMode {
  *
  * **Each form has exactly one geometric parameter, and it is not the same one**, which is why this is an enum rather
  * than a flag beside two always-visible sliders: a [LINEAR] ramp is decided by the direction it runs and spans its
- * frame whatever that direction is, where a [RADIAL] one is decided by where its centre sits. Neither value can
+ * frame whatever that direction is, where a [RADIAL] one is decided by where its center sits. Neither value can
  * answer the other's question, so the studio shows one control or the other and this is what it asks.
  *
  * Persisted inside the layer set, so the names are an on-disk contract.
@@ -115,7 +115,7 @@ enum class Falloff {
  *   ever observe, which is exactly what the old shared offsets did.
  * @property radius how far a disc reaches, as a fraction of the way to the frame's corners; 1 covers it entirely.
  *   [Falloff.RADIAL]'s — a ramp always spans its frame.
- * @property offsetX where a disc sits, as a fraction of the frame from its centre. Positive is toward the frame's
+ * @property offsetX where a disc sits, as a fraction of the frame from its center. Positive is toward the frame's
  *   own right, which is the artwork's right under [ContentAnchor.CONTENT] — so a light placed on a corner of the
  *   artwork stays on that corner when the layer turns. [Falloff.RADIAL]'s.
  * @property offsetY the same, downward. [Falloff.RADIAL]'s.
@@ -140,7 +140,7 @@ enum class Falloff {
  * @property sharpArea how much of the frame stays fully sharp before the ramp starts, 0..1.
  * @property softness how much of the frame the ramp takes to reach full blur.
  * @property angleDegrees which way the band runs, clockwise from "straight down". [Falloff.LINEAR]'s.
- * @property centerX where the sharp disc sits, as a fraction of the frame from its centre. [Falloff.RADIAL]'s.
+ * @property centerX where the sharp disc sits, as a fraction of the frame from its center. [Falloff.RADIAL]'s.
  * @property centerY the same, downward. [Falloff.RADIAL]'s.
  */
 @Serializable
@@ -185,7 +185,7 @@ data class BloomProfile(
  *
  * **Three values rather than a boolean**, because the middle one is not a mixture of a preference — it is where a
  * drawing program puts a stroke by default, and it is the only one whose look does not change the silhouette's
- * apparent size: an outside stroke fattens the icon, an inside one eats into it, and a centred one does half of each.
+ * apparent size: an outside stroke fattens the icon, an inside one eats into it, and a centered one does half of each.
  *
  * Persisted inside the layer set, so the names are an on-disk contract.
  */
@@ -424,7 +424,7 @@ sealed interface LayerEffect {
 
         /**
          * Where the light sits in the frame, whichever falloff is placing it — a fraction of the frame from its
-         * centre, which is what `LayerGradient.frameOf` moves by.
+         * center, which is what `LayerGradient.frameOf` moves by.
          *
          * A disc reads its own point. A ramp resolves [BloomProfile.along] onto [angleDegrees], the same
          * `(sin, cos)` convention `LayerGradient.endpoints` runs on, so pushing it "forward" moves it the way the
@@ -502,7 +502,7 @@ sealed interface LayerEffect {
      * [argb] gathering in from the edges and clearing toward the middle — the corners weighted down, which is the
      * finishing move that makes a flat plate read as a photographed object.
      *
-     * **A [Bloom]'s radial ramp run the other way**, and that is the whole mechanism: a bloom is colour at a point
+     * **A [Bloom]'s radial ramp run the other way**, and that is the whole mechanism: a bloom is color at a point
      * fading outward, a vignette is nothing at the middle gathering outward. It is its own effect rather than a flag
      * on that one for [Gloss]'s reason — the two are different *looks*, a user goes looking for this one by name, and
      * at most one effect of a type is meaningful, so folding them would mean an icon could carry a light or a
@@ -512,11 +512,11 @@ sealed interface LayerEffect {
      * buys: the ramp lands on the layer's own alpha, so a vignette on a rounded plate follows the plate's corners
      * instead of squaring them off.
      *
-     * @property argb what gathers at the edges. Black is the vignette everyone means, and any colour is a legitimate
+     * @property argb what gathers at the edges. Black is the vignette everyone means, and any color is a legitimate
      *   thing to ask for — a white one lifts the corners instead, which is the same control used the other way. Its
-     *   alpha is ignored; the clear end is this colour with the alpha gone, so the ramp fades out of the picture
-     *   rather than through grey.
-     * @property reach how far in from the edge the colour comes, as a fraction of the frame — so bigger is more of
+     *   alpha is ignored; the clear end is this color with the alpha gone, so the ramp fades out of the picture
+     *   rather than through gray.
+     * @property reach how far in from the edge the color comes, as a fraction of the frame — so bigger is more of
      *   it. Named for what the control does rather than for what the ramp holds: the renderers read [clearArea],
      *   which is this from the other end.
      * @property softness how much of the frame the ramp takes to arrive, as a fraction. Zero is a hard ring, which
@@ -575,8 +575,8 @@ sealed interface LayerEffect {
      * overlays, so it decorates the artwork rather than covering the icon with wallpaper.
      *
      * **The drawable is a stencil and [argb] is what it is drawn in** — see [IconPattern]. That is what makes one
-     * asset serve every colour, and it is also what [invert] can act on: swapping the marks for the ground is a
-     * property of a two-tone stencil and would mean nothing over a full-colour tile.
+     * asset serve every color, and it is also what [invert] can act on: swapping the marks for the ground is a
+     * property of a two-tone stencil and would mean nothing over a full-color tile.
      *
      * ### One set of settings for every texture, unlike a bloom's two per falloff
      *
@@ -601,7 +601,7 @@ sealed interface LayerEffect {
      * @property scale one tile's side as a fraction of the icon's box, so a quarter puts four tiles across it. A
      *   fraction rather than a pixel count for [IconLayerSpec.offsetX]'s reason: the same recipe has to look the
      *   same baked at 96px for a list row and at 288px for a folder.
-     * @property angleDegrees which way the tiling runs, turned about the box's centre. Every built-in tile is
+     * @property angleDegrees which way the tiling runs, turned about the box's center. Every built-in tile is
      *   authored square-on for this: a slanted asset would be a second way to say the same thing, and one that
      *   could only reach the angles it happened to be drawn at.
      * @property invert draws the ground and leaves the marks empty — the negative of the tile.
@@ -686,7 +686,7 @@ sealed interface LayerEffect {
     }
 
     /**
-     * The layer split into its red, green and blue channels and put back together offset — the coloured fringing a
+     * The layer split into its red, green and blue channels and put back together offset — the colored fringing a
      * cheap lens leaves, and the one effect here that *replaces* the layer rather than drawing over it.
      *
      * **No strength, and that is the honest shape rather than an omission.** Every other effect needs a separate
@@ -710,7 +710,7 @@ sealed interface LayerEffect {
         /** Nothing moved is nothing split — which is what makes the offsets their own on/off. */
         override val isIdentity: Boolean get() = offsetX == 0f && offsetY == 0f
 
-        /** Three colour matrices added together, which both paths can do at any API. */
+        /** Three color matrices added together, which both paths can do at any API. */
         override val drawsLive: Boolean get() = true
     }
 
@@ -739,16 +739,16 @@ sealed interface LayerEffect {
      *   other angle here runs on, so 45° is a light from the top-left, which is where [Shadow]'s default throw
      *   already implies it is.
      * @property altitudeDegrees how high the light stands, 0..90. A low light rakes across the surface and throws
-     *   long, strongly-sided bands; raising it takes the *sidedness* away, and directly overhead the light favours
+     *   long, strongly-sided bands; raising it takes the *sidedness* away, and directly overhead the light favors
      *   no direction at all — every slope shades equally, because a tilted surface catches less of an overhead light
      *   than a flat one. So the top of this control is the uniform darkened rim of a pillow emboss rather than
      *   nothing, which is why it runs the whole way up. It decides what *kind* of relief this is, where the two
      *   strengths decide how strongly it is painted.
      * @property highlightArgb what a slope facing the light is painted, **screened** onto the artwork so it brightens
-     *   the colours already there rather than covering them.
+     *   the colors already there rather than covering them.
      * @property highlightStrength how strongly, and how it is turned off.
      * @property shadowArgb what a slope facing away is painted, **multiplied** — so a dark band deepens the artwork's
-     *   own colour instead of greying it.
+     *   own color instead of graying it.
      * @property shadowStrength how strongly, and how it is turned off.
      */
     @Serializable
@@ -770,7 +770,7 @@ sealed interface LayerEffect {
         val highlightArgb: Int = 0xFFFFFFFF.toInt(),
         /**
          * **Not quite full**, for both bands. A bevel at full strength is two flat bands of white and black laid
-         * over the artwork, which is a picture of a bevel rather than a surface; a little short of it, the colours
+         * over the artwork, which is a picture of a bevel rather than a surface; a little short of it, the colors
          * underneath survive and the thing reads as lit.
          */
         val highlightStrength: Float = 0.8f,
@@ -793,16 +793,16 @@ sealed interface LayerEffect {
      *
      * **The same three dilations every other silhouette effect is built from, and no new drawing at all.** An
      * outside stroke is the silhouette grown and drawn behind, which is [Glow] with no blur; an inside stroke is the
-     * silhouette's *complement* grown and trimmed back to the artwork, which is [InnerGlow] with no blur; a centred
+     * silhouette's *complement* grown and trimmed back to the artwork, which is [InnerGlow] with no blur; a centered
      * one is half of each, in that order — the inner band changes no alpha, so the outward growth still measures
      * from the artwork's own edge. That the effect needed nothing new is the plan's prediction holding, one step
-     * further than it expected: erosion turned out to be the complement taken twice rather than a colour matrix.
+     * further than it expected: erosion turned out to be the complement taken twice rather than a color matrix.
      *
      * **Hard-edged by definition, which is what makes it a stroke rather than a halo.** A softened one is exactly
      * [Glow] or [InnerGlow] with a radius, so a softness control here would be a second way to reach those.
      *
      * @property argb the stroke.
-     * @property width how thick it is **in total**, as a fraction of the icon's box — so a centred stroke of a given
+     * @property width how thick it is **in total**, as a fraction of the icon's box — so a centered stroke of a given
      *   width looks the same thickness as an outside one of the same width, rather than twice it. [perSideWidth] is
      *   what the renderer reads.
      * @property position which side of the edge it sits on. See [OutlinePosition].
@@ -838,7 +838,7 @@ sealed interface LayerEffect {
          *
          * **The halving lives here rather than in the renderer**, [Vignette.clearArea]'s arrangement and its reason:
          * it is a projection of the model's own fields, and a renderer doing it is a renderer that could forget. The
-         * failure would be silent and specific — a centred stroke exactly twice as thick as the same number asked
+         * failure would be silent and specific — a centered stroke exactly twice as thick as the same number asked
          * for anywhere else, which reads as the position control also changing the width.
          */
         val perSideWidth: Float
@@ -873,8 +873,8 @@ sealed interface LayerEffect {
      * which the live path only has as nodes: Compose's only blur is `RenderEffect`, API 31+ against a `minSdk` of 26.
      * So the studio previews an icon carrying one **from the bake** rather than the effect being gated to Android 12.
      *
-     * **A glow has no direction, which is the whole of what separates it from [Shadow].** It is centred on the
-     * silhouette by definition; a halo pushed to one side is a coloured shadow, and that is the other effect. Making
+     * **A glow has no direction, which is the whole of what separates it from [Shadow].** It is centered on the
+     * silhouette by definition; a halo pushed to one side is a colored shadow, and that is the other effect. Making
      * them one record with both an offset and a spread would also mean a layer could carry only one of them, since at
      * most one effect of a type is meaningful — and a glowing icon casting a shadow is an ordinary thing to want.
      *
@@ -958,7 +958,7 @@ sealed interface LayerEffect {
      * effect for [Glow] and [Shadow]'s reason — at most one effect of a type is meaningful, and an icon that both
      * casts a shadow and is recessed into its own plate is an ordinary thing to want.
      *
-     * **Labelled "Inset" in the studio, not "Inner shadow".** The tile grid is four across and cannot hold two words,
+     * **Labeled "Inset" in the studio, not "Inner shadow".** The tile grid is four across and cannot hold two words,
      * which is the same trade [ProgressiveBlur] made in coming out as "Focus". The type keeps the name every
      * reference uses so that code and documentation stay searchable.
      *
@@ -968,7 +968,7 @@ sealed interface LayerEffect {
      * which is the commonest thing anyone applies this to. The renderer builds the complement in a padded buffer for
      * that reason; see `LayerShadow.innerMarginPx`.
      *
-     * @property argb what gathers inside the edge. Black is the recess everyone means; a light colour lifts the edge
+     * @property argb what gathers inside the edge. Black is the recess everyone means; a light color lifts the edge
      *   instead, which is the same control read the other way.
      * @property radius how soft the shadow is, as a fraction of the icon's box. Zero is a hard band, which is a real
      *   look — the flat inset a stamped label has.
@@ -1023,20 +1023,20 @@ sealed interface LayerEffect {
      * rather than painted — light gathering along the inside of the edge, which is what a rim light looks like.
      *
      * **[InnerShadow]'s twin, exactly as [Glow] is [Shadow]'s**, and the parameters differ the same way: a shadow is
-     * thrown so it has an offset, a glow is centred on the edge it lights so it has none. Two effects rather than one
+     * thrown so it has an offset, a glow is centered on the edge it lights so it has none. Two effects rather than one
      * for the same reason again — at most one effect of a type is meaningful, and an icon lit along its inside edge
      * *and* recessed is a thing to want.
      *
      * **Screened, which is the one real difference from [InnerShadow].** Both trim the halo to the artwork first, so
      * the clipping is the same; what changes is how it is laid on. Shade replaces what is under it, where light adds
-     * to it — so a screened rim brightens the artwork's own colours at the edge instead of covering them with a band
-     * of white, and a coloured rim tints rather than obscures.
+     * to it — so a screened rim brightens the artwork's own colors at the edge instead of covering them with a band
+     * of white, and a colored rim tints rather than obscures.
      *
-     * **Labelled "Rim" in the studio**, on "Inset"'s and "Focus"' precedent that a tile at four columns is one short
+     * **Labeled "Rim" in the studio**, on "Inset"'s and "Focus"' precedent that a tile at four columns is one short
      * word. Light gathered along an inside edge is a rim, so the label names the look — which is this grid's rule
      * anyway. The type keeps the name every reference uses.
      *
-     * **There is no "from the centre" mode, and the reference's toggle for one was deliberately dropped.** A glow
+     * **There is no "from the center" mode, and the reference's toggle for one was deliberately dropped.** A glow
      * radiating from the middle of the artwork outward, clipped to its alpha, is `Bloom(falloff = RADIAL, anchor =
      * CONTENT)` — already built, already reachable, and with a position and a falloff this could not offer. A control
      * that reaches a state the model holds elsewhere is the second way to say one thing this codebase keeps removing.
@@ -1078,7 +1078,7 @@ sealed interface LayerEffect {
     }
 
     /**
-     * Concentric waves pushing the layer's pixels toward and away from a centre — the layer seen through water.
+     * Concentric waves pushing the layer's pixels toward and away from a center — the layer seen through water.
      *
      * **The first *per-pixel* effect**, and the third that cannot draw live: it reads each output pixel from
      * somewhere else in the layer, which is arithmetic over an `IntArray` in the bake and AGSL (API 33+) in Compose,
@@ -1099,7 +1099,7 @@ sealed interface LayerEffect {
          * **The top-right corner**, which `LayerRipple.centerPx` reaches at exactly ±0.5 — the ends of the pad's own
          * range on both axes.
          *
-         * A ripple centred in the box is symmetrical, and symmetry reads as a lens over the artwork rather than as
+         * A ripple centered in the box is symmetrical, and symmetry reads as a lens over the artwork rather than as
          * something disturbing it. From a corner the crests sweep across, which is the picture the effect is for.
          *
          * One consequence of the corner worth knowing: [waves] counts crests across a **box's width** of distance,
@@ -1132,7 +1132,7 @@ sealed interface LayerEffect {
      *
      * **The noise is smooth, not per-pixel random**, and that is the whole difference between grain and static. A
      * fresh number per pixel scatters the artwork into confetti; a field interpolated between lattice points a
-     * [grainSize] apart moves neighbouring pixels *together*, which is what tears it into recognisable pieces.
+     * [grainSize] apart moves neighbouring pixels *together*, which is what tears it into recognizable pieces.
      *
      * @property amplitude how far a pixel is pushed at the field's extreme, as a fraction of the icon's box. Also
      *   the switch: noise that displaces nothing changes nothing.
@@ -1184,11 +1184,11 @@ sealed interface LayerEffect {
     }
 
     /**
-     * The layer redrawn as a field of dots, one colour sampled per cell — an LED panel rather than a blur.
+     * The layer redrawn as a field of dots, one color sampled per cell — an LED panel rather than a blur.
      *
      * **Not a resampling, unlike [Ripple] and [Grain], and that is why it shares nothing with them.** Those read
-     * every output pixel from somewhere else in the layer; this reads one colour per *cell* and then draws a shape.
-     * A pixelate built as a coordinate quantisation would give solid touching blocks and could express neither
+     * every output pixel from somewhere else in the layer; this reads one color per *cell* and then draws a shape.
+     * A pixelate built as a coordinate quantization would give solid touching blocks and could express neither
      * [fill] nor [roundness] — the gaps between dots are the look, and gaps are something drawn rather than sampled.
      *
      * @property cellSize how big one dot's cell is, as a fraction of the icon's box. It is also the switch: cells
@@ -1239,7 +1239,7 @@ sealed interface LayerEffect {
      * @property radius how soft the blurred end gets, as a fraction of the icon's box. Also the switch: no blur is
      *   the layer itself, however the ramp is shaped.
      * @property falloff whether the sharp region is a band across the layer or a disc within it. See [Falloff] —
-     *   it decides which of [angleDegrees] and the two centre fractions mean anything.
+     *   it decides which of [angleDegrees] and the two center fractions mean anything.
      * @property sharpArea how much stays completely sharp, as a fraction of the ramp's own extent.
      * @property softness how far past that the blur takes to reach full strength. Zero is a hard edge between sharp
      *   and blurred, which is a real look rather than a degenerate one.
@@ -1308,7 +1308,7 @@ sealed interface LayerEffect {
     }
 
     /**
-     * One of the built-in colour looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
+     * One of the built-in color looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *
      * **A whole matrix rather than the four numbers [Color] exposes**, which is the point of having both: the
@@ -1329,7 +1329,7 @@ sealed interface LayerEffect {
         /** No id, nothing to look up. An id this build does not know is caught by the renderer, not here. */
         override val isIdentity: Boolean get() = filter.id.isBlank()
 
-        /** A colour matrix, which both paths already share through `LayerFilter`'s own machinery. */
+        /** A color matrix, which both paths already share through `LayerFilter`'s own machinery. */
         override val drawsLive: Boolean get() = true
     }
 }
@@ -1401,7 +1401,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
  *
  * **It used to drop an identity effect as well, and that was the bug behind a real one.** Paired with [withEffect]
  * doing the same, dragging a bloom's strength to zero deleted the whole record — its color, angle, radius, falloff
- * and anchor with it — so the panel's switch greyed out mid-gesture and dragging back up produced a *fresh* effect
+ * and anchor with it — so the panel's switch grayed out mid-gesture and dragging back up produced a *fresh* effect
  * at defaults rather than the one being edited. Identity is a statement about what an effect would paint, and the
  * editor is not asking that question.
  */

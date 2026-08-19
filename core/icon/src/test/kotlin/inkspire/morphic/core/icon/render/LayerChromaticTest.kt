@@ -60,7 +60,7 @@ class LayerChromaticTest {
     @Test
     fun `each copy carries exactly one channel and the layer's alpha`() {
         // The alpha is what makes every copy keep the layer's silhouette; dropping it would fringe the *shape*
-        // instead of the colour, which looks like three overlapping icons.
+        // instead of the color, which looks like three overlapping icons.
         LayerChromatic.fringes(split(), sizePx = 100).forEachIndexed { channel, fringe ->
             for (output in 0..2) {
                 for (input in 0..2) {
@@ -80,7 +80,7 @@ class LayerChromaticTest {
     @Test
     fun `nothing is translated, so no copy is shifted in brightness`() {
         // The fifth column is a 0..255 translation and every builder but a few leaves it alone. A stray value here
-        // would lift one channel's black level, which reads as a colour cast rather than as a fringe.
+        // would lift one channel's black level, which reads as a color cast rather than as a fringe.
         LayerChromatic.fringes(split(), sizePx = 100).forEach { fringe ->
             for (output in 0..3) {
                 assertTrue(coefficient(fringe.matrix, output, input = 4) == 0f)

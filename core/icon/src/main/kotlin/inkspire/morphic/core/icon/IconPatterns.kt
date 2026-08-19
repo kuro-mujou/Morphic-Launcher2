@@ -11,12 +11,12 @@ import inkspire.morphic.core.model.icon.IconPattern
  * a drawable can be renamed without touching persisted data.
  *
  * **Every tile is authored to repeat.** A mark crossing an edge is drawn again on the opposite one — or, where it
- * is easier, drawn whole and centred on the edge so the drawable clips it and the neighbour completes it. Getting
+ * is easier, drawn whole and centered on the edge so the drawable clips it and the neighbour completes it. Getting
  * that wrong does not fail: it produces a visible seam every tile, which is the sort of thing that reads as a
  * rendering fault rather than as a bad asset.
  *
  * **The marks are white and the ground transparent**, always. The renderer tints the alpha, so a tile carrying its
- * own colour would come out wrong the moment a user picked one.
+ * own color would come out wrong the moment a user picked one.
  */
 object IconPatterns {
     val Dots = IconPattern("dots")

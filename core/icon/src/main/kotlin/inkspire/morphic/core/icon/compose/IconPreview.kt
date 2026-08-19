@@ -99,7 +99,7 @@ fun IconPreview(
  *
  * Letting the draft finish and *then* taking whatever the newest recipe is gives the property actually wanted —
  * the preview updates as fast as the machine can draft, never slower and never not at all — while still coalescing,
- * since everything emitted mid-draft collapses into one value. The full-size pass keeps the old behaviour, because
+ * since everything emitted mid-draft collapses into one value. The full-size pass keeps the old behavior, because
  * there the old argument holds: it is slow, it is superseded the moment the recipe moves, and a stale sharp icon is
  * worth nothing.
  *
@@ -139,7 +139,7 @@ private fun BakedIconPreview(
     BoxWithConstraints(modifier) {
         // Square, from the width — the same quantity every other derivation in the render package reads the box by.
         //
-        // **Quantised, and that is what makes the canvas survive a pinch.** The node's size is a *gesture* here: a
+        // **Quantized, and that is what makes the canvas survive a pinch.** The node's size is a *gesture* here: a
         // two-finger zoom changes it every frame, and since the size is part of the request, every frame threw away
         // the bake in flight and started another — so a pinch produced a preview that was permanently mid-bake and
         // never settled on anything. Rounding up to [BakeQuantum] means a zoom crosses a bucket occasionally instead
@@ -168,7 +168,7 @@ private fun BakedIconPreview(
         // wanted — the preview updates as fast as the machine can draft, never slower and never not at all — and it
         // still coalesces, because everything emitted while a draft is in flight collapses into one value.
         //
-        // The full-size pass keeps the old behaviour, because there the old reasoning holds: it is slow, it is
+        // The full-size pass keeps the old behavior, because there the old reasoning holds: it is slow, it is
         // superseded the instant the recipe moves, and a stale sharp icon is worth nothing.
         //
         // **This was a `snapshotFlow` + `collectLatest` before either**, which is worth keeping written down: that
@@ -263,7 +263,7 @@ private fun bakeSizeFor(nodePx: Int): Int {
 /**
  * Draws the baked bitmap over the whole node, scaled to it.
  *
- * **Scaled to the node and not to itself**, which is what lets the bake size be quantised and capped independently
+ * **Scaled to the node and not to itself**, which is what lets the bake size be quantized and capped independently
  * of what is on screen: what is held may be a draft, a bucket larger than the node, or a bitmap baked before the
  * last pinch frame, and all three are stretched to fit rather than drawn at whatever size they happen to be.
  *

@@ -118,7 +118,7 @@ class IconRenderer(
     /**
      * [maskPaint]'s opposite — keeps what is drawn only where the silhouette is *transparent*.
      *
-     * Which is how [complementOf] inverts an alpha channel without a colour matrix: destination-out over a filled
+     * Which is how [complementOf] inverts an alpha channel without a color matrix: destination-out over a filled
      * buffer leaves exactly the region the artwork does not cover.
      */
     private val punchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -175,7 +175,7 @@ class IconRenderer(
             // which is what makes a blend mode mean "against everything beneath" rather than "against the one
             // bitmap I am in". The live path composes both into one paint for the same reason.
             //
-            // **A blended layer takes a different route, and it is a correction rather than an optimisation.**
+            // **A blended layer takes a different route, and it is a correction rather than an optimization.**
             // Handing a [LayerBlend] to a `PorterDuffXfermode` looked like the whole job and was wrong for one of
             // the five: `PorterDuff.Mode.MULTIPLY` multiplies the *alpha* as well, so a layer set to multiply erased
             // everything beneath it wherever it was itself transparent. See [LayerComposite].
@@ -368,7 +368,7 @@ class IconRenderer(
                 is LayerEffect.Color ->
                     LayerFilter.colorMatrixOf(effect)?.let { m -> replace { filtered(it, m, sizePx) } }
 
-                // Unconditional where the two above are not: a duotone has no pair of colours that resolves to
+                // Unconditional where the two above are not: a duotone has no pair of colors that resolves to
                 // nothing, so there is no null to guard. Its own floor is the strength, which `activeEffects`
                 // has already filtered on before this loop is reached.
                 is LayerEffect.Duotone ->
@@ -420,7 +420,7 @@ class IconRenderer(
                     }
 
                 // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
-                // thrown and laid on plainly, or light centred on the edge and screened onto it.
+                // thrown and laid on plainly, or light centered on the edge and screened onto it.
                 is LayerEffect.InnerShadow -> replace {
                     insetHaloed(
                         source = it,
@@ -466,7 +466,7 @@ class IconRenderer(
         return current
     }
 
-    /** [source] through one colour matrix, in a buffer of its own — a canvas cannot filter its pixels in place. */
+    /** [source] through one color matrix, in a buffer of its own — a canvas cannot filter its pixels in place. */
     private fun filtered(source: Bitmap, matrix: FloatArray, sizePx: Int): Bitmap {
         val out = createBitmap(sizePx, sizePx)
         Canvas(out).drawBitmap(
@@ -485,7 +485,7 @@ class IconRenderer(
      *
      * **Drawn back to front rather than with a destination-over paint**, which is the same picture and one fewer
      * thing to get wrong: the furthest copy first, the nearest last, the untouched layer on top. Each copy is the
-     * source through `ColorMatrices.solid`, so it comes out as a flat silhouette of the extrusion colour whatever
+     * source through `ColorMatrices.solid`, so it comes out as a flat silhouette of the extrusion color whatever
      * the layer is made of.
      *
      * **`strength` is the opacity of the finished slab, and getting there took one layer over the whole loop.** It
@@ -499,9 +499,9 @@ class IconRenderer(
      * tip — and that is the honest trade: a solid object has one opacity, and the gradient was an artifact of the
      * technique rather than anything anyone asked for.
      *
-     * The colour matrix still lands correctly on the union rather than per copy, which is what makes one layer
-     * enough: `solid` replaces the colour and keeps the alpha, so a silhouette assembled from overlapping copies and
-     * then filtered is the same flat colour as each copy filtered and then assembled.
+     * The color matrix still lands correctly on the union rather than per copy, which is what makes one layer
+     * enough: `solid` replaces the color and keeps the alpha, so a silhouette assembled from overlapping copies and
+     * then filtered is the same flat color as each copy filtered and then assembled.
      */
     private fun extruded(source: Bitmap, extrude: LayerEffect.Extrude, sizePx: Int): Bitmap {
         val steps = LayerExtrude.steps(extrude, sizePx)
@@ -585,11 +585,11 @@ class IconRenderer(
     }
 
     /**
-     * Gathers [vignette]'s colour in from the edges of [frame], clipped to what the layer has already drawn.
+     * Gathers [vignette]'s color in from the edges of [frame], clipped to what the layer has already drawn.
      *
      * **The same source-atop overlay [applyBloom] is, with the ramp run the other way**: the clear end at the middle
-     * and the colour at the rim, where a bloom has the colour at a point and clears outward. The disc always spans
-     * the frame to its corners — [LayerGradient.radial] at 1 — and where the colour *starts* is the stops' job, so
+     * and the color at the rim, where a bloom has the color at a point and clears outward. The disc always spans
+     * the frame to its corners — [LayerGradient.radial] at 1 — and where the color *starts* is the stops' job, so
      * the reach and the softness move the shading without resizing the gradient under it.
      */
     private fun applyVignette(
@@ -606,8 +606,8 @@ class IconRenderer(
                 radial.radiusPx,
                 intArrayOf(LayerGradient.fadeOut(vignette.argb), vignette.argb),
                 LayerGradient.rampStops(vignette.clearArea, vignette.softness),
-                // Clamped, which is what puts the full colour in the corners: the disc reaches them at a stop of 1,
-                // and everything the square holds beyond that stays at the last colour rather than repeating.
+                // Clamped, which is what puts the full color in the corners: the disc reaches them at a stop of 1,
+                // and everything the square holds beyond that stays at the last color rather than repeating.
                 Shader.TileMode.CLAMP,
             )
             xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
@@ -642,7 +642,7 @@ class IconRenderer(
             val distance = hypot(dx, dy)
             val sampled = LayerRipple.sampleDistancePx(distance, amplitudePx, wavelengthPx)
 
-            // Dead centre has no radius to travel along, so it reads from itself — which is also what stops the
+            // Dead center has no radius to travel along, so it reads from itself — which is also what stops the
             // division from being one by zero.
             into[0] = if (distance == 0f) x.toFloat() else centerX + dx / distance * sampled
             into[1] = if (distance == 0f) y.toFloat() else centerY + dy / distance * sampled
@@ -668,14 +668,14 @@ class IconRenderer(
         val drift = LayerGrain.driftOf(grain)
 
         return resample(source, sizePx, bake) { x, y, into ->
-            // Pixel *centres*, which is [LayerGrain.latticeAt]'s whole job: the field is zero at every lattice point,
+            // Pixel *centers*, which is [LayerGrain.latticeAt]'s whole job: the field is zero at every lattice point,
             // so sampling corners drops every cellPx-th sample onto nothing.
             val u = LayerGrain.latticeAt(x, cellPx)
             val v = LayerGrain.latticeAt(y, cellPx)
             // **Written into `into` and then read back out of it, rather than into a scratch array of its own.**
             // A scratch held here would be closed over by the lambda and shared by every band — which is the one
             // way this loop's parallelism can go wrong, and it would show as individually wrong pixels scattered
-            // through the picture rather than as anything recognisable as a race. `into` is per band by
+            // through the picture rather than as anything recognizable as a race. `into` is per band by
             // construction, so there is nothing to share.
             LayerGrain.displace(
                 drift = drift,
@@ -735,7 +735,7 @@ class IconRenderer(
     /**
      * The ramp deciding how much blur shows: transparent where the layer stays sharp, opaque where it is fully soft.
      *
-     * Only the alpha is read — the destination-in above ignores the colour — so both stops are black and the two
+     * Only the alpha is read — the destination-in above ignores the color — so both stops are black and the two
      * numbers doing the work are [stops].
      */
     private fun rampShader(
@@ -752,7 +752,7 @@ class IconRenderer(
             }
 
             Falloff.RADIAL -> {
-                // The sharp disc is placed by its own centre, so the frame is moved rather than the stops shifted —
+                // The sharp disc is placed by its own center, so the frame is moved rather than the stops shifted —
                 // which is what `Frame.movedBy` is for, and what keeps this the same placement a bloom gets.
                 val moved = frame.movedBy(blur.centerX, blur.centerY)
                 val radial = LayerGradient.radial(moved, radiusFraction = 1f)
@@ -762,7 +762,7 @@ class IconRenderer(
     }
 
     /**
-     * [source] redrawn as a field of dots, one colour averaged per cell.
+     * [source] redrawn as a field of dots, one color averaged per cell.
      *
      * **Drawn rather than resampled**, which is why it does not go through [resample]: the gaps between dots and
      * their rounded corners are things *painted*, and a per-pixel sampler has nowhere to put them. That also means
@@ -833,7 +833,7 @@ class IconRenderer(
      * out as hard aliased specks rather than as dust, and a shallow ripple stepped instead of flowing. Four reads
      * and a blend per pixel is what that costs.
      *
-     * **Rows are split across cores, which is the one optimisation here that helps the home screen too.** Every
+     * **Rows are split across cores, which is the one optimization here that helps the home screen too.** Every
      * output pixel reads only the *source* buffer and writes only its own slot, so the loop is parallel with no
      * coordination at all — bands of rows, one coroutine each, and the sum of them is the same picture. It is worth
      * a few lines rather than a shader precisely because it speeds up **baking real icons** as well as the editor's
@@ -920,7 +920,7 @@ class IconRenderer(
      * **`extractAlpha` is the whole of it, and it is why this needs no bitmap arithmetic.** It hands back the
      * silhouette as an `ALPHA_8` mask with the [android.graphics.BlurMaskFilter] already applied, *grown* to fit the
      * blur — hence the offset it fills in, which has to be added back or the halo sits up and to the left of the
-     * layer casting it. Drawing that mask with a coloured paint is what turns it into the halo.
+     * layer casting it. Drawing that mask with a colored paint is what turns it into the halo.
      *
      * **The halo is clipped to the icon's box**, which is inherent rather than an oversight: the output is one
      * `sizePx` square and always was. A radius large enough to reach the edge is a radius the user can see reaching
@@ -942,7 +942,7 @@ class IconRenderer(
         val grown = if (spreadPx > 0f) dilated(source, spreadPx, sizePx) else source
         val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = argb
-            // Set **after** the colour, which carries its own alpha and would otherwise overwrite this.
+            // Set **after** the color, which carries its own alpha and would otherwise overwrite this.
             alpha = (strength.coerceIn(0f, 1f) * 255).toInt()
         }
 
@@ -967,7 +967,7 @@ class IconRenderer(
      *
      * **The one effect here built from a *neighbourhood* rather than a point**, which is why it does not go through
      * [resample]: that helper asks "which single pixel does this one read?" and answers with a bilinear sample,
-     * where this asks how the surface is *tilted* at each pixel and answers with a colour. What the two do share is
+     * where this asks how the surface is *tilted* at each pixel and answers with a color. What the two do share is
      * the row split, which is [overRows].
      *
      * Three steps, and each is somewhere else. The **height map** is the layer's own alpha blurred, which is
@@ -1062,13 +1062,13 @@ class IconRenderer(
         this[y.coerceIn(0, sizePx - 1) * sizePx + x.coerceIn(0, sizePx - 1)]
 
     /**
-     * [source] with a hard band of colour following its silhouette — the stroke.
+     * [source] with a hard band of color following its silhouette — the stroke.
      *
      * **No drawing of its own at all**, which is the whole of why this effect was cheap: an outside stroke is
-     * [haloed] with no blur, an inside stroke is [insetHaloed] with no blur, and a centred one is both. The
+     * [haloed] with no blur, an inside stroke is [insetHaloed] with no blur, and a centered one is both. The
      * dilation each of those already performs *is* the stroke once nothing softens it.
      *
-     * **The centred case runs inside first, and the order is load-bearing.** [insetHaloed] trims its band to the
+     * **The centered case runs inside first, and the order is load-bearing.** [insetHaloed] trims its band to the
      * artwork, so it changes no alpha at all — which means the silhouette [haloed] then grows outward is still the
      * artwork's own edge. The other way round, the outward band would have fattened the silhouette first and the
      * inward one would then be measured from the *stroke's* edge, putting the whole thing a width too far out.
@@ -1119,7 +1119,7 @@ class IconRenderer(
      *
      * **One function for both inner effects**, extracted when the rim arrived — the second consumer, as usual. They
      * differ in exactly two arguments: a recess is thrown so it takes an offset and lays its band on plainly, a rim
-     * is centred on the edge it lights so it takes none and screens. Everything between the complement and the trim
+     * is centered on the edge it lights so it takes none and screens. Everything between the complement and the trim
      * is identical, which is precisely the kind of near-copy that drifts if it is written twice.
      *
      * **The halo is trimmed in its own buffer rather than by the composite**, which is what made that possible. The
@@ -1134,7 +1134,7 @@ class IconRenderer(
      * genuinely filled and the blur gathers from it. See [LayerShadow.innerMarginPx].
      *
      * @param blend how the trimmed halo joins the layer — `null` for plain source-over, which is a recess, and
-     *   [PorterDuff.Mode.SCREEN] for light that brightens the artwork's own colours rather than covering them.
+     *   [PorterDuff.Mode.SCREEN] for light that brightens the artwork's own colors rather than covering them.
      */
     private fun insetHaloed(
         source: Bitmap,
@@ -1156,7 +1156,7 @@ class IconRenderer(
 
         // **The halo is built in its own buffer and trimmed there**, which is what let one function serve both
         // effects. Trimming with destination-in first means the composite below is free to be *any* mode: a recess
-        // lays its band on plainly, a rim screens its light onto the artwork's own colours, and neither has to
+        // lays its band on plainly, a rim screens its light onto the artwork's own colors, and neither has to
         // double as the clip the way a lone source-atop did.
         val halo = createBitmap(sizePx, sizePx)
         val haloCanvas = Canvas(halo)
@@ -1164,7 +1164,7 @@ class IconRenderer(
 
         if (radiusPx == null) {
             // No blur asked for: a hard band, which is the flat inset a stamped label has. The complement is an
-            // ordinary bitmap rather than a mask, so its colour is replaced the way [haloed] replaces one.
+            // ordinary bitmap rather than a mask, so its color is replaced the way [haloed] replaces one.
             paint.colorFilter = solidFilter(argb)
             haloCanvas.drawBitmap(grown, dxPx - marginPx, dyPx - marginPx, paint)
         } else {
@@ -1201,10 +1201,10 @@ class IconRenderer(
      *
      * **A filled rectangle with the silhouette punched out of it**, which is an alpha inversion reached without one:
      * destination-out leaves `dstAlpha × (1 − srcAlpha)`, so a solid buffer minus the artwork is exactly the region
-     * around it. The plan expected this to need an alpha-inverting colour matrix; a matrix would have had to reason
+     * around it. The plan expected this to need an alpha-inverting color matrix; a matrix would have had to reason
      * about premultiplication to invert an alpha channel, where two canvas calls simply do not.
      *
-     * The colour is arbitrary and never seen — only the alpha survives, the caller replacing the colour or drawing
+     * The color is arbitrary and never seen — only the alpha survives, the caller replacing the color or drawing
      * the extracted mask.
      */
     private fun complementOf(source: Bitmap, marginPx: Int, paddedPx: Int): Bitmap {
@@ -1241,11 +1241,11 @@ class IconRenderer(
     private fun solidFilter(argb: Int) = ColorMatrixColorFilter(ColorMatrix(LayerFilter.solidMatrixOf(argb)))
 
     /**
-     * [source] as its three colour channels, displaced and added back together.
+     * [source] as its three color channels, displaced and added back together.
      *
-     * **Additive rather than layered**, which is what makes the channels recombine into the original colour where
+     * **Additive rather than layered**, which is what makes the channels recombine into the original color where
      * they overlap and leave a single-channel fringe where they do not — the whole of the effect. Drawing them with
-     * ordinary source-over would stack three coloured silhouettes and the last would simply win.
+     * ordinary source-over would stack three colored silhouettes and the last would simply win.
      */
     private fun split(source: Bitmap, split: LayerEffect.ChromaticSplit, sizePx: Int): Bitmap {
         val out = createBitmap(sizePx, sizePx)
@@ -1337,7 +1337,7 @@ class IconRenderer(
     }
 
     /**
-     * Any opaque colour will do for a buffer whose alpha is the only thing that survives — see [complementOf].
+     * Any opaque color will do for a buffer whose alpha is the only thing that survives — see [complementOf].
      */
     private val OpaqueBlack = 0xFF000000.toInt()
 

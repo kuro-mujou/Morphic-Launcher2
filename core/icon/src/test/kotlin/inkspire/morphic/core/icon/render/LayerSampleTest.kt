@@ -9,7 +9,7 @@ import org.junit.Test
  *
  * **The alpha weighting is the whole reason this is testable code rather than four lines inside a loop**, and it is
  * `LayerPixelate.averageArgb`'s lesson repeated: an icon is mostly transparent, a transparent pixel is almost always
- * transparent *black*, and blending by colour alone therefore drags every displaced edge toward black. The naive
+ * transparent *black*, and blending by color alone therefore drags every displaced edge toward black. The naive
  * version passes every other assertion here and produces a dark fringe on screen.
  */
 class LayerSampleTest {
@@ -33,7 +33,7 @@ class LayerSampleTest {
     }
 
     @Test
-    fun `halfway between two opaque pixels is halfway between their colours`() {
+    fun `halfway between two opaque pixels is halfway between their colors`() {
         val sampled = LayerSample.bilinear(pixels, 2, 0.5f, 0f)
 
         assertEquals(255, alpha(sampled))
@@ -42,9 +42,9 @@ class LayerSampleTest {
     }
 
     @Test
-    fun `a transparent neighbour lowers the alpha without darkening the colour`() {
+    fun `a transparent neighbour lowers the alpha without darkening the color`() {
         // **The one that fails on the naive version.** Halfway onto a transparent black pixel, the red must stay
-        // red at half alpha — averaging the colours would give a half-alpha *maroon*, and a screenful of those is
+        // red at half alpha — averaging the colors would give a half-alpha *maroon*, and a screenful of those is
         // the dark fringe that reads as a rendering fault.
         val sampled = LayerSample.bilinear(pixels, 2, 0f, 0.5f)
 
@@ -75,7 +75,7 @@ class LayerSampleTest {
     @Test
     fun `every sample stays inside a byte`() {
         // Float weights that do not quite sum to one would otherwise round up past 255 and wrap a channel, which
-        // shows as a single wrong-coloured pixel somewhere in the artwork.
+        // shows as a single wrong-colored pixel somewhere in the artwork.
         for (step in 0..40) {
             val sampled = LayerSample.bilinear(pixels, 2, step * 0.025f, step * 0.025f)
             assertTrue(alpha(sampled) in 0..255)

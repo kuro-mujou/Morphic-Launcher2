@@ -167,9 +167,9 @@ class StudioViewportTest {
 
     @Test
     fun `a zoomed icon can be travelled all the way across`() {
-        // **The cage this replaced.** "Keep the centre on the canvas" is the right bound for an icon smaller than
+        // **The cage this replaced.** "Keep the center on the canvas" is the right bound for an icon smaller than
         // the canvas and silently becomes a trap once it is larger: reaching the right-hand edge of a bound two and
-        // a half canvases wide needs a centre well off the left, which the old rule refused — so a user could zoom
+        // a half canvases wide needs a center well off the left, which the old rule refused — so a user could zoom
         // in and then not travel across what they had zoomed into.
         var workspace = IconStudioWorkspace.Default.copy(zoom = StudioZoomRange.endInclusive)
         repeat(40) {

@@ -51,7 +51,7 @@ What each path can reach:
 
 | | bake (`Canvas`, software bitmap) | live (Compose) |
 |---|---|---|
-| colour matrix | yes | yes |
+| color matrix | yes | yes |
 | matrix / camera transform | yes | yes |
 | tiled shader, gradients | yes | yes |
 | **blur** | yes — `BlurMaskFilter`, and `Blur.kt`'s box blur | **API 31+** (`RenderEffect`) |
@@ -110,7 +110,7 @@ what a collapse would need anyway, so the option is kept open rather than spent.
 
 Both paths can already draw these on API 26 with what is in the file.
 
-- **Filters** — a table of colour matrices, `LayerEffect.Filter(id)` in the model and id → matrix in `core:icon`.
+- **Filters** — a table of color matrices, `LayerEffect.Filter(id)` in the model and id → matrix in `core:icon`.
   See §3a for why this is engineering rather than content. *Cheapest large win in the set.*
 - **Bloom** — a radial or linear gradient laid over the layer. `LayerEffect.Gradient` is most of it already; it
   needs a radial variant and to keep its source-atop compositing.
@@ -120,7 +120,7 @@ Both paths can already draw these on API 26 with what is in the file.
   `android.graphics.Camera` + `Matrix`. Both since forever. Fits `LayerTransform`'s existing job of being the one
   interpretation of where a layer sits.
 - **Extrude** — N offset draws of the layer silhouette behind itself, darkened. No blur.
-- **Chromatic split** — the layer drawn three times through channel-isolating colour matrices at offsets. Pure
+- **Chromatic split** — the layer drawn three times through channel-isolating color matrices at offsets. Pure
   `ColorMatrix`, which both paths already share.
 - **Pattern** — a tiled bitmap drawn source-atop. `BitmapShader(REPEAT)` on Android, `ShaderBrush` on Compose.
   Needs pattern assets, modelled like `IconShapes`.
@@ -157,7 +157,7 @@ It comes out the other way, and the difference is what the thing *is*:
 - A **preset** is a whole recipe — layers, sources, transforms, shapes, effects. It is open-ended, and whether one
   is any good depends on the artwork it lands on, so curating them is design work with no end and no right answer.
   That is why they stay out.
-- A **filter** is one 4×5 colour matrix. It is bounded, self-contained, and does the same thing to every icon.
+- A **filter** is one 4×5 color matrix. It is bounded, self-contained, and does the same thing to every icon.
   "Curating" it means choosing twenty numbers and a name — which is the same act as adding a value to
   `LayerBlend`, or dropping a vector into `IconShapes`.
 
@@ -166,7 +166,7 @@ So filters are a **fixed vocabulary**, and they take `IconShapes`' exact shape:
 - `LayerEffect.Filter(id: String)` in `core:model.icon`. The **id is the on-disk contract**; a stored recipe holds
   only that.
 - The id → matrix table lives in **`core:icon`**, beside `LayerFilter`, which is the module that already owns what
-  a colour matrix means. Unlike `IconShapes` it needs no `R.drawable`, so it could sit in the model — it does not,
+  a color matrix means. Unlike `IconShapes` it needs no `R.drawable`, so it could sit in the model — it does not,
   because a matrix is a *look*, and `core:model` holds what an icon is rather than what it looks like.
 - An **unknown id renders unfiltered**, matching `IconShapes.drawableResOrNull` returning null: a stale recipe from
   a later build degrades instead of failing.
@@ -193,12 +193,12 @@ pattern), so both renderers must iterate the list and apply each in turn. This i
 and it touches the one thing the two paths must agree on.
 
 **2. An effect needs an explicit `enabled`.** Our current rule is that an identity effect is removed from the list,
-which is elegant for two sliders and wrong for an effect with five parameters and a colour: the reference's master
+which is elegant for two sliders and wrong for an effect with five parameters and a color: the reference's master
 toggle exists so you can switch an effect off *without losing what you set*. Proposal: `enabled: Boolean = true` on
 each variant, with "absent from the list" meaning never configured. Costs nothing stored (`encodeDefaults = false`).
 
-**3. Variants and colours are part of the effect.** Most of these carry a 2–3 way variant and several carry a
-colour. Both are ordinary fields; the point is to decide the vocabulary once (an enum per effect, like `TintMode`)
+**3. Variants and colors are part of the effect.** Most of these carry a 2–3 way variant and several carry a
+color. Both are ordinary fields; the point is to decide the vocabulary once (an enum per effect, like `TintMode`)
 rather than thirteen ad-hoc booleans.
 
 **4. The Effects grid outgrows one page.** Five entries fit at 4 columns; thirteen-plus do not. The shape section
@@ -219,7 +219,7 @@ tool, and that is the one thing the bar cost us. While the stack was permanently
 editing?' was answered by looking at it; now the stack is behind its own entry."* A rail puts the stack back on
 screen permanently, which is the whole point.
 
-**Shape.** The preview icon shrinks and moves off-centre, freeing a strip down one edge of the canvas. The strip
+**Shape.** The preview icon shrinks and moves off-center, freeing a strip down one edge of the canvas. The strip
 holds one tile per layer — the layer's own content, thumbnailed — plus a `+` at the end. **Tap selects. Long-press
 opens a quick menu** (move up, move down, toggle visibility, delete).
 
@@ -286,7 +286,7 @@ Each slice is independently reviewable and leaves the studio working.
   they cost one `when` arm each rather than a mechanism.
 - **`ColorMatrices` came out of `LayerFilter`.** Authoring seventeen looks as raw `floatArrayOf` is unreviewable, so
   the builders were extracted and the table composes from them; `LayerFilter` kept the one thing that is about the
-  four sliders, which is the order they compose in. `contrast` and `mix` are new — the first pivots about mid-grey
+  four sliders, which is the order they compose in. `contrast` and `mix` are new — the first pivots about mid-gray
   (without the offset it is a brightness control that also steepens), the second is what a true sepia needs and what
   `scale` structurally cannot express.
 - **A filter swatch shows the *look*, not the icon** — a fixed reference gradient under the filter's matrix.
@@ -304,7 +304,7 @@ Each slice is independently reviewable and leaves the studio working.
   text field per slider with parse, clamp and commit semantics, which is its own slice.
 - **Slice 4 split, and half of it was a capability this plan never noticed.** Bloom landed first: `LayerEffect.Gradient`
   renamed and grown (linear or radial falloff, a position, a `ContentAnchor` — which is what that second consumer
-  renamed `ShapeAnchor` to), and **one colour fading to transparent**
+  renamed `ShapeAnchor` to), and **one color fading to transparent**
   rather than two opaque stops — with two, source-atop *replaces* every pixel it covers, so a bloom at full strength
   obliterated the artwork it was meant to light.
 - **Gloss is an *edge*, which is what makes it its own effect rather than a bloom preset.** A bloom is a ramp or a disc
@@ -317,14 +317,14 @@ Each slice is independently reviewable and leaves the studio working.
     that kept it from being a second angle control.
   - **Four stops, not two**, and it is load-bearing: with a two-stop ramp spanning the whole radius, a large disc
     leaves the frame in an almost flat part of it, so flattening the curve would fade the sheen away — a control
-    undoing itself. The stops are placed so the boundary lands on the frame's centre and the soft band is a constant
+    undoing itself. The stops are placed so the boundary lands on the frame's center and the soft band is a constant
     share of the frame at every curve. Pinned by a test.
   - **No position pad**, unlike Bloom: a sheen is placed by the direction it is struck from and the way its edge bows,
     and a third control moving the same band would be a second answer to what the angle settles.
 - **Perspective is *not* an effect, and it cost the live path its `graphicsLayer`.** §3 says it "fits `LayerTransform`'s
   existing job", which is right and is why it landed as two `IconLayerSpec` fields (`tiltX`/`tiltY`) rather than a
   `LayerEffect`: leaning a layer out of the plane says *where it sits*, so as an effect one rotation would be orderable
-  against a colour matrix while the in-plane one was not.
+  against a color matrix while the in-plane one was not.
   - **What §3 got wrong is "no new render machinery".** Compose expresses perspective as `graphicsLayer.cameraDistance`
     and the bake as `android.graphics.Camera`, and **the two use different units** — Camera's z is in 72-pixel units,
     Compose's is a density-scaled dp. Matching two camera models by eye is exactly the agreement `LayerTransform`
@@ -339,14 +339,14 @@ Each slice is independently reviewable and leaves the studio working.
     means tilting its layers. That is a real gap rather than a decision, and the place to fix it is whether the
     composite gets a transform of its own.
 - **Pattern confirmed §6's split and added one the plan had not stated: the tile is a *stencil*.** Its marks are
-  authored white on transparent and the effect's `argb` is what they come out in — so one asset serves every colour,
-  and `invert` is a `DST_OUT` punch rather than a second library. A tile carrying its own colours would need both.
+  authored white on transparent and the effect's `argb` is what they come out in — so one asset serves every color,
+  and `invert` is a `DST_OUT` punch rather than a second library. A tile carrying its own colors would need both.
   - **`LayerPattern` is a seventh shared derivation**, and a tiled shader earns it: there are *three* things the two
     paths must agree on and each is invisible alone — the tile's pixel size, the matrix that turns it, and how the
-    stencil becomes coloured marks. It hands back a **bitmap** rather than a shader, because that is the last point
+    stencil becomes colored marks. It hands back a **bitmap** rather than a shader, because that is the last point
     they can share: one wraps it in `BitmapShader`, the other in Compose's `ImageShader`.
   - **Every asset is authored to repeat**, which is the part with no compiler behind it. A mark crossing an edge is
-    drawn again on the opposite one, or drawn whole and centred *on* the edge so the drawable clips it and the
+    drawn again on the opposite one, or drawn whole and centered *on* the edge so the drawable clips it and the
     neighbour completes it (the dots do this at all four corners). A mistake shows as a seam every tile, which reads
     as a rendering fault rather than a bad asset.
   - **No *randomize* button**, unlike the reference. What it randomizes there cannot be read off a capture — an
@@ -362,9 +362,9 @@ Each slice is independently reviewable and leaves the studio working.
   - **It is the first candidate for `drawsLive = false`** if it proves slow on device. Left true only because the
     bake-backed preview (slice 8) is not built, which is exactly the situation that flag was added for.
   - **`ColorMatrices.solid` got a second consumer**, so `LayerFilter.solidMatrixOf` came out: an extrusion is the
-    layer's silhouette in one colour, which is the operation a `TintMode.SOLID` tint already performs. Both now pull
+    layer's silhouette in one color, which is the operation a `TintMode.SOLID` tint already performs. Both now pull
     the channels out of an int in one place, and that place is the fifth column — silent when wrong.
-  - The bake's effect loop stopped being "a colour matrix or an overlay": Extrude produces a new buffer without being
+  - The bake's effect loop stopped being "a color matrix or an overlay": Extrude produces a new buffer without being
     a matrix, so the `when` now says plainly which effects replace the buffer and which paint into it.
 - **Chromatic split needed no new arithmetic at all**, which is what `ColorMatrices.mix` was extracted for: a channel
   isolation is that builder with a single one in each row, and `scale` structurally cannot express it. What
@@ -382,7 +382,7 @@ Each slice is independently reviewable and leaves the studio working.
   plan is written as a *layer* effect, and for six of them that is simply wrong: a glow derives from the finished
   silhouette, so per-layer it glows around the foreground *inside* the background plate where nobody can see it; grain,
   ripple and pixelate applied per layer produce independent distortion fields that visibly shear apart at the edge of
-  the glyph; and even a colour matrix differs before and after compositing once opacity or a blend is in play. So
+  the glyph; and even a color matrix differs before and after compositing once opacity or a blend is in play. So
   `IconLayerSet` carries its own `effects`, applied to the composite — additive, defaulted empty, and reusing the
   **same** `LayerEffect` type and the same pipeline in both renderers rather than growing a second one.
   - **The UI cost one tile, because the rail was already the scope control.** Selection there has always meant "the
@@ -429,7 +429,7 @@ with every other layer hidden rather than through a new path.
 - **Filters are engineering, not content** (§3a). A fixed table, `IconShapes`' exact shape, our own names.
 - **The layer rail replaces the Layers section** (§4a). The effect list stays a 4-column grid in the Effects panel.
 - **Pattern gets its own assets, not `IconShapes`.** Two libraries, and the split is what each thing *is*: a shape
-  is a silhouette whose **alpha is a mask** and which is stretched to one box; a pattern is artwork whose **colour
+  is a silhouette whose **alpha is a mask** and which is stretched to one box; a pattern is artwork whose **color
   is drawn** and which is tiled at a scale and angle. Sharing one library would mean every entry answering both
   questions, and half of each list would be nonsense in the other role. They share the *pipeline* — drop a drawable
   in, add an id, id is the on-disk contract, unknown id degrades quietly — which is the part worth copying.
@@ -501,11 +501,11 @@ The fraction is still the one number to measure on device (§6).
 Worth naming now, because both groups are three effects that are one mechanism each:
 
 - **Glow and Drop shadow are the same effect twice** — a blurred copy of the finished silhouette, placed behind, one
-  centred and spread, the other offset. `Bitmap.extractAlpha(paint, offset)` with a `BlurMaskFilter` is the whole of
+  centered and spread, the other offset. `Bitmap.extractAlpha(paint, offset)` with a `BlurMaskFilter` is the whole of
   it and needs no bitmap arithmetic at all. **Built (slice 9)**, and four things came out of it:
   - **Two effects rather than one**, despite the shared mechanism, because at most one effect of a type is
     meaningful — one record would mean a layer could carry a glow *or* a shadow, and a glowing icon casting one is
-    ordinary. The parameters differ honestly too: a glow is centred so it has a spread and no offset, a shadow is
+    ordinary. The parameters differ honestly too: a glow is centered so it has a spread and no offset, a shadow is
     thrown so it has an offset and no spread.
   - **Spread is a dilation, and a dilation is the silhouette swept around a circle** — `LayerExtrude`'s "no primitive
     draws this" problem one dimension over, and cheap here in a way that one could not be, since this effect never
@@ -520,8 +520,8 @@ Worth naming now, because both groups are three effects that are one mechanism e
 - **Pixelate, Ripple and Grain are one loop with three answers** — or so this said. Building Ripple first showed
   the grouping is **two and one**: Ripple and Grain are resamplings (for every output pixel, which input pixel does
   it read — a sinusoid and noise respectively), where Pixelate as the reference draws it is not a resampling at all.
-  Its cells have gaps and rounded corners, so it *redraws* the layer as a field of shapes, one colour sampled per
-  cell. A pure coordinate-quantising pixelate would give solid blocks and no way to express either control.
+  Its cells have gaps and rounded corners, so it *redraws* the layer as a field of shapes, one color sampled per
+  cell. A pure coordinate-quantizing pixelate would give solid blocks and no way to express either control.
   - **So Ripple went first**, against this plan's order, to put the displacement pass under its natural first
     consumer rather than under the odd one out.
   - **And the pass was not extracted**, which reverses the note above: this codebase extracts on the *second*
@@ -536,7 +536,7 @@ Worth naming now, because both groups are three effects that are one mechanism e
     transparent out there.
   - **Grain's noise had to be smooth, and that is the whole effect.** A hash per pixel scatters the artwork into
     confetti; a field interpolated between lattice points a grain-size apart moves neighbours together, which is
-    what tears it into pieces still recognisable as pieces of it. `LayerGrain` is deterministic and defined in
+    what tears it into pieces still recognizable as pieces of it. `LayerGrain` is deterministic and defined in
     fractions of the box for the reason everything else here is — a field that varied between bakes would make the
     icon shimmer as the studio re-rendered, and a draft would not predict the full-size result. That is also why
     there is no seed: a hash *of position* is the randomness, and a seed would be a second control offering nothing
@@ -546,11 +546,11 @@ Worth naming now, because both groups are three effects that are one mechanism e
     and change the panel's height as it crossed zero. It is also honest about the mechanism — scatter uses two
     independent noise fields, directed uses one and spends it along the angle, and there is no continuum between
     "two fields" and "one".
-  - **Pixelate confirmed it is the odd one out**, and shares nothing with the two: it samples one colour per *cell*
+  - **Pixelate confirmed it is the odd one out**, and shares nothing with the two: it samples one color per *cell*
     and then **draws** a shape, so the gaps and the rounded corners are painted rather than sampled — and drawn on a
     canvas they come out antialiased for free, where an `IntArray` would owe its own coverage arithmetic.
     - **The averaging is the part that is silently wrong if done naively.** Straight ARGB averaging counts a
-      transparent pixel's colour equally with an opaque one, and a transparent pixel is almost always transparent
+      transparent pixel's color equally with an opaque one, and a transparent pixel is almost always transparent
       *black* — so every cell straddling the artwork's edge comes out dark, and the icon gains a fringe that reads as
       a rendering fault. `LayerPixelate.averageArgb` weights by alpha and divides by the alpha total, which is
       premultiplying and un-premultiplying.
@@ -587,25 +587,25 @@ an outline's outward half. Only Bevel needs a kernel nobody has written.
 
 | Effect | Mechanism | Already built | `drawsLive` |
 |---|---|---|---|
-| **Gradient map** | one colour matrix | `ColorMatrices.duotone` | **yes** |
+| **Gradient map** | one color matrix | `ColorMatrices.duotone` | **yes** |
 | **Vignette** | radial ramp, source-atop | `LayerGradient.radial` | **yes** |
 | **Inner shadow** | inverted alpha, blurred, masked in | `haloed`, `dilated` | no — blur |
 | **Inner glow** | the same, offset zero, screened | inner shadow's | no — blur |
 | **Outline** | dilate, erode, difference | `dilated`, `LayerShadow.spreadSteps` | no |
 | **Bevel & emboss** | Sobel over a blurred alpha, then lighting | `extractAlpha` for the height map | no — per-pixel |
 
-**The one primitive genuinely missing is an alpha-inverting matrix.** `ColorMatrices.invert` flips the three colour
+**The one primitive genuinely missing is an alpha-inverting matrix.** `ColorMatrices.invert` flips the three color
 channels and leaves row 4 alone, which is right for a look and useless for a silhouette; inner shadow, inner glow and
 an outline's inside position all need the alpha flipped instead. It is four lines, and it arrives with whichever of
 the three is built first.
 
 **Erosion is `invert → dilate → invert`**, which is why the outline's three positions cost one mechanism rather than
 three: `dilated` grows a silhouette, and growing the *hole* is shrinking the shape. Outside is the dilation drawn
-behind, inside is the difference against the erosion, centre is half of each.
+behind, inside is the difference against the erosion, center is half of each.
 
 **Bevel is the only one that does not fit `resample`.** That helper's `sourceOf` contract is "which input pixel does
 this output pixel read", and it hardcodes `LayerSample.bilinear` on the single point returned — where a Sobel reads
-a *neighbourhood* and the output is a lit colour rather than a sampled one. So it wants its own band-parallel loop
+a *neighbourhood* and the output is a lit color rather than a sampled one. So it wants its own band-parallel loop
 beside `resample` rather than a generalisation of it, on the same extract-on-the-second-consumer grounds that kept
 the displacement pass private until Grain arrived. Its height map is free: `extractAlpha` with a `BlurMaskFilter` is
 what the "Size" parameter means, and `haloed` already produces exactly that.
@@ -614,7 +614,7 @@ what the "Size" parameter means, and `haloed` already produces exactly that.
 
 - **Gradient map's bias/midpoint slider.** A 4×5 matrix cannot remap luminance non-linearly before interpolating, so
   bias demotes the effect from a matrix to a per-pixel pass — trading its live drawing, and the composability that
-  makes it stack with everything, for a control the effect was not asked for by name. The two colours *are* the
+  makes it stack with everything, for a control the effect was not asked for by name. The two colors *are* the
   effect. If bias is ever genuinely wanted it is a separate, baked effect rather than a slider added to this one.
 - **Gradient map's blend-mode dropdown and per-effect opacity.** Opacity and blend describe how a layer *joins a
   stack*, which is why they are `IconLayerSpec` fields and why the composite does not offer them (§5, slice 1). A
@@ -643,7 +643,7 @@ effect can be masked, and evaluate every effect as `mix(original, effect, fallof
 (paint onto what is there) from buffer replacers (produce a new bitmap and swap it in). A mask is: run the effect
 into a buffer, then composite that buffer back over the *pre-effect* one through a ramp's alpha. Overlays join the
 same path by being given a buffer, which they do not have today only because they never needed one. `LayerGradient`
-and `LayerProgressiveBlur.stops` already supply every parameter the proposal lists — centre, radius, softness,
+and `LayerProgressiveBlur.stops` already supply every parameter the proposal lists — center, radius, softness,
 invert — so there is no new arithmetic at all, and `IconLayerSet`'s own effects get it for free.
 
 Four things about it are not as proposed:
@@ -669,11 +669,11 @@ Four things about it are not as proposed:
 By cost, cheapest first, which also happens to put the two that draw live at the front:
 
 1. **Gradient map** — `duotone` exists; one matrix, one strength, live. **Built, and it landed as `Duotone`** — a
-   gradient map has arbitrary stops, this deliberately has exactly two colours and no midpoint (8b), so the name that
+   gradient map has arbitrary stops, this deliberately has exactly two colors and no midpoint (8b), so the name that
    describes the look is the honest one. The rename is Bloom's rule reapplied: every entry in the grid names a look
    rather than a mechanism. Two things came out of building it. **`LayerFilter.duotoneMatrixOf` is the extraction the
    second consumer earned** — `IconFilters` had been unpacking two ARGB ints into six channels privately, and a user
-   picking the same two colours was about to do it again, on the fifth column, where it is silent when wrong. And
+   picking the same two colors was about to do it again, on the fifth column, where it is silent when wrong. And
    **`strength` is a matrix interpolation, not a blended copy** (`ColorMatrices.towards`): applying a matrix is linear
    in the matrix, so interpolating the entries interpolates the outputs — which is what let the effect carry a partial
    grade without a second buffer and therefore without losing its live path.
@@ -688,10 +688,10 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    arrangement) — getting it backwards draws a perfectly plausible picture lit in the middle, on the one axis
    neither renderer can check against the other. It takes no falloff and no position, and that is the shape of the
    effect rather than controls left out: a ramp with an angle arrives from one side, which is a bloom, and an
-   off-centre disc is a bloom placed.
+   off-center disc is a bloom placed.
 3. **Inner shadow** — `haloed` with the alpha inverted; brings the alpha-invert matrix. **Built, and the matrix was
    never needed.** Destination-out over a filled buffer leaves `dstAlpha × (1 − srcAlpha)`, which *is* the alpha
-   inversion — two canvas calls, where a colour matrix would have had to reason about premultiplication to invert an
+   inversion — two canvas calls, where a color matrix would have had to reason about premultiplication to invert an
    alpha channel. So 8a's "one primitive genuinely missing" is wrong: the primitive is a `PorterDuff` mode that was
    already in the file, and outline's erosion is the same op run twice rather than a matrix either. What it *did*
    need was unforeseen and is the interesting half — **the complement has to be built in a padded buffer**. An inner
@@ -700,25 +700,25 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    so a full-bleed background plate — the commonest thing anyone recesses — would come out flat wherever it reached
    the edge. `LayerShadow.innerMarginPx` sizes the padding from the three ways the complement's edge travels inward:
    the blur spreads it, the choke grows it, the throw slides it. Source-atop is what clips the result back inside the
-   silhouette, so there is no second masking pass. Labelled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
+   silhouette, so there is no second masking pass. Labeled **"Inset"** in the studio, on `ProgressiveBlur`/"Focus"'s
    precedent: four columns is one short word.
 4. **Inner glow** — inner shadow's twin, no toggle. **Built**, and it is where the inner halo became one function
    for both: `IconRenderer.insetHaloed`, extracted on the second consumer as usual. They differ in exactly two
-   arguments — a recess is thrown so it takes an offset and lays its band on plainly, a rim is centred on the edge it
-   lights so it takes none and **screens**, brightening the artwork's own colours instead of covering them. What made
+   arguments — a recess is thrown so it takes an offset and lays its band on plainly, a rim is centered on the edge it
+   lights so it takes none and **screens**, brightening the artwork's own colors instead of covering them. What made
    that possible was moving the trim: the first cut leaned on source-atop to clip *and* composite at once, which is
    correct for a shadow and impossible for anything adding light, since the mode is then spent. Destination-in into
-   the halo's own buffer first, any mode after. The "edge vs centre" toggle stayed dropped for 8b's stated reason,
-   and building it confirmed the reason — a centre glow is `Bloom(RADIAL, CONTENT)`, which additionally offers a
-   position and a falloff this could not. Labelled **"Rim"**.
+   the halo's own buffer first, any mode after. The "edge vs center" toggle stayed dropped for 8b's stated reason,
+   and building it confirmed the reason — a center glow is `Bloom(RADIAL, CONTENT)`, which additionally offers a
+   position and a falloff this could not. Labeled **"Rim"**.
 5. **Outline** — dilate and erode; the shared silhouette helpers get extracted here, on their second consumer.
    **Built, and it needed no drawing code of its own** — the helpers had already been extracted by inner glow, and a
    stroke turns out to be those two with the blur switched off. An outside stroke is `haloed` with a null radius, an
-   inside one is `insetHaloed` with a null radius, and a centred one is **both, inward first** — which is the one
+   inside one is `insetHaloed` with a null radius, and a centered one is **both, inward first** — which is the one
    ordering fact worth knowing: `insetHaloed` trims its band to the artwork so it changes no alpha, leaving the
    silhouette that `haloed` then grows outward still the artwork's own edge. The other way round the outward band
    fattens the silhouette first, and the inward one is then measured from the *stroke's* edge, putting the whole
-   thing a width too far out. `Outline.perSideWidth` halves the total for the centred case, in the model on
+   thing a width too far out. `Outline.perSideWidth` halves the total for the centered case, in the model on
    `Vignette.clearArea`'s grounds. **`drawsLive` is false and not because of a blur**, which is a new reason: the
    inside stroke's complement has to be built in a buffer *larger* than the layer, and a Compose node cannot draw
    beyond its own bounds — so live, a full-bleed plate would be stroked on the sides its artwork happened not to
@@ -726,7 +726,7 @@ By cost, cheapest first, which also happens to put the two that draw live at the
    it was switched would make the preview flicker between mechanisms.
 6. **Bevel & emboss** — the one new kernel; a slice on its own. **Built**, and 8a was right that it does not fit
    `resample`: that helper asks which single pixel an output reads and answers with a bilinear sample, where a Sobel
-   reads a neighbourhood and answers with a *colour*. What the two do share is the row split, so `overRows` came out
+   reads a neighbourhood and answers with a *color*. What the two do share is the row split, so `overRows` came out
    of `resample` on this second consumer and the per-band scratch became per-row. Three things the build settled:
    **there is no depth control**, because a depth slider scales the slope where the strengths scale the bands and
    the picture cannot tell those apart — what depth is genuinely for is guaranteed instead, `LayerBevel.slopeScale`

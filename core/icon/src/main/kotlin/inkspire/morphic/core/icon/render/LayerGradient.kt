@@ -151,7 +151,7 @@ object LayerGradient {
      * as a pronounced bow. So there is no second mechanism here — a gloss is the radial fill a bloom already uses,
      * with its center pushed outside the frame so only the *rim* of it lands on the artwork.
      *
-     * @property stops the four positions the [colorsOf] colours sit at, ascending. Four rather than two because the
+     * @property stops the four positions the [colorsOf] colors sit at, ascending. Four rather than two because the
      *   transition has to stay the same visual width whatever the circle's size — with two stops spanning the whole
      *   radius, a large circle would leave the frame in an almost flat part of the ramp and the sheen would fade out
      *   as the curve was flattened, which is a control undoing itself.
@@ -167,7 +167,7 @@ object LayerGradient {
     ) {
 
         /**
-         * The four colours, in [stops] order — [argb] on the lit side, its own fade on the other.
+         * The four colors, in [stops] order — [argb] on the lit side, its own fade on the other.
          *
          * A member rather than something each renderer assembles, because the order is the whole of what [litInside]
          * means: getting it backwards draws a perfectly plausible sheen with the light on the wrong side, on the one
@@ -200,7 +200,7 @@ object LayerGradient {
         // straight edge without the arithmetic ever reaching for an infinite radius.
         val radius = half * (1f + FlatSweepReach * (1f - curve.absoluteValue.coerceAtMost(1f)))
 
-        // `endpoints`' own direction vector, which points *away* from where its first colour sits — so the lit side
+        // `endpoints`' own direction vector, which points *away* from where its first color sits — so the lit side
         // is the negative one, and 0° means light from the top in both.
         val radians = (angleDegrees + frame.rotationDegrees) * Math.PI.toFloat() / 180f
         val litInside = curve >= 0f
@@ -238,7 +238,7 @@ object LayerGradient {
      * enough for what reads as three regions.
      *
      * **Here rather than on [LayerProgressiveBlur], which is where it was written, because a vignette asks the
-     * identical question** — how much of the frame stays clear, and how far past that the colour takes to arrive.
+     * identical question** — how much of the frame stays clear, and how far past that the color takes to arrive.
      * Extract-on-the-second-consumer, and this file is already the one that answers "where does a ramp sit"; the
      * blur's own name would otherwise be imported by an effect that is not one.
      *

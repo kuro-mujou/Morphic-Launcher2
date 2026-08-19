@@ -61,7 +61,7 @@ object LayerFilter {
      * The matrix that turns whatever it is applied to into a flat silhouette of [argb], keeping only its alpha.
      *
      * Second consumer of [ColorMatrices.solid] and the reason it is worth a name here: an extrusion is the layer's
-     * silhouette in one colour, which is the same operation a [TintMode.SOLID] tint performs — so both go through
+     * silhouette in one color, which is the same operation a [TintMode.SOLID] tint performs — so both go through
      * one place rather than each pulling the channels out of an int its own way. **The channels are 0..255**, being
      * the matrix's fifth column, and that is exactly the thing that would be silently wrong if it were written twice.
      */
@@ -75,12 +75,12 @@ object LayerFilter {
      * The matrix mapping a whole tonal range onto the ramp from [darkArgb] to [lightArgb].
      *
      * **Here rather than in `IconFilters` because there are two consumers now**, which is what that file's own KDoc
-     * reserved: it authors a table of two-colour looks, and [LayerEffect.Duotone] lets a user pick the same two, so
+     * reserved: it authors a table of two-color looks, and [LayerEffect.Duotone] lets a user pick the same two, so
      * both were about to unpack the channels out of an int their own way. That is [solidMatrixOf]'s argument exactly,
      * and it protects the same thing — the channels are the matrix's **fifth column**, on 0..255, where a 0..1 value
      * is visually black rather than obviously broken.
      *
-     * The alpha byte of each colour is ignored: a ramp has no opacity of its own, and the layer's own alpha survives
+     * The alpha byte of each color is ignored: a ramp has no opacity of its own, and the layer's own alpha survives
      * untouched.
      */
     fun duotoneMatrixOf(darkArgb: Int, lightArgb: Int): FloatArray = ColorMatrices.duotone(

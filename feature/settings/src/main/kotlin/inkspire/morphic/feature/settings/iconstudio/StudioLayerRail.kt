@@ -566,7 +566,7 @@ private fun CompositeTile(
  *
  * **A checkerboard behind it, because most layers are mostly transparent.** A dark glyph on nothing is an empty
  * tile on dark glass, and a white one is invisible on a light plate — the canvas already solves this for the icon
- * and the same two greys solve it here.
+ * and the same two grays solve it here.
  *
  * **Selecting shrinks the preview and spawns a ring in the space it gives up.** The tile is one size whatever its
  * state, so the rail never reflows and no neighbour shifts — what changes is how much of the tile the artwork gets.
@@ -743,7 +743,7 @@ private fun LayerTile(
     }
 }
 
-/** The transparency ground a tile is read against — the canvas's own two greys, at tile scale. */
+/** The transparency ground a tile is read against — the canvas's own two grays, at tile scale. */
 private fun DrawScope.drawCheckerboard(square: Float) {
     if (square <= 0f) return
     drawRect(CheckerLight)

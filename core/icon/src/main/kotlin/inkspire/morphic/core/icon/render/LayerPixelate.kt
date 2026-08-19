@@ -4,7 +4,7 @@ import inkspire.morphic.core.model.icon.LayerEffect
 import kotlin.math.roundToInt
 
 /**
- * How large a pixelate's cells are, how much of each a dot covers, and what colour it comes out.
+ * How large a pixelate's cells are, how much of each a dot covers, and what color it comes out.
  *
  * [LayerRipple]'s and [LayerGrain]'s reason: only the bake draws this, so nothing is competing with the arithmetic —
  * it is separated because `IconRenderer` needs an emulator for every line, and the averaging below is the sort of
@@ -22,7 +22,7 @@ object LayerPixelate {
     fun cellPx(pixelate: LayerEffect.Pixelate, sizePx: Int): Float =
         (pixelate.cellSize * sizePx).coerceAtLeast(MinCellPx)
 
-    /** How far in from its cell's edge a dot starts — half the gap, since the dot is centred in the cell. */
+    /** How far in from its cell's edge a dot starts — half the gap, since the dot is centered in the cell. */
     fun insetPx(cellPx: Float, fill: Float): Float = cellPx * (1f - fill.coerceIn(0f, 1f)) / 2f
 
     /**
@@ -35,10 +35,10 @@ object LayerPixelate {
     fun cornerRadiusPx(dotPx: Float, roundness: Float): Float = dotPx / 2f * roundness.coerceIn(0f, 1f)
 
     /**
-     * The average colour of the [cellPx]-square block of [pixels] whose top-left corner is ([left], [top]).
+     * The average color of the [cellPx]-square block of [pixels] whose top-left corner is ([left], [top]).
      *
      * **Averaged premultiplied, then un-premultiplied**, and that is the whole reason this is a named function
-     * rather than four running totals inline. Straight ARGB averaging weights a fully transparent pixel's colour
+     * rather than four running totals inline. Straight ARGB averaging weights a fully transparent pixel's color
      * equally with an opaque one — and a transparent pixel is almost always transparent *black*, so every cell that
      * straddles the artwork's edge comes out darker than the artwork it is standing in for. The icon would gain a
      * dark fringe that looks like a rendering fault rather than like a mistake in an average.
@@ -59,7 +59,7 @@ object LayerPixelate {
                 val alpha = argb ushr 24 and 0xFF
                 alphaSum += alpha
                 // Weighted by alpha, which *is* premultiplying — a transparent pixel then contributes nothing to
-                // the colour rather than contributing black to it.
+                // the color rather than contributing black to it.
                 redSum += (argb shr 16 and 0xFF) * alpha
                 greenSum += (argb shr 8 and 0xFF) * alpha
                 blueSum += (argb and 0xFF) * alpha

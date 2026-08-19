@@ -186,7 +186,7 @@ class LayerGrainTest {
     }
 
     /**
-     * That a pixel is sampled at its **centre**, which is what lets the lattice go as fine as it does.
+     * That a pixel is sampled at its **center**, which is what lets the lattice go as fine as it does.
      *
      * **Invisible when wrong, which is the only reason this is worth a test.** Gradient noise reads zero at every
      * lattice point, so sampling a pixel's corner drops every `cellPx`-th sample onto nothing — at a two-pixel cell,
@@ -194,8 +194,8 @@ class LayerGrainTest {
      * recipe asked for, and no assertion about smoothness, determinism or range would notice.
      */
     @Test
-    fun `a pixel is sampled at its centre, so no sample lands on a lattice zero`() {
-        // At a two-pixel cell the corners fall on the lattice every other pixel. Centres cannot: they sit at quarter
+    fun `a pixel is sampled at its center, so no sample lands on a lattice zero`() {
+        // At a two-pixel cell the corners fall on the lattice every other pixel. Centers cannot: they sit at quarter
         // and three-quarter phases whatever the pixel.
         for (pixel in 0 until 16) {
             val phase = LayerGrain.latticeAt(pixel, cellPx = 2f) % 1f

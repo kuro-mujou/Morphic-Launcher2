@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
  * build degrades on an earlier one instead of breaking it.
  *
  * **The drawable is a stencil, not a picture.** Its marks are authored opaque and its ground transparent; what
- * colour they come out is `LayerEffect.Pattern.argb`, so one asset serves every colour rather than the library
+ * color they come out is `LayerEffect.Pattern.argb`, so one asset serves every color rather than the library
  * needing a copy per shade. The id → `R.drawable` mapping is `IconPatterns` in `core:icon`, for `IconShape`'s
  * reason: a resource id is an Android concept and this module has none.
  */

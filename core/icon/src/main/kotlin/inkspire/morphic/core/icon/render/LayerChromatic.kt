@@ -29,7 +29,7 @@ object LayerChromatic {
      *
      * **Red leads, blue trails, green stays put.** That is the convention real lens dispersion produces — long
      * wavelengths refract least — and it is the one worth fixing precisely because either direction looks plausible.
-     * Green holding still is what keeps the icon recognisably where it was: the eye reads luminance mostly from
+     * Green holding still is what keeps the icon recognizably where it was: the eye reads luminance mostly from
      * green, so moving it would shift the whole icon rather than fringe it.
      */
     fun fringes(split: LayerEffect.ChromaticSplit, sizePx: Int): List<Fringe> {
@@ -43,7 +43,7 @@ object LayerChromatic {
     }
 
     // A single one per row: each output channel takes its own input and nothing else, and alpha passes through — so
-    // every copy keeps the layer's silhouette and contributes only its own colour to the sum.
+    // every copy keeps the layer's silhouette and contributes only its own color to the sum.
     private val RedOnly = ColorMatrices.mix(1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
     private val GreenOnly = ColorMatrices.mix(0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f)
     private val BlueOnly = ColorMatrices.mix(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f)

@@ -91,7 +91,7 @@ internal fun ShapeControls(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // **No label over the chooser, because the panel header already carries one.** `StudioToolPanel` names the
         // open section, so a `LabeledControl("Shape")` here put the same word twice in the same 24dp — and it was
-        // labelling the section rather than a control *within* it, which is what that helper is for. The rule is one
+        // labeling the section rather than a control *within* it, which is what that helper is for. The rule is one
         // line: a section names its parts, never itself. `Fit to artwork` beneath is a part and keeps its own name.
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // **The page height is derived from the width, because it is a consequence of it and not a value

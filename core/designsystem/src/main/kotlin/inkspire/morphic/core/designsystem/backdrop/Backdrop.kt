@@ -244,7 +244,7 @@ fun Modifier.wallpaperBackdrop(
  *
  * **[accent] is a parameter, defaulted to the backdrop's**, for one caller that has the color but not the backdrop: the
  * effects section draws the five tints as swatches, and `LocalBackdrop` is provided only around its *preview* (a control
- * has no business frosting itself). Reading the local there would have shown the Material You swatch as grey while the
+ * has no business frosting itself). Reading the local there would have shown the Material You swatch as gray while the
  * preview beside it washed with the real hue — a chooser disagreeing with the thing it chooses.
  */
 @Composable

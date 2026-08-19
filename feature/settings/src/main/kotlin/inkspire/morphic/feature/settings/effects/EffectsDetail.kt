@@ -340,7 +340,7 @@ private fun CustomTintPicker(argb: Int, onPreview: (Int) -> Unit, onCommit: (Int
             enabled = picked != argb,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Use this colour")
+            Text("Use this color")
         }
     }
 }
@@ -428,7 +428,7 @@ private val EffectKind.label: String
  * The swatches' labels.
  *
  * "Material You" for [BackdropTint.WALLPAPER], which is the one place a label and its model name deliberately differ:
- * the model says what the wash *is* (the wallpaper's own color) where the chooser says what a user recognises. "None"
+ * the model says what the wash *is* (the wallpaper's own color) where the chooser says what a user recognizes. "None"
  * rather than "Transparent" — what is absent is the wash, and the blur behind it is not transparent at all.
  */
 private val BackdropTint.label: String

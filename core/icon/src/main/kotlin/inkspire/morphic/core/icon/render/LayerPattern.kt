@@ -17,7 +17,7 @@ import inkspire.morphic.core.model.icon.LayerEffect
  * The seventh thing the two render paths share, for the six others' reason — an icon whose texture is a different
  * size in the editor than on the home screen is the bug the editor structurally cannot show you. Here the risk is
  * sharper than usual, because a tiled shader has *three* things to agree about and each is invisible on its own: the
- * tile's pixel size, the matrix that turns it, and how the stencil becomes coloured marks.
+ * tile's pixel size, the matrix that turns it, and how the stencil becomes colored marks.
  *
  * **[tile] returns a bitmap rather than a shader**, because that is the last point the two paths can share: one
  * wraps it in a `BitmapShader`, the other in Compose's `ImageShader`, and those are different types with the same
@@ -39,7 +39,7 @@ object LayerPattern {
      * The shader's local matrix for [angleDegrees] over a box of [sizePx], or `null` when the tiling is square-on —
      * which is the common case and lets a caller skip the work.
      *
-     * **About the box's centre**, like every other rotation here, so turning a pattern spins it in place instead of
+     * **About the box's center**, like every other rotation here, so turning a pattern spins it in place instead of
      * sweeping it across the icon.
      */
     fun localMatrix(angleDegrees: Float, sizePx: Int): Matrix? {
@@ -52,7 +52,7 @@ object LayerPattern {
      * One tile of [pattern], drawn from [drawable] at [sizePx] square.
      *
      * Two ways round, and the stencil is what makes both cheap. Normally the drawable's alpha *is* the marks, so a
-     * `SRC_IN` colour filter paints them without touching the ground. Inverted, the tile is filled and the marks are
+     * `SRC_IN` color filter paints them without touching the ground. Inverted, the tile is filled and the marks are
      * punched back out with `DST_OUT` — the negative, reached without a second asset or any path arithmetic.
      *
      * The scratch bitmap is unavoidable: a `Drawable` paints with its own paints, so it cannot be handed an xfermode

@@ -54,7 +54,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * color under a springing knob is the tell that they were treated as one.
  *
  * **Colors come from the slider's own track/thumb roles** (`trackInactive`, `trackActive`, `thumb`), so a switch
- * and a slider sitting in the same panel are made of the same greys rather than of two independent readings of the
+ * and a slider sitting in the same panel are made of the same grays rather than of two independent readings of the
  * palette. The **on** track carries alpha, as M2's does, so the solid knob stays visible against it — at full
  * strength `trackActive` *is* `thumb` and the knob would vanish into the rail. Off, the knob is `contentMuted`
  * against a `trackInactive` rail, which is a light knob on a dark rail in the dark theme and a dark knob on a light

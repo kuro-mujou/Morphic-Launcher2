@@ -7,9 +7,9 @@ import org.junit.Test
  * The values a renderer reads off an effect rather than the ones a user sets.
  *
  * **These live in the model for one reason and are tested for the same one.** Each is a projection of an effect's own
- * fields into what the drawing code actually needs — a vignette's clear middle from its reach, a centred stroke's
+ * fields into what the drawing code actually needs — a vignette's clear middle from its reach, a centered stroke's
  * per-side width from its total. Done in the renderers instead, they would be done **twice**, and both failures are
- * silent: a vignette shaded from the wrong end is a perfectly plausible picture lit in the middle, and a centred
+ * silent: a vignette shaded from the wrong end is a perfectly plausible picture lit in the middle, and a centered
  * stroke measured from the total is a stroke exactly twice as heavy as the same number asks for in any other
  * position — which reads as the position control secretly also being a width control.
  *
@@ -44,7 +44,7 @@ class LayerEffectProjectionTest {
     }
 
     @Test
-    fun `a centred stroke splits its width, so it does not read twice as heavy as the others`() {
+    fun `a centered stroke splits its width, so it does not read twice as heavy as the others`() {
         // The whole point of the projection: the same number means the same visible thickness in all three
         // positions, so switching between them moves the band without also changing its weight.
         assertEquals(0.02f, LayerEffect.Outline(width = 0.04f, position = OutlinePosition.CENTER).perSideWidth, 0.0001f)

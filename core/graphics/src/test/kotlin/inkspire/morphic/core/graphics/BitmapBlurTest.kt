@@ -76,11 +76,11 @@ class BitmapBlurTest {
     /**
      * The property the wallpaper's own version never needed and an icon cannot do without.
      *
-     * A transparent pixel is almost always transparent **black**, so averaging the colour channels directly drags
+     * A transparent pixel is almost always transparent **black**, so averaging the color channels directly drags
      * black into everything near an edge. Blurring premultiplied is what stops a blurred icon growing a dark fringe.
      */
     @Test
-    fun `blurring a coloured shape on transparency does not drag black into it`() {
+    fun `blurring a colored shape on transparency does not drag black into it`() {
         val width = 32
         // A red square on transparent black — the ordinary shape of an icon layer.
         val pixels = IntArray(width * width) { i ->
@@ -102,7 +102,7 @@ class BitmapBlurTest {
     }
 
     @Test
-    fun `alpha itself is blurred, so the shape softens rather than only its colour`() {
+    fun `alpha itself is blurred, so the shape softens rather than only its color`() {
         val width = 32
         val pixels = IntArray(width * width) { i ->
             if (i % width in 8..23 && i / width in 8..23) argb(0xFF, 0xFF, 0, 0) else 0

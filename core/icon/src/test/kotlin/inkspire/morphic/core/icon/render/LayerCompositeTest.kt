@@ -55,7 +55,7 @@ class LayerCompositeTest {
     }
 
     @Test
-    fun `multiply is the product of two opaque colours`() {
+    fun `multiply is the product of two opaque colors`() {
         // 0x80 × 0x40 / 255 ≈ 0x20, per channel.
         val result = blend(dst = 0xFF808080.toInt(), src = 0xFF404040.toInt(), mode = LayerBlend.MULTIPLY)
 
@@ -67,16 +67,16 @@ class LayerCompositeTest {
 
     @Test
     fun `multiplying by white changes nothing, which is what makes it a multiply`() {
-        val colour = 0xFF3366CC.toInt()
+        val color = 0xFF3366CC.toInt()
 
-        assertEquals(colour, blend(dst = colour, src = 0xFFFFFFFF.toInt(), mode = LayerBlend.MULTIPLY))
+        assertEquals(color, blend(dst = color, src = 0xFFFFFFFF.toInt(), mode = LayerBlend.MULTIPLY))
     }
 
     @Test
     fun `screening with white produces white`() {
-        val colour = 0xFF3366CC.toInt()
+        val color = 0xFF3366CC.toInt()
 
-        assertEquals(0xFFFFFFFF.toInt(), blend(dst = colour, src = 0xFFFFFFFF.toInt(), mode = LayerBlend.SCREEN))
+        assertEquals(0xFFFFFFFF.toInt(), blend(dst = color, src = 0xFFFFFFFF.toInt(), mode = LayerBlend.SCREEN))
     }
 
     @Test

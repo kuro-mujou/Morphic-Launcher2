@@ -16,7 +16,7 @@ import org.junit.Test
  */
 class IconFiltersTest {
 
-    /** Pushes a colour through a 4×5 matrix the way a graphics pipeline does — `LayerFilterTest`'s helper. */
+    /** Pushes a color through a 4×5 matrix the way a graphics pipeline does — `LayerFilterTest`'s helper. */
     private fun apply(matrix: FloatArray, r: Int, g: Int, b: Int): Triple<Int, Int, Int> {
         fun channel(row: Int): Int {
             val value = matrix[row * 5] * r + matrix[row * 5 + 1] * g +
@@ -44,13 +44,13 @@ class IconFiltersTest {
     fun `every matrix is a 4x5 with alpha left alone`() {
         IconFilters.All.forEach { entry ->
             assertEquals("${entry.filter.id} is not 4x5", 20, entry.matrix.size)
-            // The alpha row: a filter changes colour, never coverage. A stray value here would make a look eat the
+            // The alpha row: a filter changes color, never coverage. A stray value here would make a look eat the
             // icon's edges — which reads as a rendering bug, not as the filter's doing.
             assertEquals("${entry.filter.id} scales alpha", 1f, entry.matrix[18], 0.0001f)
             assertEquals("${entry.filter.id} offsets alpha", 0f, entry.matrix[19], 0.0001f)
-            assertEquals("${entry.filter.id} leaks colour into alpha", 0f, entry.matrix[15], 0.0001f)
-            assertEquals("${entry.filter.id} leaks colour into alpha", 0f, entry.matrix[16], 0.0001f)
-            assertEquals("${entry.filter.id} leaks colour into alpha", 0f, entry.matrix[17], 0.0001f)
+            assertEquals("${entry.filter.id} leaks color into alpha", 0f, entry.matrix[15], 0.0001f)
+            assertEquals("${entry.filter.id} leaks color into alpha", 0f, entry.matrix[16], 0.0001f)
+            assertEquals("${entry.filter.id} leaks color into alpha", 0f, entry.matrix[17], 0.0001f)
         }
     }
 
@@ -95,7 +95,7 @@ class IconFiltersTest {
     fun `a duotone lands on its two ends and spans between them`() {
         // **The fifth column again, which is where this is silent when wrong**: the dark end is a translation on
         // 0..255, so a 0..1 value there gives a duotone whose shadows are simply black — plausible, and not what
-        // was authored. Handheld Green is the sharpest case, both ends being colours nothing else here produces.
+        // was authored. Handheld Green is the sharpest case, both ends being colors nothing else here produces.
         val matrix = IconFilters.matrixOrNull(IconFilter("handheld_green"))!!
 
         // Within a point, because [apply] truncates as a pipeline does and the weights sum to one only to within
@@ -104,8 +104,8 @@ class IconFiltersTest {
         assertNear(Triple(0x0F, 0x38, 0x0F), apply(matrix, 0, 0, 0))
         assertNear(Triple(0x9B, 0xBC, 0x0F), apply(matrix, 255, 255, 255))
 
-        // And a mid-grey lands mid-ramp rather than at either end, which is what "spans" means and what a
-        // `solid` — the other matrix with colour in its fifth column — would fail.
+        // And a mid-gray lands mid-ramp rather than at either end, which is what "spans" means and what a
+        // `solid` — the other matrix with color in its fifth column — would fail.
         val (r, g, b) = apply(matrix, 128, 128, 128)
         assertTrue("red did not span: $r", r in 0x0F + 1..0x9B - 1)
         assertTrue("green did not span: $g", g in 0x38 + 1..0xBC - 1)
@@ -116,11 +116,11 @@ class IconFiltersTest {
 
     @Test
     fun `a duotone discards hue, which is the whole difference from a tint`() {
-        // Two colours of the same luminance must come out identical — a tint would keep them apart, and keeping
+        // Two colors of the same luminance must come out identical — a tint would keep them apart, and keeping
         // them apart is exactly what stops a set of icons reading as one set.
         val matrix = IconFilters.matrixOrNull(IconFilter("duo_indigo_peach"))!!
 
-        // Rec. 709 puts pure green at 0.715 — so 182/255 is the grey of the same luminance, to within the point
+        // Rec. 709 puts pure green at 0.715 — so 182/255 is the gray of the same luminance, to within the point
         // that rounding leaves. A tint would hold these tens of levels apart on every channel.
         assertNear(apply(matrix, 0, 255, 0), apply(matrix, 182, 182, 182))
     }
@@ -141,7 +141,7 @@ class IconFiltersTest {
     }
 
     @Test
-    fun `classic mono drains colour, which is the one look with an arithmetic answer`() {
+    fun `classic mono drains color, which is the one look with an arithmetic answer`() {
         // Saturation 0 means each output row is the luminance weights, so all three rows are identical. Worth
         // pinning one entry's actual numbers so the composition helpers cannot silently stop composing.
         val mono = IconFilters.matrixOrNull(IconFilter("classic_mono"))!!

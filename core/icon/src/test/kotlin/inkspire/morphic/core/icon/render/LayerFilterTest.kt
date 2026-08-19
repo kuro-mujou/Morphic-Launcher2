@@ -180,7 +180,7 @@ class LayerFilterTest {
     }
 
     /**
-     * The property that separates this from a tint, and the reason the effect exists: two colours of equal lightness
+     * The property that separates this from a tint, and the reason the effect exists: two colors of equal lightness
      * come out **the same**, because only how light a pixel was survives the mapping. A tint would leave them
      * different, which is what makes a screenful of icons go on looking like a screenful of different icons.
      */
@@ -188,18 +188,18 @@ class LayerFilterTest {
     fun `a duotone discards hue and keeps only luminance`() {
         val matrix = LayerFilter.duotoneMatrixOf(LayerEffect.Duotone(0xFF000000.toInt(), 0xFFFFFFFF.toInt()))
 
-        // A mid grey and a colour mixed to the same luminance weight land on the same point of the ramp.
-        val grey = apply(matrix, r = 128, g = 128, b = 128)
+        // A mid gray and a color mixed to the same luminance weight land on the same point of the ramp.
+        val gray = apply(matrix, r = 128, g = 128, b = 128)
         val green = apply(matrix, r = 0, g = 179, b = 0)
 
-        assertEquals(grey.first.toFloat(), green.first.toFloat(), 2f)
-        assertEquals(grey.second.toFloat(), green.second.toFloat(), 2f)
-        assertEquals(grey.third.toFloat(), green.third.toFloat(), 2f)
+        assertEquals(gray.first.toFloat(), green.first.toFloat(), 2f)
+        assertEquals(gray.second.toFloat(), green.second.toFloat(), 2f)
+        assertEquals(gray.third.toFloat(), green.third.toFloat(), 2f)
     }
 
     /**
      * Strength is an interpolation of the **matrix**, and this is what says the shortcut is sound: at zero the
-     * effect has to be exactly the identity, or a slider at its floor would still be shifting colours.
+     * effect has to be exactly the identity, or a slider at its floor would still be shifting colors.
      */
     @Test
     fun `a duotone at no strength leaves a color untouched`() {
@@ -210,7 +210,7 @@ class LayerFilterTest {
         assertEquals(Triple(200, 60, 30), apply(matrix, r = 200, g = 60, b = 30))
     }
 
-    /** Half strength lands halfway between the layer's own colour and the fully mapped one, channel by channel. */
+    /** Half strength lands halfway between the layer's own color and the fully mapped one, channel by channel. */
     @Test
     fun `a duotone at half strength lands midway between the layer and the full ramp`() {
         val duotone = LayerEffect.Duotone(0xFF203060.toInt(), 0xFFF0C080.toInt())
