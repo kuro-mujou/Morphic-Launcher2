@@ -2,12 +2,14 @@ package inkspire.morphic.feature.settings.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.press.repeatingPress
 import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.feature.settings.iconstudio.finestStep
@@ -47,7 +50,13 @@ import inkspire.morphic.feature.settings.iconstudio.snappedStep
  *
  * **Preview and commit are separate, as everywhere else in settings.** [onPreview] fires per frame so a live preview can
  * follow the drag, [onCommit] fires on release so the store is written once — see [SettingsCommitSlider], whose contract
- * this keeps. The steppers and reset are *discrete*, so they preview and commit in one go: there is no drag to coalesce.
+ * this keeps.
+ *
+ * **The steppers hold to repeat, and a hold is one commit.** `Modifier.repeatingPress` — the icon studio's, shared —
+ * fires on the press, waits the platform long-press timeout before the first repeat, and reports the end of the gesture
+ * separately. So each fire previews and only the release writes, which matters more here than in the studio: a commit is
+ * a store write, and for the blur it is a re-blur of the wallpaper. Thirty of those for one hold would be thirty of
+ * each. **Reset stays a plain tap** and commits at once, being a single discrete act with nothing to coalesce.
  *
  * **Reset is disabled at [default]**, which is what makes the row double as the answer to "have I changed this?" — the
  * studio's reasoning, kept. And [default] is *the value this control arrives at* rather than the value that does
@@ -83,9 +92,24 @@ internal fun SettingsSliderRow(
     var dragged by remember(value) { mutableStateOf<Float?>(null) }
     val shown = dragged ?: value
 
-    // A press commits at once, so it also clears the drag: leaving one in place would make the readout keep showing the
-    // value the finger left rather than the one the button just chose.
-    fun commit(next: Float) {
+    // **A step reads `dragged` rather than the captured `shown`.** A repeat can fire faster than a recomposition, so a
+    // captured value would have every fire in a burst stepping from the same place — the value would move once and then
+    // sit there while the finger held. Reading the state is always reading the current one.
+    fun stepBy(up: Boolean) {
+        val from = dragged ?: value
+        val next = snappedStep(from, step, up).coerceIn(valueRange)
+        if (next == from) return
+        dragged = next
+        onPreview(next)
+    }
+
+    // What the release does, and what a discrete press (reset) does in one go. Clearing the drag is what stops the
+    // readout showing the value the finger left rather than the one now stored.
+    fun finishSteps() {
+        dragged?.let(onCommit)
+    }
+
+    fun commitAtOnce(next: Float) {
         dragged = null
         onPreview(next)
         onCommit(next)
@@ -117,11 +141,11 @@ internal fun SettingsSliderRow(
                     .background(colors.surfaceElevated)
                     .padding(horizontal = ReadoutPadH, vertical = ReadoutPadV),
             )
-            StepButton(
+            TapButton(
                 icon = Icons.Default.Refresh,
                 description = "Reset $what",
                 enabled = shown != default,
-                onClick = { commit(default) },
+                onClick = { commitAtOnce(default) },
             )
         }
         Row(
@@ -134,7 +158,8 @@ internal fun SettingsSliderRow(
                 icon = Icons.Default.Remove,
                 description = "Decrease $what",
                 enabled = down != shown,
-                onClick = { commit(down) },
+                onStep = { stepBy(up = false) },
+                onStepsFinished = ::finishSteps,
             )
             MorphicSlider(
                 value = shown,
@@ -150,28 +175,60 @@ internal fun SettingsSliderRow(
                 icon = Icons.Default.Add,
                 description = "Increase $what",
                 enabled = up != shown,
-                onClick = { commit(up) },
+                onStep = { stepBy(up = true) },
+                onStepsFinished = ::finishSteps,
             )
         }
     }
 }
 
 /**
- * One of the row's three small buttons — the two steppers and the reset.
+ * A stepper: **held, it keeps stepping.**
  *
- * Plain M3 `IconButton`, unlike the studio's glass-faced one: a settings pane is an ordinary surface, and the disabled
- * treatment M3 already applies is the one the rest of this screen uses. **Disabled rather than hidden**, so the row
- * never changes width as a value reaches a bound — which on the caption row would move the readout under the finger.
+ * Hand-built rather than an M3 `IconButton`, because that one owns its own click and this needs the gesture — see
+ * `Modifier.repeatingPress` for the four details that make a repeat behave. The ripple still comes from the platform
+ * indication the modifier drives, and the shape is clipped so it stays inside the slot.
  *
- * No press-and-hold repeat, which the studio's stepper has. A settings value has a coarse enough range that a tap is a
- * correction rather than a way to travel, and a repeat would need the two-callback shape a hold requires to stay one
- * undo step. It is the thing to add if a range ever wants it.
+ * **Disabled rather than hidden** at the end of a range, so the row never changes width as a value reaches a bound —
+ * which on the caption row would move the readout out from under the finger.
  */
 @Composable
-private fun StepButton(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(ButtonSlot)) {
-        Icon(imageVector = icon, contentDescription = description, modifier = Modifier.size(GlyphSize))
+private fun StepButton(
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean,
+    onStep: () -> Unit,
+    onStepsFinished: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(ButtonSlot)
+            .clip(CircleShape)
+            .repeatingPress(enabled = enabled, onStep = onStep, onStepsFinished = onStepsFinished),
+        contentAlignment = Alignment.Center,
+    ) {
+        StepGlyph(icon, description, enabled)
     }
+}
+
+/** The reset, which is one act with nothing to repeat — so it stays the plain M3 button and its plain click. */
+@Composable
+private fun TapButton(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(ButtonSlot)) {
+        StepGlyph(icon, description, enabled)
+    }
+}
+
+/** One glyph, dimmed when spent — the disabled treatment M3's own button applies, stated once for both forms. */
+@Composable
+private fun StepGlyph(icon: ImageVector, description: String, enabled: Boolean) {
+    val colors = LocalMorphicColors.current
+    Icon(
+        imageVector = icon,
+        contentDescription = description,
+        tint = if (enabled) colors.content else colors.contentMuted.copy(alpha = DisabledGlyphAlpha),
+        modifier = Modifier.size(GlyphSize),
+    )
 }
 
 private val RowGap = 4.dp
@@ -184,3 +241,6 @@ private val ReadoutPadV = 2.dp
 /** Small enough that the track keeps most of the width, large enough to stay a comfortable target. */
 private val ButtonSlot = 36.dp
 private val GlyphSize = 18.dp
+
+/** M3's own disabled content alpha, near enough — a glyph that is plainly spent without disappearing. */
+private const val DisabledGlyphAlpha = 0.38f

@@ -1,14 +1,8 @@
 package inkspire.morphic.feature.settings.iconstudio
 
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -27,23 +21,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.PreviewBackground
-import kotlinx.coroutines.withTimeoutOrNull
+import inkspire.morphic.core.designsystem.component.press.repeatingPress
 
 /** Every icon button in the studio is this wide, so a rail of them lines up without each caller choosing a number. */
 private val ButtonSide = 40.dp
@@ -118,6 +106,10 @@ fun StudioIconButton(
  * takes (`onValueChange` / `onValueChangeFinished`) and it is what keeps undo stepping *over* a hold rather than back
  * through every repeat inside it — the studio's rule for any control that can be dragged.
  *
+ * **The repeat itself is `Modifier.repeatingPress`**, shared with the settings sliders since they wanted the same
+ * behavior: the two thresholds, the fire-on-press and the callback pairing are all there, and what stays here is the
+ * glass face they are attached to.
+ *
  * **It fires on the press rather than on the release**, unlike every other button here, because a repeating control
  * that waits for the release would show nothing for the whole first tap. That also removes the double-fire a naive
  * "clickable plus a repeat timer" produces, where the release adds one more step after the value already looked right.
@@ -134,9 +126,6 @@ fun StudioStepperButton(
     enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val currentEnabled by rememberUpdatedState(enabled)
-    val currentStep by rememberUpdatedState(onStep)
-    val currentFinished by rememberUpdatedState(onStepsFinished)
 
     StudioButtonFace(
         icon = icon,
@@ -144,47 +133,12 @@ fun StudioStepperButton(
         enabled = enabled,
         selected = false,
         modifier = modifier,
-        interaction = Modifier
-            .indication(interactionSource, LocalIndication.current)
-            .semantics {
-                role = Role.Button
-                onClick(label = null) {
-                    if (currentEnabled) {
-                        currentStep()
-                        currentFinished()
-                    }
-                    true
-                }
-            }
-            // **Keyed on nothing, and `enabled` read from inside instead.** Keying on it would restart this the moment
-            // a hold reached the end of the range, cancelling the gesture mid-press — so the finger would come up with
-            // the edit made and `onStepsFinished` never called, leaving a change outside undo history.
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    if (!currentEnabled) return@awaitEachGesture
-
-                    val press = PressInteraction.Press(down.position)
-                    interactionSource.tryEmit(press)
-                    currentStep()
-
-                    var wait = viewConfiguration.longPressTimeoutMillis
-                    while (true) {
-                        // Three outcomes, and the timeout is the interesting one: null means the finger is still down,
-                        // so this is a repeat. Anything else ended the gesture.
-                        val ended = withTimeoutOrNull(wait) { waitForUpOrCancellation() != null }
-                        if (ended != null) {
-                            interactionSource.tryEmit(
-                                if (ended) PressInteraction.Release(press) else PressInteraction.Cancel(press),
-                            )
-                            break
-                        }
-                        if (currentEnabled) currentStep()
-                        wait = StepRepeatIntervalMs
-                    }
-                    currentFinished()
-                }
-            },
+        interaction = Modifier.repeatingPress(
+            interactionSource = interactionSource,
+            enabled = enabled,
+            onStep = onStep,
+            onStepsFinished = onStepsFinished,
+        ),
     )
 }
 
@@ -216,7 +170,6 @@ private fun StudioButtonFace(
 }
 
 /** How fast a held stepper repeats once it starts. Fast enough to cross a range, slow enough to stop on a value. */
-private const val StepRepeatIntervalMs = 60L
 
 /**
  * One icon button on a pill of its own — the shape every standalone action in the studio takes.

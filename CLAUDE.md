@@ -2579,6 +2579,15 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
   black and white, where a settings pane follows the theme. Both are in `feature:settings`, so sharing the arithmetic is
   an import rather than an extraction. The tint amount is the one row with **no name**: the swatch row above it is the
   label, and heading it "Tint" under a heading reading "Tint" says one thing twice.
+  - **The steppers hold to repeat, through `Modifier.repeatingPress`** — extracted from the studio's `StudioStepperButton`
+    on this second consumer, because what would drift is the part nobody would think to check: it fires on the *press*
+    (a release-fired repeat shows nothing for the whole first tap), waits the platform long-press timeout before the
+    first repeat (so a tap can never become two), keys the gesture on `Unit` and reads `enabled` from inside it (keying
+    on `enabled` restarts the gesture when a hold reaches a bound, so the finger lifts with the edit made and the
+    finish callback never fires), and takes **two** callbacks so a hold is one edit. That last one is worth more in
+    settings than in the studio: a commit here is a store write, and for the blur it is a re-blur of the wallpaper —
+    thirty repeats would be thirty of each, where now each repeat previews and only the release writes. **Reset stays a
+    plain tap**, being one discrete act with nothing to coalesce.
 - **The custom color picker expands inline, never in a dialog.** A `Popup` is a separate platform window, so it would
   cover the preview *and* fall outside the pane's offscreen layer, which is what the punch-through draws through — and
   mixing a color you cannot see applied is the one thing a picker here must not ask for. `MorphicColorPicker` reports
