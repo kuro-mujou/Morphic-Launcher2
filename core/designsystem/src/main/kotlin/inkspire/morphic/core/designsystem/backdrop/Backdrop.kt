@@ -270,12 +270,29 @@ fun backdropTint(effect: BackdropEffect = LocalBackdropEffect.current): Color = 
  * exception: an effect the user picks, whose whole subject is the wallpaper.
  */
 private fun tintOf(effect: BackdropEffect, tone: Color): Color = when (effect) {
-    is BackdropEffect.Blur -> effect.tint.washColor(tone, effect.customTintArgb).copy(alpha = effect.tintAmount)
-    // No wash either, and for a different reason from `Plain`'s: glass tints nothing, it *refracts* and it lifts
+    is BackdropEffect.Blur -> effect.wash(tone)
+    // No wash, and for a different reason from a tint of `NONE`: glass tints nothing, it *refracts* and it lifts
     // saturation (`BackdropEffect.saturation`). A film of color over it would be the one thing that stops it
     // reading as glass.
     is BackdropEffect.LiquidGlass -> Color.Transparent
 }
+
+/**
+ * The wash this blur paints — its tint's color at its amount, or **nothing at all** where the tint is
+ * [BackdropTint.NONE].
+ *
+ * **That branch is a bug fix, not a shortcut.** `Color.Transparent` is transparent *black*, so
+ * `.copy(alpha = tintAmount)` on it does not stay transparent: it resurrects the black at whatever amount the last tint
+ * happened to be set to. "None" therefore painted a 30% black film — indistinguishable from Dark, and taking its
+ * strength from a control the section deliberately hides while None is selected. It is the same trap `BitmapBlur`
+ * documents one layer down, where a transparent pixel is almost always transparent black and averaging its channels
+ * drags black into every edge.
+ *
+ * So the tint is asked, not the color: a wash of none has no alpha to apply, and none is applied. The amount is still
+ * *kept* in the model meanwhile — same as `customTintArgb` — so choosing a color again returns to the wash the user had.
+ */
+internal fun BackdropEffect.Blur.wash(tone: Color): Color =
+    if (tint == BackdropTint.NONE) Color.Transparent else tint.washColor(tone, customTintArgb).copy(alpha = tintAmount)
 
 /**
  * **What color a [BackdropTint] actually is**, opaque — the alpha is [BackdropEffect.Blur.tintAmount]'s and applied by

@@ -2548,6 +2548,15 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
     frost) and Material You went to 0.9 (its hue *is* the effect). A custom color makes that undecidable from the
     option — a pale color at 60% covers less than black at 40% — so the bound is the higher one and the **preview** is
     what tells a user they have gone too far, which is a thing it can now do.
+- **A tint of `NONE` paints nothing, and getting that wrong was one `copy` call.** `Color.Transparent` is transparent
+  *black*, so `.copy(alpha = tintAmount)` on it does not stay transparent — it resurrects the black at whatever amount
+  the last tint was set to, and "None" painted a ~30% dark film indistinguishable from Dark, taking its strength from a
+  slider the section deliberately hides while None is selected. `BackdropEffect.Blur.wash` asks the *tint* rather than
+  the color: no wash means no alpha to apply. The same trap `BitmapBlur` documents one layer down, where a transparent
+  pixel is almost always transparent black and averaging its channels drags black into every edge. The amount is still
+  kept in the model, as `customTintArgb` is, so choosing a color again returns to the wash the user had. Pinned by
+  `BackdropWashTest`, whose tolerance is one channel step rather than a hundred-thousandth — an alpha is eight bits, so
+  0.42 comes back as 107/255.
 - **`BackdropTint.washColor` resolves a tint to a color, in `core:designsystem` and not the model** — the
   `DeviceConfiguration` split again: a tint names a choice, where turning one into a color needs the mode's
   `surfaceVariant` and the wallpaper's accent. Public **because the swatches draw the same colors the renderer paints**;
