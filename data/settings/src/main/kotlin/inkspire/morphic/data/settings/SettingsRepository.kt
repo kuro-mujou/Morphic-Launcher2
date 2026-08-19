@@ -77,21 +77,6 @@ interface SettingsRepository {
     suspend fun setTabBarEdge(edge: VerticalEdge)
 
     /**
-     * Replaces the backdrop effect outright.
-     *
-     * **A whole-value write, unlike every other setter here**, and the sealed type is why: the parameters that apply
-     * depend on *which* variant is selected, so there is no field to update independently of it. `updateIcon` and
-     * `updateGrid` take a transform because their overrides are sparse records where one field genuinely can move
-     * alone; this one cannot, and pretending otherwise would mean a setter per variant per parameter.
-     *
-     * The consequence is worth knowing: switching variants **discards the previous one's parameters**, because they
-     * are not stored anywhere else. Within a variant nothing is lost — flipping a blur's tone keeps its strength and
-     * tint, which is the comparison a user actually makes. L1 kept all ten parameters alive at once in a flat bag; the
-     * sealed type trades that for making an effect unable to hold another effect's parameters, and this is the bill.
-     */
-    suspend fun setBackdropEffect(effect: BackdropEffect)
-
-    /**
      * The user's saved icon recipes. Empty until one is saved; there are no built-ins.
      *
      * A whole list rather than a lookup by name, because that is how it is used — the library is *shown*, and a
@@ -106,9 +91,44 @@ interface SettingsRepository {
     suspend fun deleteIconPreset(name: String)
 
     /**
+     * Applies [transform] to the stored effect **inside the write**, rather than replacing it with a value the caller
+     * computed earlier.
+     *
+     * **A transform rather than a value, because a value is a lost update — and it was one.** A screen builds
+     * its next value with `copy` off the effect it last *saw*, and seeing it means a flow emission — so a second edit
+     * issued before the first has come back round carries the first's field values with it. On the effects section that
+     * showed as tapping a tint swatch and then pressing a stepper: the stepper's `copy` still held the pre-tap effect,
+     * so the wash it had just written was overwritten with the old one. The steppers made it easy to reach because they
+     * are *fast* — a slider drag lasts long enough that the store has caught up, a press does not.
+     *
+     * The transform runs where the old value is genuinely current: inside the same `edit` that writes, which is where
+     * this module already puts every other read-modify-write (see `SettingsRepositoryImpl.update`). So an edit says
+     * *what to change* and never *what everything else was*.
+     *
+     * **It replaced a `setBackdropEffect(effect)` outright rather than sitting beside it.** A whole-value setter is the
+     * shape that caused this, and leaving one there is leaving the trap loaded for the next screen — an effect chosen
+     * outright is `updateBackdropEffect { chosen }`, which says the same thing and cannot carry a stale field with it.
+     * The whole-value writes that remain ([setIconLayerSet], [setIconStudioBackground]) are ones where the value really
+     * is the whole setting and no part of it is ever patched.
+     *
+     * **There is still no field-level setter, and the sealed type is why** — the reasoning the setter this replaced was
+     * written for. Which parameters apply depends on *which* variant is selected, so there is no field to update
+     * independently of it: `updateIcon` and `updateGrid` take a transform over a sparse record where one field genuinely
+     * can move alone, and this takes one over a value that has to be rebuilt whole. A setter per variant per parameter is
+     * the alternative, and it is a dozen of them.
+     *
+     * **The consequence worth knowing: switching variants discards the previous one's parameters**, because they are not
+     * stored anywhere else. Within a variant nothing is lost — a blur keeps its strength and amount across a change of
+     * wash, which is the comparison a user actually makes, and that is *why* the wash became a parameter rather than
+     * staying four variants. L1 kept all ten parameters alive at once in a flat bag; the sealed type trades that for
+     * making an effect unable to hold another effect's parameters, and this is the bill.
+     */
+    suspend fun updateBackdropEffect(transform: (BackdropEffect) -> BackdropEffect)
+
+    /**
      * Replaces the global default icon recipe outright.
      *
-     * A whole-value write for [setBackdropEffect]'s reason, one step further: a layer set is an **ordered list**, so
+     * A whole-value write, one step further than [setIconStudioBackground]'s: a layer set is an **ordered list**, so
      * there is no sparse record to patch and no stable key to patch it by — insert a layer and every index below it
      * moves. The editor holds the whole set anyway (that is what it edits), so it writes the whole set.
      *
@@ -133,7 +153,7 @@ interface SettingsRepository {
     /**
      * Remembers [background] as the icon studio's canvas.
      *
-     * A whole-value write like [setBackdropEffect], for the simplest version of its reason: the setting *is* one value,
+     * A whole-value write like [setIconLayerSet], for the simplest version of its reason: the setting *is* one value,
      * so there is no field to patch.
      */
     suspend fun setIconStudioBackground(background: PreviewBackground)

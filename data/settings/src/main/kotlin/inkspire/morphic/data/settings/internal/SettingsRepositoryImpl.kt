@@ -222,7 +222,9 @@ internal class SettingsRepositoryImpl(
 
     // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
     // path: it is what puts the write inside a DataStore transaction.
-    override suspend fun setBackdropEffect(effect: BackdropEffect) = update(BackdropEffectSlice) { effect }
+    // The old value is the receiver, so a caller's transform sees what is *stored* rather than what it last observed.
+    override suspend fun updateBackdropEffect(transform: (BackdropEffect) -> BackdropEffect) =
+        update(BackdropEffectSlice) { transform(this) }
 
     // Also ignores the old value: a layer set is replaced wholesale, never patched. See the interface.
     override suspend fun setIconLayerSet(layerSet: IconLayerSet) = update(IconLayerSetSlice) { layerSet }

@@ -45,6 +45,20 @@ import inkspire.morphic.feature.settings.component.SettingsSliderRow
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 
+/**
+ * An edit to one of the two effects: **what to change, and nothing about what everything else was.**
+ *
+ * Every control here hands one of these to two places — the store, where it is applied inside the write, and the live
+ * preview, where it is applied to whatever the preview is already showing. That symmetry is the fix for a bug that took
+ * two goes: a control that instead *computes* its next value from the effect it last saw is a read-modify-write across
+ * an async round-trip, and two controls used in quick succession then overwrite each other's fields. See
+ * `EffectsViewModel.editBlur` for the store half and `EffectsDetail`'s `previewBlur` for the preview half.
+ */
+private typealias BlurEdit = (BackdropEffect.Blur) -> BackdropEffect.Blur
+
+/** [BlurEdit] for the lens. */
+private typealias GlassEdit = (BackdropEffect.LiquidGlass) -> BackdropEffect.LiquidGlass
+
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
 private val ScreenPadding = 20.dp
 private val RowGap = 8.dp
@@ -99,6 +113,28 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
     // A commit landing is the end of the gesture, so stop reporting a dragged strength and let the live blur follow the
     // store again. Keyed on the same value that clears `dragged` above, because they are the same event.
     LaunchedEffect(state.effect) { viewModel.previewStrength(null) }
+
+    // **Applying an edit to what is already previewed, rather than to what the pane last saw.** This is the preview half
+    // of the lost update `EffectsViewModel.editBlur` describes, and it is the half a first fix missed on the grounds that
+    // a stale preview is discarded next frame. True of a *drag*, false of a *tap*: a stepper's preview stands until its
+    // write comes back round, so stepping the tint and then the blur built the blur's preview from an effect whose tint
+    // amount was still the old one — and repeated taps never caught up. Reading `dragged` here is a snapshot-state read,
+    // so it is always the current one, and successive edits to different fields accumulate the way the store's do.
+    fun previewBlur(edit: BlurEdit) {
+        val base = dragged ?: state.effect
+        if (base !is BackdropEffect.Blur) return
+        val next = edit(base)
+        dragged = next
+        viewModel.previewStrength(next.strength)
+    }
+
+    fun previewGlass(edit: GlassEdit) {
+        val base = dragged ?: state.effect
+        if (base !is BackdropEffect.LiquidGlass) return
+        val next = edit(base)
+        dragged = next
+        viewModel.previewStrength(next.blur)
+    }
 
     // **Which picture the card samples, and the one thing the pane knows that the state holder does not.** A dragged
     // *blur* needs the quarter-size picture that can be re-blurred per frame; a dragged tint or lens parameter is a
@@ -165,13 +201,14 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                         // The swatches resolve their colors the way the renderer does, which needs the wallpaper's
                         // accent — and they sit outside the preview, so it is handed to them rather than read.
                         tone = wallpaperTone(state.backdropAccent?.let(::Color)),
-                        onSet = viewModel::set,
-                        onPreview = { dragged = it; viewModel.previewStrength(it.blurStrength) },
+                        onEdit = viewModel::editBlur,
+                        onPreview = ::previewBlur,
                     )
-                    is BackdropEffect.LiquidGlass -> GlassControls(effect, viewModel::set) {
-                        dragged = it
-                        viewModel.previewStrength(it.blurStrength)
-                    }
+                    is BackdropEffect.LiquidGlass -> GlassControls(
+                        effect = effect,
+                        onEdit = viewModel::editGlass,
+                        onPreview = ::previewGlass,
+                    )
                 }
             }
         }
@@ -190,8 +227,8 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
 private fun ColumnScope.BlurControls(
     effect: BackdropEffect.Blur,
     tone: Color,
-    onSet: (BackdropEffect) -> Unit,
-    onPreview: (BackdropEffect) -> Unit,
+    onEdit: (BlurEdit) -> Unit,
+    onPreview: (BlurEdit) -> Unit,
 ) {
     SettingsSliderRow(
         label = "Blur",
@@ -200,8 +237,10 @@ private fun ColumnScope.BlurControls(
         valueRange = 0f..1f,
         default = BlurDefaults.strength,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(strength = it)) },
-        onPreview = { onPreview(effect.copy(strength = it)) },
+        // One transform, sent to both: the store applies it inside the write, the preview applies it to what it is
+        // already showing. Neither is computed from a snapshot of the whole effect — see [BlurEdit].
+        onCommit = { value -> onEdit { it.copy(strength = value) } },
+        onPreview = { value -> onPreview { it.copy(strength = value) } },
     )
 
     SettingsSectionHeader("Tint")
@@ -209,14 +248,14 @@ private fun ColumnScope.BlurControls(
         selected = effect.tint,
         customArgb = effect.customTintArgb,
         tone = tone,
-        onSelect = { onSet(effect.copy(tint = it)) },
+        onSelect = { tint -> onEdit { it.copy(tint = tint) } },
     )
 
     if (effect.tint == BackdropTint.CUSTOM) {
         CustomTintPicker(
             argb = effect.customTintArgb,
-            onPreview = { onPreview(effect.copy(customTintArgb = it)) },
-            onCommit = { onSet(effect.copy(customTintArgb = it)) },
+            onPreview = { argb -> onPreview { it.copy(customTintArgb = argb) } },
+            onCommit = { argb -> onEdit { it.copy(customTintArgb = argb) } },
         )
     }
 
@@ -231,8 +270,8 @@ private fun ColumnScope.BlurControls(
             valueRange = 0f..MaxTintAmount,
             default = BlurDefaults.tintAmount,
             valueLabel = ::percent,
-            onCommit = { onSet(effect.copy(tintAmount = it)) },
-            onPreview = { onPreview(effect.copy(tintAmount = it)) },
+            onCommit = { value -> onEdit { it.copy(tintAmount = value) } },
+            onPreview = { value -> onPreview { it.copy(tintAmount = value) } },
         )
     }
 }
@@ -367,8 +406,8 @@ private fun CustomTintPicker(argb: Int, onPreview: (Int) -> Unit, onCommit: (Int
 @Composable
 private fun ColumnScope.GlassControls(
     effect: BackdropEffect.LiquidGlass,
-    onSet: (BackdropEffect) -> Unit,
-    onPreview: (BackdropEffect) -> Unit,
+    onEdit: (GlassEdit) -> Unit,
+    onPreview: (GlassEdit) -> Unit,
 ) {
     SettingsSectionHeader("Lens")
     SettingsSliderRow(
@@ -378,8 +417,8 @@ private fun ColumnScope.GlassControls(
         valueRange = 0f..1f,
         default = GlassDefaults.blur,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(blur = it)) },
-        onPreview = { onPreview(effect.copy(blur = it)) },
+        onCommit = { value -> onEdit { it.copy(blur = value) } },
+        onPreview = { value -> onPreview { it.copy(blur = value) } },
     )
     SettingsSliderRow(
         label = "Refraction",
@@ -388,8 +427,8 @@ private fun ColumnScope.GlassControls(
         valueRange = 0f..1f,
         default = GlassDefaults.refraction,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(refraction = it)) },
-        onPreview = { onPreview(effect.copy(refraction = it)) },
+        onCommit = { value -> onEdit { it.copy(refraction = value) } },
+        onPreview = { value -> onPreview { it.copy(refraction = value) } },
     )
     SettingsSliderRow(
         label = "Depth",
@@ -398,8 +437,8 @@ private fun ColumnScope.GlassControls(
         valueRange = 0f..1f,
         default = GlassDefaults.depth,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(depth = it)) },
-        onPreview = { onPreview(effect.copy(depth = it)) },
+        onCommit = { value -> onEdit { it.copy(depth = value) } },
+        onPreview = { value -> onPreview { it.copy(depth = value) } },
     )
 
     SettingsSectionHeader("Light")
@@ -410,8 +449,8 @@ private fun ColumnScope.GlassControls(
         valueRange = 0f..1f,
         default = GlassDefaults.vibrancy,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(vibrancy = it)) },
-        onPreview = { onPreview(effect.copy(vibrancy = it)) },
+        onCommit = { value -> onEdit { it.copy(vibrancy = value) } },
+        onPreview = { value -> onPreview { it.copy(vibrancy = value) } },
     )
     SettingsSliderRow(
         label = "Sheen",
@@ -420,8 +459,8 @@ private fun ColumnScope.GlassControls(
         valueRange = 0f..1f,
         default = GlassDefaults.sheen,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(sheen = it)) },
-        onPreview = { onPreview(effect.copy(sheen = it)) },
+        onCommit = { value -> onEdit { it.copy(sheen = value) } },
+        onPreview = { value -> onPreview { it.copy(sheen = value) } },
     )
     SettingsSliderRow(
         label = "Dispersion",
@@ -430,8 +469,8 @@ private fun ColumnScope.GlassControls(
         valueRange = 0f..1f,
         default = GlassDefaults.dispersion,
         valueLabel = ::percent,
-        onCommit = { onSet(effect.copy(dispersion = it)) },
-        onPreview = { onPreview(effect.copy(dispersion = it)) },
+        onCommit = { value -> onEdit { it.copy(dispersion = value) } },
+        onPreview = { value -> onPreview { it.copy(dispersion = value) } },
     )
 }
 

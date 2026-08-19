@@ -77,8 +77,8 @@ sealed interface BackdropEffect {
      *
      * `Plain`, `Blur(LIGHT)`, `Blur(DARK)` and `MaterialYou` blurred identically and differed only in the color painted
      * on top, so they are one variant with a [BackdropTint] now. What that buys is not only a shorter chooser: the
-     * parameters *survive* a change of wash, where switching variants discarded them (see
-     * `SettingsRepository.setBackdropEffect`) — so a user who has tuned a strength and an amount can try all five
+     * parameters *survive* a change of wash, where switching variants discards them (see
+     * `SettingsRepository.updateBackdropEffect`) — so a user who has tuned a strength and an amount can try all five
      * washes without losing either.
      *
      * @property strength Blur amount, `0..1`.

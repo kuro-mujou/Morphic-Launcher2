@@ -2557,6 +2557,25 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
   kept in the model, as `customTintArgb` is, so choosing a color again returns to the wash the user had. Pinned by
   `BackdropWashTest`, whose tolerance is one channel step rather than a hundred-thousandth — an alpha is eight bits, so
   0.42 comes back as 107/255.
+- **Every edit is a *transform* applied inside the write, never a value the screen computed** —
+  `SettingsRepository.updateBackdropEffect`, which replaced a whole-value `setBackdropEffect` rather than sitting beside
+  it. A control that builds its next state with `copy` off the effect it last *saw* is a read-modify-write across an
+  async store round-trip, and it lost updates: tapping a tint swatch and then pressing a stepper wrote the **old tint**
+  back over the new one, because the stepper's lambda still held the pre-tap effect. The steppers are what made it easy
+  to hit — a slider drag lasts long enough for the store to catch up, a press does not — and the same race the other way
+  round loses the blur strength when a swatch is tapped just after a step. The transform runs where the old value is
+  current, inside the same `edit` that writes, which is where this module already puts every other read-modify-write.
+  The whole-value setter is *gone* rather than kept for convenience: leaving one is leaving the trap loaded, and an
+  effect chosen outright is `updateBackdropEffect { chosen }`.
+  - **The live preview takes the same transform, and that half was missed the first time.** The first fix left previews
+    built from the effect at hand, on the reasoning that a stale preview is discarded next frame. True of a *drag* and
+    false of a *tap*: a stepper's preview stands until its write comes back round, so stepping the tint and then the
+    blur built the blur's preview from an effect whose tint amount was still the old one, and repeated taps never caught
+    up — the two controls appeared to fight each other. `EffectsDetail`'s `previewBlur`/`previewGlass` apply the edit to
+    **what is already previewed** (`dragged ?: state.effect`, read from snapshot state so it is current), so successive
+    edits to different fields accumulate exactly as the store's do. One transform, two places, no snapshots anywhere.
+    What is left is a converging flicker rather than a wrong result: an intermediate store emission clears the dragged
+    effect, so a value can show its previous state for one round-trip before the next write lands.
 - **`BackdropTint.washColor` resolves a tint to a color, in `core:designsystem` and not the model** — the
   `DeviceConfiguration` split again: a tint names a choice, where turning one into a color needs the mode's
   `surfaceVariant` and the wallpaper's accent. Public **because the swatches draw the same colors the renderer paints**;
