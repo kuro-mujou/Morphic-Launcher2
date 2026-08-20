@@ -535,9 +535,11 @@ private fun CompositeTile(
     Box(
         modifier = Modifier
             .size(TileSide)
-            .clip(RoundedCornerShape(TileCorner))
+            // Above the clip, for [TileShape]'s reason — the ring and the clip are the same rounded rect, so inside
+            // it the ring loses its corners.
+            .border(SelectionBorder, StudioContentColor.copy(alpha = selection.coerceIn(0f, 1f)), TileShape)
+            .clip(TileShape)
             .clickable(onClick = onClick)
-            .border(SelectionBorder, StudioContentColor.copy(alpha = selection.coerceIn(0f, 1f)), RoundedCornerShape(TileCorner))
             .padding(inset)
             .clip(RoundedCornerShape(TileCorner - inset))
             .drawBehind { drawCheckerboard(CheckerTileSquare.toPx()) },
@@ -703,9 +705,13 @@ private fun LayerTile(
                 }
             }
             .size(TileSide)
-            .clip(RoundedCornerShape(TileCorner))
+            // **The ring goes above the clip, not under it** — see [TileShape]. Both are the same rounded rect, and
+            // a rounded clip is a hardware outline clip with no antialiasing, so from inside it the ring's own
+            // antialiased outer arc loses whole pixels: straight sides full width, corners thin and stepped. It
+            // still draws over everything below it in the chain, which is what the gap beneath is for.
+            .border(SelectionBorder, StudioContentColor.copy(alpha = progress), TileShape)
+            .clip(TileShape)
             .combinedClickable(onLongClick = onLongClick, onClick = onClick)
-            .border(SelectionBorder, StudioContentColor.copy(alpha = progress), RoundedCornerShape(TileCorner))
             // **Selecting shrinks the preview to make room for the ring; it does not grow the tile.** Every tile is
             // [TileSide] whatever its state, so the rail never reflows and no neighbour moves when the selection
             // does — the ring is drawn in space the preview gives up, not in space the tile takes.
@@ -777,6 +783,16 @@ private fun DrawScope.drawCheckerboard(square: Float) {
 private val TileSide = 48.dp
 private val TileInset = 4.dp
 private val TileCorner = 12.dp
+
+/**
+ * The tile's own rounded rect, stated once because a tile asks for it **twice** — as the clip that rounds its
+ * checkerboard and as the shape of the selection ring drawn over it — and the two must be the same rect. It is also
+ * the reminder of which way round they go in the chain: the ring **above** the clip, since a rounded clip is a
+ * hardware outline clip and is not antialiased, so a clip boundary running along the ring's outer arc strips it and
+ * the corners come back thin and stepped while the straight sides stay full width. Same fix as the effect section's
+ * swatches.
+ */
+private val TileShape = RoundedCornerShape(TileCorner)
 
 /**
  * The ring on the selected tile — and **only** on it.

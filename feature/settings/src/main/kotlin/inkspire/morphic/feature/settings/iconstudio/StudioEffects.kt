@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -904,28 +905,12 @@ private fun BlendControls(
  */
 @Composable
 private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(FilterTileWidth)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    SwatchTile(selected = selected, onClick = onClick) {
         Canvas(
             Modifier
                 .fillMaxWidth()
                 .height(FilterSwatchHeight)
-                .clip(RoundedCornerShape(8.dp))
-                .then(
-                    if (selected) {
-                        Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(8.dp))
-                    } else {
-                        Modifier
-                    },
-                )
-                // Outermost of the drawing, innermost of the chain: the border above is drawn over the finished
-                // swatch rather than being blended into it.
+                .clip(SwatchCorner)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             drawRect(brush = Brush.linearGradient(FilterReferenceStops))
@@ -938,15 +923,7 @@ private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit)
                 blendMode = blend.composeBlendMode() ?: DrawScope.DefaultBlendMode,
             )
         }
-        Text(
-            text = blend.name.lowercase(),
-            color = StudioContentColor.copy(alpha = if (selected) 1f else 0.7f),
-            style = MaterialTheme.typography.labelSmall,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
-        )
+        SwatchLabel(label = blend.name.lowercase(), selected = selected)
     }
 }
 
@@ -1127,42 +1104,79 @@ private fun FilterControls(
  */
 @Composable
 private fun FilterTile(label: String, matrix: FloatArray?, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(FilterTileWidth)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(FilterSwatchHeight)
-                .clip(RoundedCornerShape(8.dp))
-                .then(
-                    if (selected) {
-                        Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(8.dp))
-                    } else {
-                        Modifier
-                    },
-                ),
-        ) {
+    SwatchTile(selected = selected, onClick = onClick) {
+        Canvas(Modifier.fillMaxWidth().height(FilterSwatchHeight).clip(SwatchCorner)) {
             drawRect(
                 brush = Brush.linearGradient(FilterReferenceStops),
                 colorFilter = matrix?.let { ColorFilter.colorMatrix(ColorMatrix(it.copyOf())) },
             )
         }
-        Text(
-            text = label,
-            color = StudioContentColor.copy(alpha = if (selected) 1f else 0.7f),
-            style = MaterialTheme.typography.labelSmall,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
-        )
+        SwatchLabel(label = label, selected = selected)
     }
+}
+
+/**
+ * The shell both labeled swatch tiles sit in: a swatch, its name, one tap target, and the selection ring.
+ *
+ * **The ring is a sibling drawn over the tile, not a border on anything inside it — because a clip in the way eats
+ * its corners, whatever radius that clip is.** Two were in the way, and the second is the one that is easy to miss:
+ * the swatch is flush with the tile's top edge, so the *tile's* rounded clip runs across the swatch's two top
+ * corners — which is exactly where the ring looked wrong and exactly which two corners.
+ *
+ * Both radii fail, for different reasons, which is why tuning them was never going to land:
+ * - **Different radii cut.** A larger radius removes more of a corner, so a tile clipped at 10 against a swatch
+ *   rounded at 8 has its boundary *inside* the swatch's — it takes a bite out of the ring and the swatch together,
+ *   thin at the corner and full thickness along the straight sides.
+ * - **Equal radii still cut, sub-pixel.** A rounded clip is a hardware outline clip and is not antialiased, so a
+ *   boundary running along the ring's own antialiased outer edge drops whole pixels of it. The straight sides
+ *   survive (an axis-aligned boundary falls on the pixel grid); the arcs come back thin and stepped.
+ *
+ * So the tile keeps its clip — shaping the press ripple is all it was ever for — and the ring is drawn by a node
+ * that clip does not contain. `Modifier.border` is still what draws it rather than a hand-rolled stroke: it already
+ * shrinks the corner radius by half the stroke so the ring's *outer* curvature lands on the shape's own radius, and
+ * that is precisely the arithmetic that would be silently wrong if restated here.
+ *
+ * The ring adds no size, so [content]'s first item — the swatch, which the ring is sized to — is laid out exactly
+ * as it was.
+ */
+@Composable
+private fun SwatchTile(
+    selected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(modifier = Modifier.width(FilterTileWidth)) {
+        Column(
+            modifier = Modifier
+                .clip(SwatchTileCorner)
+                .clickable(onClick = onClick),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(EffectLabelGap),
+            content = content,
+        )
+        if (selected) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(FilterSwatchHeight)
+                    .border(SwatchRingWidth, StudioContentColor, SwatchCorner),
+            )
+        }
+    }
+}
+
+/** A swatch's name, dimmed until it is the chosen one. Shared so the two tiles cannot style it differently. */
+@Composable
+private fun SwatchLabel(label: String, selected: Boolean) {
+    Text(
+        text = label,
+        color = StudioContentColor.copy(alpha = if (selected) 1f else 0.7f),
+        style = MaterialTheme.typography.labelSmall,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().padding(bottom = EffectLabelPad),
+    )
 }
 
 /**
@@ -1178,6 +1192,19 @@ private val FilterReferenceStops = listOf(
     Color(0xFF7A5CFF),
     Color(0xFF2ED8C3),
 )
+
+/**
+ * The corner every swatch in this section is cut to — one value, because the clip and the selection ring drawn over
+ * it are the *same* rounded rect and a difference between them would show as a sliver of unringed swatch at each
+ * corner. Restated per tile it was three chances to drift.
+ */
+private val SwatchCorner = RoundedCornerShape(10.dp)
+
+/** The tile around a swatch, which exists only to shape the press ripple. */
+private val SwatchTileCorner = RoundedCornerShape(10.dp)
+
+/** The selection ring's stroke, wherever one is drawn in this section. */
+private val SwatchRingWidth = 2.dp
 
 private val FilterTileWidth = 72.dp
 private val FilterSwatchHeight = 48.dp
@@ -2278,11 +2305,11 @@ private fun PatternTile(pattern: IconPattern?, argb: Int, selected: Boolean, onC
     Box(
         modifier = Modifier
             .size(PatternTileSide)
-            .clip(RoundedCornerShape(8.dp))
+            // Outside the clip — see [FilterTile]. It is outside the ripple too, which is inside the clip with the
+            // ground, so a press tints the swatch and leaves the ring reading as the selection.
+            .then(if (selected) Modifier.border(SwatchRingWidth, StudioContentColor, SwatchCorner) else Modifier)
+            .clip(SwatchCorner)
             .background(Color.White.copy(alpha = 0.08f))
-            .then(
-                if (selected) Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(8.dp)) else Modifier,
-            )
             .clickable(onClick = onClick),
     ) {
         pattern?.let {
@@ -2532,8 +2559,8 @@ private val PixelateDefaults = LayerEffect.Pixelate()
 private val ProgressiveBlurDefaults = LayerEffect.ProgressiveBlur()
 
 /**
- * Between a labeled tile's picture and its name, and under the name. [effectLabelBand] reads them back, because the
- * effect grid's page height is built from them.
+ * Between a labeled tile's picture and its name, and under the name — the same two on an effect entry and on a
+ * swatch. [effectLabelBand] reads them back, because the effect grid's page height is built from them.
  */
 private val EffectLabelGap = 4.dp
 private val EffectLabelPad = 2.dp

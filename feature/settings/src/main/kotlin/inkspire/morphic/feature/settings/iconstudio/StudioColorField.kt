@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,9 +82,10 @@ private fun ColorFieldBody(
                     // The swatches' own side, so the row lines up. It takes no selection ring: it is a way *to* a
                     // color rather than one of the choices, and nothing is ever "on" it.
                     .size(ColorSwatchSide)
+                    // Above the clip, so the edge is not stripped by a boundary running along it — see [Swatch].
+                    .border(ColorSwatchEdge, Color.White.copy(0.3f), CircleShape)
                     .clip(CircleShape)
                     .background(argb?.let { Color(it) } ?: Color.Transparent)
-                    .border(width = 1.dp, color = Color.White.copy(0.3f), shape = CircleShape)
                     .clickable {
                         // Black when there is nothing yet: the picker has to start somewhere, and it is the one
                         // value a user reading the panel will not mistake for a color that was already chosen.
@@ -139,28 +141,49 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
     )
     val progress = selection.coerceIn(0f, 1f)
 
-    Box(
-        modifier = Modifier
-            .size(ColorSwatchSide)
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .border(ColorSwatchBorder, StudioContentColor.copy(alpha = progress), CircleShape)
-            .padding(ColorSwatchInset * progress)
-            .clip(CircleShape)
-            .background(if (argb == null) Color.Transparent else Color(argb))
-            .border(1.dp, Color.White.copy(0.3f), CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (argb == null) {
-            Icon(
-                imageVector = Icons.Default.Block,
-                contentDescription = "No color",
-                // Dimmed until chosen, like the shape grid's own: it is a mark saying what the slot is, not a
-                // picture of something, so at rest it should not read as loudly as a color beside it.
-                tint = StudioContentColor.copy(alpha = if (selected) 1f else 0.6f),
-                modifier = Modifier.size(NoColorGlyph),
-            )
+    val inset = ColorSwatchInset * progress
+
+    Box(modifier = Modifier.size(ColorSwatchSide), contentAlignment = Alignment.Center) {
+        // The dot: the fill, the ripple and the mark, each inside the clips that shape them.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .clickable(onClick = onClick)
+                .padding(inset)
+                .clip(CircleShape)
+                .background(if (argb == null) Color.Transparent else Color(argb)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (argb == null) {
+                Icon(
+                    imageVector = Icons.Default.Block,
+                    contentDescription = "No color",
+                    // Dimmed until chosen, like the shape grid's own: it is a mark saying what the slot is, not a
+                    // picture of something, so at rest it should not read as loudly as a color beside it.
+                    tint = StudioContentColor.copy(alpha = if (selected) 1f else 0.6f),
+                    modifier = Modifier.size(NoColorGlyph),
+                )
+            }
         }
+
+        // **Both rings, in a sibling with no clip of its own — which is the whole reason this is two nodes and not
+        // one chain.** A rounded clip is a hardware outline clip and is not antialiased, so a ring drawn inside one
+        // whose boundary runs along its own outer edge loses whole pixels of it — and on a circle there are no
+        // straight sides to hide that, so the ring simply comes back thinner and rougher than it was asked for.
+        // Each of these coincided with a *different* clip — the selection ring with the dot's outer one, the faint
+        // edge with the inner one it follows — so no ordering within a single chain could clear both. Drawn over the
+        // dot, neither is clipped at all.
+        //
+        // It costs nothing in touch: a node carrying only draw modifiers is not a hit target, so the tap still
+        // lands on the dot beneath.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .border(ColorSwatchBorder, StudioContentColor.copy(alpha = progress), CircleShape)
+                .padding(inset)
+                .border(ColorSwatchEdge, Color.White.copy(0.3f), CircleShape),
+        )
     }
 }
 
@@ -189,6 +212,13 @@ private val NoColorGlyph = 24.dp
 private val ColorSwatchSide = 28.dp
 private val ColorSwatchBorder = 2.dp
 private val ColorSwatchInset = 4.dp
+
+/**
+ * The hairline that is a swatch's own edge rather than its selection — what keeps a near-black or near-white fill
+ * from dissolving into the glass behind it. Shared with the picker button beside the row, which is the same dot with
+ * a `+` in it and no selection to show.
+ */
+private val ColorSwatchEdge = 1.dp
 
 /**
  * The quick-pick palette behind every [ColorField] — neutrals, then hues, with the picker for everything else.

@@ -280,6 +280,14 @@ private val SourceTileSide = 64.dp
 /** A source tile's corner: square with a radius, so a row of them reads as a set of chips rather than as buttons. */
 private val SourceTileCorner = 14.dp
 
+/**
+ * The tile's rounded rect, stated once because a tile asks for it twice — the clip that rounds its fill, and the
+ * outline drawn over it — and it records which way round they go in the chain: **the outline above the clip**, or a
+ * boundary with no antialiasing strips the arc it runs along. Same fix as the effect section's swatches and the
+ * layer rail's tiles.
+ */
+private val SourceTileShape = RoundedCornerShape(SourceTileCorner)
+
 /** A glyph inside a tile, for the sources that have no artwork of their own to show. */
 private val SourceGlyphSide = 26.dp
 
@@ -311,13 +319,17 @@ private fun SourceTile(
         Box(
             modifier = Modifier
                 .size(SourceTileSide)
-                .clip(RoundedCornerShape(SourceTileCorner))
-                .background(Color.White.copy(alpha = if (selected) 0.22f else 0.08f))
+                // **Above the clip, and the clip is the same rounded rect** — see [SourceTileShape]. A rounded clip
+                // is a hardware outline clip with no antialiasing, so a ring drawn *inside* one whose boundary runs
+                // along its own outer arc loses whole pixels of it: full width along the straight sides, thin and
+                // stepped at the corners. It still draws over the fill and the ripple, both of which are inside.
                 .border(
                     width = if (selected) 2.dp else 1.dp,
                     color = StudioContentColor.copy(alpha = if (selected) 1f else 0.2f),
-                    shape = RoundedCornerShape(SourceTileCorner),
+                    shape = SourceTileShape,
                 )
+                .clip(SourceTileShape)
+                .background(Color.White.copy(alpha = if (selected) 0.22f else 0.08f))
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
             content = content,
