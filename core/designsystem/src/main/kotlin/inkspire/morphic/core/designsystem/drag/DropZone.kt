@@ -16,9 +16,9 @@ import inkspire.morphic.core.model.GridItem
  *
  * **A zone answers for itself, end to end.** It says what it accepts, what a hover over it would do ([planner]),
  * and what to write when a drag lands on it ([onDrop]) — the design doc's §10 rule, *behavior always travels with
- * the destination zone*, made structural. Both lambdas used to live on the surface instead, dispatched by a
- * `when (zone.id)`, which was workable only while a drag could never leave the surface it started on. It can now: an
- * app lifted in the APPS drawer is released by a cell in `feature:apps`, and the thing that has to commit it is
+ * the destination zone*, made structural. Keeping both lambdas on the surface instead, dispatched by a
+ * `when (zone.id)`, works only while a drag can never leave the surface it started on. It can: an app lifted in the
+ * APPS drawer is released by a cell in `feature:apps`, and the thing that has to commit it is
  * **home's** grid. Nothing in the releasing surface knows how to do that, and nothing should.
  *
  * @property id stable identity used to key the registry and report the active target.
@@ -84,9 +84,9 @@ fun RegisterDropZone(
     // the surface's live state — so the put is real work, not a redundant write. `SideEffect` is the sanctioned place
     // to push composition state into a snapshot map, and nothing composes on the registry.
     //
-    // Withdrawal used to be an *edge* instead: a `DisposableEffect` keyed on `active == null`, firing on the
-    // transition rather than on the condition. A zone published from a state and withdrawn from a transition can
-    // outlive its own disabling — any path reaching "not enabled" without flipping that key leaves the zone in the
+    // Withdrawal is a *condition*, never an edge. A `DisposableEffect` keyed on `active == null` fires on the
+    // transition instead, and a zone published from a state but withdrawn from a transition can outlive its own
+    // disabling — any path reaching "not enabled" without flipping that key leaves the zone in the
     // registry answering for a node nobody can see. That is invisible in a way ordinary bugs are not: `ZoneId`
     // `"folder"` is **shared** by every folder overlay, so a stale one is not a duplicate but *the* folder zone, and
     // at `z = 1` it outranks the surface beneath it. The symptom is a rectangle in the middle of the screen — exactly

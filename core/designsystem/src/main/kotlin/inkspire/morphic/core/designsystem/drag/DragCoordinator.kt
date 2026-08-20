@@ -50,8 +50,8 @@ data class DropOutcome(
  * the same hit-test — which is what makes parallel per-surface recognizers, and the re-tracking hack they force,
  * unnecessary (docs/DRAG_AND_DROP_DESIGN.md §2, §4).
  *
- * **Hosted once, by `feature:shell`.** Each surface used to remember its own, which was enough only while no drag
- * could cross a surface boundary. It can now — an app is lifted in the APPS drawer and lands on home — and two
+ * **Hosted once, by `feature:shell`.** A coordinator per surface is enough only while no drag can cross a surface
+ * boundary. One can — an app is lifted in the APPS drawer and lands on home — and two
  * coordinators cannot both own one gesture. So the shell provides this through [LocalDragCoordinator] and every
  * surface reads it.
  *
@@ -76,8 +76,8 @@ class DragCoordinator {
      *
      * A plain map rather than snapshot state, deliberately: nothing composes on it, and it must stay in the same
      * consistency domain as the registrar's own handle. Comparing against the snapshot-held [zones] value instead
-     * is what this replaced, and it could report that a registrar no longer held *its own* zone — after which the
-     * withdrawal was declined and the entry stranded, invisibly, in the registry.
+     * can report that a registrar no longer holds *its own* zone — after which the withdrawal is declined and the
+     * entry stranded, invisibly, in the registry.
      */
     private val owners = mutableMapOf<ZoneId, Any>()
 
@@ -110,9 +110,10 @@ class DragCoordinator {
      * longer holds the id and correctly leaves the successor's registration alone — whichever order the two run in.
      *
      * **It compares the registrar, not the registered value**, and that is load-bearing rather than stylistic. This
-     * used to take the [DropZone] and remove it only if that exact instance was still in [zones] — asking a question
-     * about a snapshot-held value from code holding a plain, non-snapshot handle to it. A registrar could be told the
-     * registry no longer held *its own* zone; its withdrawal was then declined and the entry stranded. With
+     * **Keyed on the id, not the instance.** Taking the [DropZone] and removing it only if that exact instance is
+     * still in [zones] asks a question about a snapshot-held value from code holding a plain, non-snapshot handle to
+     * it: the registrar is told the registry no longer holds *its own* zone, the withdrawal is declined, and the
+     * entry is stranded. With
      * `ZoneId("folder")` sitting at `z = 1` over the whole folder card, a stranded entry goes on winning the finger
      * across the middle of the screen with no folder visible to explain it: drops in that rectangle were routed into
      * a folder nobody could see, committing a no-op reorder that left the dragged app where it started.

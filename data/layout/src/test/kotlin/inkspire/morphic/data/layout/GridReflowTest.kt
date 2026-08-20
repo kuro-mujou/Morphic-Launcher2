@@ -10,8 +10,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Behavior spec for [GridReflow], ported from L1's `GridReflowTest` onto the single-map API. String keys
- * stand in for whatever identity the caller keys by (`GridItem` in production).
+ * Behavior spec for [GridReflow]. String keys stand in for whatever identity the caller keys by (`GridItem` in
+ * production).
  */
 class GridReflowTest {
 
@@ -155,7 +155,7 @@ class GridReflowTest {
 
     @Test
     fun `adding a row on top pushes everything down and re-homes nobody`() {
-        // L1's "grow-first for adds": items shifted into the *larger* grid always fit, so a growth never displaces.
+        // Grow-first for adds: items shifted into the *larger* grid always fit, so a growth never displaces.
         val placements = mapOf("a" to GridPlacement(0, 0, 0), "b" to GridPlacement(0, 3, 1))
 
         val result = GridReflow.edit(placements, GridEditorEdge.TOP, add = true, GridConfig(rows = 5, cols = 4))
@@ -195,8 +195,8 @@ class GridReflowTest {
 
     @Test
     fun `a single-page grid evicts what an edit pushes out`() {
-        // The dock's editor: the same op, and `Overflow` is the only thing that differs — which is what let L1's
-        // `GridEdit` and `DockGridEdit` collapse into one function here.
+        // The dock's editor: the same op, with `Overflow` the only thing that differs — which is what lets one
+        // function serve both.
         val placements = mapOf(
             "a" to GridPlacement(0, 0, 0),
             "b" to GridPlacement(0, 0, 1),

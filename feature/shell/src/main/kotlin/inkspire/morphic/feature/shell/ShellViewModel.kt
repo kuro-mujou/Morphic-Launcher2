@@ -85,8 +85,8 @@ data class BackdropImages(
  * Screen-level state holder for the launcher shell: the surface register, and how bright the wallpaper is.
  *
  * **Why a ViewModel for what looked like one flow read.** It would have been one line to `koinInject` a repository in
- * the composable and collect it there — and that is precisely what L1's settings feature did, 25 times, which is why
- * it has no presentation layer to port. The rule is a ViewModel per screen, and the second input has now arrived: this
+ * the composable and collect it there, which is how a feature ends up with no presentation layer at all. The rule is
+ * a ViewModel per screen, and the second input has now arrived: this
  * is the `combine` that was predicted, rather than a second `collectAsStateWithLifecycle` plus assembly logic in the
  * composable.
  *
@@ -117,7 +117,7 @@ class ShellViewModel(
      *
      * **One bound worth knowing:** an app dragged out of a home *folder* and dropped here goes back to that folder
      * rather than being deleted from it. It has no grid placement to remove, and the shell cannot see folder
-     * membership — that is home's. L1 behaved identically for the same reason.
+     * membership — that is home's.
      */
     fun removeFromHome(item: GridItem) {
         viewModelScope.launch {

@@ -336,8 +336,8 @@ class AppsViewModel(
 
     init {
         // The cache is offline-first, so the surface renders from it immediately and this only tops it up. Done
-        // here rather than assumed of whoever ran first, so the surface stands alone (the dev harness can open it
-        // without home ever having been shown).
+        // here rather than assumed of whoever ran first, so the surface stands alone and can be opened without home
+        // ever having been shown.
         // TODO(B6 data:apps): once the AppEvent listener keeps the cache live (and prunes uninstalls), warming it
         //  belongs to that listener at startup, not to each screen that reads it.
         viewModelScope.launch { appRepository.refresh() }
@@ -617,7 +617,7 @@ class AppsViewModel(
         /**
          * A–Z by label, **locale-aware**, then by component as a tie-break.
          *
-         * A [Collator] rather than L1's `sortedBy { label.lowercase() }`: lowercasing compares raw UTF-16, which
+         * A [Collator] rather than `sortedBy { label.lowercase() }`: lowercasing compares raw UTF-16, which
          * puts every accented letter after `Z` (so a Vietnamese or French app list breaks into two alphabets) and
          * gets Turkish dotless-i wrong. The collator sorts by the *current locale's* rules, which is what a user
          * scanning an alphabetical list expects. Default (tertiary) strength on purpose — a primary-strength

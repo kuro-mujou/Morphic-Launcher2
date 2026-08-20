@@ -16,15 +16,15 @@ import kotlin.math.abs
  * Home drop-planning: the cell-partition maths that turns a finger position over an occupant into a merge or a
  * directional push, and the one planner ([planCoordinateDrop]) that every free-placement zone on HOME runs. They
  * live in feature:home because they bridge GridGeometry (core:designsystem) and PushDirection (data:layout) —
- * neither of which depends on the other. The dev harness keeps its own copy.
+ * neither of which depends on the other.
  */
 
 /**
  * Plans a drop of [item] at [fingerInRoot] on **any** free-placement zone of HOME — the pager's main area, the
  * dock, and (later) the widget area all resolve a hover the same way, differing only in the arguments below.
  *
- * Having one function rather than one per zone is deliberate. L1 grew a `resolveDockDrop` that was a near-copy of
- * its home resolver, and the copies drifted; the whole point of the coordinate primitives is that a zone is
+ * Having one function rather than one per zone is deliberate: a per-zone resolver becomes a near-copy of the home
+ * one and the copies drift. The whole point of the coordinate primitives is that a zone is
  * described by *data* (its geometry, its dimensions, its occupants) and not by its own algorithm.
  *
  * The rule, unchanged from the single-zone version:
@@ -40,8 +40,8 @@ import kotlin.math.abs
  * on any logical cell, so the offsets between the visible cells are reachable — which is the whole reason a
  * launcher subdivides at all. Passing `step = span` here rounded the top-left back onto the visual lattice, which
  * made a grid declared at `cellMultiplier = 2` behave in every observable way like one declared at 1: the
- * subdivision cost twice the occupancy bookkeeping and bought nothing. `step = 1` is what L1 does — it resolves
- * the hovered cell at logical granularity and centers the footprint on it.
+ * subdivision cost twice the occupancy bookkeeping and bought nothing. `step = 1` resolves the hovered cell at
+ * logical granularity and centers the footprint on it.
  *
  * @param geo the zone's measured geometry, as published by its grid — the same cells the user can see.
  * @param config the zone's logical dimensions; `cellMultiplier` is the visual-cell span.

@@ -20,8 +20,8 @@ import kotlin.math.roundToInt
  *
  * ## Decode and write are separate, and that is the whole file-lifecycle design
  *
- * L1 wrote the file at the moment of picking, and recorded the consequence in its own plan: abandoning the edit
- * without saving left an orphan PNG in app storage that nothing would ever clean up or show. It accepted that.
+ * Writing the file at the moment of picking is the obvious design and it leaks: abandoning the edit without saving
+ * leaves an orphan PNG in app storage that nothing will ever clean up or show.
  *
  * Here [decode] and [write] are two steps. The studio decodes on pick and previews the result **from memory**, so
  * an image the user is still deciding about exists nowhere on disk; only Save writes. Backing out leaves nothing
@@ -32,7 +32,7 @@ import kotlin.math.roundToInt
  * ## Squared on the way in
  *
  * A layer is drawn into a square box, so a non-square image would stretch. [decode] fits it inside a transparent
- * square instead — which also means **no crop screen**, unlike L1. A layer already has offset, zoom and rotation;
+ * square instead — which also means **no crop screen**. A layer already has offset, zoom and rotation;
  * a crop step would be a second way to do the same thing, and a destructive one, where the transform can be
  * changed later or undone.
  */
@@ -82,7 +82,7 @@ class CustomIconStore(
      * to be right at every site that can drop a layer — remove, reset, undo past a pick, replacing an image, a
      * whole recipe going away with an uninstalled app — and missing one is invisible. Asking "what does anything
      * still refer to?" is one question with one answer, and it cleans up after the sites that were missed as well
-     * as the ones that were not. L1 deleted per action and had at least one hole it knew about.
+     * as the ones that were not. Deleting per action leaves a hole at every site that can drop a reference.
      */
     suspend fun retainOnly(referenced: Set<String>) = withContext(dispatchers.io) {
         directory.listFiles().orEmpty()

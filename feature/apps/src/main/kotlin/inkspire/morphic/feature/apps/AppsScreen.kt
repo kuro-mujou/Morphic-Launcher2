@@ -48,9 +48,9 @@ import org.koin.androidx.compose.koinViewModel
  * The APPS surface: the full app collection, rendered in whichever [AppsLayout] is selected.
  *
  * **This is the one place a layout is chosen**, and the reason this module exists as a single `feature:apps`
- * rather than L1's split `feature:appdrawer` + `feature:applibrary`. Those two modules were the same collection
- * of the same apps with the same launch behavior, differing only in arrangement — so they duplicated the data
- * wiring, and the "drawer or library?" question had to be answered *before* the layout question, twice. The model
+ * rather than a module per look. A "drawer" and a "library" are the same collection of the same apps with the same
+ * launch behavior, differing only in arrangement — split across modules they duplicate the data wiring, and the
+ * "drawer or library?" question has to be answered *before* the layout question, twice. The model
  * already collapsed that (`Surface.APPS` + [AppsLayout], "the layout alone decides the look"); this is the code
  * catching up. A new layout is a new file under `layout/` and a new arm below, with nothing else to touch.
  *
@@ -65,8 +65,8 @@ import org.koin.androidx.compose.koinViewModel
  * the grid it draws, and the two that open folders take the folder's as well.
  *
  * **Long-press on empty space opens this surface's settings**, which is the one thing the APPS surface menu offers.
- * L1 had no empty-space menu on its side surfaces at all ("we simply don't add one") and that reads differently here,
- * because L2's touch targets are narrower by design: an item's gestures cover its icon and its label, never its cell
+ * A side surface with no empty-space menu is defensible where items fill their cells, and not here: touch targets
+ * are narrower by design — an item's gestures cover its icon and its label, never its cell
  * or its row, so every one of these layouts has real free space between items and none of it did anything. What the
  * row goes to is the **arrangement being looked at** — the APPS settings section has a chip per layout, and without
  * this reaching the one you are using is a long-press on home, a section, and then a chip.
@@ -75,9 +75,8 @@ import org.koin.androidx.compose.koinViewModel
  *   because nothing owns that preference yet: it belongs to `data:settings` (B7), per-binding, since the same
  *   surface can be reached from different home edges with different layouts. Wire it there, not here.
  * @param onOpenLayoutSettings goes to the settings for [layout]. **Nullable, and null means the row is absent** —
- *   not disabled — which is what the dev harness gets, since a destination it has no back stack for would be a row
- *   that does nothing — the same nullable-lambda shape `WidgetPickerSheet` uses for a capability its host may not
- *   have.
+ *   not disabled: a host with no back stack for that destination would otherwise get a row that does nothing. The
+ *   same nullable-lambda shape `WidgetPickerSheet` uses for a capability its host may not have.
  */
 @Composable
 fun AppsScreen(
@@ -139,11 +138,11 @@ fun AppsScreen(
     if (state.pagerConfig != null) LaunchedEffect(pagerFit) { viewModel.setPagerFit(pagerFit) }
 
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, as home's
-    // comment here used to promise would happen. Settings keeps its own boundary, so the two can disagree about
-    // dark/light — the launcher follows wallpaper brightness, settings follows the system.
+    // Settings keeps its own boundary, so the two can disagree about dark/light — the launcher follows wallpaper
+    // brightness, settings follows the system.
     //
-    // **Transparent, and read against the shell's frost** — which is the follow-through on the note that used to be
-    // here. This surface is hundreds of rows of plain text at whatever density the user chose, so a busy wallpaper
+    // **Transparent, and read against the shell's frost.** This surface is hundreds of rows of plain text at
+    // whatever density the user chose, so a busy wallpaper
     // directly behind it is unreadable; the opaque background was the honest stand-in until something better existed.
     // `SurfaceBackdropLayer` in `feature:shell` is that thing: a blurred sheet of the wallpaper between HOME and this,
     // fading in as the pan brings this surface on. It is opaque-by-scrim when there is no wallpaper to sample, so the

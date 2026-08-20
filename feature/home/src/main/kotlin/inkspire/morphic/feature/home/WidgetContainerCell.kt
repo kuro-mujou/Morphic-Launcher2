@@ -57,8 +57,8 @@ private val DotsInset = 4.dp
  * One placed **widget container** — several widgets sharing a cell, **one shown at a time**, swiped between along
  * the container's [axis].
  *
- * **Paged, not stacked**, which is `WidgetContainer`'s own correction and L1's actual behavior: dividing the cell
- * between the contained widgets would shrink each of them, and a user groups widgets to buy *cells* back, not to
+ * **Paged, not stacked**, which is `WidgetContainer`'s own correction: dividing the cell between the contained
+ * widgets would shrink each of them, and a user groups widgets to buy *cells* back, not to
  * make each widget smaller. So every page fills the container and the dots say how many there are.
  *
  * **`VerticalPager`/`HorizontalPager` from foundation, deliberately not `LauncherPager`.** That component is
@@ -168,7 +168,7 @@ internal fun WidgetContainerCell(
                 axis = axis,
                 modifier = Modifier.align(
                     // On the trailing edge of whichever axis is *not* being swiped, so the dots never sit under the
-                    // finger that is changing them. L1's alignment pair exactly.
+                    // finger that is changing them.
                     if (axis == WidgetContainerAxis.VERTICAL) Alignment.CenterEnd else Alignment.BottomCenter,
                 ),
             )
@@ -205,8 +205,8 @@ internal fun WidgetContainerProxy(snapshot: Bitmap?, modifier: Modifier = Modifi
 /**
  * The page indicator, laid out along the container's [axis].
  *
- * Colors come from the theme rather than being hardcoded white as L1's are — a launcher whose whole chrome is
- * driven by the wallpaper-brightness signal cannot have one component opting out of it.
+ * Colors come from the theme rather than being hardcoded white: a launcher whose whole chrome is driven by the
+ * wallpaper-brightness signal cannot have one component opting out of it.
  */
 @Composable
 private fun PageDots(

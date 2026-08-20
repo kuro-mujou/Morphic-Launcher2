@@ -224,7 +224,7 @@ private fun IconLayerSpec.resolveLayer(
     // Dropping the layer looks like the conservative answer and is the destructive one: on the *foreground* it
     // deletes the glyph, so an unthemed app under a pack came out as a bare background plate with no icon on it —
     // worse than having applied no pack at all. Coverage of a few hundred apps is typical, so this is the common
-    // case rather than the edge, and it is the same fallback L1 reached by returning the default icon.
+    // case rather than the edge.
     //
     // **Most packs never reach this**, because a pack shipping `iconback` art has its own answer for an app it does
     // not theme, composed one layer down in `IconPackManager` — the treatment every other launcher applies. This is
@@ -266,7 +266,7 @@ private fun IconLayerSpec.appArtwork(icon: ParsedIcon): ParsedLayer? = when (rol
  * exactly, but it is also what turns a non-silhouette into a featureless blob, and it is available as a tint whenever
  * that is what someone wants. Grayscale is the reading of the word that is safe on artwork we cannot inspect. What it
  * does not equalize is *lightness*: a desaturated color icon lands in mid-gray where a proper silhouette is flat white
- * or black. That is L1's `foregroundUniform`/`normalize` question and is deliberately still open.
+ * or black. Equalizing *lightness* as well is deliberately still open.
  */
 private fun IconLayerSpec.monochromeColor(): LayerEffect.Color =
     (effects.effectOrNull<LayerEffect.Color>() ?: LayerEffect.Color()).copy(saturation = 0f)
