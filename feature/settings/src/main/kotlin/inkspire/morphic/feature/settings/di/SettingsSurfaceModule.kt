@@ -5,6 +5,7 @@ import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
+import inkspire.morphic.feature.settings.home.HomeHubViewModel
 import inkspire.morphic.feature.settings.iconstudio.IconStudioRoute
 import inkspire.morphic.feature.settings.iconstudio.IconStudioViewModel
 import inkspire.morphic.feature.settings.iconstudio.IconsViewModel
@@ -29,6 +30,7 @@ val settingsSurfaceModule = module {
     viewModel { WallpaperViewModel(get()) }
     viewModel { DockViewModel(get(), get(), get()) }
     viewModel { GridSizeViewModel(get(), get(), get()) }
+    viewModel { HomeHubViewModel(get()) }
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
     viewModel { EffectsViewModel(get(), get()) }

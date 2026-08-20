@@ -1,43 +1,24 @@
 package inkspire.morphic.feature.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.feature.settings.component.NavRowInsetH
+import inkspire.morphic.feature.settings.component.NavRowPadding
+import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 
-/** Provisional spacing — placeholders, as everywhere else in this module. */
-private val RowInsetH = 12.dp
-private val RowInsetV = 4.dp
-private val RowPadding = 12.dp
-private val IconGap = 16.dp
 
 /**
  * The settings index: grouped rows of section → title, subtitle and glyph.
@@ -70,74 +51,30 @@ internal fun SettingsList(
 ) {
     val contentPadding = uiInsets
         .only(insetSides)
-        .add(WindowInsets(top = RowPadding, bottom = RowPadding))
+        .add(WindowInsets(top = NavRowPadding, bottom = NavRowPadding))
         .asPaddingValues()
+    // **The row to mark is the listed ancestor**, since not every section has a row of its own: HOME's two zones are
+    // reached through the Home hub, so a Dock pane showing beside this list must mark *Home*. Resolved here rather
+    // than by the caller because which sections are listed is this file's business, and a caller passing an unlisted
+    // section would otherwise highlight nothing — a two-pane screen with a detail and no marked row, which reads as
+    // the list having lost its place.
+    val marked = selected?.let { it.parent ?: it }
     LazyColumn(modifier = modifier, contentPadding = contentPadding) {
         settingsGroups.forEach { group ->
             if (group.header != null) {
                 item(key = "header-${group.header}") {
-                    SettingsSectionHeader(group.header, Modifier.padding(horizontal = RowInsetH + RowPadding))
+                    SettingsSectionHeader(group.header, Modifier.padding(horizontal = NavRowInsetH + NavRowPadding))
                 }
             }
             items(group.sections, key = { it.name }) { section ->
                 SettingsNavRow(
                     section = section,
                     homeLayout = homeLayout,
-                    selected = highlightSelected && section == selected,
+                    selected = highlightSelected && section == marked,
                     showChevron = showChevron,
                     onClick = { onSelect(section) },
                 )
             }
-        }
-    }
-}
-
-/**
- * One row.
- *
- * Selection reads by **contrast rather than hue** — the palette is grayscale by design, so a selected row takes the
- * accent as its background where L1 used `secondaryContainer`. A plain `clickable`, as everywhere in settings: the
- * shared `launcherItemGestures` contract exists so *launcher surfaces* cannot drift on long-press timing, and settings
- * is ordinary app chrome that should behave like the platform.
- */
-@Composable
-private fun SettingsNavRow(
-    section: SettingsSection,
-    homeLayout: HomeLayout,
-    selected: Boolean,
-    showChevron: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = LocalMorphicColors.current
-    val meta = section.meta(homeLayout)
-    val content = if (selected) colors.onAccent else colors.content
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = RowInsetH, vertical = RowInsetV)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) colors.accent else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(RowPadding),
-    ) {
-        Icon(imageVector = meta.icon, contentDescription = null, tint = content)
-        Spacer(Modifier.width(IconGap))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-            Text(meta.title, style = MaterialTheme.typography.bodyLarge, color = content)
-            Text(
-                text = meta.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected) content else colors.contentMuted,
-            )
-        }
-        if (showChevron) {
-            Spacer(Modifier.width(RowPadding))
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = colors.contentMuted,
-            )
         }
     }
 }

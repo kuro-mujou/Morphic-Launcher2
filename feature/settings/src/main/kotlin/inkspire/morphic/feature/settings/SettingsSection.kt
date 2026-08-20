@@ -1,11 +1,13 @@
 package inkspire.morphic.feature.settings
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -46,15 +48,27 @@ enum class SettingsSection {
     SURFACE_REGISTER,
 
     /**
+     * The HOME surface — **a hub over its two zones**, and the pairing switch that decides what they are.
+     *
+     * The one row HOME gets in the list, for the reason `APPS` gets one: what a user configures is *home*, not half
+     * of it. [HOME_GRID] and [DOCK] are its children ([parent]) and stay panes of their own, because two zones mean
+     * two icon groups and `SurfaceDetail` can pin exactly one preview — see
+     * [docs/HOME_SETTINGS_HUB_PLAN.md](../../../../../../../../docs/HOME_SETTINGS_HUB_PLAN.md).
+     */
+    HOME,
+
+    /**
      * HOME's **main area**: its size, and its icon sizing.
      *
      * What that means depends on HOME's pairing — a grid's rows and columns, or a list's row height — which is why
-     * [meta] takes the pairing and this value does not name one. One section either way, for the reason `APPS` is one
-     * section for five layouts: what the user is configuring is *home*.
+     * [meta] takes the pairing and this value does not name one.
+     *
+     * **Reached through [HOME], not from the list.** It was a top-level row until the hub existed, which is what made
+     * `meta` have to rename it under the user as a setting in *another* section changed.
      */
     HOME_GRID,
 
-    /** HOME's **side zone**: its extent, the grid inside it, and (when it holds icons) their sizing. */
+    /** HOME's **side zone**: its extent, the grid inside it, and (when it holds icons) their sizing. Under [HOME]. */
     DOCK,
 
     /** The APPS surface: each arrangement's grid — or the list's row height — and its icon sizing. */
@@ -100,10 +114,19 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
             "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
+        SettingsSection.HOME -> SettingsSectionMeta(
+            // **The one row that does not rename itself**, which is the whole point of the hub: it names a surface,
+            // and a surface does not change identity when its arrangement does. Deliberately worded as `APPS` is —
+            // both are one row over a surface arranged more than one way.
+            "Home", "Arrangement, grids and icons", Icons.Outlined.Home,
+        )
+        // Named for the zone rather than the surface, since this is a row *inside* Home now — "Home" under a pane
+        // titled "Home" would say one thing twice. The pane's own heading still reads "Home grid" / "Home list"
+        // (`GridSizeDetail`), so nothing is lost when it is the app bar's title on a phone.
         SettingsSection.HOME_GRID -> SettingsSectionMeta(
-            "Home",
-            if (isList) "Row height and icons" else "Grid and icons",
-            Icons.Outlined.Home,
+            if (isList) "List" else "Grid",
+            if (isList) "Row height and icons" else "Rows, columns and icons",
+            if (isList) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView,
         )
         SettingsSection.DOCK -> if (isList) {
             SettingsSectionMeta("Widget area", "Size and grid", Icons.Outlined.Widgets)
@@ -119,6 +142,35 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         )
     }
 }
+
+/**
+ * The section this one is reached *through*, or null when it is a row in the list.
+ *
+ * **A property, not a back stack.** The hierarchy is one level deep and has no reason to grow: sections are panes,
+ * and a pane that shares a tablet screen with the list is not a destination — the same argument that kept
+ * `SettingsSection` out of the navigation graph in the first place. Two things read it: system back, which closes to
+ * the parent rather than all the way out, and the two-pane list, which highlights the parent of whatever is showing.
+ *
+ * Exhaustive rather than `else -> null`, so a section added later has to say whether it nests. That is one line of
+ * cost against the failure it prevents, which is silent: a nested pane with no parent backs out to the list and skips
+ * the hub it was opened from.
+ */
+internal val SettingsSection.parent: SettingsSection?
+    get() = when (this) {
+        SettingsSection.HOME_GRID, SettingsSection.DOCK -> SettingsSection.HOME
+        SettingsSection.WALLPAPER,
+        SettingsSection.EFFECTS,
+        SettingsSection.ICONS,
+        SettingsSection.SURFACE_REGISTER,
+        SettingsSection.HOME,
+        SettingsSection.APPS,
+        SettingsSection.FOLDER,
+        -> null
+    }
+
+/** How many hubs sit above this section — 0 for a list row, 1 for a child. Used to pick a slide direction. */
+internal val SettingsSection.depth: Int
+    get() = if (parent == null) 0 else 1
 
 /** A titled run of sections in the list. A null [header] is a run with no heading above it. */
 internal data class SettingsGroup(val header: String?, val sections: List<SettingsSection>)
@@ -143,8 +195,10 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
         "Layout",
         listOf(
             SettingsSection.SURFACE_REGISTER,
-            SettingsSection.HOME_GRID,
-            SettingsSection.DOCK,
+            // **One row per surface.** `HOME_GRID` and `DOCK` sat here until the hub existed, which made the list
+            // split HOME by *zone* while it split APPS not at all — and forced two of its rows to rename themselves
+            // as a setting in another section changed. They are reached through `HOME` now.
+            SettingsSection.HOME,
             SettingsSection.APPS,
             SettingsSection.FOLDER,
         ),

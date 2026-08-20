@@ -32,12 +32,19 @@ internal val AppsLayout.label: String
  * **Named for the arrangement, not for L1's history.** L1 called these two "Classic" and "Minimalist", which are names
  * for *eras* of that launcher rather than descriptions: neither tells a first-time reader that one pages a grid and the
  * other lists apps under a panel of widgets. [subtitle] carries the second half of that, since a pairing is two zones
- * and a single word can only name one of them.
+ * and a name this short can only gesture at them.
+ *
+ * **Both zones, in three words, because a pairing is two zones and the shortest honest name says so.** It read "Pages
+ * with a dock" / "List with a widget area" while its only consumers were a radio row and a card that wraps to two
+ * lines. The Home hub's segmented control is a two-up row on a phone pane, where those wrap under the finger — and
+ * rather than add a second, shorter vocabulary (the fault this file exists to fix, one type up), the one name got
+ * shorter everywhere. The register card reads better for it too: "Pages + dock" under a glyph is a formula for what
+ * home is made of.
  */
 internal val HomeLayout.label: String
     get() = when (this) {
-        HomeLayout.PAGER_WITH_DOCK -> "Pages with a dock"
-        HomeLayout.LIST_WITH_WIDGET_AREA -> "List with a widget area"
+        HomeLayout.PAGER_WITH_DOCK -> "Pages + dock"
+        HomeLayout.LIST_WITH_WIDGET_AREA -> "List + widgets"
     }
 
 /** What each pairing puts where — the half a name cannot carry, for the picker's second line. */

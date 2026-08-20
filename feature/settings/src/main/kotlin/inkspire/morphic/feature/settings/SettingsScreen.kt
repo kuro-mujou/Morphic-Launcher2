@@ -59,6 +59,7 @@ import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
+import inkspire.morphic.feature.settings.home.HomeDetail
 import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
 import inkspire.morphic.feature.settings.effects.EffectsDetail
 import inkspire.morphic.feature.settings.iconstudio.IconsDetail
@@ -66,6 +67,18 @@ import inkspire.morphic.feature.settings.wallpaper.WallpaperDetail
 
 /** The list pane's width beside a detail, on a screen wide enough for both. */
 private val ListPaneWidth = 360.dp
+
+/**
+ * How deep into the surface a pane sits: the list is 0, a section reached from it is 1, a section reached through a
+ * hub is 2.
+ *
+ * **What the slide direction is read from**, and it has to be depth rather than nullness. The spec used to say "a
+ * non-null target means forward", which was true while every section was a list row — with a hub in the middle,
+ * *hub -> child* and *hub -> list* both have a non-null target, so backing out of a zone pane would animate as if it
+ * were going deeper. Nothing breaks; it just reads as the wrong direction, which is the kind of fault that survives.
+ */
+private val SettingsSection?.paneDepth: Int
+    get() = this?.let { it.depth + 1 } ?: 0
 
 /**
  * The settings surface — **an index and a detail, side by side where there is room and one at a time where there
@@ -113,9 +126,15 @@ fun SettingsScreen(
 
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
         if (twoPane) {
+            val shown = selected ?: settingsGroups.first().sections.first()
             SettingsTwoPane(
                 homeLayout = homeLayout,
-                selected = selected ?: settingsGroups.first().sections.first(),
+                selected = shown,
+                // **Two-pane has an "up" now, where it had only "leave".** The detail is always showing beside the
+                // list, so there was nothing to close — but a *child* pane replaces the hub that opened it, and
+                // leaving settings from there would skip the screen the user came through. Null on every section
+                // that is a list row, which is the old behavior exactly.
+                onCloseChild = shown.parent?.let { parent -> { selected = parent } },
                 onSelect = { selected = it; appsLayout = null },
                 appsLayout = appsLayout,
                 onOpenSection = openSection,
@@ -127,7 +146,7 @@ fun SettingsScreen(
                 homeLayout = homeLayout,
                 selected = selected,
                 onSelect = { selected = it; appsLayout = null },
-                onCloseDetail = { selected = null },
+                onCloseDetail = { selected = selected?.parent },
                 appsLayout = appsLayout,
                 onOpenSection = openSection,
                 onBack = onBack,
@@ -184,7 +203,7 @@ private fun SettingsSinglePane(
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding),
             transitionSpec = {
-                if (targetState != null) {
+                if (targetState.paneDepth > initialState.paneDepth) {
                     slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
                 } else {
                     slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
@@ -216,13 +235,15 @@ private fun SettingsTwoPane(
     homeLayout: HomeLayout,
     selected: SettingsSection,
     onSelect: (SettingsSection) -> Unit,
+    onCloseChild: (() -> Unit)?,
     onBack: () -> Unit,
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
-    BackHandler(onBack = onBack)
+    val up = onCloseChild ?: onBack
+    BackHandler(onBack = up)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -233,7 +254,7 @@ private fun SettingsTwoPane(
                 title = { Text("Settings") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background),
                 windowInsets = uiInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
-                navigationIcon = { BackButton(onBack) },
+                navigationIcon = { BackButton(up) },
             )
         },
     ) { innerPadding ->
@@ -289,6 +310,7 @@ private fun SettingsDetail(
         SettingsSection.EFFECTS -> EffectsDetail()
         SettingsSection.ICONS -> IconsDetail()
         SettingsSection.SURFACE_REGISTER -> SurfaceRegisterDetail(onOpenSection = onOpenSection)
+        SettingsSection.HOME -> HomeDetail(onOpenSection = onOpenSection)
         SettingsSection.HOME_GRID -> GridSizeDetail()
         SettingsSection.DOCK -> DockDetail()
         SettingsSection.APPS -> AppsDetail(initialLayout = appsLayout)
