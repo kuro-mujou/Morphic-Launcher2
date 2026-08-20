@@ -463,8 +463,8 @@ private fun RailDragHandle(
                         // consuming first makes every frame after the slop report no movement at all. The symptom is
                         // not an error: the rail jumps by the slop overshoot and then sits still under a finger that
                         // is plainly still dragging, which reads as the gesture having died. `detectDragGestures`,
-                        // which this replaced, computes the delta before it hands the change over — so the same two
-                        // lines in the other order had been correct by accident of who called `consume`.
+                        // computes the delta before it hands the change over — so the same two lines in the other
+                        // order are correct only by accident of who calls `consume`.
                         val delta = change.positionChange()
                         change.consume()
                         currentDrag(delta.x, delta.y)
@@ -584,8 +584,8 @@ private fun CompositeTile(
  *
  * A hidden layer is dimmed rather than removed: it is still yours to select, and the eye is how it comes back.
  *
- * **Three animations, one per thing that changes** — the shape the layer list this replaced already had, and each
- * pinned to the theme's motion scheme rather than to a duration of its own:
+ * **Three animations, one per thing that changes**, each pinned to the theme's motion scheme rather than to a
+ * duration of its own:
  * - **Placement** — `animatePlacement`, the launcher's own modifier, already carrying free-grid push and MovingGap
  *   migration. A tile whose index changes glides, which is the whole of both choreographies: an insert pushes the
  *   tiles beneath it along, a removal lets them close up, and the tiles *above* never move because their indices do
@@ -856,8 +856,8 @@ private val RailMaxHeight = 320.dp
  *
  * **Derived rather than a second number**, which is what keeps the cap meaning what it says: the rail is capped at
  * [RailMaxHeight] whatever it holds, and stating the band's own extent separately would be one edit away from a rail
- * that quietly grew past it. It is the arithmetic `weight(1f, fill = false)` used to perform at measure time — given
- * up because `weight` belongs to `ColumnScope` or `RowScope`, and a rail that can be either needs one answer both
+ * that quietly grew past it. It is the arithmetic `weight(1f, fill = false)` performs at measure time, given up
+ * because `weight` belongs to `ColumnScope` or `RowScope`, and a rail that can be either needs one answer both
  * arms can use.
  *
  * One value for both axes, deliberately: the cap is "how much of the screen may the stack take", and that is the same

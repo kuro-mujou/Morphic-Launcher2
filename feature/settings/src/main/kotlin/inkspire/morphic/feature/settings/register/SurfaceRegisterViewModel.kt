@@ -34,7 +34,7 @@ data class SurfaceRegisterState(
  *
  * Writes are fire-and-forget on `viewModelScope`: the repository is the source of truth, so there is no optimistic
  * local copy to keep in step — the flow re-emits and the screen redraws. That also means a write cannot half-apply the
- * way L1's preset application could, since each call is one atomic slice update.
+ * way, since each call is one atomic slice update.
  */
 class SurfaceRegisterViewModel(
     private val settingsRepository: SettingsRepository,
@@ -48,7 +48,7 @@ class SurfaceRegisterViewModel(
      * Binds [edge] to the APPS surface rendered in [layout], or **unbinds** it when [layout] is null.
      *
      * Takes the edge as data rather than offering four methods, mirroring `SettingsRepository.setSide` — and for the
-     * same reason L1's four `setSideTop`/`setSideRight`/… were a smell rather than an API.
+     * same reason a `setSideTop`/`setSideRight`/… quartet would be a smell rather than an API.
      */
     fun bindApps(edge: HomeEdge, layout: AppsLayout?) {
         val binding = layout?.let(SideBinding::Apps)

@@ -93,7 +93,7 @@ data class GridSizeState(
  * cannot tell a removed *left* column from a removed *right* one, and the two leave your apps in different places.
  * The edge is knowledge that exists only at the button press, so the placement edit belongs here with it.
  *
- * **Ordering matters, and it is L1's rule kept**: grow the grid before moving items into it, and move items out
+ * **Ordering matters**: grow the grid before moving items into it, and move items out
  * before shrinking it. Either way the intermediate state a flow observer sees is a grid that can hold its contents,
  * rather than a frame of items hanging outside it.
  */
@@ -164,8 +164,7 @@ class GridSizeViewModel(
     /**
      * HOME's own icon sizing, edited from this section rather than from a separate icons screen.
      *
-     * A surface's icons belong beside its grid, which is how L1 had it — every one of its details embedded
-     * `IconLayoutControls` under the layout controls — and the two genuinely depend on each other: the icon size
+     * A surface's icons belong beside its grid, the two genuinely depending on each other: the icon size
      * decides how many rows and columns fit, which this screen's bounds are computed from.
      */
     internal val icons = IconSizingEdits(
@@ -205,8 +204,8 @@ class GridSizeViewModel(
      *
      * The counterpart write is deliberately absent: an icon change that invalidates a count is *not* written down, so
      * the count returns when the icons shrink. Only a press writes — which is exactly the asymmetry the dock's rows and
-     * columns already live by. L1 reconciled it the other way, from a `LaunchedEffect` in this screen that wrote the
-     * clamped counts into storage, and so destroyed a row count for good the first time anyone touched an icon slider.
+     * columns already live by. Reconciling it the other way — a `LaunchedEffect` here writing clamped counts into
+     * storage — destroys a row count for good the first time anyone touches an icon slider.
      */
     /**
      * Sets the main area's horizontal margin, in dp.

@@ -39,8 +39,8 @@ private const val TabCount = 4
 /**
  * **The APPS editor's per-layout mockup**: the chrome a layout draws, around the lattice it draws.
  *
- * L1 fills its editor's `preview` slot the same way — a `ClassicGridEditPreview` (search bar + reflective cells) for
- * its plain grid, a `GroupedGridEditPreview` (header + tab row + reflective cells) for its category pager. This is
+ * Each layout fills the editor's `preview` slot with its own mockup — a search bar over reflective cells for the
+ * plain grid, a header and tab row over them for the category pager. This is
  * that pair generalized to L2's five layouts and driven by [chrome] rather than by constants.
  *
  * **Which lattice each layout gets is the FIXED_PAGER / SCROLL_GRID split, not a style choice.** A pager really does
@@ -51,7 +51,7 @@ private const val TabCount = 4
  * **Two pieces of chrome are stored and previewed before the surface honors them.** Search is unbuilt in
  * `feature:apps`, and neither pager draws a tab bar (the category pager draws a per-page header instead). `AppsChrome`
  * exists anyway, so what is drawn here is a real preference — see that type for why its search default is `Hidden`
- * where L1's is `TOP`.
+ * rather than a visible edge.
  *
  * @param areaWidthDp the width the grid is really given, margin already subtracted — what [ReflectivePreview] needs to
  *   compute a real cell aspect.
@@ -89,7 +89,7 @@ internal fun AppsEditorPreview(
         }
 
         // The one layout with tabs — and the one whose search sits *in* the header rather than on an edge, which is
-        // exactly the distinction `SearchPlacement` models and L1's flat enum could not.
+        // exactly the distinction `SearchPlacement` models and a flat position enum could not.
         AppsLayout.PAGER_WITH_CATEGORY -> Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(ChromeGap),

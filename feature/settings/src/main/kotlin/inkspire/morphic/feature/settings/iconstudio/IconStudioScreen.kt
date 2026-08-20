@@ -69,10 +69,9 @@ import org.koin.core.parameter.parametersOf
  * The icon studio: a full-bleed live preview with floating surfaces over it.
  *
  * **A creative workspace, not a settings form** — which is the whole reason it is a destination of its own rather
- * than another pane. L1 built its editor out of settings-list vocabulary (stacked commit sliders, emoji category
- * chips, "Up / Down / Remove" text buttons) and its own docs conclude that everything the studio *did* was right and
- * only the presentation was wrong. So this starts from the presentation L1 arrived at rather than the one it began
- * with.
+ * than another pane. An editor built out of settings-list vocabulary — stacked commit sliders, emoji category
+ * chips, "Up / Down / Remove" text buttons — can do everything this one does and still be the wrong presentation
+ * for it.
  *
  * **The canvas is the Haze source and everything else floats on it** — and the layer rail is both, which is why
  * there are two states rather than one. The rail samples the canvas alone; everything above the rail samples the
@@ -466,7 +465,7 @@ fun IconStudioScreen(
                     .uiInsetsPadding()
                     .padding(ChromeMargin)
                     .fillMaxWidth(),
-                // **Start, not end, and the layer rail is why.** These two used to sit at the trailing end, which
+                // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
                 // was out of the way of everything that existed at the time. The rail now runs down that edge, and
                 // the panel is what brings them together: opening one pushes this row up into the rail's vertical
                 // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only

@@ -60,7 +60,7 @@ import kotlin.math.ceil
  * made one tool over — show the choices, then the thing chosen — and the arrangement the reference this was drawn
  * from uses for the same reason.
  *
- * **One section rather than the two tabs this used to be** is unchanged and is what the grid restates: splitting
+ * **One section rather than a tab per group**, which is what the grid restates: splitting
  * effects across bar entries would grow the rail every time the sealed list grew, where a grid absorbs it. See
  * [StudioTool.EFFECTS].
  *
@@ -379,7 +379,8 @@ internal fun EffectHeader(
                     //
                     // The record is re-found inside the transform rather than closed over, so this writes to what
                     // the list holds *now*; and `withEnabled` is exhaustive over the sealed type, where the
-                    // forty-line `when` this replaced had an `else` arm that meant Bloom.
+                    // a forty-line `when` over the slice needs an `else` arm, and an `else` meaning Bloom is how
+                    // a new effect toggles the wrong switch.
                     onEffects { current ->
                         val record = slice.storedEffect(current) ?: return@onEffects current
                         current.map { if (it === record) it.withEnabled(on) else it }

@@ -30,8 +30,7 @@ import androidx.compose.ui.unit.dp
  * Choosing a color: quick swatches, and a full picker one tap away.
  *
  * **One component for all four colors in this editor** — a solid fill, a tint, and a gradient's two stops. They
- * were three near-identical swatch rows before the picker existed, which is exactly the shape that drifts: L1 has
- * a whole file of near-copies for the same reason.
+ * were three near-identical swatch rows before the picker existed, which is exactly the shape that drifts.
  *
  * The swatches stay rather than being replaced by the picker. They are how a color is chosen *quickly* and the
  * picker is how one is chosen *exactly*, and an editor that made every black require a drag across a saturation
@@ -115,8 +114,8 @@ private fun ColorFieldBody(
  *
  * ### Selecting shrinks the color and spawns a ring in the space it gives up
  *
- * `StudioLayerRail`'s treatment exactly, and it is here for the reason it is there. The ring used to be drawn *over*
- * the swatch at its own bounds, which fails on precisely the swatches this row is made of: a white ring on the white
+ * `StudioLayerRail`'s treatment exactly, and it is here for the reason it is there. Drawing the ring *over* the
+ * swatch at its own bounds fails on precisely the swatches this row is made of: a white ring on the white
  * swatch is no ring at all, and on black it doubled as the edge every swatch already had, so "which one is chosen"
  * was answered by a one-dp difference in a border. Inset, the ring has ground of its own that no color can paint on.
  *
@@ -222,8 +221,8 @@ private val ColorSwatchEdge = 1.dp
 /**
  * The quick-pick palette behind every [ColorField] — neutrals, then hues, with the picker for everything else.
  *
- * **Material 3 tonal values rather than the saturated primaries this used to hold.** Those were Material *2*'s 600
- * level (`E53935`, `1E88E5`, `43A047`, `FDD835`) — the sRGB primaries barely darkened, which is exactly the look M3
+ * **Material 3 tonal values rather than saturated primaries.** Material *2*'s 600 level (`E53935`, `1E88E5`,
+ * `43A047`, `FDD835`) is the sRGB primaries barely darkened, which is exactly the look M3
  * replaced: a plate that loud competes with the artwork sitting on it instead of backing it. These are **tone 40** of
  * an M3 tonal palette, the level the `primary` role takes in a light scheme — deep enough to carry a white or
  * monochrome glyph, low enough in chroma to read as a surface. `6750A4` is M3's own baseline primary.

@@ -34,8 +34,8 @@ private val ChipPaddingV = 8.dp
 /**
  * The settings surface's own row primitives — a group header, a switch row, a commit slider, and a chip.
  *
- * **Local to `feature:settings`, not in `core:designsystem`.** L1 filed its equivalents under
- * `core:designsystem/settings`, but there is exactly one consumer here and the design-system rule is to port a group
+ * **Local to `feature:settings`, not in `core:designsystem`.** There is exactly one consumer, and the design-system
+ * rule is to port a group
  * only when the screen needing it exists. They move out if a second surface ever wants them; until then this is the
  * screen that owns its rows.
  *
@@ -83,7 +83,7 @@ internal fun SettingsSwitchRow(
 /**
  * A slider that **previews while dragging and only writes on release**.
  *
- * The port of L1's `SettingsCommitSlider`, and here it is load-bearing rather than a nicety: every write is a
+ * Committing on release rather than per frame is load-bearing rather than a nicety: every write is a
  * read-modify-write over a DataStore slice, so committing per drag frame would issue hundreds of transactions for one
  * gesture. Instead the dragged value is local state and [onCommit] fires once, when the finger lifts.
  *
@@ -96,8 +96,8 @@ internal fun SettingsSwitchRow(
  * which keeps the track clean and still commits an integer.
  *
  * **[onPreview] is the same value, live.** The local drag value is already tracked here for the label, so handing it
- * out costs nothing — and it is what lets a caller show a live preview without a write per frame. L1's controls took the
- * pair the same way round (`onPreview` for the drag, `onChange` for the release), and its icon preview is why.
+ * out costs nothing — and it is what lets a caller show a live preview without a write per frame: `onPreview` for
+ * the drag, `onCommit` for the release.
  *
  * @param valueLabel renders the current value for display — a percentage, a multiplier, a dp count.
  * @param onPreview fires per frame while dragging. Never writes anything — for a preview only.
