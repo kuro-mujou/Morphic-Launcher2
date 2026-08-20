@@ -84,19 +84,17 @@ private val SettingsSection?.paneDepth: Int
  * The settings surface — **an index and a detail, side by side where there is room and one at a time where there
  * is not.**
  *
- * Ported from L1's `SettingsScreen`, whose structure is right: a section list that highlights its selection beside a
- * detail on a tablet, and slides between list and detail on a phone. What is *not* carried over is where the
- * selection lives — L1 kept its sections in the navigation module and had `feature:home` importing
- * `SettingsSection.WALLPAPER` as a result. Here the section is this screen's own state, and the only destination
- * `app` knows is "settings".
+ * A section list that highlights its selection beside a detail on a tablet, and slides between list and detail on a
+ * phone. The selected section is this screen's own state rather than a route argument, so the only destination `app`
+ * knows is "settings".
  *
  * **One theme boundary, at the top.** `darkTheme` follows [isSystemInDarkTheme] here, while the launcher shell feeds
  * its theme a *wallpaper-brightness* signal instead — settings is our own surface, launcher chrome has to contrast
  * whatever is behind it. Two "is-dark" inputs, one palette. The panes below inherit it rather than each theming
  * themselves, which is what a zone boundary means.
  *
- * @param onBack leaves settings entirely. In single-pane, system back first closes an open detail — L1's two-step,
- *   and the honest one: the detail is a place, so back should leave it before leaving the surface.
+ * @param onBack leaves settings entirely. In single-pane, system back first closes an open detail: the detail is a
+ *   place, so back should leave it before leaving the surface.
  */
 @Composable
 fun SettingsScreen(
@@ -333,19 +331,17 @@ private fun SettingsDetail(
  *   punched hole and would be exactly what the hole revealed.
  * - **Overscroll is off** for everything inside. A stretch re-composites the scrolling content into its own layer
  *   mid-gesture, and the punch stops reaching the window for as long as it does — the hole fills with the pane's
- *   color and springs back. L1 hit this and disabled it the same way; it is the one part of the recipe that reads
- *   like superstition until you see it happen.
+ *   color and springs back — the one part of the recipe that reads like superstition until you see it happen.
  *
- * The port of L1's `IconDetailPortrait` / `IconDetailLandscape` scaffolds, minus their reason for existing: those were
- * *two* screens' worth of sticky-header layout wrapped around the same trick, because L1 rebuilt the arrangement per
- * detail. Here every section is already a plain scrolling column, so the trick is all that was left to share.
+ * Every section is already a plain scrolling column, so the punch is all there is to share — no per-detail
+ * sticky-header scaffold wrapped around it.
  *
  * **Separately from the punch: the pane reaches the window edge and insets its own content.** It used to be the other
  * way round — the scaffold reserved the system bars, so the pane stopped above the navigation bar and the strip it
  * left showed the wallpaper through the transparent window, which is the one place the punch was never meant to reach.
- * Nothing but this pane knows what color that strip should be, so nothing but this pane can paint it. L1 did the same
- * with `contentPadding` on its `LazyColumn`, which additionally lets content scroll under the bar; that is not
- * available here, because a pane owns its own scroller and most of them are a plain `Column`.
+ * Nothing but this pane knows what color that strip should be, so nothing but this pane can paint it. Applying it as
+ * `contentPadding` would additionally let content scroll under the bar; that is not available here, because a pane
+ * owns its own scroller and most of them are a plain `Column`.
  *
  * @param insetSides which edges to keep content off — see [SettingsDetail].
  */

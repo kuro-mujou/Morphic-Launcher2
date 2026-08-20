@@ -18,13 +18,12 @@ import inkspire.morphic.core.model.HomeLayout
 /**
  * A section of the settings surface — **the list's own vocabulary**, not a navigation destination.
  *
- * L1 put its equivalent enum in the navigation module because a route carried it, which is how `feature:home` ended
- * up importing `SettingsSection.WALLPAPER` and every module that touched navigation could see the whole settings
- * taxonomy. Here it stays inside the surface that draws it: `app` opens *settings*, and which pane is showing is this
+ * **It stays inside the surface that draws it.** Putting this enum in the navigation module — which a route carrying
+ * a section invites — is how every module that touches navigation ends up importing the whole settings taxonomy.
+ * `app` opens *settings*, and which pane is showing is this
  * screen's business.
  *
- * Values are added as sections are ported. L1 has eleven, two of which (THEME, GESTURE) are 12-line "Coming soon"
- * placeholders — an empty destination is not worth a row.
+ * Values are added as sections are built. An empty destination is not worth a row.
  */
 enum class SettingsSection {
     /** The wallpaper the launcher owns: choose an image, and apply it to the home screen, the lock screen or both. */
@@ -36,9 +35,8 @@ enum class SettingsSection {
     /**
      * How app icons are drawn: the layer recipe every icon inherits, and the per-app overrides on top of it.
      *
-     * **The name L1 used, finally meaning what it said there.** Its `Icons` section was shape, background and
-     * layers — the icon studio — and this codebase has been holding the name back for it, with grid and icon
-     * *sizing* living in each surface's own section instead. This row is a hub rather than an editor: the editing
+     * **Shape, background and layers — the icon studio.** Grid and icon *sizing* live in each surface's own section
+     * instead, which is what this name was held back for. This row is a hub rather than an editor: the editing
      * happens in a full-screen destination, because a creative workspace is the wrong thing to put in a pane that
      * shares a tablet screen with a list.
      */
@@ -78,8 +76,7 @@ enum class SettingsSection {
      * An opened folder — and an expanded category card, which is the same overlay on the same grid: its icon sizing.
      *
      * The last section the icon-sizing waiting room was holding a grid for, which is why that room is gone: with the
-     * folder grid housed, it had nothing left to show. L1's own `Icons` section is a different concern — shape,
-     * background and layers, the **icon studio** — and will take the name back when B9 lands.
+     * folder grid housed, it had nothing left to show.
      */
     FOLDER,
 }
@@ -136,7 +133,7 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         SettingsSection.APPS -> SettingsSectionMeta(
             "Apps", "Arrangements, grids and icons", Icons.Outlined.Apps,
         )
-        // L1's wording for this row, kept: "Icon and text size" is exactly what a folder has to configure.
+        // "Icon and text size" is exactly what a folder has to configure.
         SettingsSection.FOLDER -> SettingsSectionMeta(
             "Folders", "Icon and text size", Icons.Outlined.Folder,
         )
@@ -176,15 +173,14 @@ internal val SettingsSection.depth: Int
 internal data class SettingsGroup(val header: String?, val sections: List<SettingsSection>)
 
 /**
- * The list's order and grouping — L1's shape, with the sections that exist.
+ * The list's order and grouping.
  *
  * **Two groups now that the wallpaper has landed**, which is what the note here promised: the sections that describe a
- * *surface* are L1's "Layout" group, and "Personalization" is the one holding what a launcher looks like rather than
- * how it is arranged. It has one row today and the rest of L1's — theme, effects, and the icon studio — join it as they
- * are built. The headers appear together because a single unlabeled run needed none.
+ * *surface* are the "Layout" group, and "Personalization" holds what a launcher looks like rather than how it is
+ * arranged. The headers appear together, because a single unlabeled run needed none.
  *
- * Order follows L1's: the register first (it decides what the others are *for*), then a section per surface, with
- * folders last — a folder is drawn over a surface rather than being one.
+ * The register comes first, since it decides what the others are *for*; then a section per surface, with folders
+ * last — a folder is drawn over a surface rather than being one.
  */
 internal val settingsGroups: List<SettingsGroup> = listOf(
     SettingsGroup(

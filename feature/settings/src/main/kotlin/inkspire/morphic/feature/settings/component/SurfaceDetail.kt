@@ -35,8 +35,8 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 private val ScreenPadding = 20.dp
 
 /**
- * How wide the preview column is in landscape. L1's `LANDSCAPE_PREVIEW_WIDTH`, and a fixed dp for its reason: the
- * preview draws a cell at its **true** size, so the column has to be wide enough to hold one, not a share of the pane.
+ * How wide the preview column is in landscape — a fixed dp, because the preview draws a cell at its **true** size, so
+ * the column has to be wide enough to hold one rather than a share of the pane.
  */
 private val LandscapePreviewWidth = 220.dp
 
@@ -46,13 +46,12 @@ private const val IconSectionTitle = "Icon & text"
 /**
  * The shape every surface section takes: **a layout group, then a pinned icon group with a live preview in its header.**
  *
- * Ported from L1's `IconDetailPortrait` / `IconDetailLandscape`, which its five surface details all went through. Three
- * things about the arrangement are load-bearing:
+ * One arrangement for every surface section. Three things about it are load-bearing:
  *
  * - **The grid editor comes first, then the sliders that constrain it.** The editor is a picture of the surface, so it
  *   is what a user is looking for on arrival; the margin, height and row-height sliders below it are adjustments *to*
- *   that picture and each one previews live into it. L1 ordered all five details this way (editor, then extent, then
- *   padding), and the callers here place their own controls in that order inside [layout].
+ *   that picture and each one previews live into it. Callers place their own controls in that order inside
+ *   [layout].
  * - **The icon heading and the preview pin together.** The controls below set a fraction and two dp bounds, which say
  *   nothing on their own — the preview is how they are read. Scrolling the controls out from under a preview that had
  *   scrolled away would make them unreadable again, so the two travel as one sticky block. That is the whole reason
@@ -60,20 +59,20 @@ private const val IconSectionTitle = "Icon & text"
  * **A section with no icon group passes null for both [icons] and [preview]**, and the whole pinned block — heading,
  * preview, controls — is omitted rather than left empty. One section reaches that today: HOME's **widget area**, whose
  * cells are widgets rather than icons, so `WidgetAreaGrid.icon` is null and there is no fraction, guardrail or label to
- * set. L1's dock detail took the same shape on the same branch, returning early before its `IconLayoutControls`.
+ * set.
  *
  * - **Landscape is a different arrangement, not a narrower one.** The layout group scrolls away, the heading pins, and
  *   the icon group fills the viewport as a final full-height item: controls scrolling on the left, preview fixed on the
  *   right. A phone in landscape has room for a cell beside its sliders and no room for one above them.
  *
  * The offscreen layer, the pane background, the insets and the disabled overscroll are all `PunchThroughPane`'s in
- * `SettingsScreen` — L1 repeated them in both of its scaffolds, because it had no shared pane. Overscroll being off is
+ * `SettingsScreen`, so no section repeats them. Overscroll being off is
  * what makes a lazy list safe here at all: a stretch re-composites the scrolling content and the icon preview's punch
  * stops reaching the window for as long as it lasts.
  *
  * @param title the section's own heading, above the layout group.
  * @param subtitle one line under it saying what the section governs.
- * @param onReroll shuffles which sample app the preview draws — L1's dice, in L1's place beside the icon heading.
+ * @param onReroll shuffles which sample app the preview draws.
  * @param layout the section's own controls: its grid editor first, then everything that adjusts it.
  * @param preview the live icon preview, given the modifier that sizes it for the current arrangement.
  * @param icons the icon and text controls, which every section fills with the same shared group.
@@ -208,9 +207,9 @@ private fun DetailHeading(title: String, subtitle: String) {
 }
 
 /**
- * The pinned heading over the icon group, with L1's dice beside it.
+ * The pinned heading over the icon group, with the shuffle beside it.
  *
- * The dice is here rather than on the preview because it belongs to the *section* — one app's icon is not
+ * The shuffle is here rather than on the preview because it belongs to the *section* — one app's icon is not
  * representative (a wide logo and a round one sit differently in the same cell), so what it reshuffles is which sample
  * the whole group is being judged against.
  */
