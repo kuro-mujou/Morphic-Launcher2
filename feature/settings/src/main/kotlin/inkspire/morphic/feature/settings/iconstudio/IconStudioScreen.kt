@@ -346,7 +346,6 @@ fun IconStudioScreen(
                 workspace = state.workspace,
                 canvasWidth = canvasWidth,
                 canvasHeight = canvasHeight,
-                menu = railMenu,
                 customImage = customImage,
                 packImage = packImage,
                 onSelect = viewModel::selectTarget,

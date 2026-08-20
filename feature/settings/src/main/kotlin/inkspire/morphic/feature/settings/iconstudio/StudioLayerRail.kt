@@ -130,8 +130,6 @@ import kotlin.math.roundToInt
  * @param workspace the rail's whole arrangement — where it was dragged, which way it runs, whether it is collapsed.
  * @param canvasWidth the studio canvas, in pixels, which the rail is clamped inside. Zero before it is measured, which
  *   [railDragged] treats as "not yet" rather than as a canvas of nothing.
- * @param menu which of the rail's menus is showing, or null. **Hoisted**, so a tap on the canvas can put it away —
- *   which is the one thing the rail cannot know about — and so the two menus cannot both be up.
  * @param onBoundsChange the rail's bounds in canvas space, reported as they change. The menus are drawn *outside* the
  *   rail and so cannot be children of it (Compose does not hit-test past a parent's bounds), which means the thing
  *   that positions them needs this.
@@ -143,7 +141,6 @@ internal fun StudioLayerRail(
     workspace: IconStudioWorkspace,
     canvasWidth: Float,
     canvasHeight: Float,
-    menu: RailMenu?,
     customImage: (path: String) -> android.graphics.drawable.Drawable?,
     packImage: (packPackage: String, drawableName: String?) -> android.graphics.drawable.Drawable?,
     onSelect: (StudioTarget) -> Unit,

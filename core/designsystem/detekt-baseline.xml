@@ -45,9 +45,5 @@
     <ID>MaxLineLength:RowHeightTest.kt$RowHeightTest$val crossed = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 48.dp, maxIconDp = 24.dp))</ID>
     <ID>MaxLineLength:RowHeightTest.kt$RowHeightTest$val narrow = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 40.dp, maxIconDp = 48.dp))</ID>
     <ID>ReturnCount:DragCoordinator.kt$DragCoordinator$fun drop(): DropOutcome?</ID>
-    <ID>TopLevelPropertyNaming:Morphic2DPad.kt$private val KNOB_RADIUS = 12.dp</ID>
-    <ID>TopLevelPropertyNaming:Morphic2DPad.kt$private val KNOB_RADIUS_ACTIVE = 14.dp</ID>
-    <ID>UnusedPrivateProperty:CoordinateDragPager.kt$val density = LocalDensity.current</ID>
-    <ID>UnusedPrivateProperty:ResizeOverlay.kt$private val CornerRounding = 3.5.dp</ID>
   </CurrentIssues>
 </SmellBaseline>

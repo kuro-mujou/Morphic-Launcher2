@@ -36,7 +36,6 @@ private val HandleInsetMargin = 10.dp
 
 private val FrameStroke = 1.dp
 private val CornerArm = 10.dp
-private val CornerRounding = 3.5.dp
 private val PillLong = 16.dp
 private val PillShort = 3.dp
 

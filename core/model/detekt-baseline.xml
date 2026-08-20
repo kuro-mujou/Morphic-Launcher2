@@ -7,12 +7,6 @@
     <ID>MagicNumber:LayerEffect.kt$BloomProfile$0.5f</ID>
     <ID>MagicNumber:LayerEffect.kt$LayerEffect.Ripple$0.5f</ID>
     <ID>MaxLineLength:LayerEffectPipelineTest.kt$LayerEffectPipelineTest$assertEquals(emptyList&lt;LayerEffect&gt;(), spec(LayerEffect.Color(), LayerEffect.Bloom(linear = BloomProfile(strength = 0f))).activeEffects)</ID>
-    <ID>NewLineAtEndOfFile:AppInfo.kt$inkspire.morphic.core.model.AppInfo.kt</ID>
-    <ID>NewLineAtEndOfFile:ComponentKey.kt$inkspire.morphic.core.model.ComponentKey.kt</ID>
-    <ID>NewLineAtEndOfFile:DeviceConfiguration.kt$inkspire.morphic.core.model.DeviceConfiguration.kt</ID>
-    <ID>NewLineAtEndOfFile:Orientation.kt$inkspire.morphic.core.model.Orientation.kt</ID>
-    <ID>NewLineAtEndOfFile:SearchPlacement.kt$inkspire.morphic.core.model.SearchPlacement.kt</ID>
-    <ID>NewLineAtEndOfFile:WidgetInfo.kt$inkspire.morphic.core.model.WidgetInfo.kt</ID>
     <ID>ReturnCount:ComponentKey.kt$ComponentKey.Companion$fun parse(flat: String): ComponentKey?</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -716,7 +716,7 @@ class IconRenderer(
             sizePx.toFloat(),
             sizePx.toFloat(),
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = rampShader(blur, frame, stops, sizePx)
+                shader = rampShader(blur, frame, stops)
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
             },
         )
@@ -740,7 +740,6 @@ class IconRenderer(
         blur: LayerEffect.ProgressiveBlur,
         frame: LayerGradient.Frame,
         stops: FloatArray,
-        sizePx: Int,
     ): Shader {
         val colors = intArrayOf(0x00000000, 0xFF000000.toInt())
         return when (blur.falloff) {

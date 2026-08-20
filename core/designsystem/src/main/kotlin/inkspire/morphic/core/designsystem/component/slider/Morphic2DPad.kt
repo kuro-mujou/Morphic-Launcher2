@@ -60,7 +60,7 @@ fun Morphic2DPad(
 
     var pressed by remember { mutableStateOf(false) }
     val knobRadius by animateDpAsState(
-        targetValue = if (pressed && enabled) KNOB_RADIUS_ACTIVE else KNOB_RADIUS,
+        targetValue = if (pressed && enabled) KnobRadiusActive else KnobRadius,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "Morphic2DPadKnob",
     )
@@ -78,7 +78,7 @@ fun Morphic2DPad(
             .then(
                 if (enabled) {
                     Modifier.pointerInput(xRange, yRange) {
-                        val kn = KNOB_RADIUS.toPx()
+                        val kn = KnobRadius.toPx()
                         fun emit(px: Float, py: Float) {
                             val w = (size.width - 2 * kn).coerceAtLeast(1f)
                             val h = (size.height - 2 * kn).coerceAtLeast(1f)
@@ -113,7 +113,7 @@ fun Morphic2DPad(
                 },
             ),
     ) {
-        val kn = KNOB_RADIUS.toPx()
+        val kn = KnobRadius.toPx()
         val w = (size.width - 2 * kn).coerceAtLeast(0f)
         val h = (size.height - 2 * kn).coerceAtLeast(0f)
         val knobX = kn + w * fractionOf(x, xRange)
@@ -131,5 +131,5 @@ fun Morphic2DPad(
     }
 }
 
-private val KNOB_RADIUS = 12.dp
-private val KNOB_RADIUS_ACTIVE = 14.dp
+private val KnobRadius = 12.dp
+private val KnobRadiusActive = 14.dp

@@ -12,7 +12,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
@@ -78,7 +77,6 @@ fun <T> CoordinateDragPager(
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
-    val density = LocalDensity.current
     val session = coordinator.session
 
     // Dwelled push preview for the active page (see CoordinateDragGrid); the moves apply to occupants of
