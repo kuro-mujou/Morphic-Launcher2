@@ -90,8 +90,8 @@ fun AppsScreen(
 
     // The one thing the UI knows and the ViewModel cannot: which window configuration this is. Everything
     // device-dependent — every grid's size, every grid's icon sizing — is resolved from it down there, against the
-    // settings store, rather than being worked out up here and pushed down piecemeal (which is what `setPagerGrid`
-    // used to do, and what left home drawing its blueprint whatever the user had chosen).
+    // settings store, rather than being worked out up here and pushed down piecemeal — pushing a derivative leaves
+    // the surface drawing its blueprint whatever the user had chosen.
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 

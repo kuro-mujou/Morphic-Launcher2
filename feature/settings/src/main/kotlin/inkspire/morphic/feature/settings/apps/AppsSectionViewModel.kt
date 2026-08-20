@@ -261,7 +261,7 @@ class AppsSectionViewModel(
      * count outlives the icon settings it was chosen under, so a scrolling grid draws it clamped to what its measured
      * width can hold (`CellFit.fitCols`) — and the screen, which has the measurement, is the only thing that can say
      * so. Counting from the drawn size is what makes − and + move the number the editor is showing rather than one
-     * only storage remembers. Passed as a parameter for the reason `DockViewModel.setHeight` takes its row cap that
+     * only storage remembers. Passed as a parameter for the reason `DockViewModel.setExtent` takes its row cap that
      * way: a bound that needs a measured area cannot come from a state holder.
      */
     fun edit(edge: GridEditorEdge, add: Boolean, from: GridDefault) {

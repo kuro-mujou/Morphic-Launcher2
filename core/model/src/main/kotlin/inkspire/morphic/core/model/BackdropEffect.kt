@@ -6,11 +6,9 @@ import kotlinx.serialization.Serializable
 /**
  * **What color a frosted blur is washed in** — the choice the effects section offers as five swatches.
  *
- * This replaces `BackdropBlurTone`, which had two values because light and dark were the only washes a *variant* could
- * express: "no wash" was a separate variant (a `Plain`) and so was the wallpaper's own hue (`MaterialYou`). Four
- * variants that blurred identically and differed only in the color painted over the blur is four names for one effect,
- * and it made the chooser five entries long for two genuinely different things. A wash is a *parameter* of a blur, so
- * it is one here, and the sealed type is down to the two effects that really are unlike: a blur, and a lens.
+ * **A wash is a parameter of a blur, not an effect of its own.** Variants that blur identically and differ only in
+ * the color painted over the blur are several names for one effect, and they make the chooser long for no gain. So
+ * the wash is an enum here, and the sealed type carries only the two effects that really are unlike: a blur, a lens.
  *
  * **An enum plus a stored color rather than a sealed type with a payload**, which is the one design call worth stating.
  * A `Custom(argb)` variant would carry the color, and selecting Light would then *discard* it — so trying the other
@@ -23,9 +21,8 @@ enum class BackdropTint {
     /**
      * No wash at all — the wallpaper, blurred, and nothing over it.
      *
-     * The old `Plain` variant, and the naming difference is worth keeping: that one was renamed *away* from `None`
-     * because it still blurred, so "none" read as a bug. Here the blur is the effect and the tint is genuinely absent,
-     * which makes [NONE] the honest name.
+     * The blur is the effect and the tint is genuinely absent, which is what makes [NONE] an honest name: it names
+     * the wash rather than the effect, so nothing about it suggests the wallpaper is left sharp.
      */
     NONE,
 
@@ -38,7 +35,7 @@ enum class BackdropTint {
     /**
      * The **wallpaper's own** representative color — the one wash whose subject is the picture under it.
      *
-     * `MaterialYou`'s, and the deliberate exception to the design system's monochrome rule: that rule keeps *chrome*
+     * The deliberate exception to the design system's monochrome rule: that rule keeps *chrome*
      * grayscale so the wallpaper and the icons carry the color, and this is a decoration the user picked whose whole
      * point is the wallpaper's hue. Labeled **"Wallpaper"** in the section, not "Material You": that is Google's name
      * for the *OS* palette, and this deliberately is not one — the launcher bridges a monochrome `ColorScheme`, so the
@@ -73,16 +70,14 @@ enum class BackdropTint {
 sealed interface BackdropEffect {
 
     /**
-     * **A blurred wallpaper with a wash over it** — the effect that four variants used to be.
+     * **A blurred wallpaper with a wash over it.**
      *
-     * `Plain`, `Blur(LIGHT)`, `Blur(DARK)` and `MaterialYou` blurred identically and differed only in the color painted
-     * on top, so they are one variant with a [BackdropTint] now. What that buys is not only a shorter chooser: the
-     * parameters *survive* a change of wash, where switching variants discards them (see
-     * `SettingsRepository.updateBackdropEffect`) — so a user who has tuned a strength and an amount can try all five
-     * washes without losing either.
+     * The wash is a [BackdropTint] rather than a variant of its own, which is what lets the parameters *survive* a
+     * change of wash: switching variants discards them (see `SettingsRepository.updateBackdropEffect`), so a user who
+     * has tuned a strength and an amount can try all five washes without losing either.
      *
      * @property strength Blur amount, `0..1`.
-     * @property tint Which color the wash is. [BackdropTint.NONE] means there is none, which is the old `Plain`.
+     * @property tint Which color the wash is. [BackdropTint.NONE] means there is none.
      * @property tintAmount The wash's alpha, `0..1`. Meaningless when [tint] is [BackdropTint.NONE], which is why the
      *   section shows no control for it there rather than one that does nothing.
      * @property customTintArgb The color [BackdropTint.CUSTOM] uses, kept whichever tint is selected so that choosing
@@ -171,7 +166,7 @@ sealed interface BackdropEffect {
  * What each variant keeps is exactly what distinguishes it: the **wash** for a [Blur] — its color and, where that
  * is [BackdropTint.CUSTOM], which color — and the saturation boost for [LiquidGlass], whose refraction parameters
  * are dropped because a lens needs a rim and there is none at this size (see `wallpaperBackdrop`'s `refracts`). A
- * blur tinted [BackdropTint.NONE] therefore casts a film with no wash on it, which is what `Plain`'s used to be.
+ * blur tinted [BackdropTint.NONE] therefore casts a film with no wash on it.
      */
     val fullScreenFilm: BackdropEffect
         get() = when (this) {

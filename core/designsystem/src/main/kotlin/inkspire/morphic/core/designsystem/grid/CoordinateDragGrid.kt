@@ -41,8 +41,8 @@ internal const val PUSH_DWELL_MS = 200L
  * One **coordinate (free-placement) drag zone** on a [LauncherGrid]: the piece every such surface (home MAIN,
  * dock, widget area, folders) shares. It renders [items] at their stored [placement]s, wires each cell for
  * drag/tap/menu, previews the planner's push live (dwelled so a fast drag doesn't strobe), and publishes the
- * zone's measured [GridGeometry] + registration to [coordinator]. Extracted from the near-identical blocks in
- * `HomeScreen` and the dev harness's `GridSurface` so there is one implementation to reason about.
+ * zone's measured [GridGeometry] + registration to [coordinator]. One implementation, so no two coordinate surfaces
+ * can drift apart.
  *
  * **What stays with the caller — deliberately.** Three things differ per surface, so they are inputs, not baked
  * in: the **placement rules** ([planner] and [onLand] — merge/push behavior and what to write, which travel with

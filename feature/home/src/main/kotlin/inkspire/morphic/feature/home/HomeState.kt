@@ -147,8 +147,8 @@ fun ContainerIcon.listKey(): String = when (this) {
  *
  * One type for both zones (the dock and the widget area) because they are the same *kind* of thing: a fixed-extent
  * strip whose counts divide that extent. Which of the two is on screen is `HomeLayout`'s answer, and nothing here
- * changes with it — the store, the arithmetic and the settings control are shared, which is why this is not
- * `DockSizing` and `WidgetAreaSizing`.
+ * changes with it — the store, the arithmetic and the settings control are all shared, which is why one type serves
+ * both rather than a pair differing only in name.
  *
  * The one number that is *not* here is the dimension it does not set: the screen's, on the axis it runs along.
  * Turning these three into a grid is `CellFit.fitGridConfig`, in the surface, because that needs the measured area

@@ -110,12 +110,10 @@ sealed interface AppCollectionPhase<out Id : Any> {
  * about in one place, over a single [AppCollectionPhase] rather than flags that have to be kept consistent with each
  * other.
  *
- * **The name is the second thing here that used to be a folder's and is not.** This was `FolderHostState`, in a
- * `folder/` package, back when a folder was the only collection there was; the APPS category card then hosted one
- * without being one, and every name in the package started describing a *case* rather than the thing. `AppCollection`
- * is the vocabulary the KDoc had already settled on — *a collection of apps opened over a surface*. Deliberately not
- * `IconCollection`, which would read as a sibling of `IconContainer` (a grid item that holds icons); this is an
- * overlay, and the two have nothing to do with each other.
+ * **Named for the thing, not for a case of it.** A folder is one collection and the APPS category card hosts another
+ * without being one, so the honest vocabulary is `AppCollection` — *a collection of apps opened over a surface*.
+ * Deliberately not `IconCollection`, which would read as a sibling of `IconContainer` (a grid item that holds icons);
+ * this is an overlay, and the two have nothing to do with each other.
  */
 @Stable
 class AppCollectionHostState<Id : Any> {

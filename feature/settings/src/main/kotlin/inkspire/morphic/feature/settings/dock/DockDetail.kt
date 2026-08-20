@@ -93,7 +93,8 @@ private val WidgetAreaExtentRange = 120f..480f
  *
  * The dock is the one grid with an extent of its own as well as a row and column count, and the extent **bounds** the
  * count divided out of it: a cell is `extent ÷ count`, so past a point another line leaves cells too small to draw an
- * icon in. The slider spans [ExtentRange]; the buttons on that axis stop where the division does.
+ * icon in. The slider spans the zone's own range ([DockExtentRange] or [WidgetAreaExtentRange]); the buttons on that
+ * axis stop where the division does.
  *
  * **The extent previews while dragging and commits on release**, and the commit carries the cell cap the new extent
  * allows, so a shrink that invalidates the stored count reduces it in the same step. That is L1's sequence.

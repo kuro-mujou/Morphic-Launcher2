@@ -67,10 +67,9 @@ import kotlin.math.roundToInt
  * cell heights: surface metrics bound for the settings layer. (A card's *own* inset, corner and slot spacing live
  * beside [CategoryCard], which is the only thing that reads them.)
  *
- * The **lane count** is no longer here: it is `AppsCardGrid`'s, resolved per device configuration. A card is square,
- * so its size is `shortEdge / lanes` — which makes the count genuinely per-device rather than a constant, and is what
- * retires the note on `PreviewIconMetrics` in [CategoryCard] observing that a 72dp icon cap would bind on a tablet
- * given two columns. Fix the columns, not the cap.
+ * The **lane count** is not here: it is `AppsCardGrid`'s, resolved per device configuration. A card is square, so its
+ * size is `shortEdge / lanes`, which makes the count genuinely per-device rather than a constant. A fixed icon cap
+ * would bind on a tablet given two columns — the answer to that is the column count, not the cap.
  */
 private val CategoryCardSpacing = 12.dp
 private val CategoryCardGutter = 16.dp

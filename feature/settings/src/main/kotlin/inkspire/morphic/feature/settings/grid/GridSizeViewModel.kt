@@ -198,7 +198,7 @@ class GridSizeViewModel(
      * **[fromCols]/[fromRows] come from the screen, and are not [GridSizeState]'s stored pair.** A stored count outlives
      * the conditions it was chosen under — enlarge the icons and fewer rows fit — so the grid on screen is the stored
      * one *clamped to what fits*, and that clamp needs a measured area and the current type scale, neither of which a
-     * state holder has (the same reason `DockViewModel.setHeight` is told its row cap). Counting from the drawn grid is
+     * state holder has (the same reason `DockViewModel.setExtent` is told its row cap). Counting from the drawn grid is
      * what makes the − and + buttons mean what they show: pressing − on a four-row home writes three, rather than
      * writing four because storage still remembers five. It also means the reflow moves items relative to the grid the
      * user can see, instead of to one nothing draws.

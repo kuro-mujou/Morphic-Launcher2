@@ -69,8 +69,8 @@ private val RowGap = 8.dp
  * The port of L1's `EffectsTab`, and structurally the same screen: a chooser, then the controls belonging to whatever is
  * chosen. Four differences, each following from a decision made before this:
  *
- * - **Two entries where there were five.** `Plain`, the two blurs and Material You blurred identically and differed only
- *   in the color of the wash, so the wash became a `BackdropTint` and they became one entry — see [EffectKind]. What is
+ * - **Two entries where there were five.** A plain wash, the two blurs and Material You blurred identically and differed
+ *   only in the color of the wash, so the wash is a `BackdropTint` and they are one entry — see [EffectKind]. What is
  *   left to choose between is a blur and a lens, which is what a *segmented control* is for; five options were a
  *   `FlowRow` of chips, and two are not.
  * - **The controls come from the *variant*, not from a ten-field bag.** L1 held every parameter of every effect at once

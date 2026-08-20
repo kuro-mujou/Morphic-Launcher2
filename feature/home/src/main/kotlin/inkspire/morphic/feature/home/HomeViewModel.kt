@@ -410,10 +410,9 @@ class HomeViewModel(
     /**
      * Supplies the device configuration the surface is drawn on — the UI's one job in this direction.
      *
-     * It replaced `setGridConfig(config)`, in which the UI resolved the home blueprint and handed down the product.
-     * Reporting the *input* means both grids **and** each zone's icon sizing derive here, so the next device-dependent
-     * thing costs nothing — and, more importantly, they derive from the *store* rather than from the blueprint the UI
-     * happened to have to hand.
+     * Reporting the *input* rather than a product the UI resolved from the home blueprint means both grids **and**
+     * each zone's icon sizing derive here, so the next device-dependent thing costs nothing — and, more importantly,
+     * they derive from the *store* rather than from the blueprint the UI happened to have to hand.
      */
     fun setDevice(configuration: DeviceConfiguration) {
         device.value = configuration

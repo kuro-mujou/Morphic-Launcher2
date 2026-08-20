@@ -241,7 +241,7 @@ private fun DrawScope.drawLayerContent(content: ParsedLayer) {
 }
 
 /**
- * Applies a layer's opacity and blend mode as it joins the stack — the live twin of `IconRenderer.compositePaint`.
+ * Applies a layer's opacity and blend mode as it joins the stack — the live twin of `IconRenderer.opacityPaint`.
  *
  * Through `saveLayer` rather than `graphicsLayer`, because `GraphicsLayerScope` has an `alpha` but no blend mode;
  * capturing the node into its own buffer and compositing *that* with one paint is the only way to get both, and it

@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 /**
  * The chooser's vocabulary — **two entries, where there were five.**
  *
- * `Plain`, "Light blur", "Dark blur" and "Material You" were four ways to say *blurred wallpaper with a wash on it*,
+ * "Plain", "Light blur", "Dark blur" and "Material You" were four ways to say *blurred wallpaper with a wash on it*,
  * differing only in the color of the wash; that is a [BackdropTint] now, so what is left to choose between is the two
  * things that are genuinely unlike each other. A blur softens what is behind it. A lens bends it.
  *

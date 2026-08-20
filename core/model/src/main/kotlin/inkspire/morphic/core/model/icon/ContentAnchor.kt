@@ -5,11 +5,10 @@ import kotlinx.serialization.Serializable
 /**
  * What something laid over a layer is positioned against — the icon's square box, or the layer's own artwork.
  *
- * **Three things ask this, which is why it is named for neither of them.** It was `ShapeAnchor` while an
- * [IconShape] was the only thing anchored; [LayerEffect.Bloom] and [LayerEffect.Gloss] then asked the identical
- * question about where their light is laid out, and all three resolve it through the same `ShapeMask.InkFit`, so a
- * shape and a bloom both anchored to content on one layer land on the *same square*. The rename cost nothing on
- * disk — the entries carry no `@SerialName`, so `"BOX"` and `"CONTENT"` are the stored contract — and each holder's
+ * **Three things ask this, which is why it is named for neither of them.** An [IconShape] asks where its silhouette
+ * sits; [LayerEffect.Bloom] and [LayerEffect.Gloss] ask where their light is laid out. All three resolve it through
+ * the same `ShapeMask.InkFit`, so a shape and a bloom both anchored to content on one layer land on the *same
+ * square*. The entries carry no `@SerialName`, so `"BOX"` and `"CONTENT"` are the stored contract, and each holder's
  * own field still says what *it* anchors ([IconLayerSpec.shapeAnchor], `Bloom.anchor`, `Gloss.anchor`).
  *
  * A mask needs a frame, and so does a gradient. Until this existed there was exactly one: the box, fixed, so the

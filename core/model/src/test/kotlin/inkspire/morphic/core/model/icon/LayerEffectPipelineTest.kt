@@ -77,7 +77,7 @@ class LayerEffectPipelineTest {
     @Test
     fun `a bloom still stores itself as a gradient, so old recipes keep loading`() {
         // The discriminator is deliberately stale — see `LayerEffect.Bloom`. An unknown *key* is skipped, but an
-        // unknown polymorphic *type* throws, and `IconLayerSetCodec` drops the whole recipe on a throw. So renaming
+        // unknown polymorphic *type* throws, and `IconAppearanceCodec` drops the whole recipe on a throw. So renaming
         // it would cost a user every customized icon rather than one effect's colors. Silent and total, so pinned.
         val json = Json { encodeDefaults = false }
         val encoded = json.encodeToString(LayerEffect.serializer(), bloom)

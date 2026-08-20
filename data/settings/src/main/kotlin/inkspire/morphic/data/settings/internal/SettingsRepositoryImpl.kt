@@ -379,7 +379,7 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?) {
         // Clamped to the declared range rather than left to the caller, which is `updateGrid`'s treatment and not
-        // `setDockExtent`'s. The difference is that both of a padding's bounds are static facts: zero is "no margin",
+        // `setExtent`'s. The difference is that both of a padding's bounds are static facts: zero is "no margin",
         // and the ceiling is a judgment about how much of a grid may be given away — neither needs a measured screen.
         val clamped = dp?.coerceIn(HorizontalPaddingRange.first, HorizontalPaddingRange.last)
         update(SurfaceMetricsSlice) { withHorizontalPadding(slot, device, clamped) }

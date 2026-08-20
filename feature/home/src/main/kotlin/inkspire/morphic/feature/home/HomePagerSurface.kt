@@ -447,7 +447,7 @@ internal fun HomePagerSurface(
     //
     // Answering for both zones is what makes the folder hand-offs continuous across the dock: hovering a dock folder
     // arms the same dwell that opens it mid-drag. The outbound half needs nothing here — closing the folder drops its
-    // zone, so the drag simply lands on whichever home grid is underneath, and `handleDrop` commits to the zone it
+    // zone, so the drag simply lands on whichever home grid is underneath, and `commitLanding` commits to the zone it
     // reports.
     val folderHost = rememberAppCollectionHostState<Long>(coordinator) { zoneId, plan ->
         val zone = homeZoneOf(zoneId) ?: return@rememberAppCollectionHostState null

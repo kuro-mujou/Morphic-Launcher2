@@ -44,9 +44,9 @@ private val CrossGap = 20.dp
  * ([SideBindingPicker]) and the edges got the picture.
  *
  * **HOME's pairing is *not* offered here, and neither is `transition`.** The rule is unchanged — a control appears
- * when the thing it configures exists — but the pairing failed a different test: it existed twice. A `HomeLayoutPicker`
- * on the center card and a segmented control at the head of the Home section are two live controls for one setting, and
- * the section is where a user goes to change home. So the center card kept only its gear. What this cross keeps is what
+ * when the thing it configures exists — but the pairing fails a different test: it would exist twice. A picker on the
+ * center card and the segmented control at the head of the Home section are two live controls for one setting, and the
+ * section is where a user goes to change home. So the center card carries only its gear. What this cross keeps is what
  * it is for: **where** surfaces are. `SurfacePager` still implements only `SLIDE`, so the transition stays out. (L1
  * offered both from this screen, and its presets from here too — and put the pairing in its Home section, which is
  * where it now is here.)

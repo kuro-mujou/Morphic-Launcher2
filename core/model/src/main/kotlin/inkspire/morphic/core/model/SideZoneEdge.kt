@@ -11,10 +11,10 @@ package inkspire.morphic.core.model
  * that meant for it — *and* it had to pass a second flag (`dockAtStart`) beside it, because a boolean cannot say
  * "which of four edges".
  *
- * **Four values, because HOME has two layouts and they put their side zone on opposite ends.** This was `DockEdge`
- * with two values while `PAGER_WITH_DOCK` was the only layout: a dock is a bottom strip or a trailing rail.
- * `LIST_WITH_WIDGET_AREA` mirrors both — a widget area is a *top* strip or a *leading* rail — so the enum is the four
- * edges and [HomeLayout] chooses the pair. See [sideZoneEdge] for the rule.
+ * **Four values, because HOME has two layouts and they put their side zone on opposite ends.** Under
+ * `PAGER_WITH_DOCK` a dock is a bottom strip or a trailing rail; `LIST_WITH_WIDGET_AREA` mirrors both, a widget area
+ * being a *top* strip or a *leading* rail. So the enum is the four edges and [HomeLayout] chooses the pair. See
+ * [sideZoneEdge] for the rule.
  *
  * `START`/`END` rather than `LEFT`/`RIGHT` because they are layout-direction edges — a `Row` places one first and the
  * other last, which lands them on opposite sides in LTR and RTL, and that is what a user of either expects. `TOP` and

@@ -468,8 +468,8 @@ private class BackdropNode(
         // resolved against one bitmap and drawn from another is a misalignment nobody would look for in a lambda.
         val picture = backdrop?.imageFor(role)
         val outline = outlineFor(size, layoutDirection, this)
-        // The one thing that means "nothing to sample" now: no backdrop at all. An effect can no longer say it —
-        // every variant blurs, and `Plain` is the one with no wash rather than no picture.
+        // The one thing that means "nothing to sample": no backdrop at all. An effect cannot say it — every variant
+        // blurs, and a tint of NONE means no wash rather than no picture.
         if (picture == null || size.width <= 0f || size.height <= 0f) {
             drawOutline(outline, color = scrimColor)
             drawContent()

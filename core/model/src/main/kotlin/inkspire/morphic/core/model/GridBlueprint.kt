@@ -445,7 +445,7 @@ val DockGrid = GridBlueprint(
         tabletLandscape = GridDefault(cols = 5, rows = 1),
     ),
     icon = IconSizing(),
-    // The `DockHeight` placeholder `feature:home` has carried since the dock was built, now owned by something.
+    // The dock's default extent; a user's own value overrides it through `SurfaceMetrics.extentDp`.
     extentDp = 96,
 )
 

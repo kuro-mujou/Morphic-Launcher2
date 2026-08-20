@@ -31,9 +31,9 @@ import androidx.compose.ui.graphics.graphicsLayer
  *
  * | Effect | This layer |
  * |---|---|
- * | `Plain` | blur, no wash |
- * | `Blur(LIGHT)` / `Blur(DARK)` | blur + a white- or black-leaning wash |
- * | `MaterialYou` | blur + the wallpaper's own hue |
+ * | `Blur`, tint `BackdropTint.NONE` | blur, no wash |
+ * | `Blur`, tint `BackdropTint.LIGHT` / `BackdropTint.DARK` | blur + a white- or black-leaning wash |
+ * | `Blur`, tint `BackdropTint.WALLPAPER` | blur + the wallpaper's own hue |
  * | `LiquidGlass` | blur + a saturation boost, no wash and no rim |
  *
  * The glass row is the one worth knowing: a lens needs an edge to bend light at, and at this size the rim would fall

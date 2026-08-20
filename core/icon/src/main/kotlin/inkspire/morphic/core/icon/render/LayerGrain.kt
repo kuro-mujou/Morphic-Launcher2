@@ -128,8 +128,7 @@ object LayerGrain {
      * (`fieldX`, `fieldY`) scatters every way at once. Split it into the part running *along* the effect's angle
      * and the part running across, scale the second by `1 − directionality`, and put them back together: at 0
      * nothing is scaled and the scatter is untouched, at 1 the across-part is gone entirely and every pixel moves
-     * on one line. Every value between is a real look — the reference's wind-blown sand — which is what the
-     * two-valued `GrainDrift` this replaced could not express.
+     * on one line. Every value between is a real look — the reference's wind-blown sand.
      *
      * An out-parameter rather than a returned pair, because this runs once per pixel of a bake and a `Pair` there
      * is an allocation per pixel. Same shape `IconRenderer.resample` takes for its own sample position.

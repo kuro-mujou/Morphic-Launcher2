@@ -105,9 +105,8 @@ class AppsViewModel(
      *
      * **The one thing the UI knows and this holder cannot**: `currentDeviceConfiguration()` is a `@Composable` read of
      * the window. Everything device-dependent is resolved from it here — every grid's size and every grid's icon
-     * sizing, both by `data:settings` from its blueprint plus whatever the user changed — which is why this *replaced*
-     * a narrower `setPagerGrid(config)` rather than joining it. Pushing the input down beats pushing a derivative of
-     * it: the next thing that needs the device costs nothing.
+     * sizing, both by `data:settings` from its blueprint plus whatever the user changed. Pushing the *input* down
+     * beats pushing a derivative of it: the next thing that needs the device costs nothing.
      */
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
@@ -160,9 +159,9 @@ class AppsViewModel(
      * Every reader below already treats null as "not yet" — the same rule home states for its own settle effects: a
      * blueprint fallback is not the user's grid, so nothing may act on it.
      *
-     * The narrow input [setDevice] replaced (`setPagerGrid`) pushed the *blueprint's* size down, which put a decision
-     * the store owns in the UI. This pushes a **runtime bound** the store cannot know instead — the same shape as
-     * `DockViewModel.setHeight` being told its row cap.
+     * What this carries is a **runtime bound** the store cannot know, never a size the store owns — the same shape as
+     * `DockViewModel.setExtent` being told its row cap. Pushing the blueprint's size down instead would move a
+     * decision the store owns into the UI.
      */
     private val pagerFit = MutableStateFlow<GridConfig?>(null)
 
@@ -377,8 +376,8 @@ class AppsViewModel(
     /**
      * Supplies the device configuration the surface is drawn on — the UI's one job in this direction.
      *
-     * It replaced `setPagerGrid(config)`, in which the UI resolved a blueprint and handed down the product. Reporting
-     * the *input* instead means everything else derives here: the stored page size, and every grid's icon sizing.
+     * Reporting the *input* rather than a product the UI resolved from a blueprint means everything else derives
+     * here: the stored page size, and every grid's icon sizing.
      * Idempotent, since setting an equal value on a `MutableStateFlow` emits nothing.
      *
      * The one thing that cannot derive from it is the *fit* of that size, which needs a measured window — see
@@ -395,7 +394,7 @@ class AppsViewModel(
      * **This becomes the page capacity**, so it is the number the store is paginated against and the number a drop's
      * slot is computed from; see [pagerFit] for why the clamp cannot stay in the UI. The screen owns the call because
      * the fit needs a measured area and the current type scale, neither of which a state holder has — the same division
-     * of labor as `DockViewModel.setHeight`, and the same one every `CellFit` caller follows.
+     * of labor as `DockViewModel.setExtent`, and the same one every `CellFit` caller follows.
      *
      * **Only ever called with a fit of the *stored* grid**, never of a blueprint fallback: paginating against a
      * placeholder would write pages nobody chose and then rewrite them. Idempotent, so the surface may report on every
@@ -418,7 +417,7 @@ class AppsViewModel(
         applyPager(listOf(AppsPagerChange.Move(item, toPage, toSlot)))
 
     /**
-     * Merges [dragged] onto whatever sits at [targetSlot] of [targetPage] — the merge-ring drop.
+     * Merges [dragged] onto [target] — the merge-ring drop.
      *
      * App onto app mints a folder holding both; app onto folder joins it. [target] is the entry the drag layer
      * resolved under the finger, passed by identity — see [mergeInto].

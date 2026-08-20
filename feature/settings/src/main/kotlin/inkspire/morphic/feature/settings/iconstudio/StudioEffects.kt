@@ -2508,8 +2508,8 @@ private val EffectTileMax = 96.dp
 private const val EffectGlyphFraction = 0.42f
 
 /**
- * The smallest **value** a slider that must not reach zero will take — which was `UnitStep` until that constant
- * became the stepper's increment and the two turned out to be unrelated questions sharing a number.
+ * The smallest **value** a slider that must not reach zero will take. Deliberately not the stepper's increment: the
+ * two are unrelated questions that happen to sit at a similar number.
  *
  * Four sliders bound their floor to it: a bloom's radius, a pixelate's fill, a grain's size and an extrude's depth.
  * Each is a quantity whose zero *is* the effect's identity, so the floor is what keeps dragging to the bottom of the

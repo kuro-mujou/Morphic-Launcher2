@@ -113,9 +113,9 @@ interface SettingsRepository {
      * this module already puts every other read-modify-write (see `SettingsRepositoryImpl.update`). So an edit says
      * *what to change* and never *what everything else was*.
      *
-     * **It replaced a `setBackdropEffect(effect)` outright rather than sitting beside it.** A whole-value setter is the
-     * shape that caused this, and leaving one there is leaving the trap loaded for the next screen — an effect chosen
-     * outright is `updateBackdropEffect { chosen }`, which says the same thing and cannot carry a stale field with it.
+     * **There is deliberately no whole-value setter beside it.** A whole-value setter is the shape that causes this,
+     * so leaving one would leave the trap loaded for the next screen — an effect chosen outright is
+     * `updateBackdropEffect { chosen }`, which says the same thing and cannot carry a stale field with it.
      * The whole-value writes that remain ([setIconAppearance], [setIconStudioBackground]) are ones where the value really
      * is the whole setting and no part of it is ever patched.
      *

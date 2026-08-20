@@ -55,11 +55,9 @@ enum class TintMode {
 /**
  * The geometry a ramp follows: a line across the frame, or a circle out from a point.
  *
- * **Shared by [LayerEffect.Bloom] and [LayerEffect.ProgressiveBlur]**, which is why it is not named for either. It
- * was `BloomFalloff` while the bloom was the only thing that ramped; the blur is the second consumer and asks the
- * identical question, so it took the honest name rather than gaining a duplicate enum with the same two values.
- * Renaming the *type* costs nothing on disk — the `@SerialName`s below are the contract, and each effect's own field
- * is still called `falloff`.
+ * **Shared by [LayerEffect.Bloom] and [LayerEffect.ProgressiveBlur]**, which is why it is not named for either: both
+ * ask the identical question, and a second enum carrying the same two values would be a duplicate to keep in step.
+ * The `@SerialName`s below are the on-disk contract, and each effect's own field is still called `falloff`.
  *
  * **Each form has exactly one geometric parameter, and it is not the same one**, which is why this is an enum rather
  * than a flag beside two always-visible sliders: a [LINEAR] ramp is decided by the direction it runs and spans its
@@ -358,7 +356,7 @@ sealed interface LayerEffect {
      * two-arbitrary-stop duotone the general control also allowed; a tint plus a bloom reaches most of it.
      *
      * **The `@SerialName` stays `"gradient"` deliberately, even though the shape broke.** An unknown discriminator
-     * is not skipped the way an unknown *key* is — it throws, and `IconLayerSetCodec` drops the **whole recipe** on
+     * is not skipped the way an unknown *key* is — it throws, and `IconAppearanceCodec` drops the **whole recipe** on
      * a throw, where an unreadable field costs one color. So the settings layer's rule that a key name is the seam
      * for a semantic break does not transfer here: the blast radius is a whole icon rather than one slice. Stored
      * recipes lose their two stops (the old keys are dropped, [argb] defaults to white) and keep everything else.
@@ -1145,10 +1143,8 @@ sealed interface LayerEffect {
      * @property directionality how much the scatter is forced onto one axis: 0 pushes every way at once, 1 smears
      *   strictly along [angleDegrees], and between them the sideways component is progressively squashed.
      *
-     *   **A continuum rather than the two-valued `GrainDrift` this replaces**, whose stated reason — that there is
-     *   no middle ground between "two noise fields" and "one" — was simply wrong. The displacement is a vector; the
-     *   middle ground is scaling its component *perpendicular* to the axis, which is one mechanism reaching both
-     *   ends and every wind-blown look between them.
+     *   **A continuum rather than a switch**, because the displacement is a vector: scaling its component
+     *   *perpendicular* to the axis is one mechanism reaching both ends and every wind-blown look between them.
      * @property angleDegrees which way the smear runs, clockwise from straight down. Means nothing at a
      *   [directionality] of zero, where the noise pushes every way at once, so the studio shows it only above that.
      */

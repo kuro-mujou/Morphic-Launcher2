@@ -36,7 +36,8 @@ import kotlinx.coroutines.launch
 
 /**
  * What the dock section shows — all three fields **resolved together or not at all**, since every one of them is keyed
- * by the device configuration the screen has yet to report. Null is "not yet", exactly as `IconSizingState.sizing` is.
+ * by the device configuration the screen has yet to report. Null is "not yet" — the convention every device-keyed
+ * state in this module follows, so nothing acts on a blueprint fallback the user never chose.
  *
  * @property extentDp the strip's thickness — its height as a bottom strip, its width as a rail. The dock's one genuine
  *   extent setting.
@@ -70,7 +71,7 @@ data class DockState(
  * Screen-level state holder for the dock section: its extent, the grid inside it, and its icons.
  *
  * **Three settings across two stores, which is why they are joined here.** The extent is the dock's own
- * (`setDockExtent`); the row and column counts are an ordinary grid override (`updateGrid`) like home's; the icon
+ * (`setExtent`); the row and column counts are an ordinary grid override (`updateGrid`) like home's; the icon
  * sizing is an icon override, issued through [icons]. They belong on one screen because they constrain each other —
  * the icons set the smallest usable cell, and the extent divides into cells of at least that.
  * L1 grouped them the same way, in a dock detail that held its layout controls and `IconLayoutControls` together.

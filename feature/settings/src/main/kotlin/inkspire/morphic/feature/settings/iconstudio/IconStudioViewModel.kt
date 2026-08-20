@@ -791,7 +791,7 @@ class IconStudioViewModel(
      *
      * Beneath rather than above, and the two senses of that agree, which is what makes it the right default: inserting
      * at the selected layer's own index puts the new layer **below it in the composite** *and* on the row directly
-     * **under it in the list**, since `LayerStackRows` draws the stack top-first. So one rule reads correctly whether
+     * **under it in the list**, since `StudioLayerRail` draws the stack top-first. So one rule reads correctly whether
      * the user is thinking about draw order or about what they are looking at.
      *
      * It also matches what a new layer is *for*. A fresh layer is an opaque fill, so above the selection it hides
@@ -827,7 +827,7 @@ class IconStudioViewModel(
      * enforces in its own `init`, so removing one would throw rather than misbehave.
      *
      * **The selection stays on the same *row*, which is `selected - 1` and not `selected`.** That looks like an
-     * off-by-one and is not, so it is worth stating plainly: `LayerStackRows` draws the stack **top layer first**, the
+     * off-by-one and is not, so it is worth stating plainly: `StudioLayerRail` draws the stack **top layer first**, the
      * reverse of index order, because that is the order the layers are drawn on screen. So the layer that slides into
      * the deleted one's place *on screen* is the one **below** it in the model, and keeping the index instead would
      * move the highlight up a row onto the layer that was above — which reads as the selection jumping to a layer the

@@ -303,7 +303,7 @@ internal fun HomeListSurface(
     val draggedApp = (session?.item as? GridItem.App)?.component
 
     // **The gap is cleared when the drag ends, never by the code that reads it.** An earlier cut reset it at the top
-    // of `handleDrop` and then computed the committed order from it two lines later, so every drop wrote the app to
+    // of `commitLanding` and then computed the committed order from it two lines later, so every drop wrote the app to
     // index 0. Resetting on `isDragging` is the APPS pager's shape and it has the property that matters: the only
     // writer of `-1` runs *after* the drop has been read, and it covers a cancel as well as a release.
     LaunchedEffect(coordinator.isDragging) {

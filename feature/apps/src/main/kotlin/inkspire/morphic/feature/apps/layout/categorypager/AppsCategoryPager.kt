@@ -184,7 +184,7 @@ fun AppsCategoryPager(
                 // as tall as its content — a category of three apps in a four-column grid is *one row*, and every
                 // point below that row is off the grid even though it is still squarely inside the page. Treating
                 // that as unanswerable left most of the screen dead for any short category: no gap, no drop shadow,
-                // and a release there silently discarded, because `handleDrop` needs a `gapPage` the planner never
+                // and a release there silently discarded, because `commitLanding` needs a `gapPage` the planner never
                 // set while still reporting the drop as droppable.
                 if (fingerInRoot.y >= geo.originInRoot.y + geo.rows * geo.cellH) {
                     gap = others.size
