@@ -24,7 +24,7 @@ import inkspire.morphic.core.model.GridItem
  * @property id stable identity used to key the registry and report the active target.
  * @property bounds the zone's rectangle in root/window coordinates, reported by the surface as it measures or
  *   moves; hit-testing against the measured bounds is what stops hit geometry drifting from what's drawn (the
- *   L1 smell of a hardcoded tap radius).
+ *   alternative being a hardcoded tap radius).
  * @property z stacking order: when zones overlap (an open folder above home), the highest [z] wins the finger.
  * @property planner what a drop here would do, asked on every finger move while this zone is the active one.
  * @property accepts whether this zone will take the given dragged item — an A–Z drawer refuses a home item, a

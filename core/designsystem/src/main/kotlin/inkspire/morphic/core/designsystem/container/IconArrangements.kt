@@ -23,15 +23,15 @@ data class ArrangementSlot(val x: Float, val y: Float, val width: Float, val hei
  * Lays [count] icons out inside a [width] × [height] px box, the way this [IconArrangement] says to — the whole of
  * an icon container's inner layout, and **pure**, so it is unit-tested rather than eyeballed on a device.
  *
- * **One exhaustive function, not L1's interface and registry.** L1 declares an `Arrangement` interface, seven
- * implementations of it, and an `arrangementFor(type)` mapping from the enum to those objects — one implementation
- * per enum value, and nothing outside that file ever implements it. That is the wrong-interface-abstraction smell
+ * **One exhaustive function, not an interface and a registry.** An `Arrangement` interface with seven
+ * implementations and an `arrangementFor(type)` mapping is one implementation per enum value, with nothing outside
+ * that file ever implementing it. That is the wrong-interface-abstraction smell
  * `GridBlueprint` already had removed: it buys extensibility nobody can use (the enum is closed, so a new
  * arrangement is a new enum value either way) and costs a registry that can fall out of step with the enum it maps.
  * A `when` cannot: a new [IconArrangement] value **fails to compile** here until it says how it lays out.
  *
- * The maths itself is L1's, ported as-is — the shapes are the feature, and they are already what the author knows.
- * What is not ported is the five copies of the degenerate-input guard, hoisted here so every arrangement answers an
+ * The shapes are the feature. What is *not* repeated is the degenerate-input guard, hoisted here so every
+ * arrangement answers an
  * empty container, a zero-width cell and a negative count the same way rather than each remembering to.
  *
  * @param count how many icons to place — every one gets a slot, however cramped; a container's *footprint* is what
@@ -104,7 +104,7 @@ private fun circleSlots(count: Int, width: Float, height: Float): List<Arrangeme
  * square of `min(width, height) / g`, so the fan stays square in a non-square box rather than shearing.
  *
  * [fromLeft] and [fromTop] are the chosen corner, decomposed. They are two booleans rather than a `FanCorner` enum
- * (L1 has one) because [IconArrangement]'s own four `FAN_*` values already *are* that enum — a second one parallel
+ * because [IconArrangement]'s own four `FAN_*` values already *are* that enum — a second one parallel
  * to it would be a taxonomy to keep in step, and only the `when` above can reach this.
  */
 private fun fanSlots(

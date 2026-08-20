@@ -103,8 +103,8 @@ fun SurfacePager(
         Box(Modifier.fillMaxSize().surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
             // Each slot gets its own channel for "where is my content resting", which is what makes the nested-scroll
             // hand-off work without the shell wiring anything: content calls `ReportScrollEdges` and the gesture reads
-            // whichever slot the swipe is crossing. L1 hoisted four `mutableStateOf`s and four reporter lambdas into
-            // its home screen for this; the pager composes the slots, so the pager owns them.
+            // whichever slot the swipe is crossing. The pager composes the slots, so the pager owns them — rather
+            // than four `mutableStateOf`s and four reporter lambdas hoisted into the home screen.
             CompositionLocalProvider(
                 LocalScrollEdgeSlot provides state.centerScroll,
                 LocalSurfacePresented provides (openEdge == null),
@@ -137,8 +137,7 @@ fun SurfacePager(
  * Offsets a full-screen surface slot by a [fraction] of the viewport (`1f` == one viewport). The [fraction]
  * lambda — and the viewport size it scales against — are read *inside* [offset]'s layout-phase block, so a pan
  * change re-places the slot without recomposing. Every slot fills the same parent, so the viewport dimensions
- * on [state] are also each slot's own size (L1 threaded these in the same way rather than reaching for `size`,
- * which `offset` doesn't expose).
+ * on [state] are also each slot's own size, threaded rather than read from `size`, which `offset` does not expose.
  */
 private fun Modifier.surfaceSlide(state: SurfacePagerState, fraction: () -> Offset): Modifier = offset {
     val f = fraction()

@@ -52,8 +52,7 @@ private const val AXIS_EPSILON = 0.001f
  * consumed — so over any scrolling content the accumulated delta stays at zero, slop is never crossed, and none of
  * the logic below ever executes. Initial reverses that: this gesture gets first refusal on the raw delta, decides,
  * and **consumes only if it claims**. Declining costs the child nothing, because nothing was consumed and the event
- * reaches it on Main exactly as it would have. L1's `CrossPager` used Initial for the same reason; taking the default
- * pass here was what left `AT_EDGE` inert.
+ * reaches it on Main exactly as it would have. Taking the default pass here is what leaves `AT_EDGE` inert.
  *
  * The other side of owning first refusal is that a claim must never be idle: a swipe pressed against a bound the pan
  * is already clamped at would consume the finger and move nothing, so the claim is gated on the swipe actually
@@ -61,8 +60,8 @@ private const val AXIS_EPSILON = 0.001f
  *
  * **The question is asked once, at slop, and the answer stands for the whole gesture.** A finger that crosses slop
  * while the content can still scroll belongs to the content until it lifts — scrolling a list to the bottom and
- * carrying straight on does *not* start panning; a second swipe from the bottom does. That is L1's behavior too, and
- * it is the honest limit of a hand-off decided by a claim rather than by leftover-delta plumbing: continuing would
+ * carrying straight on does *not* start panning; a second swipe from the bottom does. That is the honest limit of a
+ * hand-off decided by a claim rather than by leftover-delta plumbing: continuing would
  * mean real `nestedScroll` and a scroll connection on every surface. Two fingers skip the question entirely.
  *
  * **[enabled] is consulted twice, and the second time is the one that matters.** At touch-down it catches a reason

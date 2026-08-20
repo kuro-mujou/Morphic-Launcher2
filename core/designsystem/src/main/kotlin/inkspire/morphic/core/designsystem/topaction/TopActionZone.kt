@@ -71,21 +71,19 @@ enum class TopActionTarget {
  * crucially, **two states**: a thin collapsed strip that sits in the status bar waiting to be reached, and an
  * expanded 96dp panel naming what it will do.
  *
- * The two states are the whole design and the reason this is a full port of L1's `TopActionZone` rather than the
- * always-open banner it replaced. Collapsed, it is a hint that costs no screen and cannot be hit by accident on the
+ * The two states are the whole design, and the reason this is not an always-open banner. Collapsed, it is a hint
+ * that costs no screen and cannot be hit by accident on the
  * way to the top row of home. Expanded, it has committed to being a target and says so in words — which is the only
  * way to distinguish *remove* from *uninstall*, and the reason a shadow could never do this job (see
  * `DropIntent.REMOVE`). The transition between them is a dwell, owned by [rememberTopActionState].
  *
- * **Reduced from L1's version in one place only:** L1 drove the two modes from two entirely separate
- * implementations — the drawer's `SurfaceExtractEngagement` and home's `rememberTopActionState`, each with its own
- * thresholds and its own copy of the band. Here one band spans both, because the shell is above both surfaces; the
+ * **One band spans both modes**, rather than a separate implementation per surface with its own thresholds and its
+ * own copy of the view. It can, because the shell is above both surfaces; the
  * mode is a parameter and the timing difference between them lives in one state holder.
  *
  * **Color.** [TopActionMode.ADD_TO_HOME] is `accent`, the palette's grayscale emphasis. [TopActionMode.DELETE] is
  * `error` — the one hue the palette reserves, and this is what it is reserved *for*: an action that destroys
- * something. L1 used red for delete and green for add; the green goes, the red stays, and it stays because it is
- * carrying meaning rather than decoration.
+ * something. Red for delete stays because it carries meaning; a matching green for add would be decoration.
  *
  * @param mode what the band offers, or null when there is nothing to offer — no drag, or a drag of something the
  *   band cannot take. Null draws nothing at all, so a hidden band cannot swallow a touch.
@@ -133,8 +131,8 @@ fun TopActionZone(
         label = "topActionHeight",
     )
 
-    // L1's gradient: solid where the labels are, fading out below so the band has no hard bottom edge to be mistaken
-    // for a real one. Collapsed it reads as a tint over the status bar and nothing more.
+    // Solid where the labels are, fading out below so the band has no hard bottom edge to be mistaken for a real
+    // one. Collapsed it reads as a tint over the status bar and nothing more.
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -233,7 +231,7 @@ private fun Target(
 
 /**
  * The glyphs, drawn rather than imported: `core:designsystem` carries no material-icons dependency, and pulling one
- * in for three marks of two strokes each is not a trade worth making. L1 used the icon set here.
+ * in for three marks of two strokes each is not a trade worth making.
  */
 @Composable
 private fun TopActionGlyphMark(glyph: TopActionGlyph, tint: Color, size: Dp = GlyphSize) {

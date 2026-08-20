@@ -109,9 +109,9 @@ internal val ItemGesturePhase.ownsFinger: Boolean
  * - **long-press** → [ItemGestureEffect.ShowMenu]; then **move** → drag ([ItemGestureEffect.BeginDrag] …
  *   [ItemGestureEffect.Drop]); or **release with no move** → the menu stays up and *no* tap fires
  *
- * Keeping the decision logic here — pure, deterministic, unit-tested — is the deliberate fix for L1, where
- * four separate recognizers each re-implemented long-press/slop/tap-suppression with different constants and
- * drifted out of sync. One machine, one [ItemGestureConfig], identical behavior everywhere.
+ * Keeping the decision logic here — pure, deterministic, unit-tested — is what stops separate recognizers each
+ * re-implementing long-press, slop and tap-suppression with their own constants and drifting apart. One machine, one
+ * [ItemGestureConfig], identical behavior everywhere.
  *
  * The long-press *timer* lives in the modifier (a coroutine race); the machine just receives
  * [ItemGestureEvent.LongPress] and ignores it once the gesture has already moved on. Not thread-safe — drive
@@ -261,8 +261,8 @@ class ItemGestureMachine(
 }
 
 /**
- * Shared gesture thresholds and timing. One instance drives every item, so tuning is global — no more L1's
- * scattered, conflicting per-recognizer constants (350 vs 500ms long-press, four different edge dwells).
+ * Shared gesture thresholds and timing. One instance drives every item, so tuning is global rather than scattered
+ * across per-recognizer constants that disagree.
  *
  * @property touchSlopPx how far the finger must travel (px) before a move counts as a swipe (in [
  *   ItemGesturePhase.Pressed]) or starts a drag (in [ItemGesturePhase.MenuOpen]); smaller travel is ignored

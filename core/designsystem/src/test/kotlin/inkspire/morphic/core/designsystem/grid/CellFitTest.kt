@@ -60,7 +60,7 @@ class CellFitTest {
         //
         // Getting this wrong is not academic: the earlier `minIcon / percent` floor made a 28dp guardrail at 30% demand
         // a 101dp column, so *shrinking* the icons reported fewer columns and the icon controls appeared to resize the
-        // grid. L1's own home formula (`gridMaxima`) left the percent out for this reason.
+        // grid, which is why the percent is left out of it.
         val area = GridArea(360f, 800f)
         listOf(0.3f, 0.5f, 0.88f, 1f).forEach { percent ->
             val bounds = HomePagerGrid.boundsIn(area, metrics.copy(iconPercent = percent), labelHeight)
@@ -175,8 +175,8 @@ class CellFitTest {
 
     @Test
     fun `a wider area never reports fewer columns`() {
-        // The property L1's "fixed cell size, not one derived from the current grid" note protects: measuring against
-        // the current cell would let a wider area report no more room.
+        // The property the "fixed cell size, not one derived from the current grid" note protects: measuring
+        // against the current cell would let a wider area report no more room.
         var previous = 0
         listOf(120f, 240f, 360f, 480f, 720f, 1024f).forEach { width ->
             val cols = HomePagerGrid.boundsIn(GridArea(width, 800f), metrics, labelHeight).maxCols
@@ -259,7 +259,7 @@ class CellFitTest {
     @Test
     fun `a column count past what fits is clamped, and a wider area gives it back`() {
         // The property that lets the column clamp stay a *read*: nothing is written, so the count the user chose
-        // returns the moment there is room for it. L1 wrote every clamp back, and the preference was gone for good.
+        // returns the moment there is room for it. Writing the clamp back would lose the preference for good.
         val narrow = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
         val wide = DockGrid.fitGridConfig(GridArea(1080f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
 

@@ -17,8 +17,8 @@ import inkspire.morphic.core.model.HomeEdge
  *
  * **Every field defaults to true, and that default is load-bearing twice.** Content that does not scroll on an axis
  * genuinely *is* at both of that axis's edges, so a vertical list fills in its horizontal pair by saying nothing. And
- * a surface that reports nothing at all — a layout not yet wired, a preview, the dev harness — reads as at every
- * edge, which is precisely how the launcher behaved before this landed. The permissive value is the safe one: it can
+ * a surface that reports nothing at all — a layout not yet wired, a preview — reads as at every edge, which is how
+ * the launcher behaves with no reporter. The permissive value is the safe one: it can
  * make a swipe cross a fraction early, never trap the user on a surface they cannot swipe off.
  *
  * Named by **physical** edge rather than by scroll direction because that is what it is compared against — a
@@ -26,12 +26,10 @@ import inkspire.morphic.core.model.HomeEdge
  * a horizontal pager under RTL, where the first page is on the right; `LauncherPager` lays out in raw pixels with no
  * layout-direction handling today, so the two agree, and the day it gains one this mapping is where it shows.
  *
- * Ported from L1's `SurfaceScrollEdges`, with the same four booleans and two differences. L1 had HOME answer the
- * same question through a *second*, differently-shaped type (`HomeGestureRelease`'s `swipeRightOpensLeft`/…), which
- * conflated the live edge fact with the policy and could not express a scrolled home list at all; here one type is
- * reported by HOME and by every side surface, and the policy is [ScrollAxes]' job. And L1's reporters blanked every
- * field to false while an item drag was in flight, to stop the pan claiming mid-drag — L2 answers that one layer up,
- * with `SurfaceGestureLock`, which gates the whole gesture rather than lying about where the content is.
+ * **One type, reported by HOME and by every side surface.** Giving HOME a second, differently-shaped type conflates
+ * the live edge fact with the policy and cannot express a scrolled home list at all; the policy is [ScrollAxes]' job.
+ * And nothing here blanks a field while an item drag is in flight to stop the pan claiming — that is answered one
+ * layer up by `SurfaceGestureLock`, which gates the whole gesture rather than lying about where the content is.
  */
 @Immutable
 data class ScrollEdges(
@@ -58,8 +56,8 @@ data class ScrollEdges(
  * inside a pointer callback — so reading the scroll states *there* costs nothing and is never stale. Publishing a
  * value instead would mean the reporter reads `canScrollForward` during composition, and for a `ScrollState` that is
  * a raw read of `value`: the surface would recompose once per scroll frame purely to keep this in step. That is the
- * trap `CategoryPage`'s geometry comment already warns about on the same surface, and L1 fell into it — its
- * `PlainGridLayout` and `IosCategoryGridLayout` read `gridState.canScrollBackward` straight into composition.
+ * trap `CategoryPage`'s geometry comment already warns about on the same surface: reading
+ * `gridState.canScrollBackward` straight into composition subscribes the layout to every scroll frame.
  *
  * A plain `var` rather than snapshot state for the same reason: nothing composes against it, so a write should
  * invalidate nothing.

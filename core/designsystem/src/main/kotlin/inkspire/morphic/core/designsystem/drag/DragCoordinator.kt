@@ -47,13 +47,13 @@ data class DropOutcome(
  *
  * Because **one** coordinator sits above every surface, holds the whole drag, and hit-tests **all** zones in
  * one coordinate space, cross-surface drops and dragging out of a folder need no special handoff — they are
- * the same hit-test. This is the structural replacement for L1's four parallel gesture recognizers and the
- * `HomeDragBridge` re-tracking hack they forced (docs/DRAG_AND_DROP_DESIGN.md §2, §4).
+ * the same hit-test — which is what makes parallel per-surface recognizers, and the re-tracking hack they force,
+ * unnecessary (docs/DRAG_AND_DROP_DESIGN.md §2, §4).
  *
  * **Hosted once, by `feature:shell`.** Each surface used to remember its own, which was enough only while no drag
  * could cross a surface boundary. It can now — an app is lifted in the APPS drawer and lands on home — and two
  * coordinators cannot both own one gesture. So the shell provides this through [LocalDragCoordinator] and every
- * surface reads it; the dev playgrounds provide one of their own, since they stand in for the shell.
+ * surface reads it.
  *
  * It carries **no planner of its own** for the same reason: with every surface's zones in one registry, a single
  * planner would have to know about all of them. Each zone answers for itself (see [DropZone]).

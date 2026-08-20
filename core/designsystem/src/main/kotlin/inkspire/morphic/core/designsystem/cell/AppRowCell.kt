@@ -56,7 +56,7 @@ private val IconLabelGap = 16.dp
  * **Derived rather than a stated range**, which is why it lives here beside the padding it has to add back rather than
  * as two numbers in a settings screen: a range picked by hand would drift from the cell, and — more to the point — it
  * would not move when the user changes the guardrails it is a function of. The dock's height slider states its bounds
- * (L1's `80f..320f`) because a strip's extent genuinely is a matter of screen share; a row's is not.
+ * because a strip's extent genuinely is a matter of screen share; a row's is not.
  *
  * `minOf`/`maxOf` on the guardrails mirrors `resolveIconSize`, which is order-safe, and the upper bound is forced above
  * the lower so equal guardrails still give a usable control rather than an empty one.
@@ -186,8 +186,8 @@ private const val DEFAULT_LINE_HEIGHT_RATIO = 1.2f
  * **[metrics] is honored except for `showLabel`, and the exception is structural rather than an omission.** A row
  * *is* its label — the icon is an adornment beside it — so a row with no label would not be a row at all, and the
  * settings section correspondingly does not offer that switch for a list. `showIcon` is honored, because dropping
- * the icon leaves exactly the pure-text list it promises (L1 offered the same toggle, gated on its `listMode` flag).
- * `labelScale` is honored too: it multiplies the row's text as it multiplies a grid cell's, which is what makes the
+ * the icon leaves exactly the pure-text list it promises. `labelScale` is honored too: it multiplies the row's text
+ * as it multiplies a grid cell's, which is what makes the
  * text-size control mean the same thing wherever it appears.
  */
 @Composable

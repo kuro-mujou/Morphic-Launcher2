@@ -18,14 +18,14 @@ import kotlin.time.Duration.Companion.milliseconds
 /**
  * How long the finger rests in the collapsed strip before the band opens up. Short — opening only commits the band
  * to being a target, it performs nothing — but not zero, so brushing the top edge on the way somewhere else does not
- * flash a delete panel across the screen. L1's `TOP_ACTION_EXPAND_DWELL_MS`.
+ * flash a delete panel across the screen.
  */
 private const val ExpandDwellMs = 300L
 
 /**
  * How long an expanded [TopActionMode.ADD_TO_HOME] band waits before it actually hands the drag to HOME. Much longer
  * than the expand dwell, because this one *acts*: the band is already open and naming what it will do, and this is
- * the window in which the user can still change their mind by moving away. L1's `EXTRACT_DWELL_MS`.
+ * the window in which the user can still change their mind by moving away.
  */
 private const val EjectDwellMs = 700L
 
@@ -35,7 +35,7 @@ private const val EjectDwellMs = 700L
  *
  * Without it, handing the drag to HOME would replace "Drop to home" with "Remove | Uninstall" under a stationary
  * finger in the same instant, which is exactly how a user ends up hovering a delete target they never went looking
- * for. L1's `TOP_ACTION_SWITCH_GRACE_MS`, and it is why the band deliberately **collapses** when it fires: what the
+ * for. It is also why the band deliberately **collapses** when it fires: what the
  * user sees is act → shrink away → pause → open again, now offering something else.
  */
 private const val SwitchGraceMs = 500L
@@ -63,8 +63,7 @@ class TopActionState internal constructor(
  * The band counts as reached when the finger is above its *current* height — the status-bar inset while collapsed,
  * [TopActionExpandedHeight] once expanded. That hysteresis is what makes it usable: a deliberate push into the very
  * top of the screen arms it, and only a deliberate pull well clear disarms it, so it cannot chatter open and shut
- * while the finger sits near the boundary. L1 spelled the same rule out as two named thresholds (`statusBarPx` to
- * enter, `topBarPx` to leave).
+ * while the finger sits near the boundary — the status bar's height to enter, the expanded band's to leave.
  *
  * ## The two modes differ in timing, and only in timing
  *
