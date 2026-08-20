@@ -41,10 +41,6 @@ import inkspire.morphic.core.designsystem.grid.GridSpan
 import inkspire.morphic.core.designsystem.grid.ResizeBounds
 import inkspire.morphic.core.designsystem.grid.ResizeOverlay
 import inkspire.morphic.core.designsystem.grid.clampToGrid
-import inkspire.morphic.core.designsystem.grid.fitGridConfig
-import inkspire.morphic.core.designsystem.grid.splitForSideZone
-import inkspire.morphic.core.designsystem.grid.usableWindowArea
-import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
 import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
@@ -55,18 +51,12 @@ import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
-import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
-import inkspire.morphic.core.model.GridSlot
-import inkspire.morphic.core.model.HomeLayout
-import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.WidgetInfo
-import inkspire.morphic.core.model.sideZoneEdge
-import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.WidgetSpan
@@ -242,85 +232,11 @@ internal fun HomePagerSurface(
     // layer that can read the window. An app occupies one whole visual cell, i.e. a cellMultiplier × cellMultiplier
     // logical footprint.
     //
-    // **The blueprint is a fallback for the first frame, not the source.** This screen used to resolve
-    // `HomePagerGrid.toGridConfig(device)` and draw that, so the home grid section wrote a size nothing read — and
-    // moved the placements to match a grid nothing was drawing. The store answers a frame or two later; until it
-    // does, the blueprint's default is the same number it would resolve to for a user who has changed nothing.
-    val blueprintConfig = remember(device) { HomePagerGrid.toGridConfig(device) }
-
-    // The area the grids are actually given: the window minus the insets the column below pads by. **One value feeds
-    // every use**, which is the point. Deriving the area from settings in one place and measuring it in another lets
-    // the size a grid is fitted to disagree with the size it is drawn into. Here they cannot: `uiInsets` is the same
-    // expression throughout, and the measurement itself is
-    // now the shared `usableWindowArea` that the settings sections and the APPS surface read — so a bound computed for
-    // this screen somewhere else describes the same screen.
-    val window = usableWindowArea(uiInsets)
-
-    // **Where the dock sits, which decides everything below it.** A bottom strip on three configurations and a rail on
-    // the trailing edge in phone landscape — the one posture with no height to spare. The split is a single expression
-    // the two settings sections read as well, so the area home draws into and the area they bound its rows against
-    // cannot disagree.
-    val dockEdge = device.sideZoneEdge(HomeLayout.PAGER_WITH_DOCK)
-    val dockMetrics = state.metricsFor(GridSlot.HOME_DOCK)
-    val dockSizing = state.side
-    val dockExtent = (dockSizing?.extentDp ?: checkNotNull(DockGrid.extentDp)).dp
-    val split = window.splitForSideZone(dockExtent.value, dockEdge)
-
-    // **Padding is width the grid does not get, so it is subtracted before anything is fitted.** Each zone has its
-    // own — a user may inset the pager without touching the dock — and each is taken off *twice*, once per edge. Doing
-    // it here rather than at the draw call is the whole point: `fitGridConfig` decides how many columns the icons can
-    // occupy, and fitting against the full width would size cells the grid then has no room to draw.
-    //
-    // Horizontal on both zones whichever edge the dock is on: a rail's margin insets *within* its width, which is what
-    // a "side margin" means on a vertical strip too.
-    val mainPadding = state.paddingFor(GridSlot.HOME_MAIN).dp
-    val dockPadding = state.paddingFor(GridSlot.HOME_DOCK).dp
-    val mainArea = split.main.copy(widthDp = (split.main.widthDp - mainPadding.value * 2).coerceAtLeast(1f))
-    val dockArea = split.side.copy(widthDp = (split.side.widthDp - dockPadding.value * 2).coerceAtLeast(1f))
-
-    // The dock is the one grid with an extent of its own: the user sets how thick the strip is *and* how many rows and
-    // columns divide it, and `fitGridConfig` clamps those counts to what the extent and the icon size actually allow.
-    // On a rail that bound falls on the columns rather than the rows, which needs no branch here — the extent is in
-    // the area's width, and `CellFit` fits each axis to the dimension it is given.
-    //
-    // The blueprint stands in until the store answers, which is the fallback role `DockGrid.defaults` exists for.
-    val dockBlueprintConfig = remember(device) { DockGrid.toGridConfig(device) }
-    val dockConfig = if (dockSizing == null) {
-        dockBlueprintConfig
-    } else {
-        DockGrid.fitGridConfig(
-            area = dockArea,
-            cols = dockSizing.cols,
-            rows = dockSizing.rows,
-            metrics = dockMetrics,
-        )
-    }
-
-    // **The pager is fitted to what the dock leaves it**, through the same `fitGridConfig` the dock reads its own
-    // counts with — which is the half that was missing. The main area is the only grid that was drawn at its stored
-    // size regardless of the space available, so raising the dock's height simply squeezed home's rows into whatever
-    // was left instead of reducing them, and past a point the cells were shorter than the icon they hold.
-    //
-    // The area is the window minus the dock, and it is deliberately the same expression the Home settings section
-    // computes its bounds from: the section says how many rows may be *chosen*, this says how many are *drawn*, and
-    // one formula is what keeps those two answers the same.
-    //
-    // **Clamped on read, never written back**, exactly as the dock's columns are: the count the user chose survives,
-    // so shortening the dock again brings the rows straight back. Only the *items* the smaller grid cannot hold are
-    // written, by `fitMainTo` below — and they go to a further page rather than being dropped, since home always has
-    // one (the dock, a single strip, has to evict to home instead).
-    val mainMetrics = state.metricsFor(GridSlot.HOME_MAIN)
-    val storedMain = (state.main as? HomeMainSizing.Pager)?.config
-    val config = if (storedMain == null) {
-        blueprintConfig
-    } else {
-        HomePagerGrid.fitGridConfig(
-            area = mainArea,
-            cols = storedMain.visualCols,
-            rows = storedMain.visualRows,
-            metrics = mainMetrics,
-        )
-    }
+    // Turning that into two grid sizes is [rememberHomePagerLayout] — derivation and nothing else, which is what
+    // lets it live away from the drag state, the gestures and the measured geometry below.
+    val layout = rememberHomePagerLayout(state, device)
+    val config = layout.config
+    val dockConfig = layout.dockConfig
 
     // Both zones re-settle whenever their grid changes, and for the same reason: a smaller grid has cells that may
     // hold items. Idempotent — a grid everything already fits writes nothing — which is why neither needs a "did it
@@ -330,8 +246,8 @@ internal fun HomePagerSurface(
     // blueprint fallback is a *smaller* grid than a user who has grown theirs, so settling against it on the frame
     // before the first emission would re-home items to fit a size nobody chose — and the write would outlive the
     // frame that caused it.
-    if (storedMain != null) LaunchedEffect(config) { viewModel.fitMainTo(config) }
-    if (dockSizing != null) LaunchedEffect(dockConfig) { viewModel.fitDockTo(dockConfig) }
+    if (layout.mainFromStore) LaunchedEffect(config) { viewModel.fitMainTo(config) }
+    if (layout.dockFromStore) LaunchedEffect(dockConfig) { viewModel.fitDockTo(dockConfig) }
 
     val gestureConfig = remember {
         ItemGestureConfig(touchSlopPx = with(density) { 20.dp.toPx() }, longPressTimeoutMillis = 400L)
@@ -738,10 +654,10 @@ internal fun HomePagerSurface(
         // (`CoordinateDragGrid`'s KDoc says so in as many words), so the bounds they report are already the padded
         // ones.
         HomeZoneScaffold(
-            edge = dockEdge,
-            extent = dockExtent,
-            mainPadding = mainPadding,
-            sidePadding = dockPadding,
+            edge = layout.dockEdge,
+            extent = layout.dockExtent,
+            mainPadding = layout.mainPadding,
+            sidePadding = layout.dockPadding,
             // The dock: a single, non-paged coordinate zone on the *same* coordinator, so a drag between it and the
             // pager is one gesture with no hand-off. Its extent is the user's setting, and the count it divides that
             // extent into is clamped to it rather than stored — see `dockConfig` above.
@@ -769,7 +685,7 @@ internal fun HomePagerSurface(
                         session = session,
                         cellModifier = cellModifier,
                         itemGestures = itemGestures,
-                        metrics = dockMetrics,
+                        metrics = layout.dockMetrics,
                         onLaunch = viewModel::launch,
                         onOpenFolder = folderHost::open,
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
@@ -802,7 +718,7 @@ internal fun HomePagerSurface(
                         session = session,
                         cellModifier = cellModifier,
                         itemGestures = itemGestures,
-                        metrics = mainMetrics,
+                        metrics = layout.mainMetrics,
                         onLaunch = viewModel::launch,
                         onOpenFolder = folderHost::open,
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
