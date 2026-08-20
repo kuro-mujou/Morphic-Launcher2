@@ -1,0 +1,58 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:GridEditor.kt$pending == null || pending.nonce == flashedNonce || (shownCols == cols &amp;&amp; shownRows == rows)</ID>
+    <ID>ComplexCondition:StudioViewport.kt$canvasWidth &lt;= 0f || canvasHeight &lt;= 0f || railWidth &lt;= 0f || railHeight &lt;= 0f</ID>
+    <ID>CyclomaticComplexMethod:AppsDetail.kt$@Composable internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = Modifier)</ID>
+    <ID>CyclomaticComplexMethod:DockDetail.kt$@Composable internal fun DockDetail(modifier: Modifier = Modifier)</ID>
+    <ID>CyclomaticComplexMethod:EffectSlice.kt$EffectSlice$fun seeded(): LayerEffect?</ID>
+    <ID>CyclomaticComplexMethod:EffectSlice.kt$EffectSlice$fun storedEffect(effects: List&lt;LayerEffect&gt;): LayerEffect?</ID>
+    <ID>CyclomaticComplexMethod:GridEditor.kt$@Composable internal fun GridEditor( cols: Int, rows: Int, colBounds: IntRange?, rowBounds: IntRange?, aspectRatio: Float, onEdit: (GridEditorEdge, Boolean) -&gt; Unit, horizontalInsetFraction: Float = 0f, preview: (@Composable (PreviewEdit?) -&gt; Unit)? = null, modifier: Modifier = Modifier, companion: EditorCompanion? = null, )</ID>
+    <ID>CyclomaticComplexMethod:GridEditor.kt$@OptIn(ExperimentalMaterial3ExpressiveApi::class) @Composable internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction: Float, modifier: Modifier)</ID>
+    <ID>CyclomaticComplexMethod:GridSizeDetail.kt$@Composable internal fun GridSizeDetail(modifier: Modifier = Modifier)</ID>
+    <ID>CyclomaticComplexMethod:IconStudioScreen.kt$@Composable fun IconStudioScreen( route: IconStudioRoute, onBack: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>CyclomaticComplexMethod:StudioEffects.kt$@Composable internal fun EffectsControls( target: EffectTarget, entry: EffectEntryState, onEffects: ((List&lt;LayerEffect&gt;) -&gt; List&lt;LayerEffect&gt;) -&gt; Unit, onLayer: ((IconLayerSpec) -&gt; IconLayerSpec) -&gt; Unit, onCommit: () -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:StudioSource.kt$@OptIn(ExperimentalLayoutApi::class) @Composable internal fun SourceControls( spec: IconLayerSpec, packs: List&lt;InstalledIconPack&gt;, allowsFixedSource: Boolean, onUpdate: ((IconLayerSpec) -&gt; IconLayerSpec) -&gt; Unit, onCommit: () -&gt; Unit, onPickImage: () -&gt; Unit, onPickAppDefault: () -&gt; Unit, onPickSolidFill: () -&gt; Unit, onToggleMonochrome: () -&gt; Unit, onToggleNormalize: () -&gt; Unit, onPickPack: (String) -&gt; Unit, onBrowsePack: ((String) -&gt; Unit)?, )</ID>
+    <ID>CyclomaticComplexMethod:StudioToolPanel.kt$@Composable fun StudioToolPanel( tool: StudioTool, state: IconStudioState, actions: StudioActions, hazeState: HazeState, customImage: (path: String) -&gt; Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; Drawable?, modifier: Modifier = Modifier, )</ID>
+    <ID>CyclomaticComplexMethod:WallpaperCropScreen.kt$@Composable fun WallpaperCropScreen( uri: String, onDone: () -&gt; Unit, modifier: Modifier = Modifier, target: CropTarget = CropTarget.SINGLE, )</ID>
+    <ID>CyclomaticComplexMethod:WallpaperDetail.kt$@Composable private fun WallpaperModePager( state: WallpaperSectionState, screenRatio: Float, onApply: (WallpaperTarget) -&gt; Unit, onApplyRotating: () -&gt; Unit, onChooseImage: () -&gt; Unit, onCaptureScreen: () -&gt; Unit, onPickPortrait: () -&gt; Unit, onPickLandscape: () -&gt; Unit, )</ID>
+    <ID>ForbiddenComment:StudioSource.kt$// TODO: move to whichever section ends up owning a layer's appearance.</ID>
+    <ID>LongMethod:AppsDetail.kt$@Composable internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = Modifier)</ID>
+    <ID>LongMethod:DockDetail.kt$@Composable internal fun DockDetail(modifier: Modifier = Modifier)</ID>
+    <ID>LongMethod:GridSizeDetail.kt$@Composable internal fun GridSizeDetail(modifier: Modifier = Modifier)</ID>
+    <ID>LongMethod:IconStudioScreen.kt$@Composable fun IconStudioScreen( route: IconStudioRoute, onBack: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:StudioLayerRail.kt$@Composable internal fun StudioLayerRail( state: IconStudioState, hazeState: HazeState, workspace: IconStudioWorkspace, canvasWidth: Float, canvasHeight: Float, menu: RailMenu?, customImage: (path: String) -&gt; android.graphics.drawable.Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; android.graphics.drawable.Drawable?, onSelect: (StudioTarget) -&gt; Unit, onAdd: () -&gt; Unit, onMenuChange: (RailMenu?) -&gt; Unit, onWorkspaceChange: (IconStudioWorkspace) -&gt; Unit, onWorkspaceCommit: () -&gt; Unit, onBoundsChange: (Rect) -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:StudioSource.kt$@OptIn(ExperimentalLayoutApi::class) @Composable internal fun SourceControls( spec: IconLayerSpec, packs: List&lt;InstalledIconPack&gt;, allowsFixedSource: Boolean, onUpdate: ((IconLayerSpec) -&gt; IconLayerSpec) -&gt; Unit, onCommit: () -&gt; Unit, onPickImage: () -&gt; Unit, onPickAppDefault: () -&gt; Unit, onPickSolidFill: () -&gt; Unit, onToggleMonochrome: () -&gt; Unit, onToggleNormalize: () -&gt; Unit, onPickPack: (String) -&gt; Unit, onBrowsePack: ((String) -&gt; Unit)?, )</ID>
+    <ID>LongMethod:StudioToolPanel.kt$@Composable fun StudioToolPanel( tool: StudioTool, state: IconStudioState, actions: StudioActions, hazeState: HazeState, customImage: (path: String) -&gt; Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; Drawable?, modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:WallpaperCropScreen.kt$@Composable fun WallpaperCropScreen( uri: String, onDone: () -&gt; Unit, modifier: Modifier = Modifier, target: CropTarget = CropTarget.SINGLE, )</ID>
+    <ID>LongParameterList:EditorPreviews.kt$( layout: AppsLayout, cols: Int, rows: Int, metrics: IconMetrics, chrome: AppsChrome, areaWidthDp: Float, insetFraction: Float, edit: PreviewEdit?, rowHeightDp: Float, )</ID>
+    <ID>LongParameterList:IconStudioViewModel.kt$IconStudioViewModel$( route: IconStudioRoute, private val settingsRepository: SettingsRepository, private val wallpaperRepository: WallpaperRepository, private val overrideRepository: IconOverrideRepository, private val parsedIcons: ParsedIconLoader, private val appRepository: AppRepository, private val customIcons: CustomIconStore, private val iconPacks: IconPackManager, )</ID>
+    <ID>LongParameterList:StudioFinalizeScreen.kt$( state: IconStudioState, hazeState: HazeState, onPlateEnabled: (Boolean) -&gt; Unit, onPlateShape: (IconShape?) -&gt; Unit, onZoom: (Float) -&gt; Unit, onSavePreset: ((String) -&gt; Unit)?, onApply: () -&gt; Unit, onBack: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:StudioLayerRail.kt$( state: IconStudioState, hazeState: HazeState, workspace: IconStudioWorkspace, canvasWidth: Float, canvasHeight: Float, menu: RailMenu?, customImage: (path: String) -&gt; android.graphics.drawable.Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; android.graphics.drawable.Drawable?, onSelect: (StudioTarget) -&gt; Unit, onAdd: () -&gt; Unit, onMenuChange: (RailMenu?) -&gt; Unit, onWorkspaceChange: (IconStudioWorkspace) -&gt; Unit, onWorkspaceCommit: () -&gt; Unit, onBoundsChange: (Rect) -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:StudioLayerRail.kt$( state: IconStudioState, index: Int, entering: Boolean, vertical: Boolean, customImage: (path: String) -&gt; android.graphics.drawable.Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; android.graphics.drawable.Drawable?, onClick: () -&gt; Unit, onLongClick: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:StudioPresets.kt$( preset: IconPreset, parsed: ParsedIcon?, customImage: (path: String) -&gt; Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; Drawable?, renaming: Boolean, onLoad: () -&gt; Unit, onMenu: (() -&gt; Unit)?, onDelete: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:StudioPresets.kt$( presets: List&lt;IconPreset&gt;, parsed: ParsedIcon?, customImage: (path: String) -&gt; Drawable?, packImage: (packPackage: String, drawableName: String?) -&gt; Drawable?, onSave: ((String) -&gt; Unit)?, onLoad: (IconPreset) -&gt; Unit, onDelete: (String) -&gt; Unit, onRename: ((String, String) -&gt; Unit)?, )</ID>
+    <ID>LongParameterList:StudioRailMenu.kt$( menu: RailMenu, state: IconStudioState, workspace: IconStudioWorkspace, anchor: Rect, frame: IntRect, hazeState: HazeState, onMove: (up: Boolean) -&gt; Unit, onToggleVisible: () -&gt; Unit, onRemove: () -&gt; Unit, onToggleAxis: () -&gt; Unit, onToggleCollapsed: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:StudioSource.kt$( spec: IconLayerSpec, packs: List&lt;InstalledIconPack&gt;, allowsFixedSource: Boolean, onUpdate: ((IconLayerSpec) -&gt; IconLayerSpec) -&gt; Unit, onCommit: () -&gt; Unit, onPickImage: () -&gt; Unit, onPickAppDefault: () -&gt; Unit, onPickSolidFill: () -&gt; Unit, onToggleMonochrome: () -&gt; Unit, onToggleNormalize: () -&gt; Unit, onPickPack: (String) -&gt; Unit, onBrowsePack: ((String) -&gt; Unit)?, )</ID>
+    <ID>LongParameterList:StudioViewport.kt$( canvasWidth: Float, canvasHeight: Float, railWidth: Float, railHeight: Float, restingLeft: Float, restingTop: Float, dragX: Float, dragY: Float, )</ID>
+    <ID>LongParameterList:StudioViewport.kt$( canvasWidth: Float, canvasHeight: Float, topInset: Float, centroidX: Float, centroidY: Float, dragX: Float, dragY: Float, zoomBy: Float, )</ID>
+    <ID>LongParameterList:SurfaceRegisterCross.kt$( width: Dp, height: Dp, label: String, icon: ImageVector, container: Color, content: Color, onClick: (() -&gt; Unit)?, onSettings: (() -&gt; Unit)?, )</ID>
+    <ID>LongParameterList:WallpaperDetail.kt$( state: WallpaperSectionState, screenRatio: Float, onApply: (WallpaperTarget) -&gt; Unit, onApplyRotating: () -&gt; Unit, onChooseImage: () -&gt; Unit, onCaptureScreen: () -&gt; Unit, onPickPortrait: () -&gt; Unit, onPickLandscape: () -&gt; Unit, )</ID>
+    <ID>MagicNumber:EffectsDetail.kt$100</ID>
+    <ID>MagicNumber:StudioColorPicker.kt$16</ID>
+    <ID>MagicNumber:StudioColorPicker.kt$6</ID>
+    <ID>MagicNumber:StudioControls.kt$0.001f</ID>
+    <ID>MagicNumber:StudioControls.kt$0.01f</ID>
+    <ID>MagicNumber:SurfaceRegisterCross.kt$10f</ID>
+    <ID>MagicNumber:SurfaceRegisterCross.kt$12f</ID>
+    <ID>MatchingDeclarationName:IconSizingControls.kt$IconSizingField</ID>
+    <ID>MatchingDeclarationName:StudioRailMenu.kt$RailMenu</ID>
+    <ID>MaxLineLength:EffectTextureControls.kt$onValueChange = { x, y -&gt; onUpdate { it.withEffect(blur.withActive { p -&gt; p.copy(centerX = x, centerY = y) }) } }</ID>
+    <ID>MaxLineLength:WallpaperDetail.kt$PageActionButton(Modifier.weight(1f), Icons.Outlined.PhotoLibrary, "Choose image", !state.busy, onChooseImage)</ID>
+    <ID>MaxLineLength:WallpaperDetail.kt$PageActionButton(Modifier.weight(1f), Icons.Outlined.Screenshot, "Capture screen", !state.busy, onCaptureScreen)</ID>
+    <ID>TooManyFunctions:IconStudioViewModel.kt$IconStudioViewModel : ViewModel</ID>
+    <ID>UnusedParameter:StudioLayerRail.kt$menu: RailMenu?</ID>
+    <ID>VariableNaming:IconStudioViewModel.kt$IconStudioViewModel$/** Where a fill lands on a layer that has never held one — see [pickSolidFill]. */ private val DefaultFillArgb = 0xFF000000.toInt()</ID>
+  </CurrentIssues>
+</SmellBaseline>

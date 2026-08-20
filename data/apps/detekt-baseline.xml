@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MaxLineLength:CategoryHeuristics.kt$CategoryHeuristics$listOf("launcher", "theme", "themes", "wallpaper", "iconpack", "keyboard", "widget", "widgets", "lockscreen", "font")</ID>
+    <ID>SpreadOperator:LauncherAppsWrapper.kt$DefaultLauncherAppsWrapper.&lt;no name provided&gt;$(*packageNames)</ID>
+    <ID>TooGenericExceptionCaught:AppInfoOpener.kt$DefaultAppInfoOpener$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AppLauncher.kt$DefaultAppLauncher$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AppShortcuts.kt$DefaultAppShortcuts$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AppUninstaller.kt$DefaultAppUninstaller$t: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

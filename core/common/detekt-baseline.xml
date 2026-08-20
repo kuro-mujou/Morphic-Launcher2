@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>NewLineAtEndOfFile:CommonModule.kt$inkspire.morphic.core.common.di.CommonModule.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

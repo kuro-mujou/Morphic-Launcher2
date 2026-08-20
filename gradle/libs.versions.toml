@@ -3,6 +3,7 @@
 agp = "9.3.0"
 kotlin = "2.4.0"
 ksp = "2.3.9"
+detekt = "1.23.8"
 
 # Android SDK
 compileSdk = "37"
@@ -136,6 +137,7 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 
 # Convention plugins — defined in build-logic, applied to modules
 launcher-android-application = { id = "launcher.android.application" }

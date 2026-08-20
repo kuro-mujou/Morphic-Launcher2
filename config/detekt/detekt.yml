@@ -1,0 +1,56 @@
+# detekt rules for this project. `buildUponDefaultConfig = true`, so this file only states the departures.
+#
+# Two kinds of departure, and they are worth telling apart:
+#
+#   1. **Compose is not Java.** A composable is PascalCase, takes many parameters, and is full of dp values. Rules
+#      that read those as defects are wrong here, not lenient — so they are narrowed rather than switched off.
+#   2. **Thresholds set to where this codebase's own rules sit.** CLAUDE.md says a file holds one thing and a
+#      composable past ~80 lines is hiding sections that want names. The numbers below say that in a form the build
+#      can check, which is the whole reason for adding this.
+
+naming:
+  # `@Composable fun AppCell()` is the platform convention, not a naming defect.
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']
+  # Private top-level vals are PascalCase throughout this codebase (`RowGap`, `PresetColumns`, `DraftPx`), which is
+  # the Compose convention for a compile-time constant. detekt's default expects SCREAMING_SNAKE.
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][A-Za-z0-9]*|[A-Z][_A-Z0-9]*'
+    propertyPattern: '[A-Za-z][A-Za-z0-9]*'
+    privatePropertyPattern: '[A-Za-z][A-Za-z0-9]*'
+
+style:
+  # A dp, an alpha or a corner radius inside a composable is a value, not a magic number. Arithmetic outside one —
+  # the renderers, the planners — still gets checked, which is where a stray constant actually costs something.
+  MagicNumber:
+    ignoreAnnotated: ['Composable']
+    ignorePropertyDeclaration: true
+    ignoreNamedArgument: true
+    ignoreLocalVariableDeclaration: true
+  # The codebase writes to 120 (p99 is exactly 120). 127 leaves the handful of genuine outliers flagged — the
+  # longest line in the tree is 304 characters.
+  MaxLineLength:
+    maxLineLength: 127
+  # An early return per guard clause is how the surfaces are written; two is stricter than anything here follows.
+  ReturnCount:
+    max: 4
+
+complexity:
+  # Deliberately *not* `ignoreAnnotated: ['Composable']`. A long composable is exactly the thing worth finding — a
+  # 446-line one is hiding sections that want names. 100 is loose enough that ordinary Compose layout passes and
+  # tight enough that the real offenders do not.
+  LongMethod:
+    threshold: 100
+  # A composable genuinely takes many parameters; 8 still catches the ones that have become a config object in
+  # disguise.
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 8
+    ignoreDefaultParameters: true
+  # "A file holds one thing", stated as a number.
+  TooManyFunctions:
+    thresholdInFiles: 20
+    thresholdInClasses: 20
+    thresholdInObjects: 20
+    ignorePrivate: false
+    ignoreAnnotatedFunctions: ['Composable']

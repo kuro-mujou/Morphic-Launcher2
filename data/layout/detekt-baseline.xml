@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:FreePush.kt$FreePush$fun &lt;K&gt; push( footprint: GridPlacement, occupants: Map&lt;K, GridPlacement&gt;, config: GridConfig, preferred: PushDirection? = null, relocate: Boolean = false, ): PushResult&lt;K&gt;</ID>
+    <ID>CyclomaticComplexMethod:LayoutRepositoryImpl.kt$LayoutRepositoryImpl$private suspend fun applyChange(orientation: Orientation, change: LayoutChange)</ID>
+    <ID>LongParameterList:LayoutDaos.kt$LayoutDaos$( val appPlacement: AppPlacementDao, val folderPlacement: FolderPlacementDao, val widgetPlacement: WidgetPlacementDao, val iconContainerPlacement: IconContainerPlacementDao, val widgetContainerPlacement: WidgetContainerPlacementDao, val folder: FolderDao, val folderItem: FolderItemDao, val iconContainer: IconContainerDao, val iconContainerItem: IconContainerItemDao, val widgetContainer: WidgetContainerDao, val widgetContainerItem: WidgetContainerItemDao, val widget: WidgetDao, )</ID>
+    <ID>LoopWithTooManyJumpStatements:FreePush.kt$FreePush$for</ID>
+    <ID>MagicNumber:GridOccupancy.kt$GridOccupancy$0xFFFF</ID>
+    <ID>MagicNumber:GridOccupancy.kt$GridOccupancy$16</ID>
+    <ID>MagicNumber:GridOccupancy.kt$GridOccupancy$32</ID>
+    <ID>MatchingDeclarationName:DockSettle.kt$DockEdit</ID>
+    <ID>MaxLineLength:GridReflowTest.kt$GridReflowTest$assertFalse("occupants are the caller's already; admit returns arrivals only", result.placements.containsKey("sitting"))</ID>
+    <ID>ReturnCount:FreePush.kt$FreePush$fun &lt;K&gt; push( footprint: GridPlacement, occupants: Map&lt;K, GridPlacement&gt;, config: GridConfig, preferred: PushDirection? = null, relocate: Boolean = false, ): PushResult&lt;K&gt;</ID>
+    <ID>ReturnCount:FreePush.kt$FreePush$private fun &lt;K&gt; cascade( seedId: K, footprint: GridPlacement, dir: PushDirection, working: Map&lt;K, GridPlacement&gt;, config: GridConfig, ): Map&lt;K, GridPlacement&gt;?</ID>
+  </CurrentIssues>
+</SmellBaseline>

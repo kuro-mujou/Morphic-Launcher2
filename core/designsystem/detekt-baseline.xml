@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:AppCollectionOverlay.kt$presenting &amp;&amp; session != null &amp;&amp; gap &gt;= 0 &amp;&amp; gap / pageSize == pageIndex</ID>
+    <ID>ComplexCondition:AppCollectionOverlay.kt$presenting &amp;&amp; session != null &amp;&amp; geo != null &amp;&amp; dragApp != null</ID>
+    <ID>ComplexCondition:Backdrop.kt$bitmapWidth &lt;= 0 || bitmapHeight &lt;= 0 || screenWidth &lt;= 0 || screenHeight &lt;= 0</ID>
+    <ID>ComplexCondition:Backdrop.kt$panelImage == null || filmImage == null || windowSize.width == 0 || windowSize.height == 0</ID>
+    <ID>ComplexCondition:SliderInternals.kt$(pressed || dragged || focused) &amp;&amp; enabled</ID>
+    <ID>CyclomaticComplexMethod:AppCollectionOverlay.kt$@Composable fun AppCollectionOverlay( label: String, apps: List&lt;AppInfo&gt;, coordinator: DragCoordinator, gestureConfig: ItemGestureConfig, onLaunch: (ComponentKey) -&gt; Unit, onReorder: (List&lt;ComponentKey&gt;) -&gt; Unit, onLeave: () -&gt; Unit, onRelease: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, metrics: IconMetrics = LocalIconMetrics.current, incoming: AppInfo? = null, presenting: Boolean = true, onShowMenu: (AppInfo, Rect) -&gt; Unit = { _, _ -&gt; }, )</ID>
+    <ID>CyclomaticComplexMethod:ContextMenu.kt$@OptIn(ExperimentalMaterial3ExpressiveApi::class) @Composable fun ContextMenu( anchor: MenuAnchor, actions: List&lt;MenuAction&gt;, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, header: @Composable (() -&gt; Unit)? = null, )</ID>
+    <ID>CyclomaticComplexMethod:DragAutoScrollEffect.kt$@Composable fun DragAutoScrollEffect( scrollState: ScrollableState, bounds: Rect?, fingerInRoot: Offset?, edge: Dp = AutoScrollEdge, maxPerSecond: Dp = AutoScrollMaxPerSecond, )</ID>
+    <ID>CyclomaticComplexMethod:LauncherItemGestures.kt$@SuppressLint("ReturnFromAwaitPointerEventScope", "MultipleAwaitPointerEventScopes") fun Modifier.launcherItemGestures( config: ItemGestureConfig, edgeActions: Set&lt;SwipeDirection&gt; = emptySet(), onOpen: () -&gt; Unit, onEdgeAction: (SwipeDirection) -&gt; Unit, onShowMenu: (anchorInRoot: Rect) -&gt; Unit, onBeginDrag: (rootPosition: Offset) -&gt; Unit, onDragTo: (rootPosition: Offset) -&gt; Unit, onDrop: () -&gt; Unit, onCancelDrag: () -&gt; Unit, ): Modifier</ID>
+    <ID>CyclomaticComplexMethod:LauncherPagerSwipe.kt$fun Modifier.launcherPagerSwipe( state: LauncherPagerState, enabled: () -&gt; Boolean = { true }, ): Modifier</ID>
+    <ID>CyclomaticComplexMethod:ResizeOverlay.kt$@Composable fun ResizeOverlay( placement: GridPlacement, geometry: GridGeometry, bounds: ResizeBounds, onResize: (GridPlacement) -&gt; Unit, onCommit: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, refused: Boolean = false, )</ID>
+    <ID>CyclomaticComplexMethod:SurfacePagerGesture.kt$fun Modifier.surfacePagerGesture( state: SurfacePagerState, enabled: () -&gt; Boolean = { true }, ): Modifier</ID>
+    <ID>CyclomaticComplexMethod:TopActionState.kt$@Composable fun rememberTopActionState( mode: TopActionMode?, fingerInRoot: Offset?, viewportWidth: Float, showUninstall: Boolean, onEngage: () -&gt; Unit, ): TopActionState</ID>
+    <ID>LongMethod:AppCollectionOverlay.kt$@Composable fun AppCollectionOverlay( label: String, apps: List&lt;AppInfo&gt;, coordinator: DragCoordinator, gestureConfig: ItemGestureConfig, onLaunch: (ComponentKey) -&gt; Unit, onReorder: (List&lt;ComponentKey&gt;) -&gt; Unit, onLeave: () -&gt; Unit, onRelease: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, metrics: IconMetrics = LocalIconMetrics.current, incoming: AppInfo? = null, presenting: Boolean = true, onShowMenu: (AppInfo, Rect) -&gt; Unit = { _, _ -&gt; }, )</ID>
+    <ID>LongParameterList:AppCollectionOverlay.kt$( label: String, apps: List&lt;AppInfo&gt;, coordinator: DragCoordinator, gestureConfig: ItemGestureConfig, onLaunch: (ComponentKey) -&gt; Unit, onReorder: (List&lt;ComponentKey&gt;) -&gt; Unit, onLeave: () -&gt; Unit, onRelease: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, metrics: IconMetrics = LocalIconMetrics.current, incoming: AppInfo? = null, presenting: Boolean = true, onShowMenu: (AppInfo, Rect) -&gt; Unit = { _, _ -&gt; }, )</ID>
+    <ID>LongParameterList:Backdrop.kt$BackdropNode$( private var shape: Shape, private var effect: BackdropEffect, private var backdrop: BackdropState?, private var view: View, private var scrimColor: Color, private var wallpaperTone: Color, private var refracts: Boolean, private var role: BackdropRole, )</ID>
+    <ID>LongParameterList:Backdrop.kt$BackdropNode$( shape: Shape, effect: BackdropEffect, backdrop: BackdropState?, view: View, scrimColor: Color, wallpaperTone: Color, refracts: Boolean, role: BackdropRole, )</ID>
+    <ID>LongParameterList:CoordinateDragGrid.kt$( items: List&lt;T&gt;, config: GridConfig, coordinator: DragCoordinator, zoneId: ZoneId, gestureConfig: ItemGestureConfig, dragItem: (T) -&gt; GridItem, placement: (T) -&gt; GridPlacement, planner: DropPlanner, onLand: (DropOutcome) -&gt; Unit, onRelease: () -&gt; Unit, modifier: Modifier = Modifier, edgeActions: Set&lt;SwipeDirection&gt; = emptySet(), trackedItem: GridItem? = null, acceptsItem: (GridItem) -&gt; Boolean = { true }, onGeometryChange: (GridGeometry) -&gt; Unit = {}, onOpen: (T) -&gt; Unit = {}, onShowMenu: (T, anchorInRoot: Rect) -&gt; Unit = { _, _ -&gt; }, onEdgeAction: (T, SwipeDirection) -&gt; Unit = { _, _ -&gt; }, itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -&gt; Unit, )</ID>
+    <ID>LongParameterList:CoordinateDragPager.kt$( items: List&lt;T&gt;, config: GridConfig, pagerState: LauncherPagerState, coordinator: DragCoordinator, zoneId: ZoneId, gestureConfig: ItemGestureConfig, dragItem: (T) -&gt; GridItem, placement: (T) -&gt; GridPlacement, planner: DropPlanner, onLand: (DropOutcome) -&gt; Unit, onRelease: () -&gt; Unit, modifier: Modifier = Modifier, edgeActions: Set&lt;SwipeDirection&gt; = emptySet(), trackedItem: GridItem? = null, acceptsItem: (GridItem) -&gt; Boolean = { true }, onGeometryChange: (GridGeometry) -&gt; Unit = {}, onOpen: (T) -&gt; Unit = {}, onShowMenu: (T, anchorInRoot: Rect) -&gt; Unit = { _, _ -&gt; }, onEdgeAction: (T, SwipeDirection) -&gt; Unit = { _, _ -&gt; }, itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -&gt; Unit, )</ID>
+    <ID>LongParameterList:LauncherItemGestures.kt$( config: ItemGestureConfig, edgeActions: Set&lt;SwipeDirection&gt; = emptySet(), onOpen: () -&gt; Unit, onEdgeAction: (SwipeDirection) -&gt; Unit, onShowMenu: (anchorInRoot: Rect) -&gt; Unit, onBeginDrag: (rootPosition: Offset) -&gt; Unit, onDragTo: (rootPosition: Offset) -&gt; Unit, onDrop: () -&gt; Unit, onCancelDrag: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:LiquidGlass.kt$LiquidGlass$( image: ImageBitmap, size: Size, src: Rect, cornerRadiusPx: Float, refractionHeightPx: Float, refractionAmountPx: Float, dispersion: Float, vibrancy: Float, sheen: Float, )</ID>
+    <ID>LoopWithTooManyJumpStatements:GridSnapMarkers.kt$for</ID>
+    <ID>LoopWithTooManyJumpStatements:LauncherItemGestures.kt$while</ID>
+    <ID>LoopWithTooManyJumpStatements:LauncherPagerSwipe.kt$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Morphic2DPad.kt$while</ID>
+    <ID>LoopWithTooManyJumpStatements:ResizeOverlay.kt$while</ID>
+    <ID>LoopWithTooManyJumpStatements:SurfacePagerGesture.kt$while</ID>
+    <ID>MagicNumber:MenuAnchoring.kt$0.5f</ID>
+    <ID>MagicNumber:MorphicColorPicker.kt$3</ID>
+    <ID>MagicNumber:OrderedFlow.kt$3f</ID>
+    <ID>MatchingDeclarationName:AppCollectionReorder.kt$AppCollectionDragDelegate</ID>
+    <ID>MatchingDeclarationName:IconArrangements.kt$ArrangementSlot</ID>
+    <ID>MatchingDeclarationName:MorphicButton.kt$MorphicButtonStyle</ID>
+    <ID>MaxLineLength:AppCollectionOverlay.kt$size = DpSize(with(LocalDensity.current) { geo.cellW.toDp() }, with(LocalDensity.current) { geo.cellH.toDp() })</ID>
+    <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 0, rows = 0, metrics = metrics, labelHeightDp = labelHeight)</ID>
+    <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 1, metrics = metrics, labelHeightDp = labelHeight)</ID>
+    <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val narrow = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)</ID>
+    <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val short = DockGrid.fitGridConfig(GridArea(360f, 40f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)</ID>
+    <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val tall = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)</ID>
+    <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val wide = DockGrid.fitGridConfig(GridArea(1080f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)</ID>
+    <ID>MaxLineLength:RowHeightTest.kt$RowHeightTest$val crossed = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 48.dp, maxIconDp = 24.dp))</ID>
+    <ID>MaxLineLength:RowHeightTest.kt$RowHeightTest$val narrow = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 40.dp, maxIconDp = 48.dp))</ID>
+    <ID>ReturnCount:DragCoordinator.kt$DragCoordinator$fun drop(): DropOutcome?</ID>
+    <ID>TopLevelPropertyNaming:Morphic2DPad.kt$private val KNOB_RADIUS = 12.dp</ID>
+    <ID>TopLevelPropertyNaming:Morphic2DPad.kt$private val KNOB_RADIUS_ACTIVE = 14.dp</ID>
+    <ID>UnusedPrivateProperty:CoordinateDragPager.kt$val density = LocalDensity.current</ID>
+    <ID>UnusedPrivateProperty:ResizeOverlay.kt$private val CornerRounding = 3.5.dp</ID>
+  </CurrentIssues>
+</SmellBaseline>

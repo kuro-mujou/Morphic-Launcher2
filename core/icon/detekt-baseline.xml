@@ -1,0 +1,76 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:IconLayerStack.kt$@Composable private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit): Modifier</ID>
+    <ID>CyclomaticComplexMethod:IconRenderer.kt$IconRenderer$private suspend fun applyEffects( bitmap: Bitmap, effects: List&lt;LayerEffect&gt;, inkFit: ShapeMask.InkFit, transform: LayerTransform, sizePx: Int, bake: CoroutineContext, ): Bitmap</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:IconLayerStack.kt$val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, bloom.angleDegrees).toList()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:IconRenderer.kt$IconRenderer$val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, bloom.angleDegrees).toList()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:IconRenderer.kt$IconRenderer$val (x0, y0, x1, y1) = LayerGradient.endpoints(frame, blur.angleDegrees).toList()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:LayerGradientTest.kt$LayerGradientTest$val (x0, y0, x1, y1) = endpoints(0f)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:LayerGradientTest.kt$LayerGradientTest$val (x0, y0, x1, y1) = endpoints(180f)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:LayerGradientTest.kt$LayerGradientTest$val (x0, y0, x1, y1) = endpoints(45f)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:LayerGradientTest.kt$LayerGradientTest$val (x0, y0, x1, y1) = endpoints(90f)</ID>
+    <ID>LargeClass:IconRenderer.kt$IconRenderer</ID>
+    <ID>LongMethod:IconLayerStack.kt$@Composable private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: ShapeMask.InkFit): Modifier</ID>
+    <ID>LongParameterList:ColorMatrices.kt$ColorMatrices$( rr: Float, rg: Float, rb: Float, gr: Float, gg: Float, gb: Float, br: Float, bg: Float, bb: Float, )</ID>
+    <ID>LongParameterList:IconRenderer.kt$IconRenderer$( source: Bitmap, argb: Int, strength: Float, radiusPx: Float?, spreadPx: Float, dxPx: Float, dyPx: Float, blend: PorterDuff.Mode?, sizePx: Int, )</ID>
+    <ID>LongParameterList:IconRenderer.kt$IconRenderer$( source: Bitmap, argb: Int, strength: Float, radiusPx: Float?, spreadPx: Float, dxPx: Float, dyPx: Float, sizePx: Int, )</ID>
+    <ID>LoopWithTooManyJumpStatements:IconPreview.kt$while</ID>
+    <ID>LoopWithTooManyJumpStatements:LayerSample.kt$LayerSample$for</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$0.140f</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$0.143f</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$0.283f</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$255f</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$3</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$4</ID>
+    <ID>MagicNumber:ColorMatrices.kt$ColorMatrices$5</ID>
+    <ID>MagicNumber:ContentMetrics.kt$ContentMetrics.Companion$24</ID>
+    <ID>MagicNumber:DrawableParser.kt$100f</ID>
+    <ID>MagicNumber:DrawableParser.kt$24</ID>
+    <ID>MagicNumber:IconRenderManager.kt$IconRenderManager.Companion$1024</ID>
+    <ID>MagicNumber:IconRenderManager.kt$IconRenderManager.Companion$3</ID>
+    <ID>MagicNumber:IconRenderManager.kt$IconRenderManager.Companion$4</ID>
+    <ID>MagicNumber:IconRenderManager.kt$IconRenderManager.Companion$8</ID>
+    <ID>MagicNumber:IconRenderer.kt$IconRenderer$24</ID>
+    <ID>MagicNumber:IconRenderer.kt$IconRenderer$255</ID>
+    <ID>MagicNumber:IconRenderer.kt$IconRenderer$255f</ID>
+    <ID>MagicNumber:LayerBevel.kt$LayerBevel$16</ID>
+    <ID>MagicNumber:LayerBevel.kt$LayerBevel$255</ID>
+    <ID>MagicNumber:LayerBevel.kt$LayerBevel$8</ID>
+    <ID>MagicNumber:LayerComposite.kt$LayerComposite$0.5f</ID>
+    <ID>MagicNumber:LayerComposite.kt$LayerComposite$16</ID>
+    <ID>MagicNumber:LayerComposite.kt$LayerComposite$24</ID>
+    <ID>MagicNumber:LayerComposite.kt$LayerComposite$255</ID>
+    <ID>MagicNumber:LayerComposite.kt$LayerComposite$255f</ID>
+    <ID>MagicNumber:LayerComposite.kt$LayerComposite$8</ID>
+    <ID>MagicNumber:LayerGradient.kt$LayerGradient$0x00FFFFFF</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$0.5f</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$10f</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$1274126177</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$13</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$15f</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$16</ID>
+    <ID>MagicNumber:LayerGrain.kt$LayerGrain$6f</ID>
+    <ID>MagicNumber:LayerPixelate.kt$LayerPixelate$0xFF</ID>
+    <ID>MagicNumber:LayerPixelate.kt$LayerPixelate$16</ID>
+    <ID>MagicNumber:LayerPixelate.kt$LayerPixelate$24</ID>
+    <ID>MagicNumber:LayerPixelate.kt$LayerPixelate$8</ID>
+    <ID>MagicNumber:LayerSample.kt$LayerSample$0xFF</ID>
+    <ID>MagicNumber:LayerSample.kt$LayerSample$16</ID>
+    <ID>MagicNumber:LayerSample.kt$LayerSample$24</ID>
+    <ID>MagicNumber:LayerSample.kt$LayerSample$255</ID>
+    <ID>MagicNumber:LayerSample.kt$LayerSample$4</ID>
+    <ID>MagicNumber:LayerSample.kt$LayerSample$8</ID>
+    <ID>MagicNumber:LegacyBackground.kt$LegacyBackground$0xFF</ID>
+    <ID>MagicNumber:LegacyBackground.kt$LegacyBackground$16</ID>
+    <ID>MagicNumber:LegacyBackground.kt$LegacyBackground$24</ID>
+    <ID>MagicNumber:LegacyBackground.kt$LegacyBackground$8</ID>
+    <ID>MagicNumber:ShapeMask.kt$ShapeMask$0.5f</ID>
+    <ID>NestedBlockDepth:ContentMetrics.kt$ContentMetrics.Companion$fun of(pixels: IntArray, size: Int, alphaFloor: Int = AlphaFloor): ContentMetrics?</ID>
+    <ID>TooManyFunctions:IconRenderer.kt$IconRenderer</ID>
+    <ID>UnusedParameter:IconRenderer.kt$IconRenderer$sizePx: Int</ID>
+    <ID>VariableNaming:IconRenderer.kt$IconRenderer$/** * Any opaque color will do for a buffer whose alpha is the only thing that survives — see [complementOf]. */ private val OpaqueBlack = 0xFF000000.toInt()</ID>
+    <ID>VariableNaming:IconRenderer.kt$IconRenderer$/** * How many bands [resample] splits its rows into — one fewer than the cores, capped, and never below one. * * **One fewer, deliberately**, for `IconRenderManager`'s reason one layer up: this runs while the studio is * drawing the panel whose slider is being dragged, and a split that took every core would win the bake and lose * the frame. The cap keeps a many-core device from oversubscribing when real icons are baking beside the preview. */ private val BakeBands: Int = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 4)</ID>
+  </CurrentIssues>
+</SmellBaseline>

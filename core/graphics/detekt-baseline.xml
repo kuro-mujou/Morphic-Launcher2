@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:BitmapBlur.kt$BitmapBlur$radiusPx &lt; 1 || width &lt; 1 || height &lt; 1 || passes &lt; 1</ID>
+    <ID>LoopWithTooManyJumpStatements:BitmapBlur.kt$BitmapBlur$for</ID>
+    <ID>MagicNumber:BitmapBlur.kt$BitmapBlur$0xFF</ID>
+    <ID>MagicNumber:BitmapBlur.kt$BitmapBlur$12f</ID>
+    <ID>MagicNumber:BitmapBlur.kt$BitmapBlur$16</ID>
+    <ID>MagicNumber:BitmapBlur.kt$BitmapBlur$24</ID>
+    <ID>MagicNumber:BitmapBlur.kt$BitmapBlur$8</ID>
+  </CurrentIssues>
+</SmellBaseline>

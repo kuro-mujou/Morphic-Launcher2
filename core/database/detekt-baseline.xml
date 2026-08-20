@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MaxLineLength:IconContainerPlacementDao.kt$IconContainerPlacementDao$@Query("DELETE FROM icon_container_placement WHERE containerId = :containerId AND orientation = :orientation AND zone = :zone")</ID>
+    <ID>MaxLineLength:WidgetContainerPlacementDao.kt$WidgetContainerPlacementDao$@Query("DELETE FROM widget_container_placement WHERE containerId = :containerId AND orientation = :orientation AND zone = :zone")</ID>
+  </CurrentIssues>
+</SmellBaseline>
