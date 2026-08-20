@@ -79,7 +79,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.res.painterResource
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitch
@@ -614,17 +617,25 @@ private fun EffectGrid(target: EffectTarget, pagerState: PagerState, onOpen: (Ef
     val pages = remember(slices) { slices.chunked(EffectColumns * EffectRows) }
     val rows = remember(pages) { pages.maxOf { ceil(it.size / EffectColumns.toFloat()).toInt() } }
 
+    val labelBand = effectLabelBand()
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         BoxWithConstraints {
             // A tile is a square plate plus its label, so a row is taller than it is wide per column. The plate is
             // capped, so past that width the extra goes to the gaps between tiles rather than to the tiles.
             val cell = ((maxWidth - EffectGridSpacing * (EffectColumns - 1)) / EffectColumns)
                 .coerceAtMost(EffectTileMax)
-            val pageHeight = (cell + EffectLabelHeight) * rows + EffectGridSpacing * (rows - 1)
+            val pageHeight = (cell + labelBand) * rows + EffectGridSpacing * (rows - 1)
 
             HorizontalPager(
                 state = pagerState,
                 pageSpacing = 8.dp,
+                // **Top, against the pager's own default of centered.** The height above is the *fullest* page's,
+                // so a page with fewer rows than that is genuinely shorter — and centered, its one row floated in
+                // the middle of the band while every other page's started at the top, which reads as the grid
+                // having moved rather than as a page being short. A grid's first row belongs where the last page
+                // left one.
+                verticalAlignment = Alignment.Top,
                 modifier = Modifier.height(pageHeight),
             ) { page ->
                 EffectPage(slices = pages[page], target = target, onOpen = onOpen)
@@ -696,7 +707,7 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(EffectLabelGap),
     ) {
         Box(
             modifier = Modifier
@@ -725,9 +736,29 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 2.dp),
+                .padding(bottom = EffectLabelPad),
         )
     }
+}
+
+/**
+ * What a tile's label adds under its plate: the gap above it, one line of `labelSmall`, and the padding beneath.
+ *
+ * **Read off the type scale rather than stated as a number**, which is what stopped the words being cropped. It was
+ * a flat 20dp against the ≈22dp `labelSmall` really occupies at font scale 1 — and more at every accessibility scale
+ * above it — and the shortfall does not show as a tight gap at the foot of the grid: this is the number the pager is
+ * given as its *height*, and a pager clips, so the bottom row's label lost its descenders and then the word. Derived
+ * from the same three quantities [EffectTile] draws with, so a page cannot disagree with the tiles inside it — the
+ * shape and the reason of `cellLabelHeight`, one screen over.
+ *
+ * Rounded up in whole pixels, because text lays out in them: half a pixel short is still a clipped letter.
+ */
+@Composable
+private fun effectLabelBand(): Dp {
+    val density = LocalDensity.current
+    val style = MaterialTheme.typography.labelSmall
+    val line = if (style.lineHeight.isSpecified) style.lineHeight else style.fontSize * DefaultLineHeightRatio
+    return with(density) { ceil(line.toPx()).toDp() } + EffectLabelGap + EffectLabelPad
 }
 
 /**
@@ -2500,5 +2531,12 @@ private val GrainDefaults = LayerEffect.Grain()
 private val PixelateDefaults = LayerEffect.Pixelate()
 private val ProgressiveBlurDefaults = LayerEffect.ProgressiveBlur()
 
-/** What a tile's label adds under its plate — the gap plus one line of `labelSmall`, which is what sizes a page. */
-private val EffectLabelHeight = 20.dp
+/**
+ * Between a labeled tile's picture and its name, and under the name. [effectLabelBand] reads them back, because the
+ * effect grid's page height is built from them.
+ */
+private val EffectLabelGap = 4.dp
+private val EffectLabelPad = 2.dp
+
+/** What a text style's line height is worth when it declares none, matching `IconLabelCell`'s own fallback. */
+private const val DefaultLineHeightRatio = 1.2f

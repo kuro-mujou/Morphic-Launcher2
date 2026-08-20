@@ -111,6 +111,11 @@ internal fun ShapeControls(
                 HorizontalPager(
                     state = pagerState,
                     pageSpacing = 8.dp,
+                    // Top, against the pager's centered default: the height is a full page's, so a short last page
+                    // would float its one row in the middle of the band while every other page started at the top.
+                    // Latent today — the set is exactly one page — and wrong the moment a ninth shape is added.
+                    // See `EffectGrid`, where the same default was visible.
+                    verticalAlignment = Alignment.Top,
                     modifier = Modifier.height(pageHeight),
                 ) { page ->
                     // **The pick is a command, not a `copy`.** It writes whichever silhouette the target owns and
