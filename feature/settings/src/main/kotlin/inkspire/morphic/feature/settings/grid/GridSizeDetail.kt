@@ -38,7 +38,7 @@ import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.component.of
-import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import kotlin.math.roundToInt
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
@@ -242,21 +242,12 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             )
         },
         icons = {
-            IconSizingControls(
+            IconSizingGroup(
                 slot = slot,
                 sizing = icon,
-                onChange = viewModel.icons::change,
-                onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
-                onDpRange = viewModel.icons::changeDpRange,
+                edits = viewModel.icons,
                 onPreview = { previewIcon = it },
             )
-            MorphicButton(
-                onClick = viewModel.icons::reset,
-                style = MorphicButtonStyle.Text,
-                modifier = Modifier.padding(top = RowGap * 2),
-            ) {
-                Text("Reset icons")
-            }
         },
     )
 }

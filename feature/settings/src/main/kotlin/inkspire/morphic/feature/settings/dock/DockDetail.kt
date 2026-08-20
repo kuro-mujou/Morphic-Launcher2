@@ -39,7 +39,7 @@ import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.component.of
-import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
@@ -298,21 +298,12 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
         // returned early before its icon controls on exactly this branch.
         icons = if (icon == null) null else {
             {
-                IconSizingControls(
+                IconSizingGroup(
                     slot = slot,
                     sizing = icon,
-                    onChange = viewModel.icons::change,
-                    onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
-                    onDpRange = viewModel.icons::changeDpRange,
+                    edits = viewModel.icons,
                     onPreview = { previewIcon = it },
                 )
-                MorphicButton(
-                    onClick = viewModel.icons::reset,
-                    style = MorphicButtonStyle.Text,
-                    modifier = Modifier.padding(top = RowGap * 2),
-                ) {
-                    Text("Reset icons")
-                }
             }
         },
     )

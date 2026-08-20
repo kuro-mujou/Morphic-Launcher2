@@ -15,8 +15,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
-import inkspire.morphic.core.designsystem.component.button.MorphicButton
-import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.collection.appCollectionInnerSize
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
@@ -26,7 +24,7 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.settings.component.SurfaceDetail
-import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 
@@ -110,21 +108,12 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
             )
         },
         icons = {
-            IconSizingControls(
+            IconSizingGroup(
                 slot = GridSlot.FOLDER,
                 sizing = icon,
-                onChange = viewModel.icons::change,
-                onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
-                onDpRange = viewModel.icons::changeDpRange,
+                edits = viewModel.icons,
                 onPreview = { previewIcon = it },
             )
-            MorphicButton(
-                onClick = viewModel.icons::reset,
-                style = MorphicButtonStyle.Text,
-                modifier = Modifier.padding(top = RowGap * 2),
-            ) {
-                Text("Reset icons")
-            }
         },
     )
 }

@@ -1,6 +1,12 @@
 package inkspire.morphic.feature.settings.icons
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.button.MorphicButton
+import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.IconSizingRanges
@@ -129,4 +135,39 @@ internal fun IconSizingControls(
         onPreview = { onPreview(sizing.copy(minIconDp = it.first, maxIconDp = it.last)) },
         onCommit = onDpRange,
     )
+}
+
+/**
+ * A settings section's whole icon group: the [IconSizingControls] sliders plus the reset beneath them.
+ *
+ * Every section that sizes icons shows exactly this, so it is one composable rather than the same two statements in
+ * each — four sections had copied it, which is four places for a control to be added to and three for it to be
+ * forgotten. What varies is only which grid is being sized ([slot], [sizing]); the commands are the same
+ * [IconSizingEdits] in every section, which is what made the block identical in the first place.
+ *
+ * @param onPreview reports the sizing under the finger, per frame, so the section's live preview tracks a drag rather
+ *   than waiting for its release. The section owns that state because it also owns the cell the preview is drawn in.
+ */
+@Composable
+internal fun IconSizingGroup(
+    slot: GridSlot,
+    sizing: IconSizing,
+    edits: IconSizingEdits,
+    onPreview: (IconSizing) -> Unit,
+) {
+    IconSizingControls(
+        slot = slot,
+        sizing = sizing,
+        onChange = edits::change,
+        onToggle = { label, showIcon -> edits.toggle(label, showIcon) },
+        onDpRange = edits::changeDpRange,
+        onPreview = onPreview,
+    )
+    MorphicButton(
+        onClick = edits::reset,
+        style = MorphicButtonStyle.Text,
+        modifier = Modifier.padding(top = 16.dp),
+    ) {
+        Text("Reset icons")
+    }
 }

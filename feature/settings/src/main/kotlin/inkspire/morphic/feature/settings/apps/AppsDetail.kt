@@ -48,7 +48,7 @@ import inkspire.morphic.feature.settings.component.SettingsCommitSlider
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
-import inkspire.morphic.feature.settings.icons.IconSizingControls
+import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import inkspire.morphic.feature.settings.label
 import kotlin.math.roundToInt
@@ -454,21 +454,12 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
         // for the widget area, and the same one L1's dock detail took before its icon controls.
         icons = if (icon == null) null else {
             {
-                IconSizingControls(
+                IconSizingGroup(
                     slot = slot,
                     sizing = icon,
-                    onChange = viewModel.icons::change,
-                    onToggle = { label, showIcon -> viewModel.icons.toggle(label, showIcon) },
-                    onDpRange = viewModel.icons::changeDpRange,
+                    edits = viewModel.icons,
                     onPreview = { previewIcon = it },
                 )
-                MorphicButton(
-                    onClick = viewModel.icons::reset,
-                    style = MorphicButtonStyle.Text,
-                    modifier = Modifier.padding(top = RowGap * 2),
-                ) {
-                    Text("Reset icons")
-                }
 
                 // **The card's own controls belong here, under the pinned preview**, not up in the layout group with
                 // the lane buttons. `SurfaceDetail` pins the heading and the preview together and scrolls everything
