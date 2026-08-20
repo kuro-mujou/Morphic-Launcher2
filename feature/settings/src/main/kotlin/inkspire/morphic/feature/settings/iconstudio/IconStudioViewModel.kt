@@ -42,20 +42,14 @@ import kotlinx.coroutines.withContext
 /**
  * Screen state holder for the icon studio.
  *
- * **Plain MVVM: one `StateFlow` and typed methods, no `Action`/`Effect` hierarchy.** L1's plan for this screen
- * specified MVI, and CLAUDE.md forbids it precisely because that ceremony is what turned its home screen into a
- * 500-line `when(event)`. The unidirectional flow MVI is wanted for is already here without the machinery.
+ * Plain MVVM: one `StateFlow` and typed methods, no `Action`/`Effect` hierarchy.
  *
- * ## The set is read once and then owned
+ * **The set is read once and then owned.** [IconStudioState.editing] is seeded from storage and never re-seeded: a
+ * live editor diverges from the store the moment a slider moves, so projecting the repository flow would mean either
+ * writing every frame of a drag or letting the next emission overwrite the user. It is also the **snapshot-detach**
+ * the persistence layer runs on — opening an app copies the global default and the app goes its own way.
  *
- * [IconStudioState.editing] is seeded from storage and never re-seeded. A live editor's set diverges from the store
- * the moment a slider moves, so projecting the repository flow into the screen would mean either writing every frame
- * of a drag or having the next emission overwrite what the user is doing. Reading once is also exactly the
- * **snapshot-detach** the persistence layer is built on: opening an app in the studio copies the current global
- * default and the app goes its own way.
- *
- * ## Which recipe seeds it
- *
+ * Which recipe seeds it:
  * - [IconStudioRoute.Global] — the stored global default.
  * - [IconStudioRoute.App] with an override — that app's own recipe.
  * - [IconStudioRoute.App] with none — the global default, *copied*. Nothing is written until the edit is committed,
@@ -109,14 +103,12 @@ class IconStudioViewModel(
     /**
      * Saves what is being edited as a preset called [name].
      *
-     * **Independent of Save.** A preset is a recipe kept in a library, not a commitment to use it anywhere, so
-     * naming one neither writes the global default nor detaches an app — a user can build a look, keep it, and
-     * back out without applying it.
+     * **Independent of Save**: a preset is a recipe kept in a library, not a commitment to use it, so naming one
+     * neither writes the global default nor detaches an app.
      *
-     * **Refuses in the individual studio**, where a recipe is tuned against one app and so tends to name that app's own
-     * artwork — a custom image of it, or a pack drawable chosen for it — which a preset would then carry into every
-     * other icon it was applied to. The UI does not offer the affordance there either, so this is the guard behind the
-     * guard rather than the only one, exactly as [browsePack]'s is.
+     * **Refuses in the individual studio**, where a recipe is tuned against one app and tends to name that app's own
+     * artwork — a custom image, or a pack drawable chosen for it — which a preset would carry into every icon it was
+     * applied to. The UI omits the affordance there too; this is the guard behind that one.
      */
     fun savePreset(name: String) {
         if (_state.value.subject !is StudioSubject.Global) return
@@ -129,9 +121,9 @@ class IconStudioViewModel(
     /**
      * Loads [preset] into the editor. An ordinary edit: recorded in history, undoable, and not saved.
      *
-     * A whole new stack arrives, so its layers get **fresh keys** — nothing in it continues a layer that was there
-     * before, and reusing a key would animate an unrelated row into its place. Selection goes to the foreground for the
-     * same reason a fresh open does: the previous index means nothing in a stack the user did not build.
+     * A whole new stack arrives, so its layers get **fresh keys** — reusing one would animate an unrelated row into
+     * its place. Selection goes to the composite for the same reason a fresh open does: the previous index means
+     * nothing in a stack the user did not build.
      */
     fun loadPreset(preset: IconPreset) = _state.update { current ->
         val keys = freshKeys(preset.appearance.layerSet.layers.size)
@@ -156,9 +148,8 @@ class IconStudioViewModel(
     /**
      * Renames a saved preset, keeping its place in the library.
      *
-     * **Refuses in the individual studio** for [savePreset]'s reason, one step further on: a library that cannot be
-     * added to there should not be editable there either, or the same panel would offer two of the three verbs and
-     * refuse the third. The guard behind the guard, as ever — the menu is absent there too.
+     * **Refuses in the individual studio** for [savePreset]'s reason: a library that cannot be added to there should
+     * not be editable there either, or the panel would offer two of three verbs and refuse the third.
      */
     fun renamePreset(from: String, to: String) {
         if (_state.value.subject !is StudioSubject.Global) return
@@ -178,15 +169,12 @@ class IconStudioViewModel(
     /**
      * The plate behind the icon: whether it draws, and the silhouette it is cut to.
      *
-     * **Not recorded in history, and that is deliberate rather than pending.** History is the *recipe* — what the
-     * layer tools build — and the finalize step's three controls are one tap or one drag each, with the result on
-     * screen across every icon while it happens. Undo stepping back through a switch would also have to step back
-     * through it *from the editor*, where the plate is not visible at all.
+     * **Not in history**, deliberately: history is the *recipe*, and the finalize step's three controls are one tap
+     * or drag each with the result already on screen. Undo would also have to step back through them *from the
+     * editor*, where the plate is not visible at all.
      *
-     * **Turning it on seeds a rounded square**, because the model's own default is no shape at all — which is the
-     * right default for a stored recipe (it is what every one of them was written against) and the wrong one for a
-     * control someone just switched on: a hard-edged square plate reads as the setting being broken. The same split
-     * `ContentAnchor` records, one screen over.
+     * **Turning it on seeds a rounded square.** The model's default is no shape — right for a stored recipe, wrong
+     * for a control someone just switched on, where a hard-edged square plate reads as broken.
      */
     fun setPlateEnabled(enabled: Boolean) = _state.update { current ->
         val shape = current.plate.shape ?: IconShapes.RoundedSquare.takeIf { enabled }
@@ -207,16 +195,13 @@ class IconStudioViewModel(
      * Draws a **different app** for the global studio to preview on — the answer to the question
      * [StudioSubject.Global.sample]'s KDoc has been deferring.
      *
-     * A global recipe is edited against one app's artwork, and which app decides what the edit *looks* like: a legacy
-     * icon with a flat plate and an adaptive icon with a transparent foreground respond to the same layer differently,
-     * so a recipe tuned against one can be wrong for the other. This is how the user checks, and it is a *shuffle*
-     * rather than a picker because the point is to see a spread, not to find a particular app.
+     * A legacy icon with a flat plate and an adaptive one with a transparent foreground respond to the same layer
+     * differently, so a recipe tuned against one can be wrong for the other. A *shuffle* rather than a picker because
+     * the point is to see a spread, not to find a particular app.
      *
-     * **The current sample is excluded**, so every press visibly changes something — a die that lands on the same face
-     * reads as a broken button rather than as chance.
+     * **The current sample is excluded**, so every press visibly changes something.
      *
-     * **Refuses in the individual studio.** There the app is the subject, not a stand-in for one, so re-rolling it
-     * would be editing a different app's recipe by accident. The UI shows a different button there.
+     * **Refuses in the individual studio**, where the app is the subject rather than a stand-in for one.
      */
     fun shuffleSample() {
         val subject = _state.value.subject as? StudioSubject.Global ?: return
@@ -239,13 +224,11 @@ class IconStudioViewModel(
     /**
      * Goes back to the picker so a different app can be edited.
      *
-     * **The individual studio's counterpart to the shuffle**, and deliberately not a shuffle: an app's own recipe is
-     * about *that* app, so landing on a random one would be editing something nobody asked for. `Unchosen` is already
-     * the state that shows the picker, so this is a return to it rather than a second way in.
+     * The individual studio's counterpart to the shuffle, and deliberately *not* a shuffle: an app's own recipe is
+     * about that app, so landing on a random one would edit something nobody asked for.
      *
-     * **Unsaved edits are discarded**, which is the same bargain backing out of the studio makes and the reason Save
-     * lights up: leaving an app — by any route — leaves what was not committed. The alternative, a confirm, would put a
-     * dialog in front of the one gesture a user makes while browsing.
+     * **Unsaved edits are discarded** — the same bargain backing out of the studio makes. A confirm would put a dialog
+     * in front of the one gesture a user makes while browsing.
      */
     fun chooseAnotherApp() {
         if (_state.value.subject !is StudioSubject.App) return
@@ -258,11 +241,10 @@ class IconStudioViewModel(
     /**
      * Advances the preview backdrop, and **remembers it** — the studio reopens on whatever it was left on.
      *
-     * **Optimistic, then written.** The state moves first so the canvas turns over under the finger rather than after a
-     * round trip through DataStore; [observeBackground]'s collector then echoes the same value back, which is a no-op.
-     * The alternative — write, and let the flow be the only thing that moves the state — would cost a frame on every tap
-     * *and* mis-handle a fast double tap, since the second press would read a `background` the first write had not
-     * landed yet and compute the same successor twice.
+     * **Optimistic, then written**, so the canvas turns over under the finger rather than after a round trip;
+     * [observeBackground]'s echo is then a no-op. Letting the flow be the only thing that moves the state would cost a
+     * frame per tap *and* mis-handle a fast double tap, the second press reading a value the first write had not
+     * landed and computing the same successor twice.
      */
     fun cycleBackground() {
         val next = _state.value.background.next()
@@ -273,13 +255,9 @@ class IconStudioViewModel(
     /**
      * Keeps the canvas on the stored backdrop.
      *
-     * **The one thing on this screen that *is* projected from the store**, against [IconStudioState.editing] being read
-     * once and owned. It can be because nothing edits it continuously: a cycle is a discrete tap, so there is no drag
-     * for an emission to overwrite — the divergence that makes projecting the recipe wrong does not arise here.
-     *
-     * Collected rather than read once so an externally-changed value still arrives, and because the write path above
-     * relies on the echo being harmless. There is one implausible window — a tap landing before the first emission,
-     * which would briefly show the stored value instead — and it corrects itself, since that tap's own write emits next.
+     * **The one thing here that *is* projected from the store**, against [IconStudioState.editing] being read once and
+     * owned. It can be, because nothing edits it continuously: a cycle is a discrete tap, so there is no drag for an
+     * emission to overwrite. Collected rather than read once so an external change still arrives.
      */
     private fun observeBackground() {
         viewModelScope.launch {
@@ -422,12 +400,12 @@ class IconStudioViewModel(
      *
      * **All three at once, and one command for both targets**, which is [updateEffects]' shape for its reason: they
      * are the same three sliders either way (see `OrientationSliders`), so a caller that had to choose which holder
-     * it meant would be re-deciding what the rail already settled. Taking them together also means neither holder
-     * is ever handed a partial update to merge.
+     * it meant would be re-deciding what the rail already settled. Taking the three together also means neither
+     * holder is ever handed a partial update to merge.
      *
-     * Live, like [updateSelected] — every frame of a drag arrives here and [commitEdit] punctuates it. That is why
-     * the layer's position and zoom still go through [updateSelected] rather than gaining commands of their own:
-     * they have one holder, so there is nothing to dispatch.
+     * Live, like [updateSelected]: every frame of a drag arrives here and [commitEdit] punctuates it. Position and
+     * zoom stay on [updateSelected] rather than gaining commands of their own, having one holder and nothing to
+     * dispatch.
      */
     fun setOrientation(rotation: Float, tiltX: Float, tiltY: Float) = _state.update { current ->
         when (val target = current.target) {
@@ -446,23 +424,18 @@ class IconStudioViewModel(
     /**
      * Puts [shape] on whichever silhouette the target owns — the selected layer's, or the whole icon's.
      *
-     * **One command for both, dispatched on the target, exactly as [updateEffects] is**, and for the same reason: the
-     * chooser behind it is the same grid either way, so a caller that had to pick which write it meant would be
-     * re-deciding what the rail already settled.
+     * One command for both, dispatched on the target as [updateEffects] is: the chooser behind it is the same grid
+     * either way.
      *
-     * **Picking a shape turns the layer's anchor to [ContentAnchor.CONTENT], which is a real behavior change and not
-     * a default.** Cutting against the box is what a *plate* wants — a fixed silhouette with the artwork sliding
-     * under it — but that is not what someone reaching for this section is usually after: they want the icon they
-     * can see trimmed to that outline, and against the box an app whose artwork sits small and off-center is cropped
-     * by a shape that never touches it, which reads as the control being broken. So the useful anchor is the one a
-     * pick lands on, and the switch beneath is how the plate reading is asked for. The model's default stays
-     * [ContentAnchor.BOX], because that is what a spec carrying *no* shape means and what every stored recipe was
-     * written against.
+     * **Picking a shape turns the layer's anchor to [ContentAnchor.CONTENT] — a real behavior change, not a
+     * default.** Against the box, an app whose artwork sits small and off-center is cropped by a silhouette that
+     * never touches it, which reads as the control being broken; the box reading is the *plate* one, asked for by the
+     * switch beneath. The model's default stays [ContentAnchor.BOX], since that is what a spec carrying no shape
+     * means and what every stored recipe was written against.
      *
-     * Nothing for the composite to anchor — it has neither ink nor a transform — so that arm writes the shape alone.
-     * See `IconLayerSet.shape`.
+     * The composite has neither ink nor a transform to anchor, so that arm writes the shape alone.
      *
-     * Discrete, so it records history at once, the shape [toggleSelectedVisible] and [pickPack] take.
+     * Discrete, so it records history at once — [toggleSelectedVisible] and [pickPack]'s shape.
      */
     fun pickShape(shape: IconShape?) {
         _state.update { current ->
@@ -502,10 +475,10 @@ class IconStudioViewModel(
     /**
      * Turns size normalization on or off for the selected layer — see [IconLayerSpec.normalize].
      *
-     * A command for [toggleSelectedMonochrome]'s reason, and it sits beside it in the Source panel for the same one:
-     * both refine *the app's own artwork* rather than choosing whose artwork it is. Unguarded on the source, unlike
-     * that one, because the field is inert everywhere it does not apply — the resolver consults it only on the
-     * foreground's app-artwork arms — so a stray call changes a value nothing reads.
+     * A command for [toggleSelectedMonochrome]'s reason, and beside it in the Source panel for the same one: both
+     * refine *the app's own artwork* rather than choosing whose it is. Unguarded, unlike that one, because the
+     * resolver consults `normalize` only on the foreground's app-artwork arms — a stray call writes a value nothing
+     * reads.
      */
     fun toggleSelectedNormalize() {
         updateSelected { spec -> spec.copy(normalize = !spec.normalize) }
@@ -515,17 +488,15 @@ class IconStudioViewModel(
     /**
      * Switches the selected layer between the app's own artwork and its monochrome form, and back.
      *
-     * **A command rather than a source the UI writes**, so it records history at once — the same shape
-     * [toggleSelectedVisible] and [pickPack] take, and what makes `commitEdit`'s "discrete edits record themselves"
-     * true for this one. Off returns to [LayerSource.AppDefault], because monochrome is a *refinement of* the app's
-     * own artwork rather than a peer source: there is nowhere else for turning it off to land.
+     * **A command rather than a source the UI writes**, so it records history at once — [toggleSelectedVisible] and
+     * [pickPack]'s shape. Off returns to [LayerSource.AppDefault], monochrome being a *refinement of* the app's own
+     * artwork rather than a peer source, so there is nowhere else to land.
      *
-     * Guarded on the source as well as toggled by it, so calling this on a layer showing a pack or an image cannot
-     * quietly discard what is there — the UI only offers it on the app-default foreground, and this is the guard
-     * behind that one.
+     * Guarded on the source as well as toggled by it, so calling it on a layer showing a pack or an image cannot
+     * quietly discard what is there.
      *
-     * Either direction is remembered ([foregroundMonochrome]), so *off* survives a trip through another source
-     * exactly as *on* does — the memory is the last form the layer had, not a latch that only ever turns on.
+     * Either direction is remembered ([foregroundMonochrome]) — the memory is the last form the layer had, not a
+     * latch that only ever turns on — so *off* survives a trip through another source as *on* does.
      */
     fun toggleSelectedMonochrome() {
         updateSelected { spec ->
@@ -542,16 +513,15 @@ class IconStudioViewModel(
      * Points the selected layer back at the app's own artwork — the "System default" tile.
      *
      * **A command rather than a source the UI writes, because *which* app-default form to return to is the
-     * ViewModel's to know.** On the foreground it restores [foregroundMonochrome]: leaving the app's own artwork for a
-     * pack or an image and coming back lands on the form the layer was in, instead of silently dropping the refinement
-     * the row beneath the tiles controls. A tile that quietly resets a control one row away is the worst kind of side
-     * effect — the tile looks selected before the press and after it, so nothing on screen says what changed.
+     * ViewModel's to know.** On the foreground it restores [foregroundMonochrome], so leaving for a pack or an image
+     * and coming back lands on the form the layer was in rather than silently dropping the refinement the row beneath
+     * the tiles controls — a side effect nothing on screen would report, since the tile looks the same either way.
      *
-     * On the background there is no monochrome to restore, so it is plain [LayerSource.AppDefault]; the refinement is
-     * foreground-only, the platform shipping one silhouette and it being for that slot.
+     * The background has no monochrome to restore (the platform ships one silhouette, for the foreground slot), so it
+     * is plain [LayerSource.AppDefault].
      *
-     * Pressing it while the layer already shows that form writes an identical set, which `recordHistory` dedupes away
-     * — so it is a no-op without needing a guard of its own.
+     * Pressing it on a layer already in that form writes an identical set, which `recordHistory` dedupes — a no-op
+     * needing no guard.
      */
     fun pickAppDefault() {
         updateSelected { spec ->
@@ -564,15 +534,14 @@ class IconStudioViewModel(
     /**
      * Fills the selected layer with a flat color — the "Solid color" row.
      *
-     * **Returns to the color that layer was last filled with** ([layerFills]), for [pickAppDefault]'s reason applied to
-     * a value rather than to a form: leaving a fill for a pack or an image and coming back should land where it was,
-     * not on black. Black is only where a fill *arrives* on a layer that has never had one — the one value nobody
-     * mistakes for a color that was already chosen, so the swatch row below reads as the next step.
+     * **Returns to the color that layer was last filled with** ([layerFills]) — [pickAppDefault]'s reason applied to a
+     * value rather than a form. Black is only where a fill *arrives* on a layer that has never held one: the one value
+     * nobody mistakes for a color already chosen, so the swatch row reads as the next step.
      *
-     * **A no-op when the layer already shows a fill**, so pressing the row twice cannot throw away the color under it.
-     * Guarded rather than left to `recordHistory`'s dedupe, because this one would write a *different* set.
+     * **A no-op when the layer already shows a fill**, so pressing the row twice cannot throw the color away. Guarded
+     * rather than left to `recordHistory`'s dedupe, since this one would write a *different* set.
      *
-     * Refuses where the layer may not take a fixed source, behind the same rule that omits the row — see [pickImage].
+     * Refuses where the layer may not take a fixed source — see [pickImage].
      */
     fun pickSolidFill() {
         val current = _state.value
@@ -789,14 +758,14 @@ class IconStudioViewModel(
     /**
      * Inserts a new custom layer **directly beneath** the selected one, and selects it.
      *
-     * Beneath rather than above, and the two senses of that agree, which is what makes it the right default: inserting
-     * at the selected layer's own index puts the new layer **below it in the composite** *and* on the row directly
-     * **under it in the list**, since `StudioLayerRail` draws the stack top-first. So one rule reads correctly whether
-     * the user is thinking about draw order or about what they are looking at.
+     * Beneath rather than above, and both senses agree: inserting at the selected layer's own index puts the new
+     * layer **below it in the composite** *and* on the row directly **under it in the rail**, since `StudioLayerRail`
+     * draws the stack top-first. One rule reads correctly whether the user is thinking about draw order or about what
+     * they see.
      *
-     * It also matches what a new layer is *for*. A fresh layer is an opaque fill, so above the selection it hides
-     * whatever was just being worked on; below it, it appears as a backing behind it — which is the thing people
-     * actually add a layer to do (a colored disc behind a legacy icon is the worked example in `ShapeControls`).
+     * It also matches what a new layer is *for*: a fresh layer is an opaque fill, so above the selection it hides
+     * whatever was being worked on, where below it becomes a backing — a colored disc behind a legacy icon being the
+     * worked example.
      *
      * **Empty, not a color.** A new layer used to arrive as a mid-gray fill, which meant adding one dropped an opaque
      * plate into the stack and changed the icon before the user had chosen anything. `LayerSource.Empty` draws nothing,
