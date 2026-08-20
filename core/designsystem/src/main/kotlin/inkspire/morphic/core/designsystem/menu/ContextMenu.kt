@@ -62,11 +62,11 @@ private val MenuGap = 8.dp
 private val MenuShape = RoundedCornerShape(16.dp)
 
 /**
- * **One width for every menu**, where L1 sized each to its own widest row.
+ * **One width for every menu**, rather than sizing each to its own widest row.
  *
  * Two things follow from fixing it, and both are why. A row can then `fillMaxWidth`, so the whole row is the tap
- * target rather than just the text on it — L1's rows wrapped their content, which left a menu of short verbs
- * ("Remove") with a target a fraction of the panel it was drawn on. And a menu stops changing width with whatever
+ * target rather than just the text on it — rows that wrap their content leave a menu of short verbs ("Remove") with
+ * a target a fraction of the panel it is drawn on. And a menu stops changing width with whatever
  * app it was opened on, which matters when the same long-press is repeated down a page of icons. The cost is that a
  * long shortcut label ellipsises instead of widening the panel — the better failure of the two, since the
  * alternative is a menu that reaches across the screen.
@@ -83,8 +83,8 @@ private const val MenuMaxHeightFraction = 0.6f
  * important thing about it. The launcher's item gesture opens this menu **while the finger is still down**
  * (`ItemGesturePhase.MenuOpen`), and moving from there begins a drag on the *same* pointer stream. A `Popup` is a
  * separate platform window: raising one mid-gesture takes focus and can cancel the stream the drag depends on. So
- * this is a full-screen `Box` in the shell's own tree, which is exactly why L1 grew an `InlineContextMenu` beside
- * its `ContextMenuPopup` and why only the inline one is ported.
+ * this is a full-screen `Box` in the shell's own tree — the reason an inline menu is the only kind that works here
+ * at all.
  *
  * Everything about *where* it goes is [menuPlacementFor] / [menuOffsetFor] — pure, unit-tested, and given the
  * usable area rather than the raw window so a notch cannot push the menu under itself.
@@ -168,10 +168,9 @@ fun ContextMenu(
             content = {
                 // **Two reveals, because the two anchors mean different things.** A menu beside an item *grows out
                 // of* it, so it scales from the edge nearest the icon; a docked menu *arrives from* its screen edge,
-                // so it slides in along it. L1 drew the same distinction (`MenuReveal.Scale` against
-                // `SlideFromLeft`/`SlideFromRight`) but left the choice to whichever of its two composables the
-                // caller happened to pick. Expressive motion from the theme's own scheme either way, where L1
-                // hand-tuned a spring and two tweens: spatial for the movement, effects for the fade.
+                // so it slides in along it. The anchor decides, rather than the caller picking a composable.
+                // Expressive motion from the theme's own scheme either way: spatial for the movement, effects for
+                // the fade.
                 val fade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
                 val enter = fadeIn(fade) + when (resolved) {
                     is ResolvedAnchor.Beside -> scaleIn(
@@ -273,7 +272,7 @@ private fun MenuSurface(
 /**
  * One tappable row.
  *
- * **Colors come from the theme, where L1 hardcoded `Color.White` throughout.** The launcher's light/dark input is
+ * **Colors come from the theme.** The launcher's light/dark input is
  * the *wallpaper's* brightness, so a menu over a bright wallpaper is drawn on a light panel — and white-on-white
  * would be the one place in the launcher that ignored the signal the whole theme is built on.
  */
@@ -306,8 +305,8 @@ private fun MenuRow(action: MenuAction, onClick: () -> Unit) {
 /**
  * Which way the header's stage button takes you.
  *
- * A chevron either way, rather than L1's gear-then-back pair: the two stages are a sequence — what the *app*
- * offers, then what the *launcher* offers — and a gear meaning "our actions" was always a stretch. One mark, two
+ * A chevron either way, rather than a gear-then-back pair: the two stages are a sequence — what the *app* offers,
+ * then what the *launcher* offers — and a gear meaning "our actions" is a stretch. One mark, two
  * directions, and the direction alone says whether you are going deeper or coming back.
  */
 internal enum class MenuStage {

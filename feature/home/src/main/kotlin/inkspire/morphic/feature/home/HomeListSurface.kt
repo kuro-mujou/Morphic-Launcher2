@@ -115,14 +115,14 @@ private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.R
  * (or the leading rail on a phone in landscape) because it is the thing you look at rather than the thing you reach
  * for. See `SideZoneEdge`.
  *
- * **It holds widgets, and only widgets.** `DropZone.accepts` refuses everything else, which is L1's `areaReject`
- * rule made structural rather than a check at drop time: a zone that refuses the dragged item is skipped by the hit
+ * **It holds widgets, and only widgets.** `DropZone.accepts` refuses everything else, which makes the rule
+ * structural rather than a check at drop time: a zone that refuses the dragged item is skipped by the hit
  * test, so an app carried over the area falls through to the list beneath instead of being rejected on release.
  * Adding one is the surface menu's *Widgets* row; moving one within the area is the same shared planner the pager
  * pairing's zones use.
  *
  * **The list is ordered, and dragging it reorders it — nothing else.** There is no merge ring (a list of apps has no
- * folders in it, exactly as L1's has none), no page to carry an item onto, and no coordinate to write: a drop is an
+ * folders in it), no page to carry an item onto, and no coordinate to write: a drop is an
  * index, committed through [HomeViewModel.reorderList]. The preview is MovingGap, the same model the APPS pager and
  * every folder use.
  *
@@ -139,8 +139,8 @@ private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.R
  * It is also what makes the drag geometry the documented one: `scrollState.value` is snapshot state, so a stable
  * viewport anchor minus the scroll offset republishes the content origin every frame for free.
  *
- * Not built, all of it L1 behavior: the "Add apps" row (a picker), the long-press item menu, and removing an app
- * from the list. Without a picker, the list's contents are what [HomeViewModel] seeded from the grid.
+ * Not built: the "Add apps" row (a picker), the long-press item menu, and removing an app from the list. Without a
+ * picker, the list's contents are what [HomeViewModel] seeded from the grid.
  *
  * @param device reported by [HomeScreen], which is the layer that can read the window.
  */
@@ -167,8 +167,8 @@ internal fun HomeListSurface(
     val areaArea = split.side.copy(widthDp = (split.side.widthDp - areaPadding.value * 2).coerceAtLeast(1f))
 
     // **Fitted by a widget's floor, not an icon's.** `WidgetAreaGrid.icon` is null — a widget is not an icon in a
-    // cell — so there are no guardrails to invert and `CellFit` is given `WidgetMinCell` (L1's `MIN_WIDGET_DP`)
-    // instead. Everything else is the dock's arithmetic exactly: the stored counts clamped to what the extent and
+    // cell — so there are no guardrails to invert and `CellFit` is given `WidgetMinCell` instead. Everything else is
+    // the dock's arithmetic exactly: the stored counts clamped to what the extent and
     // the area can actually hold, never written back. The blueprint stands in until the store answers.
     val areaConfig = if (sideSizing == null) {
         remember(device) { WidgetAreaGrid.toGridConfig(device) }
@@ -218,8 +218,8 @@ internal fun HomeListSurface(
     // one-finger swipe onto a TOP or BOTTOM surface crosses this list, so it may only leave HOME once the list has
     // nothing further to scroll in that direction; horizontally nothing moves, so LEFT and RIGHT stay free.
     //
-    // L1 could not express this: its `HomeGestureRelease` for the list home was a flat `swipeUp = false`, which
-    // forbade a vertical crossing outright rather than handing it off at the end of the list.
+    // A flat "no vertical swipe" cannot express this — it forbids the crossing outright rather than handing it off
+    // at the end of the list.
     ReportScrollEdges {
         ScrollEdges(atTop = !scrollState.canScrollBackward, atBottom = !scrollState.canScrollForward)
     }
@@ -359,10 +359,9 @@ internal fun HomeListSurface(
             // being the surface on screen for the floating proxy's reason — a surface panned off to one side must not
             // answer a press meant for the one in front of it.
             //
-            // **One detector where L1 had three** (home, dock, widget area), because L1's three offered *different*
-            // action sets — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to
-            // the same single row today, so splitting them would be three ways to say one thing; the split returns with
-            // the first verb that is not launcher-wide.
+            // **One detector rather than one per zone** (home, dock, widget area). Three would be worth it only if
+            // each offered a *different* action set; ours all resolve to the same single row today, so splitting them
+            // would be three ways to say one thing. The split returns with the first verb that is not launcher-wide.
             .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
                 menuHost?.showSurface(
                     position = position,
@@ -378,8 +377,8 @@ internal fun HomeListSurface(
             extent = extent,
             mainPadding = listPadding,
             sidePadding = areaPadding,
-            // The widget area, on the same coordinator as the list. It **accepts widgets only**, which is L1's
-            // widget-area rule made structural: a zone that refuses the dragged item is skipped by the hit test, so
+            // The widget area, on the same coordinator as the list. It **accepts widgets only**, made structural:
+            // a zone that refuses the dragged item is skipped by the hit test, so
             // an app carried over it falls through to the list beneath instead of being rejected at drop time.
             side = { zoneModifier ->
                 CoordinateDragGrid(

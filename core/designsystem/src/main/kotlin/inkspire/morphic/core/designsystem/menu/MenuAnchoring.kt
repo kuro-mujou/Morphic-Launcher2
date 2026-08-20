@@ -9,8 +9,7 @@ import androidx.compose.ui.unit.IntSize
 
 /**
  * What a menu is anchored to — and the two cases are positioned by different rules because they *mean* different
- * things. This is L1's pair of position providers (`InlineContextMenu` vs `ContextMenuPopup`) named as one type,
- * rather than two composables a caller had to choose between correctly.
+ * things — named as one type, rather than two composables a caller has to choose between correctly.
  */
 sealed interface MenuAnchor {
 
@@ -24,7 +23,7 @@ sealed interface MenuAnchor {
      * A **place**: where the finger was when a long-press landed on empty space, in root coordinates.
      *
      * The menu docks flush to whichever vertical screen edge that half of the screen is nearer and slides in from
-     * it, vertically centered on the press so the rows land under the thumb — L1's `EdgeDockedPopupPositionProvider`.
+     * it, vertically centered on the press so the rows land under the thumb.
      * **The reason it docks rather than sitting at the point** is that there is nothing there to point at: an item
      * menu must be beside its icon, but a surface menu describes the *surface*, so planting it on an arbitrary patch
      * of wallpaper would claim a relationship with whatever it happens to cover — and hugging the edge leaves the
@@ -73,8 +72,8 @@ fun dockedMenuOffsetFor(
 /**
  * Where a context menu sits relative to the item it was opened on.
  *
- * **Four values rather than L1's two booleans** (`MenuPlacement(vertical, towardEnd)`), which is the same correction
- * `SideZoneEdge` made to a `landscape`/`dockAtStart` pair: two booleans encode four states while letting a reader
+ * **Four values rather than two booleans** (`vertical`, `towardEnd`) — the same correction `SideZoneEdge` made to a
+ * `landscape`/`dockAtStart` pair: two booleans encode four states while letting a reader
  * decode them at every use, and every consumer here — the offset, the transform origin — really does want to say
  * "which of the four", not "which axis, then which way".
  */
@@ -95,8 +94,8 @@ enum class MenuPlacement {
 /**
  * Which side of [anchor] a menu should open on, inside the usable area [frame].
  *
- * **The axis follows the screen's shape and the direction follows the room left**, which is L1's rule and worth
- * keeping for a reason it never wrote down: a tall screen has spare height and little spare width, so stacking the
+ * **The axis follows the screen's shape and the direction follows the room left**, for a reason worth writing down:
+ * a tall screen has spare height and little spare width, so stacking the
  * menu over or under the icon keeps it near the finger without shoving it sideways off the item it describes; a wide
  * one has the opposite, and a menu below an icon in landscape would cover the row beneath it and be clipped as often
  * as not. Then the direction flips toward whichever half of the frame has space, so an item near the top opens
@@ -104,8 +103,8 @@ enum class MenuPlacement {
  *
  * @param anchor the item's own bounds, in root coordinates.
  * @param frame the area the menu may occupy — the window less [inkspire.morphic.core.designsystem.insets.uiInsets].
- *   L1 judged the halves against the whole window; using the usable area instead means a tall notch or a gesture bar
- *   cannot tip the decision toward a half the menu is not allowed to be drawn in.
+ *   Judged against the usable area rather than the whole window, so a tall notch or a gesture bar cannot tip the
+ *   decision toward a half the menu is not allowed to be drawn in.
  */
 fun menuPlacementFor(anchor: IntRect, frame: IntRect): MenuPlacement =
     if (frame.height >= frame.width) {
@@ -167,8 +166,7 @@ fun menuOffsetFor(
  * **Known limit, accepted**: the cross-axis is pinned to the center, so a menu that [menuOffsetFor] had to *clamp*
  * sideways (an item near the screen's edge) grows from a point a little off the item. Correcting it needs the
  * menu's measured size, which is not known until it has been laid out — a frame later than the animation starts.
- * L1 had the same limit for the same reason and it is invisible in practice, since the clamp is small compared to
- * a menu's width.
+ * Invisible in practice, the clamp being small compared to a menu's width.
  */
 fun MenuPlacement.transformOrigin(): TransformOrigin = when (this) {
     MenuPlacement.BELOW -> TransformOrigin(0.5f, 0f)

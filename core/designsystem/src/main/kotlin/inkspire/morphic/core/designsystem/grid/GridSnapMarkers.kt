@@ -20,8 +20,8 @@ import kotlin.math.sqrt
 private val MarkerSize = 16.dp
 
 /**
- * How far from the dragged item's edge a marker starts to appear, as a multiple of the larger visual cell. L1's
- * 1.8 — wide enough that the lattice reads as a field rather than as four dots stuck to the icon.
+ * How far from the dragged item's edge a marker starts to appear, as a multiple of the larger visual cell — wide
+ * enough that the lattice reads as a field rather than as four dots stuck to the icon.
  */
 private const val BufferCells = 1.8f
 
@@ -32,8 +32,7 @@ private const val MinVisibleAlpha = 0.05f
  * **Shows the grid, near whatever is being dragged** — the affordance that makes a sub-divided grid legible.
  *
  * A marker at every **visual** cell corner, fading in as the dragged item approaches and out again as it leaves,
- * so the lattice appears under the finger and nowhere else. Ported from L1's `GridLinesCanvas`, which draws the
- * same concave diamonds at the same 16dp with the same 1.8-cell falloff.
+ * so the lattice appears under the finger and nowhere else.
  *
  * **Why the *visual* corners when the item snaps to the logical lattice.** `GridConfig.cellMultiplier` subdivides
  * the grid so an icon can come to rest straddling two visible cells; the corners are therefore *not* every place
@@ -49,7 +48,7 @@ private const val MinVisibleAlpha = 0.05f
  * @param config the grid's **logical** dimensions; the markers are drawn every `cellMultiplier` cells.
  * @param localFinger the finger in this node's own coordinates, or null when nothing is being dragged over this
  *   grid — which draws nothing at all. Null rather than a separate `visible` flag because there is no meaningful
- *   position to fade around without a finger, and L1 needed both a provider and a `visibleProvider` to say it.
+ *   position to fade around without a finger, so a separate flag would only be a second way to say the same thing.
  * @param draggedSpan the dragged footprint in logical cells, used to measure distance from the item's *edge*
  *   rather than from the finger — so a wide item lights up the lattice along its whole width.
  */
@@ -88,7 +87,7 @@ fun Modifier.gridSnapMarkers(
                 val distance = sqrt(dx * dx + dy * dy)
                 if (distance >= buffer) continue
 
-                // Eased rather than linear (L1's 1.5 power), so markers hold their brightness near the item and
+                // Eased rather than linear, so markers hold their brightness near the item and
                 // drop away quickly at the edge of the field instead of leaving a wide gray haze.
                 val alpha = (1f - distance / buffer).coerceIn(0f, 1f).pow(1.5f)
                 if (alpha <= MinVisibleAlpha) continue
@@ -109,8 +108,8 @@ data class GridSpan(val colSpan: Int, val rowSpan: Int)
 /**
  * One marker: a diamond with **concave** sides, drawn as four quadratic curves pulled toward the center.
  *
- * L1's shape exactly. A plain diamond or a dot reads as content — something placed on the grid — where the pinched
- * star reads as a registration mark, which is what it is.
+ * A plain diamond or a dot reads as content — something placed on the grid — where the pinched star reads as a
+ * registration mark, which is what it is.
  */
 private fun DrawScope.drawSnapMarker(center: Offset, size: Float, color: Color) {
     val half = size / 2f

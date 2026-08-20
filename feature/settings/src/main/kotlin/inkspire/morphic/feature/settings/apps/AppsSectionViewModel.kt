@@ -37,8 +37,7 @@ import kotlinx.coroutines.launch
  *
  * **A layout is what the user recognizes; a [GridSlot] is what the store is keyed by.** The chips name layouts because
  * that is the choice a user has already made (per home edge, in the surface register), and every control below then
- * addresses that layout's grid. L1 did the same and made the same distinction: its drawer detail edited
- * `drawer.profile(layout)`, the profile of whichever layout was selected.
+ * addresses that layout's grid.
  *
  * **Total, and a `when` rather than a map so that it cannot be otherwise.** This began as a map that was *deliberately*
  * partial — [AppsLayout.CATEGORY_CARD] was left out and [ConfigurableLayouts] was its key set, so one structure carried
@@ -113,15 +112,15 @@ data class AppsSectionState(
  *
  * **One section for five layouts, mirroring one `feature:apps` for five layouts.** The surface itself is a single
  * module precisely because the layouts differ only in arrangement; the same argument makes them one settings section
- * with a chip row rather than five sections. L1 had this split the other way and paid for it: its drawer and library
- * were separate modules *and* separate details, so "which one am I configuring?" had to be answered before "how?".
+ * with a chip row rather than five sections. Split the other way — a module and a section per layout — "which one am
+ * I configuring?" has to be answered before "how?".
  *
  * **Resizing here is one write, unlike home's two** — and that difference is the ordered/coordinate split showing up
  * in settings. Home's grid editor must also move the items its edit displaces, because only the button press knows
  * which edge changed and a removed left column leaves apps somewhere a removed right column does not. Every APPS grid
  * is *ordered* (or derived): the flow re-densifies into whatever the new count is, and the pager's store re-paginates
  * itself when its capacity changes — a sync it already runs for installs. So there is nothing here to displace, which
- * is also why [edit] reads only the axis of the edge it is given and not its side, exactly as L1's drawer editor did.
+ * is also why [edit] reads only the axis of the edge it is given and not its side.
  */
 class AppsSectionViewModel(
     private val settingsRepository: SettingsRepository,
@@ -215,7 +214,7 @@ class AppsSectionViewModel(
     /**
      * The selected layout's icon sizing, edited from this section rather than from the icons screen.
      *
-     * A surface's icons belong beside its grid — L1's structure, and the dependency runs that way here too: the icon
+     * A surface's icons belong beside its grid, and the dependency runs that way: the icon
      * size is what this screen's column and row limits are computed from, and for the list it is what the row height
      * range is computed from.
      */
@@ -311,9 +310,8 @@ class AppsSectionViewModel(
     /**
      * Turns the **selected** pager's page wrapping on or off.
      *
-     * Per layout, like the margin and unlike the search placement — and here that is the whole improvement on L1,
-     * which had one global flag whose only control lived in the *Home* screen. The two pagers on this surface are
-     * different questions: pages of loose apps and pages that *are* categories.
+     * Per layout, like the margin and unlike the search placement. One global flag would make the two pagers on this
+     * surface one question, and they are not: pages of loose apps, and pages that *are* categories.
      *
      * No device, because wrapping is a behavior rather than a size; and guarded by `pagerSlot`, so a stale press
      * while a non-paging chip is selected writes nothing rather than reaching a repository that would throw.

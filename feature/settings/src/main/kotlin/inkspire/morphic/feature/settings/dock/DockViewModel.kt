@@ -74,7 +74,6 @@ data class DockState(
  * (`setExtent`); the row and column counts are an ordinary grid override (`updateGrid`) like home's; the icon
  * sizing is an icon override, issued through [icons]. They belong on one screen because they constrain each other —
  * the icons set the smallest usable cell, and the extent divides into cells of at least that.
- * L1 grouped them the same way, in a dock detail that held its layout controls and `IconLayoutControls` together.
  *
  * **No bounds in this class.** Every limit depends on the measured window and the current type scale, so they live in
  * the screen that has them; this holder only commits values. The one exception is deliberate and stated at
@@ -144,7 +143,7 @@ class DockViewModel(
      * The dock's own icon sizing, edited from this section rather than from a separate icons screen.
      *
      * Beside its grid because the two decide each other: the icon size sets the smallest usable cell, which is what
-     * the dock's extent divides into cells. L1 embedded the same controls in its dock detail for the same reason.
+     * the dock's extent divides into cells.
      */
     internal val icons = IconSizingEdits(
         settings = settingsRepository,
@@ -177,8 +176,7 @@ class DockViewModel(
      *
      * A cell is `extent ÷ count`, so shrinking the strip can leave the stored count describing cells too small to draw
      * an icon in. Rather than leave storage holding a grid the dock will never draw, that count comes down to
-     * [maxCells] — the last line is given up so the survivors keep their size, which is the dock rule the settings plan
-     * states and the behavior L1 has.
+     * [maxCells] — the last line is given up so the survivors keep their size.
      *
      * **Which count that is, is [edge]'s to say**: a bottom strip's height divides into *rows*, a rail's width into
      * *columns*. The other axis is untouched, and one step out the same is true of home — a bottom dock takes height
@@ -191,9 +189,9 @@ class DockViewModel(
      * Where the swallowed line's occupants go is not settled here: the extent reaches the home surface, which re-fits
      * the dock and spills what no longer fits onto the pager ([settleDock] via `HomeViewModel.fitDockTo`).
      *
-     * **The same reduction is applied to HOME's main grid, for the same reason one step out.** L1 did this too, but
-     * from the *home surface* (a `LaunchedEffect` on its measured pager bounds, whose comment names "the dock is turned
-     * back on" as the case): correct in effect, and it wrote the clamp on every cause, including an icon-size change
+     * **The same reduction is applied to HOME's main grid, for the same reason one step out.** Driving it from the
+     * *home surface* instead — a `LaunchedEffect` on its measured pager bounds — is correct in effect and writes the
+     * clamp on every cause, including an icon-size change
      * that was never about home's rows. Here the write belongs to the **deliberate** change that caused it, which is
      * this commit — the same asymmetry that governs this dock's own two axes.
      *
@@ -272,7 +270,7 @@ class DockViewModel(
             // to HOME's main area, which exists to be evicted onto only when it is a coordinate grid; the widget area
             // sits beside a *list*, which has nowhere to put a widget. It is also moot until widgets exist — nothing
             // can be in the zone to displace — so the count is written and the re-homing is owed with the widgets.
-            // Deliberately not L1's answer, which deleted what would not fit.
+            // Deliberately not deleting what would not fit.
             val moves = if (homeLayout.sideZone != HomeZone.DOCK) {
                 emptyList()
             } else settleDock(
@@ -282,8 +280,8 @@ class DockViewModel(
                 mainConfig = settingsRepository.gridConfig(GridSlot.HOME_MAIN, configuration).first(),
                 edit = DockEdit(edge, add),
             )
-            // Grow the grid before moving items into it, and move them out before shrinking it — L1's ordering rule,
-            // so no observer ever sees a grid too small for its contents.
+            // Grow the grid before moving items into it, and move them out before shrinking it, so no observer ever
+            // sees a grid too small for its contents.
             if (add) {
                 writeSize(configuration, nextCols, nextRows)
                 if (moves.isNotEmpty()) layoutRepository.apply(ORIENTATION, moves)

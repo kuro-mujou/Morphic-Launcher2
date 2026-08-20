@@ -9,10 +9,10 @@ import kotlin.math.sin
 /**
  * A visual effect applied to a single layer while compositing — something that changes what the layer *is*.
  *
- * Deliberately an open sealed hierarchy held in a **list**, rather than one fixed nullable field per effect. That
- * is a direct lesson from L1, which hard-coded a column per effect and paid for it in repeated schema churn: here
- * a new effect is a new variant with `@SerialName`, and a stored recipe written by a build that has it still loads
- * on one that does not, because `ignoreUnknownKeys` drops what it cannot read.
+ * Deliberately an open sealed hierarchy held in a **list**, rather than one fixed nullable field per effect. A
+ * column per effect buys repeated schema churn; here a new effect is a new variant with `@SerialName`, and a stored
+ * recipe written by a build that has it still loads on one that does not, because `ignoreUnknownKeys` drops what it
+ * cannot read.
  *
  * **Opacity and blend mode are deliberately *not* here.** They live on [IconLayerSpec] as fields, because they
  * describe how a layer joins the stack rather than what it looks like — see [LayerBlend].
@@ -247,9 +247,9 @@ sealed interface LayerEffect {
      * them would mean four list entries whose *order* silently changed the result, which is a way to be wrong that
      * this shape simply does not have.
      *
-     * **Monochrome is this, not a variant of its own**: `saturation = 0` with a [tintArgb] is a tinted grayscale,
-     * which is what L1's monochrome fallback computed. Note that is a different thing from
-     * [LayerSource.AppDefaultMonochrome], which swaps in artwork the *app* ships; this recolors whatever is there.
+     * **Monochrome is this, not a variant of its own**: `saturation = 0` with a [tintArgb] is a tinted grayscale.
+     * A different thing from [LayerSource.AppDefaultMonochrome], which swaps in artwork the *app* ships; this
+     * recolors whatever is there.
      *
      * @property tintArgb the color [tintMode] applies; null leaves the channels alone. The tint's own alpha is
      *   ignored — [IconLayerSpec] already has opacity, and two ways to set one thing is one too many.

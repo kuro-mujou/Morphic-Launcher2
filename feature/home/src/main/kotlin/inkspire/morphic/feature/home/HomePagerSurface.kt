@@ -196,7 +196,7 @@ private fun homeZoneOf(zoneId: ZoneId): HomeZone? = when (zoneId) {
  * uninterrupted gesture, the drop reports *which* zone it landed in, and [homeZoneOf] turns that into the [HomeZone]
  * the `Move` writes. The coordinator is provided by `feature:shell` now, which extends exactly that property across
  * the *surface* boundary: an app lifted in the APPS drawer lands here through the same hit-test, with no hand-off and
- * no second recognizer — the structural fix for L1's `HomeDragBridge`. The open folder is simply another zone on it.
+ * no second recognizer, and so no drag bridge. The open folder is simply another zone on it.
  *
  * This screen keeps only what is home-specific: a [DropPlanner] **per zone** (that zone's geometry and occupants —
  * the planning itself is shared, see [planCoordinateDrop]), what a landing in one of its grids *writes*
@@ -249,9 +249,9 @@ internal fun HomePagerSurface(
     val blueprintConfig = remember(device) { HomePagerGrid.toGridConfig(device) }
 
     // The area the grids are actually given: the window minus the insets the column below pads by. **One value feeds
-    // every use**, which is the point — L1 derived its home area from settings in one place (`homeGridArea`) and
-    // measured it in another (`pagerBoundsInWindow`), so the size it fitted the grid to and the size it drew into
-    // could disagree. Here they cannot: `uiInsets` is the same expression throughout, and the measurement itself is
+    // every use**, which is the point. Deriving the area from settings in one place and measuring it in another lets
+    // the size a grid is fitted to disagree with the size it is drawn into. Here they cannot: `uiInsets` is the same
+    // expression throughout, and the measurement itself is
     // now the shared `usableWindowArea` that the settings sections and the APPS surface read — so a bound computed for
     // this screen somewhere else describes the same screen.
     val window = usableWindowArea(uiInsets)
@@ -388,9 +388,9 @@ internal fun HomePagerSurface(
     )
 
     // **Where HOME is scrolled, for the surface swipe.** A one-finger swipe toward a side surface crosses this pager
-    // first, so it may only leave HOME once the pager has no page left in that direction — L1's
-    // `swipeRightOpensLeft = currentPage == 0`, now stated as where the content is rather than as which gesture is
-    // released. Vertically nothing scrolls (the dock is a fixed strip), so the pair defaults to "at both edges" and
+    // first, so it may only leave HOME once the pager has no page left in that direction — stated as where the
+    // content *is* rather than as which gesture is released.
+    // Vertically nothing scrolls (the dock is a fixed strip), so the pair defaults to "at both edges" and
     // a swipe onto a TOP or BOTTOM surface is free.
     ReportScrollEdges { ScrollEdges(atLeft = pagerState.atFirstPage, atRight = pagerState.atLastPage) }
 
@@ -717,15 +717,14 @@ internal fun HomePagerSurface(
             // being the surface on screen for the floating proxy's reason — a surface panned off to one side must not
             // answer a press meant for the one in front of it.
             //
-            // **One detector where L1 had three** (home, dock, widget area), because L1's three offered *different*
-            // action sets — "Widgets" on home, "Add widget" on the widget area, nothing on the dock. Ours all resolve to
-            // the same single row today, so splitting them would be three ways to say one thing; the split returns with
-            // the first verb that is not launcher-wide.
+            // **One detector rather than one per zone** (home, dock, widget area). Three would be worth it only if
+            // each offered a *different* action set; ours all resolve to the same single row today, so splitting them
+            // would be three ways to say one thing. The split returns with the first verb that is not launcher-wide.
             .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
                 menuHost?.showSurface(
                     position = position,
-                    // **The one verb HOME owns today.** The host appends Settings itself; every other row L1 put
-                    // here is waiting on something unbuilt (an app picker, page management). The picker is hosted
+                    // **The one verb HOME owns today.** The host appends Settings itself; every other row that
+                    // belongs here waits on something unbuilt (an app picker, page management). The picker is hosted
                     // by *this* surface rather than by `HomeScreen` because the size labels it shows are measured
                     // against the grid a widget would land on, and only the surface drawing that grid knows it.
                     surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
@@ -1096,7 +1095,7 @@ private fun HomeItemCell(
             // Hide the app currently being dragged (e.g. extracted out of this folder) from the tile preview, so it
             // isn't shown in the folder icon and under the finger at the same time. The real folder removal commits
             // on drop — removing it now would dispose the dragged cell (it lives in the folder's grid) and kill the
-            // drag. (Mirrors L1's removedFromFolder.)
+            // drag.
             val dragged = (session?.item as? GridItem.App)?.component
             val preview = if (dragged == null) item.apps else item.apps.filterNot { it.componentKey == dragged }
             FolderCell(
