@@ -175,10 +175,16 @@ own grid placement.
 The icon system is a **layer editor** (like a drawing app) whose output is a **single flat bitmap** shown on
 every surface. Distilled from L1's `ICON_LAYER_STUDIO_PLAN` — adopt its end-state, skip its flat-column churn.
 
+**One thing is drawn live and outside that bitmap: the plate.** A silhouette of blurred wallpaper behind the
+artwork, which depends on *where the icon is* and so cannot be baked at all — see the plate note below. The stored
+unit is therefore an `IconAppearance` (recipe + plate + zoom) rather than an `IconLayerSet`, and the bake key is
+still the recipe alone.
+
 **This is now built, S1–S7 of [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md)** — one plan replacing L1's
 *five* icon docs, which read in date order are a churn log rather than a spec (its persistence model reversed
 three times inside one document, at a cost of four destructive schema bumps on one table). What is left from *that*
-plan is **icon packs** and **presets**. The studio has since outgrown it: a second plan,
+plan is **icon packs**; presets are built, and so is the plate ("skin") that plan and this file both deferred.
+The studio has since outgrown it: a second plan,
 [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md), takes the effect list from two to thirteen and is **complete** — the effect **pipeline**, the effect **panel**, the **filter** library, the
 **layer rail**, **Bloom**,
 **Gloss**, **perspective**, **Pattern**, **Extrude** and **Chromatic split**, plus **whole-icon effects**, which that
@@ -345,7 +351,8 @@ matrix both paths take rather than each configuring its own camera), `LayerFilte
 color matrix — free to share, since Android's and Compose's `ColorMatrix` are each a row-major `FloatArray(20)`),
 `IconFilters` (the table of built-in looks), `LayerGradient` (which way an angle runs, and the frame a bloom or a
 gloss is laid out in), `ShapeMask` (where the silhouette sits — which stopped being "the
-box" the moment `ContentAnchor` existed, and so became arithmetic rather than a constant), `LayerPattern` (a tile's
+box" the moment `ContentAnchor` existed, and so became arithmetic rather than a constant; its Compose half,
+`Modifier.shapeMask`, is public now because the **plate** is cut from the same list), `LayerPattern` (a tile's
 size, its matrix and how a stencil becomes colored marks), `LayerExtrude` (how many copies and how far apart) and
 `LayerChromatic` (which channel leads).
 
@@ -640,6 +647,23 @@ looks like a lens, so nothing would fail if the two renderers disagreed — it w
 - **It is the only effect that draws the content *instead of* over it**, so the layer's own pixels never appear.
 - **`PositionPad` gained a range parameter** for it: a fringe is a couple of percent of the icon, so at the pad's own
   travel the whole useful span would sit under the thumb. Everything else keeps `PositionRange`.
+  - **A page's height is derived from the type scale, and a short page top-aligns.** Both were guesses and both
+    showed: the label band was a flat 20dp against the ≈22dp `labelSmall` really occupies at font scale 1 — and more
+    at every accessibility scale — and since that number is the *pager's* height and a pager clips, the bottom row
+    lost its descenders and then its word. `effectLabelBand` reads it off the type scale from the same three
+    quantities the tile draws with. And `HorizontalPager` centers its pages by default, so the last page's single
+    row floated in the middle of a band sized for the fullest one, which reads as the grid having moved rather than
+    as a page being short. The shape pager had the identical default, latent at exactly one page.
+  - **A selection ring goes *above* the clip it traces, never inside it.** `Modifier.clip` is a hardware outline
+    clip with no antialiasing, so wherever its boundary runs along a ring's own antialiased outer edge it removes
+    whole pixels: straight sides survive (axis-aligned, on the pixel grid) and the arcs come back thin and stepped.
+    Every tile in this studio had `.clip(shape)` ahead of `.border(…, shape)` at the *same* shape — filter, blend and
+    pattern swatches, the layer rail's tiles, source tiles, the color field's dots. Tuning radii cannot fix it and
+    trying is informative: **different** radii cut (a larger radius removes more of a corner, so the outer clip bites
+    into the ring), and **equal** radii still cut sub-pixel. What matters is that no clip runs along the ring. Where
+    two rings coincide with two *different* clips — the color swatch's selection ring and its own faint edge — no
+    ordering in one chain clears both, so the rings became a sibling with no clip of its own. On a circle this reads
+    as "the ring is a bit thin" rather than as a corner defect, which is why it went unnoticed there.
   - **The Effects section is a paged grid of entries you open, and one entry maps to one `LayerEffect`.** It briefly
     split `LayerEffect.Color` into *Recolor* and *Tint*; the switch overturned that, because two entries sharing one
     record can express "tint off, recolor on" — a state the model cannot hold. Splitting `Color` in the *model* is
@@ -1103,17 +1127,33 @@ a bloom's), so what was new is the joining.
 - Labeled **"Focus"** in the panel, since what a user is choosing is what stays in focus — the blur is how that is
   expressed. It is also the one name that would not fit a tile at four columns.
 
-**Persistence — one serialized `IconLayerSet` blob, NOT flat columns. Done.** (L1 burned four destructive DB
-bumps learning this.) `icon_override` is now `component` + a JSON `layerSet` blob (**DB v2 → v3**, destructive,
-free pre-launch), and the global default is a fifth `data:settings` slice under `icon_layer_set` — the bare
-`IconLayerSet`, `BackdropEffect`'s shape, because the recipe *is* the whole setting. Editing an app **snapshots
-the default and detaches** (Reset re-attaches) — no field-merge, no variable-length-list diffing. Three things
-worth knowing:
+**Persistence — one serialized blob, NOT flat columns. Done.** (L1 burned four destructive DB bumps learning
+this.) `icon_override` is `component` + a JSON `appearance` blob, and the global default is a `data:settings` slice
+under `icon_appearance`. Editing an app **snapshots the default and detaches** (Reset re-attaches) — no
+field-merge, no variable-length-list diffing.
+
+**The stored unit is `IconAppearance`, not `IconLayerSet` — recipe + plate + zoom** (**DB v4 → v5**, destructive,
+free pre-launch; the settings key changed with it). What forced the widening is one control: the finalize step
+offers *"save as preset"* underneath the plate switch, so a preset carrying only the layer set would save half of
+what the user was looking at — and once a preset holds a plate, so must every store a preset can be loaded into or
+saved from. See the plate note below for why the plate cannot be part of the *recipe*.
+- **The column and the key both changed name rather than being re-interpreted in place.** A stored recipe read
+  back as an appearance decodes into one with **no layers** — every field unknown, so `ignoreUnknownKeys` drops
+  them all — which is silent and total. Renaming makes it a reset instead, and this module's own rule already
+  says the key name is the seam for a semantic break.
+- **An untouched appearance encodes to `{}`.** `layerSet` has a default of its own, so `encodeDefaults = false`
+  omits the recipe along with the plate and the zoom — widening the stored unit cost every un-plated icon on the
+  device nothing at all. Pinned both ways (`{}` for `Base`, `{"plate":{…}}` for a plate-only edit), and it came
+  out of a test written to assert the *old* JSON and failing.
+
+Five things worth knowing:
 - **The model lives in `core:model.icon`**, not `core:icon` — it is pure data describing what an icon should
   look like, where turning that into pixels is the renderer's job. Third cut of the same kind after
   `BackdropEffect` and `DeviceConfiguration`, and what forces it is that *two* modules store a recipe and neither
   should depend on a module that allocates bitmaps. `IconShapes` stays behind (it maps ids to `R.drawable`), and
   the move took the serialization plugin out of `core:icon` entirely.
+- **`IconAppearance` is a data holder and `IconId` keys on the recipe alone**, which is what keeps the bake cache
+  correct: the plate has no place in a key that has no screen position in it.
 - **An unreadable row is skipped, not deleted.** It falls back to the global default, which is visible and
   fixable; deleting would throw away a recipe a later build could read. Same position `data:layout` takes on an
   unresolvable placement. Two things reach that path — a corrupt blob, and a well-formed one describing an
@@ -1121,6 +1161,35 @@ worth knowing:
 - **Adding an effect is not a schema change**, which is the whole point of the sealed list: the spec gained
   `opacity` and `blend` and the test asserting the exact stored JSON of `IconLayerSet.Base` still passes, because
   defaults are not encoded.
+
+**The plate is built, and it is drawn *live* — the "skin" this file has carried as deferred since B3.**
+`IconPlate` (enabled + an `IconShape`) is a silhouette of blurred wallpaper sitting **behind** the artwork, drawn by
+`Modifier.wallpaperBackdrop` — so what it shows depends on **where the icon is**, and two cells showing the same app
+show different pixels. That is the whole reason it is not a layer: a layer is baked, keyed by
+`IconId(component, layerSet, sizePx)` with no position in it, which is exactly what makes that cache shareable. L1
+kept its skin as a separate live Compose layer for the same reason and this file predicted the split ("distinct from
+the baked stack"). Six things:
+- **`AppIcon` (`core:designsystem/cell`) is the seam every surface goes through now, not `LauncherIcon`.** The
+  primitive stays a component-plus-recipe in, one bitmap out; the plate and the zoom are the *cell's*, one layer out,
+  because `wallpaperBackdrop` lives in `core:designsystem` and a bake cannot hold a position. One place, so a new
+  surface cannot draw an icon and forget its glass — `AppCell`, `AppRowCell`, `CategoryCardFace`, `IconPreviewPlate`
+  and both container sites all call it.
+- **It is masked with the renderer's own silhouette** — `Modifier.shapeMask`, moved out of `IconLayerStack` into its
+  own file and made public at its third consumer, the first in another module. The alternative was a Compose `Shape`
+  catalog for plates beside the vector one for icons, and two lists meant to look identical are two lists that will
+  not: a plate cut to a squircle in front of an icon cut to a *slightly* different squircle is the kind of wrong
+  nobody can point at.
+- **No refraction on a plate**, which is the full-screen film's reasoning from the other end: liquid glass's rim is a
+  rounded-rect SDF, so masked to a hexagon or a teardrop it traces an outline the plate has not got. What it renders
+  instead is the blur plus `BackdropEffect.saturation`, at every API.
+- **With no wallpaper to sample it draws a scrim** (`surface` at 45%) rather than nothing, so a switch someone just
+  turned on says it did something. Same fallback every frosted surface has.
+- **`zoom` scales the artwork inside its box and not the plate**, unclipped, and that is the job `IconSizing`
+  structurally cannot do: an icon at 1f fills its box and so touches the plate's edge everywhere. A fraction for the
+  reason every offset in the layer model is one — the same recipe at every bake size. Unclipped because an icon's own
+  glow is meant to escape its box, so above 1 it spills, visibly, while it is being set.
+- **The cost is paid only when a plate is on**: one backdrop node and one offscreen mask layer per icon, per frame.
+  Real on a dense grid, and nothing at all for an appearance with no plate.
 
 **Custom images: nothing is written until Save.** `CustomIconStore` splits decode from write — the path is
 *reserved* up front so the recipe can refer to an image that does not exist yet, the preview draws it from
@@ -1148,15 +1217,47 @@ never learn what a pack is.
 assigns it. The list needs no separate "drawable lister": that file's **values** are drawable names, so browsing
 is a projection of what a pack already loads. **Individual mode only** — a named drawable on the global default
 would be inherited by every app — and the grid decodes only cells that scroll into view, canceling on a flick,
-over a bounded LRU. **Deferred:** drawables the author mapped to no app, and `drawable.xml`'s categories; shadows (above); skin/backing-plate (L1's separate live-Compose backdrop, distinct from the baked stack).
+over a bounded LRU. **Deferred:** drawables the author mapped to no app, and `drawable.xml`'s categories. (Shadows
+and the skin/backing-plate were both here and are both built — the shadows with the bake-backed preview, the skin as
+the **plate** above.)
 
-**Presets are a named `IconLayerSet`** — the recipe plus a name, no separate format, and stored as a
+**Presets are a named `IconAppearance`** — a whole look plus a name, no separate format, and stored as a
 `data:settings` slice rather than a Room table because a library is a handful of documents read whole, where
-per-app overrides are a row per customized app read one at a time. **Applying one is opening the studio loaded
-with it, never a write**: a preset restyles every icon that inherits the default, which is not something to do
-from a list row with no way to look first — so the dashboard row navigates, the session opens *dirty*, and Save
-commits. A preset is a **copy, not a link**: loading is an ordinary undoable edit and deleting touches nothing it
-was applied to. Built-in curated presets stay out, being a content decision rather than an engineering one.
+per-app overrides are a row per customized app read one at a time. A preset is a **copy, not a link**: loading is an
+ordinary undoable edit and deleting touches nothing it was applied to. Built-in curated presets stay out, being a
+content decision rather than an engineering one.
+
+**A library of looks is a library of pictures, not a list of names** — a grid of rounded squares, each drawing its
+own recipe on a real installed app, in all three places the library appears. A preset *is* a look, so a list of
+words was the one thing it could not be: two recipes differing in a bloom's angle read as two identical rows.
+Rendering one costs almost nothing, since `AppIcon`/`LauncherIcon` take an explicit appearance and go through
+`IconRenderManager` — a tile is one bake, on the same cache key every icon on the device already uses. Six things:
+- **Tapping a tile in the Icons pane *applies* it, which reverses this section's own earlier rule** ("applying one
+  is opening the studio loaded with it, never a write"). The tile's preview is what pays for it: the look is on
+  screen before the finger lands, so "look before you restyle every icon" happens by reading rather than by
+  navigating. The studio is still one tap away as **Edit** in the tile's menu, by exactly the route the old tap
+  took.
+- **The applied preset carries a ring**, compared by *value* — so it marks a look re-created in the studio as well
+  as one that was tapped. Without it a tap changes every inheriting icon on the device and the pane shows nothing
+  at all. There is no undo: the presets slice keeps no history, which is stated on `IconsViewModel.apply`.
+- **The menu opens two ways** — a three-dot button *and* long-press, one menu with one verb list. The button
+  because a settings pane teaches no gestures and Edit/Delete would otherwise be unreachable; the long-press
+  because that is what every other menu in this launcher uses and it must not be wrong here.
+- **The studio's own panel is the same tiles**, drawn through `IconPreview` so a preset the live path cannot draw
+  previews from its bake exactly as it will on a surface. "Edit specific apps" is select-to-apply with **no menu at
+  all** — absent, not disabled, because none of its verbs could ever become legal where the library is read-only.
+  "Edit all icons" gets long-press → Rename / Delete, matching the layer rail's tap-selects/long-press-menus split.
+- **That panel's tile menu draws *in the tile*, not in a `Popup`.** The panel is already floating glass, so a popup
+  there is a window over a window sampling neither — and two verbs need no positioner, where the rail's menu
+  machine exists because it has six rows and has to flip about an edge. Rename reuses the panel's existing name row
+  rather than putting a field in the grid, which would reflow the grid under the finger that opened it; the tile
+  being renamed carries a ring so the row is not editing an anonymous name.
+- **`IconPresets.renamed` is position-preserving**, which is why it is an operation rather than a `without` plus a
+  `with`. The name is a preset's identity, so a rename really is a delete and an insert — and `with` appends, so
+  spelled that way correcting a typo would send the tile to the end of the library. Renaming onto a name already in
+  use is an overwrite the user asked for by typing it, never two rows nothing can tell apart.
+- **The studio's preset tiles deliberately do not draw the plate**, where the Icons pane's do: that canvas is not
+  the wallpaper, so glass has nothing honest to show there.
 
 **The studio is a full-screen destination, and the settings pane above it is a hub.** L1's icon settings *were*
 the editor, hosted in the detail pane and built out of settings-list vocabulary, and its own docs conclude that
@@ -1175,10 +1276,11 @@ app's context menu. Five things about it:
   `onValueChangeFinished`) lands one history entry per gesture, so undo steps *over* a drag rather than back
   through a hundred frames of it. History is a `List<IconLayerSet>` and a step is an index — L1 left undo an open
   feasibility question because its equivalent state was a bag of mutable flat fields with nothing to snapshot.
-- **Save is explicit in both modes**, departing from L1's live-committing global studio: a slice is one JSON blob,
-  so a live-committing slider rewrites the whole document per frame, and a global edit restyles every icon on the
-  device — not a thing to do continuously while someone is still deciding. The *preview* is live either way,
-  which is all "live edit is non-negotiable" ever meant.
+- **Committing is explicit in both modes**, departing from L1's live-committing global studio: a slice is one
+  JSON blob, so a live-committing slider rewrites the whole document per frame, and a global edit restyles every
+  icon on the device — not a thing to do continuously while someone is still deciding. The *preview* is live either
+  way, which is all "live edit is non-negotiable" ever meant. **Where the commit lives moved**: the tick is gone and
+  Apply is on the finalize step — see below.
 - **There *is* a "this layer / whole icon" split now, and it is a tile in the rail rather than a scope toggle.** This
   used to say there was none, and that was right while every one of L1's six whole-icon tools had somewhere else to go:
   the tile shape became a per-layer shape *and* — since `IconLayerSet.shape` — a stack-level one, the background is the background
@@ -1234,6 +1336,47 @@ a canvas the *user* switches between black and white.
     `this then HazeSourceElement(...)`, one modifier node per call, so a *source* can belong to as many as it likes.
     The canvas simply carries two. The z-indices are stated rather than inferred from draw order, so a reshuffle of
     the screen's `Box` children cannot silently reorder what the panel sees.
+
+**The session has a last page — `StudioStep.FINALIZE` — and the tick is gone.** A forward pill leads to a step
+showing **every icon the session is about to change, over the real wallpaper**, with the settings that belong to the
+whole icon rather than to a layer (the plate, its shape, the zoom) and the two things you can do with them: keep the
+look as a preset, or apply it. Eight things:
+- **A step, not a destination.** The recipe being edited lives in the studio's own `ViewModel`, and a second
+  `NavEntry` gets its own `ViewModelStore` — so reaching it across a navigation boundary would mean passing a whole
+  `IconAppearance` as a nav argument, or scoping the ViewModel to the Activity. `StudioStep` says what is true
+  instead: one editing session with a last page, where back is a step back and neither direction commits or discards.
+- **It paints no background, and that is the whole trick.** The window carries `Theme.Wallpaper`, so a screen that
+  paints nothing *is* the wallpaper — no punch-through, because a punch cuts a hole in something opaque and the
+  studio's canvas is simply not drawn on this step. Which is also why the step has to exist: that canvas is
+  deliberately not the wallpaper, so it is the one place a silhouette of blurred wallpaper cannot be judged.
+- **The previews go through `AppIcon` with an explicit appearance**, so they are the same composable and the same
+  bake cache every surface uses. No second render path to disagree with the home screen.
+- **Who is listed is "apps that inherit", not "apps installed".** An app with a recipe of its own is detached and a
+  global edit passes it by, so listing it would misstate what Apply is about to do. The individual route lists the
+  one app it is editing — as a *list*, because that route is meant to gain a multi-app picker and this screen is
+  already written against *the apps about to change* rather than against a subject.
+- **Apply carries the signal the tick used to.** The pill is always enabled — a session with nothing changed still
+  has somewhere to go, since this is also where a preset is saved and where the plate is switched on — and "is there
+  anything to write?" moved onto the button that actually writes. `saved` widened to a whole `IconAppearance` for it:
+  it held the layer set alone while the plate and the zoom merely rode along, which was correct then and wrong the
+  moment a control could change one, since a plated icon would have read as clean.
+- **The plate's wallpaper is provided here, and the scrim is what proved it necessary.** `LocalBackdrop` belongs to
+  the shell and this is a destination beyond it, so every plate on this step drew its *scrim* — a flat gray square,
+  on the one screen that exists to judge glass. The studio reads the panel-strength picture and the accent itself
+  now; that is a **third** reader of the same repository question, and a fourth belongs beside `ProvideIconRecipes`
+  in `app`, which is already where a launcher-wide read is assembled.
+- **The previews and the panel are laid out together, never one padded around the other.** The first cut floated the
+  panel and gave the grid a constant bottom padding to clear it — a number that has to be right at every screen size
+  and was wrong at the first one it met: rotated, the panel was taller than the viewport, so it covered the previews
+  it explains and its own buttons had nowhere to go. The shape grid is `ShapePage` (now `internal`, so a plate's
+  silhouettes and a layer's come from one list) inside a **width cap**, for the effect grid's reason — equal shares
+  of a wide panel are four huge squares. **Landscape is not arranged for**: cramped rather than broken, which is the
+  honest state of a posture nobody has designed.
+- **Turning the plate on seeds a rounded square**, because the model's default is no shape at all — right for a
+  stored recipe, which is what every one of them was written against, and wrong for a control someone just switched
+  on. `ContentAnchor`'s split, one screen over. And the three whole-icon controls are **not in history**: one tap or
+  one drag each with the result on screen across every icon, and undo would have to step back through them from the
+  editor, where the plate is not visible at all.
 
 ## Design system (`core:designsystem`)
 
@@ -1649,8 +1792,10 @@ launch onto the repository; we don't.)
 Foundations: **P0 done; P1 Core done** — `core:model` (B0), `core:common` (B1), `core:database` (B2). **B3
 `core:icon` done** (parse → layer model → render/bake → `IconRenderManager` → `LauncherIcon`), and since the icon
 studio it also holds the **live** render path (`IconLayerStack`) plus the shared derivations that keep the two
-honest — the layer *model* moved out to `core:model.icon` on the way. **B9 `data:icons` done** for everything but
-icon packs: `IconOverrideRepository` over the collapsed `icon_override`, and `CustomIconStore`. **B6 `data:apps`
+honest — the layer *model* moved out to `core:model.icon` on the way, and the **plate** is drawn a layer further out
+still, by `AppIcon` in `core:designsystem`, since it samples the wallpaper by position and so cannot be baked.
+**B9 `data:icons` done** for everything but icon packs: `IconOverrideRepository` over the collapsed `icon_override`
+— an `IconAppearance` blob per detached app — and `CustomIconStore`. **B6 `data:apps`
 partial** (LauncherApps wrapper, `AppRepository` + Room cache,
 `RawIconSource`, and **categorization** — `AppCategorizer` folds a curated asset → platform
 `ApplicationInfo.category` → keyword heuristics into a `CategoryGroup` id, ported from L1 but narrowed to *one app
@@ -2253,7 +2398,8 @@ with an asset library of its own, and slice 7, **Extrude** + **Chromatic split**
 remaining — Glow, Drop shadow, Pixelate, Ripple, Grain, Progressive blur — waits on the **bake-backed preview**, which
 Extrude has already given a second reason to build.
 
-**Also still open: icon packs (S8)** — the last piece of the icon studio proper. A pack is one more `LayerSource`
+**Also still open: icon packs (S8)** — with the plate and the finalize step built, the last piece of the icon
+studio proper. A pack is one more `LayerSource`
 variant rather than a mode, so "apply a pack to everything" is setting the global default's fg/bg source and goes
 through the same commit, cache key and invalidation as any other edit. What has to be built with it is pack
 *detection* (theme-intent actions), `appfilter.xml` parsing, and — for browse and search — a drawable lister, which
@@ -2471,8 +2617,11 @@ the screen, so its rows and columns follow rather than being picked. It states t
 and states that it also governs the **category card's expansion**, which is the same `AppCollectionOverlay` on the same grid.
 **The name `Icons` has returned with the icon studio** (per-app: shape, background, layers), which is what L1's
 `Icons` section actually is — not grid sizing, which L1 never kept there either. It is the **eighth** section and
-the third in Personalization, and unlike every other one it is a **hub rather than an editor**: two actions and a
-Presets placeholder, with the editing in a full-screen destination. See the icon-feature section for why.
+the third in Personalization, and unlike every other one it is a **hub rather than an editor**: two actions and the
+**preset library** — a grid of rendered looks, one tap to apply, a menu to edit or delete — with the editing in a
+full-screen destination. It has its own `IconsViewModel`, the last pane that borrowed the shell's, which stopped
+being tenable the moment the library had to *render*: a preview needs an app, and an app means `AppRepository`. See
+the icon-feature section for the library's rules and for why the editor is not a pane.
 **The wallpaper section is the sixth, and the first that is not about a surface** — which is why the list is now two
 named groups, Personalization and Layout, as L1 had it. It is a full port of L1's `WallpaperTab` layout: a **two-page
 pager of *modes*** ("Single wallpaper" / "Wallpaper rotate") over **three browse shelves** ("My wallpapers", "Backdrops
