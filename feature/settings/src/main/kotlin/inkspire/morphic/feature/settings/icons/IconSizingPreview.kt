@@ -36,8 +36,8 @@ private val PreviewPadding = 12.dp
 private val CaptionGap = 6.dp
 
 /**
- * How much of the box a cell may fill before it is scaled down — L1's `CELL_PREVIEW_FIT`, verbatim, because the number
- * is doing the same job: leave a little air so the cell's own outline is not flush against the panel.
+ * How much of the box a cell may fill before it is scaled down — enough air that the cell's own outline is not flush
+ * against the panel.
  */
 private const val CELL_FIT = 0.94f
 
@@ -49,29 +49,29 @@ private val DotPattern = floatArrayOf(2f, 6f)
  * **The live icon preview** — a real cell at its real dp size, with the cell and the two icon guardrails outlined on
  * top, updating as the sliders below it move.
  *
- * The port of L1's `IconPreviewBox` + `ClassicCellIconPreview`, and it is worth saying what it is *for*, because a
- * smaller mock would not do it: the icon controls set a fraction and two dp bounds, and nothing about those three
+ * Worth saying what it is *for*, because a smaller mock would not do it: the icon controls set a fraction and two dp
+ * bounds, and nothing about those three
  * numbers tells you what you will get in **this** grid's cell. So the preview renders the actual [AppCell] at the
  * actual cell size the section computed, and draws the guardrails as squares around the icon — you can see which of
  * the three is binding, which is the whole question a user has while dragging.
  *
- * **It is the body only.** The heading and L1's dice belong to the section's pinned icon header (`SurfaceDetail`), so
- * that the two travel together when the controls scroll — which is what L1 does as well, and the reason its preview sits
- * inside the sticky header rather than under it.
+ * **It is the body only.** The heading and the shuffle belong to the section's pinned icon header (`SurfaceDetail`),
+ * so the two travel together when the controls scroll — which is why the preview sits inside the sticky header rather
+ * than under it.
  *
- * **Three deliberate departures from L1.**
- * - **The geometry is asked for, not copied.** L1 restated the cell's padding and label gap as `PREVIEW_CELL_PAD_DP` /
- *   `PREVIEW_LABEL_GAP_DP` under a "keep in sync" comment; this asks `cellIconLayout` where the icon is, so the guides
+ * **Three things worth knowing.**
+ * - **The geometry is asked for, not copied.** Restating the cell's padding and label gap as constants under a "keep
+ *   in sync" comment is how they drift; this asks `cellIconLayout` where the icon is, so the guides
  *   cannot drift from the cell they are drawn over.
- * - **Grayscale, distinguished by stroke.** L1 colored the guardrails green (upper) and red (lower). This palette is
- *   monochrome and reserves red for `error`, so the cell is a **solid** outline, the upper guardrail **dashed** and the
+ * - **Grayscale, distinguished by stroke**, the palette being monochrome and reserving red for `error`: the cell is a
+ *   **solid** outline, the upper guardrail **dashed** and the
  *   lower **dotted**, with the caption naming them. The same rule that made the grid editor's add/remove buttons sit on
  *   the edge they affect rather than being told apart by color.
- * - **The wallpaper behind it is L1's own trick, and it is back.** The cell box composites with `BlendMode.Src`, so
+ * - **The wallpaper shows behind it.** The cell box composites with `BlendMode.Src`, so
  *   wherever it draws nothing it *clears* the pane instead of covering it; the pane is an offscreen layer over a window
  *   that shows the wallpaper (`PunchThroughPane` in `SettingsScreen`, and `windowShowWallpaper` in `app`'s theme), so
- *   what is revealed is the real wallpaper. It is worth the machinery for the reason L1 gave: an icon is judged against
- *   what it will sit on, and a gray panel is not that.
+ *   what is revealed is the real wallpaper. Worth the machinery: an icon is judged against what it will sit on, and a
+ *   gray panel is not that.
  *
  * @param app the sample to draw, or null while the app cache is still loading — the preview then shows its outlines
  *   alone, which is still the useful half (the sizes are what is being edited).
@@ -82,8 +82,8 @@ private val DotPattern = floatArrayOf(2f, 6f)
  * @param cellWidth the real width of one cell in the grid being configured — the section computes it, since only the
  *   section knows its own area and column count.
  * @param cellHeight likewise; for the vertical list this is the row height and [asRow] is set instead.
- * @param asRow draws an [AppRowCell] across the width rather than a grid cell, for the one layout that is a list. L1
- *   took a `listMode` flag at every call site for this; here the caller passes it once per section, from the slot.
+ * @param asRow draws an [AppRowCell] across the width rather than a grid cell, for the one layout that is a list.
+ *   Passed once per section, from the slot, rather than at every call site.
  */
 @Composable
 internal fun IconSizingPreview(
@@ -142,8 +142,8 @@ internal fun IconSizingPreview(
 }
 
 /**
- * The cell, at **true dp size**, scaled *down* only if it would not fit the box — L1's rule, and the right one: a cell
- * drawn larger than life would misrepresent the very thing being measured, while a cell too large for the panel (a
+ * The cell, at **true dp size**, scaled *down* only if it would not fit the box: a cell drawn larger than life would
+ * misrepresent the very thing being measured, while a cell too large for the panel (a
  * tablet's) still has to be shown somehow.
  */
 @Composable
@@ -187,7 +187,7 @@ private fun CellPreview(app: AppInfo?, metrics: IconMetrics, cellWidth: Dp, cell
                 // horizontal padding and the height less its vertical padding and label row, which is the largest icon
                 // the cell can actually hold. Clamping to the cell instead (as this first did) drew a too-large guardrail
                 // flush against the outer ring, hiding the 4dp the cell insets its icon by and implying an icon could
-                // fill the cell edge to edge. It is also what L1 clamped to (`minOf(availWdp, iconAreaDp)`).
+                // fill the cell edge to edge.
                 val bound = layout.iconBound
                 square(minOf(maxOf(metrics.minIconDp, metrics.maxIconDp), bound), PathEffect.dashPathEffect(DashPattern))
                 square(minOf(minOf(metrics.minIconDp, metrics.maxIconDp), bound), PathEffect.dashPathEffect(DotPattern))
@@ -213,8 +213,8 @@ private fun RowPreview(app: AppInfo?, metrics: IconMetrics, rowHeight: Dp) {
 /**
  * How tall the box holding a grid-cell preview is.
  *
- * L1 sized it to hold the *largest possible* cell (the fewest rows), so that the cell never scaled and the box never
- * resized as the grid changed. Here it follows the cell it is actually drawing, capped: the section's editor is right
+ * Sizing it to hold the *largest possible* cell would stop the box ever resizing, at the cost of a preview matching
+ * nothing on screen. It follows the cell it is actually drawing instead, capped: the section's editor is right
  * above, so a preview that jumped in height as you added a row would be the more distracting of the two.
  */
 private fun previewBoxHeight(cellHeight: Dp): Dp = cellHeight.coerceIn(96.dp, 220.dp) + PreviewPadding * 2

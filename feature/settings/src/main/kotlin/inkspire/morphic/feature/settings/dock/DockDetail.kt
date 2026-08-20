@@ -48,9 +48,8 @@ import kotlin.math.roundToInt
 private val RowGap = 8.dp
 
 /**
- * The dp window the extent slider spans — **L1's, verbatim** (`valueRange = 80f..320f` in its `DockSettingsDetail`),
- * and one range for both postures, as L1 also had it: the slider is titled "Width" on a rail, but what it bounds is the
- * same physical thickness.
+ * The dp window the extent slider spans, and one range for both postures: the slider is titled "Width" on a rail, but
+ * what it bounds is the same physical thickness.
  *
  * An earlier cut derived the cap as a fraction of the screen instead. That was invented, and it was answering the
  * wrong question: what limits a useful dock is the cell size it has to divide into, which comes from the icon and
@@ -60,7 +59,7 @@ private val RowGap = 8.dp
 private val DockExtentRange = 80f..320f
 
 /**
- * The widget area's, likewise **L1's verbatim** (`120f..480f` in the same screen's `minimalist` branch).
+ * The widget area's — far thicker than a dock's, which is the difference between the two zones stated as a number.
  *
  * Far wider and far higher than the dock's, which is the whole difference between the two zones stated as a number: a
  * dock is a row of icons you reach for, and a widget area is a panel you look at.
@@ -75,19 +74,17 @@ private val WidgetAreaExtentRange = 120f..480f
  * strip whose counts divide that extent. Everything structural is shared — the extent slider, the grid editor, the
  * margin, the reset — and exactly two things differ, both of them properties of what the zone holds rather than
  * choices made here. **A widget area draws no icons**, so its blueprint declares no icon sizing and this screen shows
- * no icon group at all; that is precisely the shape L1's own `DockSettingsDetail` took in its `minimalist` branch,
- * which returned early before the icon controls. And its cells are fitted by a **widget's** floor rather than an
- * icon guardrail's (`WidgetMinCell`, L1's `MIN_WIDGET_DP`).
+ * no icon group at all. And its cells are fitted by a **widget's** floor rather than an icon guardrail's
+ * (`WidgetMinCell`).
  *
  * **Where the zone sits decides what this screen's one extent means.** A strip on three device configurations and a
  * rail on a phone in landscape (`SideZoneEdge`) — so the slider is a *height* on the first and a *width* on the
  * second, and the extent bounds the **rows** there and the **columns** here. One stored number per device serves
- * both, because a user configuring a phone in landscape is configuring the rail. L1 called the same value `extentDp`
- * and titled the same slider the same way.
+ * both, because a user configuring a phone in landscape is configuring the rail.
  *
- * **Layout group, then icon group** — L1's structure for every surface detail, and the dependency runs that way too:
- * the icons decide the smallest usable cell, which is what the extent above divides into cells. Within the layout group
- * the **editor comes first and the sliders under it**, again L1's order; [SurfaceDetail] owns the arrangement and pins
+ * **Layout group, then icon group**, which is also the way the dependency runs: the icons decide the smallest usable
+ * cell, and that is what the extent above divides into cells. Within the layout group the **editor comes first and the
+ * sliders under it**; [SurfaceDetail] owns the arrangement and pins
  * the icon heading and preview together, which earns its place here more than anywhere — a dock cell is the extent
  * *the user set* divided by a count, so the icon in it moves as the slider does.
  *
@@ -97,7 +94,7 @@ private val WidgetAreaExtentRange = 120f..480f
  * axis stop where the division does.
  *
  * **The extent previews while dragging and commits on release**, and the commit carries the cell cap the new extent
- * allows, so a shrink that invalidates the stored count reduces it in the same step. That is L1's sequence.
+ * allows, so a shrink that invalidates the stored count reduces it in the same step.
  *
  * **The count on the *other* axis is never written down** when it outgrows the icons — it is clamped where the grid is
  * drawn and returns when the icons shrink. Only the axis the extent divides is reduced in storage, because only it is
@@ -192,8 +189,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
         layout = {
             if (range != null) {
                 // The same editor home's grid uses. The one difference is a property of the dock rather than a
-                // choice: its companion zone is the pager, sitting above rather than below. L1 had a second
-                // ~220-line editor for this.
+                // choice: its companion zone is the pager, sitting above rather than below.
                 //
                 // The row buttons are bounded by `range.rows`, which is this height divided by the smallest
                 // usable cell — so "+ a row" is offered only while another row would still leave cells tall
@@ -227,8 +223,8 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
             // one transaction rather than one per frame. The cell cap goes with the commit because the extent that
             // lands may no longer carry the stored count, and the fit is a runtime question this screen owns.
             //
-            // **A width on a rail and a height on a strip** — L1 titled the same slider the same way, and the subtitle
-            // names whichever count the extent actually divides.
+            // **A width on a rail and a height on a strip**, with the subtitle naming whichever count the extent
+            // actually divides.
             SettingsCommitSlider(
                 title = if (isRail) "Width" else "Height",
                 subtitle = if (isRail) {
@@ -294,8 +290,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
             )
         },
         // **No icon group at all on the widget area**, which is `WidgetAreaGrid.icon` being null reaching the screen:
-        // a widget is not an icon in a cell, so there is no fraction, guardrail or label to set. L1's own dock detail
-        // returned early before its icon controls on exactly this branch.
+        // a widget is not an icon in a cell, so there is no fraction, guardrail or label to set.
         icons = if (icon == null) null else {
             {
                 IconSizingGroup(

@@ -62,7 +62,7 @@ private val CellCorner = 3.dp
  * The shapes the mockup will take, whatever the real screen is.
  *
  * A ratio outside these is a window we do not draw well — a freeform split, a very wide foldable — and a preview
- * stretched to match would be less recognizable as a screen than a clamped one. L1 clamps the same pair.
+ * stretched to match would be less recognizable as a screen than a clamped one.
  */
 private const val MIN_PREVIEW_RATIO = 0.35f
 private const val MAX_PREVIEW_RATIO = 2.5f
@@ -104,8 +104,8 @@ internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val 
 /**
  * **The grid editor: a screen-shaped mockup ringed by − and + buttons, one per edge per action.**
  *
- * One component for every grid, where L1 had `HomeGridEditor` and `DockGridEditor` — two ~220-line composables that
- * were the same code apart from which half of the preview held the lattice. Here that is [companion]: the part of the
+ * One component for every grid. What differs per grid is only which half of the preview holds the lattice, which is
+ * [companion]: the part of the
  * screen this grid *isn't*, drawn as a plain block, above or below. Home passes the dock; the dock passes the pager;
  * a grid that fills the screen passes null and the split disappears.
  *
@@ -113,19 +113,19 @@ internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val 
  * items end up — removing the left column shifts everything left, removing the right one drops what was in it.
  * `GridReflow.edit` is the op underneath, and this is its control surface.
  *
- * **The arrangement is L1's: removes along the top and left, adds along the right and bottom**, each pair spread to
+ * **Removes along the top and left, adds along the right and bottom**, each pair spread to
  * the preview's own extent so a button sits at the corner it acts on. The top-left − takes the left column and is
  * directly above it; the right rail's lower + adds a row at the bottom and is beside it.
  *
- * **An earlier cut here centered a −/+ pair on each edge instead**, on the grounds that L1 tells add from remove by
- * color (red / green) and this codebase's palette cannot — grayscale chrome, red reserved for `error`. The premise
- * was right and the conclusion was wrong: in L1 the *position already encodes the action*, top/left removing and
- * bottom/right adding, so the color was reinforcement rather than the signal. Taking the arrangement and dropping
+ * **An earlier cut here centered a −/+ pair on each edge instead**, on the grounds that the reference tells add from
+ * remove by color (red / green) and this palette cannot — grayscale chrome, red reserved for `error`. The premise was
+ * right and the conclusion wrong: the *position already encodes the action*, top/left removing and bottom/right
+ * adding, so the color was reinforcement rather than the signal. Taking the arrangement and dropping
  * the color keeps everything the palette forbids and nothing it doesn't, and the glyphs carry what is left. The
  * flash in the preview stays grayscale for the same reason.
  *
- * **The mockup is a fixed size per posture, not a fraction of the pane** — see the four numbers in the body, which
- * are L1's. A settings pane is half a tablet and the whole of a phone, so a fraction gave a different preview in
+ * **The mockup is a fixed size per posture, not a fraction of the pane** — see the four numbers in the body.
+ * A settings pane is half a tablet and the whole of a phone, so a fraction gave a different preview in
  * each; worse, `aspectRatio` derives *height* from width, so at a tall phone ratio a wide pane bought a preview
  * taller than the section holding it.
  *
@@ -148,8 +148,7 @@ internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val 
  *   box is `fillMaxWidth().aspectRatio(ratio)`, so a smaller ratio buys height.
  * @param horizontalInsetFraction how much of the preview's width the grid's own margin takes, per side, as a fraction
  *   of the whole. Drawn as blank space *within* the screen shape, which is what a margin actually looks like. Capped
- *   below at leaving something to draw, since the slider's ceiling is independent of this device's width. L1 does the
- *   same, down to computing the fraction from the padding and the measured area.
+ *   below at leaving something to draw, since the slider's ceiling is independent of this device's width.
  */
 @Composable
 internal fun GridEditor(
@@ -173,11 +172,11 @@ internal fun GridEditor(
         onEdit(edge, add)
     }
 
-    // **A fixed mockup size per posture, as L1 sizes its own** — not a fraction of the pane. A settings pane is half
+    // **A fixed mockup size per posture** — not a fraction of the pane. A settings pane is half
     // a tablet and all of a phone, so `fillMaxWidth(f).aspectRatio(r)` made the preview a different size in each and,
     // at a tall phone ratio, very tall indeed: height is width ÷ ratio, so 62% of a wide pane bought a preview taller
     // than the section it sits in. A mockup of a screen wants a *legible* size, which is a physical decision, and the
-    // width then follows from the shape. L1's four numbers, unchanged.
+    // width then follows from the shape.
     val previewHeight = when (currentDeviceConfiguration()) {
         DeviceConfiguration.PHONE_PORTRAIT -> 240.dp
         DeviceConfiguration.PHONE_LANDSCAPE -> 140.dp
@@ -207,23 +206,23 @@ internal fun GridEditor(
             )
         }
 
-        // **Three arrangements, and L1 has all three.**
+        // **Three arrangements.**
         //
         // *Both axes* — the plus-shape: removes along the top and left, adds along the right and bottom, each pair
         // spread to the preview's extent so a button sits at the corner it acts on. Pressing the top-left − takes the
         // left column and is directly above it.
         //
         // *Columns only* — the top and bottom rows go, and each side rail carries **− above + for its own edge**
-        // instead. That is L1's `showRowControls = false` branch, and it is better than hiding the rails and leaving
-        // the two column rows: with no rows to edit, the plus-shape's top and bottom rows are the only controls left
+        // instead. Better than hiding the rails and leaving the two column rows: with no rows to edit, the
+        // plus-shape's top and bottom rows are the only controls left
         // and they sit furthest from the columns they change.
         //
         // *Neither* — the framed preview alone. A list has one lane and a declared row height, so there is no count to
         // press; what it needs is somewhere to *see* the height its slider sets.
         //
         // An earlier cut centered a −/+ pair on each edge, reasoning that a grayscale palette cannot tell add from
-        // remove by color as L1's red/green does. The premise was right, the conclusion wrong: in L1 the *position*
-        // encodes the action, so the color was reinforcement. The arrangement is kept and the color is not.
+        // remove by color. The premise was right, the conclusion wrong: the *position* encodes the action, so color
+        // was only reinforcement. The arrangement is kept and the color is not.
         val framedPreview: @Composable () -> Unit = {
             Box(
                 modifier = Modifier
@@ -312,8 +311,8 @@ private fun EdgeRail(height: Dp, content: @Composable ColumnScope.() -> Unit) {
  *
  * **The margin reaches the edited half and never the companion**, because it is *this grid's* setting: home's two
  * zones each store their own, so insetting both from one number would show the user a dock narrowing because they
- * moved the pager's slider. That is why the inset is applied inside [edited] rather than around this split — L1 draws
- * it the same way, passing `insetFraction` to its `GridPreview` and none to its `NonGridPreview`. An earlier cut here
+ * moved the pager's slider. That is why the inset is applied inside [edited] rather than around this split. An
+ * earlier cut here
  * wrapped the whole mockup, which shrank the screen rather than the grid in it.
  */
 @Composable
@@ -362,8 +361,8 @@ private fun CompanionZone(modifier: Modifier) {
  * added or removed flashing as it goes.
  *
  * **The changing line is always the last drawn index, and the canvas is mirrored for a TOP or LEFT edit** so that
- * last index lands on the near edge instead of the far one. That is L1's trick and it is a good one: it means one
- * drawing path animates all four edges instead of four cases.
+ * last index lands on the near edge instead of the far one, so one drawing path animates all four edges instead of
+ * four cases.
  *
  * **Grayscale, not red/green.** An added line flashes to `accent`; a removed one fades out as it collapses. The
  * palette is monochrome by design and reserves red for `error`, which a user removing a row is not — and the collapse
@@ -470,14 +469,13 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
  * One square edge button.
  *
  * Deliberately not a `MorphicButton`: that is a labeled M3 button with its own minimum touch size and shape morph,
- * and eight of them around a preview would swamp it. This is a plain square, which is what L1 used too — the part
- * worth keeping from its version.
+ * and eight of them around a preview would swamp it. This is a plain square.
  */
 @Composable
 private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Box(
-        // The inset is L1's, and it is load-bearing now that the buttons sit at the preview's corners rather than
+        // The inset is load-bearing now that the buttons sit at the preview's corners rather than
         // centered on its edges: without it the outermost pair touches the very ends of the row and the group reads as
         // wider than the screen it is describing.
         modifier = Modifier
@@ -506,7 +504,7 @@ private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
  *
  * A guard rather than a rule about padding: the slider's ceiling is in dp and this device's width is not, so a wide
  * margin on a narrow screen could otherwise leave the lattice nothing to draw in and the preview would read as broken
- * rather than as tight. L1 clamps the same fraction at the same kind of value.
+ * rather than as tight.
  */
 private const val MAX_PREVIEW_INSET = 0.4f
 

@@ -97,7 +97,7 @@ private val PageChromeHeight = 128.dp
 /**
  * **Wallpaper**: the image the launcher owns, and where to put it.
  *
- * Laid out as **L1's `WallpaperTab`**: a two-page pager of *modes* over three horizontal browse shelves. Each mode page
+ * A two-page pager of *modes* over three horizontal browse shelves. Each mode page
  * is one anatomy — a header row carrying the mode's name, its status, and the control that applies it; a preview band;
  * and a row of the actions that change what that mode holds. Putting the modes side by side rather than stacked is what
  * makes them read as **alternatives** — only one of them is ever the wallpaper — which a vertical list of two groups
@@ -108,17 +108,16 @@ private val PageChromeHeight = 128.dp
  *   repository declines it and the page says so on its status line instead of offering a dead button.
  * - **The rotating pair is applied by the *system's* chooser**, never silently — the platform insists the user confirm
  *   a live wallpaper — so its button opens that chooser and the section re-asks on resume whether ours ended up
- *   active. That is where L1 ran `reconcileLiveWallpaper`; this refreshes a read rather than repairing a stored copy.
+ *   active — a refreshed read rather than a repaired copy.
  * - **Choosing an image opens [WallpaperCropScreen]**, which is what writes. This section reads the store and issues
  *   one command.
  *
- * **Two deliberate departures from L1's drawing, both small:**
- * - **One button and a menu, where L1 drew a `SplitButtonLayout`.** Both halves of that ran `expanded = true` — the
- *   leading half opened the same menu the trailing chevron did — so the split was decoration over a single action. The
- *   chevron stays, as the affordance that says "this opens something"; the seam does not.
- * - **A preview keeps the screen's aspect ratio inside L1's band.** The stored file is already cropped to this screen,
- *   so stretching it across a landscape band would show a crop the device never displays. The band is L1's — full
- *   width, [PreviewHeight] tall — and the picture sits in it at the shape it will actually be seen at, which is also
+ * **Two things worth knowing about the drawing:**
+ * - **One button and a chevron, not a split button.** Applying always asks *where*, so both halves would open the same
+ *   menu — a seam over a single action. The chevron stays, as the affordance that says "this opens something".
+ * - **A preview keeps the screen's aspect ratio inside the band.** The stored file is already cropped to this screen,
+ *   so stretching it across a landscape band would show a crop the device never displays. The band is full
+ *   width, [PreviewHeight] tall, and the picture sits in it at the shape it will actually be seen at, which is also
  *   what makes the rotating page's two tiles legible as *portrait* and *landscape*.
  */
 @Composable
@@ -139,9 +138,8 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
     }
 
     // A pick opens the **crop screen** rather than writing: the user frames the image there, and that screen saves.
-    // L1's picker did the same, and it is why nothing here passes a size — the viewport the user frames against is
-    // what gets stored. Photo Picker rather than a document-open intent: no storage permission, and it is what L1
-    // moved to.
+    // Nothing here passes a size — the viewport the user frames against is what gets stored. Photo Picker rather
+    // than a document-open intent: no storage permission.
     val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
     val singlePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) navigator.goTo(WallpaperCropRoute(uri.toString()))
@@ -161,8 +159,8 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
     }
 
     // The shelf of *installed* live wallpapers is a package-manager query with drawable loading in it, so it is read
-    // once, off the main thread. L1 did the same; the sort is the difference — a locale-aware `Collator` rather than
-    // `lowercase()`, which compares raw UTF-16 and files every accented label after `Z`. Our own service is named
+    // once, off the main thread, sorted with a locale-aware `Collator` rather than `lowercase()`, which compares
+    // raw UTF-16 and files every accented label after `Z`. Our own service is named
     // rather than found, so the shelf can leave it out (see `loadInstalledLiveWallpapers`).
     val ownService = remember(viewModel) { viewModel.rotatingServiceComponent() }
     var liveWallpapers by remember { mutableStateOf<List<LiveWallpaperEntry>>(emptyList()) }
@@ -213,7 +211,7 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
  *
  * A pager rather than two stacked groups because the modes are alternatives: whichever one is applied *is* the
  * wallpaper, and the other is a saved configuration waiting. Swiping between them says that; two headings do not. It
- * opens on whichever is active, as L1's did.
+ * opens on whichever is active.
  */
 @Composable
 private fun WallpaperModePager(
@@ -251,7 +249,7 @@ private fun WallpaperModePager(
                 applyControl = {
                     if (state.image == null || state.applicable) {
                         ApplyButton(
-                            // "Re-apply" once this launcher is the one that set it — L1's wording, off the same id.
+                            // "Re-apply" once this launcher is the one that set it.
                             label = if (state.applied) "Re-apply" else "Apply",
                             enabled = state.applicable && !state.busy,
                             onSelect = onApply,
@@ -325,7 +323,7 @@ private fun WallpaperModePager(
  * actions that change what it holds.
  *
  * The anatomy is shared so the two modes cannot drift into looking like different features — which is the same reason
- * one `GridEditor` serves home and the dock, where L1 kept two near-copies.
+ * one `GridEditor` serves home and the dock.
  *
  * @param status the mode's one line of standing — "Active", why it cannot be applied, or what is missing. Null when
  *   there is nothing to say, which keeps the header a single line rather than reserving space for silence.
@@ -370,8 +368,8 @@ private fun WallpaperModePage(
 /**
  * The single mode's picture, at the screen's shape, centered in the page's preview band.
  *
- * [ratio] rather than filling the band is the one place this departs from L1's drawing, and the reason is that the
- * stored file is *already* cropped to this screen (`WallpaperRepository.setImage`) — so a band-shaped preview would
+ * [ratio] rather than filling the band, because the stored file is *already* cropped to this screen
+ * (`WallpaperRepository.setImage`) — so a band-shaped preview would
  * show a crop the device never displays. Same argument `GridEditor`'s preview makes for taking the window's ratio.
  */
 @Composable
@@ -412,8 +410,8 @@ private fun PreviewTile(
 /**
  * One orientation of the rotating pair: its picture if it has one, a "+" if it does not, and a tap to replace it.
  *
- * Shaped like the orientation it stands for — which is what tells the two apart at a glance, where L1 labeled two
- * equal rectangles. Tapping a filled slot re-picks rather than opening a menu: there are two things one could do to a
+ * Shaped like the orientation it stands for, which is what tells the two apart at a glance without a label.
+ * Tapping a filled slot re-picks rather than opening a menu: there are two things one could do to a
  * slot, and "clear" is not worth a menu when choosing another image is the common one and clearing leaves the pair
  * half-configured anyway.
  */
@@ -485,8 +483,8 @@ private fun PageActionButton(
  * Apply, and *where* — the button and the three-item menu it opens.
  *
  * The menu is the whole control rather than a secondary affordance: applying always asks where, so there is no plain
- * "apply" to run without it. That is why the button opens the menu instead of acting, which is also what both halves of
- * L1's `SplitButtonLayout` did — hence one button here, keeping only the chevron that said "this opens something".
+ * "apply" to run without it. That is why the button opens the menu instead of acting, and why it is one button with a
+ * chevron rather than a split.
  */
 @Composable
 private fun ApplyButton(
@@ -514,7 +512,7 @@ private fun ApplyButton(
 }
 
 /**
- * A titled horizontal shelf — L1's browse rows, and the shape any future wallpaper *source* takes.
+ * A titled horizontal shelf — the shape any future wallpaper *source* takes.
  *
  * A `LazyListScope` extension rather than a composable because the header and the row are two items of the outer list:
  * a shelf whose row is long must scroll sideways while the page scrolls down, and nesting a `LazyRow` inside a single
@@ -620,8 +618,7 @@ private fun LiveWallpaperCard(entry: LiveWallpaperEntry, onClick: () -> Unit) {
  *
  * **A live wallpaper cannot be set silently** — the platform hands the user a preview with its own confirm button — so
  * this is the whole of "apply" for the rotating pair, and the section learns the outcome by asking on resume rather
- * than from a result. The fallback is L1's: the direct intent is optional, and a device without it still has the
- * chooser.
+ * than from a result. The direct intent is optional, and a device without it still has the chooser.
  */
 private fun openLiveWallpaperChooser(context: Context, component: ComponentName): Boolean {
     val direct = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
@@ -654,7 +651,7 @@ private fun loadInstalledLiveWallpapers(context: Context, exclude: ComponentName
         Intent(WallpaperService.SERVICE_INTERFACE),
         PackageManager.GET_META_DATA,
     )
-    // A locale-aware collation, not L1's `sortedBy { it.label.lowercase() }` — that compares raw UTF-16, so every
+    // A locale-aware collation, not `sortedBy { it.label.lowercase() }` — that compares raw UTF-16, so every
     // accented label sorts after `Z`. Same correction the APPS surface made to its own ordering.
     val collator = Collator.getInstance()
     return resolved.mapNotNull { info ->

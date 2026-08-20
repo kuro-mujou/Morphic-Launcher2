@@ -67,10 +67,9 @@ private val GearGlyph = 18.dp
 /**
  * **The surface register as a cross: HOME in the middle, and the four edges around it.**
  *
- * The port of L1's `SurfaceRegister`, and the reason this section is worth a component rather than a list of controls:
- * the setting *is* spatial. Which edge opens what is a fact about where things are, and the four labeled chip groups
- * this replaced made the reader rebuild that arrangement in their head — where five cards laid out in a plus simply
- * are it.
+ * Why this section is worth a component rather than a list of controls: the setting *is* spatial. Which edge opens
+ * what is a fact about where things are, and labeled chip groups make a reader rebuild that arrangement in their head
+ * — where five cards laid out in a plus simply are it.
  *
  * **A card names what is bound; it does not draw it.** An earlier cut filled each card with a mockup of the layout,
  * on the grounds that the card is already screen-shaped and this feature owns those drawings. It was reversed: at 88dp
@@ -79,8 +78,8 @@ private val GearGlyph = 18.dp
  * belongs where a layout is being chosen (`SideBindingPicker`) and where one is being sized (the APPS section's
  * editor), not where four of them are being placed.
  *
- * **The card is the shape of this device**, from `usableWindowArea` rather than L1's `LocalConfiguration` — the one
- * place this launcher measures the screen, and the same input `GridEditor` sizes its own mockup from. The long side is
+ * **The card is the shape of this device**, from `usableWindowArea` — the one place this launcher measures the
+ * screen, and the same input `GridEditor` sizes its own mockup from. The long side is
  * a fixed dp for the reason that editor's is: a mockup of a screen wants a legible size, which is a physical decision,
  * and the other side then follows from the ratio.
  *
@@ -91,15 +90,12 @@ private val GearGlyph = 18.dp
  * so it has nothing to change here; what it has is a pairing, and a pairing is what the Home section is now built
  * around. Two live controls for one setting is the fault that settled it, not the ranking of the two places.
  *
- * L1 is worth knowing on this: its center card was inert too, and its pairing choice lived in its Home section. It
- * reached the same arrangement for a narrower reason (one pairing, so nothing to choose).
- *
  * @param homeLayout HOME's current pairing; the center card is named for it.
  * @param bindings the register's current per-edge bindings; a missing edge is unbound.
  * @param onPick opens the slot picker for an edge. The picker itself is hoisted to the section, so at most one is ever
  *   composed whatever the cross is doing.
- * @param onOpenSettings jumps to a section — and, for a side, to the layout bound there. L1's gear: place a surface,
- *   then size it without going back out through the list. The layout goes with it because the APPS section configures
+ * @param onOpenSettings jumps to a section — and, for a side, to the layout bound there: place a surface, then size
+ *   it without going back out through the list. The layout goes with it because the APPS section configures
  *   **one** layout at a time, so landing on the section alone would open whichever one happened to be selected.
  */
 @Composable
@@ -155,8 +151,7 @@ private fun SideSlot(
         EmptySlot(width, height) { onPick(edge) }
     } else {
         // The same glyph for every layout, because every binding is the same *surface* — the label carries which
-        // arrangement of it. L1 varied the icon because its two side surfaces were two modules; ours collapsed into
-        // one, which is the surface taxonomy showing up in the picker.
+        // arrangement of it — the surface taxonomy showing up in the picker.
         FilledSlot(
             width = width,
             height = height,
@@ -165,8 +160,7 @@ private fun SideSlot(
             container = colors.surface,
             content = colors.content,
             onClick = { onPick(edge) },
-            // **No gear where there is nothing to open.** L1's `settingsSection` is nullable for exactly this reason
-            // and its card omits the gear when it is null.
+            // **No gear where there is nothing to open.**
             //
             // [ConfigurableLayouts] is total today — the category card was its one exclusion and now has a chip of its
             // own — so this branch never takes its `else`. Kept rather than deleted because the condition is the honest
@@ -184,13 +178,11 @@ private fun SideSlot(
 /**
  * The center: HOME, named for the pairing it is drawing.
  *
- * In `accent` where the sides are plain, since it is the fixed point the others are arranged around — L1 used
- * `primaryContainer` for the same distinction.
+ * In `accent` where the sides are plain, since it is the fixed point the others are arranged around.
  *
  * **One target, unlike every filled side slot: the gear.** A side card's body *changes what is bound there*, which is
  * the question the cross exists to ask — HOME has no such question, because HOME is not bound to anything. What it
- * has is a *pairing*, and that moved to the Home section it configures. L1's own center card was inert for the
- * narrower reason that it had only one pairing to be.
+ * has is a *pairing*, and that lives in the Home section it configures.
  */
 @Composable
 private fun HomeSlot(
@@ -221,11 +213,11 @@ private fun HomeSlot(
 }
 
 /**
- * A bound slot: its glyph over its name, with L1's gear under a divider.
+ * A bound slot: its glyph over its name, with the gear under a divider.
  *
  * **Two targets, and the divider is what says so** — the body *changes* what is bound, the gear *configures* what is
- * bound already. L1 drew exactly this, and it is the rule the APPS category card follows too: a container with two jobs
- * marks the boundary rather than leaving the user to discover it. The body is clipped and clickable in its own right,
+ * bound already — the rule the APPS category card follows too: a container with two jobs marks the boundary rather
+ * than leaving the user to discover it. The body is clipped and clickable in its own right,
  * so the ripple stops at the divider instead of flashing under the gear.
  */
 @Composable
