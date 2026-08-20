@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.CardChrome
 
@@ -199,7 +198,7 @@ fun CategoryPreviewIcon(
     val iconSize = metrics.resolveIconSize(slotSize, slotSize)
     Box(modifier.size(slotSize), contentAlignment = Alignment.Center) {
         val sizePx = with(LocalDensity.current) { iconSize.roundToPx() }
-        LauncherIcon(
+        AppIcon(
             component = app.componentKey,
             contentDescription = app.label,
             sizePx = sizePx,

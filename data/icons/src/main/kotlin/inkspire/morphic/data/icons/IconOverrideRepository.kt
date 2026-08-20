@@ -1,14 +1,14 @@
 package inkspire.morphic.data.icons
 
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import kotlinx.coroutines.flow.Flow
 
 /**
  * The apps whose icons have their **own** recipe, and the reads and writes that detach and re-attach them.
  *
  * The model is **full-snapshot detach**, not a field-level merge: an app either inherits the global default
- * (`SettingsRepository.iconLayerSet`) or owns a complete [IconLayerSet] of its own. Editing an app snapshots the
+ * (`SettingsRepository.iconAppearance`) or owns a complete [IconAppearance] of its own. Editing an app snapshots the
  * current default into its row, after which later global changes pass it by; [clear] deletes the row and the app
  * follows the default again.
  *
@@ -31,10 +31,10 @@ interface IconOverrideRepository {
      * launcher, read by every icon on screen. A row whose stored recipe cannot be decoded is **omitted**, so the app
      * falls back to the global default rather than the surface failing to draw — see the implementation.
      */
-    val overrides: Flow<Map<ComponentKey, IconLayerSet>>
+    val overrides: Flow<Map<ComponentKey, IconAppearance>>
 
-    /** Gives [component] its own [layerSet], detaching it from the global default (or replacing what it had). */
-    suspend fun set(component: ComponentKey, layerSet: IconLayerSet)
+    /** Gives [component] its own [appearance], detaching it from the global default (or replacing what it had). */
+    suspend fun set(component: ComponentKey, appearance: IconAppearance)
 
     /** Drops [component]'s own recipe, re-attaching it to the global default. A no-op if it had none. */
     suspend fun clear(component: ComponentKey)

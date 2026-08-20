@@ -1,19 +1,23 @@
 package inkspire.morphic.data.settings
 
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import kotlinx.serialization.Serializable
 
 /**
- * One saved icon recipe under a name the user chose.
+ * One saved look under a name the user chose.
  *
- * A preset is **exactly an [IconLayerSet] plus a name** — no separate format, no subset of the recipe. That is
- * what the persistence model was already shaped for: the plan noted a preset needs "no schema change", and this
- * is that promise being cashed rather than a coincidence.
+ * A preset is **exactly an [IconAppearance] plus a name** — no separate format, no subset of it. That is what the
+ * persistence model was already shaped for: the plan noted a preset needs "no schema change", and this is that
+ * promise being cashed rather than a coincidence.
+ *
+ * **It was the layer set alone until the plate existed**, and what forced the widening is one control: the finalize
+ * screen offers "save as preset" underneath the plate switch, so saving the recipe alone would have kept half of
+ * what the user was looking at. See [IconAppearance].
  */
 @Serializable
 data class IconPreset(
     val name: String,
-    val layerSet: IconLayerSet,
+    val appearance: IconAppearance,
 )
 
 /**

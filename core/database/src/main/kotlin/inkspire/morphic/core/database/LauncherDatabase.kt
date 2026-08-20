@@ -80,7 +80,7 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
     // The bump is required even though the builder falls back to a destructive migration — Room validates the
     // schema hash on open and would throw, not rebuild. Pre-launcher, so the cost of that rebuild is a dev
     // database, not user data; the first real migration is owed the moment this ships (P9).
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(

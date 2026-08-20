@@ -5,6 +5,7 @@ import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconPlate
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.PreviewBackground
@@ -121,6 +122,8 @@ data class PackBrowse(
 data class IconStudioState(
     val subject: StudioSubject = StudioSubject.Unchosen,
     val editing: IconLayerSet = IconLayerSet.Base,
+    val plate: IconPlate = IconPlate(),
+    val zoom: Float = 1f,
     val parsed: ParsedIcon? = null,
     val label: String? = null,
     val background: PreviewBackground = PreviewBackground.Default,

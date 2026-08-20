@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconSizingRanges
 
@@ -232,7 +231,7 @@ fun AppRowCell(
                 // A pure-text list drops the icon *and* the gap after it, so the label starts at the row's own inset
                 // rather than where the icon used to end.
                 if (metrics.showIcon) {
-                    LauncherIcon(
+                    AppIcon(
                         component = app.componentKey,
                         contentDescription = app.label,
                         sizePx = with(LocalDensity.current) { iconSize.roundToPx() },

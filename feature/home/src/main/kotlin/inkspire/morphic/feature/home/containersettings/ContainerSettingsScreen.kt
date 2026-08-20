@@ -48,7 +48,7 @@ import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.picker.AppPicker
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.icon.compose.LauncherIcon
+import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
@@ -430,7 +430,7 @@ private fun <T> ChooserDialog(
 private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
     when (icon) {
         is ContainerIcon.App -> ContentRow(label = icon.info.label, onRemove = onRemove) {
-            LauncherIcon(
+            AppIcon(
                 component = icon.info.componentKey,
                 contentDescription = null,
                 sizePx = with(LocalDensity.current) { RowIconSize.roundToPx() },

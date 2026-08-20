@@ -44,7 +44,7 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.icon.compose.LauncherIcon
+import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.data.settings.IconPreset
@@ -136,8 +136,9 @@ private fun DashboardAction(
  *
  * **A grid of squares, each drawing its own recipe on a real app.** A preset is a *look*, so a list of words was the
  * one thing this could not be: two recipes differing in a bloom's angle read as two identical rows. Rendering one
- * costs almost nothing here — `LauncherIcon` takes an explicit layer set and goes through `IconRenderManager`, so a
- * tile is one bake, cached on the same key every icon on the device already uses.
+ * costs almost nothing here — `AppIcon` takes an explicit appearance and bakes through `IconRenderManager`, so a
+ * tile is one bake, cached on the same key every icon on the device already uses, and it draws the preset's plate
+ * as well as its recipe.
  *
  * **The tile is the square and the name sits under it**, which is the category card's rule and holds for its reason: a
  * title inside the fill eats into the picture the tile exists to show, and reads as a header bar rather than a label.
@@ -256,10 +257,15 @@ private fun PresetTile(
             // Null only until the app cache answers, so the tile is its plate alone for a frame rather than a
             // placeholder icon that would flash and be replaced.
             sample?.let { component ->
-                LauncherIcon(
+                // The whole appearance, so a tile shows the plate a preset carries as well as its recipe —
+                // which is what "save as preset" saves. With no wallpaper provided in this pane the plate draws its
+                // scrim, the same fallback every frosted surface has: it says a plate is there without pretending
+                // to be glass.
+                AppIcon(
                     component = component,
                     contentDescription = null,
-                    layerSet = preset.layerSet,
+                    sizePx = PresetIconPx,
+                    appearance = preset.appearance,
                     modifier = Modifier.align(Alignment.Center).fillMaxSize(PresetIconFraction),
                 )
             }
@@ -328,8 +334,11 @@ private val PresetTileShape = RoundedCornerShape(20.dp)
 /** The ring marking the preset currently in force. */
 private val PresetRing = 2.dp
 
-/** The icon's share of the tile — the plate is the ground it is read against, so it keeps a visible margin. */
+/** The icon's share of the tile — the tile is the ground it is read against, so it keeps a visible margin. */
 private const val PresetIconFraction = 0.6f
+
+/** What a tile bakes at: a library is a handful of icons, so one size for every tile is one bake each. */
+private const val PresetIconPx = 192
 
 /** The menu target, kept small enough not to sit over the icon it shares a corner with. */
 private val PresetMenuButton = 28.dp

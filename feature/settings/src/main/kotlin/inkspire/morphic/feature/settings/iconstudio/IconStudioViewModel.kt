@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.icon.ContentAnchor
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
@@ -113,8 +114,8 @@ class IconStudioViewModel(
         if (_state.value.subject !is StudioSubject.Global) return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        val set = _state.value.editing
-        viewModelScope.launch { settingsRepository.saveIconPreset(trimmed, set) }
+        val appearance = _state.value.appearance()
+        viewModelScope.launch { settingsRepository.saveIconPreset(trimmed, appearance) }
     }
 
     /**
@@ -125,9 +126,17 @@ class IconStudioViewModel(
      * same reason a fresh open does: the previous index means nothing in a stack the user did not build.
      */
     fun loadPreset(preset: IconPreset) = _state.update { current ->
-        val keys = freshKeys(preset.layerSet.layers.size)
-        current.withEditing(preset.layerSet)
-            .copy(layerKeys = keys, target = StudioTarget.Composite)
+        val keys = freshKeys(preset.appearance.layerSet.layers.size)
+        // **The plate and the zoom come with it**, a preset being a whole look rather than its layers — see
+        // `IconAppearance`. They are *not* in history, which records the layer set alone: nothing edits them yet,
+        // so there is nothing to step back through. The screen that does will widen history with it.
+        current.withEditing(preset.appearance.layerSet)
+            .copy(
+                layerKeys = keys,
+                target = StudioTarget.Composite,
+                plate = preset.appearance.plate,
+                zoom = preset.appearance.zoom,
+            )
             .recordHistory()
     }
 
@@ -792,9 +801,10 @@ class IconStudioViewModel(
                 unsaved.remove(path)?.let { bitmap -> customIcons.write(path, bitmap) }
             }
 
+            val appearance = current.appearance()
             when (val subject = current.subject) {
-                is StudioSubject.Global -> settingsRepository.setIconLayerSet(current.editing)
-                is StudioSubject.App -> overrideRepository.set(subject.component, current.editing)
+                is StudioSubject.Global -> settingsRepository.setIconAppearance(appearance)
+                is StudioSubject.App -> overrideRepository.set(subject.component, appearance)
                 StudioSubject.Unchosen -> return@launch
             }
             _state.update { it.copy(dirty = false) }
@@ -814,8 +824,8 @@ class IconStudioViewModel(
      */
     private suspend fun collectOrphanedImages() {
         val referenced = buildSet {
-            addAll(settingsRepository.iconLayerSet.first().imagePaths())
-            overrideRepository.overrides.first().values.forEach { addAll(it.imagePaths()) }
+            addAll(settingsRepository.iconAppearance.first().layerSet.imagePaths())
+            overrideRepository.overrides.first().values.forEach { addAll(it.layerSet.imagePaths()) }
         }
         customIcons.retainOnly(referenced)
     }
@@ -836,14 +846,19 @@ class IconStudioViewModel(
         val current = _state.value
         viewModelScope.launch {
             val restored = when (val subject = current.subject) {
-                is StudioSubject.Global -> IconLayerSet.Base.also { settingsRepository.setIconLayerSet(it) }
+                // The plate goes with it: "stop being customized" is one verb over the whole appearance, and a
+                // reset that left glass behind every icon would be a reset the user could see it had not done.
+                is StudioSubject.Global ->
+                    IconAppearance.Base.also { settingsRepository.setIconAppearance(it) }
+
                 is StudioSubject.App -> {
                     overrideRepository.clear(subject.component)
-                    settingsRepository.iconLayerSet.first()
+                    settingsRepository.iconAppearance.first()
                 }
+
                 StudioSubject.Unchosen -> return@launch
             }
-            saved = restored
+            saved = restored.layerSet
             _state.update { it.seatedOn(restored).copy(dirty = false) }
         }
     }
@@ -859,19 +874,19 @@ class IconStudioViewModel(
             // A named preset opens *loaded with* it rather than with what is stored — and stays unsaved, so the
             // user sees what it will do to every icon before committing. See `IconStudioRoute.Global.preset`.
             val stored = preset
-                ?.let { name -> settingsRepository.iconPresets.first().firstOrNull { it.name == name }?.layerSet }
-                ?: settingsRepository.iconLayerSet.first()
+                ?.let { name -> settingsRepository.iconPresets.first().firstOrNull { it.name == name }?.appearance }
+                ?: settingsRepository.iconAppearance.first()
             val sample = appRepository.observeApps().first().firstOrNull()
             // `saved` is what is *persisted*, which a preset-loaded session deliberately is not — so it opens
             // dirty, and Save is what applies the preset. Same shape as an inheriting app opening dirty.
-            saved = settingsRepository.iconLayerSet.first()
+            saved = settingsRepository.iconAppearance.first().layerSet
             _state.update {
                 it.seatedOn(stored).copy(
                     subject = StudioSubject.Global(sample?.componentKey),
                     label = null,
                 )
             }
-            loadStoredImages(stored)
+            loadStoredImages(stored.layerSet)
             loadPacks()
             observePresets()
             sample?.componentKey?.let(::loadArtwork)
@@ -884,14 +899,14 @@ class IconStudioViewModel(
             // The override if there is one, otherwise a copy of the global default — which is the snapshot half of
             // snapshot-detach. Nothing is written here: an app that was inheriting still inherits until a commit.
             val stored = overrideRepository.overrides.first()[component]
-                ?: settingsRepository.iconLayerSet.first()
+                ?: settingsRepository.iconAppearance.first()
             val label = appRepository.observeApps().first()
                 .firstOrNull { it.componentKey == component }?.label
 
             // `saved` is what is *persisted*, which for an app that is still inheriting is not the same as what is
             // shown: the studio opens on a copy of the global default, and that copy is already an unsaved change.
             // So a freshly opened inheriting app is `dirty`, correctly — saving it is what detaches it.
-            saved = overrideRepository.overrides.first()[component] ?: IconLayerSet.Base
+            saved = overrideRepository.overrides.first()[component]?.layerSet ?: IconLayerSet.Base
             _state.update {
                 it.seatedOn(stored).copy(
                     subject = StudioSubject.App(component),
@@ -902,7 +917,7 @@ class IconStudioViewModel(
                     packImages = emptyMap(),
                 )
             }
-            loadStoredImages(stored)
+            loadStoredImages(stored.layerSet)
             loadPacks()
             observePresets()
             loadArtwork(component)
@@ -977,6 +992,16 @@ class IconStudioViewModel(
     private var saved: IconLayerSet = IconLayerSet.Base
 
     /**
+     * What this session would write: the recipe being edited, plus the plate and zoom it is carrying.
+     *
+     * **Assembled rather than held**, because the studio edits a layer set and nothing else — the plate and the zoom
+     * belong to the finalize screen, and until it exists this session's job with them is to *not lose them*. An app
+     * given glass and then edited in the studio must come back out with its glass.
+     */
+    private fun IconStudioState.appearance(): IconAppearance =
+        IconAppearance(layerSet = editing, plate = plate, zoom = zoom)
+
+    /**
      * Picked images that exist only in memory, by the path they will be written to.
      *
      * Not in the state, because nothing renders *from* this — the same bitmaps are in
@@ -1007,6 +1032,17 @@ class IconStudioViewModel(
         return withEditing(set).copy(layerKeys = keys, target = StudioTarget.Composite).withHistoryFlags()
     }
 
+    /**
+     * The same, for a whole [IconAppearance] — which is what every one of those three paths actually reads from a
+     * store now.
+     *
+     * **The plate and the zoom are seated beside the recipe rather than merged into history**, because the studio
+     * cannot yet edit them: they arrive with the appearance, ride along untouched, and go back out on save. Seating
+     * them here rather than at each call site is what stops one of the three forgetting — an app opened, edited and
+     * saved without its plate would come out of the studio having silently lost its glass.
+     */
+    private fun IconStudioState.seatedOn(appearance: IconAppearance): IconStudioState =
+        seatedOn(appearance.layerSet).copy(plate = appearance.plate, zoom = appearance.zoom)
 
     /**
      * Records the current recipe as an undo step, unless it is identical to the last one.

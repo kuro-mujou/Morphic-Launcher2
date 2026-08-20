@@ -4,7 +4,7 @@ import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.database.dao.IconOverrideDao
 import inkspire.morphic.core.database.entity.IconOverrideEntity
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.data.icons.IconOverrideRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -28,16 +28,16 @@ internal class IconOverrideRepositoryImpl(
     private val dispatchers: AppDispatchers,
 ) : IconOverrideRepository {
 
-    override val overrides: Flow<Map<ComponentKey, IconLayerSet>> =
+    override val overrides: Flow<Map<ComponentKey, IconAppearance>> =
         dao.observeAll().map { rows ->
             rows.mapNotNull { row ->
-                IconLayerSetCodec.decode(row.layerSet)?.let { row.component to it }
+                IconAppearanceCodec.decode(row.appearance)?.let { row.component to it }
             }.toMap()
         }
 
-    override suspend fun set(component: ComponentKey, layerSet: IconLayerSet) {
+    override suspend fun set(component: ComponentKey, appearance: IconAppearance) {
         withContext(dispatchers.io) {
-            dao.upsert(IconOverrideEntity(component, IconLayerSetCodec.encode(layerSet)))
+            dao.upsert(IconOverrideEntity(component, IconAppearanceCodec.encode(appearance)))
         }
     }
 

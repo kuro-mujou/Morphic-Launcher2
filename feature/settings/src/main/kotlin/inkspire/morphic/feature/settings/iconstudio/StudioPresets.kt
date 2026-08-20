@@ -219,7 +219,7 @@ private fun PresetTile(
             parsed?.let {
                 IconPreview(
                     icon = it,
-                    layerSet = preset.layerSet,
+                    layerSet = preset.appearance.layerSet,
                     modifier = Modifier.fillMaxSize(PresetIconFraction),
                     customImage = customImage,
                     packImage = packImage,

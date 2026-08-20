@@ -4,12 +4,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
 
 /**
  * The grid cell for one app: [IconLabelCell] handles the icon+label sizing/arrangement, wrapping the baked
- * [LauncherIcon]. The cell converts the resolved icon size to pixels and passes it as `sizePx`, so the layout
+ * [AppIcon]. The cell converts the resolved icon size to pixels and passes it as `sizePx`, so the layout
  * (via [IconMetrics]) owns the bake resolution — no magic default.
  *
  * Interaction comes from [itemGestures] (the enclosing
@@ -31,7 +30,7 @@ fun AppCell(
     //  IconMetrics + per-(surface, layout) size override. For now metrics come from LocalIconMetrics only.
     IconLabelCell(label = app.label, modifier = modifier, metrics = metrics, itemGestures = itemGestures) { iconSize ->
         val sizePx = with(LocalDensity.current) { iconSize.roundToPx() }
-        LauncherIcon(
+        AppIcon(
             component = app.componentKey,
             contentDescription = app.label,
             sizePx = sizePx,

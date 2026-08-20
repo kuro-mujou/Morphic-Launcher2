@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.container.slots
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.icon.compose.LauncherIcon
+import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.roundToInt
@@ -108,7 +108,7 @@ internal fun IconContainerCell(
                 contentAlignment = Alignment.Center,
             ) {
                 when (icon) {
-                    is ContainerIcon.App -> LauncherIcon(
+                    is ContainerIcon.App -> AppIcon(
                         component = icon.info.componentKey,
                         contentDescription = icon.info.label,
                         sizePx = with(density) { slotSize.roundToPx() },

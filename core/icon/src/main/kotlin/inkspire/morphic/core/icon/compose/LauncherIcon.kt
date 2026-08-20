@@ -12,6 +12,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.ComponentKey
@@ -19,20 +20,31 @@ import inkspire.morphic.core.model.ComponentKey
 /** The baker used to render icons. Provided at the app root once it is wired; `null` renders nothing. */
 val LocalIconRenderManager = staticCompositionLocalOf<IconRenderManager?> { null }
 
-/** The global default layer set an app icon uses when it has no override of its own. */
-val LocalIconLayerSet = staticCompositionLocalOf { IconLayerSet.Base }
+/** The global default appearance an app icon uses when it has no override of its own. */
+val LocalIconAppearance = staticCompositionLocalOf { IconAppearance.Base }
 
 /**
- * The apps that have been **detached** from [LocalIconLayerSet] and render from a recipe of their own, provided by
+ * The apps that have been **detached** from [LocalIconAppearance] and render from a recipe of their own, provided by
  * `app` from `data:icons`. Empty until something is customized, which is what makes the plain case free.
  *
  * **A map rather than a per-icon lookup**, because every icon on screen asks this question and a `Flow` per cell
- * would be hundreds of collectors. `static` for the same reason [LocalIconLayerSet] is: reads are the hot path here
+ * would be hundreds of collectors. `static` for the same reason [LocalIconAppearance] is: reads are the hot path here
  * and there are hundreds of them. The bill is that re-providing it recomposes the whole subtree rather than only its
  * readers — paid once per icon edit, and cheap even then, because a recomposition with unchanged inputs re-`remember`s
  * nothing and re-bakes nothing (see below).
  */
-val LocalIconOverrides = staticCompositionLocalOf<Map<ComponentKey, IconLayerSet>> { emptyMap() }
+val LocalIconOverrides = staticCompositionLocalOf<Map<ComponentKey, IconAppearance>> { emptyMap() }
+
+/**
+ * What [component] looks like: its own appearance if it has been detached, otherwise the global default.
+ *
+ * **One expression, because two consumers resolve it and they must agree.** This one takes the layer set from it to
+ * bake; the cell that draws the icon takes the plate and the zoom, which are live and so cannot be baked at all
+ * (see `IconAppearance`). Resolved twice, an app could end up baked from its own recipe and plated from the default.
+ */
+@Composable
+fun localAppearanceOf(component: ComponentKey): IconAppearance =
+    LocalIconOverrides.current[component] ?: LocalIconAppearance.current
 
 // TODO(B4): fallback bake resolution. The grid `AppCell` now passes a real sizePx (from IconMetrics), so this
 //  is only for standalone / @Preview callers and any layout cell that doesn't yet pass a size (e.g. the list
@@ -66,7 +78,9 @@ private const val DEFAULT_ICON_RENDER_PX = 192
  * own artwork) and bumps [IconRenderManager.generation], which recomposes every icon on screen; spending that on a
  * change the key already handles would be work for nothing.
  *
- * The "skin" backdrop plate is deliberately still not here (deferred).
+ * **The plate is not drawn here**, and cannot be: it samples the wallpaper by screen position, where everything
+ * this function does is keyed on a bitmap that has no position in it. It is the cell's, one layer out — see
+ * `IconAppearance` for the whole of that boundary.
  */
 @Composable
 fun LauncherIcon(
@@ -74,7 +88,7 @@ fun LauncherIcon(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     sizePx: Int = DEFAULT_ICON_RENDER_PX,
-    layerSet: IconLayerSet = LocalIconOverrides.current[component] ?: LocalIconLayerSet.current,
+    layerSet: IconLayerSet = localAppearanceOf(component).layerSet,
 ) {
     val manager = LocalIconRenderManager.current
     if (manager == null) {

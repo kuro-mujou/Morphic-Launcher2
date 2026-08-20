@@ -4,9 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.icon.compose.LocalIconLayerSet
+import inkspire.morphic.core.icon.compose.LocalIconAppearance
 import inkspire.morphic.core.icon.compose.LocalIconOverrides
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.data.icons.IconOverrideRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import org.koin.compose.koinInject
@@ -38,11 +38,11 @@ fun ProvideIconRecipes(content: @Composable () -> Unit) {
     // Seeded with the same values their stores answer with when nothing is stored, so the first frame draws plain
     // app-default icons rather than nothing — and the store's first emission is then usually identical, which
     // costs one recomposition of unchanged inputs and no re-bake at all.
-    val defaultSet by settings.iconLayerSet.collectAsStateWithLifecycle(IconLayerSet.Base)
+    val defaultSet by settings.iconAppearance.collectAsStateWithLifecycle(IconAppearance.Base)
     val perApp by overrides.overrides.collectAsStateWithLifecycle(emptyMap())
 
     CompositionLocalProvider(
-        LocalIconLayerSet provides defaultSet,
+        LocalIconAppearance provides defaultSet,
         LocalIconOverrides provides perApp,
         content = content,
     )

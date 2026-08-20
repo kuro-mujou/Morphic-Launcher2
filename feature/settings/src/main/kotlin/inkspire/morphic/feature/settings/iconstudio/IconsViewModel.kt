@@ -3,7 +3,7 @@ package inkspire.morphic.feature.settings.iconstudio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.SettingsRepository
@@ -36,7 +36,7 @@ internal class IconsViewModel(
     val state: StateFlow<IconsState> =
         combine(
             settingsRepository.iconPresets,
-            settingsRepository.iconLayerSet,
+            settingsRepository.iconAppearance,
             sample.app,
         ) { presets, applied, app ->
             IconsState(presets = presets, applied = applied, sample = app?.componentKey)
@@ -53,7 +53,7 @@ internal class IconsViewModel(
      * a look worth saving first.
      */
     fun apply(preset: IconPreset) = viewModelScope.launch {
-        settingsRepository.setIconLayerSet(preset.layerSet)
+        settingsRepository.setIconAppearance(preset.appearance)
     }
 
     /** Removes a saved preset. Touches nothing it was applied to — a preset is a copy, not a link. */
@@ -74,7 +74,7 @@ internal class IconsViewModel(
  */
 internal data class IconsState(
     val presets: List<IconPreset> = emptyList(),
-    val applied: IconLayerSet = IconLayerSet.Base,
+    val applied: IconAppearance = IconAppearance.Base,
     val sample: ComponentKey? = null,
 ) {
 
@@ -86,5 +86,5 @@ internal data class IconsState(
      * default in the studio until it happens to match a preset marks that preset, correctly: it says which look is
      * on, not which tile was last pressed.
      */
-    val appliedPreset: String? get() = presets.firstOrNull { it.layerSet == applied }?.name
+    val appliedPreset: String? get() = presets.firstOrNull { it.appearance == applied }?.name
 }

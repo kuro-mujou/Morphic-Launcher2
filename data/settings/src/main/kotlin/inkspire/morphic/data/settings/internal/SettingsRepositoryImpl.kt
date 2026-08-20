@@ -20,7 +20,7 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
@@ -84,16 +84,20 @@ private val BackdropEffectSlice = SettingsSlice(
  * about icons ever turns out not to be part of the recipe, it gets its own key rather than joining this one, which
  * is the entire point of a slice per concern.
  *
- * **A malformed blob falls back to [IconLayerSet.Base] and is reported**, and this is the one slice where that path
+ * **Its key changed with its shape.** It stored a bare `IconLayerSet` until the plate existed; a recipe read back as
+ * an appearance would decode into one with no layers, so the key is new — which is this module's stated seam for a
+ * semantic break, and it costs one reset of the global default on a build that has never shipped.
+ *
+ * **A malformed blob falls back to [IconAppearance.Base] and is reported**, and this is the one slice where that path
  * is reachable by more than corruption: the set validates its own invariants in `init` (exactly one foreground, one
  * background, foreground above background), so a blob that decodes into an illegal stack throws there and is caught
  * by [SettingsSlice.decode] like any other unreadable value. Falling back to the plain app-default icons is a state
  * the user can see and fix; refusing to draw icons is not.
  */
-private val IconLayerSetSlice = SettingsSlice(
-    name = "icon_layer_set",
-    serializer = serializer<IconLayerSet>(),
-    default = IconLayerSet.Base,
+private val IconAppearanceSlice = SettingsSlice(
+    name = "icon_appearance",
+    serializer = serializer<IconAppearance>(),
+    default = IconAppearance.Base,
 )
 
 /**
@@ -111,7 +115,7 @@ private val IconPresetsSlice = SettingsSlice(
 /**
  * The icon studio's canvas backdrop: one key, one bare enum.
  *
- * **The smallest slice there is, and its own key for [IconLayerSetSlice]'s stated reason** — that comment reserved a new
+ * **The smallest slice there is, and its own key for [IconAppearanceSlice]'s stated reason** — that comment reserved a new
  * key for anything global about icons that turns out *not* to be part of the recipe, and this is the first such thing.
  * Joining the recipe's blob would mean every backdrop cycle rewrote the global default, and every icon in the launcher
  * would recompose because someone toggled the checkerboard.
@@ -189,7 +193,7 @@ internal class SettingsRepositoryImpl(
 
     override val backdropEffect: Flow<BackdropEffect> = dataStore.read(BackdropEffectSlice) { it }
 
-    override val iconLayerSet: Flow<IconLayerSet> = dataStore.read(IconLayerSetSlice) { it }
+    override val iconAppearance: Flow<IconAppearance> = dataStore.read(IconAppearanceSlice) { it }
 
     override val iconPresets: Flow<List<IconPreset>> = dataStore.read(IconPresetsSlice) { it.presets }
 
@@ -215,8 +219,8 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setTabBarEdge(edge: VerticalEdge) = update(AppsChromeSlice) { copy(tabBarEdge = edge) }
 
-    override suspend fun saveIconPreset(name: String, layerSet: IconLayerSet) =
-        update(IconPresetsSlice) { with(IconPreset(name, layerSet)) }
+    override suspend fun saveIconPreset(name: String, appearance: IconAppearance) =
+        update(IconPresetsSlice) { with(IconPreset(name, appearance)) }
 
     override suspend fun deleteIconPreset(name: String) = update(IconPresetsSlice) { without(name) }
 
@@ -230,7 +234,8 @@ internal class SettingsRepositoryImpl(
         update(BackdropEffectSlice) { transform(this) }
 
     // Also ignores the old value: a layer set is replaced wholesale, never patched. See the interface.
-    override suspend fun setIconLayerSet(layerSet: IconLayerSet) = update(IconLayerSetSlice) { layerSet }
+    override suspend fun setIconAppearance(appearance: IconAppearance) =
+        update(IconAppearanceSlice) { appearance }
 
     override suspend fun setHomeLayout(layout: HomeLayout) =
         update(SurfaceRegisterSlice) { copy(homeLayout = layout) }

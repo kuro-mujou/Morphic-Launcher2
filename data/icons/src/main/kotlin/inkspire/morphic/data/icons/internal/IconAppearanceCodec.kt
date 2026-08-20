@@ -1,11 +1,11 @@
 package inkspire.morphic.data.icons.internal
 
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 
 /**
- * How a per-app [IconLayerSet] becomes the string in `icon_override.layerSet`, and back.
+ * How a per-app [IconAppearance] becomes the string in `icon_override.appearance`, and back.
  *
  * Kept a plain object with no Room and no Android in sight, for the reason `data:settings` keeps `SettingsSlice`
  * free of DataStore: the interesting behavior — what happens to a blob that cannot be read — is then testable
@@ -18,15 +18,16 @@ import timber.log.Timber
  * **value** — the studio snapshots the default set and writes it here — never the bytes, so the two can never
  * disagree about anything that matters.
  */
-internal object IconLayerSetCodec {
+internal object IconAppearanceCodec {
 
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = false
     }
 
-    /** Serializes [layerSet] for storage. */
-    fun encode(layerSet: IconLayerSet): String = json.encodeToString(IconLayerSet.serializer(), layerSet)
+    /** Serializes [appearance] for storage. */
+    fun encode(appearance: IconAppearance): String =
+        json.encodeToString(IconAppearance.serializer(), appearance)
 
     /**
      * Reads [stored], or `null` if it cannot be read.
@@ -35,12 +36,13 @@ internal object IconLayerSetCodec {
      * which is a visible, fixable state, where letting the failure escape would take down every surface drawing that
      * icon. Two things reach this path: a genuinely corrupt blob, and a well-formed one describing an **illegal**
      * stack (two foregrounds, or a foreground below its background), which `IconLayerSet`'s own `init` rejects. The
-     * second is the reason this catches rather than merely parses.
+     * second is the reason this catches rather than merely parses — and it reaches in through the appearance's
+     * own layer set, which validates exactly as it always did.
      *
      * A failure is logged, not swallowed: falling back is right, but it is still a bug worth being able to see.
      */
-    fun decode(stored: String): IconLayerSet? =
-        runCatching { json.decodeFromString(IconLayerSet.serializer(), stored) }
+    fun decode(stored: String): IconAppearance? =
+        runCatching { json.decodeFromString(IconAppearance.serializer(), stored) }
             .onFailure { Timber.w(it, "Unreadable icon override; falling back to the global default") }
             .getOrNull()
 }

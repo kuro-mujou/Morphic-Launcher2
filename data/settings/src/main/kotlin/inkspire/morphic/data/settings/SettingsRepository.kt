@@ -11,7 +11,7 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
-import inkspire.morphic.core.model.icon.IconLayerSet
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
 import kotlinx.coroutines.flow.Flow
 
@@ -58,7 +58,7 @@ interface SettingsRepository {
      * `categories` fell on the wrong side of in L1. The two meet in the composition, where an icon resolves its
      * override or falls back to this.
      */
-    val iconLayerSet: Flow<IconLayerSet>
+    val iconAppearance: Flow<IconAppearance>
 
     /**
      * The APPS surface's chrome — the search field's placement, and which edge the category tabs sit on.
@@ -85,7 +85,7 @@ interface SettingsRepository {
     val iconPresets: Flow<List<IconPreset>>
 
     /** Saves [layerSet] under [name], replacing any preset already called that. */
-    suspend fun saveIconPreset(name: String, layerSet: IconLayerSet)
+    suspend fun saveIconPreset(name: String, appearance: IconAppearance)
 
     /** Removes the preset called [name]. A no-op if there is none. */
     suspend fun deleteIconPreset(name: String)
@@ -116,7 +116,7 @@ interface SettingsRepository {
      * **It replaced a `setBackdropEffect(effect)` outright rather than sitting beside it.** A whole-value setter is the
      * shape that caused this, and leaving one there is leaving the trap loaded for the next screen — an effect chosen
      * outright is `updateBackdropEffect { chosen }`, which says the same thing and cannot carry a stale field with it.
-     * The whole-value writes that remain ([setIconLayerSet], [setIconStudioBackground]) are ones where the value really
+     * The whole-value writes that remain ([setIconAppearance], [setIconStudioBackground]) are ones where the value really
      * is the whole setting and no part of it is ever patched.
      *
      * **There is still no field-level setter, and the sealed type is why** — the reasoning the setter this replaced was
@@ -143,14 +143,14 @@ interface SettingsRepository {
      * This is also what makes undo cheap: a set is an immutable value, so the editor's history is a list of these and
      * a step is an index. L1 could not do that, because its equivalent state was a bag of flat fields.
      */
-    suspend fun setIconLayerSet(layerSet: IconLayerSet)
+    suspend fun setIconAppearance(appearance: IconAppearance)
 
     /**
      * What the **icon studio's canvas** is drawn on, so the studio reopens on the backdrop the user left it on.
      *
      * **A workspace preference, and the first one here that is not about what the launcher looks like.** It shapes no
      * surface and reaches no rendered icon — it is the paper, not the drawing — which is exactly why it is *not* part of
-     * [iconLayerSet]: a recipe stored with a backdrop in it would make an icon's identity depend on what someone
+     * [iconAppearance]: a recipe stored with a backdrop in it would make an icon's identity depend on what someone
      * happened to be looking at while they made it. It is a preference all the same, by the only test that matters
      * here: the user chose it, and would be annoyed to choose it again.
      *
@@ -161,7 +161,7 @@ interface SettingsRepository {
     /**
      * Remembers [background] as the icon studio's canvas.
      *
-     * A whole-value write like [setIconLayerSet], for the simplest version of its reason: the setting *is* one value,
+     * A whole-value write like [setIconAppearance], for the simplest version of its reason: the setting *is* one value,
      * so there is no field to patch.
      */
     suspend fun setIconStudioBackground(background: PreviewBackground)

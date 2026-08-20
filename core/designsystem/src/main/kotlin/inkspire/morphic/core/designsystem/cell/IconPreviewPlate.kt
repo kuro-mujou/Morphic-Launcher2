@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.icon.compose.LauncherIcon
 import inkspire.morphic.core.model.AppInfo
 
 /**
@@ -96,7 +95,7 @@ private fun PreviewIcon(app: AppInfo?, slot: Dp) {
         return
     }
     val sizePx = with(LocalDensity.current) { slot.roundToPx() }
-    LauncherIcon(
+    AppIcon(
         component = app.componentKey,
         contentDescription = app.label,
         sizePx = sizePx,

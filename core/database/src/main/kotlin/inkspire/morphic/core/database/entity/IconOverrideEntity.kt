@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 import inkspire.morphic.core.model.ComponentKey
 
 /**
- * One app's own icon recipe — the whole `IconLayerSet`, serialized, keyed by [component].
+ * One app's own icon appearance — the whole `IconAppearance`, serialized, keyed by [component].
  *
  * **A row means "this app has been detached from the global default"**, and its absence means the app inherits.
  * That is the full-snapshot detach model: opening an app in the icon studio snapshots the current global default
@@ -28,12 +28,17 @@ import inkspire.morphic.core.model.ComponentKey
  * The bill this shape accepts in exchange is that the set is **opaque to SQL** — no query can ask "which apps use a
  * circle foreground?". Nothing wants to: overrides are read as a whole map and written one app at a time.
  *
- * @property layerSet the app's `IconLayerSet` as JSON. Encoding lives in `data:icons`, not here, so `core:database`
- *   stays free of the icon model — the same reason every other entity stores what it is handed. A blob that cannot
- *   be decoded is dropped on read rather than failing the query; see the repository.
+ * @property appearance the app's `IconAppearance` as JSON — the baked recipe, the live plate and the zoom
+ *   together. Encoding lives in `data:icons`, not here, so `core:database` stays free of the icon model — the same
+ *   reason every other entity stores what it is handed. A blob that cannot be decoded is dropped on read rather
+ *   than failing the query; see the repository.
+ *
+ *   **It held only the layer set until the plate existed**, and the column was renamed rather than added to: a blob
+ *   whose *shape* changed is not the same column, and one destructive bump says so where a silently re-interpreted
+ *   `layerSet` would have every stored recipe decode as an appearance with no layers.
  */
 @Entity(tableName = "icon_override")
 data class IconOverrideEntity(
     @PrimaryKey val component: ComponentKey,
-    val layerSet: String,
+    val appearance: String,
 )

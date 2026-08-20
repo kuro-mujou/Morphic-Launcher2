@@ -1,5 +1,6 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerRole
@@ -16,10 +17,12 @@ import org.junit.Test
  */
 class IconPresetsTest {
 
-    private fun set(fill: Int) = IconLayerSet(
-        listOf(
-            IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.SolidFill(fill)),
-            IconLayerSpec(role = LayerRole.FOREGROUND, source = LayerSource.AppDefault),
+    private fun set(fill: Int) = IconAppearance(
+        IconLayerSet(
+            listOf(
+                IconLayerSpec(role = LayerRole.BACKGROUND, source = LayerSource.SolidFill(fill)),
+                IconLayerSpec(role = LayerRole.FOREGROUND, source = LayerSource.AppDefault),
+            ),
         ),
     )
 
@@ -37,7 +40,7 @@ class IconPresetsTest {
             .with(IconPreset("Mono", set(0xFFFFFFFF.toInt())))
 
         assertEquals(1, library.presets.size)
-        assertEquals(set(0xFFFFFFFF.toInt()), library.presets.single().layerSet)
+        assertEquals(set(0xFFFFFFFF.toInt()), library.presets.single().appearance)
     }
 
     @Test
@@ -82,7 +85,7 @@ class IconPresetsTest {
             .renamed("B", "Bee")
 
         assertEquals(listOf("A", "Bee", "C"), library.presets.map { it.name })
-        assertEquals(set(2), library.presets[1].layerSet)
+        assertEquals(set(2), library.presets[1].appearance)
     }
 
     /** Renaming onto a name already in use is an overwrite the user asked for — never two rows with one name. */
@@ -94,7 +97,7 @@ class IconPresetsTest {
             .renamed("A", "B")
 
         assertEquals(listOf("B"), library.presets.map { it.name })
-        assertEquals(set(1), library.presets.single().layerSet)
+        assertEquals(set(1), library.presets.single().appearance)
     }
 
     @Test
