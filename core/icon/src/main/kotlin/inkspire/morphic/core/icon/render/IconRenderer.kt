@@ -137,8 +137,8 @@ class IconRenderer(
      * ## Suspend, because a bake has to be **abandonable**
      *
      * Cancellation in coroutines is cooperative, and a `for` loop over half a million pixels cooperates in nothing:
-     * cancelling the coroutine around this used to leave it running to the end regardless. That defeated the whole
-     * of `IconPreview`'s draft-then-full design, whose throttle *is* cancellation — during a slider drag every
+     * cancelling the coroutine around this otherwise leaves it running to the end regardless, which defeats the
+     * whole of `IconPreview`'s draft-then-full design, whose throttle *is* cancellation — during a slider drag every
      * emitted recipe queued a bake that ran to completion, so the previews arrived in a backlog after the finger
      * lifted rather than while it moved, and the studio's runaway bakes starved every other icon on the screen of
      * the same dispatcher.
@@ -213,14 +213,14 @@ class IconRenderer(
     /**
      * Alpha for one layer joining the stack plainly, or `null` when it joins at full strength.
      *
-     * **The color matrix used to ride here and now does not.** Recoloring is an effect, so it belongs in the layer's
-     * own pipeline where its position relative to the other effects is the user's; opacity and blend stay because
+     * **The color matrix does not ride here.** Recoloring is an effect, so it belongs in the layer's own pipeline
+     * where its position relative to the other effects is the user's; opacity and blend stay because
      * they describe how the finished layer *joins the stack*, which is not something an effect can be ordered
      * against. Moving it changes nothing on a layer that only recolors — a color filter is per-pixel, so filtering
      * into the buffer and then compositing gives the same pixels as compositing through the filter.
      *
-     * **The blend mode used to ride here too, as a `PorterDuffXfermode`, and that was a bug rather than a
-     * simplification** — see [LayerComposite]. A layer that blends now goes through [blendOnto] instead, so what is
+     * **The blend mode does not either, and handing it to a `PorterDuffXfermode` is a bug rather than a
+     * simplification** — see [LayerComposite]. A layer that blends goes through [blendOnto], so what is
      * left here is exactly the case a canvas can be trusted with.
      */
     private fun opacityPaint(spec: IconLayerSpec): Paint? {
@@ -487,8 +487,8 @@ class IconRenderer(
      * the layer is made of.
      *
      * **`strength` is the opacity of the finished slab, and getting there took one layer over the whole loop.** It
-     * used to be the alpha of each *copy*, which compounds where they overlap: with `n` copies the slab came out at
-     * `1 - (1 - strength)^n`, so it reached 97% by a strength of 0.3 and the top two thirds of the slider did
+     * deliberately not the alpha of each *copy*, which compounds where they overlap: with `n` copies the slab comes
+     * out at `1 - (1 - strength)^n`, reaching 97% by a strength of 0.3, so the top two thirds of the slider would
      * nothing at all. Worse, `n` is a function of depth *and* of [sizePx] — so the same recipe was denser at a
      * greater depth, and denser again baked at 288px than at 96px, which is one icon looking like two.
      *

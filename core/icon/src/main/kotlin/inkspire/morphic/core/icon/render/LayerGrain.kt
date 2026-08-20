@@ -103,8 +103,8 @@ object LayerGrain {
      * The line a directional grain runs along, plus how much of the scatter is forced onto it — everything [displace]
      * needs that is the same for every pixel of a bake.
      *
-     * **It exists because the trig was inside the per-pixel loop.** `displace` used to take the effect and resolve the
-     * angle itself, so a bake spent two transcendental calls per output pixel on a value that cannot change within it —
+     * **It exists to keep the trig out of the per-pixel loop.** Resolving the angle inside `displace` spends two
+     * transcendental calls per output pixel on a value that cannot change within a bake —
      * over a million of them on a studio canvas. That is the same mistake, one function along, that [dot]'s KDoc
      * records as "the whole of why a preview took seconds to arrive": the angle is a property of the *recipe*, so it
      * belongs where the recipe is read once.
@@ -181,15 +181,15 @@ object LayerGrain {
      * How far apart the field's lattice points sit, in pixels — the size of the pieces the artwork tears into.
      *
      * **Exponential in the control's position, which is the fix for a slider whose useful half was unreachable.**
-     * `grainSize` used to be the fraction itself, and the sizes worth having are bunched near the bottom of it: on
-     * a linear travel from a five-hundredth of the box to a half, everything below a twentieth — dust through small
+     * **A control position, not the fraction itself.** The sizes worth having are bunched near the bottom: on a
+     * linear travel from a five-hundredth of the box to a half, everything below a twentieth — dust through small
      * clusters, which is most of what anyone wants — lived in the first four percent of the slider. Geometric
      * spacing makes equal movements of the finger equal *ratios*, so the fine end gets as much travel as the coarse.
      *
      * **The floor is the *reason* for the fine end rather than a clamp on it.** [FinestCell] is derived from
      * [MinCellPx] and [GrainFidelityPx], so at any size from [GrainFidelityPx] up the coercion below never binds and
-     * every position on the control is a different picture. It used to bind across the first third of the travel, and
-     * [FinestCell] records what that cost.
+     * every position on the control is a different picture — see [FinestCell] for what a floor binding across the
+     * first third of the travel costs.
      *
      * **The coercion stays, because [sizePx] is not the control's to know.** A bake *below* [GrainFidelityPx] — a
      * 128px layer tile, a thumbnail — is still asked for cells finer than it can carry, and there the clamp is what
@@ -298,8 +298,8 @@ object LayerGrain {
      * The two ends of [cellPx]'s ramp, as fractions of the box.
      *
      * **The fine end is derived from [MinCellPx] and [GrainFidelityPx] rather than chosen**, which is the fix for a
-     * slider whose bottom third was redundant. It used to be `0.006` — a cell of *four tenths of a pixel* on a home
-     * icon and nine tenths on the studio's own draft, both far under the floor — so every grain size below ≈0.35
+     * slider whose bottom third is redundant. A chosen `0.006` is a cell of *four tenths of a pixel* on a home icon
+     * and nine tenths on the studio's own draft, both far under the floor — so every grain size below ≈0.35
      * clamped to the same cell and drew the *same picture*: on a device the control did nothing across a third of its
      * travel, and in the studio the preview stopped responding entirely down there, which reads as the preview having
      * frozen rather than as a slider with nothing left to say. (Its own KDoc claimed "a few pixels at 256"; at 256 it

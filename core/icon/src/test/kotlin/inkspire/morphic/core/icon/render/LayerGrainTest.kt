@@ -35,7 +35,7 @@ class LayerGrainTest {
      * The drift a grain resolves to — what a bake resolves **once** and hands to every pixel.
      *
      * The displacement tests go through this rather than through the effect because that is the whole API now: the
-     * angle's `sin`/`cos` used to be computed inside `displace`, i.e. twice per output pixel, on a value that cannot
+     * angle's `sin`/`cos` must not be computed inside `displace` — twice per output pixel, on a value that cannot
      * change within a bake. See [LayerGrain.driftOf].
      */
     private fun drift(directionality: Float, angleDegrees: Float = 0f) =
@@ -86,7 +86,7 @@ class LayerGrainTest {
 
     @Test
     fun `the field is zero at a lattice point, which is what gradient noise buys`() {
-        // **The defect this replaced, and it is invisible as a bug.** Value noise puts its extremes *on* the
+        // **The defect this pins, and it is invisible as a bug.** Value noise puts its extremes *on* the
         // lattice, so the field carries a square grid at the cell size and the artwork tears into axis-aligned
         // chunks at every setting. Gradient noise reads zero at every corner and does its varying in between.
         for (x in 0..4) {
@@ -157,8 +157,8 @@ class LayerGrainTest {
     /**
      * That **every position on the slider is a different grain**, at the sizes icons are really baked at.
      *
-     * **The defect this pins was reported as the preview freezing.** The fine end of the ramp used to be a cell of
-     * well under a pixel, so on any real bake the whole bottom third of the control clamped to the 4px floor and drew
+     * **The defect this pins was reported as the preview freezing.** With the fine end of the ramp at a cell of
+     * well under a pixel, on any real bake the whole bottom third of the control clamps to the 4px floor and draws
      * the *same picture* — a slider doing nothing across a third of its travel on a device, and a studio draft that
      * stopped responding entirely down there. Nothing failed; the control was simply inert, which is indistinguishable
      * from a preview that has stopped updating.

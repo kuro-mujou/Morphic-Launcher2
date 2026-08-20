@@ -35,7 +35,7 @@ enum class TintMode {
 
     /**
      * Multiplies each channel by the tint's, pushing the layer toward that color **while keeping its own shading**.
-     * The only mode there used to be, and still the right one for tinting artwork that has internal detail.
+     * The right mode for tinting artwork that has internal detail.
      */
     @SerialName("multiply")
     MULTIPLY,
@@ -348,9 +348,10 @@ sealed interface LayerEffect {
      * Light spilling across the layer: [argb] fading out to nothing, painted **over it and clipped to it** —
      * source-atop, so it colors the artwork rather than covering the icon with a rectangle.
      *
-     * **This is what used to be called `Gradient`, and it is one color now rather than two.** The rename is because
-     * every other entry in this list names a *look* — a blend, a filter, a color — where "gradient" named the
-     * mechanism. Fading to transparent rather than to a second chosen color is the bigger change and it is what
+     * **One color fading out, not two stops** — and named for the look rather than the mechanism, as every other
+     * entry in this list is.
+     *
+     * Fading to transparent rather than to a second chosen color is the bigger change, and it is what
      * makes the effect usable: with two opaque stops, source-atop *replaces* every pixel it covers, so a
      * white-to-black bloom at full strength obliterated the artwork it was supposed to light. What is given up is the
      * two-arbitrary-stop duotone the general control also allowed; a tint plus a bloom reaches most of it.
@@ -925,7 +926,7 @@ sealed interface LayerEffect {
         val argb: Int = 0xFF000000.toInt(),
         val radius: Float = 0.05f,
         /**
-         * **Thrown down *and* to the side, where this used to fall straight down.** Equal on both axes puts the
+         * **Thrown down *and* to the side, not straight down.** Equal on both axes puts the
          * light over the icon's leading shoulder, which is where every other surface in this launcher implies it is
          * — a shadow directly beneath reads as the icon floating rather than as anything lighting it. The pair is
          * what makes it a direction; either alone is a drop.
@@ -1168,8 +1169,9 @@ sealed interface LayerEffect {
         /**
          * Displacing nothing.
          *
-         * **One clause now, where a grain size of zero used to be the second.** That was a guard against dividing
-         * by a lattice with no spacing; the size is a control position now and zero is its *finest* setting, which
+         * **Amplitude alone, deliberately.** A grain size of zero looks like a second clause — it guards against
+         * dividing by a lattice with no spacing — but the size is a control position and zero is its *finest*
+         * setting, which
          * is a real look rather than an absence — so treating it as identity would have deleted the effect at one
          * end of a slider.
          */
@@ -1395,8 +1397,9 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
  * switching off rather than deleting is for, and it has to go on showing them when you drag one to nothing.
  * Anything deciding what to *draw* must read [activeEffects] instead.
  *
- * **It used to drop an identity effect as well, and that was the bug behind a real one.** Paired with [withEffect]
- * doing the same, dragging a bloom's strength to zero deleted the whole record — its color, angle, radius, falloff
+ * **It deliberately does not drop an identity effect, and doing so is the bug behind a real one.** Paired with
+ * [withEffect] doing the same, dragging a bloom's strength to zero deletes the whole record — its color, angle,
+ * radius, falloff
  * and anchor with it — so the panel's switch grayed out mid-gesture and dragging back up produced a *fresh* effect
  * at defaults rather than the one being edited. Identity is a statement about what an effect would paint, and the
  * editor is not asking that question.
@@ -1409,8 +1412,8 @@ inline fun <reified T : LayerEffect> List<LayerEffect>.effectOrNull(): T? =
  *
  * At most one of each type is meaningful, so this replaces rather than appends.
  *
- * **An effect that would paint nothing is kept**, which reverses this function's own earlier rule. Dropping it kept
- * an untouched recipe empty on disk — a real goal, but bought at the wrong moment: applied on *every edit*, it made
+ * **An effect that would paint nothing is kept.** Dropping it keeps an untouched recipe empty on disk — a real
+ * goal, bought at the wrong moment: applied on *every edit*, it makes
  * "drag a slider to its floor" mean "discard every other value on this effect". Storage stays small the honest way
  * instead, by nothing writing a record until the user asks for one; and `encodeDefaults = false` means the record
  * a user does own costs only the fields they moved.

@@ -399,9 +399,9 @@ val HomePagerGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 7),
         tabletLandscape = GridDefault(cols = 8, rows = 6),
     ),
-    // The launcher's defaults, unmodified — as every blueprint now takes them. Home used to ask for 88%, reasoning
-    // that a 2×2 visual slot can afford slack; at 100% the same slack is expressed by the 48dp cap instead, in the
-    // units a user reads.
+    // The launcher's defaults, unmodified — as every blueprint takes them. A per-grid fraction (88% here, on the
+    // grounds that a 2×2 visual slot can afford slack) double-counts density: at 100% the same slack is expressed by
+    // the 48dp cap instead, in the units a user reads.
     icon = IconSizing(),
     // Paged, and the wrapping is the user's — see `wraps` for why it starts off.
     wraps = false,
@@ -529,9 +529,9 @@ val AppsPagerGrid = GridBlueprint(
         tabletPortrait = GridDefault(cols = 5, rows = 7),
         tabletLandscape = GridDefault(cols = 8, rows = 6),
     ),
-    // The same defaults as every other grid. This used to ask for 75% on the grounds that a page packs more columns
-    // than home — but a narrower cell already produces a smaller icon at 100%, since the fraction is *of the cell*, so
-    // the extra reduction was double-counting the density.
+    // The same defaults as every other grid. Asking for 75% on the grounds that a page packs more columns than home
+    // double-counts the density: a narrower cell already produces a smaller icon at 100%, the fraction being *of the
+    // cell*.
     icon = IconSizing(),
     wraps = false,
 )
@@ -681,9 +681,9 @@ val AppsCardGrid = GridBlueprint(
         // A tablet is nearer square than a phone, so the long edge is not twice the short one; four, not six.
         tabletLandscape = GridDefault(cols = 4),
     ),
-    // **A card's preview icons are sized like any other grid's**, which reverses this blueprint's original `null`.
-    // That null said "a card is a tile, not a cell", and it was true of the *card* while being wrong about what is
-    // inside one: the four slots are icons, and leaving them unowned meant their size was a pure consequence of the
+    // **A card's preview icons are sized like any other grid's.** A null here would say "a card is a tile, not a
+    // cell" — true of the *card*, and wrong about what is inside one: the four slots are icons, and leaving them
+    // unowned makes their size a pure consequence of the
     // lane count — tiny at four lanes, enormous at two, and different again on rotating the device, with no control
     // anywhere to say otherwise. Declaring sizing makes that the user's, and buys the lane ceiling for free: the
     // narrowest usable card is `2 × minIconDp` plus the paddings below, which is `CellFit`'s ordinary inversion of a
