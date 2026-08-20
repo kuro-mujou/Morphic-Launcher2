@@ -84,12 +84,15 @@ private val GearGlyph = 18.dp
  * a fixed dp for the reason that editor's is: a mockup of a screen wants a legible size, which is a physical decision,
  * and the other side then follows from the ratio.
  *
- * **HOME is a choice too, now that there are two of it.** Its card takes a tap like the four around it, and for the
- * same reason theirs do: the body *changes what is there* and the gear *configures what is there already*. That
- * reverses an earlier note here ("HOME is not a choice, so its card does not take a tap — L1's rule"), which was true
- * only while `PAGER_WITH_DOCK` was the only pairing — L1's own center card was inert for exactly that reason, and it
- * put its two-way choice in the Home *section* instead. Here the register is where "what is HOME" is answered, which
- * is what this section's own KDoc had reserved the spot for.
+ * **HOME's card is the gear alone, and this note has now been written three times.** It began inert ("HOME is not a
+ * choice, so its card does not take a tap"), took a tap when the second pairing arrived, and has given it back. The
+ * middle state was not wrong about the *card* — a body that changes what is there and a gear that configures it is
+ * this file's rule — it was wrong about the **cross**, which asks *where surfaces are*. HOME is not bound to an edge,
+ * so it has nothing to change here; what it has is a pairing, and a pairing is what the Home section is now built
+ * around. Two live controls for one setting is the fault that settled it, not the ranking of the two places.
+ *
+ * L1 is worth knowing on this: its center card was inert too, and its pairing choice lived in its Home section. It
+ * reached the same arrangement for a narrower reason (one pairing, so nothing to choose).
  *
  * @param homeLayout HOME's current pairing; the center card is named for it.
  * @param bindings the register's current per-edge bindings; a missing edge is unbound.
@@ -104,7 +107,6 @@ internal fun SurfaceRegisterCross(
     homeLayout: HomeLayout,
     bindings: Map<HomeEdge, SideBinding>,
     onPick: (HomeEdge) -> Unit,
-    onPickHomeLayout: () -> Unit,
     onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -128,7 +130,7 @@ internal fun SurfaceRegisterCross(
         SideSlot(HomeEdge.TOP, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
         Row(horizontalArrangement = Arrangement.spacedBy(CardGap)) {
             SideSlot(HomeEdge.LEFT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
-            HomeSlot(homeLayout, cardWidth, cardHeight, onPickHomeLayout, onOpenSettings)
+            HomeSlot(homeLayout, cardWidth, cardHeight, onOpenSettings)
             SideSlot(HomeEdge.RIGHT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
         }
         SideSlot(HomeEdge.BOTTOM, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
@@ -183,15 +185,18 @@ private fun SideSlot(
  * The center: HOME, named for the pairing it is drawing.
  *
  * In `accent` where the sides are plain, since it is the fixed point the others are arranged around — L1 used
- * `primaryContainer` for the same distinction. Two targets like every filled side slot: the body swaps the pairing,
- * the gear opens the section that sizes whichever main area it brings.
+ * `primaryContainer` for the same distinction.
+ *
+ * **One target, unlike every filled side slot: the gear.** A side card's body *changes what is bound there*, which is
+ * the question the cross exists to ask — HOME has no such question, because HOME is not bound to anything. What it
+ * has is a *pairing*, and that moved to the Home section it configures. L1's own center card was inert for the
+ * narrower reason that it had only one pairing to be.
  */
 @Composable
 private fun HomeSlot(
     layout: HomeLayout,
     width: Dp,
     height: Dp,
-    onPick: () -> Unit,
     onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
 ) {
     val colors = LocalMorphicColors.current
@@ -199,11 +204,19 @@ private fun HomeSlot(
         width = width,
         height = height,
         label = layout.label,
-        icon = SettingsSection.HOME_GRID.meta(layout).icon,
+        icon = SettingsSection.HOME.meta(layout).icon,
         container = colors.accent,
         content = colors.onAccent,
-        onClick = onPick,
-        onSettings = { onOpenSettings(SettingsSection.HOME_GRID, null) },
+        // **No body target, so no ripple and no second way to change the pairing.** The card had one briefly: HOME
+        // became a choice when the second pairing landed, and this is where the choice went. It moved to the head of
+        // the Home section — a segmented control over the two zones it decides — because that is the screen a user
+        // opens to change home, and two live controls for one setting is worse than either alone. `FilledSlot` takes a
+        // null `onClick` for exactly this, which is the shape the card had before the second pairing existed.
+        onClick = null,
+        // **The hub, not one of its zones.** Landing on `HOME_GRID` would drop the user past the screen that says
+        // what HOME *is*, with no way back to it except out through the list — and it would open the main area's
+        // pane whichever half of the pairing they meant.
+        onSettings = { onOpenSettings(SettingsSection.HOME, null) },
     )
 }
 

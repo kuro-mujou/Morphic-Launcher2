@@ -2567,6 +2567,11 @@ same mockups) and the edges got the picture.
 - Every side shows the **same** glyph, because every binding is the same *surface* and the label carries which
   arrangement. L1 varied it because its two side surfaces were two modules; the surface taxonomy's collapse of
   drawer + library into APPS shows up right here.
+- **HOME's card is the gear alone — the one card with a single target**, and the "two targets" rule below is about the
+  four around it. A side card's body changes *what is bound there*, which is the question this cross exists to ask;
+  HOME is bound to nothing, so it has no such question. What it has is a *pairing*, and that lives in the Home hub
+  (above). The card took a tap for one stretch, between the second pairing landing and the hub existing; L1's own
+  center card was inert throughout, for the narrower reason that it had only one pairing to be.
 - **The gear is L1's, and it lands on the layout, not just the section.** A card is two targets divided by a rule —
   the body *changes* what is bound, the gear *configures* what is bound already — and since the APPS section edits one
   layout at a time, the jump carries which one (`onOpenSection(section, layout)`; `SettingsScreen` holds it as a second
@@ -2585,25 +2590,50 @@ same mockups) and the edges got the picture.
   strings — "Pages"/"Category pages"/"Category cards" against "Pager"/"Pager + category"/"Cards" — each promising in
   KDoc to move when a second screen needed it; the picker was the third.
 
-**Two sections follow HOME's pairing, and one control switches it.** The Home section edits the pager's rows and
-columns *or* the list's row height; the Dock section becomes the **Widget area** section — its title, its subtitle,
-its extent range (L1's `120..480` against the dock's `80..320`), and whether it has an icon group at all. The list
-rows and the app-bar title rename with them (`SettingsSection.meta(homeLayout)`, read once by the shell through
-`SettingsShellViewModel` so the list and the bar cannot disagree). Three things carry that:
-- **`HomeLayout.mainSlot`/`sideSlot` again** — both ViewModels resolve *the slot*, so one `IconSizingEdits`, one
+**HOME is one row in the list, and behind it a *hub* — the pairing switch, a picture of it, and a row per zone.**
+Built 2026-08-19; full argument in [docs/HOME_SETTINGS_HUB_PLAN.md](docs/HOME_SETTINGS_HUB_PLAN.md). The list used to
+carry HOME's two zones as two top-level rows, which split HOME by **zone** while splitting APPS not at all — and the
+tell was that `SettingsSection.meta` had to take a `HomeLayout` so two *index* rows could rename themselves as a
+setting in the surface register changed. `HomeLayout` is one enum precisely so a main area and its side zone cannot be
+chosen apart; the list was the one place in the codebase taking that couple back apart. `HOME_GRID` and `DOCK` are
+still panes, reached through `SettingsSection.HOME`. Six things:
+- **A hub rather than one long pane, and `SurfaceDetail` is the reason.** Two zones means two icon groups, and that
+  scaffold pins exactly one (heading + live preview) — the icon controls are only legible *through* their preview, so
+  the second group's would scroll away from the sliders it explains. Same shape as the Icons hub, different cause.
+- **The switch *switches*; it does not select.** This is where it parts from APPS' chip row, which deliberately writes
+  nothing because a user can have one arrangement on the left edge and another on the right, both live. HOME has no
+  such state — one HOME, one pairing in force — so a selector that only selected would configure a home that does not
+  exist. `HomeLayoutPicker` is therefore **deleted** and the register's HOME card is back to **gear-only** (its gear
+  repointed at the hub). That reverses this file's previous note twice over, and the reason is not a ranking of the
+  two screens: it is that the pairing existed in two live controls at once. L1 also put this choice in its Home
+  section, as a row of two mockup cards.
+- **`HomeLayout.mainSlot`/`sideSlot` again** — both zone ViewModels resolve *the slot*, so one `IconSizingEdits`, one
   extent control and one `GridEditor` serve both pairings. `GridSizeState.main` is a sum type (`MainAreaSize.Grid` /
-  `.Rows`) for `HomeMainSizing`'s reason, one layer down.
-- **The switch is HOME's card in the surface register** (`HomeLayoutPicker`, `SideBindingPicker`'s twin), which
-  reverses that section's "HOME is not a choice, so its card does not take a tap" — true only while there was one
-  pairing. The card is already two targets (body changes what is there, gear configures it); the body was simply
-  null. L1 put the same choice in its Home *section* as a scroll row of two mockup cards labeled "Classic" and
-  "Minimalist"; those name eras of that launcher rather than what you get, and the register cross had already decided
-  not to draw mockups at card size. The rule this section states — a control appears when the thing it configures
-  exists — is unchanged: `transition` still has no control, because `SurfacePager` still implements only `SLIDE`. The
-  **infinite-scroll switch** is that rule's newest application in the other direction: it appears on the pager pairing
-  and on the two paging APPS chips, and nowhere else, because only those grids have the setting at all.
+  `.Rows`) for `HomeMainSizing`'s reason, one layer down. The Dock section still becomes the **Widget area** section
+  (its title, subtitle, extent range — L1's `120..480` against the dock's `80..320` — and whether it has an icon group
+  at all); what changed is that this renaming is now a level down from the index rather than in it.
+- **The mockup draws the *stored* extent**, through `GridEditor` with both bounds null and its companion split — the
+  arrangement it already draws for the APPS list. Reused rather than hand-drawn because which side the zone sits on is
+  `SideZoneEdge`'s rule, and a hand-rolled rectangle would eventually disagree with the two panes that draw it
+  properly; the extent is the user's rather than the blueprint's, or the hub would contradict the zone's own pane one
+  tap away. Drawing it is what earned `HomeHubViewModel` — a keyed read over two flows is a section's shape, not the
+  shell's, so `SettingsShellViewModel` stays read-only and there is exactly **one writer** of the pairing.
+- **`SettingsSection.parent` is how depth works, and it is a property rather than a back stack** — the hierarchy is one
+  level and sections are panes, which is the same argument that kept them out of the navigation graph. Three consumers,
+  and the third was missed by the plan: single-pane back closes to the parent; the two-pane list highlights the *listed
+  ancestor* (or a detail shows beside no marked row); and `SettingsTwoPane` gained an "up" at all, since
+  `BackHandler(onBack = onBack)` would leave settings from a child pane and skip the hub. The single-pane slide
+  direction reads `paneDepth`, because `targetState != null` is no longer the same question once something sits in the
+  middle.
 - **Switching is non-destructive**, which is what makes it one tap with no confirm: each pairing's zones have their
   own stored sizes and their own stored contents, so the one going off screen keeps everything it had.
+
+The rule the settings sections live by is unchanged by any of this — a control appears when the thing it configures
+exists: `transition` still has no control, because `SurfacePager` still implements only `SLIDE`, and the
+**infinite-scroll switch** is the same rule in the other direction (it appears on the pager pairing and on the two
+paging APPS chips, and nowhere else, because only those grids have the setting). The hub's **shared** block is that
+rule again: there is nothing genuinely shared between the two pairings today — every control in both panes is
+zone-scoped — so no such block is drawn.
 
 **A section belongs to a surface and holds everything about it**, layout controls *and* icon sizing, exactly as each
 of L1's five details embedded `IconLayoutControls` under its layout section. **All five surfaces now have theirs** —

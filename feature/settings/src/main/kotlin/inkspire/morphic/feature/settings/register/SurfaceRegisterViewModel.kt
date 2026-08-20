@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
-import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceRegister
@@ -56,17 +55,10 @@ class SurfaceRegisterViewModel(
         viewModelScope.launch { settingsRepository.setSide(edge, binding) }
     }
 
-    /**
-     * Sets HOME's own pairing — its main area and the side zone that comes with it.
-     *
-     * One write and nothing else, which is the whole of switching layouts: each pairing's grids have their own stored
-     * sizes and their own stored contents (`home_list_item` beside the placement tables), so the one it is *not*
-     * drawing keeps everything it had. Switching back finds it as it was, which is exactly what L1's shared store
-     * could not offer — its list and its grid were one arrangement, so reordering one flattened the other.
-     */
-    fun setHomeLayout(layout: HomeLayout) {
-        viewModelScope.launch { settingsRepository.setHomeLayout(layout) }
-    }
+    // **No `setHomeLayout` here.** HOME's pairing is written by `SettingsShellViewModel`, beside the read the Home
+    // hub's segmented control is driven from. It lived here while the register's center card was the switch; leaving
+    // it behind would leave a second writer for a setting this screen no longer offers, which is how two controls
+    // for one setting grow back.
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

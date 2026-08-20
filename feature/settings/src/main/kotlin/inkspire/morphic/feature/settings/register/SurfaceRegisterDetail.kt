@@ -43,13 +43,16 @@ private val CrossGap = 20.dp
  * that the *edges* were the part with a shape, not the options — so the options moved into a modal
  * ([SideBindingPicker]) and the edges got the picture.
  *
- * **HOME's pairing is offered here now, and `transition` still is not.** The rule stated here has not changed — a
- * control for a setting that changes nothing teaches the user the app is broken, so each appears when the thing it
- * configures exists. `HomeScreen` renders both pairings, so the center card is live; `SurfacePager` still implements
- * only `SLIDE`, so the transition stays out. (L1 offered both from this screen, and its presets from here too.)
+ * **HOME's pairing is *not* offered here, and neither is `transition`.** The rule is unchanged — a control appears
+ * when the thing it configures exists — but the pairing failed a different test: it existed twice. A `HomeLayoutPicker`
+ * on the center card and a segmented control at the head of the Home section are two live controls for one setting, and
+ * the section is where a user goes to change home. So the center card kept only its gear. What this cross keeps is what
+ * it is for: **where** surfaces are. `SurfacePager` still implements only `SLIDE`, so the transition stays out. (L1
+ * offered both from this screen, and its presets from here too — and put the pairing in its Home section, which is
+ * where it now is here.)
  *
- * **Two pickers, both hoisted**, rather than one per slot: *which* slot is being filled is this screen's state, so at
- * most one dialog exists whatever the cross is doing.
+ * **One picker, hoisted**, rather than one per slot: *which* edge is being filled is this screen's state, so at most one
+ * dialog exists whatever the cross is doing.
  *
  * A **detail**, not a screen: the theme, the background, the app bar and back all belong to `SettingsScreen`, which
  * has one of each for what may be two panes.
@@ -64,7 +67,6 @@ internal fun SurfaceRegisterDetail(
     val colors = LocalMorphicColors.current
 
     var picking by remember { mutableStateOf<HomeEdge?>(null) }
-    var pickingHome by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -83,20 +85,8 @@ internal fun SurfaceRegisterDetail(
             homeLayout = state.register.homeLayout,
             bindings = state.register.sides,
             onPick = { picking = it },
-            onPickHomeLayout = { pickingHome = true },
             onOpenSettings = onOpenSection,
             modifier = Modifier.padding(top = CrossGap),
-        )
-    }
-
-    if (pickingHome) {
-        HomeLayoutPicker(
-            selected = state.register.homeLayout,
-            onSelect = { layout ->
-                viewModel.setHomeLayout(layout)
-                pickingHome = false
-            },
-            onDismiss = { pickingHome = false },
         )
     }
 
