@@ -51,13 +51,13 @@ import org.koin.androidx.compose.koinViewModel
 /**
  * The **Icons** section: a hub, not an editor.
  *
- * L1's conclusion, and it is worth stating because the alternative is what it started with. Its icon settings were
- * the editor itself, hosted in the settings detail pane and built out of settings-list vocabulary; its own docs
- * conclude that this was the whole problem. So the pane became a place to choose *what* to edit, and the editing
+ * Worth stating because the alternative is the obvious one: making the icon settings *be* the editor, hosted in the
+ * detail pane and built out of settings-list vocabulary. A creative workspace cannot share a screen with a section
+ * list. So the pane is a place to choose *what* to edit, and the editing
  * moved to a full-screen destination — which is right for a second reason here, that a settings pane shares the
  * screen with the section list on a tablet, and a creative workspace cannot have half a screen.
  *
- * **Adaptive, as L1's dashboard was**: in portrait the two actions sit side by side above the presets; in landscape
+ * **Adaptive**: in portrait the two actions sit side by side above the presets; in landscape
  * they stack in a narrow column on the left with the presets filling the rest, so the short height is not spent on
  * two cards' worth of empty space.
  */

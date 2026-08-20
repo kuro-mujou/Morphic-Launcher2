@@ -8,9 +8,9 @@ import kotlin.math.min
  *
  * One value rather than three, because two very different things read it and they must not each derive their own:
  * the layout places a `Box` at exactly this rectangle, and `drawBackdrop` fills the same rectangle with the
- * checkerboard. Those used to be two independent derivations from the same constants — which agreed because neither
- * had any input but the canvas's size. The moment the user could pan and zoom, "derive it twice and hope" stopped
- * being safe, so it became "derive it once and hand it to both".
+ * checkerboard. Two independent derivations from the same constants agree only while neither has an input but the
+ * canvas's size; once the user can pan and zoom, "derive it twice and hope" stops being safe. So it is derived once
+ * and handed to both.
  */
 internal data class StudioIconBound(val left: Float, val top: Float, val side: Float)
 
@@ -68,12 +68,10 @@ internal val StudioZoomRange = 0.5f..3f
 /**
  * The icon's bound, resolved from the canvas's size, the chrome above it and the user's [workspace].
  *
- * **The resting bound is top-aligned under the chrome**, not centered — which is the arrangement change this function
- * carries. It used to be centered and then lifted by a constant fraction to keep clear of the tool panel, and that
- * constant was a compromise the KDoc admitted to: too small and an open panel covered the icon, too large and the icon
- * sat oddly high with nothing above it. Anchoring it to the top instead removes the compromise rather than tuning it —
- * the icon is as far from the panel as the screen allows, and the space it used to leave empty above is space it now
- * occupies.
+ * **The resting bound is top-aligned under the chrome**, not centered. Centering it and lifting it by a constant
+ * fraction to clear the tool panel is a compromise with no good value: too small and an open panel covers the icon,
+ * too large and the icon sits oddly high with nothing above it. Anchoring to the top removes the compromise rather
+ * than tuning it — the icon is as far from the panel as the screen allows, and the space above is space it occupies.
  *
  * **Zoom scales the bound about its own center**, so [IconStudioWorkspace.panX] and [panY] keep meaning "how far the
  * icon has been dragged" at any zoom. The centroid-anchored half of a pinch is [pinched]'s job, which is what keeps

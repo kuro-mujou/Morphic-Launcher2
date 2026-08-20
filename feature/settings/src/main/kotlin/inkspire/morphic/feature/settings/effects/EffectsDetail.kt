@@ -66,28 +66,28 @@ private val RowGap = 8.dp
 /**
  * **Effects**: how frosted surfaces render over the wallpaper — the one global choice, and its parameters.
  *
- * The port of L1's `EffectsTab`, and structurally the same screen: a chooser, then the controls belonging to whatever is
- * chosen. Four differences, each following from a decision made before this:
+ * A chooser, then the controls belonging to whatever is chosen. Four things about it follow from decisions made
+ * before this:
  *
  * - **Two entries where there were five.** A plain wash, the two blurs and Material You blurred identically and differed
  *   only in the color of the wash, so the wash is a `BackdropTint` and they are one entry — see [EffectKind]. What is
  *   left to choose between is a blur and a lens, which is what a *segmented control* is for; five options were a
  *   `FlowRow` of chips, and two are not.
- * - **The controls come from the *variant*, not from a ten-field bag.** L1 held every parameter of every effect at once
- *   and used a `when` to decide which subset to draw; here the selected `BackdropEffect` carries only its own, so the
+ * - **The controls come from the *variant*, not from a ten-field bag.** Holding every parameter of every effect at
+ *   once needs a `when` to decide which subset to draw; here the selected `BackdropEffect` carries only its own, so the
  *   `when` is over the sealed type and the compiler checks the mapping is total.
  * - **A live preview, first on the pane and pinned there** — see [BackdropPreview] for what it is and why the backdrop
  *   it samples is provided at the *pane*. It pins in a `stickyHeader`, the arrangement `SurfaceDetail` uses for the same
  *   reason: the controls are read *through* the picture, so scrolling to reach one must not scroll the picture away. That
  *   is also why this is a `LazyColumn`. **Nothing is titled** — not the pane, not the picture, not the chooser: the app
  *   bar names the section, and a frosted panel and two buttons reading "Blur" and "Liquid glass" say what they are
- *   without a word over them. L1 had no preview here at all.
+ *   without a word over them.
  * - **The sliders are the icon studio's shape** — name, value and reset over a track flanked by a stepper each side (see
  *   [SettingsSliderRow]). A wash at 28% and one at 30% are hard to tell apart on a photograph, which makes a readout and
  *   a reset worth more here than on a control whose result is a number of columns.
  *
  * **Liquid glass is hidden rather than disabled below API 33.** An effect that silently comes out as a plain blur is
- * worse than one that is not offered, so the entry goes and the reason is stated — L1's wording, kept.
+ * worse than one that is not offered, so the entry goes and the reason is stated.
  */
 @Composable
 internal fun EffectsDetail(modifier: Modifier = Modifier) {

@@ -56,9 +56,8 @@ import inkspire.morphic.core.model.icon.activeEffects
  * Which entry of the Effects grid is open, or null for the grid itself.
  *
  * **It lives above `EffectsControls` because the entry's header is pinned above the scroll**, and only the panel owns
- * that band. The header — back, the effect's name, its switch — used to be the first thing inside the scrolling body,
- * so on a section with more than a screenful of sliders the way back scrolled off the top and the switch went with
- * it. A control for leaving a place has to stay where the place is.
+ * that band. Inside the scrolling body, a section with more than a screenful of sliders scrolls the way back off the
+ * top and takes the switch with it. A control for leaving a place has to stay where the place is.
  *
  * That split is what makes this a holder rather than a hoisted value: the panel *renders* the header,
  * `EffectsControls` *renders* the body, and both read and write it.

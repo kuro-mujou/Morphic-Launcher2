@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 /**
  * **What a framed image becomes** — which of the launcher's three wallpaper slots the crop screen is filling.
  *
- * One value rather than L1's pair of booleans (`forRotate` + `landscape`), which between them could express a state
- * that does not exist ("not for rotate, but landscape") and had to be read together to mean anything. It decides the
+ * One value rather than a pair of booleans (`forRotate` + `landscape`), which between them can express a state that
+ * does not exist ("not for rotate, but landscape") and have to be read together to mean anything. It decides the
  * two things the crop screen needs and cannot otherwise know: the **shape** it frames against, and the **size** it
  * stores at.
  */
@@ -24,7 +24,7 @@ enum class CropTarget {
     /**
      * The landscape half of the rotating pair, **framed landscape-shaped whatever way the phone is being held**.
      *
-     * L1 solved that by pinning the activity's orientation while framing; this letterboxes a landscape frame into the
+     * Pinning the activity's orientation while framing is one answer; this letterboxes a landscape frame into the
      * portrait screen instead. Smaller to look at, and it neither fights the system nor leaves an activity in an
      * orientation the user did not ask for — while the *stored* image is full landscape resolution either way, because
      * the frame decides the shape and the target screen decides the size.
@@ -46,9 +46,8 @@ enum class CropTarget {
  *
  * **Declared here rather than in `core:navigation`, and that is the rule rather than an exception.** That module's own
  * KDoc says a module may declare its own keys, because `entryProvider` in `app` is a *mapping* and not a registry; and
- * the reason to take it up here is the one L1 demonstrates by counterexample — it put every route in its navigation
- * module, which is how an eleven-value settings enum ended up on `feature:home`'s compile classpath. A crop screen is
- * this feature's business and nobody else's.
+ * the reason to take it up here is what putting every route in the navigation module costs: that is how a settings
+ * enum ends up on `feature:home`'s compile classpath. A crop screen is this feature's business and nobody else's.
  *
  * **A destination, unlike a settings section.** The sections are panes — two of them share the screen on a tablet — so
  * "which section" is `SettingsScreen`'s state. This is full-screen, transient, and back out of it means "not that

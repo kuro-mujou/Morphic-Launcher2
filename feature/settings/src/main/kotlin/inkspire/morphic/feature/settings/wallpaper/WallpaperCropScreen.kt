@@ -45,15 +45,15 @@ import kotlin.math.roundToInt
 /**
  * **Framing a picked image**: pan and pinch it under a screen-shaped viewport, then save the region that is showing.
  *
- * The port of L1's `WallpaperCropScreen`, and it keeps that screen's arithmetic exactly — the cover scale, the
- * centroid-anchored zoom, the clamp that stops the image being dragged off its own edges, and the four fractions read
- * back out of the transform at save time. Those are not incidental: together they are what makes the image impossible
+ * Four pieces of arithmetic carry this screen — the cover scale, the centroid-anchored zoom, the clamp that stops
+ * the image being dragged off its own edges, and the four fractions read back out of the transform at save time.
+ * None is incidental: together they are what makes the image impossible
  * to frame *badly* (there is never a gap, and the crop is never outside the picture), which is worth more than any
  * chrome a crop screen could grow.
  *
  * **A destination rather than a pane**, unlike every settings *section*. It is full-screen, it is transient, and back
  * from it means "I did not want that image" rather than "close this detail" — all three are what a back-stack entry
- * is for. L1 kept it a separate screen too, and the settings section is what pushes it.
+ * is for. The settings section is what pushes it.
  *
  * **The viewport is the shape of the output, and [target] is its size.** What the user frames against has the target
  * slot's aspect, and the rectangle they end up with is read back in fractions of the source — so the frame and the
@@ -61,8 +61,8 @@ import kotlin.math.roundToInt
  * wallpaper does, so framing against a smaller box would be framing against the wrong thing.
  *
  * **The landscape half of the rotating pair is framed letterboxed**, in a landscape-shaped frame inside whatever
- * orientation the phone is in. L1 pinned the *activity* to landscape instead, which is more of the screen to frame with
- * and a device left facing a way the user did not ask for; and it is not needed for the thing that matters, since the
+ * orientation the phone is in. Pinning the *activity* to landscape gives more of the screen to frame with, at the
+ * cost of a device left facing a way the user did not ask for — and it is not needed for what matters, since the
  * stored image takes its resolution from the target screen rather than from the frame it was drawn in.
  *
  * @param uri the picked image, as a string because a `NavKey` is `@Serializable` and `Uri` is not.

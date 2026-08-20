@@ -37,7 +37,7 @@ import org.koin.androidx.compose.koinViewModel
  * Where the capture flow is: explaining, waiting for a screenshot, then importing the one that arrives.
  *
  * Three states rather than a spinner, because the middle one is the whole feature — the user has to *do* something,
- * and the screen has to get out of the way while they do it. L1's `CapturePhase` named the same three.
+ * and the screen has to get out of the way while they do it.
  */
 private enum class CapturePhase {
     /** Explaining what is about to happen, before anything is hidden or asked for. */
@@ -54,8 +54,8 @@ private enum class CapturePhase {
  * **Capturing the wallpaper**: clear the screen to the wallpaper alone, wait for the user to take a screenshot, and
  * keep the one that appears.
  *
- * The port of L1's `WallpaperCaptureScreen`, and the flow is L1's exactly because there is no other: **no API takes a
- * screenshot on an app's behalf**. So the launcher hides itself, asks, and watches `MediaStore` for what shows up —
+ * There is only one flow available, because **no API takes a screenshot on an app's behalf**. So the launcher hides
+ * itself, asks, and watches `MediaStore` for what shows up —
  * with the watching moved into `data:wallpaper` (a `ContentObserver` and a media query are system reads, and a
  * composable is the wrong place to hold either), leaving this screen the three states and the window flags.
  *
@@ -135,8 +135,8 @@ fun WallpaperCaptureScreen(onDone: () -> Unit, modifier: Modifier = Modifier) {
  * What is about to happen, before any of it does.
  *
  * A dialog rather than a screen of its own, and it is not decoration: the flow asks the user to perform a **system**
- * gesture at a moment when the app will look broken (blank, no bars). Without being told first, that reads as a crash.
- * L1 wrote the same two sentences.
+ * gesture at a moment when the app will look broken (blank, no bars). Without being told first, that reads as a
+ * crash.
  */
 @Composable
 private fun CaptureGuide(onStart: () -> Unit, onCancel: () -> Unit) {

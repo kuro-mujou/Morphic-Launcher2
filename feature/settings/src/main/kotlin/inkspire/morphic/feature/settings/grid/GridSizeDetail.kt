@@ -54,10 +54,10 @@ private val RowGap = 8.dp
  * height is decided one screen over, in the surface register. Selecting a pairing there is what switches these
  * controls; nothing here writes it.
  *
- * **Layout group, then icon group**, which is L1's structure for every surface detail and the order the dependency
- * runs in: the icon size sets the smallest usable cell (and the shortest usable row), and that is what this screen's
- * limits are computed from. Within the layout group the **editor comes first and the sliders under it**, again as L1
- * has it — see [SurfaceDetail], which owns the arrangement and pins the icon heading and preview together.
+ * **Layout group, then icon group**, which is the order the dependency runs in: the icon size sets the smallest
+ * usable cell (and the shortest usable row), and that is what this screen's limits are computed from. Within the
+ * layout group the **editor comes first and the sliders under it** — see [SurfaceDetail], which owns the arrangement
+ * and pins the icon heading and preview together.
  *
  * The counterpart of the side-zone section, and the difference between them is the whole shape of grid configuration
  * in this launcher: home is sized **by what it is given** — it takes the space the side zone leaves and divides it —
@@ -67,15 +67,15 @@ private val RowGap = 8.dp
  * dimension that zone takes is its edge's to say (`SideZoneEdge`): a strip takes height, a phone-landscape rail takes
  * width, so the main area is short in the first case and narrow in the second. `splitForSideZone` is that one
  * expression, read here and by the surface. The subtraction is this screen's arithmetic rather than part of measuring
- * a window ([usableWindowArea]) — L1 folded it into the measurement (`homeGridArea(..., dockVisible, dockThickness)`),
- * so every caller had to supply dock facts even when sizing something unrelated.
+ * a window ([usableWindowArea]). Folded into the measurement, every caller would have to supply dock facts even when
+ * sizing something unrelated.
  *
  * **The editor shows what home will draw, not what is in storage** — so changing the icon size below recalculates it.
  * On the pager that is the row and column counts; on the list it is the row height, clamped to what the guardrails can
  * honor. Either way the clamp is **applied, never written back**: shrink the icons again and the fifth row (or the
- * taller row) comes back, because nothing wrote the clamp down. L1 did write it — a `LaunchedEffect` right here,
- * firing on every cause — so an icon tweak permanently destroyed a count that had nothing to do with icons, and only
- * while this screen happened to be open. The one write that reduces home's counts belongs to the side zone's extent
+ * taller row) comes back, because nothing wrote the clamp down. Writing it — a `LaunchedEffect` right here, firing
+ * on every cause — is how an icon tweak permanently destroys a count that has nothing to do with icons, and only
+ * while this screen happens to be open. The one write that reduces home's counts belongs to the side zone's extent
  * commit, which is a deliberate change to the space home is left with.
  *
  * **On the pager, editing names an edge rather than a number**, and each press is two writes — the count and the
@@ -180,9 +180,9 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             }
 
             // **Only on the pairing that has a pager**, which the state says by leaving `wraps` null rather than by
-            // this screen asking the layout a second time. L1 gated the same control the same way — on
-            // `homeSurface == PAGER_GRID` — but its single global flag then changed the app drawer's pagers too,
-            // with no control there to show it. Here the toggle writes the grid this section is editing and nothing
+            // this screen asking the layout a second time. A single global flag would change the app drawer's
+            // pagers too, with no control there to show it; here the toggle writes the grid this section is editing
+            // and nothing
             // else.
             state.wraps?.let { wraps ->
                 SettingsSectionHeader("Paging")

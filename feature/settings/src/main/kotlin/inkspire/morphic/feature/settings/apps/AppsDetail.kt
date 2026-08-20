@@ -70,16 +70,15 @@ private val ChipGap = 8.dp
  *
  * **One section, a chip per layout** — the settings mirror of `feature:apps` being one module for five layouts. The
  * layouts differ only in arrangement, so what a user configures is "the paged one" or "the list", and every control
- * below addresses whichever is selected. L1 reached the same shape from the other direction: its drawer detail edited
- * `drawer.profile(layout)` — the profile of the selected layout — but it needed *two* details to do it, because the
- * drawer and the library were separate modules.
+ * below addresses whichever is selected. Splitting the surface into two modules would need two of these details,
+ * with "which one am I in?" answered before anything else.
  *
  * **Selecting a chip changes nothing.** Which layout a user actually gets is a property of the home edge they swipe
  * from, and lives in the surface register beside that binding; this row only says which one you are configuring. That
  * is the same distinction the icons section's chips draw, and the reason neither writes on selection.
  *
- * **Layout group, then icon group**, as in every other section here and in every one of L1's, because the dependency
- * runs that way: the icon size decides the smallest usable cell, which is what the column and row limits above are
+ * **Layout group, then icon group**, as in every other section here, because the dependency runs that way: the icon
+ * size decides the smallest usable cell, which is what the column and row limits above are
  * computed from — and, for the list, what the row-height slider's range is computed from.
  *
  * **Two controls have no counterpart elsewhere**, and both belong to one layout: the list's **row height**, and the
@@ -333,8 +332,8 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
 
             // **Only on the two layouts that page**, said by the state leaving `wraps` null rather than by a second
             // `state.layout ==` test here. Which of the two pagers it writes follows the chip, which is the whole
-            // difference from L1: its one global flag governed both of these *and* home's, from a control that only
-            // ever appeared in the Home screen.
+            // point: one global flag would govern both of these *and* home's, from a control appearing on one
+            // screen.
             state.wraps?.let { wraps ->
                 SettingsSectionHeader("Paging")
                 SettingsSwitchRow(
@@ -450,7 +449,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
         },
         // **No icon group at all on the category card**, which is `AppsCardGrid.icon` being null reaching the screen:
         // a card is a tile, so there is no fraction, guardrail or label to set. The same branch the dock section takes
-        // for the widget area, and the same one L1's dock detail took before its icon controls.
+        // for the widget area.
         icons = if (icon == null) null else {
             {
                 IconSizingGroup(
@@ -531,7 +530,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
  *
  * **Layout-dependent, which is `SearchPlacement`'s whole shape.** A standalone layout pins the field to an edge; the
  * category pager embeds it in the header beside the tabs, so it has no edge to choose. Offering all three everywhere
- * would let a user pick a state their layout cannot draw — L1's flat `SearchPosition` did exactly that.
+ * would let a user pick a state their layout cannot draw, which is what a flat placement enum allows.
  */
 private fun searchOptionsFor(layout: AppsLayout): List<Pair<String, SearchPlacement>> =
     if (layout == AppsLayout.PAGER_WITH_CATEGORY) {

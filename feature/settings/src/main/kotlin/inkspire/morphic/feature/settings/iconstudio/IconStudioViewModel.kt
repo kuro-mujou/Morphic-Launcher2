@@ -584,7 +584,7 @@ class IconStudioViewModel(
      *
      * **Nothing is written to disk here.** The image is decoded, kept in [IconStudioState.images] under a
      * reserved path, and drawn from memory — so backing out of the studio leaves no file behind, which is the
-     * bug L1 recorded and accepted. [save] writes whatever the committed recipe still refers to.
+     * orphan leak this would otherwise have. [save] writes whatever the committed recipe still refers to.
      *
      * **Refuses where the layer may not take one** — the *global* default's foreground, since one picture there stands
      * in for every app's own artwork. `IconStudioState.canUseFixedSource` is the whole rule and the UI omits the row by
@@ -842,9 +842,9 @@ class IconStudioViewModel(
     /**
      * Persists the edit: the global default, or this app's own recipe.
      *
-     * **An explicit save in both modes, which is a deliberate departure from L1** — its global studio committed
-     * live, on every control change. Two reasons not to. A slice is one JSON blob, so a live-committing slider
-     * would rewrite the whole document per frame; and a global edit restyles every icon on the device, which is
+     * **An explicit save in both modes**, rather than committing live on every control change. Two reasons. A slice
+     * is one JSON blob, so a live-committing slider would rewrite the whole document per frame; and a global edit
+     * restyles every icon on the device, which is
      * not something to do continuously while a user is still deciding. The *preview* stays live either way, which
      * is what "live edit is non-negotiable" was ever about.
      */
@@ -1026,9 +1026,8 @@ class IconStudioViewModel(
     // ---- Undo history -------------------------------------------------------------------------------------------
     //
     // **Undo is a list of whole recipes, and it is nearly free because `IconLayerSet` is immutable.** There is no
-    // command pattern here and no inverse operation per edit: a step back is an index. L1 left undo an open
-    // feasibility question in its studio plan, and the reason it was a question there is that its equivalent state
-    // was a bag of mutable flat fields with no single value to snapshot.
+    // command pattern here and no inverse operation per edit: a step back is an index. Undo is only a hard question
+    // when the state is a bag of mutable flat fields with no single value to snapshot.
     //
     // The cost is one reference per recorded edit, which is why history is punctuated by `commitEdit` rather than
     // recorded per frame — see `updateSelected`.

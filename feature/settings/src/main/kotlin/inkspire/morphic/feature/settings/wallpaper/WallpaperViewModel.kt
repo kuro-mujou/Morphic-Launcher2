@@ -41,9 +41,8 @@ import kotlinx.coroutines.launch
  *   from the system, never stored** (see `WallpaperState`), and refreshed on resume because the only way it changes is
  *   the user confirming in the system's chooser — which happens while this screen is stopped.
  * @property busy a write is in flight — read by the **crop** screen, whose Save button it disables and relabels while
- *   a large photo is decoded and scaled, and by the section, whose buttons it disables while an apply runs. L1 had no
- *   such flag and did not need one for the crop (its screen had a local `saving`), but it also could not tell you that
- *   an *apply* was still going.
+ *   a large photo is decoded and scaled, and by the section, whose buttons it disables while an apply runs. A local
+ *   flag on the crop screen would cover the first and not the second.
  */
 data class WallpaperSectionState(
     val image: WallpaperImage? = null,
@@ -69,8 +68,8 @@ data class WallpaperSectionState(
  * being the one that touches the filesystem.
  *
  * **Choosing and applying are two commands, as they are two things.** A user may pick an image, look at it, and change
- * their mind; and applying asks *where* (home, lock, both), which choosing does not. L1 separated them the same way —
- * its picker wrote the image and its Apply button set it — and the repository's own KDoc states the split.
+ * their mind; and applying asks *where* (home, lock, both), which choosing does not. The repository's own KDoc
+ * states the same split.
  */
 class WallpaperViewModel(
     private val wallpaperRepository: WallpaperRepository,
@@ -83,7 +82,7 @@ class WallpaperViewModel(
      *
      * A trigger rather than a stored flag, which is the whole point: the answer lives in `WallpaperManager` and changes
      * while this app is stopped (the user confirms in the system's chooser), so what this holder needs is a reason to
-     * look again — not a copy to repair. L1 kept the copy and needed `reconcileLiveWallpaper` to repair it.
+     * look again — not a copy that would then need repairing.
      */
     private val rotatingProbe = MutableStateFlow(0)
 
@@ -112,8 +111,8 @@ class WallpaperViewModel(
      * Re-reads whether the launcher's live wallpaper is active — the section calls this on resume.
      *
      * The one thing this holder cannot learn by listening: setting a live wallpaper happens in the *system's* chooser,
-     * so the app is stopped for the moment it changes and there is no callback on the way back. Asking on resume is
-     * exactly what L1 did (`reconcileLiveWallpaper`), minus the stored mode it existed to repair.
+     * so the app is stopped for the moment it changes and there is no callback on the way back. Asking on resume
+     * needs no stored mode and nothing to reconcile.
      */
     fun refreshRotatingActive() {
         rotatingProbe.value += 1
@@ -184,8 +183,8 @@ class WallpaperViewModel(
      * The launcher's live-wallpaper service, for the section to name in the system intent that applies it.
      *
      * Handed through rather than resolved in the UI: the component belongs to the module that declares the service, and
-     * starting an activity belongs to the screen that has a `Context`. L1 built the `ComponentName` in its UI, which is
-     * how its data layer ended up unable to say what its own service was called.
+     * starting an activity belongs to the screen that has a `Context`. Building the `ComponentName` in the UI is how
+     * a data layer ends up unable to say what its own service is called.
      */
     fun rotatingServiceComponent(): ComponentName = wallpaperRepository.rotatingServiceComponent()
 
