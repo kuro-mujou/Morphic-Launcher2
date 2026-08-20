@@ -66,8 +66,8 @@ private val StateKey = stringPreferencesKey("wallpaper_state")
  * Default [WallpaperRepository]: a JSON blob for what was chosen, a JPEG under `filesDir/wallpaper` for the image
  * itself, and `WallpaperManager` for putting it on the system.
  *
- * **Every read and write goes through one `edit`**, which is the one thing L1's version got structurally wrong: its
- * `WallpaperRepositoryImpl` read the whole settings object, modified it, and wrote it back *outside* any transaction —
+ * **Every read and write goes through one `edit`**, which is the thing to get right here: reading the whole state,
+ * modifying it and writing it back *outside* a transaction —
  * a lost update whenever two of its own operations overlapped (picking an image while an apply was still finishing).
  * `updateState` below does the read-modify-write *inside* `edit`, where DataStore serializes it.
  *
@@ -232,7 +232,7 @@ internal class WallpaperRepositoryImpl(
     override suspend fun apply(target: WallpaperTarget): Unit = withContext(dispatchers.io) {
         val image = wallpaper.first().image ?: return@withContext
         // A capture is a picture *of* the wallpaper. Setting it would at best change nothing and at worst re-encode
-        // the last capture into the next one; L1 skipped `WallpaperManager` on the same field for the same reason.
+        // the last capture into the next one.
         if (image.source == WallpaperSource.CAPTURED) {
             Timber.w("Refusing to apply a captured image: it is a picture of the wallpaper, not a wallpaper")
             return@withContext
@@ -257,8 +257,7 @@ internal class WallpaperRepositoryImpl(
         // `appliedSystemId` is evidence about — the chrome sits on it. Recording the id unconditionally meant a
         // *lock-only* apply wrote down the id of a home wallpaper it had not touched, so `ownsSystemWallpaper` then
         // compared that id against itself and answered true on no evidence at all: the frost blurred an image that was
-        // not on screen, and the brightness fallback themed the chrome against it. L1 reads the same id regardless of
-        // its own `which`, so this came across with the port.
+        // not on screen, and the brightness fallback themed the chrome against it.
         //
         // Left *untouched* rather than cleared, which is the tempting one-liner and is wrong: applying to BOTH and then
         // re-applying the same image to LOCK alone would throw away a claim that is true. Nothing records the lock
@@ -277,8 +276,7 @@ internal class WallpaperRepositoryImpl(
     /**
      * [image] copied to the slot the backdrop samples, described at its new path — or null if the copy failed.
      *
-     * L1's `owned_applied.jpg`, and the reason it kept one. Taken *after* a successful `setBitmap`, so the copy exists
-     * exactly when the claim it supports does.
+     * Taken *after* a successful `setBitmap`, so the copy exists exactly when the claim it supports does.
      */
     private fun keepAsAppliedHome(image: WallpaperImage): WallpaperImage? {
         val dir = File(appContext.filesDir, WallpaperFiles.DIR).apply { mkdirs() }
@@ -336,7 +334,7 @@ internal class WallpaperRepositoryImpl(
      *
      * The four-way answer `loadBackdrop`'s KDoc sets out, kept in one function because it is *the* rule rather than an
      * implementation detail of one caller — the icon studio's preview and the panned-surface backdrop will both want
-     * exactly this, and a second copy of it is how L1's `resolveDockDrop` happened.
+     * exactly this, and a second copy of it is how two implementations of one thing start.
      */
     private suspend fun backdropSourcePath(state: WallpaperState, orientation: Orientation): String? {
         if (isRotatingActive()) {
@@ -528,8 +526,7 @@ internal class WallpaperRepositoryImpl(
      *
      * **Each change is answered with a query for the newest image**, because an observer says only *that* something
      * changed. The cutoff is taken a couple of seconds back rather than at exactly now: `DATE_ADDED` has second
-     * resolution, so a screenshot taken in the same second this is collected would otherwise be missed - L1 took the
-     * same two-second slack for the same reason.
+     * resolution, so a screenshot taken in the same second this is collected would otherwise be missed.
      *
      * Duplicate emissions are possible (an observer can fire more than once for one insert, and a pending image
      * becomes non-pending), which is left alone rather than smoothed over: the only collector takes the first
@@ -551,8 +548,8 @@ internal class WallpaperRepositoryImpl(
      * The newest non-pending image added at or after [sinceSeconds], or null when there is none.
      *
      * `IS_PENDING = 0` matters: a screenshot appears in `MediaStore` before its bytes are written, and importing a
-     * pending row reads a truncated file. L1 guarded it the same way, gated on the API level where the column arrives;
-     * this codebase's `minSdk` is past that, so the branch is gone rather than carried.
+     * pending row reads a truncated file. The column arrives below this codebase's `minSdk`, so it needs no API
+     * branch.
      *
      * Failure is null rather than a throw: the query can run without the media permission (a user may revoke it
      * between the ask and the shot), and "no image" is the honest answer to that.
@@ -593,7 +590,7 @@ internal class WallpaperRepositoryImpl(
     }
 
     /**
-     * [crop] of [source], scaled to [outWidth] × [outHeight] — L1's `cropAndScale`, arithmetic and all.
+     * [crop] of [source], scaled to [outWidth] × [outHeight].
      *
      * **Every bound is clamped into the source, and each edge against the opposite one**, so a rectangle that arrived
      * inverted or out of range yields a small crop rather than an `IllegalArgumentException` out of
@@ -651,8 +648,8 @@ internal class WallpaperRepositoryImpl(
      * [uri] decoded with its largest edge at most [maxDimension], via `inSampleSize`.
      *
      * Two passes over the stream, which is what `inJustDecodeBounds` is for: the first reads the header to learn the
-     * size, the second decodes at a power-of-two reduction. Decoding a phone camera image whole is tens of megabytes
-     * and the reason L1 sampled too.
+     * size, the second decodes at a power-of-two reduction. Decoding a phone camera image whole is tens of
+     * megabytes.
      */
     private fun decodeSampled(uri: Uri, maxDimension: Int): Bitmap? {
         val resolver = appContext.contentResolver
@@ -702,9 +699,8 @@ internal class WallpaperRepositoryImpl(
          * How far a strength of 1.0 blurs, in pixels of the **wallpaper**.
          *
          * In the picture's own pixels rather than the reduced copy's, which is what makes the preference mean one
-         * thing: the reduction is now chosen *from* this number, so a radius expressed against the reduced bitmap
-         * would have been defined in terms of itself. L1's ceiling of 12 was against a bitmap already an eighth of
-         * the screen, so this is that reach restored to full size.
+         * thing: the reduction is chosen *from* this number, so a radius expressed against the reduced bitmap would
+         * be defined in terms of itself.
          */
         const val MAX_BLUR_RADIUS_PX = 96f
 

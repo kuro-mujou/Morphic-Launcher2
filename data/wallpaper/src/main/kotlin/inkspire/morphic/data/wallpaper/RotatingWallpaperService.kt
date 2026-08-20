@@ -15,20 +15,19 @@ import java.io.File
  * **The launcher's own live wallpaper**: it draws the [RotatingImages] half that matches the screen's orientation, and
  * swaps as the device turns.
  *
- * The port of L1's `RotateWallpaperService`, and the reason a *rotating* wallpaper needs a service at all: Android has
+ * Why a *rotating* wallpaper needs a service at all: Android has
  * no notion of "a static wallpaper per orientation". `WallpaperManager.setBitmap` takes one image, which the system then
  * crops or scales for whichever way the phone is held — so the only way to show a different picture in landscape is to
  * be the thing doing the drawing.
  *
- * **It lives in `data:wallpaper`, not in the settings feature.** L1 put it in `feature:settings`, which left its data
- * layer unable to name its own service (`applyRotateWallpaper` had to build the `ComponentName` in the UI). This module
- * owns the files it renders, so it owns the renderer; `feature:settings` only launches the system chooser at it.
+ * **It lives in `data:wallpaper`, not in the settings feature.** This module owns the files it renders, so it owns
+ * the renderer; `feature:settings` only launches the system chooser at it. Putting it in the feature would leave this
+ * data layer unable to name its own service.
  *
  * **No dependency injection, deliberately.** The wallpaper process is started by the system, lives outside the
  * launcher's own, and may outlive it — so it reads the two JPEGs straight from `filesDir` rather than standing up Koin
- * and a repository to be told the paths it already knows. L1 made the same call, in the same words. The consequence is
- * worth stating: this and [WallpaperFiles] are the contract, so a change to where the images are written is a change
- * here too.
+ * and a repository to be told the paths it already knows. The consequence is worth stating: this and [WallpaperFiles]
+ * are the contract, so a change to where the images are written is a change here too.
  *
  * **It draws only when asked** — on surface creation, on becoming visible, and on a size change. A wallpaper that
  * animates costs battery for the whole time the home screen is showing, and a pair of still images has nothing to
@@ -82,12 +81,12 @@ class RotatingWallpaperService : WallpaperService() {
         /**
          * The image for the current surface, decoded at most once per orientation.
          *
-         * **One bitmap in memory, not two.** L1 decoded *both* files on every reload and held them for the life of the
-         * engine — two full-screen bitmaps in a process the system keeps alive behind the home screen. Only one can be
-         * drawn at a time, so only one is kept; turning the device decodes the other and drops this.
+         * **One bitmap in memory, not two.** Only one can be drawn at a time, so only one is kept — turning the
+         * device decodes the other and drops this. Holding both would be two full-screen bitmaps in a process the
+         * system keeps alive behind the home screen.
          *
          * Falls back to the other orientation when the matching file is missing, which is what makes a half-configured
-         * pair draw a picture rather than black — L1's `?: portrait ?: landscape`, kept.
+         * pair draw a picture rather than black.
          */
         private fun currentBitmap(landscape: Boolean): Bitmap? {
             if (bitmapLandscape == landscape && bitmap != null) return bitmap
@@ -133,7 +132,7 @@ class RotatingWallpaperService : WallpaperService() {
          *
          * Null until something has been drawn, which is honest rather than a gap: the system re-asks after
          * [notifyColorsChanged], and [draw] fires that the first time an image appears and again whenever the device
-         * turns and the other half is decoded. L1's service published nothing and had no caller that missed it.
+         * turns and the other half is decoded.
          */
         @RequiresApi(Build.VERSION_CODES.O_MR1)
         override fun onComputeColors(): WallpaperColors? {

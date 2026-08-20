@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  *
  * **A path rather than a `Uri`**, because the point of owning a copy is that the source may go away — a picked image
  * comes from a document provider whose grant does not survive a reboot, so an app that kept the `Uri` would lose the
- * user's wallpaper. L1 owned a copy for the same reason and this keeps that.
+ * user's wallpaper.
  *
  * @property path an absolute path under `filesDir/wallpaper`, written by this module.
  * @property width the stored bitmap's width in px, and [height] its height — recorded so a consumer can size a preview
@@ -31,9 +31,8 @@ data class WallpaperImage(
 /**
  * How the launcher came by its wallpaper image — and, because of that, whether setting it on the system is meaningful.
  *
- * L1's `WallpaperSource` narrowed to what exists: its `LIVE_ROTATE` belongs to the rotating pair (S5e) and arrives with
- * it. The distinction is not bookkeeping — L1's `applySingle` branches on exactly this, and skips `WallpaperManager`
- * entirely for a capture.
+ * Not bookkeeping: [WallpaperRepository.apply] branches on exactly this, and skips `WallpaperManager` entirely for a
+ * capture.
  */
 enum class WallpaperSource {
 
@@ -71,9 +70,6 @@ enum class WallpaperTarget { HOME, LOCK, BOTH }
  * system's dark-mode switch. That is the whole of the design system's "one theme, two is-dark inputs" rule: settings is
  * a surface of our own and feeds `isSystemInDarkTheme()`, while the shell feeds this.
  *
- * **L2's own idea, not a port.** L1 has no luminance analysis anywhere — it themes the launcher from the system's dark
- * mode like any app, which is why a bright wallpaper under white chrome is one of the things that reads badly there.
- *
  * Two values rather than three, with no `UNKNOWN`: the consumer is a theme, and a theme has to pick. What would be
  * "unknown" is [DARK], because that is what the shell hardcoded before this existed and it is the safer miss — light
  * chrome over an unexpectedly bright wallpaper is unreadable, where dark chrome over a dark one is merely dull.
@@ -88,7 +84,7 @@ enum class WallpaperBrightness {
 }
 
 /**
- * The region of a source image to keep, as fractions of it — L1's `NormalizedCropRect`, kept name and all.
+ * The region of a source image to keep, as fractions of it.
  *
  * **Fractions rather than pixels, because the crop is decided against a bitmap this module chose the size of.** The
  * screen shows a *sampled* decode (a 50-megapixel photo is not going on screen at full size), so a rectangle in that
@@ -145,28 +141,21 @@ data class RotatingImages(
 /**
  * What this module knows about the wallpaper — **the chosen image, and whether we are the one that set it**.
  *
- * **Much smaller than L1's `WallpaperState`, and deliberately so.** That one carried six fields (`appliedMode`,
- * `single`, `rotate`, `appliedSingle`, `singleDirty`, `appliedSystemWallpaperId`) because it juggled *two* image sets
- * (a single image and a per-orientation rotating pair) and kept a **snapshot copy** of whichever was applied so a
- * frosted backdrop could keep sampling the real system wallpaper. Two of those six are here now, and the snapshot is
- * one of them — arriving with the effects exactly as this note predicted, having been mistaken in between for something
- * [appliedSystemId] had replaced. It had not: see that property and [appliedHome], which answer different questions.
+ * **[appliedHome] and [appliedSystemId] answer different questions and are easy to mistake for one another**: the
+ * snapshot is whether we still *have* the applied picture, the id whether the system is still showing it. A frosted
+ * backdrop needs both to be sure it samples what is on screen.
  *
  * @property image the wallpaper the user chose, or null if they never have.
  * @property rotating the per-orientation pair the launcher's own live wallpaper draws, empty until the user sets one.
  *   Beside [image] rather than instead of it, because they are independent: a user may keep a static image *and* a
- *   rotating pair, and switch by setting one or the other on the system. L1 kept both for the same reason.
+ *   rotating pair, and switch by setting one or the other on the system.
  * @property appliedSystemId the `WallpaperManager` wallpaper id at the moment we last applied [image], or 0 if we never
  *   did. Kept for two jobs a boolean could not do: it is what makes the section's button read "Apply" or "Re-apply",
- *   and comparing it against the live id is how a wallpaper set **outside** this launcher will be detected (L1 stored
- *   the same `appliedSystemWallpaperId` and used it exactly that way).
+ *   and comparing it against the live id is how a wallpaper set **outside** this launcher is detected.
  *
- * **What is deliberately *not* here: which wallpaper is currently active.** L1 stored that (`appliedMode`, latched by
- * `markRotateApplied`) and then needed `reconcileLiveWallpaper` on every resume to repair the cache when the user
- * changed wallpaper outside the app — a copy of something the system already knows, plus a job to keep the copy honest.
- * `WallpaperManager.wallpaperInfo` answers it directly, so [WallpaperRepository.isRotatingActive] asks instead of
- * remembering, and there is no latch, no reconciler, and nothing to go stale. That is smell 7 on this port's own list
- * ("derived state persisted as settings") declined rather than ported.
+ * **What is deliberately *not* here: which wallpaper is currently active.** `WallpaperManager.wallpaperInfo` answers
+ * that directly, so [WallpaperRepository.isRotatingActive] asks rather than remembering — no latch, no reconciler, and
+ * nothing to go stale. Storing it would be derived state persisted as a preference.
  */
 @Serializable
 data class WallpaperState(
@@ -189,8 +178,7 @@ object WallpaperFiles {
     const val IMAGE = "single.jpg"
 
     /**
-     * A copy of [IMAGE] as it was applied to the **home** wallpaper — what a frosted surface samples. L1's
-     * `owned_applied.jpg`.
+     * A copy of [IMAGE] as it was applied to the **home** wallpaper — what a frosted surface samples.
      *
      * A second file rather than a second reference, because [IMAGE] is a fixed name that every pick overwrites: the
      * moment a user chooses a new image the previous one is *gone*, and it is the previous one the home screen is still
@@ -209,13 +197,13 @@ object WallpaperFiles {
  * A *service* rather than a preferences store, which is why it is its own module rather than another slice of
  * `data:settings`: it decodes bitmaps, writes files, and talks to `WallpaperManager`. What it persists is a **pointer**
  * to a file it wrote plus the id of the wallpaper it set — bookkeeping, not preferences, which is the distinction the
- * settings port's S0 drew when it refused to bring L1's `WallpaperState` across into the settings blob. The *effect*
+ * settings port's S0 drew when it refused to keep this state in the settings blob. The *effect*
  * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5f.
  *
- * **All three of L1's sources are here — picked, captured and the rotating pair** — and the half that *reads* them has
+ * **All three sources are here — picked, captured and the rotating pair** — and the half that *reads* them has
  * started: [brightness] is the first, and it is the one reading that needs no image processing at all. Still absent:
  * - **the blur and the dominant color** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
- *   need L1's `Blur.kt` image processing, which the plan already says belongs beside the graphics code rather than in a
+ *   need image processing, which belongs beside the graphics code rather than in a
  *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
  *   sample?", and answering that once against every source beats re-answering it per source.
  */
@@ -251,8 +239,8 @@ interface WallpaperRepository {
      * (another app's, a live one) with no permission and no decode; `dominantColor` over our own file only below API
      * 27 or when a live wallpaper publishes nothing, and then only if that file is provably what is displayed.
      *
-     * **Not `MaterialTheme.colorScheme.primary`, which is how L1 got this above API 31.** L1's launcher ran a normal
-     * M3 dynamic scheme, so its primary *was* a wallpaper-derived hue. L2 feeds MaterialTheme a **monochrome** scheme
+     * **Not `MaterialTheme.colorScheme.primary`**, which is a wallpaper-derived hue only under a normal M3 dynamic
+     * scheme. This launcher feeds MaterialTheme a **monochrome** scheme
      * bridged from `MorphicColors`, so the same expression here returns gray — the dynamic-color route is closed by
      * a decision made long before this, and reading the wallpaper directly is what is left.
      */
@@ -270,14 +258,13 @@ interface WallpaperRepository {
      * Copies [uri] into this module's own storage as the wallpaper image: the [crop] region of it, scaled to
      * [outWidth] × [outHeight].
      *
-     * **The rectangle is the caller's**, which is the change S5c made. This used to center-crop, as a stand-in for a
-     * chooser that did not exist; now the crop screen passes the region the user framed, and there is nothing left
-     * here that invents one. A caller with genuinely nothing to say passes [NormalizedCropRect.Full] — that is not the
+     * **The rectangle is the caller's.** The crop screen passes the region the user framed, and nothing here invents
+     * one. A caller with genuinely nothing to say passes [NormalizedCropRect.Full] — that is not the
      * old behavior under a new name, since keeping the whole image *stretches* it to the output rather than filling
      * it, which is why nothing does that today.
      *
      * Storing a cropped, screen-sized file at all (rather than the original) is what makes the stored file the thing
-     * that is displayed — the same reason L1 scaled on the way in.
+     * that is displayed.
      *
      * **Does not touch the system wallpaper**; [apply] does. Choosing and applying are separate because the user may
      * pick an image, look at it, and change their mind — and because applying asks *where* (home, lock, both).
@@ -303,13 +290,13 @@ interface WallpaperRepository {
      * alone, since it neither made nor broke that claim. Nothing records the lock wallpaper, because nothing asks.
      *
      * A no-op when nothing has been chosen, **and when the stored image is a [WallpaperSource.CAPTURED] one** — that
-     * is a picture *of* the wallpaper, so setting it would either change nothing or re-encode the last capture. L1
-     * branched on the same field in `applySingle` for the same reason. The section correspondingly offers no Apply for
+     * is a picture *of* the wallpaper, so setting it would either change nothing or re-encode the last capture. The
+     * section correspondingly offers no Apply for
      * a capture, but the rule lives here, where it cannot be worked around.
      *
      * Failure to set is logged rather than thrown: `WallpaperManager` can refuse for reasons the caller cannot fix or
      * predict (a device policy, a provider that vanished), and a settings screen has nothing useful to do with an
-     * exception. L1 swallowed it the same way, with the same `runCatching`.
+     * exception.
      */
     suspend fun apply(target: WallpaperTarget)
 
@@ -323,7 +310,7 @@ interface WallpaperRepository {
      * **This is the "which image do I sample?" question the whole slice order was arranged around**, and it is answered
      * once here against all three sources rather than per effect:
      * 1. **Our rotating service is the live wallpaper** → the [orientation] half of the pair. No further test is needed:
-     *    the service renders these exact files, so the two cannot disagree. L1 said the same of its `ROTATE` branch.
+     *    the service renders these exact files, so the two cannot disagree.
      * 2. **The stored image is a [WallpaperSource.CAPTURED] one** → it, unconditionally. A capture *is* a picture of
      *    whatever is displayed, which is the only reason it exists — gating it on having been applied would reject it
      *    always, since [apply] refuses a capture by design.
@@ -333,21 +320,21 @@ interface WallpaperRepository {
      *    the *lock* screen, which cannot change what the launcher's chrome sits on.
      * 4. Otherwise null.
      *
-     * **Step 3 needs both halves, and this once claimed it needed only one.** L1 kept a snapshot copy of the applied
-     * image (`appliedSingle`) so that picking a new one without applying it could not desynchronize the backdrop from
+     * **Step 3 needs both halves.** The snapshot copy exists so that picking a new image without applying it cannot
+     * desynchronize the backdrop from
      * the real wallpaper; the id comparison was taken to replace it. It does not. The id answers *"is the wallpaper on
      * the system still the one we set?"* — a question the snapshot could not answer, since a wallpaper changed outside
-     * the launcher left L1's copy claiming to match — but it says nothing about whether we **still have that picture**,
+     * the launcher would leave a snapshot claiming to match — but it says nothing about whether we **still have it**,
      * and one fixed filename means every pick overwrites it. So both: the id, and `appliedHome`. It is the same gate
      * [brightness] uses, deliberately — "is our image what is on screen" should have one answer, not two.
      *
      * Blurred here rather than at the draw call because it is expensive and wants a background thread, and because the
-     * result is reused for every frosted surface on screen. L1's `loadBackdropBlur`, same shape.
+     * result is reused for every frosted surface on screen.
      *
-     * **A flow, where L1's was a one-shot read.** All four answers above can change while the launcher is running, and
+     * **A flow rather than a one-shot read.** All four answers above can change while the launcher is running, and
      * two of them change *without us doing anything*: a wallpaper set in the system's own settings makes step 3 stop
-     * holding, and the live-wallpaper chooser makes step 1 start. L1 re-read on recomposition and could show a blur of
-     * a wallpaper that was no longer there. This shares [brightness]' change signal, since "what is displayed" is one
+     * holding, and the live-wallpaper chooser makes step 1 start. Re-reading on recomposition instead would show a
+     * blur of a wallpaper no longer there. This shares [brightness]' change signal, since "what is displayed" is one
      * question and both readings of it should notice the same events.
      *
      * Re-emits only when the *source* changes, so nothing re-blurs because an unrelated preference moved. A change of
@@ -404,8 +391,7 @@ interface WallpaperRepository {
      * Stores the [crop] region of [uri] as the [orientation] half of the rotating pair, at [outWidth] × [outHeight].
      *
      * **Merges rather than replaces**: setting the landscape half leaves the portrait one alone, because the pair is
-     * built one orientation at a time and losing the other half to each edit would make it impossible to finish. L1's
-     * `setRotateImage` says the same in its own KDoc.
+     * built one orientation at a time and losing the other half to each edit would make it impossible to finish.
      *
      * **Touches nothing on the system.** Unlike [apply], there is nothing this could do: a live wallpaper is set through
      * the system's own chooser, which the user has to confirm. Writing the file is the whole of this module's part —
@@ -431,8 +417,8 @@ interface WallpaperRepository {
      *
      * **Asked, never remembered** — see [WallpaperState]. `WallpaperManager.wallpaperInfo` is non-null exactly when a
      * live wallpaper is set and names which, so this is a read rather than a cache: a user who changes wallpaper in the
-     * system's own settings makes the next call return the truth, with nothing to reconcile. L1 latched the answer into
-     * `appliedMode` and needed a resume-time reconciler to repair it.
+     * system's own settings makes the next call return the truth, with nothing to reconcile. Latching it would need a
+     * resume-time reconciler to repair the cache.
      *
      * Suspending because it is a binder call, not because it is slow.
      */
@@ -443,18 +429,18 @@ interface WallpaperRepository {
      *
      * The component is this module's to know — it declares the service — and starting an activity is the *screen's*, so
      * the split is: this hands over the name, and `feature:settings` builds `ACTION_CHANGE_LIVE_WALLPAPER` around it.
-     * L1 kept both in its feature module, which meant its data layer could not say what its own service was called.
+     * Keeping both in the feature module would leave this data layer unable to name its own service.
      */
     fun rotatingServiceComponent(): ComponentName
 
     /**
      * Emits each image that appears in the device's gallery **after collection starts** — how a capture is noticed.
      *
-     * There is no API for "take a screenshot", so L1's capture flow is the only one available: hide the launcher's UI,
+     * There is no API for "take a screenshot", so only one flow is available: hide the launcher's UI,
      * ask the user to take one, and watch `MediaStore` for what arrives. This is that watch, moved out of the screen it
      * lived in — a `ContentObserver` and a query are system reads, and a composable is the wrong place to hold either.
      *
-     * **It cannot tell a screenshot from any other new image**, and neither could L1's: what it reports is the newest
+     * **It cannot tell a screenshot from any other new image**: what it reports is the newest
      * image, whatever produced it. That is why the screen asks for a screenshot *now* and takes the first emission — a
      * photo arriving from a sync at that exact moment is the known failure, and it is recoverable by capturing again.
      *

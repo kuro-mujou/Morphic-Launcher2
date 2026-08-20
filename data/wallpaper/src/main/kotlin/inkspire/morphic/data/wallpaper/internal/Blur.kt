@@ -14,13 +14,12 @@ private const val GRAY_FLOOR = 8.0
 private const val NEUTRAL_GRAY = 0xFF808080.toInt()
 
 /**
- * L1's `Blur.kt`, and the half of it that is still here: the representative color `BackdropTint.WALLPAPER` washes
- * a frosted surface in.
+ * The representative color `BackdropTint.WALLPAPER` washes a frosted surface in.
  *
- * **The blur half has left, and it left in two directions.** The kernel went to `core:graphics` (`BitmapBlur`), so
- * `core:icon` could have the same one; the *reduction* went to the decode, where `inSampleSize` is free. What used to
- * sit between them — a wrapper that reduced a bitmap and then blurred it — had nothing left to decide, so the two
- * statements now stand together in `WallpaperRepositoryImpl.blurBackdrop`. That is also what retired the bug the
+ * **The blur itself is not here, and it went in two directions.** The kernel is `core:graphics`' (`BitmapBlur`), so
+ * `core:icon` can have the same one; the *reduction* belongs to the decode, where `inSampleSize` is free. A wrapper
+ * between them would have nothing left to decide, so the two statements stand together in
+ * `WallpaperRepositoryImpl.blurBackdrop`. That is also what retired the bug the
  * wrapper hid: the reduction was split between a power-of-two decode and a residual `scale`, and integer division
  * threw the residue away silently, so the radius was computed for a bitmap smaller than the one it ran on.
  *
@@ -44,7 +43,7 @@ private const val NEUTRAL_GRAY = 0xFF808080.toInt()
  *
  * **Only needed below API 27, or when a live wallpaper publishes no colors.** Above that, `WallpaperColors` answers
  * the same question about the wallpaper *actually displayed* — including another app's, which we cannot read — so this
- * is the fallback rather than the primary path. L1 used it the same way, for the same API reason.
+ * is the fallback rather than the primary path.
  */
 internal fun dominantColor(source: Bitmap): Int {
     val small = source.scale(ACCENT_GRID, ACCENT_GRID)
