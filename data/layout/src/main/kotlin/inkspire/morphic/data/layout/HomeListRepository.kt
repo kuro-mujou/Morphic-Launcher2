@@ -13,17 +13,17 @@ import kotlinx.coroutines.flow.Flow
  * three questions have no answer here, and a repository that had to accept them would be asking every caller to
  * supply a value it then ignores.
  *
- * **A store of its own, not a view of the grid — which is the one place this deliberately departs from L1.** L1's
- * minimalist home derived its list from the pager's placements, flattened by (page, row, col), and reordering it
+ * **A store of its own, not a view of the grid.** Deriving the list from the pager's placements — flattened by
+ * (page, row, col) — means reordering it
  * wrote `MoveApp(page = 0, row = index, col = 0)` for every app — so a single drag in the list collapsed the grid
  * arrangement into one column, permanently, and switching back to the pager layout found it destroyed. Two stores
  * make the two layouts independent, which is what "switch layout and switch back" has to mean.
  *
- * The good half of L1's idea survives as [seedIfEmpty]: the *first* time the list is shown it is filled from the
+ * The good half of that idea survives as [seedIfEmpty]: the *first* time the list is shown it is filled from the
  * grid in reading order, so choosing this layout hands the user their apps rather than a blank screen.
  *
- * **Apps only, and one list across orientations.** No folders — L1's list holds none, and a one-lane list has no
- * merge ring to make one with — and no per-orientation copy, because rotating a list changes how many rows are on
+ * **Apps only, and one list across orientations.** No folders, a one-lane list having no merge ring to make one
+ * with — and no per-orientation copy, because rotating a list changes how many rows are on
  * screen and nothing about their order (the persistence table in `CLAUDE.md` states both).
  */
 interface HomeListRepository {
@@ -51,9 +51,9 @@ interface HomeListRepository {
     /**
      * Fills the list with [apps] **only if it is empty** — the first-run default for this layout.
      *
-     * [apps] is the caller's reading-order flattening of HOME's grid, which is L1's own derivation and the reason
-     * this exists: a user who switches to the list layout should find the apps they had, in the order they had them,
-     * rather than an empty screen with no way to fill it (an add-apps picker is not built — see L1's "Add apps" row).
+     * [apps] is the caller's reading-order flattening of HOME's grid, and the reason this exists: a user who
+     * switches to the list layout should find the apps they had, in the order they had them,
+     * rather than an empty screen with no way to fill it — an add-apps picker is not built.
      *
      * Idempotent, and idempotent on *emptiness* rather than on a "seeded" flag: a user who empties their list
      * deliberately would be re-seeded by a flag that had been set and cleared, and there is nowhere honest to store

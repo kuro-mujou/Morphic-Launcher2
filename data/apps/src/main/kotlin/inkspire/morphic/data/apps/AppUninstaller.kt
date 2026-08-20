@@ -11,7 +11,7 @@ import timber.log.Timber
  *
  * The sibling of [AppLauncher], and separate from [AppRepository] for the same reason: the repository is
  * offline-first *read/refresh* access to the app cache, while this is a fire-and-forget *command* with a platform
- * side effect. That split is the rule this codebase keeps (L1 folded launch onto its repository; we don't).
+ * side effect. That split is the rule this codebase keeps: a repository reads, a command acts.
  *
  * **It never uninstalls anything by itself, and cannot.** All it does is start the platform's uninstall activity,
  * which shows its own confirmation and does the work. So a mis-drag onto the launcher's Uninstall target costs the
@@ -35,15 +35,15 @@ interface AppUninstaller {
 /**
  * Default [AppUninstaller]: `Intent.ACTION_DELETE` on a `package:` URI, **carrying the profile the app lives in**.
  *
- * **Two things this needs that L1's copy did not have, and without either it silently does nothing.**
+ * **Two things this needs, and without either it silently does nothing.**
  *
  * 1. **`REQUEST_DELETE_PACKAGES`**, declared in this module's manifest. An app targeting API 29 or later must hold
  *    it to ask the system to remove a package; without it the platform's uninstaller activity finishes immediately
- *    and the user sees nothing happen at all — no dialog, no error, no exception here to catch. L1 got away with a
- *    byte-identical intent because it also requested `QUERY_ALL_PACKAGES`, and L2 deliberately does not.
+ *    and the user sees nothing happen at all — no dialog, no error, no exception here to catch. Holding
+ *    `QUERY_ALL_PACKAGES` masks it, and this launcher deliberately does not request it.
  * 2. **[Intent.EXTRA_USER]**, so a work-profile app is uninstalled *in its profile*. The URI names a package and a
  *    package name means nothing on its own across profiles — the same per-profile correction [AppLauncher] and
- *    [AppInfoOpener] make to L1's hardcoded `Process.myUserHandle()`. AOSP's own Launcher3 sends exactly this pair.
+ *    [AppInfoOpener] make, rather than hardcoding `Process.myUserHandle()`. AOSP's Launcher3 sends this pair.
  *
  * `FLAG_ACTIVITY_NEW_TASK` because the launcher starts this from application context, not from an activity result
  * flow — we do not wait for an answer (see the interface).

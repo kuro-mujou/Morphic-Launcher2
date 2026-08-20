@@ -13,15 +13,14 @@ import androidx.navigation3.runtime.NavKey
  * could `clear()` it, reorder it, or drop the start destination. Naming the operations means the set of things that
  * can happen to navigation is enumerable — and small.
  *
- * **Keep it exactly as wide as its callers need.** It has two methods because two are used. L1's version also had
- * exactly two, but needed a third (reset-the-stack, for finishing its setup wizard) and instead reached *around* the
- * interface to mutate the raw list inline in a `NavDisplay` entry lambda — which is how a deliberately narrow API
- * turns into a wide one nobody documented. If a caller needs `resetTo`, add `resetTo`; do not add it before one does,
- * and do not work around it.
+ * **Keep it exactly as wide as its callers need.** It has two methods because two are used. When a third is wanted
+ * — reset-the-stack, say — the way it goes wrong is reaching *around* the interface to mutate the raw list inline in
+ * a `NavDisplay` entry lambda, which is how a deliberately narrow API turns into a wide one nobody documented. If a
+ * caller needs `resetTo`, add `resetTo`; do not add it before one does, and do not work around it.
  *
  * Obtained from [LocalNavigator]; navigation is a **composition** concern here and no ViewModel takes this as a
- * dependency. That is the one thing L1 got unambiguously right and is worth keeping deliberately: a ViewModel that
- * can navigate is a ViewModel you cannot unit-test without a back stack.
+ * dependency, and that is worth keeping deliberately: a ViewModel that can navigate is a ViewModel you cannot
+ * unit-test without a back stack.
  */
 interface Navigator {
 
@@ -51,8 +50,8 @@ val LocalNavigator = staticCompositionLocalOf<Navigator> {
 /**
  * A [Navigator] backed by [backStack].
  *
- * Lives here rather than as an anonymous object at the call site — which is where L1 had it, inside a 200-line
- * `setContent` — so the back-stack rules are stated once, in the module that owns navigation, instead of being
+ * Lives here rather than as an anonymous object inside a `setContent`, so the back-stack rules are stated once, in
+ * the module that owns navigation, instead of being
  * incidental detail in an Activity. Remembered against the stack it drives, so identity is stable across
  * recomposition and nothing downstream re-reads a new navigator every frame.
  */

@@ -10,11 +10,10 @@ import kotlinx.serialization.Serializable
  * A third slice rather than fields on [SurfaceRegister] or [SurfaceMetrics], because it is neither of those things.
  * The register says *which surface a home edge opens and in what layout*; the metrics say *how big a grid's cells are*.
  * This says what is drawn beside the cells, which changes on its own schedule and is read by a different set of
- * consumers. L1 kept the same two facts on its `DrawerSettings`, beside the grid profiles — which is exactly the
- * fusing this port exists to undo.
+ * consumers. Keeping them beside the grid profiles fuses two unrelated concerns into one record.
  *
- * **Two of L1's fields, and the types are `core:model`'s own.** `SearchPlacement` is layout-aware where L1's flat
- * `SearchPosition` was not (a standalone layout pins the field to an edge; the category pager embeds it in the header,
+ * **The types are `core:model`'s own.** `SearchPlacement` is layout-aware where a flat position enum is not (a
+ * standalone layout pins the field to an edge; the category pager embeds it in the header,
  * so it has no edge to choose), and the tab bar's placement *is* a [VerticalEdge] — which that enum's KDoc has said
  * since B0, naming this exact consumer.
  *
@@ -30,13 +29,13 @@ data class AppsChrome(
 ) {
     companion object {
         /**
-         * **Search hidden, which is where this departs from L1** — its `SearchPosition` defaults to `TOP`.
+         * **Search hidden**, rather than defaulting to a visible edge.
          *
          * The reason is that the APPS surface does not render a search field yet, and neither pager renders a tab bar:
          * both are settings the *editor preview* honors today and the surface will honor when those features land.
          * A default of `Pinned(TOP)` would therefore draw every APPS preview with a search bar the launcher has not
-         * got, which is the one thing a preview must not do. Flipping this to L1's default is a one-line change on the
-         * day search ships, and until then the default is the state that matches what is actually drawn.
+         * got, which is the one thing a preview must not do. Flipping it is a one-line change on the day search
+         * ships; until then the default is the state that matches what is actually drawn.
          */
         val Default = AppsChrome()
     }

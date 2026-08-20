@@ -151,7 +151,7 @@ data class SurfaceMetrics(
      *
      * **An override that ends up empty is removed rather than stored**, at both levels — so resetting everything
      * leaves the blob as it started rather than accumulating `{"HOME_MAIN":{"PHONE_PORTRAIT":{}}}`. Storage that
-     * grows monotonically with every visit to a settings screen is how L1's ~265 keys stayed permanently populated.
+     * grows monotonically with every visit to a settings screen is how a store stays permanently populated.
      */
     fun withIconOverride(
         slot: GridSlot,
@@ -286,7 +286,7 @@ data class SurfaceMetrics(
      *
      * No clamp against what still fits. That is deliberate and matches the column count: a padding too wide for the
      * columns stored beside it is resolved *on read* by `CellFit`, which reports fewer columns rather than rewriting
-     * anything, so narrowing the padding again brings them back. L1 wrote its clamps back and destroyed the number.
+     * anything, so narrowing the padding again brings them back. Writing the clamp back destroys the number.
      */
     fun withHorizontalPadding(slot: GridSlot, device: DeviceConfiguration, dp: Int?): SurfaceMetrics =
         copy(horizontalPaddingDp = horizontalPaddingDp.withEntry(slot, device, dp))
@@ -306,7 +306,7 @@ data class SurfaceMetrics(
  * "empty" is a property of the record there (`isEmpty`) rather than absence of a value.
  *
  * Pruning is what keeps a visited-and-reset settings screen leaving the blob exactly as it found it, instead of
- * accumulating `{"HOME_DOCK":{}}`. L1's ~265 keys stayed permanently populated for want of this.
+ * accumulating `{"HOME_DOCK":{}}` — which is how a store stays permanently populated for want of a prune.
  */
 private fun Map<GridSlot, Map<DeviceConfiguration, Int>>.withEntry(
     slot: GridSlot,

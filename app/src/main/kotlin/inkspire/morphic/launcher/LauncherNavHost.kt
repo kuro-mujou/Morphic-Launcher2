@@ -28,15 +28,15 @@ import inkspire.morphic.feature.shell.LauncherShell
  * The launcher's navigation host: the back stack, the [inkspire.morphic.core.navigation.Navigator] over it, and the
  * key → screen mapping.
  *
- * **This is the whole of navigation, in one small file.** L1's equivalent lived inside a 204-line
- * `MainActivity.setContent` mixed with wallpaper-color loading, icon-cache invalidation and six
+ * **This is the whole of navigation, in one small file** — rather than living inside a `MainActivity.setContent`
+ * mixed with wallpaper-color loading, icon-cache invalidation and six
  * `CompositionLocalProvider`s, with the navigator as an anonymous object in the middle of it. Here the Activity only
  * provides what it owns (the icon render manager) and calls this; the navigator itself is
  * [rememberLauncherNavigator], in the module that owns navigation.
  *
  * **No theme wrapper here, deliberately.** Each destination themes its own *zone* — the launcher via `LauncherShell`
  * (which follows wallpaper brightness), settings via its own boundary (which follows the system). One theme around
- * the whole `NavDisplay`, as L1 had, makes it impossible for them to differ.
+ * the whole `NavDisplay` would make it impossible for them to differ.
  *
  * Start destination is [HomeRoute], which since the P9 flip is also what the home button resolves to.
  */
@@ -86,8 +86,7 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         // taxonomy inside `feature:settings`: the APPS surface says "open my settings" and passes
                         // the arrangement it is showing (`AppsLayout`, which is `core:model` and shared by
                         // everyone), and the mapping from that to a pane happens here, where both are already
-                        // visible. L1 exported its 11-value section enum to every consumer to achieve the same
-                        // thing.
+                        // visible, without exporting the section enum to every consumer.
                         onOpenAppsSettings = { layout ->
                             navigator.goTo(SettingsRoute(SettingsSection.APPS, layout))
                         },

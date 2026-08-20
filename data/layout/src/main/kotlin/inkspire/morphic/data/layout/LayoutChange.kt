@@ -16,18 +16,16 @@ import inkspire.morphic.core.model.WidgetInfo
  *
  * **Why it lives in `data:layout`, not `core:model`.** It is the repository's *command set*, not a persisted
  * shape — no row stores a `LayoutChange`. Keeping it beside the repository (rather than with the plain data
- * models) is the honest home for a write-verb vocabulary. (L1 put it in `core:model`; that was the wrong
- * layer.)
+ * models) is the honest home for a write-verb vocabulary. `core:model` is the wrong layer for it.
  *
  * **Orientation-free by design.** A change says *what* to do; the caller scopes *which* orientation via
- * [LayoutRepository.apply]`(orientation, …)`, exactly as L1 did — so the same command replays into either
- * orientation's tables.
+ * [LayoutRepository.apply]`(orientation, …)`, so the same command replays into either orientation's tables.
  *
- * **Refactor: L1's 19 ops → 13.** L1 repeated the same four verbs once per item type. Because L2's model
- * already unified those types, the duplication collapses:
+ * **Thirteen ops, not nineteen.** Repeating the same four verbs once per item type is what makes nineteen; because
+ * the model already unifies those types, the duplication collapses:
  * - **Move ×5 → 1.** `MoveApp/MoveFolder/MoveWidget/MoveWidgetContainer/MoveIconContainer` were an identical
- *   `(id, to, surface)` differing only by id type → one [Move], keyed by the unified [GridItem]; L1's
- *   `surface: Surface` param becomes [HomeZone].
+ *   `(id, to, surface)` differing only by id type → one [Move], keyed by the unified [GridItem], with the zone
+ *   carried as [HomeZone].
  * - **Add-to-icon-container ×2 → 1.** `AddAppToIconContainer` + `AddFolderToIconContainer` → one
  *   [AddToIconContainer], since [IconItem] already *is* "app or folder".
  * - **Removal is intent-split, not one `Remove(GridItem)`.** A naive single remove conflates distinct actions.
@@ -45,7 +43,7 @@ sealed interface LayoutChange {
 
     /**
      * Place-or-move [item] to cell [to] in [zone] (an upsert — this is also how an item is first *added* to the
-     * grid). The one command behind L1's five `Move*`, unified by [GridItem].
+     * grid). One command rather than a `Move*` per item type, unified by [GridItem].
      */
     data class Move(
         val item: GridItem,

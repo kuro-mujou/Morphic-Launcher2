@@ -175,9 +175,9 @@ private val WrappableGrids: Map<GridSlot, Boolean> =
 /**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
  *
- * **A read decodes one slice, and a write rewrites one slice.** That is the whole structural difference from L1, whose
- * every mutator called `prefs.toLauncherSettings()` *inside* its edit transaction — deserializing all ~265 keys to
- * change one field, then rewriting every key of that field's group (moving one slider rewrote 18). Scoping storage to
+ * **A read decodes one slice, and a write rewrites one slice.** The alternative is a mutator that deserializes the
+ * whole settings object *inside* its edit transaction — hundreds of keys to change one field, then rewriting every
+ * key of that field's group. Scoping storage to
  * slices makes the cost proportional to what changed instead of to how many settings exist.
  *
  * `internal` so only Koin constructs it; consumers depend on [SettingsRepository].
@@ -420,8 +420,8 @@ internal class SettingsRepositoryImpl(
      * Applies [transform] to [slice] atomically.
      *
      * The read, the transform and the write all happen inside one `edit`, so a concurrent write to the same slice
-     * cannot be lost. (L1 had one mutator that read *outside* its transaction — a genuine lost-update race, and the
-     * reason this is a single helper rather than a pattern each method repeats.)
+     * cannot be lost. Reading *outside* the transaction is a genuine lost-update race, and the reason this is a
+     * single helper rather than a pattern each method repeats.
      */
     private suspend fun <T> update(slice: SettingsSlice<T>, transform: T.() -> T) {
         val key = stringPreferencesKey(slice.name)
