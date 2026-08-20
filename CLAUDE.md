@@ -59,6 +59,10 @@ order*; read it before anything structural. Module state and the record of how e
   anything that fails *silently* when it is wrong. Those earn their space.
 - **Do not document what the signature already says.** A KDoc that would still be true if the
   implementation changed is restatement — leave it out.
+- **Do not document history in KDoc.** What a function replaced, what it used to be called, which slice
+  introduced it — git holds all of that, and it is the part that goes stale first. `setPagerGrid` is
+  explained three times in one file as the thing `setDevice` replaced, and has not existed for a while.
+  If the story is worth keeping it goes in `docs/`. `tools/check-stale-docs.sh` finds these.
 - **A rule is its bound plus one line of why.** Derivations, worked examples and rejected alternatives
   belong in `docs/`, not inline. This file reached 3,400 lines by keeping every one of them, and the
   code takes its register from this file.

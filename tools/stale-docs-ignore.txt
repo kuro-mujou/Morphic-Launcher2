@@ -1,0 +1,12 @@
+# Identifiers that check-stale-docs.sh should not report.
+#
+# One name per line; # starts a note. Add a name only when the mention is deliberate — a reference to
+# an L1 type, or to a platform symbol we name without importing. If instead it is a rename a comment
+# did not follow, fix the comment; that is the whole point of the check.
+#
+# Mostly unnecessary in --history mode, which drops anything never declared in this repo, and so
+# excludes L1 and platform names on evidence rather than by hand.
+
+# L1 types, named on purpose where this codebase explains what it did differently.
+HomeSurface          # L1's `HomeSurfaceRegistry` of `HomeSurface` implementations — HomeScreen.kt
+foregroundUniform    # L1's `foregroundUniform`/`normalize` question — IconLayerResolver.kt
