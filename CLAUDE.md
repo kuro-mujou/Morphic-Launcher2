@@ -1,75 +1,81 @@
 # CLAUDE.md
 
-Guidance for Claude when working in **Morphic Launcher 2** — an Android launcher, mid-rewrite.
+Working guidance for **Morphic Launcher 2** — an Android launcher, mid-rewrite.
 
 ## What this project is
 
-A **ground-up, bottom-up rewrite** of Morphic Launcher, with two intertwined aims:
-1. the author (a **junior Android dev**) understands every layer, and
-2. the codebase comes out **clean**.
+A ground-up rewrite of Morphic Launcher (**"L1"**), aimed at a codebase that is clean at every layer.
+It is a **refactor, not a re-type**: L1 runs, but it is fragile and smell-ridden, so it is the reference
+to measure against and improve on — never the thing to copy.
 
-Launcher 2 is a **refactor, not a re-type**. The full plan, phase checklist, and per-module
-build map live in **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before doing
-anything structural; it is the source of truth for *what* to build and *in what order*.
+**[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** is the source of truth for *what* to build and *in what
+order*; read it before anything structural. Module state and the record of how each piece arrived:
+[docs/STATUS.md](docs/STATUS.md).
 
-## How to work here (read this first)
+## How to work here
 
-This is the part that isn't derivable from the code:
+### Delivering work
 
-- **Claude writes the code; the author reviews to learn.** The work is deliberately split into small,
-  self-contained parts. For each part: Claude implements it, then the author joins, reads, and gives
-  improvements before moving on. Keep each part small enough that the author can fully read and
-  understand it — the learning aim still stands (the author must understand every layer), it's just
-  reached via review rather than by typing. So: explain the *why* of each change (in KDoc and in the
-  summary), call out the design decisions you made and any alternatives you rejected, and prefer several
-  small reviewable commits over one large drop.
-- **Never port Launcher 1 verbatim.** The original (aka "L1", root Gradle project `Launcher`) is the
-  **reference / answer key**: it runs, but it's fragile and smell-ridden (duplication, poor
-  separation, logic in the wrong layer). Never delete it; compare against it, then do it *better*.
-  - **Its folder name differs per machine, so look before assuming one.** It is a **sibling of this repo**, named
-    `../Morphic-Launcher` on the home machine and `../launcher` on the work machine. Run
-    `ls ../Morphic-Launcher ../launcher` (or `ls ..`) once, at the point L1 is first needed — a hardcoded guess is
-    wrong on one machine every time, and the failure is silent in the worst way: a missing directory reads as "L1
-    has nothing on this", so the comparison this whole rule exists to force gets skipped rather than reported.
-  For each piece: understand what L1 does and *why* → question the design (duplicated? honest name?
-  right module/layer?) → fix the smell in L2. Worked examples of this mandate:
-  `GridBlueprint` (centralized scattered grid config; dropped a wrong interface abstraction + dead
-  `max` fields); `DeviceConfiguration` (split the pure enum into `core:model`, detection stays in
-  `core:designsystem`); `GridPlacement` (merged near-duplicate `GridRect` + `AppPosition` into one
-  type — rejected a `Vector` name because it carries spans, so it's a box, not a vector); the grid blueprints
-  (`Drawer{Classic,Pager,Grouped}Grid` → `Apps{Scroll,Pager,Category}Grid` — "drawer" is vocabulary the surface
-  taxonomy abolished, and `feature:apps` would have re-imported it the moment it consumed one).
-- **KDoc is mandatory.** Every class / interface / enum / top-level gets a KDoc stating what it is
-  and what it's for. Document non-obvious members too (params, edge cases, units). Explain *purpose*,
-  not line-by-line narration. (This deliberately differs from L1's "docs on request only" rule.)
-- **No model in a vacuum.** Build a module/type only when a consumer needs it, so it has context.
-- **Add dependencies as needed.** Each module's `build.gradle.kts` gets deps added *as the code that
-  needs them is written*, not up front.
-- **Commit straight to `master`. Never create a branch unless the author asks for one** — no feature branches, no
-  "session" branches, no branch-then-merge for a piece of work. This overrides any general habit of branching off
-  a default branch, and the reason is that the conditions that habit protects against are all absent here: one
-  developer, nothing released, no CI/CD, and so no `master`/`dev` split to keep honest. A branch here buys nothing
-  and costs a merge the author did not ask for. **Small, self-contained commits are still the rule** — that is the
-  review workflow above, and it is a property of how the work is *split*, not of where it lands.
+- **A change is one idea.** Size follows the idea: a coherent change is not chopped up to hit a line
+  budget, and two unrelated ideas do not share a commit.
+- **Commit straight to `master`; never create a branch unless asked.** One developer, nothing released,
+  no CI — a branch buys nothing and costs a merge nobody asked for. This overrides any default habit of
+  branching off the main branch.
+- **A green build is not "done".** Compiling proves nothing about behavior. Anything touching a surface,
+  a gesture, persistence or rendering is verified on the device before it is called finished, and the
+  commit waits for that confirmation.
+- **State the decisions in the summary** — what was chosen, what was rejected, and why. That is what a
+  diff cannot show; it belongs in the summary rather than spread through the code as commentary.
 
-- **Four rules carried out of the sections that moved to `docs/`.** Each was stated only inside worked
-  examples — "extract on the second consumer" appears eleven times in this repo's prose and had never
-  once been written as a rule — so they are collected here rather than left where nothing loads them.
-  - **Extract on the second consumer, not the first.** A near-copy is how two implementations of one
-    thing drift apart; a shared type built for a single consumer has no context to be shaped by. The
-    trigger is the *second* call site arriving, and it is not optional at that point.
-  - **A control that changes nothing is worse than a missing one — absent, not disabled.** A verb with
-    no op behind it does not appear at all. One exception, and only this one: a control gated by a
-    *continuous* control beside it is disabled rather than hidden, because hiding it moves the layout
-    under the finger that is still dragging.
-  - **Two implementations of one thing are kept honest by a shared derivation, never by intention.**
-    Wherever a second path must agree with a first — the two icon renderers, a settings preview and the
-    surface it configures, a planner and the geometry it plans against — extract the part that would be
-    *invisibly* wrong and make both call it. Arithmetic that merely looks the same in two files is the
-    bug this codebase keeps finding.
-  - **A settings key's name is the seam for a semantic break.** Slices carry no version: additive change
-    is safe both ways through `ignoreUnknownKeys` plus fully-defaulted fields. So when a stored shape
-    changes *meaning*, rename the key — never re-interpret it in place, which fails silently.
+### Reading L1
+
+- **Never port L1 verbatim.** Per piece: understand what it does and *why* → question the design
+  (duplicated? honest name? right layer?) → fix the smell here. Never delete L1; it is the answer key.
+- **Locate it before assuming a path.** L1 is a sibling of this repo — `../Morphic-Launcher` on one
+  machine, `../launcher` on the other. Run `ls ..` when it is first needed. A wrong guess fails
+  silently: a missing directory reads as "L1 has nothing on this", so the comparison this rule exists
+  to force is skipped rather than reported.
+
+### Writing code
+
+- **A file holds one thing** — one screen, one component group, one concern. Length is the symptom, not
+  the rule: a long file that is genuinely one thing is fine, while a short one holding three unrelated
+  composables is not. A file is not a folder for whatever happened to be open.
+- **A function does one thing, and long ones are usually several.** A composable past ~80 lines is
+  normally hiding sections that want names.
+- **Extract on the second consumer, not the first.** A near-copy is how two implementations of one thing
+  drift apart; a shared type built for a single consumer has no context to shape it. The trigger is the
+  second call site arriving, and it is not optional then.
+- **Literals are fine — name a value when it earns a name.** It earns one when it has two readers, or
+  when it stands in for a setting that does not exist yet, in which case name that setting. A constant
+  read once in one file is an indirection, not a name.
+- **No model in a vacuum.** Build a module or type when a consumer needs it, so it has context to be
+  shaped by. Dependencies likewise: added to `build.gradle.kts` as the code needing them is written.
+
+### Documenting code
+
+- **KDoc every type, and say what it is *for*** — purpose, not a paraphrase of the signature.
+- **Document what the code cannot say**: units, edge cases, the reason behind a non-obvious choice, and
+  anything that fails *silently* when it is wrong. Those earn their space.
+- **Do not document what the signature already says.** A KDoc that would still be true if the
+  implementation changed is restatement — leave it out.
+- **A rule is its bound plus one line of why.** Derivations, worked examples and rejected alternatives
+  belong in `docs/`, not inline. This file reached 3,400 lines by keeping every one of them, and the
+  code takes its register from this file.
+
+### Standing rules
+
+- **Absent, not disabled.** A control that changes nothing is worse than a missing one, so a verb with
+  no op behind it does not appear. One exception: a control gated by a *continuous* control beside it is
+  disabled rather than hidden, because hiding it moves the layout under a finger mid-drag.
+- **Two implementations of one thing are kept honest by a shared derivation, never by intention.**
+  Wherever a second path must agree with a first — the two icon renderers, a settings preview and the
+  surface it configures, a planner and the geometry it plans against — extract the part that would be
+  *invisibly* wrong and have both call it. Arithmetic that merely looks alike in two files is the bug
+  this codebase keeps rediscovering.
+- **A settings key's name is the seam for a semantic break.** Slices carry no version: additive change
+  is safe both ways through `ignoreUnknownKeys` plus fully-defaulted fields. When a stored shape changes
+  *meaning*, rename the key — re-interpreting it in place fails silently.
 
 ## Architecture at a glance
 
