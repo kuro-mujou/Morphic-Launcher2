@@ -70,15 +70,14 @@ import org.koin.androidx.compose.koinViewModel
  * **The widget picker** — a bottom sheet listing every installed widget, grouped by the app that publishes it, with
  * one app's widgets browsed as a pager of previews.
  *
- * A port of L1's `WidgetPickerSheet`, keeping its two-pane shape: a list of apps that slides left to a detail pane
- * for the one chosen, and back again. What differs from L1 is the house rules rather than taste:
- * - **Colors come from the theme.** L1 hardcoded `Color.White` throughout, which over a bright wallpaper is the
- *   one surface ignoring the brightness signal the whole launcher theme is built on.
+ * A two-pane sheet: a list of apps that slides left to a detail pane for the one chosen, and back again.
+ * - **Colors come from the theme.** Hardcoding white here would make this the one surface ignoring the brightness
+ *   signal the whole launcher theme is built on.
  * - **The sheet itself is [LauncherBottomSheet]** — the frosted panel, the scrim, the modality claim and `uiInsets`
  *   all live there, extracted when the icon container's app picker became the second thing wanting exactly this
  *   chrome. This file is the two panes and nothing else.
  *
- * **L1's "Components" section is here**, above the apps: an icon container and a widget container, which are things
+ * **A "Components" section sits above the apps**: an icon container and a widget container, which are things
  * the launcher itself offers rather than things an app publishes — which is why they are their own section and not
  * two more rows in the list. They were absent while nothing could draw either; they arrived with the cells, on the
  * same rule that kept them out (a row that adds an item the user cannot see is worse than a missing one).
@@ -126,7 +125,7 @@ internal fun WidgetPickerSheet(
             targetState = opened,
             transitionSpec = {
                 // Opening pushes the list out to the left and brings the detail in from the right; going back
-                // reverses it. Expressive motion from the theme, where L1 used the animation defaults.
+                // reverses it, on expressive motion from the theme rather than the animation defaults.
                 if (targetState != null) {
                     (slideInHorizontally { it } + fadeIn()) togetherWith
                         (slideOutHorizontally { -it } + fadeOut())
@@ -204,7 +203,7 @@ private fun ListPane(
         }
 
         // Filtering stays here rather than in the ViewModel: it is a display filter over an already-loaded list,
-        // with no store behind it and nothing to persist. L1 did the same.
+        // with no store behind it and nothing to persist.
         val query = search.text.toString()
         val filtered = remember(groups, query) {
             if (query.isBlank()) groups else groups.filter { it.appLabel.contains(query.trim(), ignoreCase = true) }
@@ -231,7 +230,7 @@ private fun ListPane(
                     ComponentRowSpec(
                         icon = Icons.Filled.Widgets,
                         label = "Widget container",
-                        // Reworded from L1's, which says the widgets are stacked. Ours pages between them.
+                        // Pages between its widgets rather than stacking them, which is what the wording says.
                         description = "A panel that pages between several widgets.",
                         onClick = it,
                     )
@@ -273,8 +272,7 @@ private fun SectionHeading(text: String) {
  * One of the launcher's own components: an icon beside a name and a line saying what it is.
  *
  * Taller than an [AppRow] because it carries a description, which it needs: "Icon container" does not say what a
- * container *does*, where an app's name plus a widget count does. L1's own two labels, with the widget container's
- * description reworded — ours pages between its widgets rather than stacking them.
+ * container *does*, where an app's name plus a widget count does.
  */
 @Composable
 private fun ComponentRow(spec: ComponentRowSpec) {
@@ -315,7 +313,7 @@ private fun ComponentRow(spec: ComponentRowSpec) {
 /**
  * One app's row: how many widgets it publishes, its name, and a chevron into the detail pane.
  *
- * The count in a circle is L1's, and it earns its place — it is the one thing that tells a user whether opening
+ * The count in a circle earns its place — it is the one thing that tells a user whether opening
  * the row is worth it, since an app with one widget is a single tap away from Add and an app with nine is a browse.
  */
 @Composable

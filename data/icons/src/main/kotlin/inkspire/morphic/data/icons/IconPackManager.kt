@@ -35,26 +35,25 @@ data class InstalledIconPack(
 /**
  * Finds installed icon packs and resolves an app's icon from one.
  *
- * Ported from L1's manager, which is the one part of its icon work that landed cleanly. Icon packs have no
- * official API: a pack is an ordinary app that declares one of a handful of **de-facto theme intents**, and its
- * mapping lives in an `appfilter.xml` keyed by `ComponentInfo{package/class}` strings. Both conventions are
- * copied from L1 unchanged, because they are conventions rather than choices — a pack built for Nova is what it
- * is, and inventing our own reading of it would just mean supporting fewer packs.
+ * Icon packs have no official API: a pack is an ordinary app that declares one of a handful of **de-facto theme
+ * intents**, and its mapping lives in an `appfilter.xml` keyed by `ComponentInfo{package/class}` strings. Both are
+ * followed exactly, because they are conventions rather than choices — a pack built for Nova is what it is, and
+ * inventing our own reading of it would only mean supporting fewer packs.
  *
- * ## The one thing L1 got away with and we cannot
+ * ## Package visibility, and the silent failure behind it
  *
  * `queryIntentActivities` is subject to **package visibility filtering** on API 30+: without a declaration, it
  * answers only about this app's own activities, so pack detection returns an empty list on every modern device.
- * L1 never hit it because it held `QUERY_ALL_PACKAGES`, which this launcher deliberately does not request. The
- * fix is the narrow `<queries>` block in this module's manifest, one `<intent>` per action below — the same
+ * `QUERY_ALL_PACKAGES` would mask it, and this launcher deliberately does not request it. The fix is the narrow
+ * `<queries>` block in this module's manifest, one `<intent>` per action below — the same
  * correction the wallpaper section's live-wallpaper shelf needed, and the same silent failure mode: not an error,
  * just an empty list.
  *
  * ## One pack loaded at a time
  *
  * An `appfilter.xml` is thousands of entries, so the parsed map is worth keeping — but only for the pack in use.
- * Guarded by a [Mutex] rather than `@Synchronized` (L1's choice) because the work happens in a coroutine, and a
- * blocking monitor inside one is how a dispatcher thread ends up parked.
+ * Guarded by a [Mutex] rather than `@Synchronized`, because the work happens in a coroutine and a blocking monitor
+ * inside one is how a dispatcher thread ends up parked.
  */
 class IconPackManager(
     private val context: Context,
@@ -279,9 +278,8 @@ class IconPackManager(
     /**
      * One of the pack's XML files by [name], as a resource if it has one and from its assets otherwise.
      *
-     * Both, because packs disagree: some ship them compiled into `res/xml`, others as raw assets. L1 tried the
-     * same two in the same order, for `appfilter` alone — the [name] parameter is what lets the drawable catalog
-     * reuse the lookup instead of repeating it.
+     * Both, because packs disagree: some ship them compiled into `res/xml`, others as raw assets. The [name]
+     * parameter is what lets the drawable catalog reuse this lookup instead of repeating it.
      */
     private fun openPackXml(packPackage: String, resources: Resources, name: String): XmlPullParser? {
         val xmlId = resources.getIdentifier(name, "xml", packPackage)
@@ -338,7 +336,7 @@ class IconPackManager(
     private companion object {
         /**
          * The de-facto theme intents a pack declares. No official API exists, so this list *is* the definition of
-         * "an icon pack" — L1's, unchanged, since a pack built for one of these launchers already declares it.
+         * "an icon pack" — a pack built for any of these launchers already declares one.
          * **Must stay in step with the `<queries>` block in this module's manifest**, or an action listed here is
          * one this app cannot see.
          */

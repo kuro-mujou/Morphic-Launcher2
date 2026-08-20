@@ -35,7 +35,6 @@ import inkspire.morphic.core.designsystem.menu.MenuOverlay
 import inkspire.morphic.core.designsystem.surface.EjectToHome
 import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
-import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.SurfaceGestureLock
@@ -73,25 +72,17 @@ import org.koin.compose.koinInject
 /**
  * The launcher itself: **HOME in the center, side surfaces off its edges**, panned between by a swipe.
  *
- * This is the real version of what a dev-harness playground once prototyped. That harness proved the gesture
- * and the finger-policy table against *simulated* surfaces — colored boxes standing in for layouts that didn't exist.
- * They all exist now, so the boxes are the real screens; the playground stays in the dev harness as the regression
- * test for the gesture itself.
- *
  * **It owns the launcher's theme boundary.** [LauncherTheme] wraps the whole launcher *zone* here, once, rather than
- * each screen theming itself — which is why `HomeScreen` and `AppsScreen` no longer do. Settings is a separate zone
- * with its own boundary and its own "is-dark" input, so the two can disagree; L1 wrapped one theme around its entire
- * `NavDisplay` and could not.
+ * each screen theming itself — which is why `HomeScreen` and `AppsScreen` do not. Settings is a separate zone with
+ * its own boundary and its own "is-dark" input, so the two can disagree; one theme wrapped around the whole
+ * `NavDisplay` could not express that.
  *
  * **Which surface sits on which edge is now a user setting**, read from `SurfaceRegister` via [ShellViewModel]. Out of
  * the box the register binds nothing, so this is HOME and nothing swipeable until an edge is bound in settings — the
  * defaults deliberately don't choose an edge, because which edge opens the app list is a product decision and the data
  * layer is not where product decisions should be made quietly.
  *
- * **Still to come**, deferred from `SurfacePager` rather than forgotten: drag-out from a side surface onto HOME
- * (`EjectToHome`), and the five transitions beyond SLIDE. L1 had those tangled into one 549-line `CrossPager` along
- * with the frosted backdrop and the nested-scroll hand-off, both of which have since arrived here as separate
- * additions on a clean base.
+ * **Still to come**, deferred from `SurfacePager` rather than forgotten: the five transitions beyond SLIDE.
  */
 @Composable
 fun LauncherShell(
@@ -150,17 +141,17 @@ fun LauncherShell(
         // only reason that needs no hand-off is that both surfaces' zones are in *this* registry, hit-tested against
         // one finger in one coordinate space.
         //
-        // It is also why there is no L1 `HomeDragBridge` here. That existed because `CrossPager` stopped delivering
-        // pointer events to either subtree as it collapsed, so the finger had to be re-tracked from scratch at the
-        // common ancestor. `SurfacePager` keeps every slot composed, so the lifted cell simply keeps its own pointer
+        // It is also why no drag bridge is needed. A pager that stopped delivering pointer events to either subtree
+        // as it collapsed would force the finger to be re-tracked from scratch at the common ancestor.
+        // `SurfacePager` keeps every slot composed, so the lifted cell simply keeps its own pointer
         // stream the whole way.
         val coordinator = rememberDragCoordinator()
 
         // **The launcher's one item-menu host, and it belongs at this layer for the coordinator's reason.** The verbs
         // on an item's menu are the *item's* — App info, Uninstall, its own shortcuts — and the same app is reachable
         // from home, from the drawer, and from inside a folder. Binding the commands here once is what stops those
-        // three offering different things for the same icon, which is exactly what happened in L1: home had an
-        // `ItemContextMenu` and the side surfaces a near-copy `SideContextMenu`, each with its own two-stage logic.
+        // three offering different things for the same icon — which is what a menu per surface produces, each with
+        // its own copy of the two-stage logic.
         // A surface adds only what it owns — home's "Remove", because home is where an item is *placed*.
         val menuHost = remember(viewModel, onOpenSettings, onEditIcon) {
             LauncherMenuHost(
@@ -214,8 +205,8 @@ fun LauncherShell(
 
         // **Provided at the shell, which is the same boundary the theme is applied at, and for the same reason**: a
         // frosted surface samples *this launcher's* wallpaper, and the settings graph is a different zone with
-        // different rules (its icon preview punches through to the real window instead). L1 provided these inside its
-        // `HomeScreen`, which is exactly why its settings feature needed a second provider of its own.
+        // different rules (its icon preview punches through to the real window instead). Providing these inside
+        // `HomeScreen` is what makes a settings feature need a second provider of its own.
         CompositionLocalProvider(
             LocalBackdrop provides rememberBackdropState(
                 panelImage = state.backdropImages.panel,
@@ -312,8 +303,8 @@ private val TopActionRemovePlan = PlacementPlan(GridPlacement(0, 0, 0), DropInte
  *
  * **The band's mode follows which surface the drag is over**, which is the whole reason it belongs to the shell. A
  * side surface is open → the band hands the drag to HOME. HOME is showing → it takes the item *off* the launcher.
- * One band with a mode, where L1 had two entirely separate implementations with their own thresholds and their own
- * copies of the view (the drawer's `SurfaceExtractEngagement` and home's `rememberTopActionState`).
+ * One band with a mode, rather than a separate implementation per surface with its own thresholds and its own copy
+ * of the view.
  *
  * **The two modes commit at different moments, and [rememberTopActionState] owns why:**
  * - `ADD_TO_HOME` fires on a **dwell**. The point is to get the drawer out of the way *while the finger is still
@@ -385,8 +376,8 @@ private fun TopActionOverlay(
         // **Registered whenever the band is open, in either mode** — and in ADD_TO_HOME that is for the masking
         // rather than for the drop. While the finger is up here it must stop being the drawer's: otherwise the
         // pager's own planner keeps migrating its reorder gap toward the top-left, and a release before the dwell
-        // completes lands the app there instead of canceling. Being the topmost zone is what stops that, and it is
-        // L1's rule too — its drawer explicitly blanked `hoverTarget` and `pendingGap` while over the top bar.
+        // completes lands the app there instead of canceling. Being the topmost zone is what stops that,
+        // structurally, rather than by blanking the hovered target and pending gap explicitly.
         enabled = state.expanded,
         // The shell sits in no slot, so `LocalSurfacePresented` would be its default `true`; the real condition is
         // above, and is passed explicitly for that reason.
@@ -417,9 +408,7 @@ private fun TopActionOverlay(
  * **Each side names its own scroll behavior, and one rule turns that into the policy.** `HomeLayout.scrollAxes` and
  * `AppsLayout.scrollAxes` are declared in the modules that draw those layouts; [ScrollAxes.oneFingerSwipe] is the
  * whole derivation — a bounded scroller on the edge's axis means `AT_EDGE`, an infinite one `NEVER`, nothing on the
- * axis `ALWAYS`. That expression is the surface-pager playground's table, promoted from private demo code once the
- * real layouts existed to answer it. Until this landed both were a hardcoded [OneFingerSwipe.ALWAYS] stand-in, which
- * cost nothing only because `AT_EDGE` had no hand-off behind it and behaved as `ALWAYS` anyway.
+ * axis `ALWAYS`.
  *
  * **A wrapping pager changes the policy, not just the animation**, which is why [wraps] is consulted here at all: a
  * pager with no ends has no edge to hand a one-finger swipe off at, so its axis is `AxisScroll.INFINITE` and the

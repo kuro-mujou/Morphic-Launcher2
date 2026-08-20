@@ -131,7 +131,7 @@ enum class GridSlot {
      *
      * A list is a **one-lane scrolling grid**, which is why it belongs in this enum rather than beside it: it draws
      * icon cells and therefore needs its own icon sizing, and "each grid config gets an independent icon config" is
-     * the rule that makes that automatic. (L1 modeled its list layout the same way — a profile of one column.)
+     * the rule that makes that automatic.
      */
     APPS_LIST,
 
@@ -204,14 +204,12 @@ object IconSizingRanges {
     /**
       * The dp window both guardrails live in — one bound, because one two-thumb control sets both.
       *
-      * L1 gave them separate ranges (min 16..64, max 48..140), which two independent sliders needed to stop them
-      * crossing. A range slider cannot cross its own thumbs, so the invariant is structural and the split caps were
-      * only ever a consequence of the control choice.
+      * One range rather than a separate one per thumb: a range slider cannot cross its own thumbs, so the invariant
+      * is structural. Split caps are only ever a consequence of using two independent sliders.
       *
       * **The floor is 24dp because the floor is really a *cell* floor.** `CellFit` inverts [IconSizing.minIconDp] into
       * the smallest usable cell, so a bound of 16 offered a 24dp cell — thirteen rows in a 320dp dock, fifteen columns
-      * across a phone — legal arithmetic that nothing could be tapped in. 24 is also the number L1 wrote down for this
-      * (`MIN_CELL_DP`, "minimum comfortable grid cell size (press-area floor)") and then never used anywhere.
+      * across a phone — legal arithmetic that nothing could be tapped in. 24dp is the press-area floor.
       *
       * **The ceiling is 120dp, which is a judgment rather than a derivation**, so here is the reasoning: at the default
       * fraction the upper guardrail *is* the icon size, so it has to reach far enough for a tablet cell to be filled
@@ -265,8 +263,8 @@ val HorizontalPaddingRange: IntRange = 0..64
  *
  *   **An extent rather than a height, because which dimension it is depends on the posture.** A side zone is a strip
  *   on three configurations and a rail on the fourth ([SideZoneEdge]), so the same stored number is a height there
- *   and a width here — and it bounds the *rows* in the first case and the *columns* in the second. L1 called this
- *   `extentDp` for the same reason.
+ *   and a width here — and it bounds the *rows* in the first case and the *columns* in the second, which is why it
+ *   is an *extent* rather than a height.
  *
  *   One value rather than a per-[DeviceConfiguration] map, matching [icon]: the thickness that fits an icon and its
  *   label is a physical size, and does not vary by posture the way a *count* of cells does. A user who wants a
@@ -283,8 +281,8 @@ val HorizontalPaddingRange: IntRange = 0..64
  *
  *   Not folded into [extentDp]: that is a whole grid's thickness and this is one row of one, and a list has no total
  *   height at all — it scrolls. `Int` dp for the reason [extentDp] is, [IconSizing] included.
- * @property horizontalPaddingDp Blank margin kept at the grid's left and right edges, in dp — L1's
- *   `GridDimensions.horizontalPaddingDp`, and 0 by default there and here.
+ * @property horizontalPaddingDp Blank margin kept at the grid's left and right edges, in dp. 0 by default, so an
+ *   unconfigured launcher runs edge to edge.
  *
  *   **It is width the grid does not get**, which is what makes it a grid property rather than a decoration applied by
  *   whoever draws one: every cell dimension is divided out of the remaining width, so a surface that padded itself
@@ -307,8 +305,7 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   pages loop is a fact about how the user wants to move through their apps, and it does not change when the phone is
  *   turned on its side.
  *
- *   **False where L1's default was true**, which is a deliberate reversal. L1 shipped `pager.infiniteScroll = true`,
- *   and under the surface-swipe rules that is louder than it sounds: a wrapping pager has no edge to hand off from, so
+ *   **Off by default, which the surface-swipe rules force.** A wrapping pager has no edge to hand off from, so
  *   `AxisScroll.INFINITE` makes the one-finger swipe on that axis `OneFingerSwipe.NEVER` — with wrapping on by
  *   default, a horizontal edge binding could only be opened with **two fingers**, and a user who never found this
  *   setting would never know why. Off by default, opt in.
@@ -406,7 +403,7 @@ val HomePagerGrid = GridBlueprint(
     // that a 2×2 visual slot can afford slack; at 100% the same slack is expressed by the 48dp cap instead, in the
     // units a user reads.
     icon = IconSizing(),
-    // Paged, and the wrapping is the user's — see `wraps` for why it starts off where L1 started it on.
+    // Paged, and the wrapping is the user's — see `wraps` for why it starts off.
     wraps = false,
 )
 
@@ -458,14 +455,14 @@ val DockGrid = GridBlueprint(
  * definition, so there is no count to edit, which is not the same as saying nothing about it is configurable.
  *
  * **Two things separate it from the APPS list, and both are about what the surface is for.** Its rows are 64dp where
- * the drawer's are 56 — L1's own two numbers, and the reason is that a home list holds the handful of apps you chose,
+ * the drawer's are 56, because a home list holds the handful of apps you chose,
  * where a drawer holds all of them, so density is worth less here and reach is worth more. And its order is **stored**
  * (`home_list_item`) rather than derived A–Z: the whole point of this layout is that the user arranges it.
  *
- * L1 modeled the same list as *a view of the home placements*, flattened by (page, row, col) — which is why
- * reordering it wrote `MoveApp(page = 0, row = index, col = 0)` for every app and destroyed the grid arrangement
- * underneath. Two stores is what stops one layout scrambling the other; the flattening survives only as the *seed*
- * (see `HomeListRepository`), which is the part of L1's idea worth keeping.
+ * **Deliberately not a view of the home placements.** Flattening them by (page, row, col) makes reordering the list
+ * write `MoveApp(page = 0, row = index, col = 0)` for every app, destroying the grid arrangement underneath. Two
+ * stores is what stops one layout scrambling the other; the flattening survives only as the *seed* (see
+ * `HomeListRepository`).
  */
 val HomeListGrid = GridBlueprint(
     slot = GridSlot.HOME_LIST,
@@ -491,15 +488,13 @@ val HomeListGrid = GridBlueprint(
  * it" rule, same [SideZoneEdge] deciding which count that is. What differs is what goes in it, and that shows up in
  * exactly one field — [icon] is **null**, as [AppsCardGrid]'s is, because a widget is not an icon in a cell and there
  * is no fraction, guardrail or label for a user to set. That null is load-bearing: it is what makes the widget-area
- * settings section the smallest of the five (an editor and two sliders, no icon group), which is exactly the shape
- * L1's `DockSettingsDetail` took in its `minimalist` branch, returning early before the icon controls.
+ * settings section the smallest of the five: an editor and two sliders, no icon group.
  *
  * **A null [icon] also means `CellFit` cannot size this grid from an icon guardrail**, so the smallest usable cell
- * comes from `MinWidgetCellDp` instead — a widget's own floor, and L1's `MIN_WIDGET_DP`.
+ * comes from `MinWidgetCellDp` instead — a widget's own floor.
  *
- * [defaults] are L1's `WidgetAreaSettings` (4×3 portrait, 3×4 landscape) with the two tablet configurations added,
- * which L1 had no per-form-factor defaults for at all. [extentDp] is L1's 280dp: a widget area is meant to be *looked*
- * at, so it takes far more of the screen than a dock's 96.
+ * [extentDp] is 280dp: a widget area is meant to be *looked* at, so it takes far more of the screen than a dock's
+ * 96.
  */
 val WidgetAreaGrid = GridBlueprint(
     slot = GridSlot.HOME_WIDGET_AREA,
@@ -509,7 +504,7 @@ val WidgetAreaGrid = GridBlueprint(
     editRange = GridEditRange(minCols = 1, minRows = 1),
     defaults = byDevice(
         phonePortrait = GridDefault(cols = 4, rows = 3),
-        // The rail: narrower and taller, because on this posture the extent below is a width. L1's own landscape pair.
+        // The rail: narrower and taller, because on this posture the extent below is a width.
         phoneLandscape = GridDefault(cols = 3, rows = 4),
         tabletPortrait = GridDefault(cols = 5, rows = 3),
         tabletLandscape = GridDefault(cols = 6, rows = 3),
@@ -633,8 +628,8 @@ val FolderGrid = GridBlueprint(
  * the icon rather than below it. So the row is the primary quantity and the icon a fraction of it — the reverse of a
  * grid cell, where the icon size is chosen and the cell follows.
  *
- * 56dp is L1's row, and its icon inside came out at 40dp; both are reproduced by this pair rather than by two
- * constants, since L1 hardcoded the icon as well and its list ignored its own icon settings entirely.
+ * A 56dp row with a 40dp icon inside it, expressed as a row height and a fraction rather than two constants — so the
+ * list answers to its own icon settings instead of hardcoding both.
  */
 val AppsListGrid = GridBlueprint(
     slot = GridSlot.APPS_LIST,

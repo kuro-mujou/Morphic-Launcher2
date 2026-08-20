@@ -465,9 +465,8 @@ class HomeViewModel(
      * Places a widget the add flow has just bound and configured, at the first free rect of [span] on [zone]'s grid.
      *
      * **It searches rather than being told a cell**, because the picker is reached from a long-press whose position
-     * says where the *menu* opened, not where a widget of an unknown size will fit. L1 searched from the pressed
-     * cell for the same reason; the difference is that its search fell back to deleting the id silently, where this
-     * returns false so the caller can say so.
+     * says where the *menu* opened, not where a widget of an unknown size will fit. It returns false rather than
+     * deleting the id silently, so the caller can say so.
      *
      * @return false when nothing of that size fits, in which case **nothing is written** and the caller still owns
      *   the id — a widget half-added is worse than one not added.
@@ -585,12 +584,12 @@ class HomeViewModel(
      *
      * **The same engine a drop runs**, which is the point — a resize and a move differ only in which rectangle is
      * being asked for, so `FreeGridPlanner` answers both and there is one definition of "what happens to the
-     * things in the way". L1 had a separate `resizeMoves` calling `SpreadPush` directly.
+     * things in the way".
      *
      * It is asked twice per resize and that is safe rather than wasteful: the planner is pure, and a preview
      * writes nothing, so the answer the frame previewed and the answer [resizeItem] commits are computed from the
      * same state and cannot disagree. Sharing the *logic* rather than caching a result is the same rule the drag
-     * shadow follows — see `FreeGridPlanner`'s own note on L1's three-way divergence.
+     * shadow follows — see `FreeGridPlanner`'s own note on how three copies of it diverge.
      */
     fun planResize(
         item: GridItem,
@@ -665,9 +664,9 @@ class HomeViewModel(
      * **Idempotent, so the caller does not have to know whether the dock shrank**: a config everything already fits
      * reports no change and writes nothing, which is why this can simply be called whenever the grid changes.
      *
-     * Deliberately **not** where L1 put it. L1 reflowed inside the `combine` that assembles its home state and
-     * launched the persist *from within that transform* — so the write ran as a side effect of reading state, on
-     * every emission that happened to find a stray, racing itself. Here the trigger is the config changing, and the
+     * Deliberately **not** inside the `combine` that assembles home state. Reflowing there and launching the persist
+     * from within that transform makes the write a side effect of *reading* state, running on every emission that
+     * happens to find a stray, and racing itself. Here the trigger is the config changing, and the
      * write is an ordinary [applyChanges] like any other.
      */
     /**
@@ -969,7 +968,7 @@ class HomeViewModel(
         private const val DEFAULT_FOLDER_LABEL = "Folder"
 
         /**
-         * A new container's footprint, in **visual** cells on each axis — L1's `2 * cellMultiplier`.
+         * A new container's footprint, in **visual** cells on each axis.
          *
          * Two rather than one because one visual cell is an app's footprint, and a group of icons drawn at an app's
          * size is a group of smudges: the container has to be bigger than the things it holds to be worth having.
@@ -1061,9 +1060,9 @@ private fun IconItem.asGridItem(): GridItem = when (this) {
 /**
  * HOME's coordinate placements flattened into a single top-to-bottom order — **the vertical list's seed**.
  *
- * L1's own derivation (page, then row, then column), and the one part of its "the list *is* the grid" model worth
- * keeping: it is what makes switching to the list layout hand the user their apps in the arrangement they already
- * recognize. Where L1 read this live and wrote back through it, here it runs once, into the list's own store.
+ * Page, then row, then column — which is what makes switching to the list layout hand the user their apps in the
+ * arrangement they already recognize. It runs **once**, into the list's own store; reading it live and writing back
+ * through it is what makes a list reorder destroy the grid underneath.
  *
  * Only [HomeZone.MAIN] and only apps: the dock keeps its own contents across a layout change (it is simply not drawn
  * on the other one), and a folder has no row in a list that holds apps only.
