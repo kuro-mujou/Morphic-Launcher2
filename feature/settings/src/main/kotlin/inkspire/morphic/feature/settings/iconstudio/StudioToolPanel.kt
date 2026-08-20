@@ -17,6 +17,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.graphics.drawable.Drawable
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
@@ -73,6 +74,8 @@ data class StudioActions(
     val savePreset: ((String) -> Unit)?,
     val loadPreset: (IconPreset) -> Unit,
     val deletePreset: (String) -> Unit,
+    /** Null wherever [savePreset] is: a library that cannot be added to is not one to edit either. */
+    val renamePreset: ((String, String) -> Unit)?,
     val reset: () -> Unit,
 )
 
@@ -108,6 +111,8 @@ fun StudioToolPanel(
     state: IconStudioState,
     actions: StudioActions,
     hazeState: HazeState,
+    customImage: (path: String) -> Drawable?,
+    packImage: (packPackage: String, drawableName: String?) -> Drawable?,
     modifier: Modifier = Modifier,
 ) {
     // **Built here rather than in the `when` below, because two bands need it**: the pinned header, when an effect
@@ -259,9 +264,13 @@ fun StudioToolPanel(
 
                 StudioTool.PRESETS -> PresetsControls(
                     presets = state.presets,
+                    parsed = state.parsed,
+                    customImage = customImage,
+                    packImage = packImage,
                     onSave = actions.savePreset,
                     onLoad = actions.loadPreset,
                     onDelete = actions.deletePreset,
+                    onRename = actions.renamePreset,
                 )
 
                 StudioTool.MORE -> MoreControls(subject = state.subject, onReset = actions.reset)

@@ -91,6 +91,14 @@ interface SettingsRepository {
     suspend fun deleteIconPreset(name: String)
 
     /**
+     * Renames the preset called [from] to [to], keeping its place in the library.
+     *
+     * Its own operation rather than a delete and a save, because the name *is* the identity: spelled that way the
+     * preset would come back at the end of the list. See [IconPresets.renamed].
+     */
+    suspend fun renameIconPreset(from: String, to: String)
+
+    /**
      * Applies [transform] to the stored effect **inside the write**, rather than replacing it with a value the caller
      * computed earlier.
      *

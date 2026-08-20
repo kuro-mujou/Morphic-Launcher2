@@ -136,6 +136,18 @@ class IconStudioViewModel(
         viewModelScope.launch { settingsRepository.deleteIconPreset(name) }
     }
 
+    /**
+     * Renames a saved preset, keeping its place in the library.
+     *
+     * **Refuses in the individual studio** for [savePreset]'s reason, one step further on: a library that cannot be
+     * added to there should not be editable there either, or the same panel would offer two of the three verbs and
+     * refuse the third. The guard behind the guard, as ever — the menu is absent there too.
+     */
+    fun renamePreset(from: String, to: String) {
+        if (_state.value.subject !is StudioSubject.Global) return
+        viewModelScope.launch { settingsRepository.renameIconPreset(from, to) }
+    }
+
     /** Chooses the app to edit — the picker's one output, and how [StudioSubject.Unchosen] is left. */
     fun selectApp(component: ComponentKey) = openApp(component)
 
@@ -994,6 +1006,7 @@ class IconStudioViewModel(
         resetHistory(set, keys)
         return withEditing(set).copy(layerKeys = keys, target = StudioTarget.Composite).withHistoryFlags()
     }
+
 
     /**
      * Records the current recipe as an undo step, unless it is identical to the last one.

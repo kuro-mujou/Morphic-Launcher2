@@ -46,6 +46,32 @@ data class IconPresets(
     /** This library without the preset called [name]. A no-op when there is none. */
     fun without(name: String): IconPresets = copy(presets = presets.filterNot { it.name == name })
 
+    /**
+     * This library with the preset called [from] renamed to [to], **kept where it was**.
+     *
+     * **Position-preserving, which is the whole reason this is an operation rather than a `without` and a `with`.**
+     * The name is a preset's identity, so a rename really is a delete and an insert — and [with] appends, so spelled
+     * that way it would send a renamed tile to the end of the grid. A user correcting a typo has not asked for their
+     * library to be reordered.
+     *
+     * Any *other* preset already called [to] is dropped, for [with]'s reason: two rows nothing can tell apart are
+     * worse than an overwrite the user asked for by typing a name they already own.
+     *
+     * A no-op when [from] is not here, or when [to] is blank — a preset with no name is one nothing could pick out.
+     */
+    fun renamed(from: String, to: String): IconPresets {
+        val name = to.trim()
+        if (name.isEmpty()) return this
+        val index = presets.indexOfFirst { it.name == from }
+        if (index < 0) return this
+        val renamed = presets[index].copy(name = name)
+        return copy(
+            presets = presets
+                .mapIndexed { i, preset -> if (i == index) renamed else preset }
+                .filter { it === renamed || it.name != name },
+        )
+    }
+
     companion object {
         val Default = IconPresets()
     }

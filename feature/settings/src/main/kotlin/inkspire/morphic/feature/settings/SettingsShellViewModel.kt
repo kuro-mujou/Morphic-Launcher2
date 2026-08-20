@@ -3,7 +3,6 @@ package inkspire.morphic.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.HomeLayout
-import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,16 +28,6 @@ class SettingsShellViewModel(
     val homeLayout: StateFlow<HomeLayout> = settingsRepository.surfaceRegister
         .map { it.homeLayout }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeLayout.PAGER_WITH_DOCK)
-
-    /**
-     * The saved icon recipes, for the Icons section's library.
-     *
-     * Here rather than in a section-specific ViewModel because the Icons pane is a **hub**: it holds no editing
-     * state of its own, and one list read is not worth a ViewModel per pane. Saving and deleting happen in the
-     * studio, which has its own.
-     */
-    val iconPresets: StateFlow<List<IconPreset>> = settingsRepository.iconPresets
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

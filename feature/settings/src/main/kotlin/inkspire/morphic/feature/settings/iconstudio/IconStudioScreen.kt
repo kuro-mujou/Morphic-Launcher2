@@ -193,6 +193,7 @@ fun IconStudioScreen(
             savePreset = viewModel::savePreset.takeUnless { editingOneApp },
             loadPreset = viewModel::loadPreset,
             deletePreset = viewModel::deletePreset,
+            renamePreset = viewModel::renamePreset.takeUnless { editingOneApp },
             reset = viewModel::reset,
         )
     }
@@ -588,6 +589,8 @@ fun IconStudioScreen(
                                         state = state,
                                         actions = actions,
                                         hazeState = screenHaze,
+                                        customImage = customImage,
+                                        packImage = packImage,
                                     )
                                 }
 

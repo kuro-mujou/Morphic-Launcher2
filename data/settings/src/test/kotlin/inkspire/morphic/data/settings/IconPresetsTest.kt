@@ -68,4 +68,42 @@ class IconPresetsTest {
 
         assertEquals(library, library.without("nope"))
     }
+
+    /**
+     * The whole reason `renamed` exists rather than a `without` and a `with`: spelled that way the renamed preset
+     * would come back at the *end*, and the test above is what proves it would.
+     */
+    @Test
+    fun `renaming keeps the preset where it was`() {
+        val library = IconPresets.Default
+            .with(IconPreset("A", set(1)))
+            .with(IconPreset("B", set(2)))
+            .with(IconPreset("C", set(3)))
+            .renamed("B", "Bee")
+
+        assertEquals(listOf("A", "Bee", "C"), library.presets.map { it.name })
+        assertEquals(set(2), library.presets[1].layerSet)
+    }
+
+    /** Renaming onto a name already in use is an overwrite the user asked for — never two rows with one name. */
+    @Test
+    fun `renaming onto an existing name drops the one it replaces`() {
+        val library = IconPresets.Default
+            .with(IconPreset("A", set(1)))
+            .with(IconPreset("B", set(2)))
+            .renamed("A", "B")
+
+        assertEquals(listOf("B"), library.presets.map { it.name })
+        assertEquals(set(1), library.presets.single().layerSet)
+    }
+
+    @Test
+    fun `renaming something absent, or to nothing, changes nothing`() {
+        val library = IconPresets.Default
+            .with(IconPreset("A", set(1)))
+            .with(IconPreset("B", set(2)))
+
+        assertEquals(library, library.renamed("nope", "C"))
+        assertEquals(library, library.renamed("A", "   "))
+    }
 }

@@ -220,6 +220,9 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun deleteIconPreset(name: String) = update(IconPresetsSlice) { without(name) }
 
+    override suspend fun renameIconPreset(from: String, to: String) =
+        update(IconPresetsSlice) { renamed(from, to) }
+
     // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
     // path: it is what puts the write inside a DataStore transaction.
     // The old value is the receiver, so a caller's transform sees what is *stored* rather than what it last observed.
