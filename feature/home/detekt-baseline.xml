@@ -12,5 +12,6 @@
     <ID>MaxLineLength:HomeViewModel.kt$HomeViewModel$*</ID>
     <ID>SpreadOperator:ContainerSettingsViewModel.kt$ContainerSettingsViewModel$(*components.map { LayoutChange.AddToIconContainer(route.containerId, IconItem.App(it)) }.toTypedArray())</ID>
     <ID>TooManyFunctions:HomeViewModel.kt$HomeViewModel : ViewModel</ID>
+    <ID>VariableNaming:WidgetPickerViewModel.kt$WidgetPickerViewModel$private val _state = MutableStateFlow(WidgetPickerState())</ID>
   </CurrentIssues>
 </SmellBaseline>

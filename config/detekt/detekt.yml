@@ -18,6 +18,17 @@ naming:
     constantPattern: '[A-Z][A-Za-z0-9]*|[A-Z][_A-Z0-9]*'
     propertyPattern: '[A-Za-z][A-Za-z0-9]*'
     privatePropertyPattern: '[A-Za-z][A-Za-z0-9]*'
+  # The same convention one scope in: a `private val` holding a constant inside a class is PascalCase here too
+  # (`IconRenderer.BakeBands`, `IconStudioViewModel.DefaultFillArgb`).
+  VariableNaming:
+    variablePattern: '[A-Za-z][A-Za-z0-9]*'
+    privateVariablePattern: '[A-Za-z][A-Za-z0-9]*'
+  # **Off, because every finding it produced here was the rule misreading the file convention.** It counts only
+  # *types*, ignoring functions — so a Compose file named for its composable and holding one supporting type reads
+  # as a mismatch. `MorphicButton.kt` holds `fun MorphicButton` and `enum MorphicButtonStyle`; renaming the file to
+  # `MorphicButtonStyle.kt` would name it after its own footnote. All eight findings were that shape.
+  MatchingDeclarationName:
+    active: false
 
 style:
   # A dp, an alpha or a corner radius inside a composable is a value, not a magic number. Arithmetic outside one —

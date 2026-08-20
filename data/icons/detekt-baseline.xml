@@ -3,6 +3,5 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>MagicNumber:CustomIconStore.kt$CustomIconStore$100</ID>
-    <ID>MatchingDeclarationName:PackFallbackIcon.kt$PackFallback</ID>
   </CurrentIssues>
 </SmellBaseline>

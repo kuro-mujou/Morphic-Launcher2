@@ -69,7 +69,5 @@
     <ID>MagicNumber:ShapeMask.kt$ShapeMask$0.5f</ID>
     <ID>NestedBlockDepth:ContentMetrics.kt$ContentMetrics.Companion$fun of(pixels: IntArray, size: Int, alphaFloor: Int = AlphaFloor): ContentMetrics?</ID>
     <ID>TooManyFunctions:IconRenderer.kt$IconRenderer</ID>
-    <ID>VariableNaming:IconRenderer.kt$IconRenderer$/** * Any opaque color will do for a buffer whose alpha is the only thing that survives — see [complementOf]. */ private val OpaqueBlack = 0xFF000000.toInt()</ID>
-    <ID>VariableNaming:IconRenderer.kt$IconRenderer$/** * How many bands [resample] splits its rows into — one fewer than the cores, capped, and never below one. * * **One fewer, deliberately**, for `IconRenderManager`'s reason one layer up: this runs while the studio is * drawing the panel whose slider is being dragged, and a split that took every core would win the bake and lose * the frame. The cap keeps a many-core device from oversubscribing when real icons are baking beside the preview. */ private val BakeBands: Int = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 4)</ID>
   </CurrentIssues>
 </SmellBaseline>

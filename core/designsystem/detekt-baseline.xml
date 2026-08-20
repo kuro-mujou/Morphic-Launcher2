@@ -32,9 +32,6 @@
     <ID>MagicNumber:MenuAnchoring.kt$0.5f</ID>
     <ID>MagicNumber:MorphicColorPicker.kt$3</ID>
     <ID>MagicNumber:OrderedFlow.kt$3f</ID>
-    <ID>MatchingDeclarationName:AppCollectionReorder.kt$AppCollectionDragDelegate</ID>
-    <ID>MatchingDeclarationName:IconArrangements.kt$ArrangementSlot</ID>
-    <ID>MatchingDeclarationName:MorphicButton.kt$MorphicButtonStyle</ID>
     <ID>MaxLineLength:AppCollectionOverlay.kt$size = DpSize(with(LocalDensity.current) { geo.cellW.toDp() }, with(LocalDensity.current) { geo.cellH.toDp() })</ID>
     <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 0, rows = 0, metrics = metrics, labelHeightDp = labelHeight)</ID>
     <ID>MaxLineLength:CellFitTest.kt$CellFitTest$val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 1, metrics = metrics, labelHeightDp = labelHeight)</ID>

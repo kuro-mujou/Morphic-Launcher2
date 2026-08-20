@@ -46,12 +46,10 @@
     <ID>MagicNumber:StudioControls.kt$0.01f</ID>
     <ID>MagicNumber:SurfaceRegisterCross.kt$10f</ID>
     <ID>MagicNumber:SurfaceRegisterCross.kt$12f</ID>
-    <ID>MatchingDeclarationName:IconSizingControls.kt$IconSizingField</ID>
-    <ID>MatchingDeclarationName:StudioRailMenu.kt$RailMenu</ID>
     <ID>MaxLineLength:EffectTextureControls.kt$onValueChange = { x, y -&gt; onUpdate { it.withEffect(blur.withActive { p -&gt; p.copy(centerX = x, centerY = y) }) } }</ID>
     <ID>MaxLineLength:WallpaperDetail.kt$PageActionButton(Modifier.weight(1f), Icons.Outlined.PhotoLibrary, "Choose image", !state.busy, onChooseImage)</ID>
     <ID>MaxLineLength:WallpaperDetail.kt$PageActionButton(Modifier.weight(1f), Icons.Outlined.Screenshot, "Capture screen", !state.busy, onCaptureScreen)</ID>
     <ID>TooManyFunctions:IconStudioViewModel.kt$IconStudioViewModel : ViewModel</ID>
-    <ID>VariableNaming:IconStudioViewModel.kt$IconStudioViewModel$/** Where a fill lands on a layer that has never held one — see [pickSolidFill]. */ private val DefaultFillArgb = 0xFF000000.toInt()</ID>
+    <ID>VariableNaming:IconStudioViewModel.kt$IconStudioViewModel$private val _state = MutableStateFlow(IconStudioState())</ID>
   </CurrentIssues>
 </SmellBaseline>
