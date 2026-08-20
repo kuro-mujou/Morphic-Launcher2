@@ -167,8 +167,8 @@ private fun Bitmap.asBackdropImage(windowSize: IntSize): BackdropImage = Backdro
  * Null is the normal state, not an error: the launcher only has a wallpaper to sample once the user has given it one
  * (see `WallpaperRepository.loadBackdrop`), and every consumer falls back to its own flat color. Provided at the
  * **launcher shell**, which is the same zone boundary the theme is applied at and for the same reason — the settings
- * graph is a different surface with different rules. L1 provided it inside its `HomeScreen`, which is why its settings
- * feature needed a second provider of its own to get the same effect.
+ * graph is a different surface with different rules. Providing it inside `HomeScreen` instead is what makes a
+ * settings feature need a second provider of its own.
  */
 val LocalBackdrop = staticCompositionLocalOf<BackdropState?> { null }
 
@@ -176,7 +176,7 @@ val LocalBackdrop = staticCompositionLocalOf<BackdropState?> { null }
  * The global effect frosted surfaces follow unless a call site overrides it.
  *
  * The unwashed variant as the default: an unprovided local means "nobody set this up", and a surface outside the
- * shell (the dev harness, a preview) should not reach for someone's stored decoration. It renders flat there anyway,
+ * shell (a preview, say) should not reach for someone's stored decoration. It renders flat there anyway,
  * because [LocalBackdrop] is null too and *that* is what decides whether there is anything to sample — which is the
  * distinction `BackdropEffect` stopped carrying when a wash became a parameter rather than a variant.
  */
@@ -237,8 +237,8 @@ fun Modifier.wallpaperBackdrop(
  * **Two blends, and both matter.** The raw accent is a full-saturation color lifted out of a photograph; washing a
  * surface in it directly reads as a colored filter rather than as glass. Blending it [ACCENT_BLEND] of the way from
  * the mode's own `surfaceVariant` keeps it *mode-appropriate* — dark in dark, light in light — while still carrying
- * the hue. That is L1's `materialYouTone`, and in L2 the surface it starts from is grayscale, so what comes out is a
- * desaturated version of the wallpaper's color rather than a second hue mixed in.
+ * the hue. The surface it starts from is grayscale, so what comes out is a desaturated version of the wallpaper's
+ * color rather than a second hue mixed in.
  *
  * Falls back to `surfaceVariant` when nothing could be read, which makes every wash below plain white or black.
  *
@@ -263,10 +263,10 @@ fun backdropTint(effect: BackdropEffect = LocalBackdropEffect.current): Color = 
 /**
  * The wash for [effect], over a backdrop whose wallpaper color is [tone].
  *
- * **All three washes carry the wallpaper's hue, which is L1's design and was worth arguing about.** A plain white or
- * black film over a blurred photograph reads as dirty — the wash fights the colors under it instead of sitting in
- * them — so L1 nudges white and black [LIGHT_DARK_TINT_HUE] of the way toward the wallpaper tone, and Material You
- * uses that tone outright. The design system's monochrome rule is about *chrome*, and this is the deliberate
+ * **All three washes carry the wallpaper's hue, and it was worth arguing about.** A plain white or black film over a
+ * blurred photograph reads as dirty — the wash fights the colors under it instead of sitting in them — so white and
+ * black are nudged [LIGHT_DARK_TINT_HUE] of the way toward the wallpaper tone, and the wallpaper wash uses that tone
+ * outright. The design system's monochrome rule is about *chrome*, and this is the deliberate
  * exception: an effect the user picks, whose whole subject is the wallpaper.
  */
 private fun tintOf(effect: BackdropEffect, tone: Color): Color = when (effect) {
@@ -484,7 +484,7 @@ private class BackdropNode(
         if (glassEffect != null && liquidGlassSupported) {
             drawGlass(picture.image, src, glassEffect, outline)
         } else {
-            // Every other effect — and liquid glass with no rim, or below API 33 where L1 falls back to this too.
+            // Every other effect — and liquid glass with no rim, or below API 33.
             drawBlurredCrop(picture.image, src)
         }
         drawContent()
@@ -589,7 +589,7 @@ private class BackdropNode(
 }
 
 /**
- * How far the wallpaper's accent is blended in from the mode's surface tone — L1's `MATERIAL_YOU_ACCENT_BLEND`.
+ * How far the wallpaper's accent is blended in from the mode's surface tone.
  *
  * Middle-low on purpose: enough that the hue is unmistakable, little enough that the result stays a *surface* rather
  * than a color filter, and mode-appropriate because it starts from `surfaceVariant`.
@@ -597,8 +597,7 @@ private class BackdropNode(
 private const val ACCENT_BLEND = 0.3f
 
 /**
- * How far the light and dark washes are nudged from pure white/black toward the wallpaper tone — L1's
- * `LIGHT_DARK_TINT_HUE`.
+ * How far the light and dark washes are nudged from pure white/black toward the wallpaper tone.
  *
  * Kept low so "light blur" and "dark blur" stay clearly light and dark while losing the dirty look a neutral film has
  * over a colored photograph. Material You is the same idea with the dial at 1.

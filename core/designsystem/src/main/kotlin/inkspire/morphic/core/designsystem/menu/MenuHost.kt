@@ -22,14 +22,13 @@ import inkspire.morphic.core.model.ComponentKey
  *
  * @property anchor an item's visible extent, or the point an empty-space long-press landed on. For an item it is
  *   reported by `launcherItemGestures` from the very node the finger was on, which is why no surface has to
- *   reconstruct it — L1 rebuilt that rectangle three separate ways (cell centers on the grid, an icon half-width
- *   plus a Y offset in a folder, a row's bounds in the list) and each could drift from what was drawn.
+ *   reconstruct it. Rebuilding that rectangle per surface — cell centers on a grid, an icon half-width plus a Y
+ *   offset in a folder, a row's bounds in a list — is three chances to drift from what was drawn.
  * @property title the item's name, shown as a header. **Null for a surface menu**, which has no header at all —
- *   L1's empty-space menu had none either, and there is no honest title for "the home screen" that is not just a
- *   word taking up a row.
+ *   there is no honest title for "the home screen" that is not just a word taking up a row.
  * @property shortcuts loads the app's own shortcuts, or null when there are none to offer (a folder, a surface). A
- *   **suspending lambda rather than a loaded list**, so the menu itself owns the load: L1 ran that `LaunchedEffect`
- *   in each of its three surfaces, which is three places for the two stages to disagree.
+ *   **suspending lambda rather than a loaded list**, so the menu itself owns the load. Running that `LaunchedEffect`
+ *   per surface is three places for the two stages to disagree.
  */
 data class MenuRequest(
     val anchor: MenuAnchor,
@@ -44,8 +43,7 @@ data class MenuRequest(
  *
  * **The menu is the launcher's, not a surface's**, for the same reason the drag coordinator and the top-action band
  * are: the verbs on it belong to the *item*, and the same item is reachable from home, from the drawer and from
- * inside a folder. L1 answered this per surface — home's `ItemContextMenu` and a `SideContextMenu` for the drawer
- * and library — and the two stages, the loading state and the toggle were written twice.
+ * inside a folder. Answering it per surface means writing the two stages, the loading state and the toggle twice.
  *
  * **One host for both kinds, because only one menu is ever open.** An item menu and a surface menu are the same
  * panel with different contents and different anchors ([MenuAnchor]); giving each its own holder would make "both
@@ -76,7 +74,7 @@ class LauncherMenuHost(
     /**
      * Opens the menu for an **app**: its shortcuts, then App info, Edit icon, [surfaceActions], and Uninstall.
      *
-     * The order is L1's, and the middle is where a surface's own verbs go — after the ones that describe or
+     * The middle is where a surface's own verbs go — after the ones that describe or
      * customize the app and before the one that destroys it, so the destructive row is never the one a mis-tap
      * lands on next to "Remove". **Edit icon sits beside App info** because both are about the app itself wherever
      * it is showing, unlike a surface's verbs, which are about this particular placement of it.
@@ -111,9 +109,8 @@ class LauncherMenuHost(
     /**
      * Opens the **surface** menu: a long-press that landed on empty space at [position], in root coordinates.
      *
-     * [surfaceActions] are whatever that surface can do to itself, and Settings is appended — L1's
-     * `globalMenuActions`, which its home, dock and widget-area menus each ended with. **Today that is the whole
-     * menu**, because every verb L1 put above it is waiting on something this launcher has not built: "Add app" and
+     * [surfaceActions] are whatever that surface can do to itself, and Settings is appended. **Today that is the
+     * whole menu**, because every verb that would sit above it waits on something not yet built: "Add app" and
      * "Widgets" need pickers, and "Remove page" needs page management. Each returns as its feature lands, which is
      * also why they are absent rather than disabled — a row that does nothing is worse than a row that is not there.
      *
@@ -133,8 +130,8 @@ class LauncherMenuHost(
 }
 
 /**
- * The launcher's menu host. Null outside the launcher shell — the dev harness and settings have no menu, and a null
- * here is what says so rather than a second host quietly appearing.
+ * The launcher's menu host. Null outside the launcher shell — settings has no menu, and a null here is what says so
+ * rather than a second host quietly appearing.
  */
 val LocalMenuHost = staticCompositionLocalOf<LauncherMenuHost?> { null }
 
@@ -173,7 +170,7 @@ fun MenuOverlay(host: LauncherMenuHost) {
  * Renders a [MenuRequest] — which for an app is the **two-stage** menu: its own shortcuts first, the launcher's
  * actions behind a toggle.
  *
- * That order is L1's and it is the right way round: the shortcuts are what the *app* offers and are what a user
+ * That order is the right way round: the shortcuts are what the *app* offers and are what a user
  * long-presses an icon for most often ("New message"), while App info and Uninstall are things done *to* the app
  * and are rarer. Anything with no shortcuts — a folder, a surface, an app that publishes none — skips straight to
  * the actions and shows no toggle, so the second stage never announces itself as missing. A request with no title
