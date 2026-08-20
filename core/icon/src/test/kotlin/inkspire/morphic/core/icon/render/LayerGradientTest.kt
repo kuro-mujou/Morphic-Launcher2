@@ -1,9 +1,9 @@
 package inkspire.morphic.core.icon.render
 
 import inkspire.morphic.core.model.icon.BloomProfile
+import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.ContentAnchor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

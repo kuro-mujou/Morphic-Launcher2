@@ -9,9 +9,9 @@ import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridDefault
 import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
-import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.data.apps.AppRepository

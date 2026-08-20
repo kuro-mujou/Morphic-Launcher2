@@ -23,9 +23,8 @@ import inkspire.morphic.core.designsystem.grid.sideZoneFraction
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.model.GridSlot
-import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.HomePagerGrid
+import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.sideZoneEdge
@@ -39,9 +38,9 @@ import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
-import kotlin.math.roundToInt
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
 private val RowGap = 8.dp

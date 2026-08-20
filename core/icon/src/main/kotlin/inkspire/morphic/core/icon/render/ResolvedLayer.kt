@@ -1,7 +1,7 @@
 package inkspire.morphic.core.icon.render
 
-import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.icon.parse.ParsedLayer
+import inkspire.morphic.core.model.icon.IconLayerSpec
 
 /**
  * One layer after its [IconLayerSpec.source] has been resolved to concrete [content] (a color or a drawable),

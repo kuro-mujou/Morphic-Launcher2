@@ -3,12 +3,12 @@ package inkspire.morphic.feature.settings.iconstudio
 import android.graphics.Bitmap
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.model.AppInfo
-import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.IconLayerSet
-import inkspire.morphic.core.model.icon.IconPlate
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconPlate
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.data.icons.InstalledIconPack

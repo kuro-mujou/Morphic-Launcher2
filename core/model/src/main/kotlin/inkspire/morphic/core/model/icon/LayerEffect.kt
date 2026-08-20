@@ -1,10 +1,10 @@
 package inkspire.morphic.core.model.icon
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 
 /**
  * A visual effect applied to a single layer while compositing — something that changes what the layer *is*.

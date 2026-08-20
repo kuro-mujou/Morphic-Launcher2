@@ -1,7 +1,6 @@
 package inkspire.morphic.core.database.converter
 
 import androidx.room.TypeConverter
-import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
 
 /** Room type converter between [WidgetContainerAxis] and its enum name. */

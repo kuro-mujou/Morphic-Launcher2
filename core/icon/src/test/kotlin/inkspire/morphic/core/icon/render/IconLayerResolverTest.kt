@@ -7,10 +7,10 @@ import inkspire.morphic.core.model.icon.BloomProfile
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.TintMode
+import inkspire.morphic.core.model.icon.effectOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull

@@ -2,37 +2,36 @@ package inkspire.morphic.core.icon.render
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.BlurMaskFilter
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
-
-import inkspire.morphic.core.model.icon.IconShape
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withMatrix
+import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.core.icon.IconFilters
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.icon.IconShapes
-import inkspire.morphic.core.graphics.BitmapBlur
+import inkspire.morphic.core.icon.parse.ParsedIcon
+import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
+import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.OutlinePosition
-import inkspire.morphic.core.icon.parse.ParsedIcon
-import inkspire.morphic.core.icon.parse.ParsedLayer
-import androidx.core.graphics.drawable.toDrawable
-import androidx.core.graphics.withMatrix
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -42,7 +41,6 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
-import kotlin.math.roundToInt
 
 /**
  * Composites an [IconLayerSet] + the app's [ParsedIcon] into one square [Bitmap] of `sizePx` — the baked icon

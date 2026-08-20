@@ -22,9 +22,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.meta
-import inkspire.morphic.core.model.HomeLayout
 
 /** Provisional spacing — placeholders, as everywhere else in this module. */
 internal val NavRowInsetH = 12.dp

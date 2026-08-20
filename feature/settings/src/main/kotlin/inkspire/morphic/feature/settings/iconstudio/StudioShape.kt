@@ -31,9 +31,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconShapes
+import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape
-import inkspire.morphic.core.model.icon.ContentAnchor
 
 /**
  * The selected thing's silhouette — a layer's, or the whole icon's.

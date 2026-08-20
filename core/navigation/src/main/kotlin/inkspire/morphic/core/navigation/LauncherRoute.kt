@@ -1,3 +1,8 @@
+// Named for what the file *is* — the launcher's routes — rather than for the one destination left in it. The
+// module KDoc below is about what belongs here as a category, which is the thing the name has to carry; renaming it
+// `HomeRoute.kt` would make that doc read as one route's own.
+@file:Suppress("ktlint:standard:filename")
+
 package inkspire.morphic.core.navigation
 
 import androidx.navigation3.runtime.NavKey

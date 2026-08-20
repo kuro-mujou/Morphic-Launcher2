@@ -1,6 +1,5 @@
 package inkspire.morphic.core.icon.compose
 
-import android.graphics.Matrix
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -17,8 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
@@ -28,25 +27,22 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalResources
-import androidx.core.graphics.withMatrix
 import inkspire.morphic.core.icon.IconFilters
-import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.IconPatterns
+import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.icon.render.IconLayerResolver
-import inkspire.morphic.core.icon.render.LayerFilter
-import inkspire.morphic.core.icon.render.LayerExtrude
 import inkspire.morphic.core.icon.render.LayerChromatic
+import inkspire.morphic.core.icon.render.LayerExtrude
+import inkspire.morphic.core.icon.render.LayerFilter
 import inkspire.morphic.core.icon.render.LayerGradient
 import inkspire.morphic.core.icon.render.LayerPattern
 import inkspire.morphic.core.icon.render.LayerTransform
-import inkspire.morphic.core.icon.render.ResolvedLayer
 import inkspire.morphic.core.icon.render.ShapeMask
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
-import inkspire.morphic.core.model.icon.IconShape
 import inkspire.morphic.core.model.icon.LayerBlend
 import inkspire.morphic.core.model.icon.LayerEffect
 

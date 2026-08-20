@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import android.graphics.drawable.Drawable
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.IconShape

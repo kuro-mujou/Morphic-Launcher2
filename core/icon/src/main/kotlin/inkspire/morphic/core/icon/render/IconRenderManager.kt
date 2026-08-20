@@ -2,13 +2,13 @@ package inkspire.morphic.core.icon.render
 
 import android.graphics.Bitmap
 import android.util.LruCache
-import inkspire.morphic.core.model.icon.IconLayerSet
-import inkspire.morphic.core.icon.parse.ParsedIconLoader
-import inkspire.morphic.core.icon.source.IconPackImages
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import inkspire.morphic.core.icon.parse.ParsedIconLoader
+import inkspire.morphic.core.icon.source.IconPackImages
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.icon.IconLayerSet
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

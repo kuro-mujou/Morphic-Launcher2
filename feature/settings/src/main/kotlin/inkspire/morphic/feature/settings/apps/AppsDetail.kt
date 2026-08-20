@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -18,7 +18,6 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
 import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
-import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.rowHeightRange
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
@@ -34,7 +33,6 @@ import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
-import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.CardChromeRanges
 import inkspire.morphic.core.model.GridDefault
@@ -42,6 +40,7 @@ import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsCommitSlider
@@ -51,8 +50,8 @@ import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import inkspire.morphic.feature.settings.label
-import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
 
 /**
  * The name the card preview's made-up category carries.

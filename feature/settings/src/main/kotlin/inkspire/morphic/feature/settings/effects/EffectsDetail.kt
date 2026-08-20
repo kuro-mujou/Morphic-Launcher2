@@ -30,8 +30,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.designsystem.backdrop.washColor
 import inkspire.morphic.core.designsystem.backdrop.wallpaperTone
+import inkspire.morphic.core.designsystem.backdrop.washColor
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
@@ -42,8 +42,8 @@ import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSliderRow
-import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
 
 /**
  * An edit to one of the two effects: **what to change, and nothing about what everything else was.**

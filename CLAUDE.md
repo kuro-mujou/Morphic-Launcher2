@@ -423,7 +423,12 @@ What is built per module, why each piece is shaped the way it is, and what is de
 - **detekt runs on `check`, over a baseline.** `config/detekt/detekt.yml` states only the departures from the
   defaults, and each module's `detekt-baseline.xml` records what was already there the day it was switched on —
   so the build is green, new code is checked, and the backlog is a list to work down rather than a wall. Fixing a
-  finding means deleting its entry. There is still **no formatter**: nothing enforces layout or import order.
+  finding means deleting its entry.
+- **ktlint runs on `check` too, over a hand-picked ruleset** — unused imports, import order, trailing whitespace,
+  final newline, file naming. Its *whole standard set is off* in `.editorconfig`: run with the defaults it reported
+  5,032 violations against code nobody had complained about, and autocorrecting them touched 138 files without
+  converging. Wrapping and indentation stay this codebase's own; sizes and shapes are detekt's, at thresholds tuned
+  here rather than to a style guide. `gradle ktlintFormat` fixes everything it reports.
 - **The Gradle wrapper is missing** from the repo (`gradle-wrapper.properties` is tracked; `gradlew`,
   `gradlew.bat` and the jar are not), so there is no CLI build from a fresh clone — but a Gradle
   9.6.1 distribution is cached, so

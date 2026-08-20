@@ -1,7 +1,7 @@
 package inkspire.morphic.feature.apps
 
-import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.Category
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem

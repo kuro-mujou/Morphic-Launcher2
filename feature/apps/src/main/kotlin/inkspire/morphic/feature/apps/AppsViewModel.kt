@@ -3,8 +3,8 @@ package inkspire.morphic.feature.apps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
-import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
@@ -15,8 +15,8 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
-import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsCategoryChange
+import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder

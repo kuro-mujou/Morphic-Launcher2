@@ -3,11 +3,10 @@ package inkspire.morphic.launcher
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.navigation3.runtime.NavKey
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import inkspire.morphic.core.navigation.HomeRoute
 import inkspire.morphic.core.navigation.LocalNavigator
@@ -24,7 +23,6 @@ import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropScreen
 import inkspire.morphic.feature.shell.LauncherShell
-import kotlinx.serialization.Serializable
 
 /**
  * The launcher's navigation host: the back stack, the [inkspire.morphic.core.navigation.Navigator] over it, and the

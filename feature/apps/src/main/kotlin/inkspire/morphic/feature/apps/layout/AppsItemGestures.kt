@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
@@ -11,8 +13,6 @@ import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.GridItem
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 
 /**
  * The gesture wiring for the APPS layouts that own **no arrangement of their own** — the A–Z list and the A–Z grid.

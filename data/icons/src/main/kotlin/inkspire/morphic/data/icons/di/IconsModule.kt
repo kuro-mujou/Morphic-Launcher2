@@ -3,8 +3,8 @@ package inkspire.morphic.data.icons.di
 import android.content.Context
 import inkspire.morphic.core.icon.source.IconPackImages
 import inkspire.morphic.data.icons.CustomIconStore
-import inkspire.morphic.data.icons.IconPackManager
 import inkspire.morphic.data.icons.IconOverrideRepository
+import inkspire.morphic.data.icons.IconPackManager
 import inkspire.morphic.data.icons.internal.IconOverrideRepositoryImpl
 import kotlinx.coroutines.runBlocking
 import org.koin.dsl.module

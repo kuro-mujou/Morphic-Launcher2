@@ -1,11 +1,9 @@
 package inkspire.morphic.feature.settings.iconstudio
 
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Vignette
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.model.icon.LayerEffect
 

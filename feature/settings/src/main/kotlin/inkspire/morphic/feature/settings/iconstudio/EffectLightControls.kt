@@ -6,12 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
+import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.LayerEffect
-import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.withEffect
 

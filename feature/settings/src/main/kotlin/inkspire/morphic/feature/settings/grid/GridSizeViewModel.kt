@@ -16,11 +16,11 @@ import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.settings.GridOverride
-import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
 import inkspire.morphic.feature.settings.icons.SamplePreviewApp

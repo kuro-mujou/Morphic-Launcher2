@@ -1,0 +1,47 @@
+# Formatting rules. ktlint reads this file, so it is the one place the house style is stated.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+# Matches detekt's MaxLineLength. The code writes to 120 (p99 is exactly 120); the slack is for the few lines where
+# breaking costs more than it buys, and the genuine outliers still get flagged.
+max_line_length = 127
+
+# ---------------------------------------------------------------------------------------------------------------
+# **ktlint runs a hand-picked ruleset, not its default one, and that is the whole design decision here.**
+#
+# Run with the standard ruleset, ktlint reports 5,032 violations — and on inspection almost none of them are defects.
+# This code is formatted the way Android Studio formats Kotlin; ktlint's `ktlint_official` style is a *different*
+# house style, and `intellij_idea` still disagrees in 1,499 places. A formatter that disagrees with every file is not
+# enforcing a style, it is proposing one.
+#
+# Running its autocorrect made that concrete: it touched 138 files, left 695 violations (so it did not converge),
+# collapsed deliberately aligned trailing comments in the build files, and moved an enum's terminating semicolon onto
+# a line of its own. None of that is worth a 138-file diff over code nobody reported a problem with.
+#
+# So the whole standard set is off and the rules below are switched back on one at a time. Each is mechanical, each
+# is auto-fixable, and none can destroy an intent someone had. Wrapping, indentation and spacing stay ktlint's
+# opinion and this codebase's own — the sizes and shapes are already checked by detekt, which has thresholds tuned
+# to this project rather than to a style guide.
+# ---------------------------------------------------------------------------------------------------------------
+ktlint_standard = disabled
+
+# The one with real value: refactoring leaves unused imports behind, and nothing else in the build notices.
+ktlint_standard_no-unused-imports = enabled
+# Mechanical and total — there is no intent in import order to lose.
+ktlint_standard_import-ordering = enabled
+ktlint_standard_no-trailing-spaces = enabled
+ktlint_standard_final-newline = enabled
+ktlint_standard_filename = enabled
+
+[*.{yml,yaml,xml,toml}]
+indent_style = space
+indent_size = 2

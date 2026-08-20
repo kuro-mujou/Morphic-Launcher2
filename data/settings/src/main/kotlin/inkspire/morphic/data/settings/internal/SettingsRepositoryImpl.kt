@@ -26,9 +26,9 @@ import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.GridOverride
+import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.IconPresets
-import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.IconStudioWorkspace
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding

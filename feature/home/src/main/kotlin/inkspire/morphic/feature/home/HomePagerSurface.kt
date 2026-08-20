@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -14,17 +15,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
-import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
-import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
+import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
+import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
 import inkspire.morphic.core.designsystem.drag.DragSession
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropOutcome
@@ -33,9 +34,6 @@ import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
-import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
-import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
-import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry

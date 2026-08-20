@@ -2,8 +2,8 @@ package inkspire.morphic.core.icon.render
 
 import android.graphics.Matrix
 import inkspire.morphic.core.icon.parse.ParsedLayer
-import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.ContentAnchor
+import inkspire.morphic.core.model.icon.IconLayerSpec
 
 /**
  * Where a layer's shape silhouette is drawn — the fifth thing the two render paths share, and it exists for the

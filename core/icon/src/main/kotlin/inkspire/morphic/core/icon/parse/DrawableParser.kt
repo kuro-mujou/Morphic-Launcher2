@@ -3,9 +3,9 @@ package inkspire.morphic.core.icon.parse
 import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.InsetDrawable
 import android.os.Build
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable

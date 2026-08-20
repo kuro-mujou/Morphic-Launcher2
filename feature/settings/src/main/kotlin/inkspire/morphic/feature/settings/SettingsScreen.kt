@@ -46,24 +46,24 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.withSaveLayer
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.koin.androidx.compose.koinViewModel
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
+import inkspire.morphic.feature.settings.effects.EffectsDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.home.HomeDetail
-import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
-import inkspire.morphic.feature.settings.effects.EffectsDetail
 import inkspire.morphic.feature.settings.iconstudio.IconsDetail
+import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
 import inkspire.morphic.feature.settings.wallpaper.WallpaperDetail
+import org.koin.androidx.compose.koinViewModel
 
 /** The list pane's width beside a detail, on a screen wide enough for both. */
 private val ListPaneWidth = 360.dp

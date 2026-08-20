@@ -12,10 +12,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import inkspire.morphic.core.model.icon.IconAppearance
-import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.icon.IconAppearance
+import inkspire.morphic.core.model.icon.IconLayerSet
 
 /** The baker used to render icons. Provided at the app root once it is wired; `null` renders nothing. */
 val LocalIconRenderManager = staticCompositionLocalOf<IconRenderManager?> { null }

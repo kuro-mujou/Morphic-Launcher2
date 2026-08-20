@@ -17,10 +17,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.CategoryCardFace
 import inkspire.morphic.core.designsystem.cell.CategoryClusterTile
-import inkspire.morphic.core.designsystem.cell.CategoryPreviewSlots
-import inkspire.morphic.core.designsystem.cell.categoryOverflowCluster
 import inkspire.morphic.core.designsystem.cell.CategoryPreviewIcon
+import inkspire.morphic.core.designsystem.cell.CategoryPreviewSlots
 import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.cell.categoryOverflowCluster
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.CardChrome

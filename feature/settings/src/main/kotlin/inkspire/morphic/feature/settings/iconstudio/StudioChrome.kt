@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,8 +29,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.core.designsystem.component.press.repeatingPress
+import inkspire.morphic.core.model.icon.PreviewBackground
 
 /** Every icon button in the studio is this wide, so a rail of them lines up without each caller choosing a number. */
 private val ButtonSide = 40.dp

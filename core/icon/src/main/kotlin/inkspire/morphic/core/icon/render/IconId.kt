@@ -1,7 +1,7 @@
 package inkspire.morphic.core.icon.render
 
-import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.icon.IconLayerSet
 
 /**
  * The cache key for a baked icon bitmap: the app [component], the exact [layerSet] it was rendered from, and

@@ -1630,8 +1630,9 @@ design, so those two now genuinely differ.
 No item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). **detekt runs on `check`** over a per-module
 baseline of the 316 findings that existed when it was added — new code is checked, the old backlog is a list rather
-than a wall — but there is still **no formatter**, so layout and import order are unenforced. The Gradle **wrapper
-is missing** from the repo
+than a wall — and **ktlint runs beside it** over a deliberately narrow ruleset (unused imports, import order,
+trailing whitespace, final newline, file naming), its standard set switched off because ktlint's house style is not
+this one. Wrapping and indentation remain unenforced, on purpose. The Gradle **wrapper is missing** from the repo
 (`gradle/wrapper/gradle-wrapper.properties` is tracked but `gradlew`/`gradlew.bat`/`gradle-wrapper.jar` are not),
 so there is no CLI build from a fresh clone — **but a Gradle 9.6.1 distribution is already cached**, so
 `~/.gradle/wrapper/dists/gradle-9.6.1-bin/*/gradle-9.6.1/bin/gradle :app:assembleDebug` builds and tests from the

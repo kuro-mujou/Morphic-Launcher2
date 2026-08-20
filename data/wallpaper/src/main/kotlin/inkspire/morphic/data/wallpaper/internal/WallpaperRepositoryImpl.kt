@@ -22,6 +22,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.RotatingWallpaperService
@@ -31,10 +32,7 @@ import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
 import inkspire.morphic.data.wallpaper.WallpaperSource
 import inkspire.morphic.data.wallpaper.WallpaperState
-import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.data.wallpaper.WallpaperTarget
-import java.io.File
-import kotlin.math.roundToInt
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +47,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import timber.log.Timber
+import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * This module's own store — **one file, one key, one blob**, the same shape a settings slice has.

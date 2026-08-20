@@ -4,12 +4,12 @@ import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
-import inkspire.morphic.core.model.GridSlot
-import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.GridPlacement
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconItem
+import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.Folder as FolderModel
 import inkspire.morphic.core.model.IconContainer as IconContainerModel

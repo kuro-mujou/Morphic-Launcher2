@@ -43,8 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
-import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.compose.IconPreview
+import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.data.settings.IconPreset
 
 /**

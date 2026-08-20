@@ -9,8 +9,8 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.layout.mapper.categoryRowFor
 import inkspire.morphic.data.layout.mapper.idsByItem
-import inkspire.morphic.data.layout.mapper.rowsForPages
 import inkspire.morphic.data.layout.mapper.rowsForCategoryItems
+import inkspire.morphic.data.layout.mapper.rowsForPages
 import inkspire.morphic.data.layout.mapper.toCategory
 import inkspire.morphic.data.layout.mapper.toCategoryItems
 import inkspire.morphic.data.layout.mapper.toPages

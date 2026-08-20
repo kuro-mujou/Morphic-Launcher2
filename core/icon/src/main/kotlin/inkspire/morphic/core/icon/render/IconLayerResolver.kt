@@ -1,6 +1,8 @@
 package inkspire.morphic.core.icon.render
 
 import android.graphics.drawable.Drawable
+import inkspire.morphic.core.icon.parse.ParsedIcon
+import inkspire.morphic.core.icon.parse.ParsedLayer
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerEffect
@@ -9,8 +11,6 @@ import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.core.model.icon.TintMode
 import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.withEffect
-import inkspire.morphic.core.icon.parse.ParsedIcon
-import inkspire.morphic.core.icon.parse.ParsedLayer
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin

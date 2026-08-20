@@ -6,8 +6,8 @@ import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.cellIconLayout
 import inkspire.morphic.core.model.AppsCardGrid
-import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.AppsScrollGrid
+import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridSlot

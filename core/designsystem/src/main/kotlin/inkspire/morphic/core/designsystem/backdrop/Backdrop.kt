@@ -1,7 +1,7 @@
 package inkspire.morphic.core.designsystem.backdrop
 
-import android.os.Build
 import android.graphics.Bitmap
+import android.os.Build
 import android.view.View
 import androidx.annotation.RequiresApi
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +14,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -22,8 +24,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.isSpecified
@@ -41,8 +41,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.BackdropTint
 import kotlin.math.roundToInt
 
 /**

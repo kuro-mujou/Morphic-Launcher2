@@ -2,8 +2,8 @@ package inkspire.morphic.data.icons
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.net.Uri
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.common.dispatcher.AppDispatchers

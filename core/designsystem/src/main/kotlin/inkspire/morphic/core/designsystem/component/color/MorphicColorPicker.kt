@@ -1,6 +1,5 @@
 package inkspire.morphic.core.designsystem.component.color
 
-import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -26,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import android.graphics.Color as AndroidColor
 
 /** The rainbow the hue bar is drawn from, and the same stops the saturation panel's tint is taken from. */
 private val HueStops = listOf(

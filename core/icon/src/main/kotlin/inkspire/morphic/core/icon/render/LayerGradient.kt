@@ -1,7 +1,7 @@
 package inkspire.morphic.core.icon.render
 
-import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.ContentAnchor
+import inkspire.morphic.core.model.icon.LayerEffect
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin

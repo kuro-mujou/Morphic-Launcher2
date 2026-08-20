@@ -10,9 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.component.NavRowInsetH
 import inkspire.morphic.feature.settings.component.NavRowPadding
