@@ -181,12 +181,16 @@ private val ContentAnchor.hint: String
  * handed. It is the grid plan's right-tool-per-surface rule, on a surface small enough that the answer is "no
  * tool".
  *
+ * **Internal rather than private, because the finalize step's plate is cut from the same list** — one grid, so a
+ * plate's silhouettes and a layer's cannot come to differ. Its own page height is the caller's business; this is
+ * the rows alone.
+ *
  * A short last page is **padded with empty weights**, which the lazy grid did for free and a `Row` does not: four
  * columns of `weight(1f)` given two children would hand each half the width, so the final page's tiles would come
  * out twice the size of every other page's.
  */
 @Composable
-private fun ShapePage(shapes: List<IconShape?>, selected: IconShape?, onSelect: (IconShape?) -> Unit) {
+internal fun ShapePage(shapes: List<IconShape?>, selected: IconShape?, onSelect: (IconShape?) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(ShapeGridSpacing)) {
         shapes.chunked(ShapeColumns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(ShapeGridSpacing)) {

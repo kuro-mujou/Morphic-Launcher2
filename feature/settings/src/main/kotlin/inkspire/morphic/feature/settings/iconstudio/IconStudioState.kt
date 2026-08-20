@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.IconLayerSet
 import inkspire.morphic.core.model.icon.IconPlate
 import inkspire.morphic.core.model.icon.IconLayerSpec
@@ -120,6 +122,7 @@ data class PackBrowse(
  *   shows what storage would have said.
  */
 data class IconStudioState(
+    val step: StudioStep = StudioStep.EDIT,
     val subject: StudioSubject = StudioSubject.Unchosen,
     val editing: IconLayerSet = IconLayerSet.Base,
     val plate: IconPlate = IconPlate(),
@@ -139,7 +142,21 @@ data class IconStudioState(
     val packImages: Map<String, Bitmap> = emptyMap(),
     val browsing: PackBrowse? = null,
     val presets: List<IconPreset> = emptyList(),
+    val affected: List<AppInfo> = emptyList(),
+    val backdropImage: Bitmap? = null,
+    val backdropAccent: Int? = null,
+    val backdropEffect: BackdropEffect = BackdropEffect.Default,
 ) {
+
+    /**
+     * What this session would write — the recipe being edited, plus the plate and the zoom.
+     *
+     * **On the state rather than in the ViewModel, because two things need the same answer.** The commit writes it,
+     * and the finalize step *previews* it over every icon it is about to change; assembled twice, a preview could
+     * show a plate the write did not include. It is also what [dirty] is measured against, which is why the plate
+     * and the zoom became part of that question the moment a screen could edit them.
+     */
+    val appearance: IconAppearance get() = IconAppearance(layerSet = editing, plate = plate, zoom = zoom)
 
     /** Which layer is selected, or null when the target is the whole icon. */
     val selected: Int? get() = (target as? StudioTarget.Layer)?.index
@@ -234,4 +251,23 @@ data class IconStudioState(
 
     /** @see canMoveUp */
     val canMoveDown: Boolean get() = selected?.let { editing.moveDown(it) !== editing } == true
+}
+
+/**
+ * Which half of the session is on screen: the editor, or the step that shows what applying it would do.
+ *
+ * **Two steps of one destination, not two destinations.** The finalize step reads the recipe being edited — which
+ * lives in this screen's own `ViewModel`, and a second `NavEntry` gets its own `ViewModelStore` (see
+ * `LauncherNavHost`'s decorator note). Reaching it across a navigation boundary would mean either passing a whole
+ * [IconAppearance] as a nav argument or scoping the ViewModel to the Activity, and both are worse than saying what
+ * is true: this is one editing session with a last page. Back is therefore a step back, not a screen pop, which is
+ * also what makes it non-destructive.
+ */
+enum class StudioStep {
+
+    /** The canvas, the rail and the tools. */
+    EDIT,
+
+    /** Every icon about to change, over the wallpaper, with the whole-icon settings and the commit. */
+    FINALIZE,
 }

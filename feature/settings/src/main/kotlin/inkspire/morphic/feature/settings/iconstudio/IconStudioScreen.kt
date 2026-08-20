@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
@@ -248,6 +249,27 @@ fun IconStudioScreen(
     // dark glass with white content is the only setting that reads over both. Same call as `StudioContentColor`,
     // applied to the components rather than to the text.
     LauncherTheme(darkTheme = true) {
+        // **The last page of the session replaces the editor rather than floating over it.** It is the same
+        // destination and the same ViewModel — see [StudioStep] — so back is a step back and nothing is committed or
+        // discarded on the way in or out. It paints no background of its own, which is how the wallpaper shows: the
+        // studio's canvas is simply not drawn on this step.
+        if (state.step == StudioStep.FINALIZE) {
+            StudioFinalizeScreen(
+                state = state,
+                hazeState = screenHaze,
+                onPlateEnabled = viewModel::setPlateEnabled,
+                onPlateShape = viewModel::setPlateShape,
+                onZoom = viewModel::setZoom,
+                // Null in the individual session, where the library is read-only — `PresetsControls`' rule, and the
+                // same nullable-means-absent shape.
+                onSavePreset = viewModel::savePreset.takeUnless { editingOneApp },
+                onApply = viewModel::save,
+                onBack = viewModel::toEdit,
+                modifier = modifier,
+            )
+            return@LauncherTheme
+        }
+
         // **The root measures**, which the viewport made necessary: both the canvas's pan and the rail's drag are
         // clamped against the canvas, and both store their positions as fractions of it, so somebody has to know how
         // big it is. The root is the honest place — it is the canvas, every floating surface being drawn over it.
@@ -416,15 +438,20 @@ fun IconStudioScreen(
                     onRedo = viewModel::redo,
                 )
 
-                // Lit only when there is something to write — which is also how the unsaved state is visible at all:
-                // backing out discards, and a permanently-bright Save would give no hint of that. A tick rather than a
-                // floppy disk: this commits and stays, it does not export a file.
+                // **Forward to the last page, where the commit lives now.** This was the tick, and the tick was the
+                // whole of Save; both moved to the finalize step, which is the only place the three whole-icon
+                // settings — the plate, its shape, the zoom — can be judged, since they are read against the
+                // *wallpaper* and this canvas deliberately is not it.
+                //
+                // **Always enabled, unlike the tick.** A session with nothing changed still has somewhere to go: the
+                // step is also where a look is saved as a preset and where the plate is switched on. The
+                // "is there anything to write?" signal the tick carried by being lit now sits on that step's own
+                // Apply button, which is the thing it was ever really about.
                 StudioPillButton(
-                    icon = Icons.Default.Check,
-                    contentDescription = "Save",
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Next step",
                     hazeState = screenHaze,
-                    enabled = state.dirty,
-                    onClick = viewModel::save,
+                    onClick = viewModel::toFinalize,
                 )
             }
 

@@ -5,8 +5,10 @@ import android.net.Uri
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.icon.IconShapes
 import inkspire.morphic.core.icon.parse.ParsedIconLoader
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.icon.ContentAnchor
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.IconLayerSet
@@ -23,11 +25,16 @@ import inkspire.morphic.data.icons.IconPackManager
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.IconStudioWorkspace
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.data.wallpaper.WallpaperRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -57,6 +64,7 @@ import kotlinx.coroutines.withContext
 class IconStudioViewModel(
     route: IconStudioRoute,
     private val settingsRepository: SettingsRepository,
+    private val wallpaperRepository: WallpaperRepository,
     private val overrideRepository: IconOverrideRepository,
     private val parsedIcons: ParsedIconLoader,
     private val appRepository: AppRepository,
@@ -114,7 +122,7 @@ class IconStudioViewModel(
         if (_state.value.subject !is StudioSubject.Global) return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        val appearance = _state.value.appearance()
+        val appearance = _state.value.appearance
         viewModelScope.launch { settingsRepository.saveIconPreset(trimmed, appearance) }
     }
 
@@ -156,6 +164,41 @@ class IconStudioViewModel(
         if (_state.value.subject !is StudioSubject.Global) return
         viewModelScope.launch { settingsRepository.renameIconPreset(from, to) }
     }
+
+    /**
+     * Moves to the step that shows what applying this session would do, and back again.
+     *
+     * **Neither direction commits or discards anything**, which is what makes the way back cheap: the recipe, the
+     * plate, the zoom and the whole history are one session's state, and a step is which half of it is on screen.
+     */
+    fun toFinalize() = _state.update { it.copy(step = StudioStep.FINALIZE) }
+
+    fun toEdit() = _state.update { it.copy(step = StudioStep.EDIT) }
+
+    /**
+     * The plate behind the icon: whether it draws, and the silhouette it is cut to.
+     *
+     * **Not recorded in history, and that is deliberate rather than pending.** History is the *recipe* — what the
+     * layer tools build — and the finalize step's three controls are one tap or one drag each, with the result on
+     * screen across every icon while it happens. Undo stepping back through a switch would also have to step back
+     * through it *from the editor*, where the plate is not visible at all.
+     *
+     * **Turning it on seeds a rounded square**, because the model's own default is no shape at all — which is the
+     * right default for a stored recipe (it is what every one of them was written against) and the wrong one for a
+     * control someone just switched on: a hard-edged square plate reads as the setting being broken. The same split
+     * `ContentAnchor` records, one screen over.
+     */
+    fun setPlateEnabled(enabled: Boolean) = _state.update { current ->
+        val shape = current.plate.shape ?: IconShapes.RoundedSquare.takeIf { enabled }
+        current.copy(plate = current.plate.copy(enabled = enabled, shape = shape)).withDirty()
+    }
+
+    fun setPlateShape(shape: IconShape?) = _state.update {
+        it.copy(plate = it.plate.copy(shape = shape)).withDirty()
+    }
+
+    /** How large the artwork sits inside its own box — the icon's size *relative to its plate*. */
+    fun setZoom(zoom: Float) = _state.update { it.copy(zoom = zoom).withDirty() }
 
     /** Chooses the app to edit — the picker's one output, and how [StudioSubject.Unchosen] is left. */
     fun selectApp(component: ComponentKey) = openApp(component)
@@ -649,6 +692,52 @@ class IconStudioViewModel(
         loadPackArtwork()
     }
 
+    /**
+     * Which way the device is held, for the wallpaper the plate samples.
+     *
+     * The backdrop cannot derive it — a **rotating** wallpaper is two pictures, so "the wallpaper" is not one image
+     * until you say which orientation — and this is `ShellViewModel`'s own reasoning, reported the same way: the
+     * composable is where the window is.
+     */
+    private val orientation = MutableStateFlow(Orientation.PORTRAIT)
+
+    fun setOrientation(value: Orientation) {
+        orientation.value = value
+    }
+
+    /**
+     * The wallpaper as a frosted **panel** samples it, and the color its wash is blended toward.
+     *
+     * **The studio needs its own, because it is not inside the shell** — `LocalBackdrop` is provided at that zone
+     * boundary, and this is a destination beyond it. Without this the plate on the finalize step drew its *scrim*: a
+     * flat gray square, on the one screen whose whole job is judging blurred wallpaper behind an icon. The picture is
+     * the panel one rather than the full-screen film's, because a plate is a small surface and that is the strength
+     * the user chose for those.
+     *
+     * A third reader of the same repository question is worth noting rather than hiding: if a fourth appears, this
+     * belongs beside `ProvideIconRecipes` in `app`, which is already where a launcher-wide read is assembled.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeBackdrop() {
+        viewModelScope.launch {
+            settingsRepository.backdropEffect.collect { effect ->
+                _state.update { it.copy(backdropEffect = effect) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.backdropEffect
+                .map { it.blurStrength }
+                .distinctUntilChanged()
+                .flatMapLatest { wallpaperRepository.backdrop(it, orientation) }
+                .collect { image -> _state.update { it.copy(backdropImage = image) } }
+        }
+        viewModelScope.launch {
+            wallpaperRepository.accentColor.collect { accent ->
+                _state.update { it.copy(backdropAccent = accent) }
+            }
+        }
+    }
+
     /** Keeps the preset library in step, since saving and deleting both happen from this screen. */
     private fun observePresets() {
         viewModelScope.launch {
@@ -801,14 +890,14 @@ class IconStudioViewModel(
                 unsaved.remove(path)?.let { bitmap -> customIcons.write(path, bitmap) }
             }
 
-            val appearance = current.appearance()
+            val appearance = current.appearance
             when (val subject = current.subject) {
                 is StudioSubject.Global -> settingsRepository.setIconAppearance(appearance)
                 is StudioSubject.App -> overrideRepository.set(subject.component, appearance)
                 StudioSubject.Unchosen -> return@launch
             }
             _state.update { it.copy(dirty = false) }
-            saved = current.editing
+            saved = appearance
             collectOrphanedImages()
         }
     }
@@ -858,7 +947,7 @@ class IconStudioViewModel(
 
                 StudioSubject.Unchosen -> return@launch
             }
-            saved = restored.layerSet
+            saved = restored
             _state.update { it.seatedOn(restored).copy(dirty = false) }
         }
     }
@@ -876,19 +965,26 @@ class IconStudioViewModel(
             val stored = preset
                 ?.let { name -> settingsRepository.iconPresets.first().firstOrNull { it.name == name }?.appearance }
                 ?: settingsRepository.iconAppearance.first()
-            val sample = appRepository.observeApps().first().firstOrNull()
+            val apps = appRepository.observeApps().first()
+            val sample = apps.firstOrNull()
+            // **Who this actually changes**, which is not "every app installed": an app with a recipe of its own is
+            // detached and a global edit passes it by, so listing it on the finalize step would be a lie about what
+            // Apply is going to do. Read once, here, rather than observed — the step is a snapshot of a decision.
+            val detached = overrideRepository.overrides.first().keys
             // `saved` is what is *persisted*, which a preset-loaded session deliberately is not — so it opens
             // dirty, and Save is what applies the preset. Same shape as an inheriting app opening dirty.
-            saved = settingsRepository.iconAppearance.first().layerSet
+            saved = settingsRepository.iconAppearance.first()
             _state.update {
                 it.seatedOn(stored).copy(
                     subject = StudioSubject.Global(sample?.componentKey),
                     label = null,
+                    affected = apps.filterNot { app -> app.componentKey in detached },
                 )
             }
             loadStoredImages(stored.layerSet)
             loadPacks()
             observePresets()
+            observeBackdrop()
             sample?.componentKey?.let(::loadArtwork)
             loadPackArtwork()
         }
@@ -900,17 +996,19 @@ class IconStudioViewModel(
             // snapshot-detach. Nothing is written here: an app that was inheriting still inherits until a commit.
             val stored = overrideRepository.overrides.first()[component]
                 ?: settingsRepository.iconAppearance.first()
-            val label = appRepository.observeApps().first()
-                .firstOrNull { it.componentKey == component }?.label
+            val app = appRepository.observeApps().first().firstOrNull { it.componentKey == component }
 
             // `saved` is what is *persisted*, which for an app that is still inheriting is not the same as what is
             // shown: the studio opens on a copy of the global default, and that copy is already an unsaved change.
             // So a freshly opened inheriting app is `dirty`, correctly — saving it is what detaches it.
-            saved = overrideRepository.overrides.first()[component]?.layerSet ?: IconLayerSet.Base
+            saved = overrideRepository.overrides.first()[component] ?: IconAppearance.Base
             _state.update {
                 it.seatedOn(stored).copy(
                     subject = StudioSubject.App(component),
-                    label = label,
+                    label = app?.label,
+                    // One app today; a list because this route is meant to gain a multi-app picker, and the finalize
+                    // step is already written against "the apps about to change" rather than against a subject.
+                    affected = listOfNotNull(app),
                     // Keyed by pack, but resolved *per app* — so anything cached here belongs to whichever app was
                     // open before. Only reachable since the studio learned to change app without being reopened; see
                     // [shuffleSample], which clears it for the same reason.
@@ -920,6 +1018,7 @@ class IconStudioViewModel(
             loadStoredImages(stored.layerSet)
             loadPacks()
             observePresets()
+            observeBackdrop()
             loadArtwork(component)
             loadPackArtwork()
         }
@@ -989,17 +1088,14 @@ class IconStudioViewModel(
     private fun freshKeys(count: Int): List<Long> = List(count) { nextLayerKey++ }
 
     /** What is currently persisted, so `dirty` is a comparison rather than a flag that can drift out of step. */
-    private var saved: IconLayerSet = IconLayerSet.Base
-
     /**
-     * What this session would write: the recipe being edited, plus the plate and zoom it is carrying.
+     * What is persisted for the subject, which is what [IconStudioState.dirty] is measured against.
      *
-     * **Assembled rather than held**, because the studio edits a layer set and nothing else — the plate and the zoom
-     * belong to the finalize screen, and until it exists this session's job with them is to *not lose them*. An app
-     * given glass and then edited in the studio must come back out with its glass.
+     * **A whole [IconAppearance] now that the finalize step can edit the plate and the zoom.** It held the layer set
+     * alone while those two only rode along — correct then, and wrong the moment a control could change one: a
+     * plated icon would have read as clean and the commit would have looked unnecessary.
      */
-    private fun IconStudioState.appearance(): IconAppearance =
-        IconAppearance(layerSet = editing, plate = plate, zoom = zoom)
+    private var saved: IconAppearance = IconAppearance.Base
 
     /**
      * Picked images that exist only in memory, by the path they will be written to.
@@ -1010,6 +1106,14 @@ class IconStudioViewModel(
      * undone past is simply never written, and the sweep tidies it if it was.
      */
     private val unsaved = mutableMapOf<String, Bitmap>()
+
+    /**
+     * This state, with [IconStudioState.dirty] answered against what is stored.
+     *
+     * One expression, because there are three ways to reach the question — an edit, a history step, and a whole-icon
+     * control — and three comparisons would be three chances to compare the wrong halves.
+     */
+    private fun IconStudioState.withDirty(): IconStudioState = copy(dirty = appearance != saved)
 
     /** Starts history afresh at [set] — on open, and after a reset. */
     private fun resetHistory(set: IconLayerSet, keys: List<Long>) {
@@ -1068,7 +1172,7 @@ class IconStudioViewModel(
     private fun IconStudioState.withEditing(set: IconLayerSet): IconStudioState {
         noteMonochromeForm(set)
         noteFillColors()
-        return copy(editing = set, dirty = set != saved)
+        return copy(editing = set).withDirty()
     }
 
     /**
@@ -1134,7 +1238,7 @@ class IconStudioViewModel(
     }
 
     private fun IconStudioState.withHistoryFlags(): IconStudioState =
-        copy(canUndo = historyIndex > 0, canRedo = historyIndex < history.lastIndex, dirty = editing != saved)
+        copy(canUndo = historyIndex > 0, canRedo = historyIndex < history.lastIndex).withDirty()
 
     /** Keeps the selection valid when a step through history changes how many layers there are. */
     private fun IconStudioState.withSelectionInRange(): IconStudioState =
