@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,49 +125,15 @@ fun WallpaperCropScreen(
     LauncherTheme {
         Box(modifier.fillMaxSize().background(Color.Black)) {
             if (current != null) {
-                Box(
-                    modifier = Modifier
-                        // The target's shape, centered — which is `fillMaxSize` for a slot shaped like this screen, and
-                        // a letterboxed band for the one that is not. `aspectRatio` picks the larger dimension it can
-                        // honor, so the frame is always as big as the screen allows.
-                        .align(Alignment.Center)
-                        .fillMaxSize(FRAME_FRACTION)
-                        .aspectRatio(frameRatio)
-                        .clipToBounds()
-                        .onSizeChanged { viewport = it }
-                        .pointerInput(current) {
-                            detectTransformGestures { centroid, pan, zoom, _ ->
-                                val cover = coverScale(current, viewport)
-                                // Floored at the cover scale, so the image can never be pinched small enough to leave
-                                // a gap: the viewport is always fully covered, whatever the gesture asks for.
-                                val next = (scale * zoom).coerceIn(cover, cover * MAX_ZOOM)
-                                // Anchor the zoom on the centroid — the point under the fingers stays under them —
-                                // then apply the pan.
-                                var moved = centroid - (centroid - offset) * (next / scale) + pan
-                                val shownW = current.width * next
-                                val shownH = current.height * next
-                                // And clamp, so an edge of the image can never be dragged inside the viewport. `minOf`
-                                // with 0 handles the axis where the image is not larger than the viewport at all.
-                                moved = Offset(
-                                    moved.x.coerceIn(minOf(viewport.width - shownW, 0f), 0f),
-                                    moved.y.coerceIn(minOf(viewport.height - shownH, 0f), 0f),
-                                )
-                                scale = next
-                                offset = moved
-                            }
-                        }
-                        // Drawn rather than composed as an `Image`: the transform is this screen's own state, applied
-                        // to the destination rectangle directly, so there is no layout to fight with.
-                        .drawBehind {
-                            drawImage(
-                                image = current,
-                                dstOffset = IntOffset(offset.x.roundToInt(), offset.y.roundToInt()),
-                                dstSize = IntSize(
-                                    (current.width * scale).roundToInt(),
-                                    (current.height * scale).roundToInt(),
-                                ),
-                            )
-                        },
+                CropFrame(
+                    image = current,
+                    frameRatio = frameRatio,
+                    viewport = viewport,
+                    scale = scale,
+                    offset = offset,
+                    onViewportChange = { viewport = it },
+                    onTransform = { newScale, newOffset -> scale = newScale; offset = newOffset },
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 
@@ -181,16 +148,7 @@ fun WallpaperCropScreen(
                 onClick = {
                     val source = current ?: return@MorphicButton
                     if (viewport.width == 0 || viewport.height == 0) return@MorphicButton
-                    // The viewport's corners, read back into the source's own fractions: the transform is
-                    // invertible, so where the visible window sits *on the image* is arithmetic rather than
-                    // bookkeeping this screen has to maintain as the fingers move. In *frame* coordinates, which is
-                    // why the stored size can differ from it without the rectangle needing to know.
-                    val crop = NormalizedCropRect(
-                        left = ((0 - offset.x) / (source.width * scale)).coerceIn(0f, 1f),
-                        top = ((0 - offset.y) / (source.height * scale)).coerceIn(0f, 1f),
-                        right = ((viewport.width - offset.x) / (source.width * scale)).coerceIn(0f, 1f),
-                        bottom = ((viewport.height - offset.y) / (source.height * scale)).coerceIn(0f, 1f),
-                    )
+                    val crop = cropRectOf(IntSize(source.width, source.height), viewport, scale, offset)
                     val orientation = target.orientation
                     if (orientation == null) {
                         viewModel.chooseImage(parsed, crop, storedSize.width, storedSize.height, onDone)
@@ -235,3 +193,108 @@ private const val MAX_ZOOM = 8f
 
 private val ChromeGap = 8.dp
 private val SaveGap = 24.dp
+
+/**
+ * The framed image itself: the target's shape, the pinch-and-pan gesture, and the draw.
+ *
+ * Its own composable because it is the one part of this screen that is *the crop* — everything around it is chrome.
+ * The transform stays hoisted in [WallpaperCropScreen] rather than living here, because the Save button reads it too:
+ * a frame that owned its own scale and offset would have to hand them back at the moment of saving, which is the
+ * bookkeeping [cropRectOf] exists to avoid.
+ */
+@Composable
+private fun CropFrame(
+    image: ImageBitmap,
+    frameRatio: Float,
+    viewport: IntSize,
+    scale: Float,
+    offset: Offset,
+    onViewportChange: (IntSize) -> Unit,
+    onTransform: (scale: Float, offset: Offset) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // **Every value the gesture reads is taken through `rememberUpdatedState`, and that is not a nicety.**
+    // `pointerInput` caches its block by key, so the block below is built once per [image] and then keeps whatever it
+    // captured. As *parameters*, `scale`, `offset` and `viewport` are plain values — captured once, they would freeze
+    // at whatever they were when the image arrived, and every pinch would compute from the starting transform. When
+    // this state lived in the same composable as the gesture they were `MutableState` reads, which are always
+    // current; hoisting them is what makes the indirection necessary. The same shape `HomePagerSurface` uses for its
+    // live placements and page count.
+    val liveScale = rememberUpdatedState(scale)
+    val liveOffset = rememberUpdatedState(offset)
+    val liveViewport = rememberUpdatedState(viewport)
+    val liveTransform = rememberUpdatedState(onTransform)
+
+    Box(
+        modifier = modifier
+            // The target's shape — which is `fillMaxSize` for a slot shaped like this screen, and a letterboxed band
+            // for the one that is not. `aspectRatio` picks the larger dimension it can honor, so the frame is always
+            // as big as the screen allows.
+            .fillMaxSize(FRAME_FRACTION)
+            .aspectRatio(frameRatio)
+            .clipToBounds()
+            .onSizeChanged(onViewportChange)
+            .pointerInput(image) {
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    val port = liveViewport.value
+                    val currentScale = liveScale.value
+                    val currentOffset = liveOffset.value
+                    val cover = coverScale(image, port)
+                    // Floored at the cover scale, so the image can never be pinched small enough to leave a gap: the
+                    // viewport is always fully covered, whatever the gesture asks for.
+                    val next = (currentScale * zoom).coerceIn(cover, cover * MAX_ZOOM)
+                    // Anchor the zoom on the centroid — the point under the fingers stays under them — then pan.
+                    var moved = centroid - (centroid - currentOffset) * (next / currentScale) + pan
+                    val shownW = image.width * next
+                    val shownH = image.height * next
+                    // And clamp, so an edge of the image can never be dragged inside the viewport. `minOf` with 0
+                    // handles the axis where the image is not larger than the viewport at all.
+                    moved = Offset(
+                        moved.x.coerceIn(minOf(port.width - shownW, 0f), 0f),
+                        moved.y.coerceIn(minOf(port.height - shownH, 0f), 0f),
+                    )
+                    liveTransform.value(next, moved)
+                }
+            }
+            // Drawn rather than composed as an `Image`: the transform is this screen's own state, applied to the
+            // destination rectangle directly, so there is no layout to fight with.
+            .drawBehind {
+                drawImage(
+                    image = image,
+                    dstOffset = IntOffset(offset.x.roundToInt(), offset.y.roundToInt()),
+                    dstSize = IntSize(
+                        (image.width * scale).roundToInt(),
+                        (image.height * scale).roundToInt(),
+                    ),
+                )
+            },
+    )
+}
+
+/**
+ * Where the [viewport] sits **on the image**, as fractions of the image, given the transform showing it.
+ *
+ * The transform is invertible, so this is arithmetic rather than bookkeeping the screen has to maintain as the
+ * fingers move: the viewport's own corners are mapped back through [scale] and [offset] and clamped to the image.
+ *
+ * In *frame* coordinates, which is why the size the result is stored at can differ from the viewport without the
+ * rectangle needing to know — see `WallpaperRepository.setImage`.
+ *
+ * Pure, and separated from the button that calls it for that reason: it decides what the user's wallpaper ends up
+ * looking like, and it is the one piece of this screen that can be checked without a device.
+ */
+internal fun cropRectOf(
+    image: IntSize,
+    viewport: IntSize,
+    scale: Float,
+    offset: Offset,
+): NormalizedCropRect {
+    val shownWidth = image.width * scale
+    val shownHeight = image.height * scale
+    return NormalizedCropRect(
+        left = ((0 - offset.x) / shownWidth).coerceIn(0f, 1f),
+        top = ((0 - offset.y) / shownHeight).coerceIn(0f, 1f),
+        right = ((viewport.width - offset.x) / shownWidth).coerceIn(0f, 1f),
+        bottom = ((viewport.height - offset.y) / shownHeight).coerceIn(0f, 1f),
+    )
+}
