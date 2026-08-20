@@ -7,10 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -132,40 +130,26 @@ internal fun PresetsControls(
             )
         }
 
-        BoxWithConstraints {
-            // Capped for the effect grid's reason, so a wide panel spreads four presets out rather than drawing four
-            // huge squares.
-            val cell = ((maxWidth - PresetGridSpacing * (PresetColumns - 1)) / PresetColumns)
-                .coerceAtMost(PresetTileMax)
-
-            Column(
-                modifier = Modifier.heightIn(max = PresetGridMaxHeight).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(PresetGridSpacing),
-            ) {
-                presets.chunked(PresetColumns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(PresetGridSpacing)) {
-                        row.forEach { preset ->
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PresetTile(
-                                    preset = preset,
-                                    parsed = parsed,
-                                    customImage = customImage,
-                                    packImage = packImage,
-                                    renaming = preset.name == renaming,
-                                    onLoad = { onLoad(preset) },
-                                    // Null is what makes the individual studio's tiles menu-less, and it is one
-                                    // null rather than two because rename and delete are offered together or not
-                                    // at all — they are the same permission over the same library.
-                                    onMenu = onRename?.let { { renaming = preset.name } },
-                                    onDelete = { onDelete(preset.name) },
-                                    modifier = Modifier.widthIn(max = cell),
-                                )
-                            }
-                        }
-                        repeat(PresetColumns - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
+        PresetGrid(
+            presets = presets,
+            spacing = PresetGridSpacing,
+            tileMax = PresetTileMax,
+            modifier = Modifier.heightIn(max = PresetGridMaxHeight).verticalScroll(rememberScrollState()),
+        ) { preset, cell ->
+            PresetTile(
+                preset = preset,
+                parsed = parsed,
+                customImage = customImage,
+                packImage = packImage,
+                renaming = preset.name == renaming,
+                onLoad = { onLoad(preset) },
+                // Null is what makes the individual studio's tiles menu-less, and it is one null rather than two
+                // because rename and delete are offered together or not at all — they are the same permission over
+                // the same library.
+                onMenu = onRename?.let { { renaming = preset.name } },
+                onDelete = { onDelete(preset.name) },
+                modifier = Modifier.widthIn(max = cell),
+            )
         }
     }
 }
@@ -362,7 +346,6 @@ private fun derivedName(state: androidx.compose.foundation.text.input.TextFieldS
     androidx.compose.runtime.derivedStateOf { state.text.toString().trim() }
 
 /** Three across, which at panel width is a tile big enough to read an icon in. */
-private const val PresetColumns = 3
 
 /** Between tiles on both axes. */
 private val PresetGridSpacing = 8.dp

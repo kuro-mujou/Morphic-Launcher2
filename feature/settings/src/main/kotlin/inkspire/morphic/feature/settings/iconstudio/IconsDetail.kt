@@ -6,10 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -182,34 +180,20 @@ private fun PresetsGrid(modifier: Modifier = Modifier) {
             }
         }
 
-        BoxWithConstraints {
-            // Capped, so the extra width on a tablet goes to the gaps between tiles rather than making four huge
-            // squares of a four-preset library — the effect grid's own arrangement and its reason.
-            val cell = ((maxWidth - PresetGridSpacing * (PresetColumns - 1)) / PresetColumns)
-                .coerceAtMost(PresetTileMax)
-
-            Column(verticalArrangement = Arrangement.spacedBy(PresetGridSpacing)) {
-                state.presets.chunked(PresetColumns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(PresetGridSpacing)) {
-                        row.forEach { preset ->
-                            // The cell takes the share, the tile a bounded slice of it — so a short last row is
-                            // spread like the others rather than stretched, which is what the spacers are for.
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PresetTile(
-                                    preset = preset,
-                                    sample = state.sample,
-                                    applied = preset.name == applied,
-                                    onApply = { viewModel.apply(preset) },
-                                    onEdit = { navigator.goTo(IconStudioRoute.Global(preset.name)) },
-                                    onDelete = { viewModel.delete(preset.name) },
-                                    modifier = Modifier.widthIn(max = cell),
-                                )
-                            }
-                        }
-                        repeat(PresetColumns - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
+        PresetGrid(
+            presets = state.presets,
+            spacing = PresetGridSpacing,
+            tileMax = PresetTileMax,
+        ) { preset, cell ->
+            PresetTile(
+                preset = preset,
+                sample = state.sample,
+                applied = preset.name == applied,
+                onApply = { viewModel.apply(preset) },
+                onEdit = { navigator.goTo(IconStudioRoute.Global(preset.name)) },
+                onDelete = { viewModel.delete(preset.name) },
+                modifier = Modifier.widthIn(max = cell),
+            )
         }
     }
 }
@@ -320,7 +304,6 @@ private fun PresetTile(
 }
 
 /** Three across: at a pane's width that is a ~100dp square, which is a picture rather than a button. */
-private const val PresetColumns = 3
 
 /** Between tiles on both axes. */
 private val PresetGridSpacing = 12.dp
