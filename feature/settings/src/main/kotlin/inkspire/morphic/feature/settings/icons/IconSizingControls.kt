@@ -3,12 +3,12 @@ package inkspire.morphic.feature.settings.icons
 import androidx.compose.runtime.Composable
 import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSliderRow
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.IconSizingRanges
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
-import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import kotlin.math.roundToInt
 
 /**
@@ -84,9 +84,8 @@ internal fun IconSizingControls(
     // A pure-text list is the one arrangement where hiding icons makes sense; on a grid it would leave a page of
     // labels floating in empty cells. The slot already knows, so no caller passes a flag.
     if (slot == GridSlot.APPS_LIST) {
-        SettingsSwitchRow(
-            title = "Show app icons",
-            subtitle = "Turn off for a pure-text list",
+        MorphicSwitchRow(
+            label = "Show app icons",
             checked = sizing.showIcon,
             onCheckedChange = { on -> onToggle(null, on) },
         )
@@ -134,8 +133,8 @@ internal fun IconSizingControls(
     // A card *does* have text: its title. That is card chrome rather than cell sizing, and its control lives with the
     // rest of the card's in the APPS section — a title is drawn once per tile, not once per icon.
     if (slot != GridSlot.APPS_LIST && slot != GridSlot.APPS_CARD) {
-        SettingsSwitchRow(
-            title = "Show labels",
+        MorphicSwitchRow(
+            label = "Show labels",
             checked = sizing.showLabel,
             onCheckedChange = { on -> onToggle(on, null) },
         )

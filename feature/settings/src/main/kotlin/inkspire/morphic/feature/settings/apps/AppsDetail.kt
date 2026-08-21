@@ -21,6 +21,7 @@ import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.grid.cardMinCell
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
@@ -46,7 +47,6 @@ import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
-import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
@@ -351,12 +351,13 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
             // screen.
             state.wraps?.let { wraps ->
                 SettingsSectionHeader("Paging")
-                SettingsSwitchRow(
-                    title = "Infinite scroll",
-                    // Named for the axis this surface is reached on: wrapping removes the pager's ends, and the
-                    // surface swipe hands off *at* an end — so getting back to home sideways stops working with one
-                    // finger. Worth saying, because it is not discoverable by trying the toggle once.
-                    subtitle = "Pages wrap around at the edges. Returning home sideways then needs two fingers.",
+                MorphicSwitchRow(
+                    label = "Infinite scroll",
+                    // Kept where every other supporting line was dropped, for the reason the Home section states: it
+                    // warns rather than describes, and what it warns of never appears in the preview. Named for the
+                    // axis *this* surface is reached on — wrapping removes the pager's ends, and the surface swipe
+                    // hands off at an end, so getting back to home sideways stops working with one finger.
+                    supportingText = "Pages wrap at the edges. Returning home sideways then needs two fingers.",
                     checked = wraps,
                     onCheckedChange = viewModel::setWraps,
                 )

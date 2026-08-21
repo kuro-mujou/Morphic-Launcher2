@@ -15,6 +15,7 @@ import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.sideZoneFraction
@@ -35,7 +36,6 @@ import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.LanePreview
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
-import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
@@ -195,12 +195,15 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             // else.
             state.wraps?.let { wraps ->
                 SettingsSectionHeader("Paging")
-                SettingsSwitchRow(
-                    title = "Infinite scroll",
-                    // The second sentence is the part a user cannot discover by trying it once: wrapping removes the
-                    // end of the pager, and the surface swipe hands off *at* an end — so the side surfaces on this
-                    // axis stop opening with one finger. A control that quietly takes a gesture away has to say so.
-                    subtitle = "Pages wrap around at the edges. Side surfaces left and right then need two fingers.",
+                MorphicSwitchRow(
+                    label = "Infinite scroll",
+                    // **A supporting line only where it warns of something the preview cannot show**, which is this
+                    // section's rule for them: a description of what a control does is better answered by the picture
+                    // above it, and every one of those has been dropped. This is the exception, and it is a gesture
+                    // being taken away rather than a description — wrapping removes the pager's ends, and the surface
+                    // swipe hands off *at* an end, so the side surfaces on this axis stop opening with one finger.
+                    // Nothing in the mockup moves to say so, and nobody discovers it by trying the toggle once.
+                    supportingText = "Pages wrap at the edges. Side surfaces left and right then need two fingers.",
                     checked = wraps,
                     onCheckedChange = viewModel::setWraps,
                 )
