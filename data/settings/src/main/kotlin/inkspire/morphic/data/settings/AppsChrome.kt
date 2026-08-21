@@ -18,24 +18,29 @@ import kotlinx.serialization.Serializable
  * so it has no edge to choose), and the tab bar's placement *is* a [VerticalEdge] — which that enum's KDoc has said
  * since B0, naming this exact consumer.
  *
- * **Search is per layout, the tab bar is not**, and the asymmetry is a fact about the surface rather than an
- * inconsistency. Each arrangement draws its own chrome and a user picks per arrangement — a field pinned to the bottom
- * of the list is not a choice they made about the category cards. Tabs exist on `PAGER_WITH_CATEGORY` alone, so
- * "per layout" for [tabBarEdge] would be four entries no layout can read.
+ * **How many layouts can hold a setting decides its shape, and its name says which answer it got.** More than one,
+ * and it is a sparse map keyed by layout, named `…ByLayout`. Exactly one, and it is a plain field named for the
+ * *owner* rather than for the surface — because a map would then permit four keys nothing can read or write, while a
+ * surface-wide name would claim a property of APPS that four of its five arrangements silently ignore. Search took the
+ * first answer, the category pager's tabs the second, and the pair are not inconsistent: they are the same rule with
+ * different counts.
+ *
+ * The rule is also what makes a second tabbed layout a *visible* change rather than a quiet one. A field named for the
+ * arrangement it belongs to cannot absorb a second one by being written to; it has to become a map, and renaming the
+ * key is how a stored shape announces that its meaning moved.
  *
  * @property searchByLayout where the search field sits, for each layout the user has placed it on. **Sparse**: an
  *   absent layout has not been chosen for, and resolves through [searchOn] rather than through a stored default, so a
  *   later change to that default reaches everyone who never touched it. The key is the seam this field renamed itself
  *   at — it held a single `SearchPlacement` under the name `search`, and re-reading that in place would have given
  *   every layout one value while claiming they were independent.
- * @property tabBarEdge which edge the category tab bar sits on. Meaningful only in `AppsLayout.PAGER_WITH_CATEGORY`,
- *   the one layout that has tabs; the others store it and ignore it, which is cheaper than a nullable that every
- *   reader has to branch on.
+ * @property categoryTabEdge which edge the **category pager's** tab bar sits on — `AppsLayout.PAGER_WITH_CATEGORY`,
+ *   the one arrangement that draws tabs, and the reason this is a field rather than an entry in a map.
  */
 @Serializable
 data class AppsChrome(
     val searchByLayout: Map<AppsLayout, SearchPlacement> = emptyMap(),
-    val tabBarEdge: VerticalEdge = VerticalEdge.TOP,
+    val categoryTabEdge: VerticalEdge = VerticalEdge.TOP,
 ) {
     /**
      * Where search sits on [layout].

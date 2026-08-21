@@ -359,8 +359,8 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                 val edges = VerticalEdge.entries
                 MorphicSegmentedButtons(
                     options = edges.map { if (it == VerticalEdge.TOP) "Top" else "Bottom" },
-                    selectedIndex = edges.indexOf(state.chrome.tabBarEdge),
-                    onSelect = { viewModel.setTabBarEdge(edges[it]) },
+                    selectedIndex = edges.indexOf(state.chrome.categoryTabEdge),
+                    onSelect = { viewModel.setCategoryTabEdge(edges[it]) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

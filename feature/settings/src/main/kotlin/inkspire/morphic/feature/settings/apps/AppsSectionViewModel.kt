@@ -332,9 +332,14 @@ class AppsSectionViewModel(
         viewModelScope.launch { settingsRepository.setSearchPlacement(target, placement) }
     }
 
-    /** Sets which edge the category pager's tab bar sits on. */
-    fun setTabBarEdge(edge: VerticalEdge) {
-        viewModelScope.launch { settingsRepository.setTabBarEdge(edge) }
+    /**
+     * Sets which edge the category pager's tab bar sits on.
+     *
+     * **Takes no layout, unlike [setSearch]**, because exactly one arrangement draws tabs and the setting is named for
+     * it. A layout parameter here would accept four values that nothing could ever read back.
+     */
+    fun setCategoryTabEdge(edge: VerticalEdge) {
+        viewModelScope.launch { settingsRepository.setCategoryTabEdge(edge) }
     }
 
     /**

@@ -218,7 +218,8 @@ internal class SettingsRepositoryImpl(
     override suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement) =
         update(AppsChromeSlice) { withSearch(layout, placement) }
 
-    override suspend fun setTabBarEdge(edge: VerticalEdge) = update(AppsChromeSlice) { copy(tabBarEdge = edge) }
+    override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
+        update(AppsChromeSlice) { copy(categoryTabEdge = edge) }
 
     override suspend fun saveIconPreset(name: String, appearance: IconAppearance) =
         update(IconPresetsSlice) { with(IconPreset(name, appearance)) }

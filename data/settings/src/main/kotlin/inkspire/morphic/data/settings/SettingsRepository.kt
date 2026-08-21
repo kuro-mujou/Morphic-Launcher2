@@ -70,7 +70,7 @@ interface SettingsRepository {
     suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement)
 
     /** Sets which edge the category pager's tab bar sits on. */
-    suspend fun setTabBarEdge(edge: VerticalEdge)
+    suspend fun setCategoryTabEdge(edge: VerticalEdge)
 
     /**
      * The user's saved icon recipes. Empty until one is saved; there are no built-ins.

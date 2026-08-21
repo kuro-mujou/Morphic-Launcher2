@@ -93,11 +93,11 @@ internal fun AppsEditorPreview(
             verticalArrangement = Arrangement.spacedBy(ChromeGap),
         ) {
             HeaderRow(searchInHeader = search == SearchPlacement.InHeader)
-            if (chrome.tabBarEdge == VerticalEdge.TOP) TabRow()
+            if (chrome.categoryTabEdge == VerticalEdge.TOP) TabRow()
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 ReflectivePreview(cols, metrics, areaWidthDp, insetFraction, edit)
             }
-            if (chrome.tabBarEdge == VerticalEdge.BOTTOM) TabRow()
+            if (chrome.categoryTabEdge == VerticalEdge.BOTTOM) TabRow()
         }
 
         // Cards are *tiles*: a card's height is its width, so there is no icon-and-label height to derive and the even
