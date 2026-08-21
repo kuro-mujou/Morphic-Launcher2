@@ -11,9 +11,22 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import inkspire.morphic.core.model.HomeEdge
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+/**
+ * How far past [slop] this accumulated travel reached — the drag the pan owes on the event it claims.
+ *
+ * Zero rather than a negative when the axis never crossed slop itself, which is the ordinary case for the axis a
+ * diagonal swipe did *not* lock to: subtracting a slop it never paid would push the pan backwards.
+ */
+private fun Float.pastSlop(slop: Float): Float = when {
+    this > slop -> this - slop
+    this < -slop -> this + slop
+    else -> 0f
+}
 
 /** The axis a surface pan is locked to for the duration of one drag. */
 private enum class PanAxis { HORIZONTAL, VERTICAL }
@@ -109,11 +122,43 @@ fun Modifier.surfacePagerGesture(
 
             var axis: PanAxis? = null
             var claimed = false
+            var justClaimed = false
             var settled = false
             var twoFinger = false
             var accX = 0f
             var accY = 0f
             val tracker = VelocityTracker()
+
+            // **The pan is driven by one coroutine that drains a running total, not by one launch per event** —
+            // and that is what a slow swipe was stalling on.
+            //
+            // `dragXBy` is `suspend` because `Animatable.snapTo` takes the animatable's `MutatorMutex`. Launched
+            // per pointer event, a dozen of them contend for that lock; each loser suspends and is resumed through
+            // the composition dispatcher, which hands out its queue at frame boundaries. So *n* touch events became
+            // roughly *n* frames of backlog: the surface sat still while the queue drained and then landed on the
+            // finger all at once. A flick is two or three events and never showed it; a slow drag is dozens, which
+            // is why this got worse the slower you moved.
+            //
+            // Summing instead of queueing also makes the backlog self-correcting: several events arriving inside
+            // one frame collapse into a single `snapTo` of their total, which is the only value that frame could
+            // have drawn anyway.
+            var pending = 0f
+            var pump: Job? = null
+            fun pumpPending() {
+                if (pump?.isActive == true) return
+                pump = scope.launch {
+                    // Re-read each turn: more may have arrived while the previous `snapTo` held the lock.
+                    while (pending != 0f) {
+                        val delta = pending
+                        pending = 0f
+                        when (axis) {
+                            PanAxis.HORIZONTAL -> state.dragXBy(delta)
+                            PanAxis.VERTICAL -> state.dragYBy(delta)
+                            null -> Unit
+                        }
+                    }
+                }
+            }
 
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -186,16 +231,30 @@ fun Modifier.surfacePagerGesture(
                             axis = if (horizontal) PanAxis.HORIZONTAL else PanAxis.VERTICAL
                             claimed = true
                         }
+                        justClaimed = claimed
                     }
                 }
 
                 if (claimed) {
                     pressed.forEach { it.consume() }
-                    when (axis) {
-                        PanAxis.HORIZONTAL -> scope.launch { state.dragXBy(dx) }
-                        PanAxis.VERTICAL -> scope.launch { state.dragYBy(dy) }
-                        null -> Unit
+                    // **The first drag carries the travel that recognizing the swipe cost**, not just the delta of
+                    // the event that happened to cross slop. Those are the same number only for a flick, where one
+                    // event jumps the whole distance; a slow swipe reaches slop over a dozen small events, and
+                    // applying the last of them alone threw the other eleven away — so the surface began a fixed
+                    // ~8dp behind the finger and stayed there for the rest of the drag. It is exactly the lag that
+                    // gets worse the slower you move, which is the opposite of what a threshold should feel like.
+                    //
+                    // The slop itself is deliberately *not* carried: it is the distance spent deciding this is a
+                    // swipe at all, and paying it back would start the pan with a visible jump. What is owed is the
+                    // overshoot past it — Compose's own `detectDragGestures` hands callers the same quantity.
+                    val step = when (axis) {
+                        PanAxis.HORIZONTAL -> if (justClaimed) accX.pastSlop(touchSlop) else dx
+                        PanAxis.VERTICAL -> if (justClaimed) accY.pastSlop(touchSlop) else dy
+                        null -> 0f
                     }
+                    justClaimed = false
+                    pending += step
+                    pumpPending()
                 }
             }
 
@@ -204,14 +263,17 @@ fun Modifier.surfacePagerGesture(
                 // Flip screen velocity into pan-space: a finger flinging right (+x) opens LEFT, i.e. pan
                 // decreasing, so the settle sees a negative velocity.
                 when (axis) {
+                    // Each settle waits for the pump to finish: a spring started while a `snapTo` is still queued
+                    // would animate from a position the finger has already left, and the drain would then jump the
+                    // value out from under it.
                     PanAxis.HORIZONTAL -> {
                         settled = true
-                        scope.launch { state.settleX(startX, -velocity.x) }
+                        scope.launch { pump?.join(); state.settleX(startX, -velocity.x) }
                     }
 
                     PanAxis.VERTICAL -> {
                         settled = true
-                        scope.launch { state.settleY(startY, -velocity.y) }
+                        scope.launch { pump?.join(); state.settleY(startY, -velocity.y) }
                     }
 
                     null -> Unit
@@ -220,7 +282,7 @@ fun Modifier.surfacePagerGesture(
 
             // A release that never claimed (a tap, or a gesture handed to a child) re-settles both axes so the
             // pan never rests mid-transition.
-            if (!settled) scope.launch { state.settleToNearest() }
+            if (!settled) scope.launch { pump?.join(); state.settleToNearest() }
         }
     }
 }
