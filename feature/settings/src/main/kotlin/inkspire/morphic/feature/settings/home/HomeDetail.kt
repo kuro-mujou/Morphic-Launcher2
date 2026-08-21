@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,7 +25,6 @@ import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButto
 import inkspire.morphic.core.designsystem.grid.sideZoneFraction
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.blueprint
@@ -40,7 +37,6 @@ import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.label
-import inkspire.morphic.feature.settings.subtitle
 import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders, as everywhere else in this module. */
@@ -84,7 +80,6 @@ internal fun HomeDetail(
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMorphicColors.current
     val viewModel = koinViewModel<HomeHubViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -97,13 +92,6 @@ internal fun HomeDetail(
             .verticalScroll(rememberScrollState())
             .padding(ScreenPadding),
     ) {
-        Text("Home", style = MaterialTheme.typography.headlineSmall, color = colors.content)
-        // **The pairing's own second line**, not a fixed description of the section. It is the one sentence that says
-        // what the picture and the two rows below are — "a list of apps, under a panel for widgets" names both zones,
-        // where the switch above has three words for them.
-        Text(text = state.layout.subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
-
-        Spacer(Modifier.height(SwitchGap))
         HomeLayoutSwitch(selected = state.layout, onSelect = viewModel::setLayout)
         Spacer(Modifier.height(SwitchGap))
 

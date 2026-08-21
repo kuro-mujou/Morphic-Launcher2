@@ -177,12 +177,6 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
     val range = blueprint.editableRangeIn(zoneArea, minCell)
 
     SurfaceDetail(
-        title = if (metrics == null) "Widget area" else "Dock",
-        subtitle = if (metrics == null) {
-            "Its size, and the grid widgets are placed on."
-        } else {
-            "Its height, and how many columns fit across it. Rows follow from the height."
-        },
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
         layout = {

@@ -217,8 +217,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
 
 
     SurfaceDetail(
-        title = "Apps",
-        subtitle = "Per arrangement, for this screen orientation.",
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
         layout = {

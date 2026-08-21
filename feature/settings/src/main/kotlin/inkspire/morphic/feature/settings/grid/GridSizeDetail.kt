@@ -138,11 +138,6 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
     val insetFraction = shownPadding / window.widthDp
 
     SurfaceDetail(
-        title = if (main is MainAreaSize.Rows) "Home list" else "Home grid",
-        subtitle = when (main) {
-            is MainAreaSize.Rows -> "How tall each row is, and how its icons are sized."
-            is MainAreaSize.Grid -> "Rows and columns on the home pages. The − and + on each edge change that side."
-        },
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
         layout = {

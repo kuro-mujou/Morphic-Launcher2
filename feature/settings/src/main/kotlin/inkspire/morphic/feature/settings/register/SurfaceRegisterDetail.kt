@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.data.settings.SideBinding
@@ -24,7 +21,6 @@ import org.koin.androidx.compose.koinViewModel
 
 /** Provisional spacing — placeholders until the settings port brings real row components with it. */
 private val ScreenPadding = 20.dp
-private val CrossGap = 20.dp
 
 /**
  * The **surface register**: for each edge of HOME, which surface it opens and in which layout.
@@ -62,7 +58,6 @@ internal fun SurfaceRegisterDetail(
 ) {
     val viewModel = koinViewModel<SurfaceRegisterViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val colors = LocalMorphicColors.current
 
     var picking by remember { mutableStateOf<HomeEdge?>(null) }
 
@@ -72,19 +67,11 @@ internal fun SurfaceRegisterDetail(
             .verticalScroll(rememberScrollState())
             .padding(ScreenPadding),
     ) {
-        Text("Surface register", style = MaterialTheme.typography.headlineSmall, color = colors.content)
-        Text(
-            text = "Which surface each edge of home opens. Tap a slot to place one; swipe from that edge to reach it.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.contentMuted,
-        )
-
         SurfaceRegisterCross(
             homeLayout = state.register.homeLayout,
             bindings = state.register.sides,
             onPick = { picking = it },
             onOpenSettings = onOpenSection,
-            modifier = Modifier.padding(top = CrossGap),
         )
     }
 

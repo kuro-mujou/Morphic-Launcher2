@@ -16,8 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,13 +63,16 @@ private const val IconSectionTitle = "Icon & text"
  *   the icon group fills the viewport as a final full-height item: controls scrolling on the left, preview fixed on the
  *   right. A phone in landscape has room for a cell beside its sliders and no room for one above them.
  *
+ * **The pane draws no heading of its own.** The app bar above it already carries the section's name — the same
+ * `meta().title` the list row was tapped on — so a heading here is that word a second time, with a line under it
+ * describing a screen the user is looking at. What a control does is answered by the control and by the preview it
+ * moves; the section's name is answered once, at the top.
+ *
  * The offscreen layer, the pane background, the insets and the disabled overscroll are all `PunchThroughPane`'s in
  * `SettingsScreen`, so no section repeats them. Overscroll being off is
  * what makes a lazy list safe here at all: a stretch re-composites the scrolling content and the icon preview's punch
  * stops reaching the window for as long as it lasts.
  *
- * @param title the section's own heading, above the layout group.
- * @param subtitle one line under it saying what the section governs.
  * @param onReroll shuffles which sample app the preview draws.
  * @param layout the section's own controls: its grid editor first, then everything that adjusts it.
  * @param preview the live icon preview, given the modifier that sizes it for the current arrangement.
@@ -79,8 +80,6 @@ private const val IconSectionTitle = "Icon & text"
  */
 @Composable
 internal fun SurfaceDetail(
-    title: String,
-    subtitle: String,
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
     preview: (@Composable (Modifier) -> Unit)?,
@@ -88,16 +87,14 @@ internal fun SurfaceDetail(
     modifier: Modifier = Modifier,
 ) {
     if (currentDeviceConfiguration().isLandscape) {
-        LandscapeDetail(title, subtitle, onReroll, layout, preview, icons, modifier)
+        LandscapeDetail(onReroll, layout, preview, icons, modifier)
     } else {
-        PortraitDetail(title, subtitle, onReroll, layout, preview, icons, modifier)
+        PortraitDetail(onReroll, layout, preview, icons, modifier)
     }
 }
 
 @Composable
 private fun PortraitDetail(
-    title: String,
-    subtitle: String,
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
     preview: (@Composable (Modifier) -> Unit)?,
@@ -113,7 +110,6 @@ private fun PortraitDetail(
                     .padding(horizontal = ScreenPadding)
                     .padding(top = ScreenPadding, bottom = ScreenPadding),
             ) {
-                DetailHeading(title, subtitle)
                 layout()
             }
         }
@@ -139,8 +135,6 @@ private fun PortraitDetail(
 
 @Composable
 private fun LandscapeDetail(
-    title: String,
-    subtitle: String,
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
     preview: (@Composable (Modifier) -> Unit)?,
@@ -161,7 +155,6 @@ private fun LandscapeDetail(
                     .padding(horizontal = ScreenPadding)
                     .padding(top = ScreenPadding, bottom = ScreenPadding),
             ) {
-                DetailHeading(title, subtitle)
                 layout()
             }
         }
@@ -196,14 +189,6 @@ private fun LandscapeDetail(
             }
         }
     }
-}
-
-/** The section's own heading and one line of what it governs. */
-@Composable
-private fun DetailHeading(title: String, subtitle: String) {
-    val colors = LocalMorphicColors.current
-    Text(title, style = MaterialTheme.typography.headlineSmall, color = colors.content)
-    Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
 }
 
 /**

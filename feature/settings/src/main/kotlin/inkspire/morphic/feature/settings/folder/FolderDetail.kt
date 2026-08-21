@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.settings.folder
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,9 +26,6 @@ import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
-
-/** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
-private val RowGap = 8.dp
 
 /**
  * **Folders**: how the icons inside an opened folder are sized.
@@ -81,8 +77,6 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
     )
 
     SurfaceDetail(
-        title = "Folders",
-        subtitle = "Icons inside an opened folder, and inside an expanded category card — one grid, so one setting.",
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
         layout = {
@@ -95,7 +89,6 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
                     "as it fills.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.contentMuted,
-                modifier = Modifier.padding(top = RowGap),
             )
         },
         preview = { previewModifier ->
