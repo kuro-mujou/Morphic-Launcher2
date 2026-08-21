@@ -28,9 +28,9 @@ import kotlinx.coroutines.flow.drop
  *
  * - **[onValueChangeFinished] would be captured forever.** `SliderState` exposes it as a `var` but the factory never
  *   re-assigns it, so a call site whose commit lambda closes over changing state gets the *first* composition's
- *   closure for the lifetime of the slider. `SettingsCommitSlider` is exactly that shape (its dragged-preview state is
- *   keyed on the incoming value, so a commit replaces the object the lambda reads), and the symptom was precise: the
- *   first drag committed, and every later one re-committed the first drag's value. Pushed in via [SideEffect] instead,
+ *   closure for the lifetime of the slider. A caller whose commit reads an in-flight value held in a *fresh* object
+ *   per commit — which `remember(value)` produces, and which is why [MorphicSliderRow] deliberately does not — then
+ *   commits its first drag and re-commits that same value for every later one. Pushed in via [SideEffect] instead,
  *   which is what a `var` on a remembered holder is for.
  * - **[valueRange] and [steps] are `val`s**, so a slider whose range legitimately moves — the APPS list's row height is
  *   bounded by the icon guardrails, which the user can change on the same screen — would go on mapping finger position

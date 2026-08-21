@@ -36,12 +36,12 @@ import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
+import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
-import inkspire.morphic.feature.settings.component.SettingsSliderRow
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 
@@ -83,7 +83,7 @@ private val RowGap = 8.dp
  *   bar names the section, and a frosted panel and two buttons reading "Blur" and "Liquid glass" say what they are
  *   without a word over them.
  * - **The sliders are the icon studio's shape** — name, value and reset over a track flanked by a stepper each side (see
- *   [SettingsSliderRow]). A wash at 28% and one at 30% are hard to tell apart on a photograph, which makes a readout and
+ *   [MorphicSliderRow]). A wash at 28% and one at 30% are hard to tell apart on a photograph, which makes a readout and
  *   a reset worth more here than on a control whose result is a number of columns.
  *
  * **Liquid glass is hidden rather than disabled below API 33.** An effect that silently comes out as a plain blur is
@@ -230,7 +230,7 @@ private fun ColumnScope.BlurControls(
     onEdit: (BlurEdit) -> Unit,
     onPreview: (BlurEdit) -> Unit,
 ) {
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Blur",
         what = "blur",
         value = effect.strength,
@@ -264,7 +264,7 @@ private fun ColumnScope.BlurControls(
     // under a finger already on a slider. (The studio's grain angle is the documented exception, and its gate is a
     // *continuous* control directly above it.)
     if (effect.tint != BackdropTint.NONE) {
-        SettingsSliderRow(
+        MorphicSliderRow(
             what = "tint",
             value = effect.tintAmount,
             valueRange = 0f..MaxTintAmount,
@@ -372,8 +372,8 @@ private fun TintSwatch(
  * **Live while dragging, written when accepted.** `MorphicColorPicker` reports every change and has no notion of a
  * gesture ending, so every change previews (the card re-washes under the finger) and the button below is what commits.
  * The alternative — writing per change — is a JSON encode and a file write per frame, which is exactly what
- * `SettingsCommitSlider` exists to avoid. Leaving without accepting keeps the stored color, and the preview snapping back
- * is what says so.
+ * `MorphicSliderRow`'s commit-on-release exists to avoid. Leaving without accepting keeps the stored color, and the
+ * preview snapping back is what says so.
  */
 @Composable
 private fun CustomTintPicker(argb: Int, onPreview: (Int) -> Unit, onCommit: (Int) -> Unit) {
@@ -410,7 +410,7 @@ private fun ColumnScope.GlassControls(
     onPreview: (GlassEdit) -> Unit,
 ) {
     SettingsSectionHeader("Lens")
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Blur",
         what = "blur",
         value = effect.blur,
@@ -420,7 +420,7 @@ private fun ColumnScope.GlassControls(
         onCommit = { value -> onEdit { it.copy(blur = value) } },
         onPreview = { value -> onPreview { it.copy(blur = value) } },
     )
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Refraction",
         what = "refraction",
         value = effect.refraction,
@@ -430,7 +430,7 @@ private fun ColumnScope.GlassControls(
         onCommit = { value -> onEdit { it.copy(refraction = value) } },
         onPreview = { value -> onPreview { it.copy(refraction = value) } },
     )
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Depth",
         what = "depth",
         value = effect.depth,
@@ -442,7 +442,7 @@ private fun ColumnScope.GlassControls(
     )
 
     SettingsSectionHeader("Light")
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Vibrancy",
         what = "vibrancy",
         value = effect.vibrancy,
@@ -452,7 +452,7 @@ private fun ColumnScope.GlassControls(
         onCommit = { value -> onEdit { it.copy(vibrancy = value) } },
         onPreview = { value -> onPreview { it.copy(vibrancy = value) } },
     )
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Sheen",
         what = "sheen",
         value = effect.sheen,
@@ -462,7 +462,7 @@ private fun ColumnScope.GlassControls(
         onCommit = { value -> onEdit { it.copy(sheen = value) } },
         onPreview = { value -> onPreview { it.copy(sheen = value) } },
     )
-    SettingsSliderRow(
+    MorphicSliderRow(
         label = "Dispersion",
         what = "dispersion",
         value = effect.dispersion,

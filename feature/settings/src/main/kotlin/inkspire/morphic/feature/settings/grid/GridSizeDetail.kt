@@ -13,26 +13,29 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
-import inkspire.morphic.core.designsystem.cell.rowHeightRange
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.sideZoneFraction
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.LanePreview
-import inkspire.morphic.feature.settings.component.SettingsCommitSlider
+import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
@@ -101,7 +104,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
     val slot = state.layout.mainSlot
 
     // **What the preview draws while a slider is held.** Keyed on the resolved sizing, so a commit clears it and the
-    // preview falls back to what was stored — the same shape `SettingsCommitSlider` uses for its own label, and the
+    // preview falls back to what was stored — the same shape `MorphicSliderRow` uses for its own readout, and the
     // same reason: the write is asynchronous, so dropping the local value on release would flash the old one. The
     // *controls* still read `icon`, since a slider must show its committed position.
     var previewIcon by remember(icon) { mutableStateOf<IconSizing?>(null) }
@@ -197,14 +200,16 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                 )
             }
 
-            SettingsCommitSlider(
-                title = "Side margin",
-                subtitle = "Blank space at the main area's left and right edges.",
-                value = paddingDp.toFloat(),
-                valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
-                valueLabel = { "${it.roundToInt()} dp" },
-                onPreview = { previewPadding = it.roundToInt() },
-                onCommit = { viewModel.setPadding(it.roundToInt()) },
+            MorphicSliderRow(
+                label = "Side margin",
+                what = "side margin",
+                value = paddingDp,
+                valueRange = HorizontalPaddingRange,
+                default = slot.blueprint.horizontalPaddingDp,
+                valueLabel = { "$it dp" },
+                onPreview = { previewPadding = it },
+                onCommit = viewModel::setPadding,
+                modifier = SettingsRowPadding,
             )
 
             MorphicButton(
@@ -258,7 +263,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
  * they are the reason it still gets an editor rather than a bare slider: the lanes at the height being set, and the
  * widget area beside them at its real share of the screen.
  *
- * **The slider's bounds are the icon guardrails plus the row's own inset** (`rowHeightRange`), which is what makes the
+ * **The slider's bounds are the icon guardrails plus the row's own inset** (`wholeRowHeightRange`), which is what makes the
  * icon range slider *govern* this one: a row shorter than `minIconDp` + padding cannot honor the smallest icon
  * allowed, and one taller than `maxIconDp` + padding is height the largest cannot fill. So the way to ask for a taller
  * row is to raise the upper guardrail. With icons off the range changes shape — the floor becomes the label's own
@@ -279,7 +284,8 @@ private fun HomeListEditor(
     onSetRowHeight: (Int) -> Unit,
 ) {
     val metrics = icon.toIconMetrics()
-    val range = rowHeightRange(metrics)
+    // Whole dp, because that is what the store holds — see `wholeRowHeightRange`.
+    val range = wholeRowHeightRange(metrics)
     // Previewed per frame so the lanes grow under the finger, committed on release — the same pair every other slider
     // that moves a preview uses.
     var previewRowHeight by remember(rowHeightDp) { mutableStateOf<Float?>(null) }
@@ -300,20 +306,17 @@ private fun HomeListEditor(
         modifier = Modifier.padding(top = RowGap * 2),
     )
 
-    SettingsCommitSlider(
-        title = "Row height",
-        subtitle = buildString {
-            append(if (icon.showIcon) "How tall each row is; the icon fills it. " else "How tall each row is. ")
-            append("${range.start.roundToInt()}–${range.endInclusive.roundToInt()} dp, ")
-            append(
-                if (icon.showIcon) "from the icon size limits below."
-                else "bounded by the label, not by the icon limits.",
-            )
-        },
-        value = fitRowHeight(rowHeightDp.dp, metrics).value,
+    MorphicSliderRow(
+        label = "Row height",
+        what = "row height",
+        value = fitRowHeight(rowHeightDp.dp, metrics).value.roundToInt(),
         valueRange = range,
-        valueLabel = { "${it.roundToInt()} dp" },
-        onPreview = { previewRowHeight = it },
-        onCommit = { committed -> onSetRowHeight(committed.roundToInt()) },
+        // Clamped into the same window, because the range's own bounds are the icon guardrails and those are the
+        // user's too: a blueprint row height outside today's limits is not somewhere a reset may land.
+        default = GridSlot.HOME_LIST.blueprint.rowHeightDp!!.coerceIn(range.first, range.last),
+        valueLabel = { "$it dp" },
+        onPreview = { previewRowHeight = it.toFloat() },
+        onCommit = onSetRowHeight,
+        modifier = SettingsRowPadding,
     )
 }

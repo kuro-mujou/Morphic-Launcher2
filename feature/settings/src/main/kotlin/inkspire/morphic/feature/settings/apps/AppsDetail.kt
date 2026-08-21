@@ -18,10 +18,11 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
 import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
-import inkspire.morphic.core.designsystem.cell.rowHeightRange
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.grid.cardMinCell
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
@@ -32,6 +33,7 @@ import inkspire.morphic.core.designsystem.grid.minCellFor
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.CardChromeRanges
@@ -43,7 +45,7 @@ import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
-import inkspire.morphic.feature.settings.component.SettingsCommitSlider
+import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import inkspire.morphic.feature.settings.component.SurfaceDetail
@@ -62,6 +64,14 @@ import kotlin.math.roundToInt
 private const val SampleCategoryName = "Category"
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
+/**
+ * Where each card control's reset goes: the blueprint's own chrome, which is all zeroes and a 1x title.
+ *
+ * Read from the blueprint rather than restated, because that is where a default lives — `data:settings` resolves every
+ * card override against this same object, so a reset here lands exactly where an untouched launcher already is.
+ */
+private val CardChromeDefaults = AppsCardGrid.card ?: CardChrome()
+
 private val RowGap = 8.dp
 private val ChipGap = 8.dp
 
@@ -171,7 +181,8 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
     // the row-height slider: widen the icon limits and it gains travel, narrow them and it loses it. **Unless the icons
     // are off**, in which case no guardrail applies at all — the floor becomes the label's own height and the ceiling
     // opens up, since a pure-text row can be as spacious as the user likes.
-    val rowRange = rowHeightRange(metrics)
+    // Whole dp, because that is what the store holds - see `wholeRowHeightRange`.
+    val rowRange = wholeRowHeightRange(metrics)
     var previewRowHeight by remember(rowHeightDp) { mutableStateOf<Float?>(null) }
     val fittedRowHeight = fitRowHeight(rowHeightDp.dp, metrics).value
     val shownRowHeight = previewRowHeight ?: fittedRowHeight
@@ -297,37 +308,34 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
             }
 
             if (isList) {
-                SettingsCommitSlider(
-                    title = "Row height",
-                    subtitle = buildString {
-                        append(
-                            if (icon.showIcon) "How tall each row is; the icon fills it. "
-                            else "How tall each row is. ",
-                        )
-                        append("${rowRange.start.roundToInt()}–${rowRange.endInclusive.roundToInt()} dp, ")
-                        append(
-                            if (icon.showIcon) "from the icon size limits below."
-                            else "bounded by the label, not by the icon limits.",
-                        )
-                    },
-                    value = fittedRowHeight,
+                MorphicSliderRow(
+                    label = "Row height",
+                    what = "row height",
+                    value = fittedRowHeight.roundToInt(),
                     valueRange = rowRange,
-                    valueLabel = { "${it.roundToInt()} dp" },
-                    onPreview = { previewRowHeight = it },
-                    onCommit = { committed -> viewModel.setRowHeight(committed.roundToInt()) },
+                    // Clamped into the same window, because the range's own bounds are the icon guardrails and those
+                    // are the user's too: a blueprint row height outside today's limits is not somewhere a reset may
+                    // land.
+                    default = slot.blueprint.rowHeightDp!!.coerceIn(rowRange.first, rowRange.last),
+                    valueLabel = { "$it dp" },
+                    onPreview = { previewRowHeight = it.toFloat() },
+                    onCommit = viewModel::setRowHeight,
+                    modifier = SettingsRowPadding,
                 )
             }
 
             // Every layout has edges, so this slider is outside the list/grid branch — unlike the row height, which
             // only the list has, and the editor, which only a grid with an `editRange` has.
-            SettingsCommitSlider(
-                title = "Side margin",
-                subtitle = "Blank space at this layout's left and right edges.",
-                value = paddingDp.toFloat(),
-                valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
-                valueLabel = { "${it.roundToInt()} dp" },
-                onPreview = { previewPadding = it.roundToInt() },
-                onCommit = { viewModel.setPadding(it.roundToInt()) },
+            MorphicSliderRow(
+                label = "Side margin",
+                what = "side margin",
+                value = paddingDp,
+                valueRange = HorizontalPaddingRange,
+                default = slot.blueprint.horizontalPaddingDp,
+                valueLabel = { "$it dp" },
+                onPreview = { previewPadding = it },
+                onCommit = viewModel::setPadding,
+                modifier = SettingsRowPadding,
             )
 
             // **Only on the two layouts that page**, said by the state leaving `wraps` null rather than by a second
@@ -470,47 +478,52 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                 // plain rectangle of edge-to-edge icons until a user decides otherwise.
                 card?.let { chrome ->
                     SettingsSectionHeader("Card")
-                    SettingsCommitSlider(
-                        title = "Title text size",
-                        subtitle = "Scale of the category name above each card's icons.",
+                    // **Every reset here goes to `CardChrome()`'s own field**, read from the model rather than typed
+                    // out: a card starts as a plain rectangle of edge-to-edge icons, and that decision lives in the
+                    // constructor. A number restated here would be a second answer to drift from it.
+                    MorphicSliderRow(
+                        label = "Title text size",
+                        what = "title text size",
                         value = chrome.titleScale,
                         valueRange = CardChromeRanges.TitleScale,
+                        default = CardChromeDefaults.titleScale,
                         valueLabel = { "%.2fx".format(it) },
                         onPreview = { previewCard = chrome.copy(titleScale = it) },
                         onCommit = { viewModel.cardChrome.change(CardChromeField.TitleScale, it) },
+                        modifier = SettingsRowPadding,
                     )
-                    SettingsCommitSlider(
-                        title = "Corner radius",
-                        subtitle = "How rounded each card is. Zero is a square card.",
-                        value = chrome.cornerRadiusDp.toFloat(),
-                        valueRange = CardChromeRanges.CornerRadiusDp.first.toFloat()..
-                            CardChromeRanges.CornerRadiusDp.last.toFloat(),
-                        valueLabel = { "${it.roundToInt()} dp" },
-                        onPreview = { previewCard = chrome.copy(cornerRadiusDp = it.roundToInt()) },
-                        onCommit = { viewModel.cardChrome.change(CardChromeField.CornerRadius, it) },
+                    MorphicSliderRow(
+                        label = "Corner radius",
+                        what = "corner radius",
+                        value = chrome.cornerRadiusDp,
+                        valueRange = CardChromeRanges.CornerRadiusDp,
+                        default = CardChromeDefaults.cornerRadiusDp,
+                        valueLabel = { "$it dp" },
+                        onPreview = { previewCard = chrome.copy(cornerRadiusDp = it) },
+                        onCommit = { viewModel.cardChrome.change(CardChromeField.CornerRadius, it.toFloat()) },
+                        modifier = SettingsRowPadding,
                     )
-                    SettingsCommitSlider(
-                        title = "Icon area padding",
-                        // Says which way it cuts, because it is the one control here that can take a *lane* away: the
-                        // narrowest card is two icons at their guardrail plus these paddings, so widening one raises
-                        // the floor the lane count is divided against.
-                        subtitle = "Space between a card's edge and its icons. Wide enough, and a lane is lost.",
-                        value = chrome.outerPaddingDp.toFloat(),
-                        valueRange = CardChromeRanges.PaddingDp.first.toFloat()..
-                            CardChromeRanges.PaddingDp.last.toFloat(),
-                        valueLabel = { "${it.roundToInt()} dp" },
-                        onPreview = { previewCard = chrome.copy(outerPaddingDp = it.roundToInt()) },
-                        onCommit = { viewModel.cardChrome.change(CardChromeField.OuterPadding, it) },
+                    MorphicSliderRow(
+                        label = "Icon area padding",
+                        what = "icon area padding",
+                        value = chrome.outerPaddingDp,
+                        valueRange = CardChromeRanges.PaddingDp,
+                        default = CardChromeDefaults.outerPaddingDp,
+                        valueLabel = { "$it dp" },
+                        onPreview = { previewCard = chrome.copy(outerPaddingDp = it) },
+                        onCommit = { viewModel.cardChrome.change(CardChromeField.OuterPadding, it.toFloat()) },
+                        modifier = SettingsRowPadding,
                     )
-                    SettingsCommitSlider(
-                        title = "Icon spacing",
-                        subtitle = "Gap between the four icons. Zero packs them edge to edge.",
-                        value = chrome.innerPaddingDp.toFloat(),
-                        valueRange = CardChromeRanges.PaddingDp.first.toFloat()..
-                            CardChromeRanges.PaddingDp.last.toFloat(),
-                        valueLabel = { "${it.roundToInt()} dp" },
-                        onPreview = { previewCard = chrome.copy(innerPaddingDp = it.roundToInt()) },
-                        onCommit = { viewModel.cardChrome.change(CardChromeField.InnerPadding, it) },
+                    MorphicSliderRow(
+                        label = "Icon spacing",
+                        what = "icon spacing",
+                        value = chrome.innerPaddingDp,
+                        valueRange = CardChromeRanges.PaddingDp,
+                        default = CardChromeDefaults.innerPaddingDp,
+                        valueLabel = { "$it dp" },
+                        onPreview = { previewCard = chrome.copy(innerPaddingDp = it) },
+                        onCommit = { viewModel.cardChrome.change(CardChromeField.InnerPadding, it.toFloat()) },
+                        modifier = SettingsRowPadding,
                     )
                     MorphicButton(
                         onClick = viewModel.cardChrome::reset,

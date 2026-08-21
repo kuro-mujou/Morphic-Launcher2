@@ -14,12 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,11 +27,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.slider.Morphic2DPad
-import inkspire.morphic.core.designsystem.component.slider.MorphicSlider
+import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
+import inkspire.morphic.core.designsystem.component.slider.SliderRowStyle
+import inkspire.morphic.core.designsystem.component.slider.finestFormat
+import inkspire.morphic.core.designsystem.component.slider.finestStep
+import inkspire.morphic.core.designsystem.component.slider.snappedStep
 import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
-import kotlin.math.ceil
-import kotlin.math.floor
 
 /*
  * The vocabulary every studio section is written in — a labeled block, a chip, and the words a layer is named by.
@@ -107,45 +106,23 @@ internal val LayerSource.label: String
     }
 
 /**
- * The full form of a numeric control: a caption row carrying the name, the **value** and a **reset**, over a
- * [SteppedSlider].
+ * The studio's numeric control — [MorphicSliderRow] in the studio's own dress.
  *
- * **The value is a readout of its own rather than part of the label**, which every one of these used to bake in
- * (`"Hue  180°"`). Two reasons: a name that changes as you drag is not a name, and a number wants to sit where the
- * eye returns to it — beside the control — not appended to prose on the far left.
+ * **A wrapper rather than a call site, because the studio's edit model is not the settings one.** A settings row
+ * previews and then *writes*; here the preview **is** the write — every frame edits the workspace live, and what the
+ * gesture's end contributes is the undo boundary, not a value. So [onValueChangeFinished] takes no value, and the
+ * committed one is deliberately dropped.
  *
- * **Reset is a button because the alternative is remembering.** These values have a resting position that is easy
- * to leave and hard to find again: a slider dragged to 0.98 looks like 1.00 and is not, and the stepper buttons
- * only get you back if you can see that you are off. It is **disabled at [default]**, so the row doubles as the
- * answer to "have I changed this?" — the same "ask, do not guess" rule the layer reorder buttons and the transform
- * cluster are built on.
+ * The other half is the dress: [studioSliderRowStyle] states why the studio cannot read the theme like every other
+ * surface.
  *
- * **Which makes [default] "the value this arrives at", not "the value that does nothing".** The two are the same for
- * an adjustment, whose untouched state *is* its identity — and they came apart the moment effects began arriving
- * seeded at values chosen to be visible. Every `Strength` reset was pinned to zero on the old reading, so opening a
- * fresh effect lit every reset in the panel, claiming changes the user had not made, and pressing one took the
- * effect to invisible rather than back to what they had just been handed. See `BloomDefaults` for how the effect
- * panel now reads its targets from the model rather than restating them.
- *
- * A press is discrete, so it commits at once and is one undo step.
- *
- * @param default where reset goes — **the value this control has when untouched**. Deliberately per call site and
- *   not `valueRange.start`: a zoom rests at 1 in the middle of its range, a hue at the start, and a seeded effect's
- *   strength wherever that effect chose to arrive.
- * @param step how far one press of a stepper moves the value. Defaults to [finestStep], which is what almost every
- *   caller wants; an angle overrides it, degrees not being fractions.
- * @param format how the number reads. Defaults to [finestFormat], matched to [step] so a press always moves the
- *   digit the readout ends on. An angle overrides it, since printing 180.00 for one is as wrong as printing 1 for
- *   an opacity.
- * @param enabled false to show the control **spent rather than absent** — dimmed, unmoved and unpressable, with its
- *   value still legible.
- *
- *   This is a deliberate exception to the studio's own "a control that changes nothing is worse than a missing one",
- *   and it earns one where the gate is a *continuous control sitting directly above it*: the grain's angle means
- *   nothing until its directionality leaves zero, and hiding it made a row appear and disappear **under the finger
- *   that was dragging the slider above it**, moving everything below mid-gesture. A row that grays out states the
- *   dependency without ever moving the panel. Where the gate is a discrete choice made elsewhere — a shape picked, a
- *   tint set — absent is still right, because the layout settles before the finger arrives.
+ * @param default where reset goes — **the value this control has when untouched**, which is not "the value that does
+ *   nothing": an effect seeded to be visible arrives somewhere other than zero. See `BloomDefaults` for how the effect
+ *   panels read their targets from the model rather than restating them.
+ * @param step how far one press of a stepper moves the value, and the grid a drag lands on. An angle overrides the
+ *   derived default with [AngleStep], degrees not being fractions.
+ * @param format how the number reads. Matched to [step] by default so a press always moves the digit the readout ends
+ *   on; an angle overrides it, since printing 180.00 for one is as wrong as printing 1 for an opacity.
  */
 @Composable
 internal fun SliderControl(
@@ -159,92 +136,40 @@ internal fun SliderControl(
     format: (Float) -> String = { finestFormat(valueRange).format(it) },
     enabled: Boolean = true,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = label,
-                // Dimmed together with everything else in the row, so "spent" reads as one state rather than as a
-                // slider that happens not to respond.
-                color = StudioContentColor.copy(alpha = if (enabled) 0.75f else 0.3f),
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = format(value),
-                color = StudioContentColor.copy(alpha = if (enabled) 1f else 0.4f),
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-            )
-            StudioIconButton(
-                icon = Icons.Default.Refresh,
-                contentDescription = "Reset ${label.lowercase()}",
-                enabled = enabled && value != default,
-                onClick = {
-                    onValueChange(default)
-                    onValueChangeFinished()
-                },
-                modifier = Modifier.size(ResetSlot),
-            )
-        }
-        SteppedSlider(
-            value = value,
-            valueRange = valueRange,
-            step = step,
-            what = label.lowercase(),
-            enabled = enabled,
-            onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
-        )
-    }
+    MorphicSliderRow(
+        value = value,
+        valueRange = valueRange,
+        default = default,
+        what = label.lowercase(),
+        valueLabel = format,
+        label = label,
+        step = step,
+        enabled = enabled,
+        onPreview = onValueChange,
+        onCommit = { onValueChangeFinished() },
+        style = studioSliderRowStyle(),
+    )
 }
 
-/** Smaller than a stepper, because it sits in a caption row rather than beside the track. */
-private val ResetSlot = 32.dp
-
 /**
- * How far one press of a stepper moves a value on [range] — **the finest move its readout can report**, which is
- * the whole job of these buttons.
+ * The studio's dress for [MorphicSliderRow]: fixed white on glass, at the panel's own scale.
  *
- * **A stepper is for the last little bit the slider cannot reach, not for travelling.** A finger on a 250dp track
- * lands on 0.37 and the point of a press is to reach 0.38; a step chosen to feel "worth pressing" cannot express
- * that, so the control meant to make an edit exact was the one rounding it off. Holding is what pays for a fine
- * step — [SteppedSlider]'s buttons repeat, so crossing a range is a hold rather than a hundred taps, and a hold is
- * still **one** undo entry because `onValueChangeFinished` closes it. Coarse travel and fine correction out of the
- * same button.
+ * **Fixed rather than themed, which is the one place the studio departs from the palette** — the thing behind its
+ * panels is a canvas the *user* sets to black or white at will, so a theme-derived color would be unreadable half the
+ * time. `StudioSurface` carries the whole argument.
  *
- * **It is paired with [finestFormat] and must stay so**: a step below what the number on screen can show is a press
- * that visibly does nothing, which is worse than a coarse one. That pairing is why both are derived from the range
- * here rather than chosen per slider — thirty call sites each picking a step *and* a matching format is thirty
- * chances for the two to disagree, and the symptom of disagreeing is a dead-looking button.
- *
- * **Narrow ranges get the extra digit**, which is where this earns its keep. Half the effect sliders run 0..0.1 or
- * 0..0.2 — a blur radius, a ripple's amplitude, a halo's spread — and against a two-decimal readout one press moved
- * five to ten percent of everything the control could express, on exactly the values where a small difference is
- * the point. The cut is at half a unit: wider than that and a hundredth is already a fine move, narrower and it is
- * a tenth of the whole range.
+ * The type scale is a step down from a settings row's, because these labels sit in a rail a third of the screen wide
+ * and there are six of them stacked.
  */
-internal fun finestStep(range: ClosedFloatingPointRange<Float>): Float =
-    if (range.endInclusive - range.start >= FineRangeSpan) 0.01f else 0.001f
-
-/** The readout [finestStep] is matched to — one more digit exactly where the step gains one. */
-internal fun finestFormat(range: ClosedFloatingPointRange<Float>): String =
-    if (range.endInclusive - range.start >= FineRangeSpan) "%.2f" else "%.3f"
-
-/**
- * Where a range stops being "about a unit" and starts being a fine quantity.
- *
- * Half a unit rather than a whole one, because several sliders run `0.05..1` or `0.05..1.5` and are plainly the
- * same *kind* of value as the `0..1` ones beside them — a threshold of 1 would have given those an extra decimal
- * for the sake of the 0.05 missing from the bottom of their track.
- */
-private const val FineRangeSpan = 0.5f
+@Composable
+private fun studioSliderRowStyle(): SliderRowStyle = SliderRowStyle(
+    labelColor = StudioContentColor.copy(alpha = 0.75f),
+    labelStyle = MaterialTheme.typography.labelMedium,
+    valueColor = StudioContentColor,
+    valueStyle = MaterialTheme.typography.labelMedium,
+    readoutBackground = Color.White.copy(alpha = 0.06f),
+    glyphColor = StudioContentColor,
+)
 
 /**
  * One degree — the finest turn a `"%.0f°"` readout can report, and **the one step in the studio still stated rather
@@ -260,100 +185,6 @@ private const val FineRangeSpan = 0.5f
 internal const val AngleStep = 1f
 
 /**
- * A slider between a pair of buttons that step it onto the nearest grid value.
- *
- * **A drag cannot be exact and these values have exact answers people want.** A finger on a 250dp slider lands on
- * 0.037 and 87°, and no amount of care fixes that — the control's resolution is its length in pixels. The slider
- * stays the way you *find* a value; the buttons are how you land on one.
- *
- * **The buttons snap to a grid rather than adding to the current value**, which is the detail that makes them worth
- * having: from 1.037 a plain `+0.05` gives 1.087 and every later press keeps the same debris, where snapping gives
- * 1.05 and one press the other way gives exactly 1.00. So the round numbers are always at most one press away, and
- * stepping from a dragged value cleans it up instead of preserving it. See [snappedStep].
- *
- * A **disabled** button is one whose target is where the value already is or outside the range — the "ask, do not
- * guess" rule the layer reorder buttons use, so a press that would do nothing says so first.
- *
- * **One [onValueChange] for both the drag and the press**, which is a simplification the second consumer paid for.
- * This carried a separate `onStepTo` while it served zoom and rotation alone, and both call sites passed exactly the
- * same lambda to the two — a parameter pair that has to agree is a parameter pair that will one day not, and the
- * only thing that distinguished them was a rule about committing that neither of them was doing.
- *
- * Neither of them commits, deliberately: a held button repeats, so [onValueChangeFinished] is what closes a drag
- * *and* a hold into one undo step. See `StudioStepperButton`.
- *
- * **Private to [SliderControl], which is what makes "every slider has a readout and a reset" structural.** It was
- * `internal`, and exactly one section reached past the wrapper for it — the bloom's linear position — which came out
- * as the one control in the studio with a track, two buttons, and no way to see what it was set to or put it back.
- * That is not a thing a caller should be able to choose by accident: this is the *mechanism*, and the caption row is
- * not decoration on top of it but the half that answers "what is this?". A section wanting a bare track now has to
- * make that argument by changing this line.
- *
- * @param what names the value for the buttons' content descriptions — the only per-caller text here, since both
- *   targets are computed from [step].
- */
-@Composable
-private fun SteppedSlider(
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    what: String,
-    step: Float = finestStep(valueRange),
-    enabled: Boolean = true,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit,
-) {
-    val down = snappedStep(value, step, up = false).coerceIn(valueRange)
-    val up = snappedStep(value, step, up = true).coerceIn(valueRange)
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StudioStepperButton(
-            icon = Icons.Default.Remove,
-            contentDescription = "Decrease $what",
-            enabled = enabled && down != value,
-            onStep = { onValueChange(down) },
-            onStepsFinished = onValueChangeFinished,
-        )
-        MorphicSlider(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            valueRange = valueRange,
-            enabled = enabled,
-            onValueChangeFinished = onValueChangeFinished,
-        )
-        StudioStepperButton(
-            icon = Icons.Default.Add,
-            contentDescription = "Increase $what",
-            enabled = enabled && up != value,
-            onStep = { onValueChange(up) },
-            onStepsFinished = onValueChangeFinished,
-        )
-    }
-}
-
-/**
- * The next multiple of [step] beyond [value], in the direction [up] names.
- *
- * **A grid position, not an addition**, which is what lets one press clean up a dragged value: 1.037 steps down to
- * 1.00 rather than to 0.987, and every value on the way is a number somebody could have meant. A value already on the
- * grid moves a full step, so repeated presses walk it evenly.
- *
- * The epsilon is what stops a value that *is* on the grid — arrived at by an earlier press — being read as a hair
- * below it and stepping only to itself, which would present as a button that works every other press.
- */
-internal fun snappedStep(value: Float, step: Float, up: Boolean): Float {
-    val steps = value / step
-    val target = if (up) floor(steps + SnapEpsilon) + 1f else ceil(steps - SnapEpsilon) - 1f
-    return target * step
-}
-
-/** Small against any step here, large against the float error of adding them up. */
-private const val SnapEpsilon = 1e-4f
-
-/**
  * A point in the icon's frame: a [Morphic2DPad] to find it with, and a cluster of four arrows plus a center button
  * to land on one exactly.
  *
@@ -362,7 +193,7 @@ private const val SnapEpsilon = 1e-4f
  *
  * **And buttons beside it, because a drag cannot be exact.** A finger on a 140dp pad lands on 0.037, and no amount of
  * care fixes that: the control's resolution is its length in pixels. The pad stays the way you *find* a position; the
- * cluster is how you land on one. [SteppedSlider] carries the same argument in one dimension and states why a press
+ * cluster is how you land on one. [MorphicSliderRow] carries the same argument in one dimension and states why a press
  * snaps to the grid rather than adding to the value.
  *
  * **The center of a direction pad is where "back to the middle" belongs** — the one arrangement where the control's

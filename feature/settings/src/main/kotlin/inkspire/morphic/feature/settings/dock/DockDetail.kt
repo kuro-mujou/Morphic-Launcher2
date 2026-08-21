@@ -15,6 +15,7 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.grid.MinCell
 import inkspire.morphic.core.designsystem.grid.WidgetMinCell
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
@@ -36,13 +37,12 @@ import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
-import inkspire.morphic.feature.settings.component.SettingsCommitSlider
+import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
-import kotlin.math.roundToInt
 
 /** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
 private val RowGap = 8.dp
@@ -56,7 +56,7 @@ private val RowGap = 8.dp
  * text settings — not the size of the display. The cell count is where that constraint actually bites, and it is
  * enforced there.
  */
-private val DockExtentRange = 80f..320f
+private val DockExtentRange = 80..320
 
 /**
  * The widget area's — far thicker than a dock's, which is the difference between the two zones stated as a number.
@@ -64,7 +64,7 @@ private val DockExtentRange = 80f..320f
  * Far wider and far higher than the dock's, which is the whole difference between the two zones stated as a number: a
  * dock is a row of icons you reach for, and a widget area is a panel you look at.
  */
-private val WidgetAreaExtentRange = 120f..480f
+private val WidgetAreaExtentRange = 120..480
 
 /**
  * **HOME's side zone**: how thick it is, the grid inside it, and (when it holds icons) how those are sized — the
@@ -219,25 +219,21 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 )
             }
 
-            // The slider previews while dragging and writes on release ([SettingsCommitSlider]), so a drag issues
-            // one transaction rather than one per frame. The cell cap goes with the commit because the extent that
-            // lands may no longer carry the stored count, and the fit is a runtime question this screen owns.
+            // The slider previews while dragging and writes on release, so a drag issues one transaction rather than
+            // one per frame. The cell cap goes with the commit because the extent that lands may no longer carry the
+            // stored count, and the fit is a runtime question this screen owns.
             //
-            // **A width on a rail and a height on a strip**, with the subtitle naming whichever count the extent
-            // actually divides.
-            SettingsCommitSlider(
-                title = if (isRail) "Width" else "Height",
-                subtitle = if (isRail) {
-                    "Columns divide this: at ${shownExtent}dp it holds up to ${range?.cols?.last ?: cols}."
-                } else {
-                    "Rows divide this: at ${shownExtent}dp it holds up to ${range?.rows?.last ?: rows}."
-                },
-                value = extentDp.toFloat().coerceIn(extentRange),
+            // **A width on a rail and a height on a strip** — the editor above says how many cells the extent buys,
+            // which is why the row itself needs no sentence about it.
+            MorphicSliderRow(
+                label = if (isRail) "Width" else "Height",
+                what = if (isRail) "width" else "height",
+                value = extentDp.coerceIn(extentRange),
                 valueRange = extentRange,
-                valueLabel = { "${it.roundToInt()} dp" },
-                onPreview = { previewExtent = it.roundToInt() },
-                onCommit = { committed ->
-                    val dp = committed.roundToInt()
+                default = blueprint.extentDp!!.coerceIn(extentRange),
+                valueLabel = { "$it dp" },
+                onPreview = { previewExtent = it },
+                onCommit = { dp ->
                     // Re-split at the **committed** extent rather than reading the drag's: the two agree on release,
                     // and deriving the write from the value being written is one fewer thing to keep true.
                     val committedSplit = window.splitForSideZone(dp.toFloat(), edge)
@@ -256,16 +252,19 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                         } ?: 0,
                     )
                 },
+                modifier = SettingsRowPadding,
             )
 
-            SettingsCommitSlider(
-                title = "Side margin",
-                subtitle = "Blank space at the zone's left and right edges.",
-                value = paddingDp.toFloat(),
-                valueRange = HorizontalPaddingRange.first.toFloat()..HorizontalPaddingRange.last.toFloat(),
-                valueLabel = { "${it.roundToInt()} dp" },
-                onPreview = { previewPadding = it.roundToInt() },
-                onCommit = { viewModel.setPadding(it.roundToInt()) },
+            MorphicSliderRow(
+                label = "Side margin",
+                what = "side margin",
+                value = paddingDp,
+                valueRange = HorizontalPaddingRange,
+                default = blueprint.horizontalPaddingDp,
+                valueLabel = { "$it dp" },
+                onPreview = { previewPadding = it },
+                onCommit = viewModel::setPadding,
+                modifier = SettingsRowPadding,
             )
 
             MorphicButton(

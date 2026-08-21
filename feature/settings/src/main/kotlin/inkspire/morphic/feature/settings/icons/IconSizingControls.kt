@@ -7,11 +7,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSliderRow
+import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.IconSizingRanges
-import inkspire.morphic.feature.settings.component.SettingsCommitRangeSlider
-import inkspire.morphic.feature.settings.component.SettingsCommitSlider
+import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import kotlin.math.roundToInt
@@ -34,9 +36,9 @@ internal enum class IconSizingField { IconPercent, LabelScale }
  * (the folder section took the last grid out of it). Sharing one group is what stops the sections drifting apart, and
  * [IconSizingEdits] shares the *commands* for the same reason.
  *
- * **Whether icons can be hidden, and how the size slider is worded, are read off the [slot]** rather than taken as a
- * flag every caller has to remember to pass — it is a property of
- * the grid rather than of the call site — so a caller cannot get it wrong, and a new grid answers for itself.
+ * **Whether icons can be hidden, and which defaults a reset lands on, are read off the [slot]** rather than taken as
+ * flags every caller has to remember to pass — both are properties of the grid rather than of the call site — so a
+ * caller cannot get either wrong, and a new grid answers for itself.
  *
  * The dp guardrails are shown for a list too, because they genuinely apply: every cell resolves its icon through
  * `IconMetrics.resolveIconSize`, which clamps to them whatever the surface. They are **one range slider** rather than
@@ -69,6 +71,12 @@ internal fun IconSizingControls(
     onDpRange: (IntRange) -> Unit,
     onPreview: (IconSizing) -> Unit = {},
 ) {
+    // **Where each reset goes: this grid's blueprint, not a number typed here.** The blueprint is the one place a
+    // default lives — `data:settings` resolves every override against it — so reading it is what keeps a reset landing
+    // on the value an untouched launcher actually shows. A grid of *tiles* has no icon of its own to size (the card's
+    // is null), and the launcher's own defaults are the honest fallback there, since that is what `IconSizing()` is.
+    val defaults = slot.blueprint.icon ?: IconSizing()
+
     // A pure-text list is the one arrangement where hiding icons makes sense; on a grid it would leave a page of
     // labels floating in empty cells. The slot already knows, so no caller passes a flag.
     if (slot == GridSlot.APPS_LIST) {
@@ -81,19 +89,18 @@ internal fun IconSizingControls(
     }
 
     if (sizing.showIcon) {
-        SettingsCommitSlider(
-            title = "Icon size",
-            // A list row is a full-width strip whose icon is sized against its height, so the same number reads as a
-            // scale rather than a portion of a cell.
-            subtitle = if (slot == GridSlot.APPS_LIST) "Scale of the default size" else "Portion of each cell the icon fills",
+        MorphicSliderRow(
+            label = "Icon size",
+            what = "icon size",
             value = sizing.iconPercent,
             valueRange = IconSizingRanges.IconPercent,
+            default = defaults.iconPercent,
             // Rounded rather than truncated: a hundredth is not representable in binary, so flooring reads 0.29f back
-            // as 28%. Only a drag reaches this one, so it merely under-reported by up to a percent — the same
-            // expression on a *stepper* made presses look random. See `percent` in the effects section.
+            // as 28% — a stepper moving the value by exactly one hundredth then appears to land at random.
             valueLabel = { "${(it * 100).roundToInt()}%" },
             onPreview = { onPreview(sizing.copy(iconPercent = it)) },
             onCommit = { onChange(IconSizingField.IconPercent, it) },
+            modifier = SettingsRowPadding,
         )
     }
 
@@ -113,25 +120,30 @@ internal fun IconSizingControls(
         )
     }
     if (sizing.showLabel) {
-        SettingsCommitSlider(
-            title = "Text size",
+        MorphicSliderRow(
+            label = "Text size",
+            what = "text size",
             value = sizing.labelScale,
             valueRange = IconSizingRanges.LabelScale,
+            default = defaults.labelScale,
             valueLabel = { "%.2fx".format(it) },
             onPreview = { onPreview(sizing.copy(labelScale = it)) },
             onCommit = { onChange(IconSizingField.LabelScale, it) },
+            modifier = SettingsRowPadding,
         )
     }
 
     SettingsSectionHeader("Icon size limits")
-    SettingsCommitRangeSlider(
-        title = "Icon size range",
-        subtitle = "Guardrails on dense and sparse grids",
+    MorphicRangeSliderRow(
+        label = "Icon size range",
+        what = "icon size range",
         value = sizing.minIconDp..sizing.maxIconDp,
         bounds = IconSizingRanges.IconDp,
+        default = defaults.minIconDp..defaults.maxIconDp,
         valueLabel = { "${it.first}–${it.last} dp" },
         onPreview = { onPreview(sizing.copy(minIconDp = it.first, maxIconDp = it.last)) },
         onCommit = onDpRange,
+        modifier = SettingsRowPadding,
     )
 }
 

@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconSizingRanges
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** Row insets and the icon→label gap. Cell-internal styling, the counterpart of [CellPadH] for a grid cell. */
 private val RowPadH = 24.dp
@@ -139,6 +141,20 @@ private fun rowLabelStyle(metrics: IconMetrics): TextStyle {
 fun rowHeightRange(metrics: IconMetrics): ClosedFloatingPointRange<Float> {
     val labelHeightDp = rowLabelHeight(metrics).value
     return remember(metrics, labelHeightDp) { rowHeightRangeDp(metrics, labelHeightDp) }
+}
+
+/**
+ * [rowHeightRange] narrowed to the whole dp a **store** can hold — what a settings control offers.
+ *
+ * The derived range has fractional ends (a guardrail plus a cell's padding rarely lands on a whole dp), and a row
+ * height is stored as an `Int`. A control offering 41.3 therefore offers a position nothing can keep: the value comes
+ * back a dp from where the finger left it, and the reset beside it lights up over a difference no readout shows. Both
+ * ends move *inwards*, so every offered value is one the store can hold and the guardrails still bound it.
+ */
+@Composable
+fun wholeRowHeightRange(metrics: IconMetrics): IntRange {
+    val range = rowHeightRange(metrics)
+    return ceil(range.start).toInt()..floor(range.endInclusive).toInt()
 }
 
 /**
