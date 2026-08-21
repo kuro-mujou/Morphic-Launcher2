@@ -1,7 +1,5 @@
 package inkspire.morphic.feature.settings.folder
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,7 +15,6 @@ import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.collection.appCollectionInnerSize
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.FolderGrid
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconSizing
@@ -56,8 +53,6 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
     LaunchedEffect(device) { viewModel.setDevice(device) }
     val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
 
-    val colors = LocalMorphicColors.current
-
     // Null only for the frame before the device is reported; there is no honest value to show until then, and a
     // placeholder would be a second source of truth for a number the blueprint owns.
     val icon = state.icon ?: return
@@ -79,18 +74,11 @@ internal fun FolderDetail(modifier: Modifier = Modifier) {
     SurfaceDetail(
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
-        layout = {
-            // The grid a folder opens onto, stated as a fact rather than offered as a control: it is the blueprint's,
-            // and this section deliberately has no editor because a folder's card is sized to the screen. Saying the
-            // number pre-empts "where are the − and + buttons?" without inventing an answer to it.
-            val size = FolderGrid.defaults.getValue(device)
-            Text(
-                text = "A folder shows ${size.cols} × ${size.rows} icons a page on this screen, and adds pages " +
-                    "as it fills.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.contentMuted,
-            )
-        },
+        // **Empty, and that is the section.** A folder's card is sized to the screen, so its rows and columns follow
+        // from that and there is no count to pick — `FolderGrid` declares no `editRange` and this pane draws no
+        // editor. What sat here was a sentence stating the count instead; it went because nothing on this pane can
+        // change it, which makes it a fact about a screen the user can simply open and look at.
+        layout = { },
         preview = { previewModifier ->
             IconSizingPreview(
                 app = sampleApp,
