@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -102,13 +103,14 @@ private fun PortraitDetail(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
+    val hasIconGroup = icons != null && preview != null
     LazyColumn(modifier = modifier.fillMaxSize()) {
         item(key = "layout") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding)
-                    .padding(top = ScreenPadding, bottom = ScreenPadding),
+                    .padding(top = ScreenPadding, bottom = groupGap(hasIconGroup)),
             ) {
                 layout()
             }
@@ -142,6 +144,7 @@ private fun LandscapeDetail(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
+    val hasIconGroup = icons != null && preview != null
     val density = LocalDensity.current
     // The icon body is a full-viewport item placed *under* the pinned heading, so it has to know how tall that is.
     var headerHeightPx by remember { mutableIntStateOf(0) }
@@ -153,7 +156,7 @@ private fun LandscapeDetail(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding)
-                    .padding(top = ScreenPadding, bottom = ScreenPadding),
+                    .padding(top = ScreenPadding, bottom = groupGap(hasIconGroup)),
             ) {
                 layout()
             }
@@ -190,6 +193,16 @@ private fun LandscapeDetail(
         }
     }
 }
+
+/**
+ * How much room the layout group leaves under itself.
+ *
+ * **Zero when the icon group follows, and that is not a missing gap** — the pinned heading below carries its own
+ * (`SettingsSectionHeader`'s top), so paying one here too separates the two groups *twice*, in two files, and the
+ * reader sees the sum. The padding is owed only when this group is the last thing in the pane, which is the widget
+ * area: a zone of widgets has no icons to size, so nothing follows and the list would otherwise end flush.
+ */
+private fun groupGap(hasIconGroup: Boolean): Dp = if (hasIconGroup) 0.dp else ScreenPadding
 
 /**
  * The pinned heading over the icon group, with the shuffle beside it.

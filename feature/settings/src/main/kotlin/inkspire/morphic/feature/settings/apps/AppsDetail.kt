@@ -223,7 +223,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(ChipGap),
                 verticalArrangement = Arrangement.spacedBy(ChipGap),
-                modifier = Modifier.padding(top = ChipGap * 2),
             ) {
                 ConfigurableLayouts.forEach { layout ->
                     SettingsChip(

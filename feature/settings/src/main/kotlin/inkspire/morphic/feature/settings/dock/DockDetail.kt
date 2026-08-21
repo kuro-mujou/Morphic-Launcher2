@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.settings.dock
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,9 +40,6 @@ import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
-
-/** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
-private val RowGap = 8.dp
 
 /**
  * The dp window the extent slider spans, and one range for both postures: the slider is titled "Width" on a rail, but
@@ -214,7 +210,6 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                         fraction = 1f - window.sideZoneFraction(shownExtent.toFloat(), edge),
                         side = CompanionSide.of(edge.opposite),
                     ),
-                    modifier = Modifier.padding(top = RowGap * 2),
                 )
             }
 

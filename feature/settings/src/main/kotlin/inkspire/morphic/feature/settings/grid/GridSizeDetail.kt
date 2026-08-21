@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.settings.grid
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,9 +41,6 @@ import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
-
-/** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
-private val RowGap = 8.dp
 
 /**
  * **Home**: how HOME's main area is sized, and how its icons are sized — **whichever main area the current pairing
@@ -168,7 +164,6 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                                 changed = main != MainAreaSize.Grid(cols = default.cols, rows = default.rows ?: 0),
                                 onReset = viewModel::resetGrid,
                             ),
-                            modifier = Modifier.padding(top = RowGap * 2),
                         )
                     }
                 }
@@ -301,7 +296,6 @@ private fun HomeListEditor(
         onEdit = { _, _ -> },
         preview = { LanePreview(rowHeightDp = shownRowHeight, areaWidthDp = areaWidthDp, insetFraction = insetFraction) },
         companion = companion,
-        modifier = Modifier.padding(top = RowGap * 2),
     )
 
     MorphicSliderRow(

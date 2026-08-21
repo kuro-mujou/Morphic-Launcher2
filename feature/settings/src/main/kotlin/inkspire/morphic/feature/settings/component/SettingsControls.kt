@@ -14,7 +14,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /** Provisional spacing — placeholders, like every other surface metric, until the settings layer owns its own. */
 private val RowGapV = 12.dp
-private val HeaderGapTop = 24.dp
+private val HeaderGapTop = 16.dp
 private val ChipPaddingH = 12.dp
 private val ChipPaddingV = 8.dp
 
