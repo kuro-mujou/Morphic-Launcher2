@@ -19,6 +19,11 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Signed release output. Not covered by `build/`: Android Studio's "Generate Signed Bundle / APK" wizard writes
+# beside the module rather than under it, so the profiles and metadata it drops here are untracked by default and
+# get swept up by the next `git add -A`. The APK itself is already caught by `*.apk` above; this is the rest.
+app/release/
+
 # Kotlin
 .kotlin/
 
