@@ -63,14 +63,26 @@ internal class IconSizingEdits(
     }
 
     /**
-     * Clears every icon override for this grid on this device, returning it to its blueprint's defaults.
+     * Clears one numeric field, returning it to its blueprint's default.
      *
-     * A plain write of an empty override rather than a dedicated operation — and the store then *removes* the entry
-     * instead of storing an empty one, so resetting leaves storage exactly as it started. That is the payoff of sparse
-     * overrides: "back to default" needs no separate concept, and no default is copied into storage to express it.
+     * **What a reset writes is `null`, not the default value** — the payoff of sparse overrides, and the reason each
+     * control's reset comes through here rather than committing the number it shows. Writing the number would pin it:
+     * storage would keep an entry saying what the blueprint already says, and a later change to that default would
+     * never reach anyone who had pressed reset. The store drops an override that has become empty, so a field reset is
+     * a field that was never touched.
      */
-    fun reset() {
-        edit { IconOverride() }
+    fun clear(field: IconSizingField) {
+        edit {
+            when (field) {
+                IconSizingField.IconPercent -> copy(iconPercent = null)
+                IconSizingField.LabelScale -> copy(labelScale = null)
+            }
+        }
+    }
+
+    /** [clear] for the guardrail pair, which commits as one field for [changeDpRange]'s reason. */
+    fun clearDpRange() {
+        edit { copy(minIconDp = null, maxIconDp = null) }
     }
 
     private fun edit(transform: IconOverride.() -> IconOverride) {

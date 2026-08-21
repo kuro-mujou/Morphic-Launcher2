@@ -161,7 +161,7 @@ class DockViewModel(
      * columns that no longer fit are re-reported on read rather than removed, and nothing is displaced for
      * `GridReflow` to re-home. That is the same distinction the repository's own KDoc draws between this and a resize.
      */
-    fun setPadding(dp: Int) {
+    fun setPadding(dp: Int?) {
         val configuration = device.value ?: return
         viewModelScope.launch { settingsRepository.setHorizontalPadding(slot, configuration, dp) }
     }
@@ -305,13 +305,25 @@ class DockViewModel(
      * Two writes because they are two stores, but each is a plain write of "nothing" — and both entries are then
      * *removed* rather than stored empty, so a reset leaves storage exactly as a fresh install has it.
      */
-    fun reset() {
+    fun resetGrid() {
         val configuration = device.value ?: return
-        val zoneSlot = layout.value.sideSlot
         viewModelScope.launch {
-            settingsRepository.setExtent(zoneSlot, configuration, null)
-            settingsRepository.updateGrid(zoneSlot, configuration) { GridOverride() }
+            settingsRepository.updateGrid(layout.value.sideSlot, configuration) { GridOverride() }
         }
+    }
+
+    /**
+     * Clears the extent override, returning the zone to its blueprint thickness.
+     *
+     * **Separate from [resetGrid], though one button used to do both.** The extent and the counts are two fields with a
+     * control each — the slider and the editor — and each now clears its own, which is what lets either arrow say
+     * whether *that* value has moved. Clearing the extent deliberately does not touch the counts: a zone back at its
+     * default thickness still divides into however many cells the user asked for, and reducing them is only warranted
+     * when they no longer fit (which is [setExtent]'s job, on the extent the user actually chose).
+     */
+    fun clearExtent() {
+        val configuration = device.value ?: return
+        viewModelScope.launch { settingsRepository.setExtent(layout.value.sideSlot, configuration, null) }
     }
 
     private companion object {

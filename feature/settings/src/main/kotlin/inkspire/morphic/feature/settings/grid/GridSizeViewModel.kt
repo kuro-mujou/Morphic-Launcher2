@@ -213,7 +213,7 @@ class GridSizeViewModel(
      * One write, unlike [edit]: a margin removes no cell, so nothing is displaced and there is no placement half. The
      * columns it costs are re-reported on read and come back when it narrows.
      */
-    fun setPadding(dp: Int) {
+    fun setPadding(dp: Int?) {
         val configuration = device.value ?: return
         viewModelScope.launch { settingsRepository.setHorizontalPadding(slot, configuration, dp) }
     }
@@ -229,7 +229,7 @@ class GridSizeViewModel(
      * guardrails and the current type scale (`rowHeightRangeDp`), and a stored height outside them is clamped where it
      * is drawn rather than written down.
      */
-    fun setRowHeight(dp: Int) {
+    fun setRowHeight(dp: Int?) {
         val configuration = device.value ?: return
         viewModelScope.launch { settingsRepository.setRowHeight(GridSlot.HOME_LIST, configuration, dp) }
     }
@@ -278,21 +278,16 @@ class GridSizeViewModel(
     }
 
     /**
-     * Clears the size override, returning the main area to its blueprint. Placements are then settled by the surface.
+     * Clears the main grid's **size** override, returning its counts to the blueprint's default for this device.
      *
-     * Two shapes because the two layouts store different things: the pager's counts are a grid override, the list's
-     * row height is its own setting. Both are a plain write of "nothing", after which the entry is *removed* rather
-     * than stored empty — so a reset leaves storage exactly as a fresh install has it.
+     * The editor's own reset, and only the counts: the margin and the list's row height are separate fields with a
+     * control each, and each of those clears itself. A single "reset this section" write is what the text button at
+     * the foot of the section used to do, and what it could never say was which of the three had moved.
      */
-    fun reset() {
+    fun resetGrid() {
         val configuration = device.value ?: return
-        val slot = layout.value.mainSlot
         viewModelScope.launch {
-            if (slot.blueprint.rowHeightDp != null) {
-                settingsRepository.setRowHeight(slot, configuration, null)
-            } else {
-                settingsRepository.updateGrid(slot, configuration) { GridOverride() }
-            }
+            settingsRepository.updateGrid(layout.value.mainSlot, configuration) { GridOverride() }
         }
     }
 

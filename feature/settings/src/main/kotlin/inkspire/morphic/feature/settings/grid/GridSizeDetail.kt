@@ -1,7 +1,6 @@
 package inkspire.morphic.feature.settings.grid
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,8 +14,6 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
-import inkspire.morphic.core.designsystem.component.button.MorphicButton
-import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
@@ -33,6 +30,7 @@ import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
+import inkspire.morphic.feature.settings.component.EditorReset
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.LanePreview
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
@@ -151,6 +149,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
             when (main) {
                 is MainAreaSize.Grid -> {
                     val range = HomePagerGrid.editableRangeIn(homeArea, metrics)
+                    val default = HomePagerGrid.defaults.getValue(device)
                     // **The grid as home will actually draw it**, through the same `fitGridConfig` the surface reads
                     // its own counts with — which is what makes the icon group below move this editor.
                     val fitted =
@@ -167,6 +166,13 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                             // preview shows.
                             onEdit = { e, add -> viewModel.edit(e, add, fitted.visualCols, fitted.visualRows) },
                             companion = companion,
+                            // Against the **stored** counts, not the fitted ones above: an editor whose grid has been
+                            // shrunk by large icons has not been changed by the user, and an arrow lit for that would
+                            // be answering a different question. See [EditorReset].
+                            reset = EditorReset(
+                                changed = main != MainAreaSize.Grid(cols = default.cols, rows = default.rows ?: 0),
+                                onReset = viewModel::resetGrid,
+                            ),
                             modifier = Modifier.padding(top = RowGap * 2),
                         )
                     }
@@ -209,16 +215,10 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                 valueLabel = { "$it dp" },
                 onPreview = { previewPadding = it },
                 onCommit = viewModel::setPadding,
+                // Clearing the field rather than writing the number it shows — see `MorphicSliderRow.onReset`.
+                onReset = { viewModel.setPadding(null) },
                 modifier = SettingsRowPadding,
             )
-
-            MorphicButton(
-                onClick = viewModel::reset,
-                style = MorphicButtonStyle.Text,
-                modifier = Modifier.padding(top = RowGap * 2),
-            ) {
-                Text(if (main is MainAreaSize.Rows) "Reset row height" else "Reset grid")
-            }
         },
         preview = { previewModifier ->
             // A home cell's size comes from dividing an area, so the fraction is the cell's to apply and these metrics
@@ -281,7 +281,7 @@ private fun HomeListEditor(
     insetFraction: Float,
     areaWidthDp: Float,
     companion: EditorCompanion,
-    onSetRowHeight: (Int) -> Unit,
+    onSetRowHeight: (Int?) -> Unit,
 ) {
     val metrics = icon.toIconMetrics()
     // Whole dp, because that is what the store holds — see `wholeRowHeightRange`.
@@ -317,6 +317,7 @@ private fun HomeListEditor(
         valueLabel = { "$it dp" },
         onPreview = { previewRowHeight = it.toFloat() },
         onCommit = onSetRowHeight,
+        onReset = { onSetRowHeight(null) },
         modifier = SettingsRowPadding,
     )
 }

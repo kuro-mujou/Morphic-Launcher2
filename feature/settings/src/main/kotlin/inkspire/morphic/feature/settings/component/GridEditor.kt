@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.component.button.MorphicResetButton
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridEditorEdge
@@ -97,6 +98,20 @@ internal fun CompanionSide.Companion.of(edge: SideZoneEdge): CompanionSide = whe
 
 /** How much of the preview the *other* zone takes, and on which side of the edited grid it sits. */
 internal data class EditorCompanion(val fraction: Float, val side: CompanionSide)
+
+/**
+ * The editor's way back to its blueprint's counts.
+ *
+ * **The counts need one of these because they are a control like any other**, and every other control on these screens
+ * now carries its own reset. They used to lean on a "Reset grid" text button at the foot of the section, which is the
+ * shape this codebase is getting rid of: a button naming a group cannot say *which* of its numbers has moved, so it
+ * answered "have I changed this?" for nothing while being the only way back for one thing.
+ *
+ * @param changed whether the stored size differs from the blueprint's default for this device — the question only the
+ *   section can answer, since the editor is handed the counts that **fit** rather than the ones stored. Comparing what
+ *   is drawn would light the arrow up whenever large icons had shrunk the grid, which is not a change the user made.
+ */
+internal data class EditorReset(val changed: Boolean, val onReset: () -> Unit)
 
 /** An edit the preview has been asked to animate. The nonce re-triggers it when the same edge is pressed twice. */
 internal data class PreviewEdit(val edge: GridEditorEdge, val add: Boolean, val nonce: Int)
@@ -162,6 +177,7 @@ internal fun GridEditor(
     preview: (@Composable (PreviewEdit?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     companion: EditorCompanion? = null,
+    reset: EditorReset? = null,
 ) {
     val colors = LocalMorphicColors.current
     var nonce by remember { mutableIntStateOf(0) }
@@ -186,25 +202,7 @@ internal fun GridEditor(
     val previewWidth = previewHeight * aspectRatio.coerceIn(MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
 
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Both counts wherever there are two — a derived row count is still a fact about the grid, and hiding the
-        // dock's made it look like an editor missing half its buttons rather than one whose rows follow its height.
-        // A **scrolling** grid is the one case with genuinely nothing to say there: its rows are however many its
-        // content reaches, so the number drawn is what fits rather than what was chosen, and claiming it as a count
-        // would be the one thing a caption must not do.
-        // Omitted entirely when neither axis is editable — a list is one lane, so "1 column" would be a count
-        // masquerading as a choice. The caller states what it has instead (the list says its row height).
-        if (colBounds != null || rowBounds != null) {
-            Text(
-                text = when {
-                    rowBounds == null -> "$cols columns"
-                    colBounds == null -> "$rows rows"
-                    else -> "$cols columns × $rows rows"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.contentMuted,
-                modifier = Modifier.padding(bottom = ButtonGap * 2),
-            )
-        }
+        EditorCaption(cols, rows, colBounds, rowBounds, reset)
 
         // **Three arrangements.**
         //
@@ -288,6 +286,56 @@ internal fun GridEditor(
  * What each rail *carries* depends on which axes are editable — two removes when the rows are editable, or a − and a +
  * for one column edge when they are not. The rail itself only spreads them.
  */
+/**
+ * **What this grid's size is, and the way back to its default.**
+ *
+ * Both counts wherever there are two — a derived row count is still a fact about the grid, and hiding the dock's made
+ * it look like an editor missing half its buttons rather than one whose rows follow its height. A **scrolling** grid is
+ * the one case with genuinely nothing to say there: its rows are however many its content reaches, so the number drawn
+ * is what fits rather than what was chosen, and claiming it as a count would be the one thing a caption must not do.
+ *
+ * Drawn at all only when an axis is editable — a list is one lane, so "1 column" would be a count masquerading as a
+ * choice. The caller states what it has instead (the list says its row height).
+ *
+ * **The reset belongs here**, beside the number it undoes, which is where every slider on these screens keeps its own.
+ * It used to be a "Reset grid" text button at the foot of the section — furthest from the control it acted on, and
+ * unable to say whether there was anything to undo. See [EditorReset].
+ */
+@Composable
+private fun EditorCaption(
+    cols: Int,
+    rows: Int,
+    colBounds: IntRange?,
+    rowBounds: IntRange?,
+    reset: EditorReset?,
+) {
+    if (colBounds == null && rowBounds == null) return
+    val colors = LocalMorphicColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(bottom = ButtonGap * 2),
+    ) {
+        Text(
+            text = when {
+                rowBounds == null -> "$cols columns"
+                colBounds == null -> "$rows rows"
+                else -> "$cols columns × $rows rows"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.contentMuted,
+        )
+        if (reset != null) {
+            MorphicResetButton(
+                onClick = reset.onReset,
+                contentDescription = "Reset grid size",
+                tint = colors.content,
+                enabled = reset.changed,
+                modifier = Modifier.padding(start = ButtonGap),
+            )
+        }
+    }
+}
+
 @Composable
 private fun EdgeRail(height: Dp, content: @Composable ColumnScope.() -> Unit) {
     Column(

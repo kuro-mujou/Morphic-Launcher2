@@ -1,7 +1,6 @@
 package inkspire.morphic.feature.settings.dock
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,8 +12,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
-import inkspire.morphic.core.designsystem.component.button.MorphicButton
-import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.grid.MinCell
 import inkspire.morphic.core.designsystem.grid.WidgetMinCell
@@ -36,6 +33,7 @@ import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
+import inkspire.morphic.feature.settings.component.EditorReset
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SurfaceDetail
@@ -175,6 +173,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
     // The zone at this extent, resolved by the **same function the surface uses** — so the preview cannot claim a
     // shape the real zone will not have.
     val zoneConfig = blueprint.fitGridConfig(zoneArea, cols = cols, rows = rows, min = minCell)
+    val zoneDefault = blueprint.defaults.getValue(device)
     val range = blueprint.editableRangeIn(zoneArea, minCell)
 
     SurfaceDetail(
@@ -208,6 +207,12 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                     // number the preview is showing. Storage can legitimately hold more columns than fit — that is the
                     // clamp-on-read rule — and an edit that ignored the fit would move a count nobody can see.
                     onEdit = { e, add -> viewModel.edit(e, add, zoneConfig.visualCols, zoneConfig.visualRows) },
+                    // Against the **stored** counts rather than the fitted ones this editor draws: a zone whose cells
+                    // no longer fit has not been resized by the user. See [EditorReset].
+                    reset = EditorReset(
+                        changed = cols != zoneDefault.cols || rows != (zoneDefault.rows ?: rows),
+                        onReset = viewModel::resetGrid,
+                    ),
                     // The main area, on the side the zone is *not* — the opposite edge, whichever that is. So the
                     // mockup shows a rail as a rail rather than as a strip that happens to be thin, and a widget area
                     // above its list rather than below it.
@@ -233,6 +238,7 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 default = blueprint.extentDp!!.coerceIn(extentRange),
                 valueLabel = { "$it dp" },
                 onPreview = { previewExtent = it },
+                onReset = viewModel::clearExtent,
                 onCommit = { dp ->
                     // Re-split at the **committed** extent rather than reading the drag's: the two agree on release,
                     // and deriving the write from the value being written is one fewer thing to keep true.
@@ -264,16 +270,9 @@ internal fun DockDetail(modifier: Modifier = Modifier) {
                 valueLabel = { "$it dp" },
                 onPreview = { previewPadding = it },
                 onCommit = viewModel::setPadding,
+                onReset = { viewModel.setPadding(null) },
                 modifier = SettingsRowPadding,
             )
-
-            MorphicButton(
-                onClick = viewModel::reset,
-                style = MorphicButtonStyle.Text,
-                modifier = Modifier.padding(top = RowGap * 2),
-            ) {
-                Text("Reset size and grid")
-            }
         },
         preview = if (shownIcon == null) null else { previewModifier ->
             // A side-zone cell divides the strip's own extent, which is the one cell on the launcher whose size a user

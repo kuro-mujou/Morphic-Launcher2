@@ -1,12 +1,6 @@
 package inkspire.morphic.feature.settings.icons
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.component.button.MorphicButton
-import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.slider.MorphicRangeSliderRow
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.model.GridSlot
@@ -53,8 +47,11 @@ internal enum class IconSizingField { IconPercent, LabelScale }
  * @param sizing the currently **resolved** sizing — blueprint default with any override merged in. What the controls
  *   should show, because it is what the user sees on screen.
  * @param onChange commits a numeric field. Fires on slider **release**, not per frame.
+ * @param onClear returns one field to the blueprint by **clearing** its override rather than writing the default value
+ *   — what a control's reset does, and why each needs this beside [onChange]. See `IconSizingEdits.clear`.
  * @param onToggle commits a boolean field.
  * @param onDpRange commits both icon-size guardrails at once, in whole dp.
+ * @param onClearDpRange [onClear] for the guardrail pair, which is one field as far as a reset is concerned.
  * @param onPreview the sizing a slider is *currently* dragging towards, per frame, written nowhere — for the live
  *   preview above these controls. A whole [IconSizing] rather than a field and a value, because that is what a preview
  *   needs and this group is the one place that can assemble it: it holds the resolved sizing every other field keeps.
@@ -67,8 +64,10 @@ internal fun IconSizingControls(
     slot: GridSlot,
     sizing: IconSizing,
     onChange: (IconSizingField, Float) -> Unit,
+    onClear: (IconSizingField) -> Unit,
     onToggle: (showLabel: Boolean?, showIcon: Boolean?) -> Unit,
     onDpRange: (IntRange) -> Unit,
+    onClearDpRange: () -> Unit,
     onPreview: (IconSizing) -> Unit = {},
 ) {
     // **Where each reset goes: this grid's blueprint, not a number typed here.** The blueprint is the one place a
@@ -100,6 +99,7 @@ internal fun IconSizingControls(
             valueLabel = { "${(it * 100).roundToInt()}%" },
             onPreview = { onPreview(sizing.copy(iconPercent = it)) },
             onCommit = { onChange(IconSizingField.IconPercent, it) },
+            onReset = { onClear(IconSizingField.IconPercent) },
             modifier = SettingsRowPadding,
         )
     }
@@ -129,6 +129,7 @@ internal fun IconSizingControls(
             valueLabel = { "%.2fx".format(it) },
             onPreview = { onPreview(sizing.copy(labelScale = it)) },
             onCommit = { onChange(IconSizingField.LabelScale, it) },
+            onReset = { onClear(IconSizingField.LabelScale) },
             modifier = SettingsRowPadding,
         )
     }
@@ -143,17 +144,22 @@ internal fun IconSizingControls(
         valueLabel = { "${it.first}–${it.last} dp" },
         onPreview = { onPreview(sizing.copy(minIconDp = it.first, maxIconDp = it.last)) },
         onCommit = onDpRange,
+        onReset = onClearDpRange,
         modifier = SettingsRowPadding,
     )
 }
 
 /**
- * A settings section's whole icon group: the [IconSizingControls] sliders plus the reset beneath them.
+ * A settings section's whole icon group.
  *
- * Every section that sizes icons shows exactly this, so it is one composable rather than the same two statements in
- * each — four sections had copied it, which is four places for a control to be added to and three for it to be
- * forgotten. What varies is only which grid is being sized ([slot], [sizing]); the commands are the same
- * [IconSizingEdits] in every section, which is what made the block identical in the first place.
+ * Every section that sizes icons shows exactly this, so it is one composable rather than the same statement in each —
+ * four sections had copied it, which is four places for a control to be added to and three for it to be forgotten.
+ * What varies is only which grid is being sized ([slot], [sizing]); the commands are the same [IconSizingEdits] in
+ * every section, which is what made the block identical in the first place.
+ *
+ * **There is no "Reset icons" beneath it any more**, because every control in it carries its own: a button naming the
+ * group could not say which of five values had moved, where an arrow beside each says exactly that and stays dim until
+ * it has something to undo.
  *
  * @param onPreview reports the sizing under the finger, per frame, so the section's live preview tracks a drag rather
  *   than waiting for its release. The section owns that state because it also owns the cell the preview is drawn in.
@@ -169,15 +175,10 @@ internal fun IconSizingGroup(
         slot = slot,
         sizing = sizing,
         onChange = edits::change,
+        onClear = edits::clear,
         onToggle = { label, showIcon -> edits.toggle(label, showIcon) },
         onDpRange = edits::changeDpRange,
+        onClearDpRange = edits::clearDpRange,
         onPreview = onPreview,
     )
-    MorphicButton(
-        onClick = edits::reset,
-        style = MorphicButtonStyle.Text,
-        modifier = Modifier.padding(top = 16.dp),
-    ) {
-        Text("Reset icons")
-    }
 }

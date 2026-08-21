@@ -2,7 +2,6 @@ package inkspire.morphic.core.designsystem.component.slider
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,11 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -41,14 +38,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.button.MorphicResetButton
 import inkspire.morphic.core.designsystem.component.press.repeatingPress
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import kotlinx.coroutines.delay
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -101,7 +96,12 @@ import kotlin.time.Duration.Companion.milliseconds
  *   button.
  * @param onPreview fires per frame of a drag and per fire of a held stepper. It must not write: it is what lets a
  *   caller move a live preview without a store transaction per frame.
- * @param onCommit fires once, when the gesture ends — and at once for a reset, which is one discrete act.
+ * @param onCommit fires once, when the gesture ends.
+ * @param onReset what the turning arrow writes, defaulting to committing [default] — **overridden wherever the store
+ *   keeps sparse overrides**, which is every layout metric here. "Back to default" is then not a value at all but the
+ *   *absence* of one: writing the number pins it, so a later change to a blueprint default would never reach anyone
+ *   who had pressed reset, and storage keeps an entry saying what it would have said anyway. The row still shows
+ *   [default] while the write lands, since that is what the store is about to resolve to.
  * @param enabled false shows the control **spent rather than absent** — dimmed, unmoved and unpressable, with its
  *   value still legible. A deliberate exception to "a control that changes nothing is worse than a missing one", and
  *   it earns one only where the gate is a *continuous* control sitting directly above: hiding the row would move
@@ -121,6 +121,7 @@ fun MorphicSliderRow(
     step: Float = finestStep(valueRange),
     enabled: Boolean = true,
     style: SliderRowStyle = SliderRowDefaults.style(),
+    onReset: () -> Unit = { onCommit(default) },
 ) {
     val flight = rememberValueInFlight(value)
     val current by rememberUpdatedState(value)
@@ -139,8 +140,8 @@ fun MorphicSliderRow(
 
     fun release() = flight.release(onCommit)
 
-    // A reset is discrete, so it previews and commits in one go — there is no gesture to coalesce.
-    fun resetTo(target: Float) = flight.commit(target, onPreview, onCommit)
+    // A reset is discrete, so it previews and writes in one go — there is no gesture to coalesce.
+    fun resetTo(target: Float) = flight.commit(target, onPreview) { onReset() }
 
     val down = snappedStep(shown, step, up = false).coerceIn(valueRange)
     val up = snappedStep(shown, step, up = true).coerceIn(valueRange)
@@ -214,6 +215,7 @@ fun MorphicSliderRow(
     onPreview: (Int) -> Unit = {},
     enabled: Boolean = true,
     style: SliderRowStyle = SliderRowDefaults.style(),
+    onReset: () -> Unit = { onCommit(default) },
 ) {
     MorphicSliderRow(
         value = value.toFloat(),
@@ -228,6 +230,7 @@ fun MorphicSliderRow(
         step = 1f,
         enabled = enabled,
         style = style,
+        onReset = onReset,
     )
 }
 
@@ -253,6 +256,7 @@ fun MorphicRangeSliderRow(
     label: String? = null,
     onPreview: (IntRange) -> Unit = {},
     style: SliderRowStyle = SliderRowDefaults.style(),
+    onReset: () -> Unit = { onCommit(default) },
 ) {
     val flight = rememberValueInFlight(value)
     val current by rememberUpdatedState(value)
@@ -272,7 +276,7 @@ fun MorphicRangeSliderRow(
             what = what,
             enabled = true,
             canReset = shown != default,
-            onReset = { flight.commit(default, onPreview, onCommit) },
+            onReset = { flight.commit(default, onPreview) { onReset() } },
             style = style,
         )
         MorphicRangeSlider(
@@ -325,14 +329,11 @@ private fun SliderCaption(
                 .background(style.readoutBackground)
                 .padding(horizontal = ReadoutPadH, vertical = ReadoutPadV),
         )
-        GlyphButton(
-            glyph = SliderRowGlyph.RESET,
-            description = "Reset $what",
+        MorphicResetButton(
+            onClick = onReset,
+            contentDescription = "Reset $what",
+            tint = style.glyphColor,
             enabled = enabled && canReset,
-            slot = ResetSlot,
-            style = style,
-            // A tap, not a repeat: there is one place to go and pressing again would not move it.
-            interaction = Modifier.clickable(enabled = enabled && canReset, onClick = onReset),
         )
     }
 }
@@ -395,13 +396,12 @@ private fun GlyphButton(
     }
 }
 
-/** The three marks this row needs. */
-private enum class SliderRowGlyph { MINUS, PLUS, RESET }
+/** The two marks this row draws itself. The turning arrow beside the value is [MorphicResetButton]. */
+private enum class SliderRowGlyph { MINUS, PLUS }
 
 /**
- * The glyphs, drawn rather than imported: `core:designsystem` carries no material-icons dependency, and a minus, a
- * plus and a turning arrow are not a reason to take one on — `TopActionZone` draws its three marks by hand for the
- * same reason.
+ * The glyphs, drawn rather than imported: `core:designsystem` carries no material-icons dependency, and a minus and a
+ * plus are not a reason to take one on — `TopActionZone` draws its three marks by hand for the same reason.
  */
 private fun DrawScope.drawSliderRowGlyph(glyph: SliderRowGlyph, tint: Color) {
     val side = size.minDimension
@@ -419,40 +419,8 @@ private fun DrawScope.drawSliderRowGlyph(glyph: SliderRowGlyph, tint: Color) {
             line(Offset(mid - arm, mid), Offset(mid + arm, mid))
             line(Offset(mid, mid - arm), Offset(mid, mid + arm))
         }
-        // A ring open at one point, with a head on the leading end: the least that still reads as "turn it back".
-        // The radius leaves room for that head, which sticks out past the arc it grows from.
-        SliderRowGlyph.RESET -> {
-            val radius = mid * 0.62f
-            drawArc(
-                color = tint,
-                startAngle = ResetArcStart,
-                sweepAngle = ResetArcSweep,
-                useCenter = false,
-                topLeft = Offset(mid - radius, mid - radius),
-                size = Size(radius * 2f, radius * 2f),
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
-            )
-            val end = ((ResetArcStart + ResetArcSweep) * PI / 180f).toFloat()
-            val tip = Offset(mid + radius * cos(end), mid + radius * sin(end))
-            // Backwards along the tangent, splayed either side of it — a chevron rather than a filled triangle, which
-            // at this size would read as a blob.
-            val back = Offset(sin(end), -cos(end))
-            val arm = radius * 0.7f
-            listOf(HeadSplay, -HeadSplay).forEach { angle ->
-                val a = (angle * PI / 180f).toFloat()
-                val dir = Offset(back.x * cos(a) - back.y * sin(a), back.x * sin(a) + back.y * cos(a))
-                line(tip, Offset(tip.x + dir.x * arm, tip.y + dir.y * arm))
-            }
-        }
     }
 }
-
-/** Where the ring's gap sits and how far the arrow travels — a gap at the top right, read as "not quite closed". */
-private const val ResetArcStart = -60f
-private const val ResetArcSweep = 285f
-
-/** How far each arm of the head splays off the tangent. Wide enough to read, narrow enough not to look like a V. */
-private const val HeadSplay = 38f
 
 /** Dimmed exactly as M3 dims disabled content, stated once so the label, the number and the glyphs agree. */
 private fun Color.dimmedUnless(enabled: Boolean): Color =
@@ -532,13 +500,19 @@ private class ValueInFlight<T : Any> {
         onCommit(moved)
     }
 
-    /** A discrete edit — a reset. Claims the value so the readout holds still, and writes it at once. */
-    fun commit(target: T, onPreview: (T) -> Unit, onCommit: (T) -> Unit) {
+    /**
+     * A discrete edit — a reset. Claims the value so the readout holds still while the write lands, and writes at once.
+     *
+     * [write] takes no value, because a reset's write is not always the value shown: where the store keeps sparse
+     * overrides it *clears* the field and lets the blueprint answer, which resolves to the same number by a different
+     * route.
+     */
+    fun commit(target: T, onPreview: (T) -> Unit, write: () -> Unit) {
         claim = target
         unsent = null
         commits++
         onPreview(target)
-        onCommit(target)
+        write()
     }
 }
 
@@ -583,9 +557,6 @@ private val ReadoutPadV = 2.dp
 
 /** Large enough to be a comfortable target, small enough that the track keeps most of the width. */
 private val StepperSlot = 40.dp
-
-/** Smaller, because it sits in a caption row rather than beside the track. */
-private val ResetSlot = 32.dp
 
 /** Short of either slot, so the press target is larger than the mark it shows. */
 private val GlyphSide = 20.dp

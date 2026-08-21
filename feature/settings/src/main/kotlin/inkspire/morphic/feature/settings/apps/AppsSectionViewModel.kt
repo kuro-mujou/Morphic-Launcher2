@@ -285,7 +285,7 @@ class AppsSectionViewModel(
      * leaves none without a place, which is the difference from the dock's height and the reason this needs no
      * settle step.
      */
-    fun setRowHeight(dp: Int) {
+    fun setRowHeight(dp: Int?) {
         val configuration = device.value ?: return
         viewModelScope.launch { settingsRepository.setRowHeight(GridSlot.APPS_LIST, configuration, dp) }
     }
@@ -329,28 +329,25 @@ class AppsSectionViewModel(
      * always — even the pager, whose *resize* is one write here where home's is two, needs no companion, since a
      * margin displaces nothing.
      */
-    fun setPadding(dp: Int) {
+    fun setPadding(dp: Int?) {
         val configuration = device.value ?: return
         val slot = layout.value.slot
         viewModelScope.launch { settingsRepository.setHorizontalPadding(slot, configuration, dp) }
     }
 
     /**
-     * Clears the selected layout's size override — and, for the list, its row height too.
+     * Clears the selected layout's **size** override, returning its lane count to the blueprint's default.
      *
-     * Both are "the size of this layout" from the user's side, so one button clears both rather than making them
-     * discover that a list's size is stored somewhere else than a grid's.
+     * The editor's own reset, and only the counts. It used to clear the row height and the margin with them, on the
+     * grounds that all three are "the size of this layout" and one button should not leave a number behind that nothing
+     * appears to own — true while the only reset was a text button under the section, and now false: each of those has
+     * its own arrow beside its own value, which is a better answer than one button clearing three things at once.
      */
-    fun resetSize() {
+    fun resetGrid() {
         val configuration = device.value ?: return
         val slot = layout.value.slot
-        viewModelScope.launch {
-            if (slot.blueprint.editRange != null) settingsRepository.updateGrid(slot, configuration) { GridOverride() }
-            if (slot == GridSlot.APPS_LIST) settingsRepository.setRowHeight(GridSlot.APPS_LIST, configuration, null)
-            // The margin is part of "the size of this layout" from the user's side, so Reset clears it with the rest
-            // rather than leaving one number behind that no button appears to own.
-            settingsRepository.setHorizontalPadding(slot, configuration, null)
-        }
+        if (slot.blueprint.editRange == null) return
+        viewModelScope.launch { settingsRepository.updateGrid(slot, configuration) { GridOverride() } }
     }
 
     private companion object {

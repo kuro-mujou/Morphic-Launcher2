@@ -41,9 +41,22 @@ internal class CardChromeEdits(
         }
     }
 
-    /** Clears every card override for this grid on this device, returning it to the blueprint's all-zero chrome. */
-    fun reset() {
-        edit { CardOverride() }
+    /**
+     * Clears one field, returning it to the blueprint's all-zero chrome.
+     *
+     * **`null` rather than the default value**, which is what each control's reset writes: a zero written down is an
+     * override saying what the blueprint already says, and it would outlive a change to that default. See
+     * `IconSizingEdits.clear`.
+     */
+    fun clear(field: CardChromeField) {
+        edit {
+            when (field) {
+                CardChromeField.TitleScale -> copy(titleScale = null)
+                CardChromeField.CornerRadius -> copy(cornerRadiusDp = null)
+                CardChromeField.OuterPadding -> copy(outerPaddingDp = null)
+                CardChromeField.InnerPadding -> copy(innerPaddingDp = null)
+            }
+        }
     }
 
     private fun edit(transform: CardOverride.() -> CardOverride) {

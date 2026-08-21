@@ -20,8 +20,6 @@ import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
-import inkspire.morphic.core.designsystem.component.button.MorphicButton
-import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.grid.cardMinCell
 import inkspire.morphic.core.designsystem.grid.derivedCell
@@ -43,6 +41,7 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.feature.settings.component.EditorReset
 import inkspire.morphic.feature.settings.component.GridEditor
 import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
@@ -283,6 +282,12 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                         horizontalInsetFraction = shownPadding / fullWindow.widthDp,
                         // Counting from the drawn size, so a press moves the number the preview is showing.
                         onEdit = { edge, add -> viewModel.edit(edge, add, drawn) },
+                        // Against the **stored** size rather than the `drawn` one beside it: a grid whose lanes were
+                        // taken by larger icons has not been resized by the user. See [EditorReset].
+                        reset = EditorReset(
+                            changed = size != slot.blueprint.defaults.getValue(device),
+                            onReset = viewModel::resetGrid,
+                        ),
                         // **This layout's own mockup**, so each chip shows the surface it configures rather than one
                         // generic lattice — the reflective cells for the scrolling grids, the chrome for the ones that
                         // have it. `window` here (not `fullWindow`): the cell aspect comes from the width the grid is
@@ -320,6 +325,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                     valueLabel = { "$it dp" },
                     onPreview = { previewRowHeight = it.toFloat() },
                     onCommit = viewModel::setRowHeight,
+                    onReset = { viewModel.setRowHeight(null) },
                     modifier = SettingsRowPadding,
                 )
             }
@@ -335,6 +341,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                 valueLabel = { "$it dp" },
                 onPreview = { previewPadding = it },
                 onCommit = viewModel::setPadding,
+                onReset = { viewModel.setPadding(null) },
                 modifier = SettingsRowPadding,
             )
 
@@ -394,14 +401,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                         )
                     }
                 }
-            }
-
-            MorphicButton(
-                onClick = viewModel::resetSize,
-                style = MorphicButtonStyle.Text,
-                modifier = Modifier.padding(top = RowGap * 2),
-            ) {
-                Text(if (isList) "Reset row height" else "Reset grid")
             }
         },
         // **The card previews a whole card, where every other layout previews one cell**, and the difference is what
@@ -490,6 +489,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                         valueLabel = { "%.2fx".format(it) },
                         onPreview = { previewCard = chrome.copy(titleScale = it) },
                         onCommit = { viewModel.cardChrome.change(CardChromeField.TitleScale, it) },
+                        onReset = { viewModel.cardChrome.clear(CardChromeField.TitleScale) },
                         modifier = SettingsRowPadding,
                     )
                     MorphicSliderRow(
@@ -501,6 +501,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                         valueLabel = { "$it dp" },
                         onPreview = { previewCard = chrome.copy(cornerRadiusDp = it) },
                         onCommit = { viewModel.cardChrome.change(CardChromeField.CornerRadius, it.toFloat()) },
+                        onReset = { viewModel.cardChrome.clear(CardChromeField.CornerRadius) },
                         modifier = SettingsRowPadding,
                     )
                     MorphicSliderRow(
@@ -512,6 +513,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                         valueLabel = { "$it dp" },
                         onPreview = { previewCard = chrome.copy(outerPaddingDp = it) },
                         onCommit = { viewModel.cardChrome.change(CardChromeField.OuterPadding, it.toFloat()) },
+                        onReset = { viewModel.cardChrome.clear(CardChromeField.OuterPadding) },
                         modifier = SettingsRowPadding,
                     )
                     MorphicSliderRow(
@@ -523,15 +525,9 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                         valueLabel = { "$it dp" },
                         onPreview = { previewCard = chrome.copy(innerPaddingDp = it) },
                         onCommit = { viewModel.cardChrome.change(CardChromeField.InnerPadding, it.toFloat()) },
+                        onReset = { viewModel.cardChrome.clear(CardChromeField.InnerPadding) },
                         modifier = SettingsRowPadding,
                     )
-                    MorphicButton(
-                        onClick = viewModel.cardChrome::reset,
-                        style = MorphicButtonStyle.Text,
-                        modifier = Modifier.padding(top = RowGap * 2),
-                    ) {
-                        Text("Reset card")
-                    }
                 }
             }
         },
