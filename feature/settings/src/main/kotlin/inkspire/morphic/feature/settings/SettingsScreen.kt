@@ -191,6 +191,7 @@ private fun SettingsSinglePane(
                 navigationIcon = {
                     BackButton { if (selected != null) onCloseDetail() else onBack() }
                 },
+                actions = { SettingsSectionActions(selected) },
             )
         },
     ) { innerPadding ->
@@ -253,6 +254,7 @@ private fun SettingsTwoPane(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background),
                 windowInsets = uiInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 navigationIcon = { BackButton(up) },
+                actions = { SettingsSectionActions(selected) },
             )
         },
     ) { innerPadding ->

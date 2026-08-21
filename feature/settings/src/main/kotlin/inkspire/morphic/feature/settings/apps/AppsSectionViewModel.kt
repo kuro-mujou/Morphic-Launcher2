@@ -18,6 +18,7 @@ import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
 import inkspire.morphic.feature.settings.icons.SamplePreviewApp
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -104,6 +106,7 @@ data class AppsSectionState(
     val chrome: AppsChrome = AppsChrome.Default,
     val wraps: Boolean? = null,
     val card: CardChrome? = null,
+    val boundLayouts: Set<AppsLayout> = emptySet(),
 )
 
 /**
@@ -148,6 +151,25 @@ class AppsSectionViewModel(
 
     private val layout = MutableStateFlow(ConfigurableLayouts.first())
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
+    /**
+     * The layouts a home edge actually opens.
+     *
+     * **Read here so the chip row can tell "the one I am editing" from "the one I can reach"**, which are different
+     * questions on this surface and on no other. [layout] is a view choice, and the register is free to bind a
+     * different layout to every edge or none at all — so a highlighted chip on its own says nothing about whether the
+     * arrangement under it is one the user can swipe to. Without this the section will happily spend a minute tuning
+     * a grid that is not on the device.
+     *
+     * A set rather than the register: which *edge* opens what is the register's own screen to answer, and reaching
+     * for it here would put a second, worse copy of that screen at the top of this one.
+     */
+    private val boundLayouts: Flow<Set<AppsLayout>> =
+        settingsRepository.surfaceRegister
+            .map { register ->
+                register.sides.values.filterIsInstance<SideBinding.Apps>().mapTo(mutableSetOf()) { it.layout }
+            }
+            .distinctUntilChanged()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<AppsSectionState> =
@@ -195,6 +217,10 @@ class AppsSectionViewModel(
                     }
                 }
             }
+            // Joined outside the inner combine rather than squeezed into its grouped triple: this is the one source
+            // keyed by neither the selected layout nor the device, so nesting it there would re-subscribe it on every
+            // chip press and every rotation.
+            .combine(boundLayouts) { base, bound -> base.copy(boundLayouts = bound) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsSectionState())
 
     /**

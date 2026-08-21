@@ -1,9 +1,6 @@
 package inkspire.morphic.feature.settings.apps
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,7 +40,6 @@ import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.EditorReset
 import inkspire.morphic.feature.settings.component.GridEditor
-import inkspire.morphic.feature.settings.component.SettingsChip
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SurfaceDetail
@@ -69,9 +65,6 @@ private const val SampleCategoryName = "Category"
  * card override against this same object, so a reset here lands exactly where an untouched launcher already is.
  */
 private val CardChromeDefaults = AppsCardGrid.card ?: CardChrome()
-
-private val RowGap = 8.dp
-private val ChipGap = 8.dp
 
 /**
  * **Apps**: how each arrangement of the app list is sized, and how its icons are drawn.
@@ -217,19 +210,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
         onReroll = viewModel.sample::reroll,
         modifier = modifier,
         layout = {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(ChipGap),
-                verticalArrangement = Arrangement.spacedBy(ChipGap),
-            ) {
-                ConfigurableLayouts.forEach { layout ->
-                    SettingsChip(
-                        label = layout.label,
-                        selected = layout == state.layout,
-                        onClick = { viewModel.selectLayout(layout) },
-                    )
-                }
-            }
-
             if (isList) {
                 // **The list gets an editor too, with no buttons on it.** One lane and a declared row height means
                 // there is no count to press — but there are two things to *see*: the height its slider sets, and
@@ -256,7 +236,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                             rowHeightDp = shownRowHeight,
                         )
                     },
-                    modifier = Modifier.padding(top = RowGap * 2),
                 )
             } else {
                 // The same editor home and the dock use. No companion zone: an APPS layout fills the screen, so there
@@ -301,7 +280,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                                 rowHeightDp = fittedRowHeight,
                             )
                         },
-                        modifier = Modifier.padding(top = RowGap * 2),
                     )
                 }
             }

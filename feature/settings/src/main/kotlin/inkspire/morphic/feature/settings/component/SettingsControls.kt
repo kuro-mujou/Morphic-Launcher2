@@ -1,25 +1,19 @@
 package inkspire.morphic.feature.settings.component
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /** Provisional spacing — placeholders, like every other surface metric, until the settings layer owns its own. */
 private val RowGapV = 12.dp
 private val HeaderGapTop = 16.dp
-private val ChipPaddingH = 12.dp
-private val ChipPaddingV = 8.dp
 
 /**
- * The settings surface's own row primitives — a group header and a chip.
+ * The settings surface's own row primitive: a group header, and the room between two rows.
  *
  * **Local to `feature:settings`, not in `core:designsystem`.** There is exactly one consumer, and the design-system
  * rule is to port a group only when the screen needing it exists. They move out if a second surface ever wants them;
@@ -49,19 +43,3 @@ internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier)
  * slots are plain `Column`s with no arrangement of their own.
  */
 internal val SettingsRowPadding = Modifier.padding(vertical = RowGapV / 2)
-
-/** One mutually-exclusive choice. Selection reads by contrast, not hue — the palette is grayscale by design. */
-@Composable
-internal fun SettingsChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalMorphicColors.current
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = if (selected) colors.onAccent else colors.content,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) colors.accent else colors.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = ChipPaddingH, vertical = ChipPaddingV),
-    )
-}
