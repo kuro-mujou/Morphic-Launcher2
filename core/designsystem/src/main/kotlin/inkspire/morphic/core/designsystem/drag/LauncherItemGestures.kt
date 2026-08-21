@@ -208,6 +208,28 @@ fun Modifier.launcherItemGestures(
                                 // the app**. It cost nothing only while the pan ran on the Main pass and could not
                                 // consume ahead of this node.
                                 if (change.positionChangedIgnoreConsumed()) {
+                                    // **Consumed by an ancestor means the surface pan took the gesture**, and the
+                                    // item stands down before its long-press can fire. This is the other half of
+                                    // `SurfaceGestureLock`, which only ever ran the other way: an item that owns the
+                                    // finger locks the pan out, while a pan that had already claimed could not tell
+                                    // the item anything. The thresholds make that gap routine rather than rare — the
+                                    // pan claims at the platform slop (~8dp) and an item needs 20 — so a finger
+                                    // between the two when the timer fires opened a menu on an icon the user was
+                                    // swiping past, and the next move turned it into a drag under a closing surface.
+                                    //
+                                    // **Reading consumption here does not contradict ignoring it above.** Where the
+                                    // finger is was never in dispute (that is what `positionChangedIgnoreConsumed`
+                                    // protects); *who owns the gesture* is a different question, and consumption is
+                                    // the honest answer to it. No new state, and nothing to keep in step.
+                                    //
+                                    // **Only an `Initial`-pass ancestor is visible here, which is exactly right.**
+                                    // The surface pan runs on `Initial`, ahead of every descendant, so its claim
+                                    // reaches this node on `Main`. An ordinary scroller or pager runs on `Main`,
+                                    // where children go first — so list scrolling and home's own pager never trip
+                                    // this, and neither should they: they settle with the item the ordinary way.
+                                    if (change.isConsumed && !machine.phase.ownsFinger) {
+                                        perform(machine.onEvent(ItemGestureEvent.TakenByParent), local)
+                                    }
                                     perform(machine.onEvent(ItemGestureEvent.Move(local - down.position)), local)
                                     // Once the item owns the finger, stop anything else reacting to the same
                                     // movement — a parent pager or scroller, and an embedded View below.

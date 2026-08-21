@@ -199,4 +199,77 @@ class ItemGestureMachineTest {
         assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Cancel))
         assertEquals(ItemGesturePhase.Idle, m.phase)
     }
+    // --- The surface pan taking the gesture (`TakenByParent`) ------------------------------------------------
+
+    @Test
+    fun `the pan taking the gesture releases a pending press to the parent`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(wobble))
+        assertEquals(ItemGesturePhase.Pressed, m.phase)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.TakenByParent))
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+    }
+
+    /**
+     * The bug this event exists for: the pan claims at ~8dp and an item needs 20, so a finger between the two when
+     * the 400ms timer fires used to raise a menu on an icon the user was swiping past — and the next move turned it
+     * into a drag under a surface already sliding home.
+     */
+    @Test
+    fun `once the pan has it, the long-press raises no menu`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(wobble))
+        m.onEvent(ItemGestureEvent.TakenByParent)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.LongPress))
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+    }
+
+    @Test
+    fun `once the pan has it, lifting fires no tap`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.TakenByParent)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    @Test
+    fun `once the pan has it, further movement starts no drag`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.TakenByParent)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(40f, 40f))))
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+    }
+
+    /**
+     * The modifier only sends this while the item does not own the finger, so these three phases never see it — but
+     * an item that *does* own the finger holds `SurfaceGestureLock`, and were one to arrive it must not tear down a
+     * menu or a drag in flight.
+     */
+    @Test
+    fun `it does not disturb a phase that owns the finger`() {
+        val dragging = machine()
+        dragging.onEvent(ItemGestureEvent.Down)
+        dragging.onEvent(ItemGestureEvent.LongPress)
+        dragging.onEvent(ItemGestureEvent.Move(far(30f, 0f)))
+        assertEquals(ItemGesturePhase.Dragging, dragging.phase)
+        assertEquals(emptyList<ItemGestureEffect>(), dragging.onEvent(ItemGestureEvent.TakenByParent))
+        assertEquals(ItemGesturePhase.Dragging, dragging.phase)
+
+        val menu = machine()
+        menu.onEvent(ItemGestureEvent.Down)
+        menu.onEvent(ItemGestureEvent.LongPress)
+        assertEquals(emptyList<ItemGestureEffect>(), menu.onEvent(ItemGestureEvent.TakenByParent))
+        assertEquals(ItemGesturePhase.MenuOpen, menu.phase)
+
+        val swiped = machine()
+        swiped.onEvent(ItemGestureEvent.Down)
+        swiped.onEvent(ItemGestureEvent.Move(far(30f, 2f)))
+        assertEquals(emptyList<ItemGestureEffect>(), swiped.onEvent(ItemGestureEvent.TakenByParent))
+        assertEquals(ItemGesturePhase.Swiped(SwipeDirection.RIGHT), swiped.phase)
+    }
+
 }

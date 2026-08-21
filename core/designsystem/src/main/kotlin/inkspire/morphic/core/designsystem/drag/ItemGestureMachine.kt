@@ -16,6 +16,24 @@ sealed interface ItemGestureEvent {
     data object Down : ItemGestureEvent
     data class Move(val offsetFromDown: Offset) : ItemGestureEvent
     data object LongPress : ItemGestureEvent
+
+    /**
+     * An ancestor consumed this movement — **the surface pan took the gesture.**
+     *
+     * The one arbitration this contract could not previously express. `SurfaceGestureLock` runs the other way: an
+     * item that owns the finger locks the pan out. Nothing ran this way, and the thresholds guarantee the pan gets
+     * there first — it claims at the platform slop (~8dp) where an item needs 20 — so between those two distances
+     * the pan has claimed and the item does not know.
+     *
+     * Without this the long-press timer keeps running underneath a pan already under way, and a finger that has
+     * travelled 8dp but not 20 when it fires opens a menu on an item the user is swiping *past*, then turns it into
+     * a drag. Two owners of one finger, which is what it looks like: the surface slides home while an icon comes up
+     * under the thumb.
+     *
+     * Sent only while the item does **not** own the finger; see `launcherItemGestures`. Once an item is swiping,
+     * dragging or holding a menu it has the pan locked out, so this cannot arrive.
+     */
+    data object TakenByParent : ItemGestureEvent
     data object Up : ItemGestureEvent
     data object Cancel : ItemGestureEvent
 }
@@ -175,6 +193,11 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.OpenItem)
         }
+        // The pan claimed at its own slop, below ours: hand the gesture over before the long-press can fire.
+        ItemGestureEvent.TakenByParent -> {
+            phase = ItemGesturePhase.ReleasedToParent
+            noEffect()
+        }
         ItemGestureEvent.Cancel -> reset()
         ItemGestureEvent.Down -> noEffect()
     }
@@ -188,8 +211,10 @@ class ItemGestureMachine(
                 effect(ItemGestureEffect.EdgeAction(current.direction))
             }
             ItemGestureEvent.Cancel -> reset()
-            // The long-press timer is stale once we've moved; ignore it.
-            ItemGestureEvent.LongPress, ItemGestureEvent.Down -> noEffect()
+            // The long-press timer is stale once we've moved; ignore it. `TakenByParent` cannot arrive in the
+            // three phases that own the finger — the modifier only sends it while the item does not — and the
+            // branch exists so adding a phase has to answer for it.
+            ItemGestureEvent.LongPress, ItemGestureEvent.Down, ItemGestureEvent.TakenByParent -> noEffect()
         }
 
     private fun onMenuOpen(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
@@ -220,7 +245,7 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.DismissMenu)
         }
-        ItemGestureEvent.LongPress, ItemGestureEvent.Down -> noEffect()
+        ItemGestureEvent.LongPress, ItemGestureEvent.Down, ItemGestureEvent.TakenByParent -> noEffect()
     }
 
     private fun onDragging(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
@@ -233,13 +258,17 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.CancelDrag)
         }
-        ItemGestureEvent.LongPress, ItemGestureEvent.Down -> noEffect()
+        ItemGestureEvent.LongPress, ItemGestureEvent.Down, ItemGestureEvent.TakenByParent -> noEffect()
     }
 
     // The swipe belongs to the parent now; do nothing until the pointer lifts, then reset.
     private fun onReleasedToParent(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
         ItemGestureEvent.Up, ItemGestureEvent.Cancel -> reset()
-        is ItemGestureEvent.Move, ItemGestureEvent.LongPress, ItemGestureEvent.Down -> noEffect()
+        is ItemGestureEvent.Move,
+        ItemGestureEvent.LongPress,
+        ItemGestureEvent.Down,
+        ItemGestureEvent.TakenByParent,
+        -> noEffect()
     }
 
     private fun reset(): List<ItemGestureEffect> {
