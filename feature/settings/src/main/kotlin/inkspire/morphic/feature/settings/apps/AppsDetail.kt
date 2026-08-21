@@ -2,9 +2,8 @@ package inkspire.morphic.feature.settings.apps
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +19,7 @@ import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
+import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.grid.cardMinCell
@@ -31,7 +31,6 @@ import inkspire.morphic.core.designsystem.grid.maxCells
 import inkspire.morphic.core.designsystem.grid.minCellFor
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
@@ -113,8 +112,6 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
     LaunchedEffect(Unit) { initialLayout?.let(viewModel::selectLayout) }
     val sampleApp by viewModel.sample.app.collectAsStateWithLifecycle()
     val sampleCardApps by viewModel.sampleApps.collectAsStateWithLifecycle()
-
-    val colors = LocalMorphicColors.current
 
     // Null only for the frame before the device is reported; there is no honest value to show until then, and a
     // placeholder would be a second source of truth for numbers the blueprint owns.
@@ -362,43 +359,32 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
 
             // The chrome choosers sit with the layout group rather than the icon group, because what they place is
             // drawn *around* the cells. One shared value for the surface, with the options depending on the layout.
+            //
+            // **Segmented rather than chips, which is the pane's one distinction between a setting and a view
+            // choice.** Both chrome choosers are two or three mutually-exclusive options — what a segmented control
+            // is for, and what the Home hub's pairing switch already is. The chip row above them is five options
+            // wrapping to a second row *and* the only control here that writes nothing, so leaving it the pane's one
+            // chip row is what keeps "this picks what I am looking at" from wearing the same pill as "this saves".
             SettingsSectionHeader("Search")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(ChipGap),
-                verticalArrangement = Arrangement.spacedBy(ChipGap),
-            ) {
-                searchOptionsFor(state.layout).forEach { (label, placement) ->
-                    SettingsChip(
-                        label = label,
-                        selected = state.chrome.search == placement,
-                        onClick = { viewModel.setSearch(placement) },
-                    )
-                }
-            }
-            Text(
-                text = "Search is not built on the Apps surface yet — this sets where it will sit, and the editor " +
-                    "above shows it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.contentMuted,
-                modifier = Modifier.padding(top = RowGap),
+            val searchOptions = searchOptionsFor(state.layout)
+            MorphicSegmentedButtons(
+                options = searchOptions.map { it.first },
+                selectedIndex = searchOptions.indexOfFirst { it.second == state.chrome.search },
+                onSelect = { viewModel.setSearch(searchOptions[it].second) },
+                modifier = Modifier.fillMaxWidth(),
             )
 
-            // Tabs exist on one layout only, so the chooser appears on one chip only rather than being offered and
-            // ignored.
+            // Tabs exist on one layout only, so the chooser appears on that layout alone rather than being offered
+            // and ignored.
             if (state.layout == AppsLayout.PAGER_WITH_CATEGORY) {
                 SettingsSectionHeader("Category tabs")
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(ChipGap),
-                    verticalArrangement = Arrangement.spacedBy(ChipGap),
-                ) {
-                    VerticalEdge.entries.forEach { edge ->
-                        SettingsChip(
-                            label = if (edge == VerticalEdge.TOP) "Top" else "Bottom",
-                            selected = state.chrome.tabBarEdge == edge,
-                            onClick = { viewModel.setTabBarEdge(edge) },
-                        )
-                    }
-                }
+                val edges = VerticalEdge.entries
+                MorphicSegmentedButtons(
+                    options = edges.map { if (it == VerticalEdge.TOP) "Top" else "Bottom" },
+                    selectedIndex = edges.indexOf(state.chrome.tabBarEdge),
+                    onSelect = { viewModel.setTabBarEdge(edges[it]) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         // **The card previews a whole card, where every other layout previews one cell**, and the difference is what

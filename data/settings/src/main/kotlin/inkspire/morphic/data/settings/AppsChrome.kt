@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
  * so it has no edge to choose), and the tab bar's placement *is* a [VerticalEdge] — which that enum's KDoc has said
  * since B0, naming this exact consumer.
  *
- * @property search where the search field sits, per layout family. See the caveat on [Default] about the default.
+ * @property search where the search field sits, per layout family.
  * @property tabBarEdge which edge the category tab bar sits on. Meaningful only in `AppsLayout.PAGER_WITH_CATEGORY`,
  *   the one layout that has tabs; the others store it and ignore it, which is cheaper than a nullable that every
  *   reader has to branch on.
@@ -28,15 +28,7 @@ data class AppsChrome(
     val tabBarEdge: VerticalEdge = VerticalEdge.TOP,
 ) {
     companion object {
-        /**
-         * **Search hidden**, rather than defaulting to a visible edge.
-         *
-         * The reason is that the APPS surface does not render a search field yet, and neither pager renders a tab bar:
-         * both are settings the *editor preview* honors today and the surface will honor when those features land.
-         * A default of `Pinned(TOP)` would therefore draw every APPS preview with a search bar the launcher has not
-         * got, which is the one thing a preview must not do. Flipping it is a one-line change on the day search
-         * ships; until then the default is the state that matches what is actually drawn.
-         */
+        /** Search hidden: a visible default would draw a bar into previews of a surface that has none. */
         val Default = AppsChrome()
     }
 }

@@ -48,11 +48,6 @@ private const val TabCount = 4
  * width, so only [ReflectivePreview] shows the shape the surface will actually draw — and only it makes adding a
  * column visibly gain rows.
  *
- * **Two pieces of chrome are stored and previewed before the surface honors them.** Search is unbuilt in
- * `feature:apps`, and neither pager draws a tab bar (the category pager draws a per-page header instead). `AppsChrome`
- * exists anyway, so what is drawn here is a real preference — see that type for why its search default is `Hidden`
- * rather than a visible edge.
- *
  * @param areaWidthDp the width the grid is really given, margin already subtracted — what [ReflectivePreview] needs to
  *   compute a real cell aspect.
  * @param edit the live edit, threaded through so a layout-specific mockup still plays the add/remove flash.
