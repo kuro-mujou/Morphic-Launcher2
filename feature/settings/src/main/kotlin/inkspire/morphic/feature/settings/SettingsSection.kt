@@ -42,7 +42,7 @@ enum class SettingsSection {
      */
     ICONS,
 
-    /** Which surface each HOME edge opens, in which layout. L1 called this "Layout". */
+    /** Which surface each HOME edge opens, in which layout. */
     SURFACE_REGISTER,
 
     /**
@@ -109,17 +109,16 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
             "Icons", "Shape, background and layers", Icons.Outlined.Palette,
         )
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
-            "Layout", "Surfaces and transitions", Icons.Outlined.Dashboard,
+            "Screen manager", "Surfaces and transitions", Icons.Outlined.Dashboard,
         )
         SettingsSection.HOME -> SettingsSectionMeta(
             // **The one row that does not rename itself**, which is the whole point of the hub: it names a surface,
             // and a surface does not change identity when its arrangement does. Deliberately worded as `APPS` is —
             // both are one row over a surface arranged more than one way.
-            "Home", "Arrangement, grids and icons", Icons.Outlined.Home,
+            "Home screen", "Arrangement, grids and icons", Icons.Outlined.Home,
         )
-        // Named for the zone rather than the surface, since this is a row *inside* Home now — "Home" under a pane
-        // titled "Home" would say one thing twice. The pane's own heading still reads "Home grid" / "Home list"
-        // (`GridSizeDetail`), so nothing is lost when it is the app bar's title on a phone.
+        // Named for the zone rather than the surface, since this is a row *inside* the home screen — naming it
+        // "Home" again would say one thing twice, and this string is the app bar's title once the pane is open.
         SettingsSection.HOME_GRID -> SettingsSectionMeta(
             if (isList) "List" else "Grid",
             if (isList) "Row height and icons" else "Rows, columns and icons",
@@ -131,7 +130,7 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
             SettingsSectionMeta("Dock", "Height, grid and icons", Icons.Outlined.Dock)
         }
         SettingsSection.APPS -> SettingsSectionMeta(
-            "Apps", "Arrangements, grids and icons", Icons.Outlined.Apps,
+            "App screen", "Arrangements, grids and icons", Icons.Outlined.Apps,
         )
         // "Icon and text size" is exactly what a folder has to configure.
         SettingsSection.FOLDER -> SettingsSectionMeta(
