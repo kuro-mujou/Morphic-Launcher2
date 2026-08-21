@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -214,8 +215,8 @@ internal class SettingsRepositoryImpl(
 
     override val appsChrome: Flow<AppsChrome> = dataStore.read(AppsChromeSlice) { it }
 
-    override suspend fun setSearchPlacement(placement: SearchPlacement) =
-        update(AppsChromeSlice) { copy(search = placement) }
+    override suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement) =
+        update(AppsChromeSlice) { withSearch(layout, placement) }
 
     override suspend fun setTabBarEdge(edge: VerticalEdge) = update(AppsChromeSlice) { copy(tabBarEdge = edge) }
 

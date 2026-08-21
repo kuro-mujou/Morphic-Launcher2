@@ -1,5 +1,6 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -65,8 +66,8 @@ interface SettingsRepository {
      */
     val appsChrome: Flow<AppsChrome>
 
-    /** Sets where the APPS search field sits. */
-    suspend fun setSearchPlacement(placement: SearchPlacement)
+    /** Sets where the APPS search field sits on [layout]; the other arrangements keep theirs. */
+    suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement)
 
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setTabBarEdge(edge: VerticalEdge)

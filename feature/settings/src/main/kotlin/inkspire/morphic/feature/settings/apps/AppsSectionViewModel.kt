@@ -293,13 +293,17 @@ class AppsSectionViewModel(
     /**
      * Sets where the search field sits.
      *
-     * **Not per layout, unlike everything else in this section** — the chrome slice is one value for the surface. Which
-     * *options* are offered does depend on the layout (a standalone layout pins to an edge; the category pager embeds
-     * in its header), but that is `SearchPlacement`'s shape rather than five separate settings, and a user who wants
-     * search at the bottom means it everywhere.
+     * **Per layout, like the margin and the wrap flag.** Each arrangement draws its own chrome, so a field pinned to
+     * the bottom of the list says nothing about where it belongs on the category cards. It is also what keeps the
+     * control honest: the options a layout offers depend on it (a standalone layout pins to an edge, the category
+     * pager embeds in its header), so one shared value meant the stored placement was routinely absent from the list
+     * the user was being shown, and the control had nothing to mark.
+     *
+     * Writes against the **selected** layout, as `setWraps` does — the chip row above chooses what is being edited.
      */
     fun setSearch(placement: SearchPlacement) {
-        viewModelScope.launch { settingsRepository.setSearchPlacement(placement) }
+        val target = layout.value
+        viewModelScope.launch { settingsRepository.setSearchPlacement(target, placement) }
     }
 
     /** Sets which edge the category pager's tab bar sits on. */

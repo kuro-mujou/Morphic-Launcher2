@@ -369,7 +369,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
             val searchOptions = searchOptionsFor(state.layout)
             MorphicSegmentedButtons(
                 options = searchOptions.map { it.first },
-                selectedIndex = searchOptions.indexOfFirst { it.second == state.chrome.search },
+                selectedIndex = searchOptions.indexOfFirst { it.second == state.chrome.searchOn(state.layout) },
                 onSelect = { viewModel.setSearch(searchOptions[it].second) },
                 modifier = Modifier.fillMaxWidth(),
             )

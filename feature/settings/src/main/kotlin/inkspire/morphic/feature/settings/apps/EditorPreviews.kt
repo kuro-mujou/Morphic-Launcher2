@@ -66,20 +66,23 @@ internal fun AppsEditorPreview(
     edit: PreviewEdit?,
     rowHeightDp: Float,
 ) {
+    // Resolved once for the layout being drawn, and handed down — so the mockup and the control that sets it read the
+    // same entry through the same accessor.
+    val search = chrome.searchOn(layout)
     when (layout) {
         // **Not `ReflectivePreview`, and the difference is the point.** That derives a cell's height from its width,
         // which is what the two scrolling *grids* do. A list is the third way a cell gets a height — declared — so its
         // rows are drawn at the height the slider sets, and the aspect comes from `rowHeightDp` rather than from an
         // icon-and-label derivation. See `GridBlueprint.rowHeightDp` for the three-way split.
-        AppsLayout.VERTICAL_LIST -> Standalone(chrome) {
+        AppsLayout.VERTICAL_LIST -> Standalone(search) {
             LanePreview(rowHeightDp = rowHeightDp, areaWidthDp = areaWidthDp, insetFraction = insetFraction)
         }
 
-        AppsLayout.VERTICAL_GRID -> Standalone(chrome) {
+        AppsLayout.VERTICAL_GRID -> Standalone(search) {
             ReflectivePreview(cols, metrics, areaWidthDp, insetFraction, edit)
         }
 
-        AppsLayout.PAGER -> Standalone(chrome) {
+        AppsLayout.PAGER -> Standalone(search) {
             GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxSize())
         }
 
@@ -89,7 +92,7 @@ internal fun AppsEditorPreview(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(ChromeGap),
         ) {
-            HeaderRow(searchInHeader = chrome.search == SearchPlacement.InHeader)
+            HeaderRow(searchInHeader = search == SearchPlacement.InHeader)
             if (chrome.tabBarEdge == VerticalEdge.TOP) TabRow()
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 ReflectivePreview(cols, metrics, areaWidthDp, insetFraction, edit)
@@ -100,7 +103,7 @@ internal fun AppsEditorPreview(
         // Cards are *tiles*: a card's height is its width, so there is no icon-and-label height to derive and the even
         // lattice is the truthful mockup rather than a simplification. Same reason `AppsCardGrid` declares no icon
         // sizing at all.
-        AppsLayout.CATEGORY_CARD -> Standalone(chrome) {
+        AppsLayout.CATEGORY_CARD -> Standalone(search) {
             GridPreview(cols, rows, edit, insetFraction, Modifier.fillMaxSize())
         }
     }
@@ -115,8 +118,8 @@ internal fun AppsEditorPreview(
  * show what would really be drawn, which is no search bar.
  */
 @Composable
-private fun Standalone(chrome: AppsChrome, content: @Composable () -> Unit) {
-    val pinned = (chrome.search as? SearchPlacement.Pinned)?.edge
+private fun Standalone(search: SearchPlacement, content: @Composable () -> Unit) {
+    val pinned = (search as? SearchPlacement.Pinned)?.edge
     if (pinned == null) {
         Box(Modifier.fillMaxSize()) { content() }
         return
