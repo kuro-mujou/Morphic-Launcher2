@@ -81,10 +81,15 @@ enum class SettingsSection {
     FOLDER,
 }
 
-/** A section's row in the list: what it is called, what it covers, and the glyph that marks it. */
+/**
+ * A section's row in the list: what it is called, and the glyph that marks it.
+ *
+ * **No second line.** Every row used to carry one describing its section, and down a list of seven they read as a
+ * single sentence with the nouns shuffled — four ended in "and icons". A row in an index has one job, which is to be
+ * recognized. What a section covers is answered by opening it.
+ */
 internal data class SettingsSectionMeta(
     val title: String,
-    val subtitle: String,
     val icon: ImageVector,
 )
 
@@ -100,41 +105,38 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
     val isList = homeLayout == HomeLayout.LIST_WITH_WIDGET_AREA
     return when (this) {
         SettingsSection.WALLPAPER -> SettingsSectionMeta(
-            "Wallpaper", "Image, and where to apply it", Icons.Outlined.Wallpaper,
+            "Wallpaper", Icons.Outlined.Wallpaper,
         )
         SettingsSection.EFFECTS -> SettingsSectionMeta(
-            "Effects", "Frosted surfaces over the wallpaper", Icons.Outlined.AutoAwesome,
+            "Effects", Icons.Outlined.AutoAwesome,
         )
         SettingsSection.ICONS -> SettingsSectionMeta(
-            "Icons", "Shape, background and layers", Icons.Outlined.Palette,
+            "Icons", Icons.Outlined.Palette,
         )
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
-            "Screen manager", "Surfaces and transitions", Icons.Outlined.Dashboard,
+            "Screen manager", Icons.Outlined.Dashboard,
         )
         SettingsSection.HOME -> SettingsSectionMeta(
             // **The one row that does not rename itself**, which is the whole point of the hub: it names a surface,
-            // and a surface does not change identity when its arrangement does. Deliberately worded as `APPS` is —
-            // both are one row over a surface arranged more than one way.
-            "Home screen", "Arrangement, grids and icons", Icons.Outlined.Home,
+            // and a surface does not change identity when its arrangement does.
+            "Home screen", Icons.Outlined.Home,
         )
         // Named for the zone rather than the surface, since this is a row *inside* the home screen — naming it
         // "Home" again would say one thing twice, and this string is the app bar's title once the pane is open.
         SettingsSection.HOME_GRID -> SettingsSectionMeta(
             if (isList) "List" else "Grid",
-            if (isList) "Row height and icons" else "Rows, columns and icons",
             if (isList) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView,
         )
         SettingsSection.DOCK -> if (isList) {
-            SettingsSectionMeta("Widget area", "Size and grid", Icons.Outlined.Widgets)
+            SettingsSectionMeta("Widget area", Icons.Outlined.Widgets)
         } else {
-            SettingsSectionMeta("Dock", "Height, grid and icons", Icons.Outlined.Dock)
+            SettingsSectionMeta("Dock", Icons.Outlined.Dock)
         }
         SettingsSection.APPS -> SettingsSectionMeta(
-            "App screen", "Arrangements, grids and icons", Icons.Outlined.Apps,
+            "App screen", Icons.Outlined.Apps,
         )
-        // "Icon and text size" is exactly what a folder has to configure.
         SettingsSection.FOLDER -> SettingsSectionMeta(
-            "Folders", "Icon and text size", Icons.Outlined.Folder,
+            "Folders", Icons.Outlined.Folder,
         )
     }
 }

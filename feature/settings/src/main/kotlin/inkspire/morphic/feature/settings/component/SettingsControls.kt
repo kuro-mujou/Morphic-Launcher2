@@ -22,15 +22,20 @@ private val HeaderGapTop = 16.dp
  * and this file keeps only how far apart two rows sit ([SettingsRowPadding]).
  */
 
-/** A group heading inside a settings screen, or above a run of rows in the section list. */
+/**
+ * A group heading inside a settings screen, or above a run of rows in the section list.
+ *
+ * @param spaceAbove false where nothing is above it to be separated from, which is the **first** heading in a list.
+ *   [HeaderGapTop] is a break between two groups; paid at the top of a pane it is just the app bar pushed away.
+ */
 @Composable
-internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier) {
+internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier, spaceAbove: Boolean = true) {
     val colors = LocalMorphicColors.current
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,
         color = colors.contentMuted,
-        modifier = modifier.padding(top = HeaderGapTop, bottom = RowGapV / 2),
+        modifier = modifier.padding(top = if (spaceAbove) HeaderGapTop else 0.dp, bottom = RowGapV / 2),
     )
 }
 

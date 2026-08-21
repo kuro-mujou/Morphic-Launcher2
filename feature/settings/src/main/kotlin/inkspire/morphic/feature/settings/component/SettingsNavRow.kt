@@ -2,14 +2,11 @@ package inkspire.morphic.feature.settings.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
@@ -18,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -27,9 +23,8 @@ import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.meta
 
 /** Provisional spacing — placeholders, as everywhere else in this module. */
-internal val NavRowInsetH = 12.dp
-internal val NavRowInsetV = 4.dp
 internal val NavRowPadding = 12.dp
+private val RowPaddingV = 14.dp
 private val IconGap = 16.dp
 
 /**
@@ -40,6 +35,14 @@ private val IconGap = 16.dp
  * sites resolve their title, subtitle and glyph through [SettingsSection.meta], so a hand-rolled row in the Home hub
  * would eventually name a zone differently from the way the list names it — exactly the fault `LayoutLabels` exists to
  * fix, one level up.
+ *
+ * **A title and nothing under it.** Every row carried a second line describing its section, and read down a list they
+ * were one sentence with the nouns shuffled — four of the seven ended in "and icons". A row in an index has one job,
+ * which is to be recognized; what a section covers is answered by opening it, and answered better.
+ *
+ * **It fills its panel edge to edge**, taking neither inset nor rounding of its own — [SettingsGroupCard] separates
+ * one run of rows from the next and cuts the corners its children paint into. That is what lets a selected row's fill
+ * span the full width instead of floating inside it.
  *
  * Selection reads by **contrast rather than hue**, since the palette is grayscale by design and red is reserved for
  * `error`. A plain `clickable`: the shared `launcherItemGestures` contract exists so *launcher surfaces* cannot drift
@@ -66,22 +69,18 @@ internal fun SettingsNavRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = NavRowInsetH, vertical = NavRowInsetV)
-            .clip(RoundedCornerShape(16.dp))
             .background(if (selected) colors.accent else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(NavRowPadding),
+            .padding(horizontal = NavRowPadding, vertical = RowPaddingV),
     ) {
         Icon(imageVector = meta.icon, contentDescription = null, tint = content)
         Spacer(Modifier.width(IconGap))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-            Text(meta.title, style = MaterialTheme.typography.bodyLarge, color = content)
-            Text(
-                text = meta.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected) content else colors.contentMuted,
-            )
-        }
+        Text(
+            text = meta.title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = content,
+            modifier = Modifier.weight(1f),
+        )
         if (showChevron) {
             Spacer(Modifier.width(NavRowPadding))
             Icon(

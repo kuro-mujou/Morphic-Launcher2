@@ -5,7 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +33,7 @@ import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
+import inkspire.morphic.feature.settings.component.SettingsGroupCard
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.label
@@ -42,7 +42,6 @@ import org.koin.androidx.compose.koinViewModel
 /** Provisional spacing — placeholders, as everywhere else in this module. */
 private val ScreenPadding = 20.dp
 private val SwitchGap = 16.dp
-private val RowsGap = 8.dp
 
 /** How long the mockup and the zone rows take to cross-fade between pairings. Short: the switch is one tap. */
 private const val SwapMs = 180
@@ -183,7 +182,9 @@ private fun HomeZoneRows(
     layout: HomeLayout,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(RowsGap)) {
+    // The same panel the settings index puts its rows on — this hub is one tap from that list, and two runs of the
+    // same row wearing different dress is exactly what a shared container prevents.
+    SettingsGroupCard {
         listOf(SettingsSection.HOME_GRID, SettingsSection.DOCK).forEach { section ->
             SettingsNavRow(
                 section = section,
