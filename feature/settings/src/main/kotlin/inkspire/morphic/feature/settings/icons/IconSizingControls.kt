@@ -8,7 +8,6 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.IconSizingRanges
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.feature.settings.component.SettingsRowPadding
-import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsSwitchRow
 import kotlin.math.roundToInt
 
@@ -34,9 +33,15 @@ internal enum class IconSizingField { IconPercent, LabelScale }
  * flags every caller has to remember to pass — both are properties of the grid rather than of the call site — so a
  * caller cannot get either wrong, and a new grid answers for itself.
  *
- * The dp guardrails are shown for a list too, because they genuinely apply: every cell resolves its icon through
- * `IconMetrics.resolveIconSize`, which clamps to them whatever the surface. They are **one range slider** rather than
- * two independent ones, which makes their ordering structural instead of a clamp anyone could forget.
+ * The dp guardrails apply to a list as much as to a grid — every cell resolves its icon through
+ * `IconMetrics.resolveIconSize`, which clamps to them whatever the surface — so they are offered wherever an icon is
+ * drawn, **directly under the fraction they bound**. They are **one range slider** rather than two independent ones,
+ * which makes their ordering structural instead of a clamp anyone could forget.
+ *
+ * **They are hidden with the icon itself**, on the one arrangement that can hide it: a pure-text list draws no icon, and
+ * its row height is then bounded by the label rather than by these (`rowHeightRangeDp`), so a guardrail there would be
+ * a control over something absent. Both come back together when the icons do — the same "absent, not disabled" rule
+ * the text controls follow one switch below.
  *
  * **Every control writes a *sparse* override**, so nothing is stored for a field left alone and a later change to a
  * blueprint default still reaches it. That is also what makes "reset" a plain write of nulls rather than a special op.
@@ -87,6 +92,10 @@ internal fun IconSizingControls(
         )
     }
 
+    // **The two icon controls sit together, and the pair is what makes them one question.** How much of a cell the
+    // icon fills, and the dp it may not leave — at the default fraction the upper guardrail *is* the icon size, so
+    // reading one without the other tells you nothing. They were a fraction here and a range at the foot of the group,
+    // with the text controls between them, which put the two halves of one answer a scroll apart.
     if (sizing.showIcon) {
         MorphicSliderRow(
             label = "Icon size",
@@ -100,6 +109,18 @@ internal fun IconSizingControls(
             onPreview = { onPreview(sizing.copy(iconPercent = it)) },
             onCommit = { onChange(IconSizingField.IconPercent, it) },
             onReset = { onClear(IconSizingField.IconPercent) },
+            modifier = SettingsRowPadding,
+        )
+        MorphicRangeSliderRow(
+            label = "Icon size range",
+            what = "icon size range",
+            value = sizing.minIconDp..sizing.maxIconDp,
+            bounds = IconSizingRanges.IconDp,
+            default = defaults.minIconDp..defaults.maxIconDp,
+            valueLabel = { "${it.first}–${it.last} dp" },
+            onPreview = { onPreview(sizing.copy(minIconDp = it.first, maxIconDp = it.last)) },
+            onCommit = onDpRange,
+            onReset = onClearDpRange,
             modifier = SettingsRowPadding,
         )
     }
@@ -133,20 +154,6 @@ internal fun IconSizingControls(
             modifier = SettingsRowPadding,
         )
     }
-
-    SettingsSectionHeader("Icon size limits")
-    MorphicRangeSliderRow(
-        label = "Icon size range",
-        what = "icon size range",
-        value = sizing.minIconDp..sizing.maxIconDp,
-        bounds = IconSizingRanges.IconDp,
-        default = defaults.minIconDp..defaults.maxIconDp,
-        valueLabel = { "${it.first}–${it.last} dp" },
-        onPreview = { onPreview(sizing.copy(minIconDp = it.first, maxIconDp = it.last)) },
-        onCommit = onDpRange,
-        onReset = onClearDpRange,
-        modifier = SettingsRowPadding,
-    )
 }
 
 /**

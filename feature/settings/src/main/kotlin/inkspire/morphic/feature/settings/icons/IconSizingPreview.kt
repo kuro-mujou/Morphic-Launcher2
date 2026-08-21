@@ -131,7 +131,12 @@ internal fun IconSizingPreview(
                     append("Cell ${cellWidth.value.roundToInt()} × ${cellHeight.value.roundToInt()} dp")
                     append(" · icon ${layout.iconSize.value.roundToInt()} dp")
                 }
-                append(" · limits ${metrics.minIconDp.value.roundToInt()}–${metrics.maxIconDp.value.roundToInt()} dp")
+                // Only where there is an icon for them to bound. A pure-text list draws none, and its row is bounded
+                // by the label instead — so naming the guardrails there describes something absent, and does it beside
+                // a control that is (rightly) not offered either.
+                if (metrics.showIcon) {
+                    append(" · limits ${metrics.minIconDp.value.roundToInt()}–${metrics.maxIconDp.value.roundToInt()} dp")
+                }
                 if (!asRow) append("\nSolid outline: the cell · dashed: upper limit · dotted: lower limit")
             },
             style = MaterialTheme.typography.bodySmall,
