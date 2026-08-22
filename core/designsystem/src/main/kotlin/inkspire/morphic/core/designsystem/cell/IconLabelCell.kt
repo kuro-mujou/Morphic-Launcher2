@@ -22,10 +22,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 
-internal val CellPadH = 4.dp
-internal val CellPadV = 4.dp
-internal val LabelGap = 4.dp
-
 /**
  * A grid-cell label: single line, ellipsized, sized by [IconMetrics.labelScale].
  *
@@ -99,13 +95,13 @@ fun IconLabelCell(
     icon: @Composable (iconSize: Dp) -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val availW = maxWidth - CellPadH * 2
+        val availW = maxWidth - 4.dp * 2
         val padding = Modifier
             .fillMaxSize()
-            .padding(horizontal = CellPadH, vertical = CellPadV)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
 
         if (!metrics.showLabel) {
-            val iconDp = metrics.resolveIconSize(availW, maxHeight - CellPadV * 2)
+            val iconDp = metrics.resolveIconSize(availW, maxHeight - 4.dp * 2)
             Box(modifier = padding, contentAlignment = Alignment.Center) {
                 Box(itemGestures) { icon(iconDp) }
             }
@@ -113,7 +109,7 @@ fun IconLabelCell(
         }
 
         val labelHeight = cellLabelHeight(metrics)
-        val iconArea = (maxHeight - CellPadV * 2 - LabelGap - labelHeight).coerceAtLeast(0.dp)
+        val iconArea = (maxHeight - 4.dp * 2 - 4.dp - labelHeight).coerceAtLeast(0.dp)
         val iconDp = metrics.resolveIconSize(availW, iconArea).coerceAtMost(iconArea)
         // Outer box centers the group in the cell; the group itself wraps content and carries the gestures.
         Box(modifier = padding, contentAlignment = Alignment.Center) {
@@ -122,7 +118,7 @@ fun IconLabelCell(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 icon(iconDp)
-                Spacer(Modifier.height(LabelGap))
+                Spacer(Modifier.height(4.dp))
                 CellLabel(label = label, metrics = metrics)
             }
         }

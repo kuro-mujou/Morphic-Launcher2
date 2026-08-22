@@ -25,9 +25,6 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 /** How much of the screen a sheet takes. L1's fraction, from the widget picker this was extracted from. */
 private const val SheetHeightFraction = 0.7f
 
-/** Rounded at the top only, since the bottom is the screen edge. */
-private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-
 /**
  * A **modal bottom sheet over a launcher surface** — a scrim, a frosted panel, and the modality that makes it one.
  *
@@ -78,8 +75,11 @@ internal fun LauncherBottomSheet(
                 // sheet it is a fixed box that silently clips whatever does not fit, and does so only at the font
                 // scales and densities nobody develops at.
                 .then(if (heightFraction != null) Modifier.fillMaxHeight(heightFraction) else Modifier)
-                .clip(SheetShape)
-                .wallpaperBackdrop(shape = SheetShape, scrimColor = colors.surfaceElevated)
+                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .wallpaperBackdrop(
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    scrimColor = colors.surfaceElevated,
+                )
                 // Swallows taps on the sheet itself, so they do not reach the scrim behind it and dismiss.
                 .pointerInput(Unit) { detectTapGestures { } }
                 .uiInsetsPadding()

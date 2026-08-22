@@ -50,17 +50,6 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.feature.apps.AppsCategory
 
 /**
- * Provisional header spacing — **a placeholder, not a design choice**, for the reason the other layouts' metrics are:
- * a surface metric bound for the settings layer, and a flat constant says so where derived arithmetic would look like
- * a decision.
- *
- * It lives here rather than with [AppsCategoryPager] because a page is the only thing that reads it. The cell *height*
- * is no longer a constant at all: it is derived from the cell width by `derivedCell`, and the surface derives its own
- * from the same rule rather than waiting on a page to report geometry.
- */
-private val HeaderPadding = 16.dp
-
-/**
  * One category's page: its name, then its apps in a scrolling, draggable grid.
  *
  * Split from [AppsCategoryPager] because it is a leaf — everything it needs arrives as a parameter, and it reads
@@ -190,7 +179,7 @@ internal fun CategoryPage(
             color = colors.content,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HeaderPadding, vertical = HeaderPadding / 2),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp / 2),
         )
         // The scroll host: the grid inside reports its *content* height, which grows past this box and scrolls. Its
         // own `remember` sits inside the pager's per-page `key`, so each category keeps its own scroll position.

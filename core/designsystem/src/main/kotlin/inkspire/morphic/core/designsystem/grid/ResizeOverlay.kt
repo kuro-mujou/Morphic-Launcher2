@@ -27,18 +27,6 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** How far from a handle's center a press still grabs it. Generous, because the glyphs are small. L1's 28dp. */
-private val HandleHitRadius = 28.dp
-
-/** How far inside the frame a handle sits, and the least frame it leaves either side of one. L1's pair. */
-private val HandleInset = 18.dp
-private val HandleInsetMargin = 10.dp
-
-private val FrameStroke = 1.dp
-private val CornerArm = 10.dp
-private val PillLong = 16.dp
-private val PillShort = 3.dp
-
 /** How strongly the frame's interior is washed, legal and refused. */
 private const val FillAlpha = 0.08f
 private const val RefusedFillAlpha = 0.22f
@@ -101,9 +89,9 @@ fun ResizeOverlay(
 
     val colors = LocalMorphicColors.current
     val density = LocalDensity.current
-    val hitRadiusPx = with(density) { HandleHitRadius.toPx() }
-    val insetPx = with(density) { HandleInset.toPx() }
-    val insetMarginPx = with(density) { HandleInsetMargin.toPx() }
+    val hitRadiusPx = with(density) { 28.dp.toPx() }
+    val insetPx = with(density) { 18.dp.toPx() }
+    val insetMarginPx = with(density) { 10.dp.toPx() }
 
     // Read live inside the gesture loop: a resize runs for as long as the finger is down, and the placement it
     // starts from must be the one on screen when it started rather than the one this composition captured.
@@ -178,7 +166,7 @@ fun ResizeOverlay(
             color = accent.copy(alpha = FrameAlpha),
             topLeft = Offset(frame.left, frame.top),
             size = Size(frame.width, frame.height),
-            style = Stroke(width = FrameStroke.toPx()),
+            style = Stroke(width = 1.dp.toPx()),
         )
 
         handlesFor(bounds).forEach { handle ->
@@ -190,7 +178,7 @@ fun ResizeOverlay(
 
 /** A corner grip: a rounded triangle pointing out of the corner it drags. */
 private fun DrawScope.drawCornerArrow(handle: ResizeHandle, center: Offset, color: Color) {
-    val half = CornerArm.toPx() / 2f
+    val half = 10.dp.toPx() / 2f
     val sx = if (handle.movesLeft) -1f else 1f
     val sy = if (handle.movesTop) -1f else 1f
     val path = Path().apply {
@@ -205,13 +193,13 @@ private fun DrawScope.drawCornerArrow(handle: ResizeHandle, center: Offset, colo
 /** An edge grip: a pill lying along the edge it drags — wide on a horizontal edge, tall on a vertical one. */
 private fun DrawScope.drawEdgePill(handle: ResizeHandle, center: Offset, color: Color) {
     val horizontal = handle.movesTop || handle.movesBottom
-    val width = if (horizontal) PillLong.toPx() else PillShort.toPx()
-    val height = if (horizontal) PillShort.toPx() else PillLong.toPx()
+    val width = if (horizontal) 16.dp.toPx() else 3.dp.toPx()
+    val height = if (horizontal) 3.dp.toPx() else 16.dp.toPx()
     drawRoundRect(
         color = color,
         topLeft = Offset(center.x - width / 2f, center.y - height / 2f),
         size = Size(width, height),
-        cornerRadius = CornerRadius(PillShort.toPx() / 2f),
+        cornerRadius = CornerRadius(3.dp.toPx() / 2f),
     )
 }
 

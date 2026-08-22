@@ -11,14 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.component.GroupInsetH
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.model.HomeLayout
-import inkspire.morphic.feature.settings.component.NavRowPadding
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
-
 
 /**
  * The settings index: a titled panel per group, holding one row per section.
@@ -56,7 +53,7 @@ internal fun SettingsList(
 ) {
     val contentPadding = uiInsets
         .only(insetSides)
-        .add(WindowInsets(top = ListTopPadding, bottom = NavRowPadding))
+        .add(WindowInsets(top = 8.dp, bottom = 12.dp))
         .asPaddingValues()
     // **The row to mark is the listed ancestor**, since not every section has a row of its own: HOME's two zones are
     // reached through the Home hub, so a Dock pane showing beside this list must mark *Home*. Resolved here rather
@@ -67,7 +64,7 @@ internal fun SettingsList(
     LazyColumn(modifier = modifier, contentPadding = contentPadding) {
         settingsGroups.forEachIndexed { index, group ->
             item(key = "group-${group.header ?: index}") {
-                Column(Modifier.padding(horizontal = GroupInsetH)) {
+                Column(Modifier.padding(horizontal = 16.dp)) {
                     if (group.header != null) {
                         // The first heading sits directly under the app bar, so it takes no break above it.
                         SettingsSectionHeader(group.header, spaceAbove = index > 0)
@@ -88,6 +85,3 @@ internal fun SettingsList(
         }
     }
 }
-
-/** Short of a row's own, since the first thing under the bar is a heading rather than something to press. */
-private val ListTopPadding = 8.dp

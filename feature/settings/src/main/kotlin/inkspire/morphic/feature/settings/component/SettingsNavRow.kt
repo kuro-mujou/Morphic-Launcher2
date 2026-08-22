@@ -22,11 +22,6 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.meta
 
-/** Provisional spacing — placeholders, as everywhere else in this module. */
-internal val NavRowPadding = 12.dp
-private val RowPaddingV = 14.dp
-private val IconGap = 16.dp
-
 /**
  * A row that names a section and opens it — the settings index's row, and now the **hub's** row too.
  *
@@ -71,10 +66,10 @@ internal fun SettingsNavRow(
             .fillMaxWidth()
             .background(if (selected) colors.accent else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = NavRowPadding, vertical = RowPaddingV),
+            .padding(horizontal = 12.dp, vertical = 14.dp),
     ) {
         Icon(imageVector = meta.icon, contentDescription = null, tint = content)
-        Spacer(Modifier.width(IconGap))
+        Spacer(Modifier.width(16.dp))
         Text(
             text = meta.title,
             style = MaterialTheme.typography.bodyLarge,
@@ -82,7 +77,7 @@ internal fun SettingsNavRow(
             modifier = Modifier.weight(1f),
         )
         if (showChevron) {
-            Spacer(Modifier.width(NavRowPadding))
+            Spacer(Modifier.width(12.dp))
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,

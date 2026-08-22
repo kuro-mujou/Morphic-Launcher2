@@ -59,10 +59,6 @@ private typealias BlurEdit = (BackdropEffect.Blur) -> BackdropEffect.Blur
 /** [BlurEdit] for the lens. */
 private typealias GlassEdit = (BackdropEffect.LiquidGlass) -> BackdropEffect.LiquidGlass
 
-/** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
-private val ScreenPadding = 20.dp
-private val RowGap = 8.dp
-
 /**
  * **Effects**: how frosted surfaces render over the wallpaper — the one global choice, and its parameters.
  *
@@ -156,13 +152,13 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(colors.background)
-                    .padding(top = RowGap),
+                    .padding(top = 8.dp),
             ) {
                 BackdropPreview(
                     effect = previewed,
                     image = previewImage,
                     accent = state.backdropAccent,
-                    modifier = Modifier.padding(horizontal = ScreenPadding),
+                    modifier = Modifier.padding(horizontal = 20.dp),
                 )
             }
         }
@@ -171,8 +167,8 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(ScreenPadding),
-                verticalArrangement = Arrangement.spacedBy(RowGap),
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // **The chooser sits under the preview, unlabeled**, which is the order the eye wants: the picture is
                 // what you came to look at, and this is the first thing you reach for to change it. A "Effect" heading
@@ -302,7 +298,7 @@ private fun TintSwatches(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(RowGap),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         BackdropTint.entries.forEach { tint ->
             TintSwatch(
@@ -338,10 +334,10 @@ private fun TintSwatch(
     ) {
         Box(
             modifier = Modifier
-                .size(SwatchRing)
+                .size(40.dp)
                 .clip(CircleShape)
                 .border(
-                    width = if (selected) SelectedRing else UnselectedRing,
+                    width = if (selected) 2.dp else 1.dp,
                     color = if (selected) colors.accent else colors.contentMuted.copy(alpha = 0.4f),
                     shape = CircleShape,
                 ),
@@ -349,7 +345,7 @@ private fun TintSwatch(
         ) {
             Box(
                 modifier = Modifier
-                    .size(SwatchFill)
+                    .size(30.dp)
                     .clip(CircleShape)
                     .background(color),
             )
@@ -384,7 +380,7 @@ private fun CustomTintPicker(argb: Int, onPreview: (Int) -> Unit, onCommit: (Int
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(RowGap),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         MorphicColorPicker(
             argb = picked,
@@ -539,9 +535,3 @@ private val GlassDefaults = BackdropEffect.LiquidGlass()
  * now do.
  */
 private const val MaxTintAmount = 0.9f
-
-/** How large the swatches are: the ring, and the fill inside it. */
-private val SwatchRing = 40.dp
-private val SwatchFill = 30.dp
-private val SelectedRing = 2.dp
-private val UnselectedRing = 1.dp

@@ -50,18 +50,18 @@ internal fun HomeItemGestureSheet(
     // Sized to its rows rather than to a fraction of the screen: five short rows in a fixed half-screen box
     // left the last one clipped against the bottom edge.
     LauncherBottomSheet(onDismiss = onDismiss, heightFraction = null) {
-        Column(Modifier.padding(horizontal = SheetPadding)) {
+        Column(Modifier.padding(horizontal = 20.dp)) {
             Text(
                 text = "Gestures",
                 style = MaterialTheme.typography.headlineSmall,
                 color = colors.content,
-                modifier = Modifier.padding(bottom = TitleGap),
+                modifier = Modifier.padding(bottom = 4.dp),
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.contentMuted,
-                modifier = Modifier.padding(bottom = SheetPadding),
+                modifier = Modifier.padding(bottom = 20.dp),
             )
             ItemGesture.entries.forEach { gesture ->
                 GestureRow(
@@ -83,12 +83,12 @@ private fun GestureRow(gesture: ItemGesture, action: String?, note: String?, onC
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = RowPaddingV),
+            .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(RowGap)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(gesture.label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
             Text(
@@ -116,8 +116,3 @@ private val ItemGesture.label: String
     }
 
 private const val UnassignedLabel = "Not assigned"
-
-private val SheetPadding = 20.dp
-private val TitleGap = 4.dp
-private val RowPaddingV = 14.dp
-private val RowGap = 2.dp

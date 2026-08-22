@@ -31,31 +31,6 @@ import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.component.press.repeatingPress
 import inkspire.morphic.core.model.icon.PreviewBackground
 
-/** Every icon button in the studio is this wide, so a rail of them lines up without each caller choosing a number. */
-private val ButtonSide = 40.dp
-
-/** The glyph inside one. Short of the button's own side, so the press target is larger than what it shows. */
-private val GlyphSide = 20.dp
-
-/** The bottom container's height. A resting bar, not a panel — what it holds decides how tall it grows later. */
-private val BottomBarHeight = 56.dp
-
-/** How far the bottom container and the chrome above it stay clear of the screen's sides. */
-internal val ChromeMargin = 12.dp
-
-/**
- * How tall the top row of chrome is — back on one side, history and save on the other.
- *
- * Exported because the **workspace begins below it**: the icon's resting bound and the layer rail's resting head are
- * both placed against this, and they line up only because they are placed against the *same* number. It is
- * [ButtonSide] and must stay so; the pills are one button tall, and a second constant beside it would be that fact
- * written down twice.
- */
-internal val StudioTopChromeHeight = ButtonSide
-
-/** Between the chrome and the work it sits above — enough that the icon is not touching the buttons. */
-internal val WorkspaceGap = 8.dp
-
 /**
  * How far a selected entry's wash carries. The same value the layer rows use, so "this is the one being edited" looks
  * the same wherever it is said.
@@ -152,7 +127,7 @@ private fun StudioButtonFace(
 ) {
     Box(
         modifier = modifier
-            .size(ButtonSide)
+            .size(40.dp)
             .clip(CircleShape)
             .background(if (selected) StudioContentColor.copy(alpha = SelectedWashAlpha) else Color.Transparent)
             .then(interaction),
@@ -162,7 +137,7 @@ private fun StudioButtonFace(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = StudioContentColor.copy(alpha = if (enabled) 1f else 0.3f),
-            modifier = Modifier.size(GlyphSide),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -256,7 +231,7 @@ fun StudioViewButtons(
         // read as a tile rather than as a button's contents. Centered in a full-size cell instead, so the pair lines
         // up and both halves have the same press target.
         Box(
-            modifier = Modifier.size(ButtonSide),
+            modifier = Modifier.size(40.dp),
             contentAlignment = Alignment.Center
         ) {
             BackgroundCycleButton(
@@ -331,7 +306,7 @@ fun StudioBottomBar(
     hazeState: HazeState,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(24.dp),
-    height: Dp = BottomBarHeight,
+    height: Dp = 56.dp,
     content: @Composable RowScope.() -> Unit = {},
 ) {
     Row(

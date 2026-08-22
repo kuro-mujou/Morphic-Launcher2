@@ -25,7 +25,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-
 /**
  * Choosing a color: quick swatches, and a full picker one tap away.
  *
@@ -79,9 +78,9 @@ private fun ColorFieldBody(
                 modifier = Modifier
                     // The swatches' own side, so the row lines up. It takes no selection ring: it is a way *to* a
                     // color rather than one of the choices, and nothing is ever "on" it.
-                    .size(ColorSwatchSide)
+                    .size(28.dp)
                     // Above the clip, so the edge is not stripped by a boundary running along it — see [Swatch].
-                    .border(ColorSwatchEdge, Color.White.copy(0.3f), CircleShape)
+                    .border(1.dp, Color.White.copy(0.3f), CircleShape)
                     .clip(CircleShape)
                     .background(argb?.let { Color(it) } ?: Color.Transparent)
                     .clickable {
@@ -139,9 +138,9 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
     )
     val progress = selection.coerceIn(0f, 1f)
 
-    val inset = ColorSwatchInset * progress
+    val inset = 4.dp * progress
 
-    Box(modifier = Modifier.size(ColorSwatchSide), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
         // The dot: the fill, the ripple and the mark, each inside the clips that shape them.
         Box(
             modifier = Modifier
@@ -160,7 +159,7 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
                     // Dimmed until chosen, like the shape grid's own: it is a mark saying what the slot is, not a
                     // picture of something, so at rest it should not read as loudly as a color beside it.
                     tint = StudioContentColor.copy(alpha = if (selected) 1f else 0.6f),
-                    modifier = Modifier.size(NoColorGlyph),
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
@@ -178,45 +177,12 @@ private fun Swatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
         Box(
             Modifier
                 .fillMaxSize()
-                .border(ColorSwatchBorder, StudioContentColor.copy(alpha = progress), CircleShape)
+                .border(2.dp, StudioContentColor.copy(alpha = progress), CircleShape)
                 .padding(inset)
-                .border(ColorSwatchEdge, Color.White.copy(0.3f), CircleShape),
+                .border(1.dp, Color.White.copy(0.3f), CircleShape),
         )
     }
 }
-
-/**
- * The "none" mark, filling nearly the whole dot — short of it only by enough that the faint ring still reads as the
- * swatch's edge rather than as part of the glyph.
- *
- * **It is bounded by the dot rather than sized against it**, which matters once the swatch is selected: the color
- * shrinks by [ColorSwatchInset] to make room for the ring, and this asks for more than the space left. `Modifier.size`
- * coerces into the constraints it is given, so the glyph shrinks with the circle instead of spilling out of it —
- * which is the behavior wanted anyway, the mark being part of the content that gives up room to the ring.
- */
-private val NoColorGlyph = 24.dp
-
-/**
- * The swatch, and the gap its selection ring needs.
- *
- * [ColorSwatchInset] is deliberately wider than [ColorSwatchBorder], for the layer tile's reason: a border draws
- * *inward* from the bounds, so an inset no larger than it would leave the ring cropping the color it marks.
- *
- * [ColorSwatchSide] is what the picker button beside the row is sized to as well, so the two line up — it is one row.
- *
- * `Color`-prefixed because `BackgroundCycleButton` already owns a `SwatchSide` for the backdrop tile, and top-level
- * names share a package here whether or not they are private.
- */
-private val ColorSwatchSide = 28.dp
-private val ColorSwatchBorder = 2.dp
-private val ColorSwatchInset = 4.dp
-
-/**
- * The hairline that is a swatch's own edge rather than its selection — what keeps a near-black or near-white fill
- * from dissolving into the glass behind it. Shared with the picker button beside the row, which is the same dot with
- * a `+` in it and no selection to show.
- */
-private val ColorSwatchEdge = 1.dp
 
 /**
  * The quick-pick palette behind every [ColorField] — neutrals, then hues, with the picker for everything else.

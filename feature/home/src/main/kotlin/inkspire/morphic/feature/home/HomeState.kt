@@ -252,7 +252,6 @@ fun HomeState.paddingFor(slot: GridSlot): Int = horizontalPaddingDp[slot] ?: 0
 /** The items placed in [zone] — one zone's grid contents, in the order the state reports them. */
 fun HomeState.inZone(zone: HomeZone): List<HomeItem> = items.filter { it.zone == zone }
 
-
 /**
  * Resolves [component] to the app info home can draw — **placed on a grid, inside a folder, or merely installed**.
  *

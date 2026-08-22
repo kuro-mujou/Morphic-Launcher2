@@ -133,7 +133,7 @@ internal fun StudioRailMenu(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val gapPx = with(LocalDensity.current) { MenuGap.roundToPx() }
+    val gapPx = with(LocalDensity.current) { 8.dp.roundToPx() }
     val bounds = remember(anchor) {
         IntRect(anchor.left.toInt(), anchor.top.toInt(), anchor.right.toInt(), anchor.bottom.toInt())
     }
@@ -300,8 +300,8 @@ private fun StackMenuRows(
 private fun MenuPanel(hazeState: HazeState, content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
-            .width(MenuWidth)
-            .studioSurface(hazeState, shape = RoundedCornerShape(MenuCorner))
+            .width(176.dp)
+            .studioSurface(hazeState, shape = RoundedCornerShape(18.dp))
             .padding(vertical = 6.dp),
     ) {
         content()
@@ -324,9 +324,3 @@ private fun MenuRow(icon: ImageVector, label: String, enabled: Boolean, onClick:
         Text(label, color = tint, style = MaterialTheme.typography.labelMedium)
     }
 }
-
-/** Off the rail and off the screen's edges — one number, because they are the same breathing space from two sides. */
-private val MenuGap = 8.dp
-
-private val MenuWidth = 176.dp
-private val MenuCorner = 18.dp

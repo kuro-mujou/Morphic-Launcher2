@@ -34,12 +34,6 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
-/** How deep the band reaches once it has opened up — L1's `EXPANDED_HEIGHT`, and its disengage threshold too. */
-val TopActionExpandedHeight = 96.dp
-
-/** The drawn glyph, sized to sit level with the `titleMedium` label beside it. */
-private val GlyphSize = 24.dp
-
 /** What the band offers for the item currently in flight. */
 enum class TopActionMode {
     /**
@@ -126,7 +120,7 @@ fun TopActionZone(
     // Springs rather than a tween so the band settles the way every other surface in the launcher does; no bounce,
     // because a target that overshoots its own bounds is a target that moves while you are aiming at it.
     val height by animateDpAsState(
-        targetValue = if (expanded) TopActionExpandedHeight else statusBar,
+        targetValue = if (expanded) 96.dp else statusBar,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
         label = "topActionHeight",
     )
@@ -241,7 +235,7 @@ private fun Target(
  * in for three marks of two strokes each is not a trade worth making.
  */
 @Composable
-private fun TopActionGlyphMark(glyph: TopActionGlyph, tint: Color, size: Dp = GlyphSize) {
+private fun TopActionGlyphMark(glyph: TopActionGlyph, tint: Color, size: Dp = 24.dp) {
     Canvas(Modifier.size(size)) {
         val mid = this.size.minDimension / 2f
         val arm = mid * 0.6f

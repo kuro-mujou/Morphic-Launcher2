@@ -27,12 +27,6 @@ import inkspire.morphic.feature.settings.component.ReflectivePreview
 import inkspire.morphic.feature.settings.component.previewFaint
 import inkspire.morphic.feature.settings.component.previewInk
 
-private val BarHeight = 10.dp
-private val TabHeight = 8.dp
-private val ChromeGap = 6.dp
-private val ActionSquareSize = 12.dp
-private val BarCorner = 5.dp
-
 /** Enough tabs to read as a row, without implying a count the user chose — the categories decide that. */
 private const val TabCount = 4
 
@@ -90,7 +84,7 @@ internal fun AppsEditorPreview(
         // exactly the distinction `SearchPlacement` models and a flat position enum could not.
         AppsLayout.PAGER_WITH_CATEGORY -> Column(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(ChromeGap),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             HeaderRow(searchInHeader = search == SearchPlacement.InHeader)
             if (chrome.categoryTabEdge == VerticalEdge.TOP) TabRow()
@@ -128,7 +122,7 @@ private fun Standalone(search: SearchPlacement, content: @Composable () -> Unit)
         Box(Modifier.fillMaxSize()) { content() }
         return
     }
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(ChromeGap)) {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (pinned == VerticalEdge.TOP) SearchBar()
         Box(
             modifier = Modifier
@@ -144,8 +138,8 @@ private fun SearchBar() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(BarHeight)
-            .clip(RoundedCornerShape(BarCorner))
+            .height(10.dp)
+            .clip(RoundedCornerShape(5.dp))
             .background(previewInk())
     )
 }
@@ -156,13 +150,13 @@ private fun HeaderRow(searchInHeader: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(ChromeGap),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             Modifier
                 .weight(1f)
-                .height(BarHeight)
-                .clip(RoundedCornerShape(BarCorner))
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
                 .background(previewInk()),
         )
         if (searchInHeader) ActionSquare()
@@ -174,7 +168,7 @@ private fun HeaderRow(searchInHeader: Boolean) {
 private fun ActionSquare() {
     Box(
         modifier = Modifier
-            .size(ActionSquareSize)
+            .size(12.dp)
             .clip(RoundedCornerShape(3.dp))
             .background(previewFaint())
     )
@@ -188,8 +182,8 @@ private fun TabRow() {
             Box(
                 Modifier
                     .weight(1f)
-                    .height(TabHeight)
-                    .clip(RoundedCornerShape(TabHeight / 2))
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(8.dp / 2))
                     .background(if (index == 0) previewInk() else previewFaint()),
             )
         }

@@ -91,8 +91,8 @@ internal fun BlendControls(
     // fixed, small set, and there is no reason to hide two of them past an edge. The filter row scrolls because it
     // holds seventeen.
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(FilterTileGap),
-        verticalArrangement = Arrangement.spacedBy(FilterTileGap),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LayerBlend.entries.forEach { blend ->
             BlendTile(blend = blend, selected = spec.blend == blend) {
@@ -132,8 +132,8 @@ private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit)
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(FilterSwatchHeight)
-                .clip(EffectSwatchCorner)
+                .height(48.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             drawRect(brush = Brush.linearGradient(FilterReferenceStops))
@@ -298,7 +298,7 @@ internal fun FilterControls(
         LabeledControl(category.label) {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(FilterTileGap),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilterTile(
                     label = "None",
@@ -331,8 +331,8 @@ private fun FilterTile(label: String, matrix: FloatArray?, selected: Boolean, on
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(FilterSwatchHeight)
-                .clip(EffectSwatchCorner)
+                .height(48.dp)
+                .clip(RoundedCornerShape(10.dp))
         ) {
             drawRect(
                 brush = Brush.linearGradient(FilterReferenceStops),
@@ -373,21 +373,21 @@ private fun SwatchTile(
     onClick: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Box(modifier = Modifier.width(FilterTileWidth)) {
+    Box(modifier = Modifier.width(72.dp)) {
         Column(
             modifier = Modifier
-                .clip(SwatchTileCorner)
+                .clip(RoundedCornerShape(10.dp))
                 .clickable(onClick = onClick),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(EffectLabelGap),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             content = content,
         )
         if (selected) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(FilterSwatchHeight)
-                    .border(SwatchRingWidth, StudioContentColor, EffectSwatchCorner),
+                    .height(48.dp)
+                    .border(2.dp, StudioContentColor, RoundedCornerShape(10.dp)),
             )
         }
     }
@@ -405,7 +405,7 @@ private fun SwatchLabel(label: String, selected: Boolean) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = EffectLabelPad),
+            .padding(bottom = 2.dp),
     )
 }
 
@@ -422,19 +422,3 @@ private val FilterReferenceStops = listOf(
     Color(0xFF7A5CFF),
     Color(0xFF2ED8C3),
 )
-
-/**
- * The corner every swatch in this section is cut to — one value, because the clip and the selection ring drawn over
- * it are the *same* rounded rect and a difference between them would show as a sliver of unringed swatch at each
- * corner. Restated per tile it was three chances to drift.
- */
-internal val EffectSwatchCorner = RoundedCornerShape(10.dp)
-
-/** The tile around a swatch, which exists only to shape the press ripple. */
-private val SwatchTileCorner = RoundedCornerShape(10.dp)
-
-/** The selection ring's stroke, wherever one is drawn in this section. */
-internal val SwatchRingWidth = 2.dp
-private val FilterTileWidth = 72.dp
-private val FilterSwatchHeight = 48.dp
-internal val FilterTileGap = 8.dp

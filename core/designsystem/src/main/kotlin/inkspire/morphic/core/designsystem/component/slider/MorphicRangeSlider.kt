@@ -78,7 +78,7 @@ fun MorphicRangeSlider(
         endThumb = { MorphicSliderThumb(endSource, colors, enabled) },
         track = { rangeState ->
             SliderDefaults.Track(
-                modifier = Modifier.height(MorphicTrackHeight),
+                modifier = Modifier.height(6.dp),
                 rangeSliderState = rangeState,
                 enabled = enabled,
                 thumbTrackGapSize = 2.dp,

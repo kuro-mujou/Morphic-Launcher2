@@ -280,7 +280,7 @@ fun IconStudioScreen(
             // number that makes them line up: the icon rests immediately below the chrome and the rail rests beside
             // it, and two derivations of "below the chrome" would be one edit away from disagreeing.
             val insets = uiInsets.asPaddingValues()
-            val topChrome = insets.calculateTopPadding() + ChromeMargin + StudioTopChromeHeight + WorkspaceGap
+            val topChrome = insets.calculateTopPadding() + 12.dp + 40.dp + 8.dp
 
             // The area a floating panel may occupy: the canvas less `uiInsets`. Whole pixels, since that is what the
             // placement arithmetic works in.
@@ -363,9 +363,9 @@ fun IconStudioScreen(
                     // The same expression the canvas is given, so the rail's head and the icon's top edge rest on one
                     // line. Applied as padding rather than as an offset so the rail's *cap* is measured against what
                     // is left below it.
-                    .padding(top = topChrome, end = ChromeMargin)
+                    .padding(top = topChrome, end = 12.dp)
                     .uiInsetsPadding(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
-                    .padding(bottom = ChromeMargin),
+                    .padding(bottom = 12.dp),
             )
 
             // **The rail's menus, drawn beside the rail rather than inside it.** Which side they take is computed from
@@ -412,7 +412,7 @@ fun IconStudioScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .uiInsetsPadding()
-                    .padding(ChromeMargin),
+                    .padding(12.dp),
             )
 
             // The session's actions, opposite the back button — history, then commit. **Corners rather than bar
@@ -422,7 +422,7 @@ fun IconStudioScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .uiInsetsPadding()
-                    .padding(ChromeMargin),
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -462,7 +462,7 @@ fun IconStudioScreen(
                     // it costs the other panels nothing.
                     .imePadding()
                     .uiInsetsPadding()
-                    .padding(ChromeMargin)
+                    .padding(12.dp)
                     .fillMaxWidth(),
                 // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
                 // was out of the way of everything that existed at the time. The rail now runs down that edge, and

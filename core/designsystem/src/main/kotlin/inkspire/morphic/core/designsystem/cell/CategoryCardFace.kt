@@ -43,33 +43,6 @@ const val CategoryPreviewCols = 2
 /** How many apps a card's preview shows at once. */
 const val CategoryPreviewSlots = CategoryPreviewCols * CategoryPreviewCols
 
-/**
- * The card **grid's** own gutter and the gap between lanes — placeholders, as the other APPS layouts' cell heights are,
- * and distinct from anything in [CardChrome]: these shape the grid of cards, not a card.
- *
- * They live here rather than beside the surface because the *fit* needs them too. `CellFit.cardMinCell` states the
- * narrowest usable card, but a column fit divides the grid's raw width — so a lane's share is a card **plus** its share
- * of this chrome, and a floor that ignored it would allow one more lane than the cards can actually fill. That is the
- * exact mistake the hand-picked constant before it made twice, in the other direction; one owner for the numbers is
- * what stops it being made a third time.
- */
-val CategoryCardGutter = 16.dp
-
-/** The gap between lanes of cards — see [CategoryCardGutter]. */
-val CategoryCardSpacing = 12.dp
-
-/**
- * The title's own horizontal inset — **fixed, and deliberately not [CardChrome.outerPaddingDp]**.
- *
- * That padding insets the *icon area* within the tile, and is allowed to reach zero so the four slots sit flush
- * against it. The title is outside the tile entirely now, so it needs an inset of its own or a long name would run to
- * the very edge of the lane and touch its neighbor. Small, because the label is centered and ellipsized anyway.
- */
-private val TitleInset = 4.dp
-
-/** The gap between the tile and the title beneath it. Fixed, for [TitleInset]'s reason: it is the title's. */
-private val TitleGap = 6.dp
-
 /** How translucent the card's fill is over the surface behind it — what the launcher's own cards are drawn at. */
 const val CardAlpha = 0.10f
 
@@ -154,7 +127,7 @@ fun CategoryCardFace(
                 }
             }
         }
-        Spacer(Modifier.height(TitleGap))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = title,
             style = cardTitleStyle(chrome),
@@ -164,7 +137,7 @@ fun CategoryCardFace(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = TitleInset)
+                .padding(horizontal = 4.dp)
                 .then(titleGestures),
         )
     }

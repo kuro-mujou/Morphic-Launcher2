@@ -13,12 +13,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** How deep into the top or bottom of the viewport the finger has to be before the content starts moving. */
-private val AutoScrollEdge = 72.dp
-
-/** Top speed, reached at the very edge; it ramps up from nothing at the band's inner boundary. */
-private val AutoScrollMaxPerSecond = 900.dp
-
 private enum class ScrollEdge { TOP, BOTTOM }
 
 /**
@@ -50,8 +44,8 @@ fun DragAutoScrollEffect(
     scrollState: ScrollableState,
     bounds: Rect?,
     fingerInRoot: Offset?,
-    edge: Dp = AutoScrollEdge,
-    maxPerSecond: Dp = AutoScrollMaxPerSecond,
+    edge: Dp = 72.dp,
+    maxPerSecond: Dp = 900.dp,
 ) {
     val density = LocalDensity.current
     val edgePx = with(density) { edge.toPx() }

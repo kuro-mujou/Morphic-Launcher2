@@ -55,24 +55,6 @@ import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
-/** How far a menu keeps from the item it belongs to, and from the edges of the usable area. L1's number. */
-private val MenuGap = 8.dp
-
-/** The menu's own shape — also the shape the frosted backdrop and liquid glass's rim are clipped to. */
-private val MenuShape = RoundedCornerShape(16.dp)
-
-/**
- * **One width for every menu**, rather than sizing each to its own widest row.
- *
- * Two things follow from fixing it, and both are why. A row can then `fillMaxWidth`, so the whole row is the tap
- * target rather than just the text on it — rows that wrap their content leave a menu of short verbs ("Remove") with
- * a target a fraction of the panel it is drawn on. And a menu stops changing width with whatever
- * app it was opened on, which matters when the same long-press is repeated down a page of icons. The cost is that a
- * long shortcut label ellipsises instead of widening the panel — the better failure of the two, since the
- * alternative is a menu that reaches across the screen.
- */
-private val MenuWidth = 248.dp
-
 /** The tallest a menu may be, as a fraction of the usable height — past this it scrolls. L1's 0.6. */
 private const val MenuMaxHeightFraction = 0.6f
 
@@ -124,7 +106,7 @@ fun ContextMenu(
             bottom = window.height - insets.getBottom(density),
         )
     }
-    val gapPx = with(density) { MenuGap.roundToPx() }
+    val gapPx = with(density) { 8.dp.roundToPx() }
 
     // The anchor resolved to whole pixels and to the side this menu opens on — computed once, read by both the
     // reveal (in composition) and the placement (in the measure block below), so the two cannot disagree about
@@ -247,12 +229,12 @@ private fun MenuSurface(
     val colors = LocalMorphicColors.current
     Column(
         modifier = Modifier
-            .width(MenuWidth)
+            .width(248.dp)
             .heightIn(max = maxHeight)
-            .clip(MenuShape)
+            .clip(RoundedCornerShape(16.dp))
             // The scrim is what the panel falls back to with no wallpaper to sample, so it must be opaque enough
             // to read a menu against on its own — the theme's elevated surface, which is exactly that color.
-            .wallpaperBackdrop(shape = MenuShape, scrimColor = colors.surfaceElevated)
+            .wallpaperBackdrop(shape = RoundedCornerShape(16.dp), scrimColor = colors.surfaceElevated)
             .padding(vertical = 4.dp),
     ) {
         header?.invoke()

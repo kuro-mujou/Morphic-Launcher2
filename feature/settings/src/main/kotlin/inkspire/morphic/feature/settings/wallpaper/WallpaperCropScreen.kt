@@ -144,7 +144,7 @@ fun WallpaperCropScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .statusBarsPadding()
-                    .padding(ChromeGap),
+                    .padding(8.dp),
             ) {
                 Icon(Icons.Filled.Close, contentDescription = "Cancel", tint = Color.White)
             }
@@ -165,7 +165,7 @@ fun WallpaperCropScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = SaveGap),
+                    .padding(bottom = 24.dp),
             ) {
                 Text(if (state.busy) "Saving…" else "Save")
             }
@@ -195,9 +195,6 @@ private fun coverScale(image: ImageBitmap, viewport: IntSize): Float =
 
 /** How far in a pinch may go. L1's, and it is generous by design — a wallpaper crop is not a magnifier. */
 private const val MAX_ZOOM = 8f
-
-private val ChromeGap = 8.dp
-private val SaveGap = 24.dp
 
 /**
  * The framed image itself: the target's shape, the pinch-and-pan gesture, and the draw.

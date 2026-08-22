@@ -133,7 +133,7 @@ fun LauncherDragCell(
  */
 @Composable
 private fun rememberSwipePull(config: ItemGestureConfig): SwipePull {
-    val cap = with(LocalDensity.current) { PullCap.toPx() }
+    val cap = with(LocalDensity.current) { 16.dp.toPx() }
     val scope = rememberCoroutineScope()
     return remember(config, cap, scope) { SwipePull(config.touchSlopPx, cap, scope) }
 }
@@ -213,4 +213,3 @@ private class SwipePull(
  * neighbours on the tightest grid this launcher offers.
  */
 private const val PullResistance = 0.5f
-private val PullCap = 16.dp

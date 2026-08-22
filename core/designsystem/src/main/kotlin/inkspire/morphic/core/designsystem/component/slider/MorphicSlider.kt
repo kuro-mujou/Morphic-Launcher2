@@ -76,7 +76,7 @@ fun MorphicSlider(
         thumb = { MorphicSliderThumb(interactionSource, colors, enabled) },
         track = { sliderState ->
             SliderDefaults.Track(
-                modifier = Modifier.height(MorphicTrackHeight),
+                modifier = Modifier.height(6.dp),
                 sliderState = sliderState,
                 enabled = enabled,
                 thumbTrackGapSize = 2.dp,

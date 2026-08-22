@@ -79,12 +79,6 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
-/** Width of the outline drawn round the inner zone while a drag is in flight (its drop-target affordance). */
-private val InnerZoneOutline = 1.dp
-
-private val DotSize = 6.dp
-private val DotSpacing = 6.dp
-
 /** This overlay's inner-grid drop zone, registered above the surface's zone (`z = 1`) on the shared coordinator. */
 private val CollectionZoneId = ZoneId("collection")
 
@@ -378,7 +372,7 @@ fun AppCollectionOverlay(
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(bottom = TitleBottomPadding),
+                        modifier = Modifier.padding(bottom = 12.dp),
                     )
                     // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
                     Box(
@@ -388,7 +382,7 @@ fun AppCollectionOverlay(
                             // structurally stable across the drag flip — the same rule the backdrop above follows,
                             // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
                             // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
-                            .border(InnerZoneOutline, if (session != null) Color.White else Color.Transparent)
+                            .border(1.dp, if (session != null) Color.White else Color.Transparent)
                             // Consumes a tap on the card's background so it doesn't reach the scrim and dismiss —
                             // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
                             // invisible but still laid out over the middle of the screen, and Compose stops
@@ -466,7 +460,7 @@ fun AppCollectionOverlay(
                     }
                     // Page dots below the inner zone; the row's height is reserved even for a single page.
                     Box(
-                        modifier = Modifier.height(CollectionDotsHeight),
+                        modifier = Modifier.height(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
@@ -506,11 +500,11 @@ fun AppCollectionOverlay(
 /** A row of small dots marking the collection's pages, the [current] one filled. */
 @Composable
 private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(DotSpacing)) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(count) { index ->
             Box(
                 modifier = Modifier
-                    .size(DotSize)
+                    .size(6.dp)
                     .clip(CircleShape)
                     .background(if (index == current) Color.White else Color.White.copy(alpha = 0.3f)),
             )

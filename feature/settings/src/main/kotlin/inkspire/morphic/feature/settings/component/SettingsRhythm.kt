@@ -27,10 +27,6 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * declaration documents nothing at all.
  */
 
-/** Provisional spacing — placeholders, like every other surface metric, until the settings layer owns its own. */
-private val RowGapV = 12.dp
-private val HeaderGapTop = 16.dp
-
 /**
  * A group heading inside a settings screen, or above a run of rows in the section list.
  *
@@ -44,7 +40,7 @@ internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier,
         text = title,
         style = MaterialTheme.typography.titleSmall,
         color = colors.contentMuted,
-        modifier = modifier.padding(top = if (spaceAbove) HeaderGapTop else 0.dp, bottom = RowGapV / 2),
+        modifier = modifier.padding(top = if (spaceAbove) 16.dp else 0.dp, bottom = 12.dp / 2),
     )
 }
 
@@ -56,4 +52,4 @@ internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier,
  * it once — a `Modifier` shared by every call site rather than a dp repeated at a dozen of them, since the sections'
  * slots are plain `Column`s with no arrangement of their own.
  */
-internal val SettingsRowPadding = Modifier.padding(vertical = RowGapV / 2)
+internal val SettingsRowPadding = Modifier.padding(vertical = 12.dp / 2)

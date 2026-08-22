@@ -587,7 +587,6 @@ private val VerticalGestures = setOf(ItemGesture.SWIPE_UP, ItemGesture.SWIPE_DOW
  */
 private const val VerticalUnavailable = "Not supported on this layout"
 
-
 /**
  * The list itself: one scrolling lane of [AppRowCell], each row [rowHeight] tall.
  *

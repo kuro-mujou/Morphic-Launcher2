@@ -187,9 +187,9 @@ private fun EffectGrid(target: EffectTarget, pagerState: PagerState, onOpen: (Ef
         BoxWithConstraints {
             // A tile is a square plate plus its label, so a row is taller than it is wide per column. The plate is
             // capped, so past that width the extra goes to the gaps between tiles rather than to the tiles.
-            val cell = ((maxWidth - EffectGridSpacing * (EffectColumns - 1)) / EffectColumns)
-                .coerceAtMost(EffectTileMax)
-            val pageHeight = (cell + labelBand) * rows + EffectGridSpacing * (rows - 1)
+            val cell = ((maxWidth - 8.dp * (EffectColumns - 1)) / EffectColumns)
+                .coerceAtMost(96.dp)
+            val pageHeight = (cell + labelBand) * rows + 8.dp * (rows - 1)
 
             HorizontalPager(
                 state = pagerState,
@@ -230,9 +230,9 @@ private fun pageCountOf(target: EffectTarget): Int =
  */
 @Composable
 private fun EffectPage(slices: List<EffectSlice>, target: EffectTarget, onOpen: (EffectSlice) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(EffectGridSpacing)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         slices.chunked(EffectColumns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(EffectGridSpacing)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { slice ->
                     // **The cell takes the share; the tile takes a bounded slice of it.** A square tile in a
                     // column that grows with the panel is a square that grows with the panel, and this panel is as
@@ -243,7 +243,7 @@ private fun EffectPage(slices: List<EffectSlice>, target: EffectTarget, onOpen: 
                             slice = slice,
                             active = slice.isActive(target),
                             onClick = { onOpen(slice) },
-                            modifier = Modifier.widthIn(max = EffectTileMax),
+                            modifier = Modifier.widthIn(max = 96.dp),
                         )
                     }
                 }
@@ -271,7 +271,7 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(EffectLabelGap),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Box(
             modifier = Modifier
@@ -300,7 +300,7 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = EffectLabelPad),
+                .padding(bottom = 2.dp),
         )
     }
 }
@@ -322,7 +322,7 @@ private fun effectLabelBand(): Dp {
     val density = LocalDensity.current
     val style = MaterialTheme.typography.labelSmall
     val line = if (style.lineHeight.isSpecified) style.lineHeight else style.fontSize * DefaultLineHeightRatio
-    return with(density) { ceil(line.toPx()).toDp() } + EffectLabelGap + EffectLabelPad
+    return with(density) { ceil(line.toPx()).toDp() } + 4.dp + 2.dp
 }
 
 /**
@@ -405,21 +405,8 @@ internal fun EffectHeader(
 private const val EffectColumns = 4
 private const val EffectRows = 2
 
-/** Between tiles on both axes. */
-private val EffectGridSpacing = 8.dp
-
-/** How wide a tile is allowed to get, whatever share of the panel its cell was handed. */
-private val EffectTileMax = 96.dp
-
 /** The glyph inside a tile's plate — a signpost, so it sits in the square rather than filling it. */
 private const val EffectGlyphFraction = 0.42f
-
-/**
- * Between a labeled tile's picture and its name, and under the name — the same two on an effect entry and on a
- * swatch. [effectLabelBand] reads them back, because the effect grid's page height is built from them.
- */
-internal val EffectLabelGap = 4.dp
-internal val EffectLabelPad = 2.dp
 
 /** What a text style's line height is worth when it declares none, matching `IconLabelCell`'s own fallback. */
 private const val DefaultLineHeightRatio = 1.2f

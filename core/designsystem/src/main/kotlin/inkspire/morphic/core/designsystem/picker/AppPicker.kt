@@ -27,9 +27,6 @@ import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 
-/** How tall one row is. A placeholder — see the "don't invent a dimension nothing owns yet" rule. */
-private val PickerRowHeight = 64.dp
-
 /**
  * Choose an installed app from a searchable list.
  *
@@ -89,7 +86,7 @@ fun AppPicker(
             items(matches, key = { it.componentKey.flatten() }) { app ->
                 val row = Modifier
                     .fillMaxWidth()
-                    .height(PickerRowHeight)
+                    .height(64.dp)
                     .clickable { onPick(app.componentKey) }
                 if (selected == null) {
                     AppRowCell(app = app, modifier = row)

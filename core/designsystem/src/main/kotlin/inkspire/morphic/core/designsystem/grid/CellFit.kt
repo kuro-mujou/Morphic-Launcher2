@@ -4,12 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.CategoryPreviewCols
-import inkspire.morphic.core.designsystem.cell.CellPadH
-import inkspire.morphic.core.designsystem.cell.CellPadV
 import inkspire.morphic.core.designsystem.cell.IconMetrics
-import inkspire.morphic.core.designsystem.cell.LabelGap
 import inkspire.morphic.core.designsystem.cell.cellLabelHeight
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.GridBlueprint
@@ -31,9 +27,10 @@ import kotlin.math.floor
  * `minIconDp` as the whole cell, and to divide the guardrail by `iconPercent`, which answers a different question
  * backwards.
  *
- * **The padding comes from the cell, not from a copy of it.** A `CELL_PADDING_DP` declared beside the fitting maths
- * is free to drift from what `IconLabelCell` actually insets. These read `CellPadH`/`CellPadV`/`LabelGap` directly,
- * so the inverse cannot disagree with the layout it is inverting.
+ * **The padding here is a copy of what `IconLabelCell` insets, and nothing checks that the two agree.** The 4dp
+ * used below is the same number that cell applies on each axis, plus the same 4dp gap above its label — written
+ * out in both places rather than shared. Change one and this inverse silently stops inverting the layout it is
+ * built from, which shows up as cells that fit their own maths and not the icon drawn in them.
  *
  * **The same answer serves two questions.** [editableRangeIn] bounds what a settings screen may *offer*;
  * [fitGridConfig] applies the identical bound to a value that was stored earlier, under conditions that may since
@@ -101,7 +98,7 @@ fun cardMinCell(metrics: IconMetrics, chrome: CardChrome): MinCell {
     // Plus a lane's share of the grid's own chrome, because a column fit divides the grid's *raw* width. Without it
     // this floor describes a card while the division describes a lane, and the gap between the two is one extra lane
     // of cards too narrow to fill — which is precisely how the constant this replaced went wrong.
-    val laneDp = cardDp + CategoryCardSpacing.value
+    val laneDp = cardDp + 12.dp.value
     return MinCell(widthDp = laneDp, heightDp = laneDp)
 }
 
@@ -138,7 +135,7 @@ data class GridBounds(val maxCols: Int, val maxRows: Int?)
  * but forgets that a cell insets its icon. What is right is the guardrail plus the padding the cell really applies.
  */
 fun minCellWidthDp(metrics: IconMetrics): Float =
-    minOf(metrics.minIconDp.value, metrics.maxIconDp.value) + CellPadH.value * 2
+    minOf(metrics.minIconDp.value, metrics.maxIconDp.value) + 4.dp.value * 2
 
 /**
  * The shortest cell whose icon still fits, in dp.
@@ -152,8 +149,8 @@ fun minCellWidthDp(metrics: IconMetrics): Float =
  */
 fun minCellHeightDp(metrics: IconMetrics, labelHeightDp: Float): Float {
     val minIcon = minOf(metrics.minIconDp.value, metrics.maxIconDp.value)
-    val label = if (metrics.showLabel) labelHeightDp + LabelGap.value else 0f
-    return minIcon + CellPadV.value * 2 + label
+    val label = if (metrics.showLabel) labelHeightDp + 4.dp.value else 0f
+    return minIcon + 4.dp.value * 2 + label
 }
 
 /**
@@ -175,12 +172,12 @@ fun minCellHeightDp(metrics: IconMetrics, labelHeightDp: Float): Float {
  *   `cellLabelHeight`, as in [minCellHeightDp].
  */
 fun cellHeightDp(cellWidthDp: Float, metrics: IconMetrics, labelHeightDp: Float): Float {
-    val innerWidth = (cellWidthDp - CellPadH.value * 2).coerceAtLeast(0f)
+    val innerWidth = (cellWidthDp - 4.dp.value * 2).coerceAtLeast(0f)
     val minIcon = minOf(metrics.minIconDp.value, metrics.maxIconDp.value)
     val maxIcon = maxOf(metrics.minIconDp.value, metrics.maxIconDp.value)
     val iconDp = (innerWidth * metrics.iconPercent).coerceIn(minIcon, maxIcon)
-    val label = if (metrics.showLabel) LabelGap.value + labelHeightDp else 0f
-    return CellPadV.value * 2 + iconDp + label
+    val label = if (metrics.showLabel) 4.dp.value + labelHeightDp else 0f
+    return 4.dp.value * 2 + iconDp + label
 }
 
 /** The most whole cells of [minCellDp] that fit in [availableDp]. Always ≥ 1 — a grid with no cells is not a grid. */

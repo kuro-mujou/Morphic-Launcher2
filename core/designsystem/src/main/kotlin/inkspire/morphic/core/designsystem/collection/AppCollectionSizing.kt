@@ -7,21 +7,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
-import inkspire.morphic.core.designsystem.cell.CellPadH
-import inkspire.morphic.core.designsystem.cell.CellPadV
 import inkspire.morphic.core.designsystem.cell.IconMetrics
-import inkspire.morphic.core.designsystem.cell.LabelGap
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.cellLabelHeight
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
-
-/** Padding between the collection's title and the inner zone. */
-internal val TitleBottomPadding = 12.dp
-
-/** Fixed height of the page-dots row below the inner zone (reserved even for a single page, so the card's
- *  size doesn't depend on how many pages the collection happens to have). */
-internal val CollectionDotsHeight = 24.dp
 
 /**
  * The inner-zone size (the bounded card holding the collection's app grid) for an [AppCollectionOverlay].
@@ -88,22 +78,22 @@ private fun collectionChromeReserve(): Dp {
     val titleHeight = with(LocalDensity.current) {
         (if (titleStyle.lineHeight.isSpecified) titleStyle.lineHeight else titleStyle.fontSize * 1.2f).toDp()
     }
-    return titleHeight + TitleBottomPadding + CollectionDotsHeight
+    return titleHeight + 12.dp + 24.dp
 }
 
 private fun widthDriven(windowWidth: Dp, fraction: Float, grid: GridConfig, labelHeight: Dp): DpSize {
     val innerWidth = windowWidth * fraction
     val cellWidth = innerWidth / grid.cols.toFloat()
-    val iconArea = (cellWidth - CellPadH * 2f).coerceAtLeast(0.dp) // the square icon bound inside the cell
-    val cellHeight = CellPadV * 2f + iconArea + LabelGap + labelHeight
+    val iconArea = (cellWidth - 4.dp * 2f).coerceAtLeast(0.dp) // the square icon bound inside the cell
+    val cellHeight = 4.dp * 2f + iconArea + 4.dp + labelHeight
     return DpSize(innerWidth, cellHeight * grid.rows.toFloat())
 }
 
 private fun heightDriven(windowHeight: Dp, fraction: Float, grid: GridConfig, labelHeight: Dp, reserve: Dp): DpSize {
     val innerHeight = (windowHeight * fraction - reserve).coerceAtLeast(0.dp)
     val cellHeight = innerHeight / grid.rows.toFloat()
-    val iconArea = (cellHeight - CellPadV * 2f - LabelGap - labelHeight).coerceAtLeast(0.dp)
-    val cellWidth = iconArea + CellPadH * 2f
+    val iconArea = (cellHeight - 4.dp * 2f - 4.dp - labelHeight).coerceAtLeast(0.dp)
+    val cellWidth = iconArea + 4.dp * 2f
     return DpSize(cellWidth * grid.cols.toFloat(), innerHeight)
 }
 

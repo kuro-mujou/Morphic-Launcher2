@@ -27,11 +27,6 @@ import inkspire.morphic.core.model.IconSizingRanges
 import kotlin.math.ceil
 import kotlin.math.floor
 
-/** Row insets and the icon→label gap. Cell-internal styling, the counterpart of [CellPadH] for a grid cell. */
-private val RowPadH = 8.dp
-private val RowPadV = 8.dp
-private val IconLabelGap = 16.dp
-
 /**
  * **The row heights the icon guardrails can honor**, in dp — the inverse of [AppRowCell]'s own sizing, and what a
  * row-height control offers.
@@ -76,7 +71,7 @@ private val IconLabelGap = 16.dp
  *   parameter here, exactly as `CellFit.minCellHeightDp` takes the grid label's.
  */
 fun rowHeightRangeDp(metrics: IconMetrics, labelHeightDp: Float): ClosedFloatingPointRange<Float> {
-    val padding = RowPadV.value * 2
+    val padding = 8.dp.value * 2
     if (!metrics.showIcon) {
         val floor = labelHeightDp + padding
         return floor..maxOf(IconSizingRanges.IconDp.last + padding, floor + 1f)
@@ -220,9 +215,9 @@ fun AppRowCell(
         // The icon is bounded by the row's inner box on both axes; in practice the height wins, since a row is
         // far wider than it is tall. Clamped again to that height so a short row can't be overflowed by the
         // metrics' lower guardrail.
-        val innerHeight = (maxHeight - RowPadV * 2).coerceAtLeast(0.dp)
+        val innerHeight = (maxHeight - 8.dp * 2).coerceAtLeast(0.dp)
         val iconSize = metrics
-            .resolveIconSize(availWidth = maxWidth - RowPadH * 2, availHeight = innerHeight)
+            .resolveIconSize(availWidth = maxWidth - 8.dp * 2, availHeight = innerHeight)
             .coerceAtMost(innerHeight)
         // The one definition of the row's text, shared with `rowLabelHeight` so the height a row-height *bound* is
         // computed from is the height this row actually draws.
@@ -233,7 +228,7 @@ fun AppRowCell(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = RowPadH, vertical = RowPadV),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // **Wraps horizontally, fills vertically**, and the asymmetry is not a fudge — the two axes have
@@ -257,7 +252,7 @@ fun AppRowCell(
                         sizePx = with(LocalDensity.current) { iconSize.roundToPx() },
                         modifier = Modifier.size(iconSize),
                     )
-                    Spacer(Modifier.width(IconLabelGap))
+                    Spacer(Modifier.width(16.dp))
                 }
                 // **No `weight`, which is what makes the group wrap.** With one the text stretched to the row's end
                 // and the group was the whole strip again — the target this cell is deliberately not. Unweighted, the

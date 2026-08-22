@@ -148,27 +148,27 @@ private fun PreviewWall(
 ) {
     Box(modifier) {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = PreviewCell),
+            columns = GridCells.Adaptive(minSize = 76.dp),
             modifier = Modifier.fillMaxSize(),
             // The top is the back pill's room — it floats over the grid rather than taking a row of its own, so the
             // wallpaper runs behind it. Everything else is the layout's, not a constant's.
             contentPadding = PaddingValues(
-                start = ScreenMargin,
-                end = ScreenMargin,
-                top = TopRoom,
-                bottom = ScreenMargin,
+                start = 16.dp,
+                end = 16.dp,
+                top = 88.dp,
+                bottom = 16.dp,
             ),
-            horizontalArrangement = Arrangement.spacedBy(PreviewGap),
-            verticalArrangement = Arrangement.spacedBy(PreviewGap),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(state.affected, key = { it.componentKey.flatten() }) { app ->
-                Box(Modifier.size(PreviewCell), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(76.dp), contentAlignment = Alignment.Center) {
                     AppIcon(
                         component = app.componentKey,
                         contentDescription = app.label,
                         sizePx = PreviewBakePx,
                         appearance = state.appearance,
-                        modifier = Modifier.size(PreviewIcon),
+                        modifier = Modifier.size(52.dp),
                     )
                 }
             }
@@ -182,7 +182,7 @@ private fun PreviewWall(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .uiInsetsPadding()
-                .padding(ChromeMargin),
+                .padding(12.dp),
         )
     }
 }
@@ -208,7 +208,7 @@ private fun FinalizePanel(
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(topStart = PanelCorner, topEnd = PanelCorner))
+            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
             .background(colors.surface)
             // Content padding, never layout padding: the panel fills to the window edge and insets what is in it,
             // which is this launcher's rule everywhere a surface has a background.
@@ -217,7 +217,7 @@ private fun FinalizePanel(
             // handful; what varies is the room they are given, and on a short viewport the shape grid is what would
             // otherwise push the buttons off the bottom edge.
             .verticalScroll(rememberScrollState())
-            .padding(PanelPadding),
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         MorphicSwitchRow(
@@ -240,7 +240,7 @@ private fun FinalizePanel(
             // **Bounded, for the effect grid's reason.** `ShapePage` hands each tile an equal share of the width and
             // makes it square, so on a wide panel four shares are four huge squares — which is exactly what a
             // rotated phone produced before this cap existed.
-            Box(Modifier.widthIn(max = ShapeGridMax)) {
+            Box(Modifier.widthIn(max = 400.dp)) {
                 ShapePage(
                     shapes = PlateShapes,
                     selected = state.plate.shape,
@@ -345,20 +345,5 @@ private val PlateShapes: List<IconShape?> = listOf(null) + IconShapes.All
  */
 private val ZoomRange = 0.4f..1.15f
 
-/** One preview: the cell, and the icon inside it. A home cell's proportions, so the picture is the honest one. */
-private val PreviewCell = 76.dp
-private val PreviewIcon = 52.dp
-private val PreviewGap = 4.dp
-
 /** What a preview bakes at. One size for every tile, so a screenful of icons is one bake each and no more. */
 private const val PreviewBakePx = 192
-
-private val ScreenMargin = 16.dp
-private val PanelCorner = 24.dp
-private val PanelPadding = 16.dp
-
-/** Room above the previews for the back pill, which floats over them so the wallpaper runs behind it. */
-private val TopRoom = 88.dp
-
-/** How wide the shape grid may get before the extra goes to the gaps rather than to the tiles. */
-private val ShapeGridMax = 400.dp

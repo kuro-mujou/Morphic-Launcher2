@@ -66,12 +66,6 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
-/** The size an icon is drawn at in a contents row — a list row, so the icon is a fraction of its height. */
-private val RowIconSize = 40.dp
-
-/** How tall one contents row is. A placeholder, on the "don't invent a dimension nothing owns yet" rule. */
-private val ContentRowHeight = 64.dp
-
 /**
  * **A container's settings** — what it holds, and how it behaves.
  *
@@ -446,13 +440,13 @@ private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
             AppIcon(
                 component = icon.info.componentKey,
                 contentDescription = null,
-                sizePx = with(LocalDensity.current) { RowIconSize.roundToPx() },
-                modifier = Modifier.size(RowIconSize),
+                sizePx = with(LocalDensity.current) { 40.dp.roundToPx() },
+                modifier = Modifier.size(40.dp),
             )
         }
 
         is ContainerIcon.Folder -> ContentRow(label = icon.folder.label.ifBlank { "Folder" }, onRemove = onRemove) {
-            IconPreviewPlate(apps = icon.apps, size = RowIconSize)
+            IconPreviewPlate(apps = icon.apps, size = 40.dp)
         }
     }
 }
@@ -464,7 +458,7 @@ private fun WidgetContentRow(widget: WidgetInfo, onRemove: () -> Unit) {
     ContentRow(label = widget.label.ifBlank { UnnamedWidget }, onRemove = onRemove) {
         Box(
             modifier = Modifier
-                .size(RowIconSize)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(colors.surfaceElevated),
             contentAlignment = Alignment.Center,
@@ -486,7 +480,7 @@ private fun ContentRow(label: String, onRemove: () -> Unit, leading: @Composable
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(ContentRowHeight)
+            .height(64.dp)
             .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

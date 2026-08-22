@@ -190,7 +190,7 @@ internal fun StudioLayerRail(
     // expanding first, so the state it left you in was one you had to leave to do anything. Capping the scroll band
     // to a single tile says the same thing about screen space and costs nothing: every layer is still there, still in
     // order, still one flick away, and the selected one is still scrolled into view by [LayerTile]'s own effect.
-    val bandExtent = if (workspace.railCollapsed) TileSide else RailScrollExtent
+    val bandExtent = if (workspace.railCollapsed) 48.dp else RailScrollExtent
 
     val handle = @Composable {
         // **The grab bar, at the head of the rail and before everything in it.** It moves and configures the whole
@@ -274,7 +274,7 @@ internal fun StudioLayerRail(
                 onAdd()
                 onMenuChange(null)
             },
-            modifier = Modifier.size(TileSide),
+            modifier = Modifier.size(48.dp),
         )
     }
 
@@ -291,8 +291,8 @@ internal fun StudioLayerRail(
             restingTopLeft = Offset(placed.x - offsetX, placed.y - offsetY)
             onBoundsChange(Rect(placed, coordinates.size.toSize()))
         }
-        .studioSurface(hazeState, shape = RoundedCornerShape(RailCorner))
-        .padding(RailPadding)
+        .studioSurface(hazeState, shape = RoundedCornerShape(18.dp))
+        .padding(6.dp)
 
     // **The band's extent is the only thing on the rail that animates**, and every reason it changes arrives here: a
     // layer added or removed, and collapsing. One animation rather than two, for the reason `StudioToolPanel` states —
@@ -306,7 +306,7 @@ internal fun StudioLayerRail(
     if (vertical) {
         Column(
             modifier = surface,
-            verticalArrangement = Arrangement.spacedBy(RailGap),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             handle()
@@ -315,7 +315,7 @@ internal fun StudioLayerRail(
                 modifier = band
                     .heightIn(max = bandExtent)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(RailGap),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) { tiles() }
             addButton()
@@ -323,7 +323,7 @@ internal fun StudioLayerRail(
     } else {
         Row(
             modifier = surface,
-            horizontalArrangement = Arrangement.spacedBy(RailGap),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             handle()
@@ -332,7 +332,7 @@ internal fun StudioLayerRail(
                 modifier = band
                     .widthIn(max = bandExtent)
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(RailGap),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) { tiles() }
             addButton()
@@ -344,9 +344,9 @@ internal fun StudioLayerRail(
 @Composable
 private fun RailDivider(vertical: Boolean) {
     if (vertical) {
-        HorizontalDivider(color = RailDividerColor, modifier = Modifier.width(TileSide))
+        HorizontalDivider(color = RailDividerColor, modifier = Modifier.width(48.dp))
     } else {
-        VerticalDivider(color = RailDividerColor, modifier = Modifier.height(TileSide))
+        VerticalDivider(color = RailDividerColor, modifier = Modifier.height(48.dp))
     }
 }
 
@@ -412,8 +412,8 @@ private fun RailDragHandle(
     Box(
         modifier = Modifier
             .size(
-                width = if (vertical) TileSide else HandleSlotThickness,
-                height = if (vertical) HandleSlotThickness else TileSide,
+                width = if (vertical) 48.dp else 20.dp,
+                height = if (vertical) 20.dp else 48.dp,
             )
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -479,10 +479,10 @@ private fun RailDragHandle(
         Box(
             modifier = Modifier
                 .size(
-                    width = if (vertical) HandleWidth else HandleThickness,
-                    height = if (vertical) HandleThickness else HandleWidth,
+                    width = if (vertical) 20.dp else 4.dp,
+                    height = if (vertical) 4.dp else 20.dp,
                 )
-                .clip(RoundedCornerShape(HandleThickness / 2))
+                .clip(RoundedCornerShape(4.dp / 2))
                 .background(StudioContentColor.copy(alpha = HandleAlpha)),
         )
     }
@@ -526,19 +526,19 @@ private fun CompositeTile(
         label = "compositeTileSelection",
     )
     // Clamped for [LayerTile]'s reason: the spatial spec is a spring, and `Modifier.padding` throws on a negative.
-    val inset = TileInset * selection.coerceIn(0f, 1f)
+    val inset = 4.dp * selection.coerceIn(0f, 1f)
 
     Box(
         modifier = Modifier
-            .size(TileSide)
+            .size(48.dp)
             // Above the clip, for [TileShape]'s reason — the ring and the clip are the same rounded rect, so inside
             // it the ring loses its corners.
-            .border(SelectionBorder, StudioContentColor.copy(alpha = selection.coerceIn(0f, 1f)), TileShape)
+            .border(2.dp, StudioContentColor.copy(alpha = selection.coerceIn(0f, 1f)), TileShape)
             .clip(TileShape)
             .clickable(onClick = onClick)
             .padding(inset)
-            .clip(RoundedCornerShape(TileCorner - inset))
-            .drawBehind { drawCheckerboard(CheckerTileSquare.toPx()) },
+            .clip(RoundedCornerShape(12.dp - inset))
+            .drawBehind { drawCheckerboard(6.dp.toPx()) },
         contentAlignment = Alignment.Center,
     ) {
         state.parsed?.let { parsed ->
@@ -628,7 +628,7 @@ private fun LayerTile(
     // the one being chosen. Expressive motion is kept everywhere it is free; this is the one place where the tail of
     // it is an illegal value rather than a bounce.
     val progress = selection.coerceIn(0f, 1f)
-    val inset = TileInset * progress
+    val inset = 4.dp * progress
 
     // Runs once per tile, on the composition that mounts it — `entering` is read at mount and never again, so a
     // tile does not re-animate when the set of known keys catches up a frame later.
@@ -700,12 +700,12 @@ private fun LayerTile(
                     translationX = -size.width * travel
                 }
             }
-            .size(TileSide)
+            .size(48.dp)
             // **The ring goes above the clip, not under it** — see [TileShape]. Both are the same rounded rect, and
             // a rounded clip is a hardware outline clip with no antialiasing, so from inside it the ring's own
             // antialiased outer arc loses whole pixels: straight sides full width, corners thin and stepped. It
             // still draws over everything below it in the chain, which is what the gap beneath is for.
-            .border(SelectionBorder, StudioContentColor.copy(alpha = progress), TileShape)
+            .border(2.dp, StudioContentColor.copy(alpha = progress), TileShape)
             .clip(TileShape)
             .combinedClickable(onLongClick = onLongClick, onClick = onClick)
             // **Selecting shrinks the preview to make room for the ring; it does not grow the tile.** Every tile is
@@ -718,8 +718,8 @@ private fun LayerTile(
             .padding(inset)
             // Follows the gap, so the preview's corner stays concentric with the tile's rather than snapping
             // between two radii as the inset opens.
-            .clip(RoundedCornerShape(TileCorner - inset))
-            .drawBehind { drawCheckerboard(CheckerTileSquare.toPx()) },
+            .clip(RoundedCornerShape(12.dp - inset))
+            .drawBehind { drawCheckerboard(6.dp.toPx()) },
         contentAlignment = Alignment.Center,
     ) {
         state.parsed?.let { parsed ->
@@ -739,7 +739,7 @@ private fun LayerTile(
                 imageVector = Icons.Default.VisibilityOff,
                 contentDescription = "Hidden",
                 tint = StudioContentColor,
-                modifier = Modifier.size(HiddenBadge),
+                modifier = Modifier.size(18.dp),
             )
         }
     }
@@ -770,17 +770,6 @@ private fun DrawScope.drawCheckerboard(square: Float) {
 }
 
 /**
- * The tile, and the gap the selection ring needs.
- *
- * [TileInset] is the gap a *selected* tile opens — at rest the preview fills the tile — and it is deliberately
- * wider than [SelectionBorder], because a border draws *inward* from the bounds. Drop the inset below the border
- * width and selecting a layer would start cropping its own preview.
- */
-private val TileSide = 48.dp
-private val TileInset = 4.dp
-private val TileCorner = 12.dp
-
-/**
  * The tile's own rounded rect, stated once because a tile asks for it **twice** — as the clip that rounds its
  * checkerboard and as the shape of the selection ring drawn over it — and the two must be the same rect. It is also
  * the reminder of which way round they go in the chain: the ring **above** the clip, since a rounded clip is a
@@ -788,62 +777,16 @@ private val TileCorner = 12.dp
  * the corners come back thin and stepped while the straight sides stay full width. Same fix as the effect section's
  * swatches.
  */
-private val TileShape = RoundedCornerShape(TileCorner)
-
-/**
- * The ring on the selected tile — and **only** on it.
- *
- * An outline on every tile was tried and dropped: it made the rail a column of boxes, and it was redundant with the
- * checkerboard, which already gives an unselected tile a defined square to read as a slot. What the gap buys is kept
- * either way, because the inset does not depend on the ring being drawn.
- */
-private val SelectionBorder = 2.dp
-private val RailCorner = 18.dp
-private val RailPadding = 6.dp
-private val RailGap = 6.dp
-private val HiddenBadge = 18.dp
-private val CheckerTileSquare = 6.dp
+private val TileShape = RoundedCornerShape(12.dp)
 
 /** The rules inside the rail. Its own value so the two calls cannot drift, being the same line drawn twice. */
 private val RailDividerColor = StudioContentColor.copy(alpha = 0.15f)
-
-/**
- * M3's own divider thickness, restated so [RailScrollExtent] can subtract it.
- *
- * `DividerDefaults.Thickness` is what the dividers actually draw at; naming it here is the one place this file could
- * drift from Material, and it is one dp of a 320dp cap — stated rather than dropped, because the whole point of that
- * derivation is that the pieces add up to the cap exactly.
- */
-private val DividerThickness = 1.dp
-
-/**
- * The grab bar: what is **drawn**, and the slot that is **pressed**.
- *
- * The two are deliberately different sizes — the mark is a discreet 20×4, the slot a full tile across and 20dp
- * through — which is `StudioIconButton`'s own split between its 20dp glyph and its 40dp face. A handle large enough
- * to grab reliably would be a heavy bar at the head of a rail whose whole subject is small pictures.
- *
- * Both turn with the rail: across its run, a grab bar reads as a divider rather than as something to take hold of.
- */
-private val HandleWidth = 20.dp
-private val HandleThickness = 4.dp
-private val HandleSlotThickness = 20.dp
 
 /** Present without competing with the tiles: a handle is chrome, and the layers are the content. */
 private const val HandleAlpha = 0.45f
 
 /** Enough that a hidden layer reads as switched off, not enough that it stops being identifiable. */
 private const val HiddenLayerAlpha = 0.25f
-
-/**
- * Capped so a rail at rest stays clear of the tool panel below it, which grows to 320dp. Past this it scrolls, which
- * is the right answer for a stack deep enough to reach it.
- *
- * **A cap on the resting arrangement, not a guarantee**, now that the rail can be dragged: a user who moves it down
- * the canvas can put it over the panel, and that is their call rather than something to prevent. What the cap still
- * buys is that the studio never *opens* with the two overlapping.
- */
-private val RailMaxHeight = 320.dp
 
 /**
  * How far the **expanded** scroll band of layer tiles may run — [RailMaxHeight] less exactly what everything pinned
@@ -862,10 +805,10 @@ private val RailMaxHeight = 320.dp
  * The **collapsed** extent is not here — it is one [TileSide], stated at the call site, because it is not a leftover
  * but the whole point: a collapsed rail is a list one item tall.
  */
-private val RailScrollExtent = RailMaxHeight -
-    RailPadding * 2 -
-    HandleSlotThickness -
-    TileSide -
-    DividerThickness * 2 -
-    RailGap * 5 -
-    TileSide
+private val RailScrollExtent = 320.dp -
+    6.dp * 2 -
+    20.dp -
+    48.dp -
+    1.dp * 2 -
+    6.dp * 5 -
+    48.dp

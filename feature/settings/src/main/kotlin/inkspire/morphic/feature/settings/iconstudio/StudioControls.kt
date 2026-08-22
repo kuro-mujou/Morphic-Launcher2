@@ -233,7 +233,7 @@ internal fun PositionPad(
             enabled = target != (x to y),
             onStep = { onValueChange(target.first, target.second) },
             onStepsFinished = onCommit,
-            modifier = Modifier.size(NudgeSlot),
+            modifier = Modifier.size(40.dp),
         )
     }
 
@@ -253,7 +253,7 @@ internal fun PositionPad(
                 xRange = range,
                 yRange = range,
                 onValueChangeFinished = onCommit,
-                modifier = Modifier.size(PadSide),
+                modifier = Modifier.size(140.dp),
             )
 
             // **The pad says where, the readout says how far** — the same pairing every slider here has, and it was
@@ -288,7 +288,7 @@ internal fun PositionPad(
                         onValueChange(0f, 0f)
                         onCommit()
                     },
-                    modifier = Modifier.size(NudgeSlot),
+                    modifier = Modifier.size(40.dp),
                 )
                 Arrow(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Nudge right", 1, 0)
             }
@@ -320,10 +320,6 @@ private fun Float.nudged(direction: Int, range: ClosedFloatingPointRange<Float>,
  * could not hold still — so that one passes its own range and gets the same pad at a scale it can be dragged in.
  */
 internal val PositionRange = -0.5f..0.5f
-
-/** The pad, and one cell of the cluster beside it — equal to `StudioIconButton`'s own side. */
-private val PadSide = 140.dp
-private val NudgeSlot = 40.dp
 
 /**
  * Which page of a pager is showing. Not a control — pressing one is not offered, since swiping is the gesture.

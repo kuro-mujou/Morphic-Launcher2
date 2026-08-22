@@ -10,9 +10,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
-/** How near a viewport edge a dragged item must be held before pages start flipping. */
-private val EdgeFlipWidth = 44.dp
-
 /** How long between flips while the finger stays at the edge. */
 private const val EDGE_FLIP_DWELL_MS = 450L
 
@@ -46,7 +43,7 @@ fun EdgeFlipEffect(
     pagerState: LauncherPagerState,
     viewport: Rect?,
     fingerInRoot: Offset?,
-    edgeWidth: Dp = EdgeFlipWidth,
+    edgeWidth: Dp = 44.dp,
     dwellMillis: Long = EDGE_FLIP_DWELL_MS,
 ) {
     val edgePx = with(LocalDensity.current) { edgeWidth.toPx() }

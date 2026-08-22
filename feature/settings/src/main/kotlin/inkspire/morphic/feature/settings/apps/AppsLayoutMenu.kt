@@ -72,7 +72,7 @@ internal fun AppsLayoutMenu() {
                     Icon(
                         imageVector = Icons.Filled.KeyboardArrowDown,
                         contentDescription = "Choose an arrangement",
-                        modifier = Modifier.size(TrailingGlyph),
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             },
@@ -104,8 +104,8 @@ internal fun AppsLayoutMenu() {
                         }
                     },
                     modifier = Modifier
-                        .padding(horizontal = RowInsetH, vertical = RowInsetV)
-                        .clip(RoundedCornerShape(RowCorner))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(if (selected) colors.accent else Color.Transparent),
                     onClick = {
                         expanded = false
@@ -116,11 +116,3 @@ internal fun AppsLayoutMenu() {
         }
     }
 }
-
-/** Short of the trailing button's own slot, as every glyph in this module is. */
-private val TrailingGlyph = 20.dp
-
-/** A menu row's selected fill, inset and rounded as `SettingsNavRow`'s is so the two read as one idea. */
-private val RowInsetH = 8.dp
-private val RowInsetV = 2.dp
-private val RowCorner = 12.dp

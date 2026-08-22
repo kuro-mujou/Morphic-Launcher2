@@ -45,24 +45,9 @@ import inkspire.morphic.feature.settings.apps.ConfigurableLayouts
 import inkspire.morphic.feature.settings.label
 import inkspire.morphic.feature.settings.meta
 
-/** The long side of a register card — L1's `RegisterLongSide`, unchanged; the short side follows the screen's shape. */
-private val CardLongSide = 176.dp
-
-/** Floors on the short side, so an extreme window still leaves a card something to draw. L1's pair. */
-private val MinCardWidth = 88.dp
-private val MinCardHeight = 120.dp
-
 /** The shapes a register card will take, whatever the window is — L1's clamp, and `GridEditor` clamps its own. */
 private const val MIN_RATIO = 0.4f
 private const val MAX_RATIO = 2.4f
-
-private val CardGap = 8.dp
-private val CardCorner = 16.dp
-private val IconLabelGap = 6.dp
-
-/** L1's gear: a 32dp target holding an 18dp glyph, small enough not to compete with the card it sits in. */
-private val GearTarget = 32.dp
-private val GearGlyph = 18.dp
 
 /**
  * **The surface register as a cross: HOME in the middle, and the four edges around it.**
@@ -111,20 +96,20 @@ internal fun SurfaceRegisterCross(
     val cardWidth: Dp
     val cardHeight: Dp
     if (ratio >= 1f) {
-        cardHeight = CardLongSide
-        cardWidth = (CardLongSide / ratio).coerceAtLeast(MinCardWidth)
+        cardHeight = 176.dp
+        cardWidth = (176.dp / ratio).coerceAtLeast(88.dp)
     } else {
-        cardWidth = CardLongSide
-        cardHeight = (CardLongSide * ratio).coerceAtLeast(MinCardHeight)
+        cardWidth = 176.dp
+        cardHeight = (176.dp * ratio).coerceAtLeast(120.dp)
     }
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(CardGap),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         SideSlot(HomeEdge.TOP, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
-        Row(horizontalArrangement = Arrangement.spacedBy(CardGap)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SideSlot(HomeEdge.LEFT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
             HomeSlot(homeLayout, cardWidth, cardHeight, onOpenSettings)
             SideSlot(HomeEdge.RIGHT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
@@ -234,7 +219,7 @@ private fun FilledSlot(
     Column(
         modifier = Modifier
             .size(width, height)
-            .clip(RoundedCornerShape(CardCorner))
+            .clip(RoundedCornerShape(16.dp))
             .background(container)
             .padding(8.dp),
     ) {
@@ -242,13 +227,13 @@ private fun FilledSlot(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(CardCorner - 8.dp))
+                .clip(RoundedCornerShape(16.dp - 8.dp))
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = content)
-            Spacer(Modifier.height(IconLabelGap))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
@@ -260,12 +245,12 @@ private fun FilledSlot(
         if (onSettings != null) {
             HorizontalDivider(color = content.copy(alpha = 0.2f))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                IconButton(onClick = onSettings, modifier = Modifier.size(GearTarget)) {
+                IconButton(onClick = onSettings, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "$label settings",
                         tint = content,
-                        modifier = Modifier.size(GearGlyph),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -280,8 +265,8 @@ private fun EmptySlot(width: Dp, height: Dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(width, height)
-            .clip(RoundedCornerShape(CardCorner))
-            .dashedBorder(colors.contentMuted.copy(alpha = 0.5f), CardCorner)
+            .clip(RoundedCornerShape(16.dp))
+            .dashedBorder(colors.contentMuted.copy(alpha = 0.5f), 16.dp)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

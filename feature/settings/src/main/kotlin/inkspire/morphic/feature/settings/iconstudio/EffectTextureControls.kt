@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -464,7 +465,7 @@ internal fun PatternControls(
         LabeledControl("Texture") {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(FilterTileGap),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PatternTile(
                     pattern = null,
@@ -547,11 +548,11 @@ internal fun PatternControls(
 private fun PatternTile(pattern: IconPattern?, argb: Int, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(PatternTileSide)
+            .size(56.dp)
             // Outside the clip — see [FilterTile]. It is outside the ripple too, which is inside the clip with the
             // ground, so a press tints the swatch and leaves the ring reading as the selection.
-            .then(if (selected) Modifier.border(SwatchRingWidth, StudioContentColor, EffectSwatchCorner) else Modifier)
-            .clip(EffectSwatchCorner)
+            .then(if (selected) Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(10.dp)) else Modifier)
+            .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = 0.08f))
             .clickable(onClick = onClick),
     ) {
@@ -570,5 +571,3 @@ private fun PatternTile(pattern: IconPattern?, argb: Int, selected: Boolean, onC
         }
     }
 }
-
-private val PatternTileSide = 56.dp

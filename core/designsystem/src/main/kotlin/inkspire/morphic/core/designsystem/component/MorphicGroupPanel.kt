@@ -33,12 +33,8 @@ fun MorphicGroupPanel(modifier: Modifier = Modifier, content: @Composable Column
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(GroupCorner))
+            .clip(RoundedCornerShape(20.dp))
             .background(colors.surface),
         content = content,
     )
 }
-
-/** How far a group's panel sits from the pane's edges, and how round it is. */
-val GroupInsetH = 16.dp
-private val GroupCorner = 20.dp

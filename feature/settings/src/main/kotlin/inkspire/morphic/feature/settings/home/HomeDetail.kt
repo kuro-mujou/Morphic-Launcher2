@@ -39,10 +39,6 @@ import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.label
 import org.koin.androidx.compose.koinViewModel
 
-/** Provisional spacing — placeholders, as everywhere else in this module. */
-private val ScreenPadding = 20.dp
-private val SwitchGap = 16.dp
-
 /** How long the mockup and the zone rows take to cross-fade between pairings. Short: the switch is one tap. */
 private const val SwapMs = 180
 
@@ -89,10 +85,10 @@ internal fun HomeDetail(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(ScreenPadding),
+            .padding(20.dp),
     ) {
         HomeLayoutSwitch(selected = state.layout, onSelect = viewModel::setLayout)
-        Spacer(Modifier.height(SwitchGap))
+        Spacer(Modifier.height(16.dp))
 
         // **Cross-fade, not a pager.** The two pairings are mutually-exclusive states rather than pages sitting side
         // by side, so there is nothing to travel between — and a horizontal pager here would compete with the sliders
@@ -107,7 +103,7 @@ internal fun HomeDetail(
         ) { shown ->
             Column {
                 PairingMockup(shown)
-                Spacer(Modifier.height(SwitchGap))
+                Spacer(Modifier.height(16.dp))
                 HomeZoneRows(shown.layout, onOpenSection)
             }
         }

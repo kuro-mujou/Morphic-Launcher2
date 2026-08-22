@@ -31,8 +31,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
-import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
-import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
@@ -62,18 +60,6 @@ import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
 import kotlin.math.roundToInt
 
-/**
- * The spacing and inset of the grid holding the cards — **placeholders**, in the same sense as the other APPS layouts'
- * cell heights: surface metrics bound for the settings layer. (A card's *own* inset, corner and slot spacing live
- * beside [CategoryCard], which is the only thing that reads them.)
- *
- * The **lane count** is not here: it is `AppsCardGrid`'s, resolved per device configuration. A card is square, so its
- * size is `shortEdge / lanes`, which makes the count genuinely per-device rather than a constant. A fixed icon cap
- * would bind on a tablet given two columns — the answer to that is the column count, not the cap.
- */
-private val CategoryCardSpacing = 12.dp
-private val CategoryCardGutter = 16.dp
-
 /** This surface's drop zone — the whole card grid, as each paged surface registers its viewport. */
 private val CardGridZoneId = ZoneId("apps-category-cards")
 
@@ -86,13 +72,6 @@ private val CardGridZoneId = ZoneId("apps-category-cards")
  * *intent* is the part that has to be true, since the drop shadow and the drag host both branch on it.
  */
 private val CardMergePlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.MERGE)
-
-/**
- * The floating proxy's size while a drag is over the card grid — **a placeholder**, and the one metric here with no
- * cell to inherit from: the app was lifted out of an expansion whose cell size this surface never sees, and a card
- * preview slot is not what the user is carrying. Replaced by the icon-size setting with the rest.
- */
-private val DragProxySize = 72.dp
 
 /**
  * The **category card** layout of the APPS surface
@@ -338,7 +317,6 @@ fun AppsCategoryCard(
             ?.fingerInRoot,
     )
 
-
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier.fillMaxSize()) {
             // **Not lazy**, and this reverses the call the first cut made. It was a `LazyVerticalGrid` on the
@@ -361,12 +339,12 @@ fun AppsCategoryCard(
                     // gap between a card and the screen edge that the *tile* needs to read as a tile, and the
                     // setting is the user's inset on top. Inside the scroller, so cards still travel under the bars.
                     .padding(
-                        start = CategoryCardGutter + horizontalPadding,
-                        top = CategoryCardGutter,
-                        end = CategoryCardGutter + horizontalPadding,
-                        bottom = CategoryCardGutter,
+                        start = 16.dp + horizontalPadding,
+                        top = 16.dp,
+                        end = 16.dp + horizontalPadding,
+                        bottom = 16.dp,
                     ),
-                verticalArrangement = Arrangement.spacedBy(CategoryCardSpacing),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // TODO(category management): long-press a card for rename / delete, and drag one to reorder the
                 //  categories. Both write category *definitions*, which `AppsCategoryChange` deliberately has no ops
@@ -378,7 +356,7 @@ fun AppsCategoryCard(
                 categories.chunked(cardColumns).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(CategoryCardSpacing),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         row.forEach { entry ->
                             key(entry.category.id) {
@@ -416,10 +394,10 @@ fun AppsCategoryCard(
             // ejected onto home is still live here and would otherwise paint a second icon under the same finger.
             if (presented && session != null && draggedApp != null && openCategoryId == null) {
                 val finger = session.fingerInRoot
-                val halfPx = with(density) { DragProxySize.toPx() } / 2f
+                val halfPx = with(density) { 72.dp.toPx() } / 2f
                 FloatingDragIcon(
                     rootOffset = IntOffset((finger.x - halfPx).roundToInt(), (finger.y - halfPx).roundToInt()),
-                    size = DpSize(DragProxySize, DragProxySize),
+                    size = DpSize(72.dp, 72.dp),
                 ) {
                     // No `itemGestures`: the proxy follows the finger, it is not a touch target.
                     AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())

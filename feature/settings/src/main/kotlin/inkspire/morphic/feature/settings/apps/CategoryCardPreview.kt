@@ -27,10 +27,6 @@ import inkspire.morphic.core.model.CardChrome
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Provisional spacing — placeholders, matching `IconSizingPreview`'s. */
-private val PreviewPadding = 12.dp
-private val CaptionGap = 6.dp
-
 /** How much of the box a card may fill before it is scaled down — `IconSizingPreview`'s `CELL_FIT`, same job. */
 private const val CARD_FIT = 0.94f
 
@@ -87,7 +83,7 @@ internal fun CategoryCardPreview(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer { blendMode = BlendMode.Src }
-                .padding(vertical = PreviewPadding),
+                .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
             BoxWithConstraints(contentAlignment = Alignment.Center) {
@@ -127,7 +123,7 @@ internal fun CategoryCardPreview(
                 "${metrics.maxIconDp.value.roundToInt()} dp",
             style = MaterialTheme.typography.bodySmall,
             color = colors.contentMuted,
-            modifier = Modifier.padding(top = CaptionGap),
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }

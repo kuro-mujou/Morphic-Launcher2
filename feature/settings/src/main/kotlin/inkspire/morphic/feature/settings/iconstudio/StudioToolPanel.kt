@@ -25,15 +25,6 @@ import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.data.settings.IconPreset
 
 /**
- * How tall a panel may grow. The rest of the screen is the work, and it stays visible.
- *
- * **The cap is on the whole panel, not on its scrolling part** — the pinned header and the scroll together — which is
- * what makes pinning free: a header takes space *from* the scroll rather than adding it to the panel, so the section
- * with the tallest one cannot push the canvas up behind it.
- */
-private val PanelMaxHeight = 320.dp
-
-/**
  * Every command the studio's panels can issue, in one value.
  *
  * **A holder rather than fifteen parameters threaded through the host into a section.** The host does not use any of
@@ -143,7 +134,7 @@ fun StudioToolPanel(
                 animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 alignment = Alignment.BottomStart,
             )
-            .heightIn(max = PanelMaxHeight)
+            .heightIn(max = 320.dp)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

@@ -81,20 +81,6 @@ import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import java.text.Collator
 
-/** Provisional spacing — placeholders, as everywhere else, until the settings layer owns its own metrics. */
-private val ScreenPadding = 16.dp
-private val RowGap = 8.dp
-private val PreviewCorner = 20.dp
-private val CardCorner = 16.dp
-
-/** L1's shelf-card size, kept so the three shelves line up with each other. */
-private val CardWidth = 120.dp
-private val CardHeight = 200.dp
-
-/** The band a mode page reserves for its preview, and the chrome above and below it. */
-private val PreviewHeight = 200.dp
-private val PageChromeHeight = 128.dp
-
 /**
  * **Wallpaper**: the image the launcher owns, and where to put it.
  *
@@ -171,7 +157,7 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = ScreenPadding),
+        contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item(key = "modes") {
@@ -230,8 +216,8 @@ private fun WallpaperModePager(
     }
     HorizontalPager(
         state = pagerState,
-        modifier = Modifier.height(PreviewHeight + PageChromeHeight),
-        contentPadding = PaddingValues(horizontal = ScreenPadding),
+        modifier = Modifier.height(200.dp + 128.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
         pageSpacing = 12.dp,
         verticalAlignment = Alignment.Top,
     ) { page ->
@@ -298,7 +284,7 @@ private fun WallpaperModePager(
                 preview = {
                     Row(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(RowGap),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         RotateSlot(
                             bitmap = state.rotatingPortrait,
@@ -360,7 +346,7 @@ private fun WallpaperModePage(
     actions: @Composable RowScope.() -> Unit,
 ) {
     val colors = LocalMorphicColors.current
-    Column(verticalArrangement = Arrangement.spacedBy(RowGap)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -368,7 +354,7 @@ private fun WallpaperModePage(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = RowGap)
+                    .padding(end = 8.dp)
             ) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium, color = colors.content)
                 if (status != null) {
@@ -386,7 +372,7 @@ private fun WallpaperModePage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(PreviewHeight)
+                .height(200.dp)
         ) { preview() }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -414,7 +400,7 @@ private fun PreviewTile(
         Box(
             modifier = Modifier
                 .fitAspect(ratio)
-                .clip(RoundedCornerShape(PreviewCorner))
+                .clip(RoundedCornerShape(20.dp))
                 .background(colors.surface),
             contentAlignment = Alignment.Center,
         ) {
@@ -431,7 +417,7 @@ private fun PreviewTile(
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.contentMuted,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = RowGap),
+                    modifier = Modifier.padding(horizontal = 8.dp),
                 )
             }
         }
@@ -459,7 +445,7 @@ private fun RotateSlot(
         Box(
             modifier = Modifier
                 .fitAspect(ratio)
-                .clip(RoundedCornerShape(PreviewCorner))
+                .clip(RoundedCornerShape(20.dp))
                 .background(colors.surface)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
@@ -484,7 +470,7 @@ private fun RotateSlot(
                 color = colors.content,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(RowGap),
+                    .padding(8.dp),
             )
         }
     }
@@ -511,7 +497,7 @@ private fun PageActionButton(
 ) {
     MorphicButton(onClick = onClick, modifier = modifier, style = MorphicButtonStyle.Tonal, enabled = enabled) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(RowGap))
+        Spacer(Modifier.width(8.dp))
         Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -533,7 +519,7 @@ private fun ApplyButton(
     Box {
         MorphicButton(onClick = { expanded = true }, enabled = enabled) {
             Text(label)
-            Spacer(Modifier.width(RowGap / 2))
+            Spacer(Modifier.width(8.dp / 2))
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Apply options", modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -565,7 +551,7 @@ private fun LazyListScope.wallpaperShelf(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = ScreenPadding, vertical = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -581,7 +567,7 @@ private fun LazyListScope.wallpaperShelf(
     }
     item(key = "row-$title") {
         LazyRow(
-            contentPadding = PaddingValues(horizontal = ScreenPadding),
+            contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             content = rowContent,
         )
@@ -595,8 +581,8 @@ private fun LazyItemScope.EmptyHint(text: String) {
     Box(
         modifier = Modifier
             .fillParentMaxWidth()
-            .height(CardHeight)
-            .clip(RoundedCornerShape(CardCorner))
+            .height(200.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(colors.surface),
         contentAlignment = Alignment.Center,
     ) {
@@ -621,12 +607,12 @@ private data class LiveWallpaperEntry(
 @Composable
 private fun LiveWallpaperCard(entry: LiveWallpaperEntry, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
-    Column(modifier = Modifier.width(CardWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = Modifier.width(120.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
-                .width(CardWidth)
-                .height(CardHeight)
-                .clip(RoundedCornerShape(CardCorner))
+                .width(120.dp)
+                .height(200.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(colors.surface)
                 .clickable(onClick = onClick),
         ) {
@@ -647,7 +633,7 @@ private fun LiveWallpaperCard(entry: LiveWallpaperEntry, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            modifier = Modifier.width(CardWidth),
+            modifier = Modifier.width(120.dp),
         )
     }
 }

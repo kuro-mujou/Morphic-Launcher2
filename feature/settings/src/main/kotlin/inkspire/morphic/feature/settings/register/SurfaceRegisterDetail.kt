@@ -19,9 +19,6 @@ import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.feature.settings.SettingsSection
 import org.koin.androidx.compose.koinViewModel
 
-/** Provisional spacing — placeholders until the settings port brings real row components with it. */
-private val ScreenPadding = 20.dp
-
 /**
  * The **surface register**: for each edge of HOME, which surface it opens and in which layout.
  *
@@ -65,7 +62,7 @@ internal fun SurfaceRegisterDetail(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(ScreenPadding),
+            .padding(20.dp),
     ) {
         SurfaceRegisterCross(
             homeLayout = state.register.homeLayout,

@@ -1021,7 +1021,6 @@ private fun HomeItemCell(
     }
 }
 
-
 /**
  * The measured geometry of [zone] on this surface, or null before it has been laid out.
  *

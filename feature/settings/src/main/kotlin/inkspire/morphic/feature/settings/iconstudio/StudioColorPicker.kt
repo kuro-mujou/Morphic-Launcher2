@@ -205,13 +205,10 @@ fun StudioColorPickerPanel(
             },
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
-                .widthIn(max = PickerMaxWidth),
+                .widthIn(max = 280.dp),
         )
     }
 }
-
-/** Keeps the panel near the tool panel's height — see [StudioColorPickerPanel]. */
-private val PickerMaxWidth = 280.dp
 
 /** `#RRGGBB`, upper case; the alpha is dropped because nothing in this editor lets a picked color carry one. */
 private val Int.hex: String get() = "#%06X".format(this and 0xFFFFFF)

@@ -52,10 +52,10 @@ fun cellIconLayout(
     metrics: IconMetrics,
     labelHeight: Dp,
 ): CellIconLayout {
-    val availWidth = (cellWidth - CellPadH * 2).coerceAtLeast(0.dp)
+    val availWidth = (cellWidth - 4.dp * 2).coerceAtLeast(0.dp)
 
     if (!metrics.showLabel) {
-        val iconArea = (cellHeight - CellPadV * 2).coerceAtLeast(0.dp)
+        val iconArea = (cellHeight - 4.dp * 2).coerceAtLeast(0.dp)
         // No clamp to the area, mirroring the cell's own no-label branch — see the note above.
         val iconSize = metrics.resolveIconSize(availWidth, iconArea)
         return CellIconLayout(
@@ -66,12 +66,12 @@ fun cellIconLayout(
         )
     }
 
-    val iconArea = (cellHeight - CellPadV * 2 - LabelGap - labelHeight).coerceAtLeast(0.dp)
+    val iconArea = (cellHeight - 4.dp * 2 - 4.dp - labelHeight).coerceAtLeast(0.dp)
     val iconSize = metrics.resolveIconSize(availWidth, iconArea).coerceAtMost(iconArea)
     // The *group* is centered in the padded box, so the icon sits above the cell's center by half the label block.
-    val groupHeight = iconSize + LabelGap + labelHeight
-    val contentHeight = (cellHeight - CellPadV * 2).coerceAtLeast(0.dp)
-    val iconTop = CellPadV + (contentHeight - groupHeight) / 2
+    val groupHeight = iconSize + 4.dp + labelHeight
+    val contentHeight = (cellHeight - 4.dp * 2).coerceAtLeast(0.dp)
+    val iconTop = 4.dp + (contentHeight - groupHeight) / 2
     return CellIconLayout(
         iconSize = iconSize,
         iconBound = minOf(availWidth, iconArea),

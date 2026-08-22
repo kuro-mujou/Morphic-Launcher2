@@ -51,7 +51,7 @@ fun MorphicResetButton(
 ) {
     Box(
         modifier = modifier
-            .size(ResetSlot)
+            .size(32.dp)
             .clip(CircleShape)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
@@ -61,7 +61,7 @@ fun MorphicResetButton(
         contentAlignment = Alignment.Center,
     ) {
         val color = if (enabled) tint else tint.copy(alpha = tint.alpha * DisabledAlpha)
-        Canvas(Modifier.size(GlyphSide)) {
+        Canvas(Modifier.size(20.dp)) {
             // A ring open at one point with a head on its leading end: the least that still reads as "turn it back".
             // Drawn rather than imported — `core:designsystem` carries no material-icons dependency, and `TopActionZone`
             // draws its three marks by hand for the same reason.
@@ -107,9 +107,3 @@ private const val HeadFraction = 0.7f
 
 /** M3's own disabled content alpha: plainly spent, without disappearing. */
 private const val DisabledAlpha = 0.38f
-
-/** Smaller than a stepper, because it sits in a caption row rather than beside a track. */
-private val ResetSlot = 32.dp
-
-/** Short of the slot, so the press target is larger than the mark it shows. */
-private val GlyphSide = 20.dp

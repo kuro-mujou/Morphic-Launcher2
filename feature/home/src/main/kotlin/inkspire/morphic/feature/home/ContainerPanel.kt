@@ -9,9 +9,6 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
-/** A container's corner rounding, and the shape its frosted backdrop is clipped to. */
-val ContainerShape = RoundedCornerShape(16.dp)
-
 /**
  * The frosted panel both containers are drawn on — the fill, the corner and the backdrop, as one modifier.
  *
@@ -27,6 +24,6 @@ val ContainerShape = RoundedCornerShape(16.dp)
 fun Modifier.containerPanel(): Modifier {
     val colors = LocalMorphicColors.current
     return fillMaxSize()
-        .clip(ContainerShape)
-        .wallpaperBackdrop(shape = ContainerShape, scrimColor = colors.surface)
+        .clip(RoundedCornerShape(16.dp))
+        .wallpaperBackdrop(shape = RoundedCornerShape(16.dp), scrimColor = colors.surface)
 }

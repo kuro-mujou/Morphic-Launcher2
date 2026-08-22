@@ -25,9 +25,6 @@ import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.feature.settings.label
 
-private val RowGap = 10.dp
-private val RadioGap = 12.dp
-
 /**
  * **What a register slot may hold: nothing, or the APPS surface in one of its layouts.**
  *
@@ -91,10 +88,10 @@ private fun PickerRow(label: String, subtitle: String?, selected: Boolean, onCli
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .selectable(selected = selected, onClick = onClick)
-            .padding(vertical = RowGap),
+            .padding(vertical = 10.dp),
     ) {
         RadioButton(selected = selected, onClick = null)
-        Spacer(Modifier.width(RadioGap))
+        Spacer(Modifier.width(12.dp))
         Column {
             Text(label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
             if (subtitle != null) {

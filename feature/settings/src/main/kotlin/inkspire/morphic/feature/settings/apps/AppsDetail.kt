@@ -11,8 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
-import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
-import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
@@ -146,7 +144,7 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
     // also keeps its own gutter, and the surface subtracts it before fitting — so this must too, or the editor offers a
     // lane the grid has no room for. `cardMinCell` folds in the spacing between lanes, the other half of the same sum.
     val fitArea = if (card == null) window else {
-        window.copy(widthDp = (window.widthDp - CategoryCardGutter.value * 2).coerceAtLeast(1f))
+        window.copy(widthDp = (window.widthDp - 16.dp.value * 2).coerceAtLeast(1f))
     }
     val storedRows = size.rows
     val drawn = if (storedRows == null) {
@@ -199,11 +197,10 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
     // a fixed 220dp column, so a card wider than that is drawn narrower rather than overflowing — Compose clamps the
     // inner `width` to the incoming constraint. Worth knowing rather than worth fixing here: widening that column is
     // the shared scaffold's decision, and every other section's preview is a single cell that fits it comfortably.
-    val cardWidthDp = ((fitArea.widthDp - (drawn.cols - 1) * CategoryCardSpacing.value) / drawn.cols)
+    val cardWidthDp = ((fitArea.widthDp - (drawn.cols - 1) * 12.dp.value) / drawn.cols)
         .coerceAtLeast(1f)
     val cellHeightDp = if (card == null) derivedCell(cellWidthDp.dp, metrics).height.value else cellWidthDp
     val derivedRows = maxCells(window.heightDp, cellHeightDp)
-
 
     SurfaceDetail(
         onReroll = viewModel.sample::reroll,

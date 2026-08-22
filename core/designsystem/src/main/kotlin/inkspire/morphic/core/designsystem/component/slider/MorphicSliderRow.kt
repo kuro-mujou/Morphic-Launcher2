@@ -146,7 +146,7 @@ fun MorphicSliderRow(
     val down = snappedStep(shown, step, up = false).coerceIn(valueRange)
     val up = snappedStep(shown, step, up = true).coerceIn(valueRange)
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(RowGap)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SliderCaption(
             label = label,
             valueText = valueLabel(shown),
@@ -164,7 +164,7 @@ fun MorphicSliderRow(
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(StepGap),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             StepperButton(
                 glyph = SliderRowGlyph.MINUS,
@@ -269,7 +269,7 @@ fun MorphicRangeSliderRow(
         onPreview(next)
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(RowGap)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SliderCaption(
             label = label,
             valueText = valueLabel(shown),
@@ -305,7 +305,7 @@ private fun SliderCaption(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(CaptionGap),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (label != null) {
             Text(
@@ -325,9 +325,9 @@ private fun SliderCaption(
             color = style.valueColor.dimmedUnless(enabled),
             style = style.valueStyle,
             modifier = Modifier
-                .clip(RoundedCornerShape(ReadoutCorner))
+                .clip(RoundedCornerShape(6.dp))
                 .background(style.readoutBackground)
-                .padding(horizontal = ReadoutPadH, vertical = ReadoutPadV),
+                .padding(horizontal = 8.dp, vertical = 2.dp),
         )
         MorphicResetButton(
             onClick = onReset,
@@ -353,7 +353,7 @@ private fun StepperButton(
         glyph = glyph,
         description = description,
         enabled = enabled,
-        slot = StepperSlot,
+        slot = 40.dp,
         style = style,
         interaction = Modifier.repeatingPress(
             interactionSource = interactionSource,
@@ -390,7 +390,7 @@ private fun GlyphButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(GlyphSide)) {
+        Canvas(Modifier.size(20.dp)) {
             drawSliderRowGlyph(glyph, style.glyphColor.dimmedUnless(enabled))
         }
     }
@@ -547,17 +547,3 @@ private const val EchoWindowMs = 600L
 
 /** M3's own disabled content alpha: plainly spent, without disappearing. */
 private const val DisabledAlpha = 0.38f
-
-/** Between the caption and the track it captions — they are one control, and read as one. */
-private val RowGap = 4.dp
-private val CaptionGap = 8.dp
-private val StepGap = 4.dp
-private val ReadoutCorner = 6.dp
-private val ReadoutPadH = 8.dp
-private val ReadoutPadV = 2.dp
-
-/** Large enough to be a comfortable target, small enough that the track keeps most of the width. */
-private val StepperSlot = 40.dp
-
-/** Short of either slot, so the press target is larger than the mark it shows. */
-private val GlyphSide = 20.dp

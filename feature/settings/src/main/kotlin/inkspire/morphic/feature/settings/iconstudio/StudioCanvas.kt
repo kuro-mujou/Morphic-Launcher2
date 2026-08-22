@@ -28,9 +28,6 @@ import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** One square of the transparency checkerboard, at canvas scale. */
-private val CheckerSquare = 12.dp
-
 /** The checkerboard's two grays — mid-toned, so they read against both a black and a white surround. */
 internal val CheckerLight = Color(0xFFBDBDBD)
 internal val CheckerDark = Color(0xFF8A8A8A)
@@ -82,7 +79,7 @@ fun StudioCanvas(
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
-    val checkerPx = with(density) { CheckerSquare.toPx() }
+    val checkerPx = with(density) { 12.dp.toPx() }
     val topInsetPx = with(density) { topInset.toPx() }
 
     // **Read from inside the gesture rather than keyed on**, which is the same trap `StudioStepperButton` documents:

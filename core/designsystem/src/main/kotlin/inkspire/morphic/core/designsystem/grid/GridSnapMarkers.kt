@@ -16,9 +16,6 @@ import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-/** Size of one marker. L1's 16dp. */
-private val MarkerSize = 16.dp
-
 /**
  * How far from the dragged item's edge a marker starts to appear, as a multiple of the larger visual cell — wide
  * enough that the lattice reads as a field rather than as four dots stuck to the icon.
@@ -59,7 +56,7 @@ fun Modifier.gridSnapMarkers(
     draggedSpan: () -> GridSpan,
     color: Color = LocalMorphicColors.current.content,
 ): Modifier {
-    val markerPx = with(LocalDensity.current) { MarkerSize.toPx() }
+    val markerPx = with(LocalDensity.current) { 16.dp.toPx() }
     return drawBehind {
         val finger = localFinger() ?: return@drawBehind
         val span = draggedSpan()

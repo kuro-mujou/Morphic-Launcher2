@@ -10,7 +10,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
-import inkspire.morphic.core.designsystem.cell.CategoryCardGutter
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
@@ -122,7 +121,7 @@ fun AppsScreen(
     // The grid's own gutter comes off as well as the user's margin, so what is divided by the lane count is the width
     // the *lanes* share. `cardMinCell` folds in the spacing between them, which is the other half of the same sum.
     val cardArea = usableWindowArea(uiInsets).let {
-        val lanes = it.widthDp - cardPadding.value * 2 - CategoryCardGutter.value * 2
+        val lanes = it.widthDp - cardPadding.value * 2 - 16.dp.value * 2
         GridArea(widthDp = lanes.coerceAtLeast(1f), heightDp = it.heightDp)
     }
     // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —

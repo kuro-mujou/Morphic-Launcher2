@@ -104,8 +104,8 @@ internal fun ShapeControls(
             // avoid. `pageSpacing` is not subtracted: with `PageSize.Fill` it is inserted *between* pages and
             // pages stay the full viewport width.
             BoxWithConstraints {
-                val cell = (maxWidth - ShapeGridSpacing * (ShapeColumns - 1)) / ShapeColumns
-                val pageHeight = cell * ShapeRows + ShapeGridSpacing * (ShapeRows - 1)
+                val cell = (maxWidth - 8.dp * (ShapeColumns - 1)) / ShapeColumns
+                val pageHeight = cell * ShapeRows + 8.dp * (ShapeRows - 1)
 
                 HorizontalPager(
                     state = pagerState,
@@ -190,9 +190,9 @@ private val ContentAnchor.hint: String
  */
 @Composable
 internal fun ShapePage(shapes: List<IconShape?>, selected: IconShape?, onSelect: (IconShape?) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(ShapeGridSpacing)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         shapes.chunked(ShapeColumns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(ShapeGridSpacing)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { shape ->
                     ShapeTile(
                         shape = shape,
@@ -241,7 +241,7 @@ private fun ShapeTile(
             tint = StudioContentColor.copy(alpha = if (resource == null) 0.5f else 1f),
             modifier = Modifier
                 .fillMaxSize()
-                .padding(ShapeTileInset),
+                .padding(12.dp),
         )
     }
 }
@@ -255,9 +255,3 @@ private fun ShapeTile(
 private const val ShapeColumns = 4
 private const val ShapeRows = 2
 private const val ShapesPerPage = ShapeColumns * ShapeRows
-
-/** Between tiles on both axes — and, being the gap the rows are separated by, an input to the page height. */
-private val ShapeGridSpacing = 8.dp
-
-/** Keeps the silhouette clear of the tile's own rounded corners. */
-private val ShapeTileInset = 12.dp

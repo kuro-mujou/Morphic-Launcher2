@@ -47,12 +47,6 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 private const val AutoRotateIntervalMs = 5_000L
 
-/** The dots' sizes and spacing — L1's, which are chosen against a widget rather than against a page of them. */
-private val ActiveDotSize = 6.dp
-private val InactiveDotSize = 4.dp
-private val DotSpacing = 2.dp
-private val DotsInset = 4.dp
-
 /**
  * One placed **widget container** — several widgets sharing a cell, **one shown at a time**, swiped between along
  * the container's [axis].
@@ -222,7 +216,7 @@ private fun PageDots(
         Column(
             modifier = modifier
                 .fillMaxHeight()
-                .padding(end = DotsInset),
+                .padding(end = 4.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -232,7 +226,7 @@ private fun PageDots(
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(bottom = DotsInset),
+                .padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -248,10 +242,10 @@ private fun Dot(active: Boolean, orientation: Orientation) {
     Box(
         modifier = Modifier
             .padding(
-                horizontal = if (orientation == Orientation.Horizontal) DotSpacing else 0.dp,
-                vertical = if (orientation == Orientation.Vertical) DotSpacing else 0.dp,
+                horizontal = if (orientation == Orientation.Horizontal) 2.dp else 0.dp,
+                vertical = if (orientation == Orientation.Vertical) 2.dp else 0.dp,
             )
-            .size(if (active) ActiveDotSize else InactiveDotSize)
+            .size(if (active) 6.dp else 4.dp)
             .background(
                 color = if (active) colors.content else colors.contentMuted,
                 shape = CircleShape,

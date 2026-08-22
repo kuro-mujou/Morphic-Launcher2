@@ -35,7 +35,6 @@ import inkspire.morphic.core.model.icon.LayerRole
 import inkspire.morphic.core.model.icon.LayerSource
 import inkspire.morphic.data.icons.InstalledIconPack
 
-
 /**
  * Where the layer's content comes from.
  *
@@ -117,7 +116,7 @@ internal fun SourceControls(
                         imageVector = Icons.Default.Android,
                         contentDescription = null,
                         tint = StudioContentColor,
-                        modifier = Modifier.size(SourceGlyphSide),
+                        modifier = Modifier.size(26.dp),
                     )
                 }
             }
@@ -133,7 +132,7 @@ internal fun SourceControls(
                         imageVector = Icons.Default.Image,
                         contentDescription = null,
                         tint = StudioContentColor,
-                        modifier = Modifier.size(SourceGlyphSide),
+                        modifier = Modifier.size(26.dp),
                     )
                 }
             }
@@ -153,7 +152,7 @@ internal fun SourceControls(
                         Image(
                             bitmap = preview.asImageBitmap(),
                             contentDescription = null,
-                            modifier = Modifier.size(SourcePackIconSide),
+                            modifier = Modifier.size(36.dp),
                         )
                     } else {
                         // A pack whose own icon could not be read still has to be pickable; its label is beneath
@@ -162,7 +161,7 @@ internal fun SourceControls(
                             imageVector = Icons.Default.Palette,
                             contentDescription = null,
                             tint = StudioContentColor,
-                            modifier = Modifier.size(SourceGlyphSide),
+                            modifier = Modifier.size(26.dp),
                         )
                     }
                 }
@@ -274,25 +273,13 @@ internal fun SourceControls(
     }
 }
 
-/** The side of a source tile — a press target in its own right, and large enough to read a pack's icon in. */
-private val SourceTileSide = 64.dp
-
-/** A source tile's corner: square with a radius, so a row of them reads as a set of chips rather than as buttons. */
-private val SourceTileCorner = 14.dp
-
 /**
  * The tile's rounded rect, stated once because a tile asks for it twice — the clip that rounds its fill, and the
  * outline drawn over it — and it records which way round they go in the chain: **the outline above the clip**, or a
  * boundary with no antialiasing strips the arc it runs along. Same fix as the effect section's swatches and the
  * layer rail's tiles.
  */
-private val SourceTileShape = RoundedCornerShape(SourceTileCorner)
-
-/** A glyph inside a tile, for the sources that have no artwork of their own to show. */
-private val SourceGlyphSide = 26.dp
-
-/** A pack's own launcher icon inside a tile — larger than a glyph, since it *is* the thing being chosen. */
-private val SourcePackIconSide = 36.dp
+private val SourceTileShape = RoundedCornerShape(14.dp)
 
 /**
  * One choice in the source row: a rounded square with something drawn in the middle of it, and its name beneath.
@@ -312,13 +299,13 @@ private fun SourceTile(
     content: @Composable BoxScope.() -> Unit,
 ) {
     Column(
-        modifier = Modifier.width(SourceTileSide),
+        modifier = Modifier.width(64.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(SourceTileSide)
+                .size(64.dp)
                 // **Above the clip, and the clip is the same rounded rect** — see [SourceTileShape]. A rounded clip
                 // is a hardware outline clip with no antialiasing, so a ring drawn *inside* one whose boundary runs
                 // along its own outer arc loses whole pixels of it: full width along the straight sides, thin and

@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
@@ -44,7 +45,6 @@ import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.designsystem.topaction.TopActionExpandedHeight
 import inkspire.morphic.core.designsystem.topaction.TopActionMode
 import inkspire.morphic.core.designsystem.topaction.TopActionTarget
 import inkspire.morphic.core.designsystem.topaction.TopActionZone
@@ -367,7 +367,7 @@ private fun TopActionOverlay(
     // handler follows.
     val target = state.hoveredTarget
     val bounds = remember(width, density) {
-        Rect(0f, 0f, width, with(density) { TopActionExpandedHeight.toPx() })
+        Rect(0f, 0f, width, with(density) { 96.dp.toPx() })
     }
     RegisterDropZone(
         coordinator = coordinator,

@@ -65,9 +65,6 @@ import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
 import inkspire.morphic.feature.settings.wallpaper.WallpaperDetail
 import org.koin.androidx.compose.koinViewModel
 
-/** The list pane's width beside a detail, on a screen wide enough for both. */
-private val ListPaneWidth = 360.dp
-
 /**
  * How deep into the surface a pane sits: the list is 0, a section reached from it is 1, a section reached through a
  * hub is 2.
@@ -274,7 +271,7 @@ private fun SettingsTwoPane(
                 showChevron = false,
                 insetSides = WindowInsetsSides.Start + WindowInsetsSides.Bottom,
                 modifier = Modifier
-                    .width(ListPaneWidth)
+                    .width(360.dp)
                     .fillMaxHeight()
                     .background(colors.background),
             )

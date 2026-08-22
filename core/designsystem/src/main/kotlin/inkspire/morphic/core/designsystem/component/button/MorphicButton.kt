@@ -114,23 +114,23 @@ fun MorphicSegmentedButtons(
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(GroupCorner))
+            .clip(RoundedCornerShape(12.dp))
             .background(colors.surfaceElevated)
-            .padding(GroupPadding)
+            .padding(4.dp)
             // After the padding, so this draws in the content box the segments themselves occupy — the same
             // rectangle the arithmetic below divides up.
             .drawBehind {
                 if (!showIndicator) return@drawBehind
-                val gap = SegmentGap.toPx()
+                val gap = 4.dp.toPx()
                 val segment = (size.width - gap * (options.size - 1)) / options.size
                 drawRoundRect(
                     color = colors.accent,
                     topLeft = Offset(x = (segment + gap) * travel, y = 0f),
                     size = Size(segment, size.height),
-                    cornerRadius = CornerRadius(SegmentCorner.toPx()),
+                    cornerRadius = CornerRadius(9.dp.toPx()),
                 )
             },
-        horizontalArrangement = Arrangement.spacedBy(SegmentGap),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         options.forEachIndexed { index, label ->
             val labelColor by animateColorAsState(
@@ -141,9 +141,9 @@ fun MorphicSegmentedButtons(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(SegmentCorner))
+                    .clip(RoundedCornerShape(9.dp))
                     .clickable { onSelect(index) }
-                    .padding(vertical = SegmentPaddingV),
+                    .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(text = label, style = MaterialTheme.typography.labelLarge, color = labelColor)
@@ -151,16 +151,3 @@ fun MorphicSegmentedButtons(
         }
     }
 }
-
-/**
- * The segmented control's metrics.
- *
- * Named because [SegmentGap] and [SegmentCorner] each have two readers that must agree — the `Row` lays the segments
- * out with them and the indicator is drawn from them — and a pill an odd number of pixels off its label is the kind
- * of wrong that looks like a rendering artifact rather than a number.
- */
-private val GroupCorner = 12.dp
-private val GroupPadding = 4.dp
-private val SegmentGap = 4.dp
-private val SegmentCorner = 9.dp
-private val SegmentPaddingV = 8.dp

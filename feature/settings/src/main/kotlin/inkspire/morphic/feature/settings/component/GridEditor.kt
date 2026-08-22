@@ -50,14 +50,6 @@ import inkspire.morphic.core.model.GridEditorEdge
 import inkspire.morphic.core.model.SideZoneEdge
 import kotlin.math.ceil
 
-/** Provisional spacing — placeholders, as everywhere else in this module. */
-private val ButtonSize = 24.dp
-private val ButtonGap = 4.dp
-private val ButtonCorner = 6.dp
-private val PreviewPad = 6.dp
-private val CellGap = 3.dp
-private val CellCorner = 3.dp
-
 /**
  * The shapes the mockup will take, whatever the real screen is.
  *
@@ -224,12 +216,12 @@ internal fun GridEditor(
         val framedPreview: @Composable () -> Unit = {
             Box(
                 modifier = Modifier
-                    .padding(ButtonGap * 2)
+                    .padding(4.dp * 2)
                     .width(previewWidth)
                     .height(previewHeight)
                     .clip(RoundedCornerShape(12.dp))
                     .background(colors.surface)
-                    .padding(PreviewPad),
+                    .padding(6.dp),
             ) {
                 // The companion split wraps **whatever** fills the edited half — a caller's own mockup or the plain
                 // lattice. Passing a `preview` used to replace the whole screen, which was fine while only the APPS
@@ -313,7 +305,7 @@ private fun EditorCaption(
     val colors = LocalMorphicColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = ButtonGap * 2),
+        modifier = Modifier.padding(bottom = 4.dp * 2),
     ) {
         Text(
             text = when {
@@ -330,7 +322,7 @@ private fun EditorCaption(
                 contentDescription = "Reset grid size",
                 tint = colors.content,
                 enabled = reset.changed,
-                modifier = Modifier.padding(start = ButtonGap),
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }
@@ -380,7 +372,7 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
                         .fillMaxWidth()
                         .weight(companionWeight)
                 )
-                Spacer(Modifier.height(PreviewPad))
+                Spacer(Modifier.height(6.dp))
             }
             edited(
                 Modifier
@@ -388,7 +380,7 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
                     .weight(gridWeight)
             )
             if (!first) {
-                Spacer(Modifier.height(PreviewPad))
+                Spacer(Modifier.height(6.dp))
                 CompanionZone(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -404,7 +396,7 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
                         .fillMaxHeight()
                         .weight(companionWeight)
                 )
-                Spacer(Modifier.width(PreviewPad))
+                Spacer(Modifier.width(6.dp))
             }
             edited(
                 Modifier
@@ -412,7 +404,7 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
                     .weight(gridWeight)
             )
             if (!first) {
-                Spacer(Modifier.width(PreviewPad))
+                Spacer(Modifier.width(6.dp))
                 CompanionZone(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -428,7 +420,7 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
 private fun CompanionZone(modifier: Modifier) {
     Box(
         modifier
-            .clip(RoundedCornerShape(CellCorner))
+            .clip(RoundedCornerShape(3.dp))
             .background(LocalMorphicColors.current.contentMuted.copy(alpha = 0.25f))
     )
 }
@@ -516,10 +508,10 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
         ) {
             val cw = animCols.coerceAtLeast(1f)
             val ch = animRows.coerceAtLeast(1f)
-            val gap = CellGap.toPx()
+            val gap = 3.dp.toPx()
             val cellW = ((size.width - gap * (cw - 1f)) / cw).coerceAtLeast(1f)
             val cellH = ((size.height - gap * (ch - 1f)) / ch).coerceAtLeast(1f)
-            val corner = CornerRadius(CellCorner.toPx())
+            val corner = CornerRadius(3.dp.toPx())
             for (r in 0 until ceil(ch).toInt()) {
                 for (c in 0 until ceil(cw).toInt()) {
                     val flashed = flashValue > 0f &&
@@ -546,7 +538,6 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
     }
 }
 
-
 /**
  * One square edge button.
  *
@@ -561,9 +552,9 @@ private fun EdgeButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
         // centered on its edges: without it the outermost pair touches the very ends of the row and the group reads as
         // wider than the screen it is describing.
         modifier = Modifier
-            .padding(ButtonGap)
-            .size(ButtonSize)
-            .clip(RoundedCornerShape(ButtonCorner))
+            .padding(4.dp)
+            .size(24.dp)
+            .clip(RoundedCornerShape(6.dp))
             .background(if (enabled) colors.content else colors.content.copy(alpha = 0.25f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

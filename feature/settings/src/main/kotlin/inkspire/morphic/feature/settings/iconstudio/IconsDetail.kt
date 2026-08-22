@@ -195,8 +195,8 @@ private fun PresetsGrid(modifier: Modifier = Modifier) {
 
         PresetGrid(
             presets = state.presets,
-            spacing = PresetGridSpacing,
-            tileMax = PresetTileMax,
+            spacing = 12.dp,
+            tileMax = 132.dp,
         ) { preset, cell ->
             PresetTile(
                 preset = preset,
@@ -246,8 +246,8 @@ private fun PresetTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .then(if (applied) Modifier.border(PresetRing, colors.accent, PresetTileShape) else Modifier)
-                .clip(PresetTileShape)
+                .then(if (applied) Modifier.border(2.dp, colors.accent, RoundedCornerShape(20.dp)) else Modifier)
+                .clip(RoundedCornerShape(20.dp))
                 .background(colors.surfaceElevated)
                 .combinedClickable(onClick = onApply, onLongClick = { menu = true }),
         ) {
@@ -273,7 +273,7 @@ private fun PresetTile(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(2.dp)
-                    .size(PresetMenuButton)
+                    .size(28.dp)
                     .clip(RoundedCornerShape(50))
                     .clickable { menu = true },
                 contentAlignment = Alignment.Center,
@@ -320,23 +320,8 @@ private fun PresetTile(
 
 /** Three across: at a pane's width that is a ~100dp square, which is a picture rather than a button. */
 
-/** Between tiles on both axes. */
-private val PresetGridSpacing = 12.dp
-
-/** How wide a tile may get, whatever share of the pane its cell was handed. */
-private val PresetTileMax = 132.dp
-
-/** The plate a preset is drawn on, and the shape its applied ring traces. One value, since the two must agree. */
-private val PresetTileShape = RoundedCornerShape(20.dp)
-
-/** The ring marking the preset currently in force. */
-private val PresetRing = 2.dp
-
 /** The icon's share of the tile — the tile is the ground it is read against, so it keeps a visible margin. */
 private const val PresetIconFraction = 0.6f
 
 /** What a tile bakes at: a library is a handful of icons, so one size for every tile is one bake each. */
 private const val PresetIconPx = 192
-
-/** The menu target, kept small enough not to sit over the icon it shares a corner with. */
-private val PresetMenuButton = 28.dp

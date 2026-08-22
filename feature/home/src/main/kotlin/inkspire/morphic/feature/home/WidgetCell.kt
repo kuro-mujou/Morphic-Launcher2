@@ -32,9 +32,6 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import org.koin.compose.koinInject
 
-/** The widget's corner rounding, and the shape its host view is clipped to. */
-private val WidgetShape = RoundedCornerShape(12.dp)
-
 /**
  * One placed widget — **another app's views, hosted inside a cell of ours**.
  *
@@ -106,7 +103,7 @@ internal fun WidgetCell(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .clip(WidgetShape)
+                .clip(RoundedCornerShape(12.dp))
                 .then(itemGestures),
             contentAlignment = Alignment.Center,
         ) {
@@ -147,7 +144,7 @@ internal fun WidgetCell(
         },
         modifier = modifier
             .fillMaxSize()
-            .clip(WidgetShape)
+            .clip(RoundedCornerShape(12.dp))
             .onSizeChanged { size = it }
             .then(itemGestures),
     )

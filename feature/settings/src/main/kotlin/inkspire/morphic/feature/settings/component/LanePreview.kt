@@ -52,12 +52,12 @@ internal fun LanePreview(rowHeightDp: Float, areaWidthDp: Float, insetFraction: 
         val laneWidth = maxWidth * (1f - inset * 2)
         val laneHeight = laneWidth * aspect
         // One more lane than fits, so the bottom one is cut by the clip rather than stopping short of it.
-        val laneCount = ceil((maxHeight + LaneGap) / (laneHeight + LaneGap)).toInt().coerceAtLeast(1)
+        val laneCount = ceil((maxHeight + 3.dp) / (laneHeight + 3.dp)).toInt().coerceAtLeast(1)
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .clipToBounds(),
-            verticalArrangement = Arrangement.spacedBy(LaneGap),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             repeat(laneCount) {
@@ -66,7 +66,7 @@ internal fun LanePreview(rowHeightDp: Float, areaWidthDp: Float, insetFraction: 
                         .width(laneWidth)
                         .height(laneHeight),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(LaneGap),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     val glyph = (laneHeight * LaneIconFraction).coerceAtLeast(1.dp)
                     Box(
@@ -95,8 +95,6 @@ internal fun previewInk(): Color = LocalMorphicColors.current.contentMuted.copy(
 /** Chrome that reads as secondary — an inactive tab, an action button. */
 @Composable
 internal fun previewFaint(): Color = LocalMorphicColors.current.contentMuted.copy(alpha = 0.22f)
-
-private val LaneGap = 3.dp
 
 /** How much of a lane's height the icon square takes. A row's icon fills it, less the row's own inset. */
 private const val LaneIconFraction = 0.7f

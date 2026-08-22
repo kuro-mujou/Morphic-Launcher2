@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -94,7 +95,7 @@ fun rememberTopActionState(
 ): TopActionState {
     val density = LocalDensity.current
     val collapsedPx = WindowInsets.statusBars.getTop(density).toFloat()
-    val expandedPx = with(density) { TopActionExpandedHeight.toPx() }
+    val expandedPx = with(density) { 96.dp.toPx() }
 
     var expanded by remember { mutableStateOf(false) }
     // Survives the effect below restarting, which is the point: it is armed *by* a hand-off and has to still be set

@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.AppRowCell
-import inkspire.morphic.core.designsystem.component.GroupInsetH
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
@@ -95,19 +94,19 @@ internal fun GestureActionScreen(
             style = MaterialTheme.typography.headlineSmall,
             color = colors.content,
             modifier = Modifier
-                .padding(horizontal = ScreenPadding)
-                .padding(top = ScreenPadding),
+                .padding(horizontal = 16.dp)
+                .padding(top = 16.dp),
         )
         GestureActionSearch(
             query = state.query,
             onQuery = viewModel::search,
-            modifier = Modifier.padding(ScreenPadding),
+            modifier = Modifier.padding(16.dp),
         )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(ChipGap),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
-                .padding(horizontal = ScreenPadding)
-                .padding(bottom = ChipGap),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 8.dp),
         ) {
             SectionChip("Apps") { scope.launch { listState.animateScrollToItem(appsAt) } }
             SectionChip("Shortcuts") { scope.launch { listState.animateScrollToItem(shortcutsAt) } }
@@ -181,7 +180,7 @@ internal fun GestureActionScreen(
 @Composable
 private fun Panel(content: @Composable ColumnScope.() -> Unit) {
     MorphicGroupPanel(
-        modifier = Modifier.padding(horizontal = GroupInsetH, vertical = PanelGap),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         content = content,
     )
 }
@@ -196,7 +195,7 @@ private fun AppChoiceRow(app: AppInfo, selected: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .background(if (selected) colors.accent else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = RowPadding, vertical = RowPaddingV),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         // **`AppRowCell` rather than a bitmap of our own**, so a picked icon is the one the user will actually see
         // on home — the same shaped, baked icon, through the same metrics. It draws its own label too.
@@ -204,7 +203,7 @@ private fun AppChoiceRow(app: AppInfo, selected: Boolean, onClick: () -> Unit) {
             app = app,
             modifier = Modifier
                 .weight(1f)
-                .height(AppRowHeight),
+                .height(52.dp),
             // The fill is the launcher's accent, so the label has to switch with it — a label fixed to the theme's
             // content color vanished into the selected row, leaving the icon on a blank bar.
             labelColor = if (selected) colors.onAccent else null,
@@ -224,8 +223,8 @@ private fun ShortcutChoiceRow(shortcut: AppShortcut, selected: Boolean, onClick:
             .fillMaxWidth()
             .background(if (selected) colors.accent else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(start = ShortcutIndent, end = RowPadding)
-            .padding(vertical = RowPaddingV),
+            .padding(start = 40.dp, end = 8.dp)
+            .padding(vertical = 4.dp),
     ) {
         // **Drawn as the app rasterized it, not run through `core:icon`.** A shortcut icon is the app's own
         // badge-and-glyph composition, which `AppShortcut` says in as many words — restyling it into one of our
@@ -235,11 +234,11 @@ private fun ShortcutChoiceRow(shortcut: AppShortcut, selected: Boolean, onClick:
             Image(
                 bitmap = icon.asImageBitmap(),
                 contentDescription = null,
-                modifier = Modifier.size(ShortcutIcon),
+                modifier = Modifier.size(24.dp),
             )
         } else {
             // A shortcut the platform gave us no icon for still needs its row to line up with the others.
-            Box(Modifier.size(ShortcutIcon))
+            Box(Modifier.size(24.dp))
         }
         Text(
             text = shortcut.label,
@@ -249,7 +248,7 @@ private fun ShortcutChoiceRow(shortcut: AppShortcut, selected: Boolean, onClick:
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = RowPadding),
+                .padding(start = 8.dp),
         )
         if (selected) SelectedMark()
     }
@@ -265,7 +264,7 @@ private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .background(if (selected) colors.accent else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = RowPaddingV),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
         Text(
             text = label,
@@ -273,7 +272,7 @@ private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
             color = if (selected) colors.onAccent else colors.content,
             modifier = Modifier
                 .weight(1f)
-                .padding(vertical = RowPadding),
+                .padding(vertical = 8.dp),
         )
         if (selected) SelectedMark()
     }
@@ -290,8 +289,8 @@ private fun SelectedMark() {
     val colors = LocalMorphicColors.current
     Box(
         Modifier
-            .padding(start = RowPadding)
-            .size(MarkSize)
+            .padding(start = 8.dp)
+            .size(8.dp)
             .clip(RoundedCornerShape(50))
             .background(colors.onAccent),
     )
@@ -307,7 +306,7 @@ private fun SelectedMark() {
 @Composable
 private fun GroupHeader(app: AppInfo) {
     val colors = LocalMorphicColors.current
-    val sizePx = with(LocalDensity.current) { GroupIcon.roundToPx() }
+    val sizePx = with(LocalDensity.current) { 28.dp.roundToPx() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -318,7 +317,7 @@ private fun GroupHeader(app: AppInfo) {
             component = app.componentKey,
             contentDescription = null,
             sizePx = sizePx,
-            modifier = Modifier.size(GroupIcon),
+            modifier = Modifier.size(28.dp),
         )
         Text(
             text = app.label,
@@ -326,7 +325,7 @@ private fun GroupHeader(app: AppInfo) {
             color = colors.contentMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = RowPadding),
+            modifier = Modifier.padding(start = 8.dp),
         )
     }
 }
@@ -339,7 +338,7 @@ private fun BlockDivider() {
         Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .height(DividerThickness)
+            .height(1.dp)
             .background(colors.divider),
     )
 }
@@ -352,8 +351,8 @@ private fun SectionHeader(title: String) {
         style = MaterialTheme.typography.labelMedium,
         color = colors.contentMuted,
         modifier = Modifier
-            .padding(horizontal = GroupInsetH + RowPadding)
-            .padding(top = SectionGap, bottom = 4.dp),
+            .padding(horizontal = 16.dp + 8.dp)
+            .padding(top = 16.dp, bottom = 4.dp),
     )
 }
 
@@ -365,7 +364,7 @@ private fun SectionNote(text: String) {
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = colors.contentMuted,
-        modifier = Modifier.padding(RowPadding),
+        modifier = Modifier.padding(8.dp),
     )
 }
 
@@ -405,7 +404,7 @@ private fun SectionChip(label: String, onClick: () -> Unit) {
             .clip(RoundedCornerShape(50))
             .background(colors.surface)
             .clickable(onClick = onClick)
-            .padding(horizontal = ChipPaddingH, vertical = ChipPaddingV),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }
 
@@ -418,18 +417,3 @@ private val ItemGesture.label: String
         ItemGesture.SWIPE_RIGHT -> "swipe right"
         ItemGesture.DOUBLE_TAP -> "double tap"
     }
-
-private val ScreenPadding = 16.dp
-private val PanelGap = 4.dp
-private val RowPadding = 8.dp
-private val AppRowHeight = 52.dp
-private val RowPaddingV = 4.dp
-private val ShortcutIndent = 40.dp
-private val ShortcutIcon = 24.dp
-private val GroupIcon = 28.dp
-private val DividerThickness = 1.dp
-private val MarkSize = 8.dp
-private val SectionGap = 16.dp
-private val ChipGap = 8.dp
-private val ChipPaddingH = 14.dp
-private val ChipPaddingV = 8.dp

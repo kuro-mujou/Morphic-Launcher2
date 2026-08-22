@@ -19,22 +19,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.icon.PreviewBackground
 
-/** The swatch's own corner. Small enough to read as a tile rather than as a pill at this size. */
-private val SwatchCorner = 8.dp
-
-/**
- * The swatch's side — what is **drawn**, not what is pressed.
- *
- * It stood alone and was its own press target until `StudioViewButtons` put it on a pill beside the reset-view
- * button; the press target is that button's full slot now, and this is the mark inside it. Which is why it matches
- * `GlyphSide` rather than filling the slot: the two halves of that pill are a picture and a glyph, and they read as
- * one control only while they are the same size.
- */
-private val SwatchSide = 20.dp
-
-/** One square of the swatch's checkerboard — small enough that the pattern still reads at [SwatchSide]. */
-private val SwatchCheckerSquare = 4.dp
-
 /**
  * The swatch's outline, and **the reason it is gray rather than [StudioContentColor]**: it is drawn over a swatch the
  * user can cycle to white, and white-on-white is no border at all. The checkerboard's own dark gray is reused for
@@ -62,7 +46,7 @@ fun BackgroundCycleButton(
     BackgroundSwatch(
         background = background.next(),
         modifier = modifier
-            .size(SwatchSide)
+            .size(20.dp)
             .clickable(onClick = onClick),
     )
 }
@@ -85,10 +69,10 @@ fun BackgroundCycleButton(
 fun BackgroundSwatch(
     background: PreviewBackground,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(SwatchCorner),
+    shape: Shape = RoundedCornerShape(8.dp),
     borderWidth: Dp = 1.dp,
 ) {
-    val checkerPx = with(LocalDensity.current) { SwatchCheckerSquare.toPx() }
+    val checkerPx = with(LocalDensity.current) { 4.dp.toPx() }
 
     // No content: the tile *is* the drawing, and its size is the caller's — so one swatch serves this button and
     // whatever a future presets row wants.

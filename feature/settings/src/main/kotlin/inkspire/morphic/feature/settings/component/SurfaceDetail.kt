@@ -30,15 +30,6 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
-/** Provisional spacing — placeholders, as everywhere else in this module. */
-private val ScreenPadding = 20.dp
-
-/**
- * How wide the preview column is in landscape — a fixed dp, because the preview draws a cell at its **true** size, so
- * the column has to be wide enough to hold one rather than a share of the pane.
- */
-private val LandscapePreviewWidth = 220.dp
-
 /** The pinned heading over the icon group. */
 private const val IconSectionTitle = "Icon & text"
 
@@ -109,8 +100,8 @@ private fun PortraitDetail(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = ScreenPadding)
-                    .padding(top = ScreenPadding, bottom = groupGap(hasIconGroup)),
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 20.dp, bottom = groupGap(hasIconGroup)),
             ) {
                 layout()
             }
@@ -120,18 +111,18 @@ private fun PortraitDetail(
             Column(modifier = Modifier
                 .fillMaxWidth()
                 .background(colors.background)) {
-                IconSectionHeader(onReroll, Modifier.padding(horizontal = ScreenPadding))
+                IconSectionHeader(onReroll, Modifier.padding(horizontal = 20.dp))
                 preview(Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = ScreenPadding))
+                    .padding(horizontal = 20.dp))
             }
         }
         item(key = "icon-controls") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = ScreenPadding)
-                    .padding(bottom = ScreenPadding),
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 20.dp),
             ) {
                 icons()
             }
@@ -159,8 +150,8 @@ private fun LandscapeDetail(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = ScreenPadding)
-                    .padding(top = ScreenPadding, bottom = groupGap(hasIconGroup)),
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 20.dp, bottom = groupGap(hasIconGroup)),
             ) {
                 layout()
             }
@@ -172,7 +163,7 @@ private fun LandscapeDetail(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(colors.background)
-                    .padding(horizontal = ScreenPadding)
+                    .padding(horizontal = 20.dp)
                     .onSizeChanged { headerHeightPx = it.height },
             )
         }
@@ -181,20 +172,20 @@ private fun LandscapeDetail(
                 modifier = Modifier
                     .fillParentMaxHeight()
                     .fillMaxWidth()
-                    .padding(top = headerHeight, bottom = ScreenPadding),
+                    .padding(top = headerHeight, bottom = 20.dp),
             ) {
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = ScreenPadding),
+                        .padding(horizontal = 20.dp),
                 ) {
                     icons()
                 }
                 preview(Modifier
-                    .width(LandscapePreviewWidth)
-                    .padding(end = ScreenPadding))
+                    .width(220.dp)
+                    .padding(end = 20.dp))
             }
         }
     }
@@ -208,7 +199,7 @@ private fun LandscapeDetail(
  * reader sees the sum. The padding is owed only when this group is the last thing in the pane, which is the widget
  * area: a zone of widgets has no icons to size, so nothing follows and the list would otherwise end flush.
  */
-private fun groupGap(hasIconGroup: Boolean): Dp = if (hasIconGroup) 0.dp else ScreenPadding
+private fun groupGap(hasIconGroup: Boolean): Dp = if (hasIconGroup) 0.dp else 20.dp
 
 /**
  * The pinned heading over the icon group, with the shuffle beside it.

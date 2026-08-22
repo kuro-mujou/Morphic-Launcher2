@@ -18,12 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.MorphicColors
 
-/** Track height shared by [MorphicSlider] and [MorphicRangeSlider], fed to M3's `SliderDefaults.Track` slot. */
-internal val MorphicTrackHeight = 6.dp
-
-private val ThumbDiameter = 18.dp
-private val ThumbActive = 22.dp
-
 /**
  * The shared monochrome slider thumb: a circle in the `thumb` color that springs larger on press / drag /
  * focus via the Expressive motion spring. Used for the single [MorphicSlider] and for each thumb of
@@ -40,7 +34,7 @@ internal fun MorphicSliderThumb(
     val dragged by interactionSource.collectIsDraggedAsState()
     val focused by interactionSource.collectIsFocusedAsState()
     val diameter by animateDpAsState(
-        targetValue = if ((pressed || dragged || focused) && enabled) ThumbActive else ThumbDiameter,
+        targetValue = if ((pressed || dragged || focused) && enabled) 22.dp else 18.dp,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "MorphicSliderThumb",
     )

@@ -79,9 +79,9 @@ internal fun BackdropPreview(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(PreviewHeight)
+                .height(168.dp)
                 .graphicsLayer { blendMode = BlendMode.Src }
-                .padding(vertical = PreviewPadding),
+                .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -91,11 +91,11 @@ internal fun BackdropPreview(
                     // `refracts = true`, unlike the full-screen frost: a lens needs an edge to bend light at, and this
                     // card has four. It is the whole reason liquid glass has a preview worth looking at.
                     .wallpaperBackdrop(
-                        shape = RoundedCornerShape(CardCorner),
+                        shape = RoundedCornerShape(20.dp),
                         effect = effect,
                         scrimColor = colors.surfaceElevated,
                     )
-                    .padding(CardPadding),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
                 // Text, because legibility over a photograph is what the effect is *for* — a bare rectangle of glass
@@ -115,16 +115,8 @@ internal fun BackdropPreview(
     }
 }
 
-/** Tall enough to read a two-line card against the wallpaper around it, short enough to pin without eating the pane. */
-private val PreviewHeight = 168.dp
-
-/** Breathing room so the punched wallpaper reads as *around* the card rather than as the card's own edge. */
-private val PreviewPadding = 12.dp
-
 /** The card, at roughly the width a context menu takes. */
 private const val CardWidthFraction = 0.8f
-private val CardCorner = 20.dp
-private val CardPadding = 16.dp
 
 /** The subtitle sits under the title in the same white, softened — the launcher's own chrome over glass. */
 private const val SubtitleAlpha = 0.75f

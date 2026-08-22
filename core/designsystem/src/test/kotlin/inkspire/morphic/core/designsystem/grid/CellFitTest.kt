@@ -1,8 +1,6 @@
 package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.cell.CategoryCardSpacing
-import inkspire.morphic.core.designsystem.cell.CellPadH
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.cellIconLayout
 import inkspire.morphic.core.model.AppsCardGrid
@@ -49,7 +47,7 @@ class CellFitTest {
         assertEquals(32f, minCellWidthDp(metrics), 0.01f)
         // Which is to say: the smallest cell's inner width is exactly the guardrail, so an icon clamped to its floor
         // fits it exactly rather than overflowing.
-        assertEquals(metrics.minIconDp.value, minCellWidthDp(metrics) - CellPadH.value * 2, 0.01f)
+        assertEquals(metrics.minIconDp.value, minCellWidthDp(metrics) - 4.dp.value * 2, 0.01f)
     }
 
     @Test
@@ -125,7 +123,7 @@ class CellFitTest {
             val chosen = metrics.copy(iconPercent = percent, showLabel = true)
             val height = cellHeightDp(cellWidth, chosen, labelHeight)
             // What the height was derived for: the fraction of the inner width, inside the guardrails.
-            val intended = (cellWidth - CellPadH.value * 2) * percent
+            val intended = (cellWidth - 4.dp.value * 2) * percent
             val expected = intended.coerceIn(chosen.minIconDp.value, chosen.maxIconDp.value)
 
             // What the cell actually draws, given the metrics `derivedCell` hands it.
@@ -316,7 +314,7 @@ class CellFitTest {
         // `CellFit`'s ordinary inversion, applied to a tile holding four icons rather than a cell holding one.
         // Two icons at the guardrail, plus the gap between lanes that a column fit does not otherwise account for.
         val bare = cardMinCell(metrics, CardChrome())
-        assertEquals(2f * metrics.minIconDp.value + CategoryCardSpacing.value, bare.widthDp)
+        assertEquals(2f * metrics.minIconDp.value + 12.dp.value, bare.widthDp)
         // A user who wants larger cards asks for larger *icons*, and the lane count follows — which is the whole point
         // of deriving the ceiling rather than picking a number that was wrong twice.
         val chunkyIcons = cardMinCell(chunky, CardChrome())

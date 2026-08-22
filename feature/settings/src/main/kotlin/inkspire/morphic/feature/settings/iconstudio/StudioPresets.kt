@@ -132,10 +132,10 @@ internal fun PresetsControls(
 
         PresetGrid(
             presets = presets,
-            spacing = PresetGridSpacing,
-            tileMax = PresetTileMax,
+            spacing = 8.dp,
+            tileMax = 96.dp,
             modifier = Modifier
-                .heightIn(max = PresetGridMaxHeight)
+                .heightIn(max = 240.dp)
                 .verticalScroll(rememberScrollState()),
         ) { preset, cell ->
             PresetTile(
@@ -193,8 +193,8 @@ private fun PresetTile(
                 // The ring above the clip, as everywhere else in this studio: both are the same rounded rect, and a
                 // rounded clip is a hardware outline clip with no antialiasing, so from inside one a ring loses the
                 // corners it traces.
-                .then(if (renaming) Modifier.border(2.dp, StudioContentColor, PresetTileShape) else Modifier)
-                .clip(PresetTileShape)
+                .then(if (renaming) Modifier.border(2.dp, StudioContentColor, RoundedCornerShape(12.dp)) else Modifier)
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color.White.copy(alpha = 0.06f))
                 .combinedClickable(
                     onClick = { if (menu) menu = false else onLoad() },
@@ -216,7 +216,7 @@ private fun PresetTile(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(PresetTileShape)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color.Black.copy(alpha = 0.72f)),
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -271,7 +271,7 @@ private fun PresetMenuRow(
             imageVector = icon,
             contentDescription = null,
             tint = StudioContentColor,
-            modifier = Modifier.size(PresetMenuGlyph),
+            modifier = Modifier.size(14.dp),
         )
         Text(
             text = label,
@@ -349,20 +349,5 @@ private fun derivedName(state: androidx.compose.foundation.text.input.TextFieldS
 
 /** Three across, which at panel width is a tile big enough to read an icon in. */
 
-/** Between tiles on both axes. */
-private val PresetGridSpacing = 8.dp
-
-/** How wide a tile may get, whatever share of the panel its cell was handed. */
-private val PresetTileMax = 96.dp
-
-/** As tall as the grid gets before it scrolls — the panel is glass over a canvas, not a page. */
-private val PresetGridMaxHeight = 240.dp
-
-/** The plate a preset is drawn on, and the shape the renaming ring traces. One value, since the two must agree. */
-private val PresetTileShape = RoundedCornerShape(12.dp)
-
 /** The icon's share of a tile — the plate is the ground it is read against, so it keeps a margin. */
 private const val PresetIconFraction = 0.72f
-
-/** A menu row's glyph, sized against the row's own word rather than the tile. */
-private val PresetMenuGlyph = 14.dp

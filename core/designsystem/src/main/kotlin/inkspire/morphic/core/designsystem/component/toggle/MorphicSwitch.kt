@@ -113,7 +113,7 @@ fun MorphicSwitch(
     Box(
         modifier = modifier
             .minimumInteractiveComponentSize()
-            .size(width = TrackWidth, height = ThumbDiameter),
+            .size(width = 34.dp, height = 20.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         // The rail: full width, thinner than the box, so the knob stands proud of it top and bottom. That overhang
@@ -121,7 +121,7 @@ fun MorphicSwitch(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(TrackHeight)
+                .height(14.dp)
                 .clip(CircleShape)
                 .background(trackColor),
         )
@@ -143,7 +143,7 @@ fun MorphicSwitch(
                     },
                 )
                 .offset { IntOffset(thumbOffset.roundToPx(), 0) }
-                .size(ThumbDiameter)
+                .size(20.dp)
                 .clip(CircleShape)
                 .background(thumbColor),
         )
@@ -216,17 +216,7 @@ fun MorphicSwitchRow(
     }
 }
 
-/**
- * Material 2's switch metrics, kept exactly: a 34×14 rail under a 20dp knob, so the knob travels the 14dp the rail
- * has left over and overhangs it by 3dp top and bottom.
- *
- * Taken rather than invented because the proportion is the whole point of this component — the numbers are what
- * make it read as M2 instead of as a smaller M3, and picking near-misses by eye is how it would end up neither.
- */
-private val TrackWidth = 34.dp
-private val TrackHeight = 14.dp
-private val ThumbDiameter = 20.dp
-private val ThumbTravel = TrackWidth - ThumbDiameter
+private val ThumbTravel = 34.dp - 20.dp
 
 /** Keeps the solid knob legible on the filled rail — at full strength `trackActive` and `thumb` are one color. */
 private const val OnTrackAlpha = 0.5f

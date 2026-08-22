@@ -112,10 +112,10 @@ internal fun ReflectivePreview(
                 .fillMaxHeight()
                 .clipToBounds()
         ) {
-            val gap = ReflectiveCellGap.toPx()
+            val gap = 3.dp.toPx()
             val cellW = ((size.width - gap * (drawnCols - 1f)) / drawnCols).coerceAtLeast(1f)
             val cellH = (cellW * aspect).coerceAtLeast(1f)
-            val corner = CornerRadius(ReflectiveCellCorner.toPx())
+            val corner = CornerRadius(3.dp.toPx())
             // One more row than fits, so the bottom one is cut off by the clip rather than stopping short of it.
             val rowCount = ceil((size.height + gap) / (cellH + gap)).toInt().coerceAtLeast(1)
             for (r in 0 until rowCount) {
@@ -138,9 +138,6 @@ internal fun ReflectivePreview(
         }
     }
 }
-
-private val ReflectiveCellGap = 3.dp
-private val ReflectiveCellCorner = 3.dp
 
 /** As [GridEditor]'s own cap, and for the same reason: a wide margin on a narrow screen must still draw something. */
 private const val MAX_REFLECTIVE_INSET = 0.4f
