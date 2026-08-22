@@ -31,6 +31,7 @@ internal fun showHomeItemMenu(
     onResize: (HomeResize) -> Unit,
     onOpenIconContainerSettings: (Long) -> Unit,
     onOpenWidgetContainerSettings: (Long) -> Unit,
+    onOpenGestures: (HomeItem) -> Unit,
 ) {
     when (item) {
         is HomeItem.App -> menuHost?.showApp(
@@ -38,6 +39,11 @@ internal fun showHomeItemMenu(
             label = item.info.label,
             anchor = anchor,
             surfaceActions = listOf(
+                // **Offered on the two icon items and nowhere else.** A widget owns the whole of its own area, so a
+                // swipe across it is the widget's; a container is a page of items rather than one, and a swipe on it
+                // already means something. An app and a folder are single icons a finger can pull, which is what a
+                // per-item gesture is.
+                MenuAction("Gestures") { onOpenGestures(item) },
                 MenuAction("Remove") {
                     viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
                 },
@@ -80,6 +86,7 @@ internal fun showHomeItemMenu(
             title = item.folder.label.ifBlank { UnnamedFolder },
             anchor = anchor,
             actions = listOf(
+                MenuAction("Gestures") { onOpenGestures(item) },
                 MenuAction("Remove folder") {
                     viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
                 },
@@ -119,3 +126,19 @@ internal fun showHomeItemMenu(
         )
     }
 }
+
+/**
+ * What a menu — or the sheet one of its rows opens — calls this item.
+ *
+ * Shared so the Gestures sheet cannot name an item differently from the menu it was opened from, which is the same
+ * reason `SettingsNavRow` resolves its title through `SettingsSection.meta`. Only the two icon items are offered
+ * gestures, but every case is answered so a caller cannot be handed a blank title by a variant nobody thought about.
+ */
+internal val HomeItem.menuLabel: String
+    get() = when (this) {
+        is HomeItem.App -> info.label
+        is HomeItem.Folder -> folder.label.ifBlank { UnnamedFolder }
+        is HomeItem.Widget -> info.label.ifBlank { UnnamedWidget }
+        is HomeItem.IconContainer -> IconContainerTitle
+        is HomeItem.WidgetContainer -> WidgetContainerTitle
+    }

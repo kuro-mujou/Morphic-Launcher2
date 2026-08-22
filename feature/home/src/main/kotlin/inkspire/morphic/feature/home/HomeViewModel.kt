@@ -18,6 +18,7 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
@@ -346,7 +347,23 @@ class HomeViewModel(
                 main = configured.main,
                 side = configured.side,
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
+        }
+            // Joined outside the combine above, which is already at its five-argument limit — and correctly so:
+            // this is keyed by neither the device nor the layout, so nesting it inside would re-subscribe it on
+            // every rotation and every pairing change. The same shape `AppsSectionViewModel` uses for its bound
+            // layouts.
+            .combine(settingsRepository.homeItemGestures) { base, gestures -> base.copy(itemGestures = gestures) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
+
+    /**
+     * Replaces the swipe directions [item] has taken for itself; an empty set clears them.
+     *
+     * **Home only.** A side surface passes no claimed directions at all, so a swipe there always reaches the pan —
+     * see `ItemSwipeClaim`.
+     */
+    fun setItemGestures(item: GridItem, directions: Set<SwipeDirection>) {
+        viewModelScope.launch { settingsRepository.setItemGestures(item, directions) }
+    }
 
     /** Layout writes dispatched but not yet seen land — see the store collector in [init]. */
     private var writesInFlight = 0

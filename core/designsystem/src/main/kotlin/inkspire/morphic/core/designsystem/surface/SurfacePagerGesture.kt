@@ -11,10 +11,77 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.SwipeDirection
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+/**
+ * Which way the **finger** is travelling, which is what an item's gestures are named for.
+ *
+ * Deliberately not the edge being opened: those are opposites, since a finger travelling right drags HOME rightward
+ * and so opens the surface parked on the *left*. Asking the item with an edge would invert every assignment.
+ *
+ * Used to ask [ItemSwipeClaim] whether the pressed item has taken this direction for itself. That question is a
+ * lookup rather than a race — the item published its set at the down — which is the whole point: the pan always
+ * reaches its slop first, so an item could never win one. A claimed direction is handed back whole, nothing is
+ * consumed, and the item goes on to recognize the swipe at its own slop exactly as it would with no pan present.
+ */
+private fun fingerSwipe(horizontal: Boolean, accX: Float, accY: Float): SwipeDirection = when {
+    horizontal && accX > 0f -> SwipeDirection.RIGHT
+    horizontal -> SwipeDirection.LEFT
+    accY > 0f -> SwipeDirection.DOWN
+    else -> SwipeDirection.UP
+}
+
+/**
+ * **Drives the pan from one coroutine draining a running total, rather than one launch per pointer event.**
+ *
+ * `dragXBy` is `suspend` only because `Animatable.snapTo` takes the animatable's `MutatorMutex`. Launched once per
+ * event, a dozen of them contend for that lock; each loser resumes through the composition dispatcher, which hands
+ * out its queue at frame boundaries. So *n* touch events became roughly *n* frames of backlog — the surface held
+ * still while the queue drained and then landed on the finger at once. A flick is two or three events and never
+ * showed it; a slow drag is dozens, which is why it got worse the slower the swipe.
+ *
+ * Summing also makes the backlog self-correcting: several events inside one frame collapse into a single `snapTo`
+ * of their total, which is the only value that frame could have drawn anyway.
+ *
+ * One per gesture, and it needs no synchronization — every caller is the pointer loop on the main thread.
+ */
+private class PanPump(private val scope: CoroutineScope, private val state: SurfacePagerState) {
+
+    private var pending = 0f
+    private var job: Job? = null
+
+    /** Adds [delta] to the total and starts the drain if it is not already running. */
+    fun add(axis: PanAxis?, delta: Float) {
+        if (axis == null) return
+        pending += delta
+        if (job?.isActive == true) return
+        job = scope.launch {
+            // Re-read each turn: more may have arrived while the previous `snapTo` held the lock.
+            while (pending != 0f) {
+                val next = pending
+                pending = 0f
+                when (axis) {
+                    PanAxis.HORIZONTAL -> state.dragXBy(next)
+                    PanAxis.VERTICAL -> state.dragYBy(next)
+                }
+            }
+        }
+    }
+
+    /**
+     * Waits for the drain to finish — **what a settle must do before it springs.** A spring started while a
+     * `snapTo` is still queued would animate from a position the finger has already left, and the drain would then
+     * pull the value out from under it.
+     */
+    suspend fun join() {
+        job?.join()
+    }
+}
 
 /**
  * How far past [slop] this accumulated travel reached — the drag the pan owes on the event it claims.
@@ -98,7 +165,8 @@ fun Modifier.surfacePagerGesture(
     enabled: () -> Boolean = { true },
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
-    pointerInput(state) {
+    val itemClaim = LocalItemSwipeClaim.current
+    pointerInput(state, itemClaim) {
         val touchSlop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -129,36 +197,7 @@ fun Modifier.surfacePagerGesture(
             var accY = 0f
             val tracker = VelocityTracker()
 
-            // **The pan is driven by one coroutine that drains a running total, not by one launch per event** —
-            // and that is what a slow swipe was stalling on.
-            //
-            // `dragXBy` is `suspend` because `Animatable.snapTo` takes the animatable's `MutatorMutex`. Launched
-            // per pointer event, a dozen of them contend for that lock; each loser suspends and is resumed through
-            // the composition dispatcher, which hands out its queue at frame boundaries. So *n* touch events became
-            // roughly *n* frames of backlog: the surface sat still while the queue drained and then landed on the
-            // finger all at once. A flick is two or three events and never showed it; a slow drag is dozens, which
-            // is why this got worse the slower you moved.
-            //
-            // Summing instead of queueing also makes the backlog self-correcting: several events arriving inside
-            // one frame collapse into a single `snapTo` of their total, which is the only value that frame could
-            // have drawn anyway.
-            var pending = 0f
-            var pump: Job? = null
-            fun pumpPending() {
-                if (pump?.isActive == true) return
-                pump = scope.launch {
-                    // Re-read each turn: more may have arrived while the previous `snapTo` held the lock.
-                    while (pending != 0f) {
-                        val delta = pending
-                        pending = 0f
-                        when (axis) {
-                            PanAxis.HORIZONTAL -> state.dragXBy(delta)
-                            PanAxis.VERTICAL -> state.dragYBy(delta)
-                            null -> Unit
-                        }
-                    }
-                }
-            }
+            val pump = PanPump(scope, state)
 
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -185,6 +224,8 @@ fun Modifier.surfacePagerGesture(
                     // a claim that is dropped mid-gesture still leaves a pan possible.
                     if ((abs(accX) > touchSlop || abs(accY) > touchSlop) && enabled()) {
                         val horizontal = abs(accX) >= abs(accY)
+                        // The item under the finger is asked before the pan takes anything — see [fingerSwipe].
+                        if (itemClaim?.claims(fingerSwipe(horizontal, accX, accY)) == true) break
                         if (activeAxis != null) {
                             // A surface is open (or mid-transition): only a swipe along that axis is ours — it
                             // drags back toward HOME. A perpendicular swipe is left unclaimed, and the release's
@@ -253,8 +294,7 @@ fun Modifier.surfacePagerGesture(
                         null -> 0f
                     }
                     justClaimed = false
-                    pending += step
-                    pumpPending()
+                    pump.add(axis, step)
                 }
             }
 
@@ -268,12 +308,12 @@ fun Modifier.surfacePagerGesture(
                     // value out from under it.
                     PanAxis.HORIZONTAL -> {
                         settled = true
-                        scope.launch { pump?.join(); state.settleX(startX, -velocity.x) }
+                        scope.launch { pump.join(); state.settleX(startX, -velocity.x) }
                     }
 
                     PanAxis.VERTICAL -> {
                         settled = true
-                        scope.launch { pump?.join(); state.settleY(startY, -velocity.y) }
+                        scope.launch { pump.join(); state.settleY(startY, -velocity.y) }
                     }
 
                     null -> Unit
@@ -282,7 +322,7 @@ fun Modifier.surfacePagerGesture(
 
             // A release that never claimed (a tap, or a gesture handed to a child) re-settles both axes so the
             // pan never rests mid-transition.
-            if (!settled) scope.launch { pump?.join(); state.settleToNearest() }
+            if (!settled) scope.launch { pump.join(); state.settleToNearest() }
         }
     }
 }

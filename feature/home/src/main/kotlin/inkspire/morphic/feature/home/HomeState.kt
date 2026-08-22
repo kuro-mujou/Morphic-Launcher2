@@ -11,6 +11,7 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.data.settings.HomeItemGestures
 import inkspire.morphic.core.model.Folder as FolderModel
 import inkspire.morphic.core.model.IconContainer as IconContainerModel
 import inkspire.morphic.core.model.WidgetContainer as WidgetContainerModel
@@ -235,6 +236,7 @@ data class HomeState(
     val main: HomeMainSizing? = null,
     val side: SideZoneSizing? = null,
     val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
+    val itemGestures: HomeItemGestures = HomeItemGestures.Default,
 )
 
 /**

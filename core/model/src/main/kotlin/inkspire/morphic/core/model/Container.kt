@@ -1,19 +1,24 @@
 package inkspire.morphic.core.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
  * Anything that can occupy a position on a home grid (main area or dock). These five are the "same level"
  * peers: apps and widgets are referenced directly; folders and containers by their id (defined in [Folder] /
  * [IconContainer] / [WidgetContainer]). Pair a [GridItem] with a [GridPlacement] to record where it sits.
+ *
+ * **Short [SerialName]s, because this now reaches a user's stored blob** — a per-item gesture assignment is keyed by
+ * one of these. Without them the discriminator is the fully-qualified class name, so moving or renaming a subtype
+ * would quietly orphan every assignment referring to it. `SearchPlacement` carries them for the same reason.
  */
 @Serializable
 sealed interface GridItem {
-    @Serializable data class App(val component: ComponentKey) : GridItem
-    @Serializable data class Widget(val appWidgetId: Int) : GridItem
-    @Serializable data class Folder(val folderId: Long) : GridItem
-    @Serializable data class IconContainer(val containerId: Long) : GridItem
-    @Serializable data class WidgetContainer(val containerId: Long) : GridItem
+    @Serializable @SerialName("app") data class App(val component: ComponentKey) : GridItem
+    @Serializable @SerialName("widget") data class Widget(val appWidgetId: Int) : GridItem
+    @Serializable @SerialName("folder") data class Folder(val folderId: Long) : GridItem
+    @Serializable @SerialName("icon_container") data class IconContainer(val containerId: Long) : GridItem
+    @Serializable @SerialName("widget_container") data class WidgetContainer(val containerId: Long) : GridItem
 }
 
 /**

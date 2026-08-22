@@ -1,10 +1,9 @@
 package inkspire.morphic.core.designsystem.drag
 
 import androidx.compose.ui.geometry.Offset
+import inkspire.morphic.core.model.SwipeDirection
 
 /** A cardinal swipe direction, used for the press-and-swipe custom action on an item. */
-enum class SwipeDirection { UP, DOWN, LEFT, RIGHT }
-
 /**
  * A pointer event fed to [ItemGestureMachine], already reduced to what the machine cares about. The Compose
  * modifier (built next) translates raw `PointerInputChange`s and the long-press timer into these.

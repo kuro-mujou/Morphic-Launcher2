@@ -7,9 +7,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
-import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.SwipeDirection
 
 /**
  * One draggable coordinate cell — the per-item wiring every free-placement surface repeats, shared by the

@@ -11,6 +11,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import inkspire.morphic.core.model.SwipeDirection
 
 /**
  * **Claims on the launcher's surface-switching swipe** — who, right now, has a better use for the finger than
@@ -130,3 +131,53 @@ fun Modifier.claimSurfaceGestureWhilePressed(): Modifier {
         }
     }
 }
+
+
+/**
+ * **The swipe directions the item under the finger has taken for itself** — the pan's question, not the item's
+ * claim on the whole gesture.
+ *
+ * [SurfaceGestureLock] answers "does anything want this finger more than the pan does", and it is answered *after*
+ * an item has committed: from the long-press onward. A per-item swipe gesture has to be settled far earlier than
+ * that and cannot be settled the same way. The pan claims at the platform slop (~8dp) and an item recognizes its
+ * own swipe at 20dp, so an item can never win a race to claim — by the time it knows its direction the pan has
+ * consumed and `ItemGestureEvent.TakenByParent` has already stood it down.
+ *
+ * **So the pan asks instead of the item racing.** An item publishes the directions it would take at the *down*,
+ * where the answer is already known — it is the `edgeActions` it was composed with, not a measurement — and
+ * `surfacePagerGesture` checks its own direction against that set at the moment it would claim. A claimed
+ * direction hands the gesture back before the pan consumes anything; an unclaimed one proceeds exactly as it does
+ * with no item there at all. **Neither branch waits for the other**, which is what keeps the surface animation
+ * starting at slop rather than at 20dp.
+ *
+ * **A plain `var`, not snapshot state**, for [ScrollEdgeSlot]'s reason: the only reader is a pointer callback, so a
+ * write should invalidate nothing. Nothing composes against this.
+ *
+ * **One holder, last down wins.** A second finger landing on another item overwrites the first's directions rather
+ * than merging them. Two items being pressed at once is not a gesture this launcher has, and a union would let an
+ * item block a direction it does not own.
+ *
+ * Hosted once at the shell beside [SurfaceGestureLock]. Null means nothing can claim — previews and the dev
+ * harness, where the pan behaves as it did before per-item gestures existed.
+ */
+class ItemSwipeClaim {
+
+    /** What the pressed item would take, or empty while nothing is pressed or the item takes nothing. */
+    private var directions: Set<SwipeDirection> = emptySet()
+
+    /** Publishes an item's claimed directions. Called at the down; pair with [release]. */
+    fun claim(claimed: Set<SwipeDirection>) {
+        directions = claimed
+    }
+
+    /** Clears the claim, on up or cancel. */
+    fun release() {
+        directions = emptySet()
+    }
+
+    /** Whether the pressed item would handle a swipe in [direction] itself. */
+    fun claims(direction: SwipeDirection): Boolean = direction in directions
+}
+
+/** The claim the surface pan consults before taking a swipe, or null outside the shell. */
+val LocalItemSwipeClaim = staticCompositionLocalOf<ItemSwipeClaim?> { null }

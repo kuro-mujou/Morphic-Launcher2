@@ -18,7 +18,6 @@ import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.RegisterDropZone
-import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.pager.EdgeFlipEffect
 import inkspire.morphic.core.designsystem.pager.LauncherPager
@@ -28,6 +27,7 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.SwipeDirection
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -68,7 +68,7 @@ fun <T> CoordinateDragPager(
     onLand: (DropOutcome) -> Unit,
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
-    edgeActions: Set<SwipeDirection> = emptySet(),
+    edgeActions: (T) -> Set<SwipeDirection> = { emptySet() },
     trackedItem: GridItem? = null,
     acceptsItem: (GridItem) -> Boolean = { true },
     onGeometryChange: (GridGeometry) -> Unit = {},
@@ -158,7 +158,7 @@ fun <T> CoordinateDragPager(
                     gestureConfig = gestureConfig,
                     onRelease = onRelease,
                     modifier = cellModifier,
-                    edgeActions = edgeActions,
+                    edgeActions = edgeActions(item),
                     tracksFinger = dragItem(item) == trackedItem,
                     onOpen = { onOpen(item) },
                     onShowMenu = { anchor -> onShowMenu(item, anchor) },

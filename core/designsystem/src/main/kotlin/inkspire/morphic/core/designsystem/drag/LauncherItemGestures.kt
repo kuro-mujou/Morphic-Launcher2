@@ -20,7 +20,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.toSize
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
+import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
+import inkspire.morphic.core.model.SwipeDirection
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -80,6 +82,12 @@ fun Modifier.launcherItemGestures(
     // every caller already goes through. Stable for the life of the shell, so the `pointerInput` below capturing it
     // once is correct.
     val surfaceLock = LocalSurfaceGestureLock.current
+
+    // **What this item would take for itself, published at the down so the pan can ask.** The item cannot win a
+    // race for a swipe — the pan claims at the platform slop and this contract at 20dp — so it does not race:
+    // `edgeActions` is known at composition, and the pan checks it against its own direction before claiming.
+    // See `ItemSwipeClaim`.
+    val swipeClaim = LocalItemSwipeClaim.current
 
     // **Taking the menu down is the contract's, not the caller's.** Every path that ends a menu — a drag lifting
     // out of it, a canceled gesture — is decided by the machine, so wiring it here means no surface can forget
@@ -163,6 +171,10 @@ fun Modifier.launcherItemGestures(
                     // canceled `pointerInput` coroutine (the node leaving the tree mid-drag) takes none of them, and
                     // a leaked claim would lock the surface swipe for the rest of the session.
                     try {
+                        // Only while this item has something to take. Publishing an empty set would still be
+                        // correct — the pan asks about one direction — but it would make every press overwrite
+                        // whatever a previous one left, and the release below already handles that.
+                        if (edgeActions.isNotEmpty()) swipeClaim?.claim(edgeActions)
                         perform(machine.onEvent(ItemGestureEvent.Down), local)
 
                         // The long-press timer runs beside the event loop; the machine ignores it if the gesture
@@ -239,6 +251,7 @@ fun Modifier.launcherItemGestures(
                         }
                         longPress.cancel()
                     } finally {
+                        if (edgeActions.isNotEmpty()) swipeClaim?.release()
                         releaseSurface()
                     }
                 }

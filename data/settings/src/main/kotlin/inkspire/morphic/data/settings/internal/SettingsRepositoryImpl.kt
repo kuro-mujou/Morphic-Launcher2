@@ -12,6 +12,7 @@ import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
@@ -19,6 +20,7 @@ import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.icon.IconAppearance
@@ -27,6 +29,7 @@ import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.GridOverride
+import inkspire.morphic.data.settings.HomeItemGestures
 import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.IconPresets
@@ -156,6 +159,13 @@ private val AppsChromeSlice = SettingsSlice(
     default = AppsChrome.Default,
 )
 
+/** Which swipe directions each home item has taken for itself: one key, one blob, sparse inside. */
+private val HomeItemGesturesSlice = SettingsSlice(
+    name = "home_item_gestures",
+    serializer = serializer<HomeItemGestures>(),
+    default = HomeItemGestures.Default,
+)
+
 /** How the launcher's three pagers page: one key, one blob, sparse inside. */
 private val SurfacePagingSlice = SettingsSlice(
     name = "surface_paging",
@@ -217,6 +227,11 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement) =
         update(AppsChromeSlice) { withSearch(layout, placement) }
+
+    override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
+
+    override suspend fun setItemGestures(item: GridItem, directions: Set<SwipeDirection>) =
+        update(HomeItemGesturesSlice) { withDirections(item, directions) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }

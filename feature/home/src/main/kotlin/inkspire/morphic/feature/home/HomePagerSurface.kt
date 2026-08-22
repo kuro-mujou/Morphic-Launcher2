@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.home
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
@@ -56,6 +58,7 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
@@ -97,7 +100,6 @@ internal const val UnnamedWidget = "Widget"
  */
 internal const val IconContainerTitle = "Icon container"
 internal const val WidgetContainerTitle = "Widget container"
-
 
 /**
  * A resize in progress on one of home's coordinate zones — **the resolved outcome, not the finger's request**.
@@ -505,6 +507,23 @@ internal fun HomePagerSurface(
     // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
     var widgetPickerOpen by remember { mutableStateOf(false) }
 
+    // The item whose Gestures sheet is open, or null. Held here rather than in the menu because the menu is a
+    // transient host and the sheet outlives it — the menu closes as the row is chosen.
+    var gesturesFor by remember { mutableStateOf<HomeItem?>(null) }
+
+    // **What each item has taken, and what happens when it fires.** Both zones read the one resolver, so the dock
+    // and the pager cannot disagree about an item's claims — and the claims are what the surface pan asks about
+    // before it takes a swipe of its own, so a disagreement would show up as a swipe that opens a surface on one
+    // zone and not the other.
+    val claimedOn: (HomeItem) -> Set<SwipeDirection> = { state.itemGestures.directionsOn(it.gridItem) }
+    val context = LocalContext.current
+    val fireGesture: (HomeItem, SwipeDirection) -> Unit = { item, direction ->
+        // A placeholder, and honest about being one: the action picker is unbuilt, so there is nothing to run. What
+        // this confirms is the part that was hard — that the swipe reached the item at all instead of panning the
+        // surface away.
+        Toast.makeText(context, "${item.menuLabel}: ${direction.name.lowercase()}", Toast.LENGTH_SHORT).show()
+    }
+
     val menuHost = LocalMenuHost.current
     val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
         showHomeItemMenu(
@@ -516,6 +535,7 @@ internal fun HomePagerSurface(
             onResize = { resizing = it },
             onOpenIconContainerSettings = onOpenIconContainerSettings,
             onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
+            onOpenGestures = { gesturesFor = it },
         )
     }
 
@@ -590,6 +610,8 @@ internal fun HomePagerSurface(
             side = { zoneModifier ->
                 val dockResize = resizePreviewIn(HomeZone.DOCK)
                 CoordinateDragGrid(
+                    edgeActions = claimedOn,
+                    onEdgeAction = fireGesture,
                     items = dockItems,
                     config = dockConfig,
                     coordinator = coordinator,
@@ -622,6 +644,8 @@ internal fun HomePagerSurface(
             main = { zoneModifier ->
                 val mainResize = resizePreviewIn(HomeZone.MAIN)
                 CoordinateDragPager(
+                    edgeActions = claimedOn,
+                    onEdgeAction = fireGesture,
                     items = mainItems,
                     config = config,
                     pagerState = pagerState,
@@ -890,6 +914,25 @@ internal fun HomePagerSurface(
                     widgetPickerOpen = false
                     viewModel.createWidgetContainer(HomeZone.MAIN, config)
                 },
+            )
+        }
+
+        // **The gestures sheet, in the overlay stack rather than beside the menu that opens it.** Composed next to
+        // `showMenu` it drew *under* the grids — a sibling earlier in the same `Box` paints first, so a screenful of
+        // icons rendered straight over the panel. Every other sheet on this surface is stacked here for the same
+        // reason.
+        gesturesFor?.let { target ->
+            val taken = state.itemGestures.directionsOn(target.gridItem)
+            HomeItemGestureSheet(
+                label = target.menuLabel,
+                assigned = taken,
+                onToggle = { direction ->
+                    viewModel.setItemGestures(
+                        item = target.gridItem,
+                        directions = if (direction in taken) taken - direction else taken + direction,
+                    )
+                },
+                onDismiss = { gesturesFor = null },
             )
         }
     }

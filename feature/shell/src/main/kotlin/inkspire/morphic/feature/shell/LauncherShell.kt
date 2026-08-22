@@ -34,6 +34,8 @@ import inkspire.morphic.core.designsystem.menu.MenuAction
 import inkspire.morphic.core.designsystem.menu.MenuOverlay
 import inkspire.morphic.core.designsystem.surface.EjectToHome
 import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
+import inkspire.morphic.core.designsystem.surface.ItemSwipeClaim
+import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
@@ -130,6 +132,11 @@ fun LauncherShell(
         // consumption.
         val gestureLock = remember { SurfaceGestureLock() }
 
+        // **The finer half of the same question**, and hosted for the same reason: which *directions* the pressed
+        // item has taken for itself, so the pan can ask before it claims rather than the item racing a threshold it
+        // always loses. See `ItemSwipeClaim`.
+        val itemSwipeClaim = remember { ItemSwipeClaim() }
+
         // Back closes an open side surface and returns to HOME. Disabled when already on HOME so back falls through to
         // the system — on a launcher there is nowhere further to go, and swallowing it would trap the user.
         BackHandler(enabled = pagerState.openEdge != null) { scope.launch { pagerState.close() } }
@@ -216,6 +223,7 @@ fun LauncherShell(
             ),
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
+            LocalItemSwipeClaim provides itemSwipeClaim,
             LocalDragCoordinator provides coordinator,
             LocalMenuHost provides menuHost,
             LocalEjectToHome provides eject,

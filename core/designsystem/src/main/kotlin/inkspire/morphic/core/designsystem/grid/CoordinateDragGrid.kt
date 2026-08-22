@@ -18,12 +18,12 @@ import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.RegisterDropZone
-import inkspire.morphic.core.designsystem.drag.SwipeDirection
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.SwipeDirection
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -68,7 +68,10 @@ internal const val PUSH_DWELL_MS = 200L
  * @param onRelease a cell *of this grid* released the finger. The surface's own end-of-drag bookkeeping; the
  *   landing itself is [onLand]'s, and may be a different zone's [onLand] altogether.
  * @param modifier applied to the grid; pass sizing/padding here (geometry is measured *after* it).
- * @param edgeActions swipe directions a cell claims as press-and-swipe actions (empty → none).
+ * @param edgeActions the swipe directions *this* item claims as press-and-swipe actions (empty → none).
+ *   **Per item rather than per grid**, because the assignments it carries are a user's, made one icon at a time:
+ *   a grid-wide set would give every icon on the page whatever was assigned to one of them. It is also read by the
+ *   surface pan, which asks the pressed item what it has taken before claiming a swipe of its own.
  * @param trackedItem an item whose [placement] the finger is driving in place — a live resize. It skips the
  *   settle spring, for the reason [LauncherDragCell] states. The *placement* itself still comes from [placement],
  *   because who is being resized and where is entirely the surface's business; all this zone needs to know is
@@ -96,7 +99,7 @@ fun <T> CoordinateDragGrid(
     onLand: (DropOutcome) -> Unit,
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
-    edgeActions: Set<SwipeDirection> = emptySet(),
+    edgeActions: (T) -> Set<SwipeDirection> = { emptySet() },
     trackedItem: GridItem? = null,
     acceptsItem: (GridItem) -> Boolean = { true },
     onGeometryChange: (GridGeometry) -> Unit = {},
@@ -175,7 +178,7 @@ fun <T> CoordinateDragGrid(
                 gestureConfig = gestureConfig,
                 onRelease = onRelease,
                 modifier = cellModifier,
-                edgeActions = edgeActions,
+                edgeActions = edgeActions(item),
                 tracksFinger = dragItem(item) == trackedItem,
                 onOpen = { onOpen(item) },
                 onShowMenu = { anchor -> onShowMenu(item, anchor) },

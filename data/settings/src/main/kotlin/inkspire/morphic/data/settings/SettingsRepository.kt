@@ -5,12 +5,14 @@ import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
@@ -68,6 +70,18 @@ interface SettingsRepository {
 
     /** Sets where the APPS search field sits on [layout]; the other arrangements keep theirs. */
     suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement)
+
+    /**
+     * Which swipe directions each home item has taken for itself.
+     *
+     * Read by home when it composes its cells: an item's claimed set becomes the `edgeActions` its gesture contract
+     * is wired with, and is published to the surface pan so a claimed swipe is handed to the item rather than
+     * opening a side surface.
+     */
+    val homeItemGestures: Flow<HomeItemGestures>
+
+    /** Replaces [item]'s claimed directions. An empty set clears them, leaving nothing stored for that item. */
+    suspend fun setItemGestures(item: GridItem, directions: Set<SwipeDirection>)
 
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)

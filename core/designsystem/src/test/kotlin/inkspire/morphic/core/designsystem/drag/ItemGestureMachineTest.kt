@@ -1,6 +1,7 @@
 package inkspire.morphic.core.designsystem.drag
 
 import androidx.compose.ui.geometry.Offset
+import inkspire.morphic.core.model.SwipeDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
