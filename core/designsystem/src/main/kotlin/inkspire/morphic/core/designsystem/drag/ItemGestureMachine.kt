@@ -30,6 +30,13 @@ sealed interface ItemGestureEvent {
      * a drag. Two owners of one finger, which is what it looks like: the surface slides home while an icon comes up
      * under the thumb.
      *
+     * **Not only the pan.** Any ancestor that consumes stands the item down: the surface pan is seen on `Main`,
+     * since it runs on `Initial` ahead of this node, and a scroller or pager that consumes on `Main` is seen one
+     * pass later on `Final`. The second was thought unnecessary, because consumption settles a *swipe* by itself —
+     * the item reaches its slop, finds the movement taken and gives up. It does not settle the **timer**: a slow
+     * scroll drag travels under 20dp for the whole 400ms, so the machine is still `Pressed` when the long press
+     * fires and raises a menu on a row the user is scrolling past.
+     *
      * Sent only while the item does **not** own the finger; see `launcherItemGestures`. Once an item is swiping,
      * dragging or holding a menu it has the pan locked out, so this cannot arrive.
      */

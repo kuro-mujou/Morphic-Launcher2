@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -256,8 +257,11 @@ fun Modifier.launcherItemGestures(
                                 // the app**. It cost nothing only while the pan ran on the Main pass and could not
                                 // consume ahead of this node.
                                 if (change.positionChangedIgnoreConsumed()) {
-                                    // **Consumed by an ancestor means the surface pan took the gesture**, and the
-                                    // item stands down before its long-press can fire. This is the other half of
+                                    // **Consumed already means an `Initial`-pass ancestor took it** — the surface
+                                    // pan, which runs ahead of every descendant, so its claim reaches this node here
+                                    // on `Main`. A `Main`-pass ancestor has not acted yet and is caught on `Final`
+                                    // below; catching the pan *here* is what stops the item recognizing its own
+                                    // swipe on this very event and consuming first. This is the other half of
                                     // `SurfaceGestureLock`, which only ever ran the other way: an item that owns the
                                     // finger locks the pan out, while a pan that had already claimed could not tell
                                     // the item anything. The thresholds make that gap routine rather than rare — the
@@ -282,6 +286,23 @@ fun Modifier.launcherItemGestures(
                                     // Once the item owns the finger, stop anything else reacting to the same
                                     // movement — a parent pager or scroller, and an embedded View below.
                                     if (machine.phase.ownsFinger) change.consume()
+                                }
+
+                                // **`Final` is where a `Main`-pass ancestor becomes visible**, and without it the
+                                // long-press timer ran underneath a list that was already scrolling. Compose
+                                // dispatches `Initial` parent-to-child, `Main` child-to-parent, and `Final`
+                                // parent-to-child again — so a scroller that consumed on `Main`, *after* this node,
+                                // has still consumed by the time the same event comes back around.
+                                //
+                                // Consumption was thought to settle these on its own, and for a *swipe* it does:
+                                // the item reaches its own slop, finds the movement taken and stands down. It does
+                                // not settle the **timer**. A slow drag travels under 20dp for the whole 400ms, so
+                                // the machine is still `Pressed` when the long press fires and raises a menu on a
+                                // row the user is scrolling past. The timer was what needed telling.
+                                val settled = awaitPointerEvent(PointerEventPass.Final)
+                                    .changes.firstOrNull { it.id == pointerId }
+                                if (settled != null && settled.isConsumed && !machine.phase.ownsFinger) {
+                                    perform(machine.onEvent(ItemGestureEvent.TakenByParent), local)
                                 }
                             }
                         }
