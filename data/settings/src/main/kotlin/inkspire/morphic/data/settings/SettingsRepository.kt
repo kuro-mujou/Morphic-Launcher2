@@ -10,9 +10,9 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
-import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
@@ -80,8 +80,8 @@ interface SettingsRepository {
      */
     val homeItemGestures: Flow<HomeItemGestures>
 
-    /** Replaces [item]'s claimed directions. An empty set clears them, leaving nothing stored for that item. */
-    suspend fun setItemGestures(item: GridItem, directions: Set<SwipeDirection>)
+    /** Replaces [item]'s claimed gestures. An empty set clears them, leaving nothing stored for that item. */
+    suspend fun setItemGestures(item: GridItem, gestures: Set<ItemGesture>)
 
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)

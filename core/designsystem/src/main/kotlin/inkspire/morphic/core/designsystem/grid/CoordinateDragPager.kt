@@ -69,12 +69,14 @@ fun <T> CoordinateDragPager(
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: (T) -> Set<SwipeDirection> = { emptySet() },
+    doubleTap: (T) -> Boolean = { false },
     trackedItem: GridItem? = null,
     acceptsItem: (GridItem) -> Boolean = { true },
     onGeometryChange: (GridGeometry) -> Unit = {},
     onOpen: (T) -> Unit = {},
     onShowMenu: (T, anchorInRoot: Rect) -> Unit = { _, _ -> },
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
+    onDoubleTap: (T) -> Unit = {},
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
     val session = coordinator.session
@@ -159,10 +161,12 @@ fun <T> CoordinateDragPager(
                     onRelease = onRelease,
                     modifier = cellModifier,
                     edgeActions = edgeActions(item),
+                    doubleTap = doubleTap(item),
                     tracksFinger = dragItem(item) == trackedItem,
                     onOpen = { onOpen(item) },
                     onShowMenu = { anchor -> onShowMenu(item, anchor) },
                     onEdgeAction = { direction -> onEdgeAction(item, direction) },
+                    onDoubleTap = { onDoubleTap(item) },
                 ) { itemGestures ->
                     itemContent(item, Modifier.fillMaxSize(), itemGestures)
                 }

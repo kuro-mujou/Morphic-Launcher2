@@ -18,9 +18,9 @@ import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
-import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.icon.IconAppearance
@@ -230,8 +230,8 @@ internal class SettingsRepositoryImpl(
 
     override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
 
-    override suspend fun setItemGestures(item: GridItem, directions: Set<SwipeDirection>) =
-        update(HomeItemGesturesSlice) { withDirections(item, directions) }
+    override suspend fun setItemGestures(item: GridItem, gestures: Set<ItemGesture>) =
+        update(HomeItemGesturesSlice) { withGestures(item, gestures) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }

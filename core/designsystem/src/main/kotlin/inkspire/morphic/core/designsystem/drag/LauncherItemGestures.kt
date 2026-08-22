@@ -23,6 +23,7 @@ import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.model.SwipeDirection
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -50,8 +51,11 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param edgeActions the swipe directions this item handles as an edge action; swipes in other directions are
  *   released to the parent (pager / surface navigation) instead of being consumed. Empty (default) → the item
  *   claims no swipes, so every swipe flows to the parent.
+ * @param doubleTap this item has a double tap assigned, which is what arms the window a release waits out
+ *   before [onOpen] fires. False (default) keeps the immediate launch every other item has always had.
  * @param onOpen a completed tap.
  * @param onEdgeAction a press-and-swipe in a registered direction (custom action; a toast for now).
+ * @param onDoubleTap a second press inside the window on an item that has one assigned.
  * @param onSwipePull the finger has moved while a claimed swipe is in flight — the raw offset from the down, and
  *   the direction committed to. Null offset means the swipe ended and the item returns to rest, on release and on
  *   cancel alike. How far the item actually moves is the caller's: see [ItemGestureEffect.SwipeProgress].
@@ -68,8 +72,10 @@ import kotlin.time.Duration.Companion.milliseconds
 fun Modifier.launcherItemGestures(
     config: ItemGestureConfig,
     edgeActions: Set<SwipeDirection> = emptySet(),
+    doubleTap: Boolean = false,
     onOpen: () -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
+    onDoubleTap: () -> Unit = {},
     onSwipePull: (direction: SwipeDirection, offsetFromDown: Offset?) -> Unit = { _, _ -> },
     onShowMenu: (anchorInRoot: Rect) -> Unit,
     onBeginDrag: (rootPosition: Offset) -> Unit,
@@ -114,6 +120,7 @@ fun Modifier.launcherItemGestures(
     val currentOnOpen by rememberUpdatedState(onOpen)
     val currentOnEdgeAction by rememberUpdatedState(onEdgeAction)
     val currentOnSwipePull by rememberUpdatedState(onSwipePull)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
     val currentOnShowMenu by rememberUpdatedState(onShowMenu)
     val currentOnBeginDrag by rememberUpdatedState(onBeginDrag)
     val currentOnDragTo by rememberUpdatedState(onDragTo)
@@ -121,8 +128,8 @@ fun Modifier.launcherItemGestures(
     val currentOnCancelDrag by rememberUpdatedState(onCancelDrag)
 
     onGloballyPositioned { coordinates = it }
-        .pointerInput(config, edgeActions) {
-            val machine = ItemGestureMachine(config, edgeActions)
+        .pointerInput(config, edgeActions, doubleTap) {
+            val machine = ItemGestureMachine(config, edgeActions, doubleTap)
 
             fun rootOf(local: Offset): Offset = coordinates?.localToRoot(local) ?: local
 
@@ -167,6 +174,7 @@ fun Modifier.launcherItemGestures(
                         lastPull?.let { currentOnSwipePull(it, null) }
                         lastPull = null
                     }
+                    ItemGestureEffect.DoubleTapAction -> currentOnDoubleTap()
                     // The long-press has fired: from here the finger is this item's, whether it ends as a menu or
                     // becomes a drag. A drag arrives as `[DismissMenu, BeginDrag, …]` in one list, so the claim is
                     // taken again immediately after being dropped — which a count absorbs, and which nothing can
@@ -181,8 +189,17 @@ fun Modifier.launcherItemGestures(
             }
 
             coroutineScope {
+                // **The double-tap window, and it only ever runs on an item that has one assigned.** The
+                // machine parks in `AwaitingSecondTap` on release; this races the next press against the
+                // timeout, and whichever arrives first decides whether the tap was single or double. Held
+                // across iterations of the loop below because the gap between two taps *is* the gap between
+                // two gestures — there is no finger down to hang it on.
+                var window: Job? = null
+
                 while (true) {
                     val down = awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
+                    // A press inside the window is the second tap; the machine decides what that means.
+                    window?.cancel()
 
                     val pointerId: PointerId = down.id
                     var local = down.position
@@ -269,6 +286,13 @@ fun Modifier.launcherItemGestures(
                             }
                         }
                         longPress.cancel()
+                        // Only ever true where a double tap is assigned, so no other item pays for this.
+                        if (machine.phase == ItemGesturePhase.AwaitingSecondTap) {
+                            window = launch {
+                                delay(config.doubleTapWindowMillis.milliseconds)
+                                perform(machine.onEvent(ItemGestureEvent.DoubleTapTimeout), local)
+                            }
+                        }
                     } finally {
                         if (edgeActions.isNotEmpty()) swipeClaim?.release()
                         releaseSurface()

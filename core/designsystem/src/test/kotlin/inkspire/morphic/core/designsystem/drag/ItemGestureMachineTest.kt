@@ -18,6 +18,13 @@ class ItemGestureMachineTest {
     private fun machine(edgeActions: Set<SwipeDirection> = SwipeDirection.entries.toSet()) =
         ItemGestureMachine(ItemGestureConfig(touchSlopPx = slop, longPressTimeoutMillis = 400L), edgeActions)
 
+    /** An item whose owner assigned a double tap — the only kind whose launch waits. */
+    private fun doubleTapMachine() = ItemGestureMachine(
+        ItemGestureConfig(touchSlopPx = slop, longPressTimeoutMillis = 400L),
+        edgeActions = emptySet(),
+        doubleTap = true,
+    )
+
     private val wobble = Offset(3f, 3f)          // under slop
     private fun far(x: Float, y: Float) = Offset(x, y)  // past slop
 
@@ -327,6 +334,68 @@ class ItemGestureMachineTest {
         m.onEvent(ItemGestureEvent.Down)
         assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(30f, 2f))))
         assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(50f, 2f))))
+    }
+
+    // --- Double tap -------------------------------------------------------------------------------------------
+
+    /** The mitigation, stated as a test: an item with no double tap assigned still launches on release. */
+    @Test
+    fun `without a double tap assigned a release opens the item at once`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(listOf(ItemGestureEffect.OpenItem), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    @Test
+    fun `with one assigned the release waits instead of opening`() {
+        val m = doubleTapMachine()
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(ItemGesturePhase.AwaitingSecondTap, m.phase)
+    }
+
+    @Test
+    fun `a second press inside the window fires the double tap and no tap`() {
+        val m = doubleTapMachine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Up)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Down))
+        assertEquals(listOf(ItemGestureEffect.DoubleTapAction), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    /** The window closing is what turns the held-back tap into an ordinary one — late, but not lost. */
+    @Test
+    fun `the window closing opens the item`() {
+        val m = doubleTapMachine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Up)
+        assertEquals(listOf(ItemGestureEffect.OpenItem), m.onEvent(ItemGestureEvent.DoubleTapTimeout))
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    /** Pressing twice and then dragging is no longer a double tap, and firing one would act on a changed mind. */
+    @Test
+    fun `dragging out of the second press abandons the double tap`() {
+        val m = doubleTapMachine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Up)
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(40f, 0f))))
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Up))
+    }
+
+    /** The second press is an ordinary press in every way but what its release means. */
+    @Test
+    fun `holding the second press opens the menu`() {
+        val m = doubleTapMachine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Up)
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(listOf(ItemGestureEffect.ShowMenu), m.onEvent(ItemGestureEvent.LongPress))
+        assertEquals(ItemGesturePhase.MenuOpen, m.phase)
     }
 
 }

@@ -68,10 +68,12 @@ fun LauncherDragCell(
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
     edgeActions: Set<SwipeDirection> = emptySet(),
+    doubleTap: Boolean = false,
     tracksFinger: Boolean = false,
     onOpen: () -> Unit = {},
     onShowMenu: (anchorInRoot: Rect) -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
+    onDoubleTap: () -> Unit = {},
     content: @Composable (itemGestures: Modifier) -> Unit,
 ) {
     val isDragged = coordinator.session?.item == item
@@ -95,8 +97,10 @@ fun LauncherDragCell(
             Modifier.launcherItemGestures(
                 config = gestureConfig,
                 edgeActions = edgeActions,
+                doubleTap = doubleTap,
                 onOpen = onOpen,
                 onEdgeAction = onEdgeAction,
+                onDoubleTap = onDoubleTap,
                 onSwipePull = pull::onPull,
                 onShowMenu = onShowMenu,
                 onBeginDrag = { root -> coordinator.start(item, root) },

@@ -41,6 +41,9 @@ private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
  * the surface buried behind. The declarative form, because the reason is a piece of state — this composable being
  * on screen — rather than an event.
  *
+ * @param heightFraction how much of the screen the sheet takes, or **null to size it to its content** — which is
+ *   what a sheet with a fixed handful of rows wants. The `Box` bounds it either way, so wrapping cannot grow past
+ *   the screen.
  * @param onDismiss a tap on the scrim, and the default for [onBack].
  * @param onBack overridden by a sheet with somewhere to go back *to*: the widget picker's detail pane closes before
  *   the sheet does, so the two panes read as depth rather than as a swap.
@@ -50,7 +53,7 @@ internal fun LauncherBottomSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = onDismiss,
-    heightFraction: Float = SheetHeightFraction,
+    heightFraction: Float? = SheetHeightFraction,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     LockSurfaceGesture(locked = true)
@@ -70,7 +73,11 @@ internal fun LauncherBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(heightFraction)
+                // **Null wraps to the content**, for a sheet whose rows are countable. A fraction is right for the
+                // pickers, which are lists of unknown length and want a predictable window — but imposed on a short
+                // sheet it is a fixed box that silently clips whatever does not fit, and does so only at the font
+                // scales and densities nobody develops at.
+                .then(if (heightFraction != null) Modifier.fillMaxHeight(heightFraction) else Modifier)
                 .clip(SheetShape)
                 .wallpaperBackdrop(shape = SheetShape, scrimColor = colors.surfaceElevated)
                 // Swallows taps on the sheet itself, so they do not reach the scrim behind it and dismiss.

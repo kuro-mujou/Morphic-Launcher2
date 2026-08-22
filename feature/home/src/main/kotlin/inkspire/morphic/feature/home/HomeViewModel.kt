@@ -16,9 +16,9 @@ import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
-import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
@@ -356,13 +356,13 @@ class HomeViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
     /**
-     * Replaces the swipe directions [item] has taken for itself; an empty set clears them.
+     * Replaces the gestures [item] has taken for itself; an empty set clears them.
      *
      * **Home only.** A side surface passes no claimed directions at all, so a swipe there always reaches the pan —
      * see `ItemSwipeClaim`.
      */
-    fun setItemGestures(item: GridItem, directions: Set<SwipeDirection>) {
-        viewModelScope.launch { settingsRepository.setItemGestures(item, directions) }
+    fun setItemGestures(item: GridItem, gestures: Set<ItemGesture>) {
+        viewModelScope.launch { settingsRepository.setItemGestures(item, gestures) }
     }
 
     /** Layout writes dispatched but not yet seen land — see the store collector in [init]. */

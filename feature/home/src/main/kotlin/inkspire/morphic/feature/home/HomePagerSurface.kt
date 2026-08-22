@@ -515,8 +515,12 @@ internal fun HomePagerSurface(
     // and the pager cannot disagree about an item's claims — and the claims are what the surface pan asks about
     // before it takes a swipe of its own, so a disagreement would show up as a swipe that opens a surface on one
     // zone and not the other.
-    val claimedOn: (HomeItem) -> Set<SwipeDirection> = { state.itemGestures.directionsOn(it.gridItem) }
+    val claimedOn: (HomeItem) -> Set<SwipeDirection> = { state.itemGestures.swipesOn(it.gridItem) }
+    val doubleTapOn: (HomeItem) -> Boolean = { state.itemGestures.hasDoubleTapOn(it.gridItem) }
     val context = LocalContext.current
+    val fireDoubleTap: (HomeItem) -> Unit = { item ->
+        Toast.makeText(context, "${item.menuLabel}: double tap", Toast.LENGTH_SHORT).show()
+    }
     val fireGesture: (HomeItem, SwipeDirection) -> Unit = { item, direction ->
         // A placeholder, and honest about being one: the action picker is unbuilt, so there is nothing to run. What
         // this confirms is the part that was hard — that the swipe reached the item at all instead of panning the
@@ -611,7 +615,9 @@ internal fun HomePagerSurface(
                 val dockResize = resizePreviewIn(HomeZone.DOCK)
                 CoordinateDragGrid(
                     edgeActions = claimedOn,
+                    doubleTap = doubleTapOn,
                     onEdgeAction = fireGesture,
+                    onDoubleTap = fireDoubleTap,
                     items = dockItems,
                     config = dockConfig,
                     coordinator = coordinator,
@@ -645,7 +651,9 @@ internal fun HomePagerSurface(
                 val mainResize = resizePreviewIn(HomeZone.MAIN)
                 CoordinateDragPager(
                     edgeActions = claimedOn,
+                    doubleTap = doubleTapOn,
                     onEdgeAction = fireGesture,
+                    onDoubleTap = fireDoubleTap,
                     items = mainItems,
                     config = config,
                     pagerState = pagerState,
@@ -922,14 +930,14 @@ internal fun HomePagerSurface(
         // icons rendered straight over the panel. Every other sheet on this surface is stacked here for the same
         // reason.
         gesturesFor?.let { target ->
-            val taken = state.itemGestures.directionsOn(target.gridItem)
+            val taken = state.itemGestures.gesturesOn(target.gridItem)
             HomeItemGestureSheet(
                 label = target.menuLabel,
                 assigned = taken,
-                onToggle = { direction ->
+                onToggle = { gesture ->
                     viewModel.setItemGestures(
                         item = target.gridItem,
-                        directions = if (direction in taken) taken - direction else taken + direction,
+                        gestures = if (gesture in taken) taken - gesture else taken + gesture,
                     )
                 },
                 onDismiss = { gesturesFor = null },

@@ -1,6 +1,7 @@
 package inkspire.morphic.data.settings
 
 import inkspire.morphic.core.model.GridItem
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SwipeDirection
 import kotlinx.serialization.Serializable
 
@@ -36,19 +37,31 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class HomeItemGestures(val items: List<ItemGestures> = emptyList()) {
 
-    /** The directions [item] has taken, or empty for an item nobody has assigned anything on. */
-    fun directionsOn(item: GridItem): Set<SwipeDirection> =
-        items.firstOrNull { it.item == item }?.directions.orEmpty()
+    /** The gestures [item] has taken, or empty for an item nobody has assigned anything on. */
+    fun gesturesOn(item: GridItem): Set<ItemGesture> =
+        items.firstOrNull { it.item == item }?.gestures.orEmpty()
 
     /**
-     * This record with [item]'s directions replaced.
+     * Just the swipes, which is what the gesture contract and the surface pan deal in.
+     *
+     * The double tap is filtered out here rather than stored apart, so the sheet can draw one list while each
+     * recognizer still gets only what it can act on — see [ItemGesture.swipe].
+     */
+    fun swipesOn(item: GridItem): Set<SwipeDirection> =
+        gesturesOn(item).mapNotNullTo(mutableSetOf()) { it.swipe }
+
+    /** Whether [item] has a double tap, which is the only thing that makes its launch wait. */
+    fun hasDoubleTapOn(item: GridItem): Boolean = ItemGesture.DOUBLE_TAP in gesturesOn(item)
+
+    /**
+     * This record with [item]'s gestures replaced.
      *
      * An empty set **removes the row** rather than storing one, which is what keeps the record sparse when a user
      * clears the last gesture off an icon.
      */
-    fun withDirections(item: GridItem, directions: Set<SwipeDirection>): HomeItemGestures {
+    fun withGestures(item: GridItem, gestures: Set<ItemGesture>): HomeItemGestures {
         val rest = items.filterNot { it.item == item }
-        return HomeItemGestures(if (directions.isEmpty()) rest else rest + ItemGestures(item, directions))
+        return HomeItemGestures(if (gestures.isEmpty()) rest else rest + ItemGestures(item, gestures))
     }
 
     companion object {
@@ -64,4 +77,4 @@ data class HomeItemGestures(val items: List<ItemGestures> = emptyList()) {
  *   sitting in a folder as well as on the grid, is two items and can carry two different sets.
  */
 @Serializable
-data class ItemGestures(val item: GridItem, val directions: Set<SwipeDirection>)
+data class ItemGestures(val item: GridItem, val gestures: Set<ItemGesture>)

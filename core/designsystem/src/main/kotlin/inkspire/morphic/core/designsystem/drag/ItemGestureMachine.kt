@@ -33,6 +33,9 @@ sealed interface ItemGestureEvent {
      * dragging or holding a menu it has the pan locked out, so this cannot arrive.
      */
     data object TakenByParent : ItemGestureEvent
+
+    /** The double-tap window closed with no second press: the tap that was waiting was a single one. */
+    data object DoubleTapTimeout : ItemGestureEvent
     data object Up : ItemGestureEvent
     data object Cancel : ItemGestureEvent
 }
@@ -68,6 +71,9 @@ sealed interface ItemGestureEffect {
      * nothing to bring it home.
      */
     data object SwipeSettled : ItemGestureEffect
+
+    /** A second press landed inside the window — the item's double-tap action. */
+    data object DoubleTapAction : ItemGestureEffect
 
     /** The long-press fired with the finger still: open the item's context menu. */
     data object ShowMenu : ItemGestureEffect
@@ -110,6 +116,20 @@ sealed interface ItemGesturePhase {
 
     /** A drag is in flight; the finger is being tracked at the root. */
     data object Dragging : ItemGesturePhase
+
+    /**
+     * A tap has been released on an item that has a **double tap assigned**, and the window for a second
+     * press is open. No finger is down.
+     *
+     * The state that makes a double tap cost something, which is why it exists only where one is assigned:
+     * the launch has to be held back until the window closes, or every double tap would open the app too.
+     * Items without one go straight from [Pressed] to firing, as they always have — the delay is paid by the
+     * icons whose owner asked for it and by no others.
+     */
+    data object AwaitingSecondTap : ItemGesturePhase
+
+    /** The second press of a double tap is down; releasing it fires. */
+    data object SecondPressed : ItemGesturePhase
 
     /**
      * Moved past slop before the long-press, in a direction the item does **not** have an edge action for — so
@@ -170,10 +190,14 @@ internal val ItemGesturePhase.ownsFinger: Boolean
  *
  * @param config the shared slop threshold.
  * @param edgeActions the swipe directions this item handles itself; the rest are released to the parent.
+ * @param doubleTap this item has a double tap assigned, so a release holds the launch back until the window
+ *   closes. **False everywhere it is not assigned, and that is the whole mitigation**: waiting on every tap
+ *   would slow the one action a user performs most, to serve a gesture almost no icon has.
  */
 class ItemGestureMachine(
     private val config: ItemGestureConfig,
     private val edgeActions: Set<SwipeDirection> = emptySet(),
+    private val doubleTap: Boolean = false,
 ) {
 
     var phase: ItemGesturePhase = ItemGesturePhase.Idle
@@ -187,6 +211,59 @@ class ItemGestureMachine(
         ItemGesturePhase.MenuOpen -> onMenuOpen(event)
         ItemGesturePhase.Dragging -> onDragging(event)
         ItemGesturePhase.ReleasedToParent -> onReleasedToParent(event)
+        ItemGesturePhase.AwaitingSecondTap -> onAwaitingSecondTap(event)
+        ItemGesturePhase.SecondPressed -> onSecondPressed(event)
+    }
+
+    /**
+     * The gap between the two taps. A press restarts the gesture as the second one; the window closing means
+     * the first tap was a single tap, and it opens the item late rather than not at all.
+     */
+    private fun onAwaitingSecondTap(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
+        ItemGestureEvent.Down -> {
+            phase = ItemGesturePhase.SecondPressed
+            noEffect()
+        }
+        ItemGestureEvent.DoubleTapTimeout -> {
+            phase = ItemGesturePhase.Idle
+            effect(ItemGestureEffect.OpenItem)
+        }
+        // No finger is down, so nothing else can reach this state.
+        is ItemGestureEvent.Move,
+        ItemGestureEvent.LongPress,
+        ItemGestureEvent.Up,
+        ItemGestureEvent.Cancel,
+        ItemGestureEvent.TakenByParent,
+        -> noEffect()
+    }
+
+    /**
+     * The second press.
+     *
+     * **A move past slop abandons the double tap rather than completing it**, and the swipe is left to
+     * whoever wants it: a finger that presses twice and then drags has stopped making a double tap, and
+     * firing one on release would act on a gesture the user visibly changed their mind about. A long press is
+     * still the menu — the second press is an ordinary press in every way except what its release means.
+     */
+    private fun onSecondPressed(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
+        ItemGestureEvent.Up -> {
+            phase = ItemGesturePhase.Idle
+            effect(ItemGestureEffect.DoubleTapAction)
+        }
+        is ItemGestureEvent.Move -> {
+            if (event.offsetFromDown.pastSlop()) phase = ItemGesturePhase.ReleasedToParent
+            noEffect()
+        }
+        ItemGestureEvent.LongPress -> {
+            phase = ItemGesturePhase.MenuOpen
+            effect(ItemGestureEffect.ShowMenu)
+        }
+        ItemGestureEvent.TakenByParent -> {
+            phase = ItemGesturePhase.ReleasedToParent
+            noEffect()
+        }
+        ItemGestureEvent.Cancel -> reset()
+        ItemGestureEvent.Down, ItemGestureEvent.DoubleTapTimeout -> noEffect()
     }
 
     private fun onIdle(event: ItemGestureEvent): List<ItemGestureEffect> {
@@ -216,9 +293,15 @@ class ItemGestureMachine(
             effect(ItemGestureEffect.ShowMenu)
         }
         ItemGestureEvent.Up -> {
-            // A quick, still press is a tap.
-            phase = ItemGesturePhase.Idle
-            effect(ItemGestureEffect.OpenItem)
+            // A quick, still press is a tap — **unless a second one could still be coming**, which is only
+            // true on an item whose owner assigned a double tap. Everywhere else this fires at once, as ever.
+            if (doubleTap) {
+                phase = ItemGesturePhase.AwaitingSecondTap
+                noEffect()
+            } else {
+                phase = ItemGesturePhase.Idle
+                effect(ItemGestureEffect.OpenItem)
+            }
         }
         // The pan claimed at its own slop, below ours: hand the gesture over before the long-press can fire.
         ItemGestureEvent.TakenByParent -> {
@@ -226,7 +309,7 @@ class ItemGestureMachine(
             noEffect()
         }
         ItemGestureEvent.Cancel -> reset()
-        ItemGestureEvent.Down -> noEffect()
+        ItemGestureEvent.Down, ItemGestureEvent.DoubleTapTimeout -> noEffect()
     }
 
     private fun onSwiped(current: ItemGesturePhase.Swiped, event: ItemGestureEvent): List<ItemGestureEffect> =
@@ -246,7 +329,11 @@ class ItemGestureMachine(
             // The long-press timer is stale once we've moved; ignore it. `TakenByParent` cannot arrive in the
             // three phases that own the finger — the modifier only sends it while the item does not — and the
             // branch exists so adding a phase has to answer for it.
-            ItemGestureEvent.LongPress, ItemGestureEvent.Down, ItemGestureEvent.TakenByParent -> noEffect()
+            ItemGestureEvent.LongPress,
+            ItemGestureEvent.Down,
+            ItemGestureEvent.TakenByParent,
+            ItemGestureEvent.DoubleTapTimeout,
+            -> noEffect()
         }
 
     private fun onMenuOpen(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
@@ -277,7 +364,11 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.DismissMenu)
         }
-        ItemGestureEvent.LongPress, ItemGestureEvent.Down, ItemGestureEvent.TakenByParent -> noEffect()
+        ItemGestureEvent.LongPress,
+        ItemGestureEvent.Down,
+        ItemGestureEvent.TakenByParent,
+        ItemGestureEvent.DoubleTapTimeout,
+        -> noEffect()
     }
 
     private fun onDragging(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
@@ -290,7 +381,11 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.CancelDrag)
         }
-        ItemGestureEvent.LongPress, ItemGestureEvent.Down, ItemGestureEvent.TakenByParent -> noEffect()
+        ItemGestureEvent.LongPress,
+        ItemGestureEvent.Down,
+        ItemGestureEvent.TakenByParent,
+        ItemGestureEvent.DoubleTapTimeout,
+        -> noEffect()
     }
 
     // The swipe belongs to the parent now; do nothing until the pointer lifts, then reset.
@@ -300,6 +395,7 @@ class ItemGestureMachine(
         ItemGestureEvent.LongPress,
         ItemGestureEvent.Down,
         ItemGestureEvent.TakenByParent,
+        ItemGestureEvent.DoubleTapTimeout,
         -> noEffect()
     }
 
@@ -336,6 +432,10 @@ class ItemGestureMachine(
  *   claim before an item could and sometimes after. All three call sites use 20dp today
  *   (`rememberAppsGestureConfig`, and home's pager and list); the number is theirs to tune, the ordering is not.
  *   docs/DRAG_AND_DROP_DESIGN.md §5 has the whole arbitration.
+ * @property doubleTapWindowMillis how long a release waits for a second press before it counts as a single
+ *   tap — **the delay an item with a double tap assigned adds to its own launch**, and the reason the flag is
+ *   per item rather than global. Timed by the gesture modifier, like the long press, and kept here so all
+ *   gesture tuning has one home.
  * @property longPressTimeoutMillis how long a still press waits before the menu shows. The machine doesn't
  *   time anything itself — the gesture modifier runs this timer and feeds in [ItemGestureEvent.LongPress] — but
  *   it lives here so all gesture tuning has one home.
@@ -343,4 +443,14 @@ class ItemGestureMachine(
 data class ItemGestureConfig(
     val touchSlopPx: Float,
     val longPressTimeoutMillis: Long,
+    val doubleTapWindowMillis: Long = DEFAULT_DOUBLE_TAP_WINDOW_MS,
 )
+
+/**
+ * The platform's own double-tap window, which is what a user's thumb is already calibrated to.
+ *
+ * A default rather than a value every call site passes, unlike the slop and the long press: those two are
+ * tuned for this launcher's feel, while this one is a fact about how fast people tap and there is nothing
+ * here to have an opinion about.
+ */
+private const val DEFAULT_DOUBLE_TAP_WINDOW_MS = 300L
