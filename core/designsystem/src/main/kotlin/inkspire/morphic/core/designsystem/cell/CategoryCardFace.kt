@@ -148,7 +148,7 @@ fun CategoryCardFace(
  *
  * Deliberately **not** an [AppCell], which is what both callers used first and what made
  * [CardChrome.innerPaddingDp] unable to reach zero. An `AppCell` is a grid *cell*: it wraps [IconLabelCell], which
- * insets its icon by `CellPadH`/`CellPadV` and reserves a label row. On a card that inset is 4dp a side, so two
+ * insets its icon by 4dp on each axis and reserves a label row. On a card that meant two
  * adjacent slots kept an 8dp gap however far the spacing slider was dragged down — a control that could not express
  * the thing it was named for. A card slot has no label and no chrome of its own; it *is* the icon's box, which is
  * what `iconPercent = 1f` in this grid's blueprint means literally.

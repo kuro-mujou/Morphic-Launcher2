@@ -9,11 +9,16 @@ import androidx.compose.ui.unit.dp
  * Where the icon lands inside a cell of a given size, and how big it comes out — [IconLabelCell]'s own layout,
  * published as numbers.
  *
- * **Why this exists at all: so a caller that draws *over* a cell can align with it without copying its constants.** The
- * settings icon preview needs exactly that — it outlines the cell and the two icon guardrails on top of a real
- * `AppCell`, and its guides are wrong the moment they disagree with the cell by a padding value. L1's version *did*
- * copy them (`PREVIEW_CELL_PAD_DP = 4f` and `PREVIEW_LABEL_GAP_DP = 4f`, under a comment reading "Keep in sync with
- * CellPadH/CellPadV/LabelGap there"), which is the same drift `CellFit` was ported to remove on the inverse direction.
+ * **Why this exists at all: so a caller that draws *over* a cell can align with it without re-deriving its layout.**
+ * The settings icon preview needs exactly that — it outlines the cell and the two icon guardrails on top of a real
+ * `AppCell`, and its guides are wrong the moment they disagree with the cell by a padding value. L1's version worked
+ * the arithmetic out a second time (`PREVIEW_CELL_PAD_DP = 4f` and `PREVIEW_LABEL_GAP_DP = 4f`, under a comment
+ * reading "Keep in sync with CellPadH/CellPadV/LabelGap there").
+ *
+ * **What it does not buy is one copy of the padding.** The 4dp below is written out here, again in [IconLabelCell],
+ * and a third time in `CellFit` — dp values are not named in this codebase, so the three are kept in step by hand and
+ * nothing fails when they diverge. The *arithmetic* is shared, which is the larger half of the drift `CellFit` was
+ * ported to remove; the numbers are not.
  *
  * **It must mirror [IconLabelCell] exactly, including where that is unkind.** Two details are load-bearing:
  * - the **no-label branch does not clamp** the icon to its area, so an icon whose lower guardrail exceeds the cell

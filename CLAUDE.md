@@ -45,10 +45,16 @@ order*; read it before anything structural. Module state and the record of how e
   normally hiding sections that want names.
 - **Extract on the second consumer, not the first.** A near-copy is how two implementations of one thing
   drift apart; a shared type built for a single consumer has no context to shape it. The trigger is the
-  second call site arriving, and it is not optional then.
-- **Literals are fine — name a value when it earns a name.** It earns one when it has two readers, or
-  when it stands in for a setting that does not exist yet, in which case name that setting. A constant
-  read once in one file is an indirection, not a name.
+  second call site arriving, and it is not optional then. This is about *behavior* — logic, a type, a
+  derivation. Dimensions are the standing exception; see the next rule.
+- **A dp value is written where it is used, never lifted into a named constant.** No
+  `private val RowGap = 8.dp` above the file: the number goes at the call site that sizes something with
+  it, and it goes there again at the second call site. A name moves the value away from the thing it
+  measures and makes reading the layout a jump; the literal is the shorter path in a file whose whole job
+  is arrangement. This is a deliberate departure from "extract on the second consumer" and from the
+  shared-derivation rule below, and it is not free — see the cost recorded in `CellFit`'s KDoc.
+  What still earns a name: a *computed* dimension (`320.dp - 6.dp * 2 - …` is arithmetic, not a
+  constant), a `Shape`, and a `Modifier`.
 - **No model in a vacuum.** Build a module or type when a consumer needs it, so it has context to be
   shaped by. Dependencies likewise: added to `build.gradle.kts` as the code needing them is written.
 
@@ -76,7 +82,12 @@ order*; read it before anything structural. Module state and the record of how e
   Wherever a second path must agree with a first — the two icon renderers, a settings preview and the
   surface it configures, a planner and the geometry it plans against — extract the part that would be
   *invisibly* wrong and have both call it. Arithmetic that merely looks alike in two files is the bug
-  this codebase keeps rediscovering.
+  this codebase keeps rediscovering. **Bare dp values are exempt by decision** (see "a dp value is
+  written where it is used"), and the exemption is what makes `CellFit` a hazard rather than a
+  guarantee: it inverts the insets `IconLabelCell` applies, and the two now hold the same 4dp
+  independently. `CellFitTest` cannot catch a divergence there either — both sides of its padding
+  assertion are literals. The rule still binds everything that is not a dp: shapes, formulas, planners,
+  the renderers.
 - **A settings key's name is the seam for a semantic break.** Slices carry no version: additive change
   is safe both ways through `ignoreUnknownKeys` plus fully-defaulted fields. When a stored shape changes
   *meaning*, rename the key — re-interpreting it in place fails silently.
@@ -252,7 +263,8 @@ Plans: [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md) (S1–S8),
     them.** Those factories are `rememberSaveable(saver = …) { State(…) }` — an init block that never re-runs — so
     they freeze three arguments at first composition. Two of them matter here: `onValueChangeFinished` (a `var` the
     factory never re-assigns, so a facade hands the state the *first* composition's closure forever — which is what
-    made `SettingsCommitSlider` commit its first drag and then re-commit that same value on every later one), and
+    made a commit-on-release slider commit its first drag and then re-commit that same value on every later one;
+    that behavior now lives in `MorphicSliderRow`), and
     `valueRange`/`steps` (`val`s, so a slider whose range legitimately moves — the APPS row height is bounded by the
     icon guardrails — keeps mapping the finger through the range it was born with). So the state is a `remember` keyed
     on `steps`/`valueRange`, with the callback pushed in by `SideEffect`. What is given up is restore across a
@@ -307,13 +319,17 @@ Plans: [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md) (S1–S8),
     republishing, and in that order (a `snapshotFlow` on the scroll offset fires *before* the recomposition that
     derives the new geometry, so it stays a step behind — put both in one `SideEffect`).
 - **Don't invent a dimension nothing owns yet.** Launcher surface metrics (dock extent, home padding, icon size, grid
-  rows) are **settings-driven by design**. Until `data:settings` exists, use the plainest possible stand-in — a named
-  dp constant, or "fill the rest" — and KDoc it as a placeholder naming the setting that replaces it. Do **not** derive
-  it from something else to make it look principled: derived-looking arithmetic reads as a decision when it is really
-  a guess, and it hides that the value is still unowned (worse, it can invert the real dependency — the dock's row
-  count comes *from* its height, so sizing its height from a row count is backwards). `RowHeight` in
-  `AppsVerticalList` is the live example; `DockHeight` in `HomeScreen` was the worked one until S4c gave it an owner,
-  and the placeholder deleted cleanly precisely because nothing had been derived from it.
+  rows) are **settings-driven by design**. `data:settings` now owns most of them — `AppsVerticalList` takes its
+  `rowHeight` as a parameter, and `HomeScreen`'s `DockHeight` placeholder deleted cleanly when S4c gave it an owner.
+  For the ones still unowned, use the plainest possible stand-in — a literal at the call site, or "fill the rest" —
+  with a comment naming the setting that will replace it. Do **not** derive it from something else to make it look
+  principled: derived-looking arithmetic reads as a decision when it is really a guess, and it hides that the value is
+  still unowned (worse, it can invert the real dependency — the dock's row count comes *from* its height, so sizing
+  its height from a row count is backwards). The stand-in used to be a named dp constant; for a **dimension** it is a
+  bare literal now, for the reason given under "a dp value is written where it is used", which leaves the comment as
+  the only thing marking it provisional — so it has to say so explicitly. A placeholder that is **not** a dp still
+  gets a name: `WidgetContainerCell.AutoRotateIntervalMs` is the live example, and it has to stay named anyway
+  because of the `delay`/`Duration` convention below.
 - **But a dimension that is a *consequence* of one the user owns must be derived, not stored** — the other half of the
   rule above, and the two are told apart by whether a formula exists. A scrolling grid's cell **height** is the case:
   its columns fix the cell width, and what is left is exactly what the icon and its label need, which is
@@ -442,6 +458,14 @@ What is built per module, why each piece is shaped the way it is, and what is de
 - Kotlin + Gradle Kotlin DSL (`.kts`) throughout.
 - Follow the existing module boundaries and the build order in the rewrite plan.
 - Match surrounding style; keep KDoc current when changing a type's purpose.
+- **Formatting is Android Studio's, via Reformat Code (Ctrl+Alt+L)** — not ktlint's and not ktfmt's, both of which
+  were tried and rejected for it. The rule that decided it: **a `Modifier` chain of two or more calls breaks one call
+  per line**, while a single-call chain stays inline. ktlint's chain threshold is not scoped to `Modifier` so it
+  splits every two-call expression in the tree; ktfmt breaks only on overflow, which is the opposite rule. ktlint
+  still runs on `check` over its five narrow rules and the two agree there. Two things to know before reformatting:
+  set the IDE's **hard wrap to 127** so it matches `.editorconfig` and detekt's `MaxLineLength` (it will otherwise
+  *join* correctly-wrapped lines past the limit), and leave **"Cleanup code" unchecked** — it rewrites references
+  rather than formatting them, and last time it moved 59 members into imports and orphaned one.
 - **`delay` takes a `Duration`, not a bare `Long`** — `delay(FooDwellMs.milliseconds)`, never `delay(FooDwellMs)`
   (`kotlin.time.Duration.Companion.milliseconds`). The IDE flags the `Long` overload, and this codebase is full of
   dwell/timeout constants, so the unit belongs at the call site where a wrong one would otherwise be invisible. The
