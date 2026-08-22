@@ -141,6 +141,14 @@ internal val ItemGesturePhase.ownsFinger: Boolean
  * item with no horizontal edge action lets horizontal swipes flow to the pager, and one with a LEFT/RIGHT
  * action keeps them.
  *
+ * **Every call site passes an empty set today, and turning one on needs a change outside this class.** The pan
+ * claims at the platform slop and this machine at 20dp, so by the time a claimed direction could be recognized
+ * here the pan has already consumed and [ItemGestureEvent.TakenByParent] has stood the item down — the edge
+ * action would never fire, and nothing would look wrong. What the planned per-item home gestures need is for the
+ * pan to **ask** rather than for this machine to win a race it cannot: the item publishing its claimed directions
+ * at the down, and the pan checking them against its own direction at the moment it claims. See
+ * docs/DRAG_AND_DROP_DESIGN.md §5.
+ *
  * @param config the shared slop threshold.
  * @param edgeActions the swipe directions this item handles itself; the rest are released to the parent.
  */
@@ -296,6 +304,14 @@ class ItemGestureMachine(
  * @property touchSlopPx how far the finger must travel (px) before a move counts as a swipe (in [
  *   ItemGesturePhase.Pressed]) or starts a drag (in [ItemGesturePhase.MenuOpen]); smaller travel is ignored
  *   so the long-press survives a wobble.
+ *
+ *   **It must stay above the platform touch slop (~8dp), and that ordering is load-bearing rather than a
+ *   preference.** The surface pan claims at the platform value, so it always decides first; an item learns that it
+ *   lost by seeing the movement arrive consumed ([ItemGestureEvent.TakenByParent]). Bring this down to the
+ *   platform's and the two decide at the same distance, which is a race with no arbiter — the pan would sometimes
+ *   claim before an item could and sometimes after. All three call sites use 20dp today
+ *   (`rememberAppsGestureConfig`, and home's pager and list); the number is theirs to tune, the ordering is not.
+ *   docs/DRAG_AND_DROP_DESIGN.md §5 has the whole arbitration.
  * @property longPressTimeoutMillis how long a still press waits before the menu shows. The machine doesn't
  *   time anything itself — the gesture modifier runs this timer and feeds in [ItemGestureEvent.LongPress] — but
  *   it lives here so all gesture tuning has one home.
