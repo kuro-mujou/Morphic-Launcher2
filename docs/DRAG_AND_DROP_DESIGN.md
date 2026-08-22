@@ -203,73 +203,105 @@ invisible pointer holder, emitted from the **same keyed call site** as the prese
 to a different call site is itself a disposal and would kill the drag it exists to preserve.
 
 
-### 5a. Who owns the finger: the item or the surface pan
+### 5a. Who owns the finger
 
-Two gestures overlap in time on every press: the item's, and `surfacePagerGesture`'s pan toward a side surface.
-They are arbitrated by **two different mechanisms, one per direction**, and the reason they differ is the pointer
-pass.
+Four things want the same finger on home: the **item**, the **surface pan** (`surfacePagerGesture`, sliding HOME
+toward a side surface), **home's own pager** (`launcherPagerSwipe`, changing page), and on the list pairing the
+**scroll**. They are settled by two mechanisms pointing in opposite directions, and which one applies depends on
+where the competitor sits in the pointer tree.
 
-`surfacePagerGesture` runs on `PointerEventPass.Initial` — ahead of every descendant — and **consumes only when it
-claims**. That one fact decides both halves.
+**Every one of these conflicts has the same root**, and it is worth stating before the remedies: a coarse recognizer
+commits before a fine one has decided. The pan, the pager and the scroll all claim at the **platform touch slop
+(~8dp)**; an item needs **20dp**. The item can therefore never win a race, and between those two distances the
+gesture is already gone.
 
-**Item wins → state.** `SurfaceGestureLock` is a count of claims, taken by `launcherItemGestures` from the
-long-press onward (the menu, and the drag it may become) and by anything else that wants the finger more than the
-pan does. It cannot be consumption: the pan is *upstream*, so an item's consumption is not visible to it, and the
-thresholds mean the pan reaches its own slop first — there is nothing consumed yet to see. Two gestures that
-overlap in time and cannot see each other have to be settled by state.
+#### The item wins → state, asked before the claim
 
-**Pan wins → consumption.** The reverse needs no new state, because the pan's claim is already published: it
-consumed, on `Initial`, so the item sees it on `Main`. `ItemGestureEvent.TakenByParent` carries that into the
-machine, which drops to `ReleasedToParent` — cancelling the tap, the swipe and, crucially, the pending long-press.
+An item that has taken a swipe direction publishes it at the **down**, where the answer is already known — it is the
+`edgeActions` the cell was composed with, not a measurement. `ItemSwipeClaim` holds it, and every coarse recognizer
+consults it at the moment it would claim:
 
-Without that half the two thresholds leave a routine gap: the pan claims at the platform slop (~8dp) and an item
-needs 20dp, so **a finger between those two distances when the 400ms timer fires** used to raise a menu on an icon
-the user was swiping past, and the next move turned it into a drag. The surface slid home while an icon came up
-under the thumb. It is not a side-surface fault — home is simply sparse enough that swipes rarely start on an item,
-where the APPS layouts are wall to wall with them.
+| Competitor | Pass it runs on | How it defers |
+|---|---|---|
+| `surfacePagerGesture` | `Initial` | asks `ItemSwipeClaim` at its slop |
+| `launcherPagerSwipe` | `Main` (ancestor) | asks `ItemSwipeClaim` at its slop |
+| the list's `verticalScroll` | `Main` (ancestor) | **not contested** — see the refusal below |
 
-Reading consumption here does not contradict `positionChangedIgnoreConsumed` in the same loop. That protects *where
-the finger is*, which is never in dispute. *Who owns the gesture* is a different question, and consumption is the
-honest answer to it.
+A claimed direction is handed back whole: nothing is consumed, so the item goes on to recognize the swipe at its own
+slop exactly as it would with no competitor present. **Neither branch waits for the other**, which is what keeps the
+surface animation starting at slop rather than at 20dp.
 
-**The pass asymmetry filters correctly, for free.** A scroller or a pager runs on `Main`, where children go first,
-so an item never sees a Main-pass ancestor's consumption on the same event — list scrolling and home's own
-`LauncherPager` cannot trip the stand-down, and should not, since they already settle with the item the ordinary
-way by consuming as a child. Only an `Initial`-pass ancestor is visible, and the surface pan is the only one.
+Asked with the **finger's** direction, never the edge being opened — a finger travelling right drags HOME rightward
+and so opens the surface parked on the *left*. `swipeDirectionOf` in `core:model` is the single derivation all three
+readers share; three private copies would have to agree about what a diagonal is, and none would fail loudly if they
+did not.
 
-**Consequence to preserve: the item's slop must stay above the platform's.** It is what makes the pan the first
-decider and the item the one that finds out. Equal thresholds would be a race with no arbiter.
+`launcherPagerSwipe` also keeps an older, *repairing* hand-off: it notices a child's consumption after the fact and
+animates back to the page it started on. That was the whole of its arbitration once, and it is why a page visibly
+scrolled and snapped back on every assigned swipe. It survives for what cannot be predicted at the down — a
+long-press **drag** claims the pointer 400ms in, by which time the pager may legitimately be scrolling.
 
-#### Per-item gestures (planned): the pan must *ask*, not wait
+`SurfaceGestureLock` is the coarser, directionless form of the same idea, and it is a *count* rather than a set: it
+answers "does anything want this finger more than the pan does" and is taken from the long-press onward, by an item
+holding its menu open, by an open folder, by a modal sheet.
 
-The intended home feature is a user-assigned action per swipe direction on a home item, with the priority **item
-gesture → surface pan → item menu**. `ItemGestureMachine` already models it (`edgeActions`, `ItemGesturePhase.Swiped`,
-`ItemGestureEffect.EdgeAction`) and the parameter is threaded to every call site — all of which pass an empty set.
+#### The item loses → consumption, on whichever pass carries it
 
-Turning one on does not work by itself, and fails silently: the pan claims at 8dp, consumes, and the stand-down
-above fires before the machine reaches 20dp and could recognize the claimed direction. The edge action never runs
-and nothing looks broken.
+The reverse needs no state, because a claim is already published the moment it is made: the winner **consumed**.
+`ItemGestureEvent.TakenByParent` carries that into the machine, which drops to `ReleasedToParent` — cancelling the
+tap, the swipe, and crucially the pending long press.
 
-Nor is the answer to make the pan **wait** for the item's 20dp — that reintroduces the dead zone this arbitration
-exists to remove. The pan already computes its direction at its own slop; it should **ask** whether the item under
-the finger claims that direction:
+Compose dispatches every event three times, and **both directions matter**:
 
-- **claimed** → the pan declines, consumes nothing, and the item owns the gesture from its own slop onward.
-- **not claimed** → the pan claims at 8dp as it does today, consumes, and the item stands down on the next event.
+- `Initial`, parent → child
+- `Main`, child → parent
+- `Final`, parent → child again
 
-Neither branch waits for the other, which is what keeps the surface animation starting at slop. It is
-`SurfaceGestureLock` made *directional*: today it answers "does somebody want the finger", and this needs "does the
-item under this finger want UP". The stand-down needs no change — the pan only consumes in the branch where the
-item did not claim.
+So the item checks twice, for two different competitors:
 
-Two things fall out and are deliberate. **Home-only is free**, since `edgeActions` is per call site and the APPS
-layouts keep passing empty. And **an item with all four directions assigned is a dead zone for surface switching**
-— the same trade `claimSurfaceGestureWhilePressed` makes for widget containers, acceptable here because it is the
-user's own choice rather than a property of the item.
+- On **`Main`** it sees an `Initial`-pass ancestor: the surface pan, which ran ahead of it. Catching the pan *here*
+  rather than one pass later is what stops the item recognizing its own swipe on that very event and consuming first.
+- On **`Final`** it sees a `Main`-pass ancestor: the list's scroll, home's pager, any scroller — all of which act
+  *after* this node on `Main` and have still consumed by the time the event comes back around.
 
-What is genuinely unbuilt is the *feedback*: `ItemGesturePhase.Swiped` emits nothing until release, so letting the
-user pull an icon toward the edge it will fire needs a progress effect out of the machine and a render path in the
-cell.
+**The `Final` check exists because consumption settles a swipe but not a timer**, and that distinction was got wrong
+once, in this document's own words. Against a *swipe*, an item that loses finds out by reaching its 20dp slop and
+seeing the movement taken. Against the **400ms long press** it never gets there: a slow drag travels under 20dp for
+the whole window, so the machine is still `Pressed` when the timer fires and raises a menu on a row the user is
+scrolling past. Three of the four bugs in this area were that, wearing different clothes.
+
+Reading consumption does not contradict `positionChangedIgnoreConsumed` in the same loop. That protects *where the
+finger is*, which is never in dispute. *Who owns the gesture* is a different question, and consumption is the honest
+answer to it.
+
+Both checks are guarded on the item not already owning the finger. An item that is swiping, dragging or holding a
+menu has the lock, so no competitor can have claimed.
+
+#### A surface may refuse an axis outright
+
+Home's **list** offers horizontal swipes and the double tap, and does not offer swipe up or down. That is a decision,
+not a gap.
+
+Technically, none of the remedies above reach it: `verticalScroll` is a framework modifier that cannot be made to
+ask; gating its `enabled` races the recomposition that would read it, since a claim is published on the pointer
+thread at the down; and an `Initial`-pass interceptor would have to consume, which the item reads as `TakenByParent`
+and stands down on — killing the scroll *and* the gesture. Honoring it means hand-rolling the list's scroll gesture.
+
+And it should be refused even if it were free, because **a vertical list's whole area is for scrolling**. Rows fill
+the screen, so a handful of assignments would turn the primary interaction off across much of the surface. That is
+the inverse of the trade `claimSurfaceGestureWhilePressed` makes for the widget container, where taking the whole
+area is right *because* the thing exists to be swiped between pages.
+
+The two refused gestures are still **shown and still assignable** in the sheet, under a warning. Assignments are keyed
+by `GridItem`, the same key in both of home's pairings, so one made on the list is live on the pager; hiding the rows
+would leave a stored gesture doing nothing with no way to find out why.
+
+#### The constraint that holds all of this up
+
+**The item's slop must stay above the platform's.** It is what makes every coarse recognizer the first to decide and
+the item the one that finds out, which is the premise of both mechanisms — the ask happens before the claim, and the
+stand-down happens after it. Equal thresholds would be a race with no arbiter. Recorded on `ItemGestureConfig`, where
+all three call sites pass through.
 
 ---
 
