@@ -9,6 +9,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
+import inkspire.morphic.core.model.swipeDirectionOf
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -18,6 +20,15 @@ import kotlin.math.abs
  * release. Because it defers to already-consumed events, a child that has claimed the pointer — an item drag or
  * a vertical gesture — wins, and the pager stays out of its way.
  *
+ * **It asks the pressed item before claiming**, exactly as the surface pan does and for the same reason. The
+ * consumed-event hand-off below is a *repair*: the pager claims at the platform slop where an item needs
+ * 20dp, so a page visibly scrolled and then snapped back to where it started every time an item took a
+ * LEFT/RIGHT swipe of its own. Asking `ItemSwipeClaim` up front means there is nothing to undo — the item
+ * published what it would handle at the down, so this is a lookup rather than a race the pager always wins.
+ *
+ * The repair stays for what cannot be predicted at the down: a long-press **drag** claims the pointer 400ms
+ * in, by which time the pager may legitimately be scrolling.
+ *
  * @param enabled gate the pager swipe off when it shouldn't run (e.g. `{ !coordinator.isDragging }` so an item
  *   drag isn't fighting a page swipe).
  */
@@ -26,7 +37,8 @@ fun Modifier.launcherPagerSwipe(
     enabled: () -> Boolean = { true },
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
-    pointerInput(state) {
+    val itemClaim = LocalItemSwipeClaim.current
+    pointerInput(state, itemClaim) {
         val touchSlop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
@@ -72,6 +84,9 @@ fun Modifier.launcherPagerSwipe(
                     dx += delta.x
                     dy += delta.y
                     if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
+                        // The item's swipe wins outright; leaving it alone here is what stops the page from
+                        // scrolling a few dp and bouncing back.
+                        if (itemClaim?.claims(swipeDirectionOf(dx, dy)) == true) break
                         if (abs(dx) > abs(dy) && enabled()) {
                             decided = true
                             horizontal = true

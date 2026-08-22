@@ -11,30 +11,12 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import inkspire.morphic.core.model.HomeEdge
-import inkspire.morphic.core.model.SwipeDirection
+import inkspire.morphic.core.model.swipeDirectionOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
-/**
- * Which way the **finger** is travelling, which is what an item's gestures are named for.
- *
- * Deliberately not the edge being opened: those are opposites, since a finger travelling right drags HOME rightward
- * and so opens the surface parked on the *left*. Asking the item with an edge would invert every assignment.
- *
- * Used to ask [ItemSwipeClaim] whether the pressed item has taken this direction for itself. That question is a
- * lookup rather than a race — the item published its set at the down — which is the whole point: the pan always
- * reaches its slop first, so an item could never win one. A claimed direction is handed back whole, nothing is
- * consumed, and the item goes on to recognize the swipe at its own slop exactly as it would with no pan present.
- */
-private fun fingerSwipe(horizontal: Boolean, accX: Float, accY: Float): SwipeDirection = when {
-    horizontal && accX > 0f -> SwipeDirection.RIGHT
-    horizontal -> SwipeDirection.LEFT
-    accY > 0f -> SwipeDirection.DOWN
-    else -> SwipeDirection.UP
-}
 
 /**
  * **Drives the pan from one coroutine draining a running total, rather than one launch per pointer event.**
@@ -224,8 +206,16 @@ fun Modifier.surfacePagerGesture(
                     // a claim that is dropped mid-gesture still leaves a pan possible.
                     if ((abs(accX) > touchSlop || abs(accY) > touchSlop) && enabled()) {
                         val horizontal = abs(accX) >= abs(accY)
-                        // The item under the finger is asked before the pan takes anything — see [fingerSwipe].
-                        if (itemClaim?.claims(fingerSwipe(horizontal, accX, accY)) == true) break
+                        // **The item under the finger is asked before the pan takes anything.** It published
+                        // what it would handle at the down, so this is a lookup rather than a race — which
+                        // matters, because the pan always reaches its slop first and an item could never win
+                        // one. A claimed direction is handed back whole: nothing is consumed, so the item goes
+                        // on to recognize the swipe at its own slop as it would with no pan present.
+                        //
+                        // Asked with the **finger's** direction, never the edge being opened: those are
+                        // opposites, since a finger travelling right drags HOME rightward and so opens the
+                        // surface parked on the left.
+                        if (itemClaim?.claims(swipeDirectionOf(accX, accY)) == true) break
                         if (activeAxis != null) {
                             // A surface is open (or mid-transition): only a swipe along that axis is ours — it
                             // drags back toward HOME. A perpendicular swipe is left unclaimed, and the release's

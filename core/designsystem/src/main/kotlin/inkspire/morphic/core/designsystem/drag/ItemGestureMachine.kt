@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.drag
 
 import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.core.model.SwipeDirection
+import inkspire.morphic.core.model.swipeDirectionOf
 
 /** A cardinal swipe direction, used for the press-and-swipe custom action on an item. */
 /**
@@ -406,12 +407,7 @@ class ItemGestureMachine(
 
     private fun Offset.pastSlop(): Boolean = getDistance() >= config.touchSlopPx
 
-    private fun Offset.dominantDirection(): SwipeDirection =
-        if (kotlin.math.abs(x) >= kotlin.math.abs(y)) {
-            if (x >= 0f) SwipeDirection.RIGHT else SwipeDirection.LEFT
-        } else {
-            if (y >= 0f) SwipeDirection.DOWN else SwipeDirection.UP
-        }
+    private fun Offset.dominantDirection(): SwipeDirection = swipeDirectionOf(x, y)
 
     private fun noEffect(): List<ItemGestureEffect> = emptyList()
     private fun effect(e: ItemGestureEffect): List<ItemGestureEffect> = listOf(e)

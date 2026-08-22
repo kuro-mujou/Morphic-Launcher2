@@ -15,3 +15,19 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class SwipeDirection { UP, DOWN, LEFT, RIGHT }
+
+/**
+ * The direction a movement of ([dx], [dy]) is going — its dominant axis, then its sign.
+ *
+ * **One derivation with three readers**, which is why it is here rather than a private helper in each: the
+ * gesture machine names the swipe an item commits to, the surface pan asks whether the pressed item has taken
+ * that direction, and home's own pager asks the same before it takes a page swipe. All three must agree about
+ * what a diagonal is, and none of them would fail loudly if they did not — a swipe would simply go to the
+ * wrong recognizer near 45 degrees.
+ *
+ * Ties go horizontal, arbitrarily but consistently.
+ */
+fun swipeDirectionOf(dx: Float, dy: Float): SwipeDirection = when {
+    kotlin.math.abs(dx) >= kotlin.math.abs(dy) -> if (dx >= 0f) SwipeDirection.RIGHT else SwipeDirection.LEFT
+    else -> if (dy >= 0f) SwipeDirection.DOWN else SwipeDirection.UP
+}
