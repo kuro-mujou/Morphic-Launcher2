@@ -153,6 +153,7 @@ internal fun WidgetContainerCell(
                 userScrollEnabled = userScrollEnabled,
                 modifier = Modifier.fillMaxSize(),
             ) { page(it) }
+
             WidgetContainerAxis.VERTICAL -> VerticalPager(
                 state = pagerState,
                 userScrollEnabled = userScrollEnabled,
@@ -219,7 +220,9 @@ private fun PageDots(
         if (axis == WidgetContainerAxis.VERTICAL) Orientation.Vertical else Orientation.Horizontal
     if (orientation == Orientation.Vertical) {
         Column(
-            modifier = modifier.fillMaxHeight().padding(end = DotsInset),
+            modifier = modifier
+                .fillMaxHeight()
+                .padding(end = DotsInset),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -227,7 +230,9 @@ private fun PageDots(
         }
     } else {
         Row(
-            modifier = modifier.fillMaxWidth().padding(bottom = DotsInset),
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(bottom = DotsInset),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -195,6 +195,7 @@ internal class AppsOrderRepositoryImpl(
                 items = when (change) {
                     is AppsCategoryChange.Move ->
                         moveCategoryItem(items, change.app, change.toCategory, change.toSlot)
+
                     is AppsCategoryChange.Reorder ->
                         reorderCategoryItems(items, change.category, change.apps)
                 }

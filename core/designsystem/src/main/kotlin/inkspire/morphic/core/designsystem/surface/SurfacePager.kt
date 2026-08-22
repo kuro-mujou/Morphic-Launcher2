@@ -100,7 +100,10 @@ fun SurfacePager(
         // mechanism (it is what a nav host uses), and what makes the composition gate above free rather than a
         // trade: a drawer comes back on the page it was left on.
         val slotState = rememberSaveableStateHolder()
-        Box(Modifier.fillMaxSize().surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
             // Each slot gets its own channel for "where is my content resting", which is what makes the nested-scroll
             // hand-off work without the shell wiring anything: content calls `ReportScrollEdges` and the gesture reads
             // whichever slot the swipe is crossing. The pager composes the slots, so the pager owns them — rather
@@ -116,7 +119,10 @@ fun SurfacePager(
             // Not composed at all until the surface is at least partly on screen, or the caller has asked for it to
             // be kept — see the class note. Everything below, including the slot's own state, is absent until then.
             if (edge !in engagedEdges && edge !in retainedEdges) continue
-            Box(Modifier.fillMaxSize().surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
                 // **A composed surface is not necessarily an on-screen one**, which is what
                 // [LocalSurfacePresented] exists to say: a slot stays composed through the whole of a pan and, when
                 // [retainedEdges] holds it, for the whole of a drag lifted on it. Anything that must belong to

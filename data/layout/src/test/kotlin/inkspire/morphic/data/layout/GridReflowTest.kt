@@ -99,7 +99,10 @@ class GridReflowTest {
         val landed = result.placements.getValue("arriving")
         assertTrue(landed.fitsIn(config))
         assertNotEquals(GridPlacement(0, 0, 0), landed)
-        assertFalse("occupants are the caller's already; admit returns arrivals only", result.placements.containsKey("sitting"))
+        assertFalse(
+            "occupants are the caller's already; admit returns arrivals only",
+            result.placements.containsKey("sitting")
+        )
     }
 
     @Test

@@ -234,7 +234,8 @@ class CellFitTest {
     fun `a stored size that fits passes through, in logical units`() {
         // A 32dp minimum cell (a 24dp guardrail plus 4dp padding a side): eleven columns fit 360dp and three rows fit
         // 96dp, so a stored 4 × 1 is untouched.
-        val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
+        val config =
+            DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 1, metrics = metrics, labelHeightDp = labelHeight)
 
         assertEquals(1, config.visualRows)
         assertEquals(4, config.visualCols)
@@ -249,8 +250,10 @@ class CellFitTest {
         // The dock's rule: a cell is `height ÷ rows`, so 40dp cannot carry two 32dp rows however many are stored.
         // The *write* that makes this permanent is the dock screen's on commit; this is the read that keeps the
         // drawn grid honest in the meantime.
-        val short = DockGrid.fitGridConfig(GridArea(360f, 40f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
-        val tall = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
+        val short =
+            DockGrid.fitGridConfig(GridArea(360f, 40f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
+        val tall =
+            DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 4, rows = 2, metrics = metrics, labelHeightDp = labelHeight)
 
         assertEquals(1, short.visualRows)
         assertEquals(2, tall.visualRows)
@@ -260,8 +263,10 @@ class CellFitTest {
     fun `a column count past what fits is clamped, and a wider area gives it back`() {
         // The property that lets the column clamp stay a *read*: nothing is written, so the count the user chose
         // returns the moment there is room for it. Writing the clamp back would lose the preference for good.
-        val narrow = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
-        val wide = DockGrid.fitGridConfig(GridArea(1080f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
+        val narrow =
+            DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
+        val wide =
+            DockGrid.fitGridConfig(GridArea(1080f, 96f), cols = 9, rows = 1, metrics = chunky, labelHeightDp = labelHeight)
 
         assertEquals("360dp fits three 96dp cells, not nine", 3, narrow.visualCols)
         assertEquals(9, wide.visualCols)
@@ -278,7 +283,8 @@ class CellFitTest {
 
     @Test
     fun `a count below the blueprint's floor is raised to it`() {
-        val config = DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 0, rows = 0, metrics = metrics, labelHeightDp = labelHeight)
+        val config =
+            DockGrid.fitGridConfig(GridArea(360f, 96f), cols = 0, rows = 0, metrics = metrics, labelHeightDp = labelHeight)
 
         assertEquals(DockGrid.editRange!!.minCols, config.visualCols)
         assertEquals(DockGrid.editRange!!.minRows, config.visualRows)

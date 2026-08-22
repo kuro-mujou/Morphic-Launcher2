@@ -265,7 +265,9 @@ fun AppCollectionOverlay(
     // has to earn its own arming or the hold that opened the collection would immediately close it again.
     var enteredInnerZone by remember { mutableStateOf(false) }
     LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) { gap = -1; enteredInnerZone = false }
+        if (!coordinator.isDragging) {
+            gap = -1; enteredInnerZone = false
+        }
     }
     LaunchedEffect(presenting) { if (!presenting) enteredInnerZone = false }
 
@@ -320,6 +322,7 @@ fun AppCollectionOverlay(
     //
     // Read inside `graphicsLayer`'s lambda below, so a frame of the fade re-draws without recomposing the card.
     val presence = remember { Animatable(0f) }
+
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     val presenceSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     LaunchedEffect(presenting) { presence.animateTo(if (presenting) 1f else 0f, presenceSpec) }
@@ -362,7 +365,9 @@ fun AppCollectionOverlay(
                 ),
         ) {
             BoxWithConstraints(
-                Modifier.fillMaxSize().windowInsetsPadding(uiInsets),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(uiInsets),
                 contentAlignment = Alignment.Center,
             ) {
                 val innerSize: DpSize = appCollectionInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
@@ -377,7 +382,7 @@ fun AppCollectionOverlay(
                     )
                     // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
                     Box(
-                        Modifier
+                        modifier = Modifier
                             .size(innerSize)
                             // The outline is always in the chain and switches *color*, so this chain stays
                             // structurally stable across the drag flip — the same rule the backdrop above follows,
@@ -417,7 +422,10 @@ fun AppCollectionOverlay(
                                     innerBounds = b
                                 },
                         ) { pageIndex ->
-                            LauncherGrid(config = grid, modifier = Modifier.fillMaxSize()) {
+                            LauncherGrid(
+                                config = grid,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
                                 // The drop shadow for the slot the gap has opened, behind the cells (declared
                                 // first) and inside the page grid so it travels with the page. `gap` is an index
                                 // into the *display* order, which is the flat list these pages were chunked from —
@@ -457,7 +465,10 @@ fun AppCollectionOverlay(
                         }
                     }
                     // Page dots below the inner zone; the row's height is reserved even for a single page.
-                    Box(Modifier.height(CollectionDotsHeight), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.height(CollectionDotsHeight),
+                        contentAlignment = Alignment.Center
+                    ) {
                         if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
                     }
                 }
@@ -481,7 +492,9 @@ fun AppCollectionOverlay(
                     (finger.x - geo.cellW / 2f).roundToInt(),
                     (finger.y - geo.cellH / 2f).roundToInt(),
                 ),
-                size = DpSize(with(LocalDensity.current) { geo.cellW.toDp() }, with(LocalDensity.current) { geo.cellH.toDp() }),
+                size = DpSize(
+                    with(LocalDensity.current) { geo.cellW.toDp() },
+                    with(LocalDensity.current) { geo.cellH.toDp() }),
             ) {
                 // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target.
                 AppCell(app = dragApp, modifier = Modifier.fillMaxSize(), metrics = metrics)
@@ -496,7 +509,7 @@ private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(DotSpacing)) {
         repeat(count) { index ->
             Box(
-                Modifier
+                modifier = Modifier
                     .size(DotSize)
                     .clip(CircleShape)
                     .background(if (index == current) Color.White else Color.White.copy(alpha = 0.3f)),

@@ -50,83 +50,44 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
 
     CompositionLocalProvider(LocalNavigator provides navigator) {
         NavDisplay(
-            backStack = backStack,
             modifier = modifier,
-            // Delegated to the navigator so the start destination is guarded in one place: back on HOME must fall
-            // through to the system rather than pop the launcher off its own stack.
+            backStack = backStack,
             onBack = { navigator.goBack() },
-            // **Each destination gets its own `ViewModelStore`, and without this none of them do.**
-            //
-            // `navigation3-runtime` ships only the saveable-state decorator, so by default every entry shares the
-            // *Activity's* store. A `koinViewModel<T>()` keys on the type, so the first entry to ask for a given
-            // ViewModel creates it and every later entry — a different destination, different arguments — is handed
-            // that same instance. It also means "cleared with the screen" was not true of any ViewModel here:
-            // `viewModelScope` lived as long as the Activity.
-            //
-            // Invisible until a ViewModel took a per-instance parameter, which the icon studio is the first to do:
-            // opening one app's icon and then another edited the first one, and arriving at the picker after either
-            // showed that app instead. One cause, and it was never really about the studio.
-            //
-            // Supplying this list replaces the defaults, so the saveable-state decorator has to be named again —
-            // dropping it would lose each entry's `rememberSaveable` state.
             entryDecorators = listOf(
                 rememberSaveableStateHolderNavEntryDecorator(),
                 rememberViewModelStoreNavEntryDecorator(),
             ),
             entryProvider = entryProvider {
                 entry<HomeRoute> {
-                    // The launcher. Which edges are swipeable now comes from the surface register in
-                    // `data:settings`; nothing is bound until the user binds one — see `LauncherShell`.
-                    //
-                    // **The way in is a long-press on empty space**, which is why the shell takes this action rather
-                    // than reading `LocalNavigator` itself: `app` owns the back stack, so `app` says where "Settings"
-                    // goes. It replaces the gear chip that stood in for the menu until it existed — that chip was
-                    // scaffolding kept here rather than in `feature:shell` precisely so deleting it would touch no
-                    // feature module, and it hasn't.
                     LauncherShell(
                         onOpenSettings = { navigator.goTo(SettingsRoute()) },
-                        // **`app` is the only layer that may name a section**, which is what keeps the settings
-                        // taxonomy inside `feature:settings`: the APPS surface says "open my settings" and passes
-                        // the arrangement it is showing (`AppsLayout`, which is `core:model` and shared by
-                        // everyone), and the mapping from that to a pane happens here, where both are already
-                        // visible, without exporting the section enum to every consumer.
                         onOpenAppsSettings = { layout ->
                             navigator.goTo(SettingsRoute(SettingsSection.APPS, layout))
                         },
-                        // The item menu's "Edit icon". Flattened here because a `NavKey` has to be serializable
-                        // and `ComponentKey` is not something to pin into the back stack's stored form.
                         onEditIcon = { component ->
                             navigator.goTo(IconStudioRoute.App(component.flatten()))
                         },
-                        // A container's "+" and its context menu. Declared by `feature:home` — a container is a HOME
-                        // item, and everything the screen reads is already wired there — and mapped here for
-                        // `entryProvider`'s reason: it is a mapping, not a registry.
                         onOpenIconContainerSettings = { id ->
                             navigator.goTo(ContainerSettingsRoute.Icon(id))
                         },
                         onOpenWidgetContainerSettings = { id ->
                             navigator.goTo(ContainerSettingsRoute.Widget(id))
                         },
-                        // The gestures sheet's rows. Flattened here for `IconStudioRoute`'s reason — a `NavKey` is
-                        // serialized into the saved back stack, and neither `ComponentKey` nor `GridItem` is a shape
-                        // to pin there. Only the two item kinds offered gestures can arrive.
                         onAssignGesture = { item, gesture ->
                             when (item) {
-                                is GridItem.App ->
+                                is GridItem.App -> {
                                     navigator.goTo(GestureActionRoute.App(item.component.flatten(), gesture))
-                                is GridItem.Folder ->
+                                }
+
+                                is GridItem.Folder -> {
                                     navigator.goTo(GestureActionRoute.Folder(item.folderId, gesture))
+                                }
+
                                 else -> Unit
                             }
                         },
                     )
                 }
-                // **One entry per concrete key, never the sealed parent.** `entry<T>` matches the exact class a
-                // back-stack element has, so registering the interface matched nothing and every push failed with
-                // "Unknown screen". The two routes beside this one are split for the same reason.
-                //
-                // A choice closes the picker, which is what makes the list a *picker* rather than a screen with a
-                // save button — every row is a complete decision.
                 entry<GestureActionRoute.App> { route ->
                     GestureActionDestination(
                         route = route,
@@ -144,46 +105,47 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<SettingsRoute> { route ->
                     SettingsScreen(
                         onBack = { navigator.goBack() },
-                        // Null for the ordinary way in, which is what opens settings where it always opens.
                         initialSection = route.section,
                         initialLayout = route.layout,
-                        // Settings is **one** destination: its sections are panes, two of which share the screen on a
-                        // tablet, so which one is showing is that screen's own state.
                     )
                 }
-                // Declared by `feature:settings`, mapped here — which is the whole point of `entryProvider` being a
-                // mapping rather than a registry: a destination that belongs to one feature stays in it, and `app`
-                // only says where it goes.
                 entry<WallpaperCropRoute> { route ->
-                    // Both fields, not just the uri: the target decides the shape the screen frames against and the
-                    // size it stores at, so dropping it here would quietly frame a landscape half as a portrait one.
                     WallpaperCropScreen(
                         uri = route.uri,
                         target = route.target,
                         onDone = { navigator.goBack() },
                     )
                 }
-                entry<WallpaperCaptureRoute> { WallpaperCaptureScreen(onDone = { navigator.goBack() }) }
-                // Two entries because the studio's key is a sealed pair rather than a mode enum beside a nullable
-                // component — `Global` carries nothing, because there is nothing for it to carry. The screen is one
-                // screen; only what it edits differs.
+                entry<WallpaperCaptureRoute> {
+                    WallpaperCaptureScreen(
+                        onDone = { navigator.goBack() },
+                    )
+                }
                 entry<IconStudioRoute.Global> { route ->
-                    IconStudioScreen(route = route, onBack = { navigator.goBack() })
+                    IconStudioScreen(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                    )
                 }
                 entry<IconStudioRoute.App> { route ->
-                    IconStudioScreen(route = route, onBack = { navigator.goBack() })
+                    IconStudioScreen(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                    )
                 }
-                // Two entries for one screen, as the icon studio has: the key is a sealed pair because the two
-                // containers share no settings at all, so a single key carrying both kinds would be a state whose
-                // fields are half meaningless.
                 entry<ContainerSettingsRoute.Icon> { route ->
-                    ContainerSettingsScreen(route = route, onBack = { navigator.goBack() })
+                    ContainerSettingsScreen(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                    )
                 }
                 entry<ContainerSettingsRoute.Widget> { route ->
-                    ContainerSettingsScreen(route = route, onBack = { navigator.goBack() })
+                    ContainerSettingsScreen(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                    )
                 }
             },
         )
     }
 }
-

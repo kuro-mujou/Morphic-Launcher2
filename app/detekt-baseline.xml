@@ -2,6 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
+    <ID>LongMethod:LauncherNavHost.kt$@Composable fun LauncherNavHost(modifier: Modifier = Modifier)</ID>
     <ID>MagicNumber:MainActivity.kt$MainActivity$29</ID>
   </CurrentIssues>
 </SmellBaseline>

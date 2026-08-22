@@ -81,17 +81,17 @@ fun Modifier.surfaceMenuGestures(
                     while (true) {
                         val event = awaitPointerEvent()
                         // A second finger is the surface pan's gesture, not a press.
-                        if (event.changes.count { it.pressed } > 1) return@withTimeoutOrNull Unit
+                        if (event.changes.count { it.pressed } > 1) return@withTimeoutOrNull
                         val change = event.changes.firstOrNull { it.id == down.id }
-                            ?: return@withTimeoutOrNull Unit
-                        if (!change.pressed) return@withTimeoutOrNull Unit
+                            ?: return@withTimeoutOrNull
+                        if (!change.pressed) return@withTimeoutOrNull
                         // Consumed by a child means something below took this gesture — a page swipe, a scroll —
                         // and a long-press is no longer what is happening.
-                        if (change.isConsumed) return@withTimeoutOrNull Unit
+                        if (change.isConsumed) return@withTimeoutOrNull
                         // Travel measured from the down, against the launcher's shared slop, so a press that
                         // wandered is a swipe here for the same distance it is one on an item.
                         if ((change.position - down.position).getDistance() > config.touchSlopPx) {
-                            return@withTimeoutOrNull Unit
+                            return@withTimeoutOrNull
                         }
                     }
                 }

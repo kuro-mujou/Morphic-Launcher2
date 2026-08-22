@@ -253,7 +253,9 @@ fun AppsPager(
     val session = coordinator.session
 
     LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) { gap = -1; gapPage = -1; mergeTarget = null }
+        if (!coordinator.isDragging) {
+            gap = -1; gapPage = -1; mergeTarget = null
+        }
     }
 
     // Folder hosting, the same lifecycle home uses — `AppCollectionHostState` is surface-independent, and the one thing

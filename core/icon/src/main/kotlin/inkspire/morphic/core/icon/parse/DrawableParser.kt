@@ -68,7 +68,7 @@ class DrawableParser(private val resources: Resources) {
     }
 
     /** The pixels within [RingWidth] of an edge of [drawable] rendered at [SampleSize], or null if it cannot draw. */
-    private fun borderRing(drawable: Drawable): IntArray? {
+    private fun borderRing(drawable: Drawable): IntArray {
         val bitmap = createBitmap(SampleSize, SampleSize)
         try {
             // The drawable's own bounds are whatever the last renderer left them as, so they are set here rather

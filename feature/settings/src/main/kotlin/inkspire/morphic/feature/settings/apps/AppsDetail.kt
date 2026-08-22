@@ -45,7 +45,6 @@ import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SurfaceDetail
 import inkspire.morphic.feature.settings.icons.IconSizingGroup
 import inkspire.morphic.feature.settings.icons.IconSizingPreview
-import inkspire.morphic.feature.settings.label
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
 

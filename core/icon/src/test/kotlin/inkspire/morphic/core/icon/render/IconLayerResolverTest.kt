@@ -533,6 +533,7 @@ internal open class StubDrawable : android.graphics.drawable.Drawable() {
     override fun setAlpha(alpha: Int) = Unit
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
     override fun getConstantState(): ConstantState? = null
+
     @Deprecated("Deprecated in Java", ReplaceWith("android.graphics.PixelFormat.TRANSLUCENT"))
     override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
 }

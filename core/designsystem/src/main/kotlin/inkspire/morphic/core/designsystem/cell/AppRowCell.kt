@@ -243,7 +243,9 @@ fun AppRowCell(
             // line of text tall, under the platform's touch minimum. `IconLabelCell` wraps both because a grid cell's
             // slack is real on both axes.
             Row(
-                modifier = Modifier.fillMaxHeight().then(itemGestures),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .then(itemGestures),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // A pure-text list drops the icon *and* the gap after it, so the label starts at the row's own inset

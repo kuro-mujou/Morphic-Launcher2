@@ -3,7 +3,6 @@ package inkspire.morphic.feature.apps.layout.categorycard
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -158,6 +157,7 @@ private fun PreviewSlot(
             metrics = metrics,
             itemGestures = Modifier.categoryOpenGestures(gestureConfig, onExpand),
         )
+
         app != null -> LauncherDragCell(
             coordinator = coordinator,
             item = GridItem.App(app.componentKey),
@@ -176,6 +176,7 @@ private fun PreviewSlot(
                 itemGestures = itemGestures,
             )
         }
+
         else -> Unit
     }
 }

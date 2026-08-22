@@ -17,7 +17,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * **A press that keeps firing while it is held** — for a button whose job is to move a value by a little.

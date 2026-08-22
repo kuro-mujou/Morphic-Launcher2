@@ -1,9 +1,5 @@
 package inkspire.morphic.feature.settings.iconstudio
 
-import androidx.compose.material.icons.filled.Grain
-import androidx.compose.material.icons.filled.Vignette
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import inkspire.morphic.core.icon.IconPatterns
 import inkspire.morphic.core.model.icon.LayerEffect
 
@@ -21,6 +17,7 @@ import inkspire.morphic.core.model.icon.LayerEffect
  * It stays at the value it has always had; only the stepper got finer.
  */
 internal const val UnitFloor = 0.05f
+
 /**
  * **Each effect as it arrives** — held once, so the value the studio *seeds* and the value a slider's **reset**
  * returns to are the same object's fields rather than two numbers that happen to agree.
@@ -43,6 +40,7 @@ internal val BloomDefaults = LayerEffect.Bloom()
 internal val GlossDefaults = LayerEffect.Gloss()
 internal val VignetteDefaults = LayerEffect.Vignette()
 internal val BevelDefaults = LayerEffect.Bevel()
+
 /**
  * The one addition with no all-default constructor: a pattern has to *be* one, and there is no neutral tile. Dots for
  * the reason `PatternControls` picks it as its own fallback — the most legible of the set at icon size.

@@ -71,26 +71,39 @@ internal fun IconsDetail(modifier: Modifier = Modifier) {
     val editOne = { navigator.goTo(IconStudioRoute.App()) }
 
     if (currentDeviceConfiguration().isLandscape) {
-        Row(modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier
+                .fillMaxSize()
+                .padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth(0.4f).fillMaxHeight(),
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 DashboardAction("Edit all icons", AllSubtitle, Icons.Outlined.Palette, Modifier.weight(1f), editAll)
                 DashboardAction("Edit specific apps", OneSubtitle, Icons.Outlined.Apps, Modifier.weight(1f), editOne)
             }
-            PresetsGrid(Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            PresetsGrid(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            )
         }
     } else {
         Column(
-            modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 DashboardAction("Edit all icons", AllSubtitle, Icons.Outlined.Palette, Modifier.weight(1f), editAll)
                 DashboardAction("Edit specific apps", OneSubtitle, Icons.Outlined.Apps, Modifier.weight(1f), editOne)
             }
-            PresetsGrid(Modifier.fillMaxWidth())
+            PresetsGrid(modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -250,7 +263,9 @@ private fun PresetTile(
                     contentDescription = null,
                     sizePx = PresetIconPx,
                     appearance = preset.appearance,
-                    modifier = Modifier.align(Alignment.Center).fillMaxSize(PresetIconFraction),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxSize(PresetIconFraction),
                 )
             }
 

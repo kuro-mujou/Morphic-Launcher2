@@ -134,7 +134,9 @@ internal fun PresetsControls(
             presets = presets,
             spacing = PresetGridSpacing,
             tileMax = PresetTileMax,
-            modifier = Modifier.heightIn(max = PresetGridMaxHeight).verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .heightIn(max = PresetGridMaxHeight)
+                .verticalScroll(rememberScrollState()),
         ) { preset, cell ->
             PresetTile(
                 preset = preset,

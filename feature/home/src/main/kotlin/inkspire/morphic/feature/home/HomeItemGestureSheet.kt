@@ -29,11 +29,11 @@ import inkspire.morphic.core.model.ItemGesture
  * @param label the item's own name, so the sheet says whose gestures these are.
  * @param assigned what each taken gesture does; a gesture absent from the map is unassigned.
  * @param describe names an action for a row — resolved by the caller, which is the only layer holding the app
-   catalog a stored component has to be looked up in.
+catalog a stored component has to be looked up in.
  * @param unavailable gestures the surface on screen cannot honor, shown with [unavailableNote] under them.
-   **Still assignable, deliberately**: an assignment belongs to the item and is keyed the same in both of
-   home's pairings, so one made here is live on the other. Hiding these rows would leave a stored gesture
-   that silently does nothing and no way to find out why.
+ **Still assignable, deliberately**: an assignment belongs to the item and is keyed the same in both of
+home's pairings, so one made here is live on the other. Hiding these rows would leave a stored gesture
+that silently does nothing and no way to find out why.
  * @param unavailableNote why, in the words of the surface that cannot honor them.
  */
 @Composable
@@ -80,10 +80,16 @@ internal fun HomeItemGestureSheet(
 private fun GestureRow(gesture: ItemGesture, action: String?, note: String?, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = RowPaddingV),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = RowPaddingV),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(RowGap)) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(RowGap)
+        ) {
             Text(gesture.label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
             Text(
                 text = action ?: UnassignedLabel,

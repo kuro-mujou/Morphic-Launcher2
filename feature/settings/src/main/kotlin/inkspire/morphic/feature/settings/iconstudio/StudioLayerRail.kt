@@ -73,7 +73,6 @@ import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.icon.compose.IconPreview
 import inkspire.morphic.data.settings.IconStudioWorkspace
 import inkspire.morphic.data.settings.LayerRailAxis
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 /**

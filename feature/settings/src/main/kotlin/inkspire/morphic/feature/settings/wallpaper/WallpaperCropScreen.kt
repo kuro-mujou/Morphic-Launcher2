@@ -123,7 +123,9 @@ fun WallpaperCropScreen(
     // Its own theme boundary, as the settings screen is: this is pushed from settings and is our own surface, so it
     // follows the system's dark mode rather than the launcher's wallpaper-brightness signal.
     LauncherTheme {
-        Box(modifier.fillMaxSize().background(Color.Black)) {
+        Box(modifier
+            .fillMaxSize()
+            .background(Color.Black)) {
             if (current != null) {
                 CropFrame(
                     image = current,
@@ -139,7 +141,10 @@ fun WallpaperCropScreen(
 
             IconButton(
                 onClick = onDone,
-                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(ChromeGap),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(ChromeGap),
             ) {
                 Icon(Icons.Filled.Close, contentDescription = "Cancel", tint = Color.White)
             }

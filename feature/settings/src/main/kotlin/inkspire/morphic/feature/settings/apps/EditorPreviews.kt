@@ -94,7 +94,11 @@ internal fun AppsEditorPreview(
         ) {
             HeaderRow(searchInHeader = search == SearchPlacement.InHeader)
             if (chrome.categoryTabEdge == VerticalEdge.TOP) TabRow()
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 ReflectivePreview(cols, metrics, areaWidthDp, insetFraction, edit)
             }
             if (chrome.categoryTabEdge == VerticalEdge.BOTTOM) TabRow()
@@ -126,14 +130,24 @@ private fun Standalone(search: SearchPlacement, content: @Composable () -> Unit)
     }
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(ChromeGap)) {
         if (pinned == VerticalEdge.TOP) SearchBar()
-        Box(Modifier.fillMaxWidth().weight(1f)) { content() }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) { content() }
         if (pinned == VerticalEdge.BOTTOM) SearchBar()
     }
 }
 
 @Composable
 private fun SearchBar() {
-    Box(Modifier.fillMaxWidth().height(BarHeight).clip(RoundedCornerShape(BarCorner)).background(previewInk()))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(BarHeight)
+            .clip(RoundedCornerShape(BarCorner))
+            .background(previewInk())
+    )
 }
 
 /** The category pager's compact header: a title, and the actions beside it — search only when it lives here. */
@@ -158,7 +172,12 @@ private fun HeaderRow(searchInHeader: Boolean) {
 
 @Composable
 private fun ActionSquare() {
-    Box(Modifier.size(ActionSquareSize).clip(RoundedCornerShape(3.dp)).background(previewFaint()))
+    Box(
+        modifier = Modifier
+            .size(ActionSquareSize)
+            .clip(RoundedCornerShape(3.dp))
+            .background(previewFaint())
+    )
 }
 
 /** The category tabs: the first solid, the rest faint — which is the whole of what a tab row reads as at this size. */

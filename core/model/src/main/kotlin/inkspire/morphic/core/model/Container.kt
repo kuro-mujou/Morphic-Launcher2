@@ -14,11 +14,21 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 sealed interface GridItem {
-    @Serializable @SerialName("app") data class App(val component: ComponentKey) : GridItem
-    @Serializable @SerialName("widget") data class Widget(val appWidgetId: Int) : GridItem
-    @Serializable @SerialName("folder") data class Folder(val folderId: Long) : GridItem
-    @Serializable @SerialName("icon_container") data class IconContainer(val containerId: Long) : GridItem
-    @Serializable @SerialName("widget_container") data class WidgetContainer(val containerId: Long) : GridItem
+    @Serializable
+    @SerialName("app")
+    data class App(val component: ComponentKey) : GridItem
+    @Serializable
+    @SerialName("widget")
+    data class Widget(val appWidgetId: Int) : GridItem
+    @Serializable
+    @SerialName("folder")
+    data class Folder(val folderId: Long) : GridItem
+    @Serializable
+    @SerialName("icon_container")
+    data class IconContainer(val containerId: Long) : GridItem
+    @Serializable
+    @SerialName("widget_container")
+    data class WidgetContainer(val containerId: Long) : GridItem
 }
 
 /**
@@ -28,8 +38,10 @@ sealed interface GridItem {
  */
 @Serializable
 sealed interface IconItem {
-    @Serializable data class App(val component: ComponentKey) : IconItem
-    @Serializable data class Folder(val folderId: Long) : IconItem
+    @Serializable
+    data class App(val component: ComponentKey) : IconItem
+    @Serializable
+    data class Folder(val folderId: Long) : IconItem
 }
 
 // ── Containers (grid items that own an inner layout + inner items) ─────

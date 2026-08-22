@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
@@ -237,8 +238,6 @@ private fun WallpaperModePager(
         if (page == SinglePage) {
             WallpaperModePage(
                 title = "Single wallpaper",
-                // A capture explains itself where "Active" would be, rather than under a button that cannot be
-                // pressed — the rule lives in the repository, and this is the sentence for it.
                 status = when {
                     state.busy -> "Working…"
                     state.image != null && !state.applicable ->
@@ -249,7 +248,6 @@ private fun WallpaperModePager(
                 applyControl = {
                     if (state.image == null || state.applicable) {
                         ApplyButton(
-                            // "Re-apply" once this launcher is the one that set it.
                             label = if (state.applied) "Re-apply" else "Apply",
                             enabled = state.applicable && !state.busy,
                             onSelect = onApply,
@@ -259,14 +257,25 @@ private fun WallpaperModePager(
                 preview = {
                     PreviewTile(
                         bitmap = state.preview,
-                        // Two silences to tell apart: nothing chosen, and something chosen whose file went missing.
                         emptyLabel = if (state.image == null) "No wallpaper set" else "Image unavailable",
                         ratio = screenRatio,
                     )
                 },
                 actions = {
-                    PageActionButton(Modifier.weight(1f), Icons.Outlined.PhotoLibrary, "Choose image", !state.busy, onChooseImage)
-                    PageActionButton(Modifier.weight(1f), Icons.Outlined.Screenshot, "Capture screen", !state.busy, onCaptureScreen)
+                    PageActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.PhotoLibrary,
+                        label = "Choose image",
+                        enabled = !state.busy,
+                        onClick = onChooseImage
+                    )
+                    PageActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.Screenshot,
+                        label = "Capture screen",
+                        enabled = !state.busy,
+                        onClick = onCaptureScreen
+                    )
                 },
             )
         } else {
@@ -291,27 +300,41 @@ private fun WallpaperModePager(
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(RowGap),
                     ) {
-                        // The screen's own ratio for the portrait slot and its inverse for the landscape one, so the
-                        // two tiles are the shapes they stand for rather than two identical rectangles.
                         RotateSlot(
                             bitmap = state.rotatingPortrait,
                             label = "Portrait",
                             ratio = minOf(screenRatio, 1f / screenRatio),
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                             onClick = onPickPortrait,
                         )
                         RotateSlot(
                             bitmap = state.rotatingLandscape,
                             label = "Landscape",
                             ratio = maxOf(screenRatio, 1f / screenRatio),
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                             onClick = onPickLandscape,
                         )
                     }
                 },
                 actions = {
-                    PageActionButton(Modifier.weight(1f), Icons.Filled.Add, "Add portrait", !state.busy, onPickPortrait)
-                    PageActionButton(Modifier.weight(1f), Icons.Filled.Add, "Add landscape", !state.busy, onPickLandscape)
+                    PageActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Filled.Add,
+                        label = "Add portrait",
+                        enabled = !state.busy,
+                        onClick = onPickPortrait
+                    )
+                    PageActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Filled.Add,
+                        label = "Add landscape",
+                        enabled = !state.busy,
+                        onClick = onPickLandscape
+                    )
                 },
             )
         }
@@ -342,7 +365,11 @@ private fun WallpaperModePage(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = RowGap)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = RowGap)
+            ) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium, color = colors.content)
                 if (status != null) {
                     Text(
@@ -356,7 +383,11 @@ private fun WallpaperModePage(
             }
             applyControl()
         }
-        Box(modifier = Modifier.fillMaxWidth().height(PreviewHeight)) { preview() }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(PreviewHeight)
+        ) { preview() }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -441,13 +472,19 @@ private fun RotateSlot(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Icon(Icons.Filled.Add, contentDescription = "Add $label image", tint = colors.contentMuted)
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Add $label image",
+                    tint = colors.contentMuted
+                )
             }
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 color = colors.content,
-                modifier = Modifier.align(Alignment.TopStart).padding(RowGap),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(RowGap),
             )
         }
     }
@@ -526,7 +563,9 @@ private fun LazyListScope.wallpaperShelf(
     item(key = "header-$title") {
         val colors = LocalMorphicColors.current
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ScreenPadding, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -677,7 +716,7 @@ private fun Drawable.toImageBitmap(): ImageBitmap {
     }
     val width = intrinsicWidth.coerceAtLeast(1)
     val height = intrinsicHeight.coerceAtLeast(1)
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(width, height)
     setBounds(0, 0, width, height)
     draw(Canvas(bitmap))
     return bitmap.asImageBitmap()

@@ -66,6 +66,7 @@ internal fun LauncherGridScope.dropFootprintCell(
         // the footprint would be placed off the grid — invisible either way, but silently so.
         gap in 0 until config.rows * config.cols && gapPage == pageIndex ->
             gap / config.cols to gap % config.cols
+
         else -> null
     } ?: return
     val (row, col) = cell

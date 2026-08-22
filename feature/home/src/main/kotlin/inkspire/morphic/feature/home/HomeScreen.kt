@@ -68,6 +68,7 @@ fun HomeScreen(
             onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
             onAssignGesture = onAssignGesture,
         )
+
         HomeLayout.LIST_WITH_WIDGET_AREA -> HomeListSurface(
             viewModel = viewModel,
             state = state,

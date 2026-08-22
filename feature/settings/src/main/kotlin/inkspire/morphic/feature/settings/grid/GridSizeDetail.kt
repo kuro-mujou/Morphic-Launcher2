@@ -167,6 +167,7 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                         )
                     }
                 }
+
                 is MainAreaSize.Rows -> HomeListEditor(
                     rowHeightDp = main.heightDp,
                     icon = icon,

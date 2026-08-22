@@ -167,7 +167,7 @@ class ShellViewModel(
     private val orientation = MutableStateFlow(Orientation.PORTRAIT)
 
     val state: StateFlow<ShellState> =
-        // Six sources against `combine`'s five, so the two that come from the same store and answer the same
+    // Six sources against `combine`'s five, so the two that come from the same store and answer the same
         // question — what is bound to each edge, and how the pagers behind those bindings page — are grouped first.
         combine(
             combine(settingsRepository.surfaceRegister, settingsRepository.pagerWraps, ::Pair),

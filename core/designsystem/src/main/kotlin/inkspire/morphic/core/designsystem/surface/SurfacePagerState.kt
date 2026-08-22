@@ -131,7 +131,7 @@ class SurfacePagerState {
      * edge, and a consumer that needed to know *which* edge already has [openEdge].
      */
     val progress: Float
-        get() = maxOf(kotlin.math.abs(animX.value), kotlin.math.abs(animY.value)).coerceIn(0f, 1f)
+        get() = maxOf(abs(animX.value), abs(animY.value)).coerceIn(0f, 1f)
 
     /**
      * Drags the horizontal pan by a raw pixel delta (a finger move). A positive [px] (finger moving right)

@@ -46,7 +46,10 @@ class LayerEffectPipelineTest {
     fun `an effect that would paint nothing is left out too`() {
         // Two different reasons to skip — the user's switch, and the effect saying it is a no-op — and the pipeline
         // must not care which, or every renderer would have to ask both questions itself.
-        assertEquals(emptyList<LayerEffect>(), spec(LayerEffect.Color(), LayerEffect.Bloom(linear = BloomProfile(strength = 0f))).activeEffects)
+        assertEquals(
+            emptyList<LayerEffect>(),
+            spec(LayerEffect.Color(), LayerEffect.Bloom(linear = BloomProfile(strength = 0f))).activeEffects
+        )
     }
 
     @Test

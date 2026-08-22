@@ -155,10 +155,15 @@ fun Modifier.launcherItemGestures(
 
             var holdsSurfaceLock = false
             fun claimSurface() {
-                if (!holdsSurfaceLock) { surfaceLock?.acquire(); holdsSurfaceLock = true }
+                if (!holdsSurfaceLock) {
+                    surfaceLock?.acquire(); holdsSurfaceLock = true
+                }
             }
+
             fun releaseSurface() {
-                if (holdsSurfaceLock) { surfaceLock?.release(); holdsSurfaceLock = false }
+                if (holdsSurfaceLock) {
+                    surfaceLock?.release(); holdsSurfaceLock = false
+                }
             }
 
             fun perform(effects: List<ItemGestureEffect>, local: Offset) {
@@ -175,17 +180,32 @@ fun Modifier.launcherItemGestures(
                         lastPull?.let { currentOnSwipePull(it, null) }
                         lastPull = null
                     }
+
                     ItemGestureEffect.DoubleTapAction -> currentOnDoubleTap()
                     // The long-press has fired: from here the finger is this item's, whether it ends as a menu or
                     // becomes a drag. A drag arrives as `[DismissMenu, BeginDrag, …]` in one list, so the claim is
                     // taken again immediately after being dropped — which a count absorbs, and which nothing can
                     // observe in between since this whole loop runs synchronously off the pointer thread.
-                    ItemGestureEffect.ShowMenu -> { claimSurface(); currentOnShowMenu(anchorInRoot()) }
-                    ItemGestureEffect.DismissMenu -> { releaseSurface(); menuHost?.dismiss() }
-                    ItemGestureEffect.BeginDrag -> { claimSurface(); currentOnBeginDrag(rootOf(local)) }
+                    ItemGestureEffect.ShowMenu -> {
+                        claimSurface(); currentOnShowMenu(anchorInRoot())
+                    }
+
+                    ItemGestureEffect.DismissMenu -> {
+                        releaseSurface(); menuHost?.dismiss()
+                    }
+
+                    ItemGestureEffect.BeginDrag -> {
+                        claimSurface(); currentOnBeginDrag(rootOf(local))
+                    }
+
                     is ItemGestureEffect.DragTo -> currentOnDragTo(rootOf(local))
-                    ItemGestureEffect.Drop -> { releaseSurface(); currentOnDrop() }
-                    ItemGestureEffect.CancelDrag -> { releaseSurface(); currentOnCancelDrag() }
+                    ItemGestureEffect.Drop -> {
+                        releaseSurface(); currentOnDrop()
+                    }
+
+                    ItemGestureEffect.CancelDrag -> {
+                        releaseSurface(); currentOnCancelDrag()
+                    }
                 }
             }
 

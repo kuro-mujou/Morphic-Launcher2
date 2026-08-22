@@ -25,11 +25,6 @@ interface AppsPagerItemDao {
     @Query("SELECT * FROM apps_pager_item WHERE orientation = :orientation ORDER BY page, positionInPage")
     suspend fun get(orientation: Orientation): List<AppsPagerItemEntity>
 
-    /**
-     * Inserts new rows and updates existing ones. Matching is by the surrogate `id`, so a row being *moved* must
-     * carry the id it was read with — an id of 0 always inserts, which for an entry already in the list would
-     * duplicate it (or, thanks to the unique indices, fail outright rather than corrupt the list).
-     */
     @Upsert
     suspend fun upsert(items: List<AppsPagerItemEntity>)
 

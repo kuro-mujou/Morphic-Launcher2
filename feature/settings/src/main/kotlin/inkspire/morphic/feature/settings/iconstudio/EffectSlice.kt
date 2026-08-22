@@ -29,7 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import inkspire.morphic.core.model.icon.IconLayerSpec
 import inkspire.morphic.core.model.icon.LayerBlend
@@ -90,10 +89,12 @@ internal class EffectEntryState {
         )
     }
 }
+
 /** @see EffectEntryState */
 @Composable
 internal fun rememberEffectEntryState(): EffectEntryState =
     rememberSaveable(saver = EffectEntryState.Saver) { EffectEntryState() }
+
 /**
  * What an entry in the Effects grid *does* to the layer — which is what decides whether it carries a switch, and
  * whether opening it seeds anything.
@@ -120,6 +121,7 @@ internal enum class EffectKind {
      */
     ADDITION,
 }
+
 internal sealed interface EffectTarget {
 
     /** The effects this target carries, in pipeline order. */
@@ -138,6 +140,7 @@ internal sealed interface EffectTarget {
         override val slices: List<EffectSlice> get() = EffectSlice.entries.filter { it.ownsEffect }
     }
 }
+
 /**
  * One entry in the Effects grid: a job the user can go and do to this layer, with the glyph and word the grid
  * offers it under.

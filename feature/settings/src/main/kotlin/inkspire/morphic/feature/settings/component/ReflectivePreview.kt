@@ -106,7 +106,12 @@ internal fun ReflectivePreview(
     val mirrorCols = edit?.edge == GridEditorEdge.LEFT
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Canvas(Modifier.fillMaxWidth(1f - inset * 2).fillMaxHeight().clipToBounds()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth(1f - inset * 2)
+                .fillMaxHeight()
+                .clipToBounds()
+        ) {
             val gap = ReflectiveCellGap.toPx()
             val cellW = ((size.width - gap * (drawnCols - 1f)) / drawnCols).coerceAtLeast(1f)
             val cellH = (cellW * aspect).coerceAtLeast(1f)

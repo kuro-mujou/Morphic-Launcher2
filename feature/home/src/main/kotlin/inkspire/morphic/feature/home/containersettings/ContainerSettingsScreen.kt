@@ -121,7 +121,11 @@ fun ContainerSettingsScreen(
         true
     }
 
-    Box(modifier.fillMaxSize().background(colors.background)) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(colors.background)
+    ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 24.dp),
@@ -176,6 +180,7 @@ fun ContainerSettingsScreen(
                         )
                     }
                 }
+
                 is ContainerSettings.Widget -> {
                     items(settings.widgets, key = { it.appWidgetId }) { widget ->
                         WidgetContentRow(widget = widget, onRemove = { viewModel.removeWidget(widget.appWidgetId) })
@@ -223,6 +228,7 @@ fun ContainerSettingsScreen(
                     onPick = { viewModel.setArrangement(it) },
                     onDismiss = { chooserOpen = false },
                 )
+
                 is ContainerSettings.Widget -> ChooserDialog(
                     title = "Scroll orientation",
                     options = WidgetContainerAxis.entries,
@@ -248,6 +254,7 @@ fun ContainerSettingsScreen(
                     sheet = null
                 },
             )
+
             ContainerSheet.Widgets -> WidgetPickerSheet(
                 // **No grid**, which is the case that parameter became nullable for: every page of a container
                 // fills the container, so a widget's footprint here is not a promise anyone could keep. The sheet
@@ -335,7 +342,10 @@ private fun OptionsHeading() {
     val colors = LocalMorphicColors.current
     Column {
         Spacer(Modifier.height(16.dp))
-        HorizontalDivider(color = colors.outline, modifier = Modifier.padding(horizontal = 24.dp))
+        HorizontalDivider(
+            color = colors.outline,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
         Text(
             text = "OPTIONS",
             style = MaterialTheme.typography.labelMedium,
@@ -376,7 +386,11 @@ private fun SwitchRow(
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f).padding(end = 16.dp)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 16.dp)
+        ) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge, color = colors.content)
             Text(text = description, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
         }
@@ -436,6 +450,7 @@ private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
                 modifier = Modifier.size(RowIconSize),
             )
         }
+
         is ContainerIcon.Folder -> ContentRow(label = icon.folder.label.ifBlank { "Folder" }, onRemove = onRemove) {
             IconPreviewPlate(apps = icon.apps, size = RowIconSize)
         }
@@ -448,7 +463,10 @@ private fun WidgetContentRow(widget: WidgetInfo, onRemove: () -> Unit) {
     val colors = LocalMorphicColors.current
     ContentRow(label = widget.label.ifBlank { UnnamedWidget }, onRemove = onRemove) {
         Box(
-            modifier = Modifier.size(RowIconSize).clip(CircleShape).background(colors.surfaceElevated),
+            modifier = Modifier
+                .size(RowIconSize)
+                .clip(CircleShape)
+                .background(colors.surfaceElevated),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -466,7 +484,10 @@ private fun WidgetContentRow(widget: WidgetInfo, onRemove: () -> Unit) {
 private fun ContentRow(label: String, onRemove: () -> Unit, leading: @Composable () -> Unit) {
     val colors = LocalMorphicColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().height(ContentRowHeight).padding(horizontal = 24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ContentRowHeight)
+            .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {

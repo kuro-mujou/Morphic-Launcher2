@@ -205,12 +205,23 @@ private fun CellPreview(app: AppInfo?, metrics: IconMetrics, cellWidth: Dp, cell
 @Composable
 private fun RowPreview(app: AppInfo?, metrics: IconMetrics, rowHeight: Dp) {
     val colors = LocalMorphicColors.current
-    Box(Modifier.fillMaxWidth().height(rowHeight)) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(rowHeight)
+    ) {
         if (app != null) {
-            AppRowCell(app = app, modifier = Modifier.fillMaxSize(), metrics = metrics)
+            AppRowCell(
+                app = app,
+                modifier = Modifier.fillMaxSize(),
+                metrics = metrics
+            )
         }
         Canvas(Modifier.fillMaxSize()) {
-            drawRect(color = colors.content, style = Stroke(width = GuideStrokeDp.toPx()))
+            drawRect(
+                color = colors.content,
+                style = Stroke(width = GuideStrokeDp.toPx())
+            )
         }
     }
 }

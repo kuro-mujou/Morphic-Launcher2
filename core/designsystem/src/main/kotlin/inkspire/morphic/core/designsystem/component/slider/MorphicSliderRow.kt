@@ -414,6 +414,7 @@ private fun DrawScope.drawSliderRowGlyph(glyph: SliderRowGlyph, tint: Color) {
             val arm = mid * 0.62f
             line(Offset(mid - arm, mid), Offset(mid + arm, mid))
         }
+
         SliderRowGlyph.PLUS -> {
             val arm = mid * 0.62f
             line(Offset(mid - arm, mid), Offset(mid + arm, mid))

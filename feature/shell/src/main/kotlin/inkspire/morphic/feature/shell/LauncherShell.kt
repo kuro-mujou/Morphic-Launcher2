@@ -253,7 +253,7 @@ fun LauncherShell(
                     // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                     // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
                     enabled = { !gestureLock.isLocked },
-                retainedEdges = setOfNotNull(dragSourceEdge),
+                    retainedEdges = setOfNotNull(dragSourceEdge),
                     // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
                     // read against this; the two move differently on purpose — the pane translates, the frost only fades
                     // — which is why it is a slot on the pager rather than a modifier on either. `progress` is the pan
@@ -384,6 +384,7 @@ private fun TopActionOverlay(
                     TopActionTarget.REMOVE -> onRemove(outcome.item)
                     TopActionTarget.UNINSTALL ->
                         (outcome.item as? GridItem.App)?.let { onUninstall(it.component) }
+
                     null -> Unit // no half armed — nothing to commit
                 }
             },

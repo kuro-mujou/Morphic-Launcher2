@@ -275,8 +275,8 @@ class AppsViewModel(
      * It also groups honestly — these change together when a settings section is edited, and none of them is content.
      */
     private val sizing: Flow<AppsSizing> =
-        // Six sources against `combine`'s five, so the three **per-device maps** are grouped first. They are the
-        // honest three to fold: each is `posture`-gated and each resolves the same way, where the two below are a
+    // Six sources against `combine`'s five, so the three **per-device maps** are grouped first. They are the
+    // honest three to fold: each is `posture`-gated and each resolves the same way, where the two below are a
         // single value and a setting with no device dimension at all.
         combine(
             combine(iconSizings, gridCols, paddings, cardChrome, ::PerDevice),

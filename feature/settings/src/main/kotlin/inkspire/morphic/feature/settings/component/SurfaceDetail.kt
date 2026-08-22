@@ -117,9 +117,13 @@ private fun PortraitDetail(
         }
         if (icons == null || preview == null) return@LazyColumn
         stickyHeader(key = "icon-header") { _ ->
-            Column(modifier = Modifier.fillMaxWidth().background(colors.background)) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.background)) {
                 IconSectionHeader(onReroll, Modifier.padding(horizontal = ScreenPadding))
-                preview(Modifier.fillMaxWidth().padding(horizontal = ScreenPadding))
+                preview(Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ScreenPadding))
             }
         }
         item(key = "icon-controls") {
@@ -188,7 +192,9 @@ private fun LandscapeDetail(
                 ) {
                     icons()
                 }
-                preview(Modifier.width(LandscapePreviewWidth).padding(end = ScreenPadding))
+                preview(Modifier
+                    .width(LandscapePreviewWidth)
+                    .padding(end = ScreenPadding))
             }
         }
     }

@@ -86,6 +86,7 @@ class GridBlueprintTest {
                     emptyList<Int?>(),
                     rows.filter { it == null },
                 )
+
                 GridSizing.SCROLL_GRID -> assertEquals(
                     "SCROLL_GRID ${blueprint.slot} derives rows at runtime, so it must not declare any",
                     emptyList<Int?>(),

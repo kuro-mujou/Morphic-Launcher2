@@ -53,21 +53,35 @@ internal fun HomeZoneScaffold(
     side: @Composable (Modifier) -> Unit,
     main: @Composable (Modifier) -> Unit,
 ) {
-    val zones = modifier.fillMaxSize().windowInsetsPadding(uiInsets)
+    val zones = modifier
+        .fillMaxSize()
+        .windowInsetsPadding(uiInsets)
     if (edge.isStrip) {
         Column(zones) {
             // `weight` is a `ColumnScope`/`RowScope` member, so the remainder modifier can only be built inside the
             // container — which is why these four lines are here rather than hoisted above the branch.
-            val sideModifier = Modifier.fillMaxWidth().height(extent).padding(horizontal = sidePadding)
-            val mainModifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = mainPadding)
+            val sideModifier = Modifier
+                .fillMaxWidth()
+                .height(extent)
+                .padding(horizontal = sidePadding)
+            val mainModifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = mainPadding)
             if (edge.isLeading) side(sideModifier)
             main(mainModifier)
             if (!edge.isLeading) side(sideModifier)
         }
     } else {
         Row(zones) {
-            val sideModifier = Modifier.fillMaxHeight().width(extent).padding(horizontal = sidePadding)
-            val mainModifier = Modifier.fillMaxHeight().weight(1f).padding(horizontal = mainPadding)
+            val sideModifier = Modifier
+                .fillMaxHeight()
+                .width(extent)
+                .padding(horizontal = sidePadding)
+            val mainModifier = Modifier
+                .fillMaxHeight()
+                .weight(1f)
+                .padding(horizontal = mainPadding)
             if (edge.isLeading) side(sideModifier)
             main(mainModifier)
             if (!edge.isLeading) side(sideModifier)

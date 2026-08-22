@@ -83,12 +83,16 @@ internal class LayoutRepositoryImpl(
             is LayoutChange.Move -> when (val item = change.item) {
                 is GridItem.App ->
                     daos.appPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+
                 is GridItem.Folder ->
                     daos.folderPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+
                 is GridItem.Widget ->
                     daos.widgetPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+
                 is GridItem.IconContainer ->
                     daos.iconContainerPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+
                 is GridItem.WidgetContainer ->
                     daos.widgetContainerPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
             }
@@ -239,6 +243,7 @@ internal class LayoutRepositoryImpl(
             daos.folderItem.removeByComponent(item.component)
             daos.iconContainerItem.removeByComponent(item.component)
         }
+
         is IconItem.Folder -> {
             daos.folderPlacement.deleteByFolderId(item.folderId)
             daos.iconContainerItem.removeByFolder(item.folderId)

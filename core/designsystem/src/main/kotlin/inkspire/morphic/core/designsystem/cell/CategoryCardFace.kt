@@ -202,7 +202,9 @@ fun CategoryPreviewIcon(
             component = app.componentKey,
             contentDescription = app.label,
             sizePx = sizePx,
-            modifier = Modifier.size(iconSize).then(itemGestures),
+            modifier = Modifier
+                .size(iconSize)
+                .then(itemGestures),
         )
     }
 }

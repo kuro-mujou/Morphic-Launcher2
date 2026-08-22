@@ -94,7 +94,9 @@ internal fun GestureActionScreen(
             text = "Assign action to ${gesture.label}",
             style = MaterialTheme.typography.headlineSmall,
             color = colors.content,
-            modifier = Modifier.padding(horizontal = ScreenPadding).padding(top = ScreenPadding),
+            modifier = Modifier
+                .padding(horizontal = ScreenPadding)
+                .padding(top = ScreenPadding),
         )
         GestureActionSearch(
             query = state.query,
@@ -103,7 +105,9 @@ internal fun GestureActionScreen(
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(ChipGap),
-            modifier = Modifier.padding(horizontal = ScreenPadding).padding(bottom = ChipGap),
+            modifier = Modifier
+                .padding(horizontal = ScreenPadding)
+                .padding(bottom = ChipGap),
         ) {
             SectionChip("Apps") { scope.launch { listState.animateScrollToItem(appsAt) } }
             SectionChip("Shortcuts") { scope.launch { listState.animateScrollToItem(shortcutsAt) } }
@@ -149,6 +153,7 @@ internal fun GestureActionScreen(
                         // Empty has two very different causes and only one is worth acting on, so it says both.
                         state.shortcutGroups.isEmpty() ->
                             SectionNote("No shortcuts. Apps publish these, and only the active home app may read them.")
+
                         else -> state.shortcutGroups.forEachIndexed { index, group ->
                             // **A rule between blocks, not under every row.** One app's shortcuts are a unit; what
                             // needs separating is where one app ends and the next begins. A divider per row would
@@ -242,7 +247,9 @@ private fun ShortcutChoiceRow(shortcut: AppShortcut, selected: Boolean, onClick:
             color = content,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = RowPadding),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = RowPadding),
         )
         if (selected) SelectedMark()
     }
@@ -264,7 +271,9 @@ private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             color = if (selected) colors.onAccent else colors.content,
-            modifier = Modifier.weight(1f).padding(vertical = RowPadding),
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = RowPadding),
         )
         if (selected) SelectedMark()
     }

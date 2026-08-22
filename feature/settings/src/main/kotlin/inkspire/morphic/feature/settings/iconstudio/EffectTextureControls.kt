@@ -13,10 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.Grain
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -120,12 +117,22 @@ internal fun ProgressiveBlurControls(
             PositionPad(
                 x = blur.centerX,
                 y = blur.centerY,
-                onValueChange = { x, y -> onUpdate { it.withEffect(blur.withActive { p -> p.copy(centerX = x, centerY = y) }) } },
+                onValueChange = { x, y ->
+                    onUpdate {
+                        it.withEffect(blur.withActive { p ->
+                            p.copy(
+                                centerX = x,
+                                centerY = y
+                            )
+                        })
+                    }
+                },
                 onCommit = onCommit,
             )
         }
     }
 }
+
 /**
  * How soft the blurred end may get, as a fraction of the box.
  *
@@ -133,6 +140,7 @@ internal fun ProgressiveBlurControls(
  * anything of the artwork survives — the ceiling is where the control stops doing more rather than where it breaks.
  */
 private const val BlurReach = 0.1f
+
 /**
  * How big the dots are, how much of their cells they fill, and how round they come out.
  *
@@ -182,6 +190,7 @@ internal fun PixelateControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * How large a cell may get, as a fraction of the box.
  *
@@ -189,6 +198,7 @@ internal fun PixelateControls(
  * is where the control stops being useful rather than where the arithmetic stops working.
  */
 private const val PixelateReach = 0.2f
+
 /**
  * How far the noise pushes, how big the pieces are, and whether they scatter or all slide one way.
  *
@@ -255,6 +265,7 @@ internal fun GrainControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * How far the noise may push a pixel, as a fraction of the box.
  *
@@ -266,6 +277,7 @@ internal fun GrainControls(
  * reaching for at maximum — the icon dispersed into a cloud of its own colors — was not on the control at all.
  */
 private const val GrainReach = 0.45f
+
 /**
  * How far the waves push, how many of them, and where they start.
  *
@@ -314,6 +326,7 @@ internal fun RippleControls(
         )
     }
 }
+
 /**
  * How far a crest may push a pixel, as a fraction of the box.
  *
@@ -321,6 +334,7 @@ internal fun RippleControls(
  * the effect reads as damage rather than as water.
  */
 private const val RippleReach = 0.1f
+
 /**
  * How far the channels are displaced, and in which direction — which is the whole effect.
  *
@@ -353,6 +367,7 @@ internal fun ChromaticControls(
         )
     }
 }
+
 /**
  * How far a fringe may reach, either way.
  *
@@ -360,6 +375,7 @@ internal fun ChromaticControls(
  * colored edges and start reading as three overlapping icons, which is a different — and much less useful — effect.
  */
 private val ChromaticRange = -0.05f..0.05f
+
 /**
  * The slab's color, how deep it runs, which way, and how strongly.
  *
@@ -414,6 +430,7 @@ internal fun ExtrudeControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * Which texture, in what color, how large, which way round, and how strongly.
  *
@@ -519,6 +536,7 @@ internal fun PatternControls(
         )
     }
 }
+
 /**
  * One texture, drawn as itself over the checkerboard the layer tiles use.
  *
@@ -545,9 +563,12 @@ private fun PatternTile(pattern: IconPattern?, argb: Int, selected: Boolean, onC
                 // The drawable is one tile, and the swatch shows four of them — enough to read as a repeat rather
                 // than as a single mark, which is the whole difference between choosing a texture and choosing a
                 // shape.
-                modifier = Modifier.fillMaxSize().scale(2f),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(2f),
             )
         }
     }
 }
+
 private val PatternTileSide = 56.dp

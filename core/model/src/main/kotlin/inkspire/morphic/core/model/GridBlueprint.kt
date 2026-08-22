@@ -202,21 +202,21 @@ object IconSizingRanges {
     val LabelScale: ClosedFloatingPointRange<Float> = 0.7f..1.5f
 
     /**
-      * The dp window both guardrails live in — one bound, because one two-thumb control sets both.
-      *
-      * One range rather than a separate one per thumb: a range slider cannot cross its own thumbs, so the invariant
-      * is structural. Split caps are only ever a consequence of using two independent sliders.
-      *
-      * **The floor is 24dp because the floor is really a *cell* floor.** `CellFit` inverts [IconSizing.minIconDp] into
-      * the smallest usable cell, so a bound of 16 offered a 24dp cell — thirteen rows in a 320dp dock, fifteen columns
-      * across a phone — legal arithmetic that nothing could be tapped in. 24dp is the press-area floor.
-      *
-      * **The ceiling is 120dp, which is a judgment rather than a derivation**, so here is the reasoning: at the default
-      * fraction the upper guardrail *is* the icon size, so it has to reach far enough for a tablet cell to be filled
-      * (~150dp inner at eight columns) while keeping the 24–48 default legible on the track. 120 also stays clear of the
-      * one place a bound can misbehave — the *lower* thumb drives the cell floor, and 120 + a cell's padding still
-      * leaves a 360dp phone two columns rather than none.
-      */
+     * The dp window both guardrails live in — one bound, because one two-thumb control sets both.
+     *
+     * One range rather than a separate one per thumb: a range slider cannot cross its own thumbs, so the invariant
+     * is structural. Split caps are only ever a consequence of using two independent sliders.
+     *
+     * **The floor is 24dp because the floor is really a *cell* floor.** `CellFit` inverts [IconSizing.minIconDp] into
+     * the smallest usable cell, so a bound of 16 offered a 24dp cell — thirteen rows in a 320dp dock, fifteen columns
+     * across a phone — legal arithmetic that nothing could be tapped in. 24dp is the press-area floor.
+     *
+     * **The ceiling is 120dp, which is a judgment rather than a derivation**, so here is the reasoning: at the default
+     * fraction the upper guardrail *is* the icon size, so it has to reach far enough for a tablet cell to be filled
+     * (~150dp inner at eight columns) while keeping the 24–48 default legible on the track. 120 also stays clear of the
+     * one place a bound can misbehave — the *lower* thumb drives the cell floor, and 120 + a cell's padding still
+     * leaves a 360dp phone two columns rather than none.
+     */
     val IconDp: IntRange = 24..120
 }
 

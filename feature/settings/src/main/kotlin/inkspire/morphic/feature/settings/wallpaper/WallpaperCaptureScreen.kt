@@ -123,7 +123,9 @@ fun WallpaperCaptureScreen(onDone: () -> Unit, modifier: Modifier = Modifier) {
         // screenshot. No theme, no background, no scrim.
         CapturePhase.Waiting -> Unit
         CapturePhase.Importing -> Box(
-            modifier = modifier.fillMaxSize().background(Color.Black.copy(alpha = ImportingScrimAlpha)),
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = ImportingScrimAlpha)),
             contentAlignment = Alignment.Center,
         ) {
             if (state.busy) CircularProgressIndicator(color = Color.White)

@@ -27,6 +27,6 @@ internal fun SettingsSectionActions(section: SettingsSection?) {
         SettingsSection.DOCK,
         SettingsSection.FOLDER,
         null,
-        -> Unit
+            -> Unit
     }
 }

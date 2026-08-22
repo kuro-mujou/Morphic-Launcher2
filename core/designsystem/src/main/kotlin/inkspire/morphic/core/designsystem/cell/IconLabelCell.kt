@@ -100,7 +100,9 @@ fun IconLabelCell(
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val availW = maxWidth - CellPadH * 2
-        val padding = Modifier.fillMaxSize().padding(horizontal = CellPadH, vertical = CellPadV)
+        val padding = Modifier
+            .fillMaxSize()
+            .padding(horizontal = CellPadH, vertical = CellPadV)
 
         if (!metrics.showLabel) {
             val iconDp = metrics.resolveIconSize(availW, maxHeight - CellPadV * 2)

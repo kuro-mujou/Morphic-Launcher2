@@ -210,6 +210,7 @@ class HomeViewModel(
                 HomeLayout.PAGER_WITH_DOCK -> combine(pagerConfig, mainWraps) { config, wraps ->
                     config?.let { HomeMainSizing.Pager(it, wraps) }
                 }
+
                 HomeLayout.LIST_WITH_WIDGET_AREA ->
                     settingsRepository.rowHeight(GridSlot.HOME_LIST, current.device).map(HomeMainSizing::List)
             }
@@ -299,6 +300,7 @@ class HomeViewModel(
                     when (item) {
                         is GridItem.App ->
                             infoByComponent[item.component]?.let { HomeItem.App(it, at.placement, at.zone) }
+
                         is GridItem.Folder -> folderById[item.folderId]?.let { folder ->
                             HomeItem.Folder(
                                 folder = folder,
@@ -307,6 +309,7 @@ class HomeViewModel(
                                 zone = at.zone,
                             )
                         }
+
                         is GridItem.Widget ->
                             widgetById[item.appWidgetId]?.let { HomeItem.Widget(it, at.placement, at.zone) }
                         // Both containers resolve their *contents* here too, for the folder's reason: the cell draws
@@ -326,6 +329,7 @@ class HomeViewModel(
                                 zone = at.zone,
                             )
                         }
+
                         is GridItem.WidgetContainer -> widgetContainerById[item.containerId]?.let { container ->
                             HomeItem.WidgetContainer(
                                 container = container,
@@ -944,6 +948,7 @@ class HomeViewModel(
                     ),
                 )
             }
+
             is HomeItem.Folder -> draggedApp?.let { listOf(LayoutChange.AddToFolder(target.folder.id, it)) }
             // **One op is the whole move**, unlike the folder paths: `AddToIconContainer` detaches the item from
             // wherever it was — its grid cell, its folder, another container — as part of filing it, so there is no

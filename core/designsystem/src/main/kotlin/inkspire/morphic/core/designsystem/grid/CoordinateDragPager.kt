@@ -86,7 +86,9 @@ fun <T> CoordinateDragPager(
     val livePlan = session?.takeIf { it.activeZone == zoneId }?.plan
     var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
     LaunchedEffect(livePlan) {
-        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan }
+        if (livePlan == null) dwelledPlan = null else {
+            delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan
+        }
     }
 
     // Edge-dwell page-flip, shared with every other paged drag surface. Scoped to *this* pager's zone: on a

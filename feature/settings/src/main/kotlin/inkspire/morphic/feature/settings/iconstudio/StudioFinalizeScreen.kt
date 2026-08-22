@@ -179,7 +179,10 @@ private fun PreviewWall(
             contentDescription = "Back to the editor",
             hazeState = hazeState,
             onClick = onBack,
-            modifier = Modifier.align(Alignment.TopStart).uiInsetsPadding().padding(ChromeMargin),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .uiInsetsPadding()
+                .padding(ChromeMargin),
         )
     }
 }

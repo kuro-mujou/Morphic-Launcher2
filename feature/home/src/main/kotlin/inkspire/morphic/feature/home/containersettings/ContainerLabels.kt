@@ -26,6 +26,7 @@ internal fun ContainerSettingsRoute.title(): String = when (this) {
 internal fun ContainerSettingsRoute.description(): String = when (this) {
     is ContainerSettingsRoute.Icon ->
         "Group apps and folders into one cell. Add them here, or drag an icon onto the container on your home screen."
+
     is ContainerSettingsRoute.Widget ->
         "Keep several widgets in one cell and swipe between them. Add them here, or drag a widget onto the stack."
 }

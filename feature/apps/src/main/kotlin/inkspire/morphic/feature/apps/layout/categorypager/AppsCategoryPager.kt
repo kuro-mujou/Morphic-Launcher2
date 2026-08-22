@@ -214,7 +214,9 @@ fun AppsCategoryPager(
     val session = coordinator.session
 
     LaunchedEffect(coordinator.isDragging) {
-        if (!coordinator.isDragging) { gap = -1; gapPage = -1 }
+        if (!coordinator.isDragging) {
+            gap = -1; gapPage = -1
+        }
     }
 
     EdgeFlipEffect(

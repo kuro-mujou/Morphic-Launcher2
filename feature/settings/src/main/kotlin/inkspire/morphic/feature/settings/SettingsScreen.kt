@@ -218,7 +218,9 @@ private fun SettingsSinglePane(
                     highlightSelected = false,
                     showChevron = true,
                     insetSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-                    modifier = Modifier.fillMaxSize().background(colors.background),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.background),
                 )
             } else {
                 SettingsDetail(target, WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom, appsLayout, onOpenSection)
@@ -279,7 +281,9 @@ private fun SettingsTwoPane(
             VerticalDivider()
             AnimatedContent(
                 targetState = selected,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 transitionSpec = { fadeIn(tween(DETAIL_FADE_MS)) togetherWith fadeOut(tween(DETAIL_FADE_MS)) },
                 label = "settings-detail",
             ) { section ->

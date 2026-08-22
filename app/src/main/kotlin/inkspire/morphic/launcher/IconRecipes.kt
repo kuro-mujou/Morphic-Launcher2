@@ -34,10 +34,6 @@ import org.koin.compose.koinInject
 fun ProvideIconRecipes(content: @Composable () -> Unit) {
     val settings: SettingsRepository = koinInject()
     val overrides: IconOverrideRepository = koinInject()
-
-    // Seeded with the same values their stores answer with when nothing is stored, so the first frame draws plain
-    // app-default icons rather than nothing — and the store's first emission is then usually identical, which
-    // costs one recomposition of unchanged inputs and no re-bake at all.
     val defaultSet by settings.iconAppearance.collectAsStateWithLifecycle(IconAppearance.Base)
     val perApp by overrides.overrides.collectAsStateWithLifecycle(emptyMap())
 

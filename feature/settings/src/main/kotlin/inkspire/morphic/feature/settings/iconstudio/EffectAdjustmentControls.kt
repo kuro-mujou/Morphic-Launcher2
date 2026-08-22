@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +70,7 @@ internal fun OpacityControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * How the layer combines with what is beneath it.
  *
@@ -102,6 +102,7 @@ internal fun BlendControls(
         }
     }
 }
+
 /**
  * One blend mode, shown as **what it does** rather than named and left to be imagined.
  *
@@ -148,6 +149,7 @@ private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit)
         SwatchLabel(label = blend.name.lowercase(), selected = selected)
     }
 }
+
 /**
  * The shape every blend swatch composites onto the reference.
  *
@@ -157,6 +159,7 @@ private fun BlendTile(blend: LayerBlend, selected: Boolean, onClick: () -> Unit)
  * tiles.
  */
 private val BlendSwatchSource = Color(0xFF9E9E9E)
+
 /**
  * The shape's side, as a share of the swatch's shorter one — leaving the reference visible around it, which is what
  * makes the tile a comparison rather than a color chip.
@@ -166,8 +169,10 @@ private val BlendSwatchSource = Color(0xFF9E9E9E)
  * color test; this reads as the operation being demonstrated on the subject it will be used on.
  */
 private const val BlendSwatchSide = 0.68f
+
 /** About a quarter of the side — an icon's corner, which is what makes the shape read as a layer. */
 private const val BlendSwatchCorner = 0.26f
+
 /**
  * Hue, saturation, brightness and the tint — one `LayerEffect.Color`.
  *
@@ -243,6 +248,7 @@ internal fun ColorControls(
         }
     }
 }
+
 /**
  * The built-in color looks: a category to narrow by, then the looks in it.
  *
@@ -312,6 +318,7 @@ internal fun FilterControls(
         }
     }
 }
+
 /**
  * One look: the reference gradient under this filter's matrix, named underneath.
  *
@@ -321,7 +328,12 @@ internal fun FilterControls(
 @Composable
 private fun FilterTile(label: String, matrix: FloatArray?, selected: Boolean, onClick: () -> Unit) {
     SwatchTile(selected = selected, onClick = onClick) {
-        Canvas(Modifier.fillMaxWidth().height(FilterSwatchHeight).clip(EffectSwatchCorner)) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(FilterSwatchHeight)
+                .clip(EffectSwatchCorner)
+        ) {
             drawRect(
                 brush = Brush.linearGradient(FilterReferenceStops),
                 colorFilter = matrix?.let { ColorFilter.colorMatrix(ColorMatrix(it.copyOf())) },
@@ -330,6 +342,7 @@ private fun FilterTile(label: String, matrix: FloatArray?, selected: Boolean, on
         SwatchLabel(label = label, selected = selected)
     }
 }
+
 /**
  * The shell both labeled swatch tiles sit in: a swatch, its name, one tap target, and the selection ring.
  *
@@ -379,6 +392,7 @@ private fun SwatchTile(
         }
     }
 }
+
 /** A swatch's name, dimmed until it is the chosen one. Shared so the two tiles cannot style it differently. */
 @Composable
 private fun SwatchLabel(label: String, selected: Boolean) {
@@ -389,9 +403,12 @@ private fun SwatchLabel(label: String, selected: Boolean) {
         textAlign = TextAlign.Center,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().padding(bottom = EffectLabelPad),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = EffectLabelPad),
     )
 }
+
 /**
  * What every swatch is a picture of.
  *
@@ -405,14 +422,17 @@ private val FilterReferenceStops = listOf(
     Color(0xFF7A5CFF),
     Color(0xFF2ED8C3),
 )
+
 /**
  * The corner every swatch in this section is cut to — one value, because the clip and the selection ring drawn over
  * it are the *same* rounded rect and a difference between them would show as a sliver of unringed swatch at each
  * corner. Restated per tile it was three chances to drift.
  */
 internal val EffectSwatchCorner = RoundedCornerShape(10.dp)
+
 /** The tile around a swatch, which exists only to shape the press ripple. */
 private val SwatchTileCorner = RoundedCornerShape(10.dp)
+
 /** The selection ring's stroke, wherever one is drawn in this section. */
 internal val SwatchRingWidth = 2.dp
 private val FilterTileWidth = 72.dp

@@ -413,7 +413,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     is LayerEffect.Grain,
     is LayerEffect.Pixelate,
     is LayerEffect.ProgressiveBlur,
-    -> Modifier
+        -> Modifier
 
     // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what
     // comes out is the three channels, displaced and added. The outer layer is what keeps `Plus` adding against

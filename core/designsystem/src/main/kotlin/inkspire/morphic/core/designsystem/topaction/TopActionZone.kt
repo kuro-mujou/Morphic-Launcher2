@@ -160,20 +160,25 @@ fun TopActionZone(
                     highlighted = true,
                     content = onBase,
                 )
+
                 TopActionMode.DELETE -> if (showUninstall) {
                     Target(
                         glyph = TopActionGlyph.CROSS,
                         label = "Remove",
                         highlighted = hoveredTarget == TopActionTarget.REMOVE,
                         content = onBase,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                     )
                     Target(
                         glyph = TopActionGlyph.BIN,
                         label = "Uninstall",
                         highlighted = hoveredTarget == TopActionTarget.UNINSTALL,
                         content = onBase,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                     )
                 } else {
                     Target(TopActionGlyph.CROSS, "Remove", highlighted = true, content = onBase)
@@ -215,7 +220,9 @@ private fun Target(
         label = "topActionTargetWash",
     )
     Row(
-        modifier = modifier.background(wash).padding(horizontal = 4.dp),
+        modifier = modifier
+            .background(wash)
+            .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -245,6 +252,7 @@ private fun TopActionGlyphMark(glyph: TopActionGlyph, tint: Color, size: Dp = Gl
                 line(Offset(mid - arm, mid), Offset(mid + arm, mid))
                 line(Offset(mid, mid - arm), Offset(mid, mid + arm))
             }
+
             TopActionGlyph.CROSS -> {
                 line(Offset(mid - arm, mid - arm), Offset(mid + arm, mid + arm))
                 line(Offset(mid + arm, mid - arm), Offset(mid - arm, mid + arm))

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -75,7 +74,8 @@ private const val MAX_PREVIEW_RATIO = 2.5f
  * split from its own end: the main area's companion *is* the side zone (wherever it sits), and the side zone's is the
  * main area (the opposite edge).
  */
-internal enum class CompanionSide { TOP, BOTTOM, START, END;
+internal enum class CompanionSide {
+    TOP, BOTTOM, START, END;
 
     /** Empty, so [of] can hang off it — Kotlin enums carry no implicit companion. */
     companion object
@@ -375,24 +375,49 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
     when (companion.side) {
         CompanionSide.TOP, CompanionSide.BOTTOM -> Column(Modifier.fillMaxSize()) {
             if (first) {
-                CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
+                CompanionZone(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(companionWeight)
+                )
                 Spacer(Modifier.height(PreviewPad))
             }
-            edited(Modifier.fillMaxWidth().weight(gridWeight))
+            edited(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(gridWeight)
+            )
             if (!first) {
                 Spacer(Modifier.height(PreviewPad))
-                CompanionZone(Modifier.fillMaxWidth().weight(companionWeight))
+                CompanionZone(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(companionWeight)
+                )
             }
         }
+
         CompanionSide.START, CompanionSide.END -> Row(Modifier.fillMaxSize()) {
             if (first) {
-                CompanionZone(Modifier.fillMaxHeight().weight(companionWeight))
+                CompanionZone(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(companionWeight)
+                )
                 Spacer(Modifier.width(PreviewPad))
             }
-            edited(Modifier.fillMaxHeight().weight(gridWeight))
+            edited(
+                Modifier
+                    .fillMaxHeight()
+                    .weight(gridWeight)
+            )
             if (!first) {
                 Spacer(Modifier.width(PreviewPad))
-                CompanionZone(Modifier.fillMaxHeight().weight(companionWeight))
+                CompanionZone(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(companionWeight)
+                )
             }
         }
     }
@@ -401,7 +426,11 @@ private fun ScreenPreview(companion: EditorCompanion?, edited: @Composable (Modi
 /** The zone this editor is *not* editing — a plain block, since its own contents are another screen's business. */
 @Composable
 private fun CompanionZone(modifier: Modifier) {
-    Box(modifier.clip(RoundedCornerShape(CellCorner)).background(LocalMorphicColors.current.contentMuted.copy(alpha = 0.25f)))
+    Box(
+        modifier
+            .clip(RoundedCornerShape(CellCorner))
+            .background(LocalMorphicColors.current.contentMuted.copy(alpha = 0.25f))
+    )
 }
 
 /**
@@ -479,7 +508,12 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
     // when the posture changes the preview's size.
     val inset = insetFraction.coerceIn(0f, MAX_PREVIEW_INSET)
     Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxWidth(1f - inset * 2).fillMaxHeight().clipToBounds()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth(1f - inset * 2)
+                .fillMaxHeight()
+                .clipToBounds()
+        ) {
             val cw = animCols.coerceAtLeast(1f)
             val ch = animRows.coerceAtLeast(1f)
             val gap = CellGap.toPx()
@@ -508,7 +542,7 @@ internal fun GridPreview(cols: Int, rows: Int, edit: PreviewEdit?, insetFraction
                     )
                 }
             }
-            }
+        }
     }
 }
 

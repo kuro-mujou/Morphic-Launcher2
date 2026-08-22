@@ -107,15 +107,19 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         SettingsSection.WALLPAPER -> SettingsSectionMeta(
             "Wallpaper", Icons.Outlined.Wallpaper,
         )
+
         SettingsSection.EFFECTS -> SettingsSectionMeta(
             "Effects", Icons.Outlined.AutoAwesome,
         )
+
         SettingsSection.ICONS -> SettingsSectionMeta(
             "Icons", Icons.Outlined.Palette,
         )
+
         SettingsSection.SURFACE_REGISTER -> SettingsSectionMeta(
             "Screen manager", Icons.Outlined.Dashboard,
         )
+
         SettingsSection.HOME -> SettingsSectionMeta(
             // **The one row that does not rename itself**, which is the whole point of the hub: it names a surface,
             // and a surface does not change identity when its arrangement does.
@@ -127,14 +131,17 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
             if (isList) "List" else "Grid",
             if (isList) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView,
         )
+
         SettingsSection.DOCK -> if (isList) {
             SettingsSectionMeta("Widget area", Icons.Outlined.Widgets)
         } else {
             SettingsSectionMeta("Dock", Icons.Outlined.Dock)
         }
+
         SettingsSection.APPS -> SettingsSectionMeta(
             "App screen", Icons.Outlined.Apps,
         )
+
         SettingsSection.FOLDER -> SettingsSectionMeta(
             "Folders", Icons.Outlined.Folder,
         )
@@ -163,7 +170,7 @@ internal val SettingsSection.parent: SettingsSection?
         SettingsSection.HOME,
         SettingsSection.APPS,
         SettingsSection.FOLDER,
-        -> null
+            -> null
     }
 
 /** How many hubs sit above this section — 0 for a list row, 1 for a child. Used to pick a slide direction. */

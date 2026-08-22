@@ -180,6 +180,7 @@ object GridReflow {
             val rect = when (overflow) {
                 Overflow.NEXT_PAGE ->
                     occupancy.findFreeRect(placement.page, placement.row, placement.col, rowSpan, colSpan)
+
                 Overflow.EVICT ->
                     occupancy.findFreeRectOnPage(placement.page, placement.row, placement.col, rowSpan, colSpan)
             }

@@ -69,7 +69,9 @@ fun PackDrawablePicker(
         MorphicTextField(
             state = searchState,
             placeholder = "Search icons",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
         )
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 64.dp),

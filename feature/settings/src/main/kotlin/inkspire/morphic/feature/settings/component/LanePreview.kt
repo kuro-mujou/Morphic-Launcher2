@@ -54,20 +54,29 @@ internal fun LanePreview(rowHeightDp: Float, areaWidthDp: Float, insetFraction: 
         // One more lane than fits, so the bottom one is cut by the clip rather than stopping short of it.
         val laneCount = ceil((maxHeight + LaneGap) / (laneHeight + LaneGap)).toInt().coerceAtLeast(1)
         Column(
-            modifier = Modifier.fillMaxSize().clipToBounds(),
+            modifier = Modifier
+                .fillMaxSize()
+                .clipToBounds(),
             verticalArrangement = Arrangement.spacedBy(LaneGap),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             repeat(laneCount) {
                 Row(
-                    modifier = Modifier.width(laneWidth).height(laneHeight),
+                    modifier = Modifier
+                        .width(laneWidth)
+                        .height(laneHeight),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(LaneGap),
                 ) {
                     val glyph = (laneHeight * LaneIconFraction).coerceAtLeast(1.dp)
-                    Box(Modifier.size(glyph).clip(RoundedCornerShape(2.dp)).background(previewInk()))
                     Box(
-                        Modifier
+                        modifier = Modifier
+                            .size(glyph)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(previewInk())
+                    )
+                    Box(
+                        modifier = Modifier
                             .weight(1f)
                             .height((glyph * LaneLabelFraction).coerceAtLeast(1.dp))
                             .clip(RoundedCornerShape(2.dp))

@@ -636,7 +636,11 @@ private fun ListZone(
 ) {
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         Box(modifier = modifier.onGloballyPositioned { onViewportChange(it.boundsInRoot()) }) {
-            Column(Modifier.fillMaxSize().verticalScroll(scrollState, enabled = !dragging)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState, enabled = !dragging)
+            ) {
                 apps.forEach { app ->
                     key(app.componentKey.flatten()) {
                         val item = GridItem.App(app.componentKey)
@@ -645,7 +649,9 @@ private fun ListZone(
                             item = item,
                             gestureConfig = gestureConfig,
                             onRelease = onRelease,
-                            modifier = Modifier.fillMaxWidth().height(rowHeight),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rowHeight),
                             // **Horizontal only, and the vertical pair is not a gap.** This list scrolls, and
                             // a row that took a vertical swipe would take scrolling away from wherever the
                             // user had assigned one — on a surface that is almost entirely rows. Nothing here

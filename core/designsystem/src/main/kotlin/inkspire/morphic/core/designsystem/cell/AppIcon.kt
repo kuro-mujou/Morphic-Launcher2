@@ -74,7 +74,9 @@ fun AppIcon(
             // not `IconSizing`: an icon at 1f fills its box and so touches the plate's edge everywhere. Deliberately
             // unclipped, since an icon's own glow or shadow is meant to escape its box; a zoom above 1 therefore
             // spills, which is visible while it is being set rather than a surprise later.
-            modifier = Modifier.fillMaxSize().scale(appearance.zoom.coerceAtLeast(0f)),
+            modifier = Modifier
+                .fillMaxSize()
+                .scale(appearance.zoom.coerceAtLeast(0f)),
         )
     }
 }

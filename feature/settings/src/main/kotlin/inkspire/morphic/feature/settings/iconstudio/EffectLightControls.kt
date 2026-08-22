@@ -1,10 +1,7 @@
 package inkspire.morphic.feature.settings.iconstudio
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.filled.Vignette
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
@@ -64,6 +61,7 @@ internal fun DuotoneControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * The bloom's falloff, its color, and how strongly it is laid on.
  *
@@ -170,6 +168,7 @@ internal fun BloomControls(
         modifier = Modifier.fillMaxWidth(),
     )
 }
+
 /**
  * Where the light sits — **the transform section's pad for a disc, one slider for a ramp**, because a linear
  * gradient is constant along its own perpendicular and so genuinely cannot see half of a 2D move.
@@ -218,6 +217,7 @@ private fun BloomPosition(
         )
     }
 }
+
 /**
  * The sheen's color, how hard it is struck, where from, and how its edge bows.
  *
@@ -285,18 +285,21 @@ internal fun GlossControls(
         modifier = Modifier.fillMaxWidth(),
     )
 }
+
 /** @see bloomHint */
 private val ContentAnchor.glossHint: String
     get() = when (this) {
         ContentAnchor.BOX -> "The sheen stays put; moving the layer slides the artwork under it."
         ContentAnchor.CONTENT -> "The sheen sits on the artwork and moves, zooms and turns with it."
     }
+
 /** One line saying what the chosen anchor does — the shape section's rule, that a static one would look broken. */
 private val ContentAnchor.bloomHint: String
     get() = when (this) {
         ContentAnchor.BOX -> "The light stays put; moving the layer slides the artwork under it."
         ContentAnchor.CONTENT -> "The light sits on the artwork and moves, zooms and turns with it."
     }
+
 /**
  * The vignette's color, how far in it comes, how softly, and how strongly.
  *
@@ -367,6 +370,7 @@ internal fun VignetteControls(
         modifier = Modifier.fillMaxWidth(),
     )
 }
+
 /** @see bloomHint */
 private val ContentAnchor.vignetteHint: String
     get() = when (this) {

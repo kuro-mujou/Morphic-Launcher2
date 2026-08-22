@@ -23,11 +23,6 @@ fun AppCell(
     metrics: IconMetrics = LocalIconMetrics.current,
     itemGestures: Modifier = Modifier,
 ) {
-    // TODO(B9 data:icons): per-app icon-size override — IconOverride.iconSizeFor(surface, layout) applied as a
-    //  graphicsLayer scale on the icon. Dropped until per-app icon overrides exist.
-    // TODO(P7 gestures): support a `hidden` placeholder slot (an app whose cell is reserved but not drawn).
-    // TODO(per-surface sizing): read LocalIconSurface + a layout key so a surface can pick its own
-    //  IconMetrics + per-(surface, layout) size override. For now metrics come from LocalIconMetrics only.
     IconLabelCell(label = app.label, modifier = modifier, metrics = metrics, itemGestures = itemGestures) { iconSize ->
         val sizePx = with(LocalDensity.current) { iconSize.roundToPx() }
         AppIcon(

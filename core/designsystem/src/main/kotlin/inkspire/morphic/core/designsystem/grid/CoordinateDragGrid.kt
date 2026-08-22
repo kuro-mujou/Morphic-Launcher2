@@ -119,7 +119,9 @@ fun <T> CoordinateDragGrid(
     val livePlan = session?.takeIf { it.activeZone == zoneId }?.plan
     var dwelledPlan by remember { mutableStateOf<PlacementPlan?>(null) }
     LaunchedEffect(livePlan) {
-        if (livePlan == null) dwelledPlan = null else { delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan }
+        if (livePlan == null) dwelledPlan = null else {
+            delay(PUSH_DWELL_MS.milliseconds); dwelledPlan = livePlan
+        }
     }
 
     // Held in state rather than registered straight from the layout callback: registration also depends on this
@@ -181,12 +183,12 @@ fun <T> CoordinateDragGrid(
                 onRelease = onRelease,
                 modifier = cellModifier,
                 edgeActions = edgeActions(item),
-                    doubleTap = doubleTap(item),
+                doubleTap = doubleTap(item),
                 tracksFinger = dragItem(item) == trackedItem,
                 onOpen = { onOpen(item) },
                 onShowMenu = { anchor -> onShowMenu(item, anchor) },
                 onEdgeAction = { direction -> onEdgeAction(item, direction) },
-                    onDoubleTap = { onDoubleTap(item) },
+                onDoubleTap = { onDoubleTap(item) },
             ) { itemGestures ->
                 itemContent(item, Modifier.fillMaxSize(), itemGestures)
             }

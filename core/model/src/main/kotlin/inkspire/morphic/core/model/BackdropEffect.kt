@@ -126,8 +126,8 @@ sealed interface BackdropEffect {
     /**
      * How much the sampled wallpaper is blurred for this effect, `0..1`.
      *
- * **Both variants have one**, which is the whole of an earlier model change: there is no longer a
- * value of this type that means "sample nothing". A surface with nothing to sample is a surface with no
+     * **Both variants have one**, which is the whole of an earlier model change: there is no longer a
+     * value of this type that means "sample nothing". A surface with nothing to sample is a surface with no
      * *backdrop* — `LocalBackdrop` being null — which is a different question and one this type never answered.
      */
     val blurStrength: Float
@@ -156,17 +156,17 @@ sealed interface BackdropEffect {
      * The frost behind an arriving surface is deliberately **not tunable**. It is what a screenful of content is read
      * against, and a strength or tint slider that can make that content unreadable is not a preference worth
      * offering — so choosing the variant chooses the whole look, and the per-variant sliders govern the smaller
- * frosted panels instead. Choosing between a blur and a lens, and which wash the blur carries, is the entire
- * control a user has over it, which is the design this exists to express.
+     * frosted panels instead. Choosing between a blur and a lens, and which wash the blur carries, is the entire
+     * control a user has over it, which is the design this exists to express.
      *
      * **Every variant blurs by the same amount**, and that is load-bearing rather than tidy: the blurred bitmap is
      * produced upstream from this strength, so one shared value means switching variants never re-blurs anything. It
      * is a redraw with a different wash over an identical picture, not a re-decode.
      *
- * What each variant keeps is exactly what distinguishes it: the **wash** for a [Blur] — its color and, where that
- * is [BackdropTint.CUSTOM], which color — and the saturation boost for [LiquidGlass], whose refraction parameters
- * are dropped because a lens needs a rim and there is none at this size (see `wallpaperBackdrop`'s `refracts`). A
- * blur tinted [BackdropTint.NONE] therefore casts a film with no wash on it.
+     * What each variant keeps is exactly what distinguishes it: the **wash** for a [Blur] — its color and, where that
+     * is [BackdropTint.CUSTOM], which color — and the saturation boost for [LiquidGlass], whose refraction parameters
+     * are dropped because a lens needs a rim and there is none at this size (see `wallpaperBackdrop`'s `refracts`). A
+     * blur tinted [BackdropTint.NONE] therefore casts a film with no wash on it.
      */
     val fullScreenFilm: BackdropEffect
         get() = when (this) {

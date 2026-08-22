@@ -232,6 +232,7 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.SecondPressed
             noEffect()
         }
+
         ItemGestureEvent.DoubleTapTimeout -> {
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.OpenItem)
@@ -242,7 +243,7 @@ class ItemGestureMachine(
         ItemGestureEvent.Up,
         ItemGestureEvent.Cancel,
         ItemGestureEvent.TakenByParent,
-        -> noEffect()
+            -> noEffect()
     }
 
     /**
@@ -258,18 +259,22 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.DoubleTapAction)
         }
+
         is ItemGestureEvent.Move -> {
             if (event.offsetFromDown.pastSlop()) phase = ItemGesturePhase.ReleasedToParent
             noEffect()
         }
+
         ItemGestureEvent.LongPress -> {
             phase = ItemGesturePhase.MenuOpen
             effect(ItemGestureEffect.ShowMenu)
         }
+
         ItemGestureEvent.TakenByParent -> {
             phase = ItemGesturePhase.ReleasedToParent
             noEffect()
         }
+
         ItemGestureEvent.Cancel -> reset()
         ItemGestureEvent.Down, ItemGestureEvent.DoubleTapTimeout -> noEffect()
     }
@@ -296,10 +301,12 @@ class ItemGestureMachine(
                 noEffect()
             }
         }
+
         ItemGestureEvent.LongPress -> {
             phase = ItemGesturePhase.MenuOpen
             effect(ItemGestureEffect.ShowMenu)
         }
+
         ItemGestureEvent.Up -> {
             // A quick, still press is a tap — **unless a second one could still be coming**, which is only
             // true on an item whose owner assigned a double tap. Everywhere else this fires at once, as ever.
@@ -316,6 +323,7 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.ReleasedToParent
             noEffect()
         }
+
         ItemGestureEvent.Cancel -> reset()
         ItemGestureEvent.Down, ItemGestureEvent.DoubleTapTimeout -> noEffect()
     }
@@ -326,10 +334,12 @@ class ItemGestureMachine(
             // move the item — the pull is how a swipe that has not fired yet shows that it is being made.
             is ItemGestureEvent.Move ->
                 effect(ItemGestureEffect.SwipeProgress(current.direction, event.offsetFromDown))
+
             ItemGestureEvent.Up -> {
                 phase = ItemGesturePhase.Idle
                 listOf(ItemGestureEffect.EdgeAction(current.direction), ItemGestureEffect.SwipeSettled)
             }
+
             ItemGestureEvent.Cancel -> {
                 phase = ItemGesturePhase.Idle
                 effect(ItemGestureEffect.SwipeSettled)
@@ -341,7 +351,7 @@ class ItemGestureMachine(
             ItemGestureEvent.Down,
             ItemGestureEvent.TakenByParent,
             ItemGestureEvent.DoubleTapTimeout,
-            -> noEffect()
+                -> noEffect()
         }
 
     private fun onMenuOpen(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
@@ -372,11 +382,12 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.DismissMenu)
         }
+
         ItemGestureEvent.LongPress,
         ItemGestureEvent.Down,
         ItemGestureEvent.TakenByParent,
         ItemGestureEvent.DoubleTapTimeout,
-        -> noEffect()
+            -> noEffect()
     }
 
     private fun onDragging(event: ItemGestureEvent): List<ItemGestureEffect> = when (event) {
@@ -385,15 +396,17 @@ class ItemGestureMachine(
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.Drop)
         }
+
         ItemGestureEvent.Cancel -> {
             phase = ItemGesturePhase.Idle
             effect(ItemGestureEffect.CancelDrag)
         }
+
         ItemGestureEvent.LongPress,
         ItemGestureEvent.Down,
         ItemGestureEvent.TakenByParent,
         ItemGestureEvent.DoubleTapTimeout,
-        -> noEffect()
+            -> noEffect()
     }
 
     // The swipe belongs to the parent now; do nothing until the pointer lifts, then reset.
@@ -404,7 +417,7 @@ class ItemGestureMachine(
         ItemGestureEvent.Down,
         ItemGestureEvent.TakenByParent,
         ItemGestureEvent.DoubleTapTimeout,
-        -> noEffect()
+            -> noEffect()
     }
 
     private fun reset(): List<ItemGestureEffect> {

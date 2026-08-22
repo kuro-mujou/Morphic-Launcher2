@@ -196,7 +196,10 @@ private fun ListPane(
         if (groups == null) {
             // Still reading the catalog. Distinct from an empty list, which is a real answer — see
             // [WidgetPickerState.groups].
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = colors.content)
             }
             return@Column
@@ -211,7 +214,9 @@ private fun ListPane(
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // **Components come first, and only when nothing is being searched.** They are the launcher's own
@@ -286,7 +291,10 @@ private fun ComponentRow(spec: ComponentRowSpec) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.accentMuted),
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(colors.accentMuted),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -329,7 +337,10 @@ private fun AppRow(group: WidgetProviderGroup, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.accentMuted),
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(colors.accentMuted),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -386,7 +397,9 @@ private fun DetailPane(
 
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
         ) { page ->
             WidgetPage(
                 provider = group.providers[page],
@@ -398,7 +411,9 @@ private fun DetailPane(
             Dots(
                 current = pagerState.currentPage,
                 count = group.providers.size,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
             )
         } else {
             Spacer(Modifier.height(8.dp))
@@ -410,7 +425,9 @@ private fun DetailPane(
             MorphicButton(
                 onClick = { current?.let(onAddWidget) },
                 enabled = current != null,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
             ) {
                 Text("Add to home")
             }
@@ -423,7 +440,9 @@ private fun DetailPane(
 private fun WidgetPage(provider: WidgetProvider, sizeLabel: String) {
     val colors = LocalMorphicColors.current
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -441,7 +460,9 @@ private fun WidgetPage(provider: WidgetProvider, sizeLabel: String) {
                     bitmap = preview.asImageBitmap(),
                     contentDescription = provider.label,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
                 )
             } else {
                 // A provider that publishes neither a preview nor an icon. Its name is all there is to show, and

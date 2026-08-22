@@ -178,6 +178,7 @@ fun AppsScreen(
                 rowHeight = state.rowHeight,
                 horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
             )
+
             AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
                 apps = state.apps,
                 onLaunch = viewModel::launch,
@@ -185,6 +186,7 @@ fun AppsScreen(
                 cols = state.colsFor(GridSlot.APPS_SCROLL, device),
                 horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
             )
+
             AppsLayout.PAGER -> AppsPager(
                 pages = state.pagerPages,
                 onLaunch = viewModel::launch,
@@ -204,6 +206,7 @@ fun AppsScreen(
                 horizontalPadding = pagerPadding,
                 wraps = state.wraps(GridSlot.APPS_PAGER),
             )
+
             AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
                 categories = state.categories,
                 onLaunch = viewModel::launch,
@@ -260,6 +263,7 @@ fun AppsScreen(
 fun AppsLayout.scrollAxes(wraps: Boolean): ScrollAxes = when (this) {
     AppsLayout.VERTICAL_LIST, AppsLayout.VERTICAL_GRID, AppsLayout.CATEGORY_CARD ->
         ScrollAxes(vertical = AxisScroll.BOUNDED)
+
     AppsLayout.PAGER -> ScrollAxes(horizontal = AxisScroll.ofPager(wraps))
     // The only layout that scrolls on both: pages across, a category down. Only the pages can wrap — a category's
     // own scroll is a list of apps, which has a top and a bottom whatever the pager does.

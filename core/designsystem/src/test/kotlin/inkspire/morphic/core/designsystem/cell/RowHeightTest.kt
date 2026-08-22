@@ -49,7 +49,8 @@ class RowHeightTest {
     fun `widening the guardrails widens the range, and narrowing narrows it`() {
         // The coupling the settings section relies on: the icon range slider is the authority, and this follows it.
         val wide = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 24.dp, maxIconDp = 120.dp))
-        val narrow = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 40.dp, maxIconDp = 48.dp))
+        val narrow =
+            rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 40.dp, maxIconDp = 48.dp))
 
         assertEquals(24f + padding, wide.start, 0.01f)
         assertEquals(120f + padding, wide.endInclusive, 0.01f)
@@ -61,7 +62,8 @@ class RowHeightTest {
     fun `crossed guardrails are read order-safe, and equal ones still give a usable control`() {
         // `resolveIconSize` coerces with minOf/maxOf, so a crossed pair must describe the same range rather than an
         // empty one — and equal guardrails must still leave a slider something to travel.
-        val crossed = rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 48.dp, maxIconDp = 24.dp))
+        val crossed =
+            rowHeightRangeDp(labelHeightDp = labelHeight, metrics = metrics.copy(minIconDp = 48.dp, maxIconDp = 24.dp))
         assertEquals(rowHeightRangeDp(metrics, labelHeight).start, crossed.start, 0.01f)
         assertEquals(rowHeightRangeDp(metrics, labelHeight).endInclusive, crossed.endInclusive, 0.01f)
 

@@ -134,6 +134,7 @@ fun rememberTopActionState(
                 graceArmed = true
                 engage()
             }
+
             TopActionMode.DELETE -> {
                 delay(ExpandDwellMs.milliseconds)
                 expanded = true

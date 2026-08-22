@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -27,9 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -163,6 +160,7 @@ internal fun EffectsControls(
         }
     }
 }
+
 /**
  * The entries, [EffectColumns] across and paged.
  *
@@ -212,6 +210,7 @@ private fun EffectGrid(target: EffectTarget, pagerState: PagerState, onOpen: (Ef
         if (pages.size > 1) PagerDots(current = pagerState.currentPage, count = pages.size)
     }
 }
+
 /**
  * How many pages [target]'s entries fill.
  *
@@ -221,6 +220,7 @@ private fun EffectGrid(target: EffectTarget, pagerState: PagerState, onOpen: (Ef
  */
 private fun pageCountOf(target: EffectTarget): Int =
     ceil(target.slices.size / (EffectColumns * EffectRows).toFloat()).toInt().coerceAtLeast(1)
+
 /**
  * One page of entries.
  *
@@ -252,6 +252,7 @@ private fun EffectPage(slices: List<EffectSlice>, target: EffectTarget, onOpen: 
         }
     }
 }
+
 /**
  * One entry: a square plate with the glyph, the word underneath.
  *
@@ -303,6 +304,7 @@ private fun EffectTile(slice: EffectSlice, active: Boolean, onClick: () -> Unit,
         )
     }
 }
+
 /**
  * What a tile's label adds under its plate: the gap above it, one line of `labelSmall`, and the padding beneath.
  *
@@ -322,6 +324,7 @@ private fun effectLabelBand(): Dp {
     val line = if (style.lineHeight.isSpecified) style.lineHeight else style.fontSize * DefaultLineHeightRatio
     return with(density) { ceil(line.toPx()).toDp() } + EffectLabelGap + EffectLabelPad
 }
+
 /**
  * Which entry is open, the way back to the grid, and — for an entry that owns an effect — its switch.
  *
@@ -391,6 +394,7 @@ internal fun EffectHeader(
         }
     }
 }
+
 /**
  * Four across, two rows to a page — eight entries before a second page is needed, against four today.
  *
@@ -400,17 +404,22 @@ internal fun EffectHeader(
  */
 private const val EffectColumns = 4
 private const val EffectRows = 2
+
 /** Between tiles on both axes. */
 private val EffectGridSpacing = 8.dp
+
 /** How wide a tile is allowed to get, whatever share of the panel its cell was handed. */
 private val EffectTileMax = 96.dp
+
 /** The glyph inside a tile's plate — a signpost, so it sits in the square rather than filling it. */
 private const val EffectGlyphFraction = 0.42f
+
 /**
  * Between a labeled tile's picture and its name, and under the name — the same two on an effect entry and on a
  * swatch. [effectLabelBand] reads them back, because the effect grid's page height is built from them.
  */
 internal val EffectLabelGap = 4.dp
 internal val EffectLabelPad = 2.dp
+
 /** What a text style's line height is worth when it declares none, matching `IconLabelCell`'s own fallback. */
 private const val DefaultLineHeightRatio = 1.2f

@@ -169,7 +169,9 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
 
         item(key = "controls") {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(ScreenPadding),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(ScreenPadding),
                 verticalArrangement = Arrangement.spacedBy(RowGap),
             ) {
                 // **The chooser sits under the preview, unlabeled**, which is the order the eye wants: the picture is
@@ -204,6 +206,7 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                         onEdit = viewModel::editBlur,
                         onPreview = ::previewBlur,
                     )
+
                     is BackdropEffect.LiquidGlass -> GlassControls(
                         effect = effect,
                         onEdit = viewModel::editGlass,

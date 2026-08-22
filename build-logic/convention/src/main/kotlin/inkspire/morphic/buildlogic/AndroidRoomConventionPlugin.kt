@@ -20,8 +20,8 @@ class AndroidRoomConventionPlugin : Plugin<Project> {
                     it.name == "arg"
                         && it.parameterCount == 2
                         && it.parameterTypes.all { p ->
-                            p == String::class.java
-                        }
+                        p == String::class.java
+                    }
                 } ?: return@afterEvaluate
                 argMethod.invoke(kspExt, "room.schemaLocation", "$projectDir/schemas")
                 argMethod.invoke(kspExt, "room.incremental", "true")

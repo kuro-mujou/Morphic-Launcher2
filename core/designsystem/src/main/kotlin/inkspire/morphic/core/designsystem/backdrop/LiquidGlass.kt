@@ -170,5 +170,6 @@ internal class LiquidGlass {
  * chooser does not offer, so it asks this and says why instead. The renderer checks it too, since a stored preference
  * outlives the device it was chosen on — a backup restored onto an older phone is exactly that case.
  */
-val liquidGlassSupported: Boolean @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.TIRAMISU)
+val liquidGlassSupported: Boolean
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.TIRAMISU)
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU

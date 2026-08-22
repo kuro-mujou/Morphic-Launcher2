@@ -191,7 +191,18 @@ internal object CategoryHeuristics {
         ),
         Rule(
             AppCategory.PERSONALIZATION,
-            listOf("launcher", "theme", "themes", "wallpaper", "iconpack", "keyboard", "widget", "widgets", "lockscreen", "font"),
+            listOf(
+                "launcher",
+                "theme",
+                "themes",
+                "wallpaper",
+                "iconpack",
+                "keyboard",
+                "widget",
+                "widgets",
+                "lockscreen",
+                "font"
+            ),
         ),
         Rule(
             AppCategory.TOOLS,

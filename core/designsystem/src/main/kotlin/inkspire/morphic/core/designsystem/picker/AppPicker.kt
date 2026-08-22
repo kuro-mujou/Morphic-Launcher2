@@ -81,7 +81,9 @@ fun AppPicker(
         MorphicTextField(
             state = searchState,
             placeholder = placeholder,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
         )
         LazyColumn(Modifier.fillMaxSize()) {
             items(matches, key = { it.componentKey.flatten() }) { app ->
@@ -92,13 +94,24 @@ fun AppPicker(
                 if (selected == null) {
                     AppRowCell(app = app, modifier = row)
                 } else {
-                    Row(modifier = row, verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = row,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         // The row carries the click, not the box — a checkbox is a 20dp target inside a 64dp row,
                         // and the whole row is what a user aims at. `onClick = null` is Compose's own way of saying
                         // "this control is drawn, and something else is the target", which also stops it taking a
                         // second, competing tap.
-                        Checkbox(checked = app.componentKey in selected, onCheckedChange = null)
-                        AppRowCell(app = app, modifier = Modifier.weight(1f).fillMaxHeight())
+                        Checkbox(
+                            checked = app.componentKey in selected,
+                            onCheckedChange = null
+                        )
+                        AppRowCell(
+                            app = app,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
                     }
                 }
             }
@@ -107,7 +120,10 @@ fun AppPicker(
         // is true reads as a broken picker: an empty list with an empty query is a caller whose apps have not
         // loaded, not a search that failed. Only a non-empty query can fail to match.
         if (matches.isEmpty() && query.isNotEmpty()) {
-            Text("No apps match “$query”", modifier = Modifier.padding(16.dp))
+            Text(
+                text = "No apps match “$query”",
+                modifier = Modifier.padding(16.dp)
+            )
         }
     }
 }

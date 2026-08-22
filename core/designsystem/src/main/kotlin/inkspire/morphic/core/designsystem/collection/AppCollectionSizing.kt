@@ -66,10 +66,13 @@ internal fun appCollectionInnerSize(
 ): DpSize = when (device) {
     DeviceConfiguration.PHONE_PORTRAIT ->
         widthDriven(window.width, PHONE_PORTRAIT_WIDTH_FRACTION, grid, cellLabelHeight)
+
     DeviceConfiguration.TABLET_PORTRAIT ->
         widthDriven(window.width, TABLET_PORTRAIT_WIDTH_FRACTION, grid, cellLabelHeight)
+
     DeviceConfiguration.PHONE_LANDSCAPE ->
         heightDriven(window.height, PHONE_LANDSCAPE_HEIGHT_FRACTION, grid, cellLabelHeight, chromeReserve)
+
     DeviceConfiguration.TABLET_LANDSCAPE ->
         heightDriven(window.height, TABLET_LANDSCAPE_HEIGHT_FRACTION, grid, cellLabelHeight, chromeReserve)
 }

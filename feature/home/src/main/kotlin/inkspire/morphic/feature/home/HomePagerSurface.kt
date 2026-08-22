@@ -975,12 +975,14 @@ private fun HomeItemCell(
     when (item) {
         is HomeItem.App ->
             AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
+
         is HomeItem.Widget -> WidgetCell(
             appWidgetId = item.info.appWidgetId,
             label = item.info.label.ifBlank { UnnamedWidget },
             modifier = cellModifier,
             itemGestures = itemGestures,
         )
+
         is HomeItem.Folder -> {
             // Hide the app currently being dragged (e.g. extracted out of this folder) from the tile preview, so it
             // isn't shown in the folder icon and under the finger at the same time. The real folder removal commits
@@ -996,6 +998,7 @@ private fun HomeItemCell(
                 itemGestures = itemGestures,
             )
         }
+
         is HomeItem.IconContainer -> IconContainerCell(
             icons = item.icons,
             arrangement = item.container.arrangement,
@@ -1005,6 +1008,7 @@ private fun HomeItemCell(
             onOpenFolder = onOpenFolder,
             onAddIcon = { onAddIconToContainer(item.container.id) },
         )
+
         is HomeItem.WidgetContainer -> WidgetContainerCell(
             widgets = item.widgets,
             axis = item.container.axis,

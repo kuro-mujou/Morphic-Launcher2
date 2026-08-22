@@ -104,7 +104,10 @@ internal fun WidgetCell(
 
     if (!resolved) {
         Box(
-            modifier = modifier.fillMaxSize().clip(WidgetShape).then(itemGestures),
+            modifier = modifier
+                .fillMaxSize()
+                .clip(WidgetShape)
+                .then(itemGestures),
             contentAlignment = Alignment.Center,
         ) {
             Text(text = label, style = MaterialTheme.typography.labelMedium, color = colors.contentMuted)

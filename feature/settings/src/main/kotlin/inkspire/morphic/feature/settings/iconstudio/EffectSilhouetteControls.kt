@@ -1,10 +1,6 @@
 package inkspire.morphic.feature.settings.iconstudio
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.OutlinePosition
@@ -64,6 +60,7 @@ internal fun GlowControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * The shadow's color, how strong it is, how soft, and where it is thrown.
  *
@@ -115,6 +112,7 @@ internal fun ShadowControls(
         )
     }
 }
+
 /**
  * The recess's color, how strong it is, how soft, how far it is choked in, and where it is thrown.
  *
@@ -179,6 +177,7 @@ internal fun InnerShadowControls(
         )
     }
 }
+
 /**
  * The rim's color, how strong it is, how far it reaches in, and how far it is choked.
  *
@@ -229,6 +228,7 @@ internal fun InnerGlowControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * The stroke's color, how strong it is, how thick, and which side of the edge it sits on.
  *
@@ -285,6 +285,7 @@ internal fun OutlineControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * The thinnest stroke worth offering, as a fraction of the box.
  *
@@ -293,6 +294,7 @@ internal fun OutlineControls(
  * so the useful half of the control would be missing entirely.
  */
 private const val OutlineFloor = 0.005f
+
 /**
  * Where the light is, and what each of the two slopes it finds is painted.
  *
@@ -381,6 +383,7 @@ internal fun BevelControls(
         onValueChangeFinished = onCommit,
     )
 }
+
 /**
  * How far a halo may reach, as a fraction of the box.
  *
@@ -388,5 +391,6 @@ internal fun BevelControls(
  * offer travel that stops doing anything. Shared by the radius and the spread, which reach in the same units.
  */
 private const val HaloReach = 0.2f
+
 /** How far a shadow may be thrown. Past this it stops reading as cast by the icon and starts reading as a second one. */
 private val ThrowRange = -0.15f..0.15f
