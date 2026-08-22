@@ -43,8 +43,9 @@ class ItemGestureMachineTest {
         m.onEvent(ItemGestureEvent.Down)
         assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(30f, 2f))))
         assertEquals(ItemGesturePhase.Swiped(SwipeDirection.RIGHT), m.phase)
+        // The release both fires the action and brings the pull home — see [ItemGestureEffect.SwipeSettled].
         assertEquals(
-            listOf(ItemGestureEffect.EdgeAction(SwipeDirection.RIGHT)),
+            listOf(ItemGestureEffect.EdgeAction(SwipeDirection.RIGHT), ItemGestureEffect.SwipeSettled),
             m.onEvent(ItemGestureEvent.Up),
         )
         assertEquals(ItemGesturePhase.Idle, m.phase)
@@ -72,7 +73,7 @@ class ItemGestureMachineTest {
         m.onEvent(ItemGestureEvent.Move(far(0f, 30f)))          // now mostly down
         assertEquals(ItemGesturePhase.Swiped(SwipeDirection.RIGHT), m.phase)
         assertEquals(
-            listOf(ItemGestureEffect.EdgeAction(SwipeDirection.RIGHT)),
+            listOf(ItemGestureEffect.EdgeAction(SwipeDirection.RIGHT), ItemGestureEffect.SwipeSettled),
             m.onEvent(ItemGestureEvent.Up),
         )
     }
@@ -190,7 +191,10 @@ class ItemGestureMachineTest {
         m.onEvent(ItemGestureEvent.Down)
         m.onEvent(ItemGestureEvent.Move(far(2f, -30f))) // up, registered
         assertEquals(ItemGesturePhase.Swiped(SwipeDirection.UP), m.phase)
-        assertEquals(listOf(ItemGestureEffect.EdgeAction(SwipeDirection.UP)), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(
+            listOf(ItemGestureEffect.EdgeAction(SwipeDirection.UP), ItemGestureEffect.SwipeSettled),
+            m.onEvent(ItemGestureEvent.Up),
+        )
     }
 
     @Test
@@ -271,6 +275,58 @@ class ItemGestureMachineTest {
         swiped.onEvent(ItemGestureEvent.Move(far(30f, 2f)))
         assertEquals(emptyList<ItemGestureEffect>(), swiped.onEvent(ItemGestureEvent.TakenByParent))
         assertEquals(ItemGesturePhase.Swiped(SwipeDirection.RIGHT), swiped.phase)
+    }
+
+    // --- The pull on a claimed swipe -------------------------------------------------------------------------
+
+    @Test
+    fun `a claimed swipe reports the pull as the finger moves`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(30f, 2f)))
+        assertEquals(
+            listOf(ItemGestureEffect.SwipeProgress(SwipeDirection.RIGHT, far(44f, 2f))),
+            m.onEvent(ItemGestureEvent.Move(far(44f, 2f))),
+        )
+    }
+
+    /** The direction is locked at recognition, so a curving finger keeps reporting the swipe it committed to. */
+    @Test
+    fun `the pull keeps the direction recognized, not the latest one`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(30f, 0f)))
+        val effects = m.onEvent(ItemGestureEvent.Move(far(30f, 90f)))
+        assertEquals(SwipeDirection.RIGHT, (effects.single() as ItemGestureEffect.SwipeProgress).direction)
+    }
+
+    @Test
+    fun `releasing a claimed swipe fires the action and settles the pull`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(0f, -30f)))
+        assertEquals(
+            listOf(ItemGestureEffect.EdgeAction(SwipeDirection.UP), ItemGestureEffect.SwipeSettled),
+            m.onEvent(ItemGestureEvent.Up),
+        )
+    }
+
+    /** A cancel brings the item home too, and fires nothing — the pull must not be left parked off-center. */
+    @Test
+    fun `canceling a claimed swipe settles the pull and fires no action`() {
+        val m = machine()
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(0f, -30f)))
+        assertEquals(listOf(ItemGestureEffect.SwipeSettled), m.onEvent(ItemGestureEvent.Cancel))
+        assertEquals(ItemGesturePhase.Idle, m.phase)
+    }
+
+    @Test
+    fun `a swipe the item does not claim reports no pull`() {
+        val m = machine(edgeActions = emptySet())
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(30f, 2f))))
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Move(far(50f, 2f))))
     }
 
 }

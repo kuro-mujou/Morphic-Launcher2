@@ -49,6 +49,26 @@ sealed interface ItemGestureEffect {
     /** A press-and-swipe in [direction]: run that direction's custom action (a toast, for now). */
     data class EdgeAction(val direction: SwipeDirection) : ItemGestureEffect
 
+    /**
+     * The finger has moved while a claimed swipe is in flight — **the feedback for a gesture that has not fired
+     * yet**, so the item can be pulled toward the edge it will fire at.
+     *
+     * Carries the raw offset from the down and the direction already committed to. **The raw offset, because how
+     * far the item actually moves is presentation**: resistance, a ceiling and the axis projection belong to
+     * whatever draws the pull, not to the contract that recognizes the swipe. [direction] rides along so the
+     * drawer need not re-derive it and risk disagreeing with the direction that will fire.
+     */
+    data class SwipeProgress(val direction: SwipeDirection, val offsetFromDown: Offset) : ItemGestureEffect
+
+    /**
+     * A claimed swipe ended — the item returns to rest.
+     *
+     * Emitted on release **and** on cancel, because the pull has to come back either way; whether the action fires
+     * is [EdgeAction]'s separate business. Without it a canceled swipe would leave the item parked off-center with
+     * nothing to bring it home.
+     */
+    data object SwipeSettled : ItemGestureEffect
+
     /** The long-press fired with the finger still: open the item's context menu. */
     data object ShowMenu : ItemGestureEffect
 
@@ -211,13 +231,18 @@ class ItemGestureMachine(
 
     private fun onSwiped(current: ItemGesturePhase.Swiped, event: ItemGestureEvent): List<ItemGestureEffect> =
         when (event) {
-            // Direction is locked at recognition; further movement doesn't change the committed swipe.
-            is ItemGestureEvent.Move -> noEffect()
+            // Direction is locked at recognition; further movement doesn't change the committed swipe, but it does
+            // move the item — the pull is how a swipe that has not fired yet shows that it is being made.
+            is ItemGestureEvent.Move ->
+                effect(ItemGestureEffect.SwipeProgress(current.direction, event.offsetFromDown))
             ItemGestureEvent.Up -> {
                 phase = ItemGesturePhase.Idle
-                effect(ItemGestureEffect.EdgeAction(current.direction))
+                listOf(ItemGestureEffect.EdgeAction(current.direction), ItemGestureEffect.SwipeSettled)
             }
-            ItemGestureEvent.Cancel -> reset()
+            ItemGestureEvent.Cancel -> {
+                phase = ItemGesturePhase.Idle
+                effect(ItemGestureEffect.SwipeSettled)
+            }
             // The long-press timer is stale once we've moved; ignore it. `TakenByParent` cannot arrive in the
             // three phases that own the finger — the modifier only sends it while the item does not — and the
             // branch exists so adding a phase has to answer for it.

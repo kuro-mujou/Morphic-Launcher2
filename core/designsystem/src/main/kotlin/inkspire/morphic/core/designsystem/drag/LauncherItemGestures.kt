@@ -52,6 +52,9 @@ import kotlin.time.Duration.Companion.milliseconds
  *   claims no swipes, so every swipe flows to the parent.
  * @param onOpen a completed tap.
  * @param onEdgeAction a press-and-swipe in a registered direction (custom action; a toast for now).
+ * @param onSwipePull the finger has moved while a claimed swipe is in flight — the raw offset from the down, and
+ *   the direction committed to. Null offset means the swipe ended and the item returns to rest, on release and on
+ *   cancel alike. How far the item actually moves is the caller's: see [ItemGestureEffect.SwipeProgress].
  * @param onShowMenu the long-press fired: open the item's context menu, anchored to the **rectangle this modifier
  *   is attached to** — which is the item's visible extent, since that is where the gestures are hung (see the
  *   scope note above). Reported from here rather than reconstructed by each surface, so a menu can never be
@@ -67,6 +70,7 @@ fun Modifier.launcherItemGestures(
     edgeActions: Set<SwipeDirection> = emptySet(),
     onOpen: () -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
+    onSwipePull: (direction: SwipeDirection, offsetFromDown: Offset?) -> Unit = { _, _ -> },
     onShowMenu: (anchorInRoot: Rect) -> Unit,
     onBeginDrag: (rootPosition: Offset) -> Unit,
     onDragTo: (rootPosition: Offset) -> Unit,
@@ -109,6 +113,7 @@ fun Modifier.launcherItemGestures(
     // which for lambdas rebuilt every recomposition means tearing down an in-flight drag.
     val currentOnOpen by rememberUpdatedState(onOpen)
     val currentOnEdgeAction by rememberUpdatedState(onEdgeAction)
+    val currentOnSwipePull by rememberUpdatedState(onSwipePull)
     val currentOnShowMenu by rememberUpdatedState(onShowMenu)
     val currentOnBeginDrag by rememberUpdatedState(onBeginDrag)
     val currentOnDragTo by rememberUpdatedState(onDragTo)
@@ -136,6 +141,10 @@ fun Modifier.launcherItemGestures(
 
             // Whether *this* gesture currently holds the surface-swipe claim, so the release below is idempotent
             // and the `finally` cannot over-release someone else's.
+            // The direction of the swipe currently being pulled, so the settle can name it. Reset by the settle
+            // itself rather than at the down: a gesture that never claimed a swipe never sets it.
+            var lastPull: SwipeDirection? = null
+
             var holdsSurfaceLock = false
             fun claimSurface() {
                 if (!holdsSurfaceLock) { surfaceLock?.acquire(); holdsSurfaceLock = true }
@@ -148,6 +157,16 @@ fun Modifier.launcherItemGestures(
                 for (effect in effects) when (effect) {
                     ItemGestureEffect.OpenItem -> currentOnOpen()
                     is ItemGestureEffect.EdgeAction -> currentOnEdgeAction(effect.direction)
+                    is ItemGestureEffect.SwipeProgress -> {
+                        lastPull = effect.direction
+                        currentOnSwipePull(effect.direction, effect.offsetFromDown)
+                    }
+                    // The direction the pull is being released *from*; the caller animates back to rest whichever
+                    // it was, so any value would do — but handing back the wrong one would be a lie in a log.
+                    ItemGestureEffect.SwipeSettled -> {
+                        lastPull?.let { currentOnSwipePull(it, null) }
+                        lastPull = null
+                    }
                     // The long-press has fired: from here the finger is this item's, whether it ends as a menu or
                     // becomes a drag. A drag arrives as `[DismissMenu, BeginDrag, …]` in one list, so the claim is
                     // taken again immediately after being dropped — which a count absorbs, and which nothing can
