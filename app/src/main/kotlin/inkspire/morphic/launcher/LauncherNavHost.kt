@@ -8,11 +8,14 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.navigation.HomeRoute
 import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.core.navigation.rememberLauncherNavigator
 import inkspire.morphic.feature.home.containersettings.ContainerSettingsRoute
 import inkspire.morphic.feature.home.containersettings.ContainerSettingsScreen
+import inkspire.morphic.feature.home.gestureaction.GestureActionDestination
+import inkspire.morphic.feature.home.gestureaction.GestureActionRoute
 import inkspire.morphic.feature.settings.SettingsRoute
 import inkspire.morphic.feature.settings.SettingsScreen
 import inkspire.morphic.feature.settings.SettingsSection
@@ -104,6 +107,38 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                         onOpenWidgetContainerSettings = { id ->
                             navigator.goTo(ContainerSettingsRoute.Widget(id))
                         },
+                        // The gestures sheet's rows. Flattened here for `IconStudioRoute`'s reason — a `NavKey` is
+                        // serialized into the saved back stack, and neither `ComponentKey` nor `GridItem` is a shape
+                        // to pin there. Only the two item kinds offered gestures can arrive.
+                        onAssignGesture = { item, gesture ->
+                            when (item) {
+                                is GridItem.App ->
+                                    navigator.goTo(GestureActionRoute.App(item.component.flatten(), gesture))
+                                is GridItem.Folder ->
+                                    navigator.goTo(GestureActionRoute.Folder(item.folderId, gesture))
+                                else -> Unit
+                            }
+                        },
+                    )
+                }
+                // **One entry per concrete key, never the sealed parent.** `entry<T>` matches the exact class a
+                // back-stack element has, so registering the interface matched nothing and every push failed with
+                // "Unknown screen". The two routes beside this one are split for the same reason.
+                //
+                // A choice closes the picker, which is what makes the list a *picker* rather than a screen with a
+                // save button — every row is a complete decision.
+                entry<GestureActionRoute.App> { route ->
+                    GestureActionDestination(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                        onChosen = { navigator.goBack() },
+                    )
+                }
+                entry<GestureActionRoute.Folder> { route ->
+                    GestureActionDestination(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                        onChosen = { navigator.goBack() },
                     )
                 }
                 entry<SettingsRoute> { route ->

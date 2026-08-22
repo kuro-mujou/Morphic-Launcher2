@@ -33,8 +33,8 @@ import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
 import inkspire.morphic.core.designsystem.menu.MenuOverlay
 import inkspire.morphic.core.designsystem.surface.EjectToHome
-import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.designsystem.surface.ItemSwipeClaim
+import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
@@ -57,6 +57,7 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.pagerSlot
@@ -93,6 +94,11 @@ fun LauncherShell(
     onEditIcon: (ComponentKey) -> Unit,
     modifier: Modifier = Modifier,
     onOpenIconContainerSettings: (Long) -> Unit = {},
+    /**
+     * Opens the action picker for one gesture on one home item. Passed through rather than handled here for the
+     * reason every other destination is: `app` owns the back stack, so `app` says where a full-screen place goes.
+     */
+    onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
     onOpenWidgetContainerSettings: (Long) -> Unit = {},
 ) {
     val viewModel = koinViewModel<ShellViewModel>()
@@ -269,6 +275,7 @@ fun LauncherShell(
                     // maps a key to a screen. Ids rather than the key itself, so this module never imports it.
                     HomeScreen(
                         onOpenIconContainerSettings = onOpenIconContainerSettings,
+                        onAssignGesture = onAssignGesture,
                         onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
                     )
                 }

@@ -35,3 +35,17 @@ enum class ItemGesture {
             DOUBLE_TAP -> null
         }
 }
+
+/**
+ * The gesture this swipe is, which is [ItemGesture.swipe] read the other way.
+ *
+ * Needed because the gesture *contract* speaks in [SwipeDirection] — it knows nothing of double taps — while an
+ * assignment is keyed by [ItemGesture]. One conversion in one place, rather than a `when` at each surface that
+ * fires one.
+ */
+fun SwipeDirection.asItemGesture(): ItemGesture = when (this) {
+    SwipeDirection.UP -> ItemGesture.SWIPE_UP
+    SwipeDirection.DOWN -> ItemGesture.SWIPE_DOWN
+    SwipeDirection.LEFT -> ItemGesture.SWIPE_LEFT
+    SwipeDirection.RIGHT -> ItemGesture.SWIPE_RIGHT
+}

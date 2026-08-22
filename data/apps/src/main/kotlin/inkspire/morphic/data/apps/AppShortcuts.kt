@@ -12,9 +12,15 @@ import timber.log.Timber
  * runtime, and read through [android.content.pm.LauncherApps].
  *
  * **It is a handle, not a command**: [id] means something only to [packageName] under [userSerial], and only
- * for as long as the app keeps publishing it. So a stored one would go stale silently — these are read fresh
- * each time a menu opens and thrown away when it closes, which is why nothing here is persisted and why this
- * lives in `data:apps` rather than in `core:model` (it carries a rasterized [Bitmap], too).
+ * for as long as the app keeps publishing it. So a stored one goes stale silently — which is why this type is
+ * read fresh each time a menu opens and thrown away when it closes, and why it lives in `data:apps` rather
+ * than `core:model` (it carries a rasterized [Bitmap], too).
+ *
+ * **One thing does store a handle, deliberately.** A gesture assigned to a shortcut has to outlive the menu it
+ * was picked from, so `GestureAction.LaunchShortcut` keeps the three fields that identify one and accepts the
+ * staleness: an app update that withdraws a shortcut leaves an assignment pointing at nothing, and firing it
+ * does nothing. It stores those fields rather than this type, since a `Bitmap` has no business in a settings
+ * blob.
  *
  * @property userSerial the profile the shortcut belongs to, carried for the same reason [ComponentKey] carries
  *   one: starting a work-profile app's shortcut under the personal user silently does nothing.
@@ -53,10 +59,26 @@ interface AppShortcuts {
     suspend fun shortcuts(component: ComponentKey): List<AppShortcut>
 
     /**
-     * Starts [shortcut]. Fire-and-forget like [AppLauncher.launch], and for the same reason: the shortcut may have
-     * been withdrawn between the menu opening and the tap, and that must not surface as a crash.
+     * Every shortcut published on the device, for a screen that offers all of them at once.
+     *
+     * Grouping by [AppShortcut.packageName] is the caller's, since only it knows how it wants them shown.
      */
-    fun start(shortcut: AppShortcut)
+    suspend fun allShortcuts(): List<AppShortcut>
+
+    /**
+     * Starts the shortcut [id] of [packageName] under [userSerial].
+     *
+     * **The three fields rather than an [AppShortcut]**, because a stored assignment has only these — it never
+     * had the label or the icon, and re-reading the whole list to rebuild one would be a platform query to
+     * reconstruct data the call does not use.
+     *
+     * Fire-and-forget like [AppLauncher.launch], and for the same reason: the shortcut may have been withdrawn
+     * between being picked and being fired, and that must not surface as a crash.
+     */
+    fun start(id: String, packageName: String, userSerial: Long)
+
+    /** [start] for one just read from [shortcuts], which is every caller that has the whole thing to hand. */
+    fun start(shortcut: AppShortcut) = start(shortcut.id, shortcut.packageName, shortcut.userSerial)
 }
 
 /**
@@ -85,11 +107,21 @@ internal class DefaultAppShortcuts(
             }
         }
 
-    override fun start(shortcut: AppShortcut) {
+    override suspend fun allShortcuts(): List<AppShortcut> =
+        withContext(dispatchers.io) {
+            try {
+                launcherApps.allShortcuts()
+            } catch (t: Throwable) {
+                Timber.w(t, "Failed to read all shortcuts")
+                emptyList()
+            }
+        }
+
+    override fun start(id: String, packageName: String, userSerial: Long) {
         try {
-            launcherApps.startShortcut(shortcut)
+            launcherApps.startShortcut(id = id, packageName = packageName, userSerial = userSerial)
         } catch (t: Throwable) {
-            Timber.w(t, "Failed to start shortcut %s of %s", shortcut.id, shortcut.packageName)
+            Timber.w(t, "Failed to start shortcut %s of %s", id, packageName)
         }
     }
 }

@@ -6,6 +6,7 @@ import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.Folder
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -28,6 +29,7 @@ import inkspire.morphic.core.model.orientation
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.apps.AppShortcuts
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.GridReflow
@@ -92,6 +94,7 @@ class HomeViewModel(
     private val homeListRepository: HomeListRepository,
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
+    private val appShortcuts: AppShortcuts,
     private val settingsRepository: SettingsRepository,
     private val widgetHost: AppWidgetHostController,
 ) : ViewModel() {
@@ -356,13 +359,23 @@ class HomeViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
     /**
-     * Replaces the gestures [item] has taken for itself; an empty set clears them.
+     * Performs whatever [gesture] is assigned to on [item], and nothing at all when it is unassigned.
      *
-     * **Home only.** A side surface passes no claimed directions at all, so a swipe there always reaches the pan —
-     * see `ItemSwipeClaim`.
+     * **Read at the moment it fires, not held by the cell.** A gesture that was reassigned while the finger was
+     * down should do the new thing, and the cell has no reason to carry an action it only hands back.
+     *
+     * A withdrawn shortcut or an uninstalled app simply does nothing — both commands are fire-and-forget for
+     * that reason, and a gesture is exactly as entitled to point at something gone as a home icon is.
      */
-    fun setItemGestures(item: GridItem, gestures: Set<ItemGesture>) {
-        viewModelScope.launch { settingsRepository.setItemGestures(item, gestures) }
+    fun runGesture(item: GridItem, gesture: ItemGesture) {
+        viewModelScope.launch {
+            when (val action = settingsRepository.homeItemGestures.first().actionsOn(item)[gesture]) {
+                null -> Unit
+                is GestureAction.LaunchApp -> appLauncher.launch(action.component)
+                is GestureAction.LaunchShortcut ->
+                    appShortcuts.start(action.id, action.packageName, action.userSerial)
+            }
+        }
     }
 
     /** Layout writes dispatched but not yet seen land — see the store collector in [init]. */

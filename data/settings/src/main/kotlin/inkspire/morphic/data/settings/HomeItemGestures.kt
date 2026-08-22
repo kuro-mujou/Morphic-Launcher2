@@ -1,5 +1,6 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SwipeDirection
@@ -22,24 +23,23 @@ import kotlinx.serialization.Serializable
  * **Sparse: an item with nothing assigned has no row.** The same rule the icon-sizing overrides follow — nothing is
  * stored for an item nobody has touched, so a later change to what "unassigned" means still reaches them.
  *
- * ## What an assignment holds, and why it is only a direction today
+ * ## The field name is the seam, and this is the second time it has moved
  *
- * The action picker is unbuilt, so an assignment currently records that a direction is *taken* and nothing more; the
- * gesture fires a placeholder. That is deliberate rather than unfinished — the shape an action wants (an app, a
- * shortcut, one of a set of system verbs) is the picker's to determine, and inventing it here would be a model with
- * no consumer to shape it.
- *
- * **When it gains one, the field name is the seam.** [directions] becomes something like an action map under a new
- * name, because re-reading a stored set of bare directions as actions would silently give every assignment whatever
- * the first action in the list happened to be. That is the settings rule this codebase already applies to
+ * It held a set of bare directions, then a set of gestures, and now a gesture-to-action map. Each step renamed
+ * the field rather than re-reading the old one, because a stored set read as a map would have given every
+ * assignment whatever the first action happened to be — silently, and only on devices that had one. The cost is
+ * that assignments are cleared once per move, which is the trade this codebase takes every time: see
  * `searchByLayout`.
  */
 @Serializable
 data class HomeItemGestures(val items: List<ItemGestures> = emptyList()) {
 
-    /** The gestures [item] has taken, or empty for an item nobody has assigned anything on. */
-    fun gesturesOn(item: GridItem): Set<ItemGesture> =
-        items.firstOrNull { it.item == item }?.gestures.orEmpty()
+    /** What each of [item]'s gestures does, empty for an item nobody has assigned anything on. */
+    fun actionsOn(item: GridItem): Map<ItemGesture, GestureAction> =
+        items.firstOrNull { it.item == item }?.actions.orEmpty()
+
+    /** The gestures [item] has taken, whatever they do. */
+    fun gesturesOn(item: GridItem): Set<ItemGesture> = actionsOn(item).keys
 
     /**
      * Just the swipes, which is what the gesture contract and the surface pan deal in.
@@ -54,14 +54,15 @@ data class HomeItemGestures(val items: List<ItemGestures> = emptyList()) {
     fun hasDoubleTapOn(item: GridItem): Boolean = ItemGesture.DOUBLE_TAP in gesturesOn(item)
 
     /**
-     * This record with [item]'s gestures replaced.
+     * This record with [gesture] on [item] set to [action], or cleared when it is null.
      *
-     * An empty set **removes the row** rather than storing one, which is what keeps the record sparse when a user
-     * clears the last gesture off an icon.
+     * Clearing the **last** gesture on an item removes its row rather than storing an empty one, which is what
+     * keeps the record sparse.
      */
-    fun withGestures(item: GridItem, gestures: Set<ItemGesture>): HomeItemGestures {
+    fun withAction(item: GridItem, gesture: ItemGesture, action: GestureAction?): HomeItemGestures {
+        val actions = actionsOn(item).let { if (action == null) it - gesture else it + (gesture to action) }
         val rest = items.filterNot { it.item == item }
-        return HomeItemGestures(if (gestures.isEmpty()) rest else rest + ItemGestures(item, gestures))
+        return HomeItemGestures(if (actions.isEmpty()) rest else rest + ItemGestures(item, actions))
     }
 
     companion object {
@@ -75,6 +76,8 @@ data class HomeItemGestures(val items: List<ItemGestures> = emptyList()) {
  *
  * @property item what the gesture belongs to — **the item on home, not the app**. The same app placed twice, or
  *   sitting in a folder as well as on the grid, is two items and can carry two different sets.
+ * @property actions what each taken gesture does. A gesture absent from the map is unassigned; there is no
+ *   `None` action, since that would make one state expressible two ways.
  */
 @Serializable
-data class ItemGestures(val item: GridItem, val gestures: Set<ItemGesture>)
+data class ItemGestures(val item: GridItem, val actions: Map<ItemGesture, GestureAction>)

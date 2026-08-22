@@ -11,6 +11,7 @@ import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
@@ -230,8 +231,8 @@ internal class SettingsRepositoryImpl(
 
     override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
 
-    override suspend fun setItemGestures(item: GridItem, gestures: Set<ItemGesture>) =
-        update(HomeItemGesturesSlice) { withGestures(item, gestures) }
+    override suspend fun setItemGesture(item: GridItem, gesture: ItemGesture, action: GestureAction?) =
+        update(HomeItemGesturesSlice) { withAction(item, gesture, action) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }

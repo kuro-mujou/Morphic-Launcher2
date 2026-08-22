@@ -4,6 +4,7 @@ import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
@@ -80,8 +81,8 @@ interface SettingsRepository {
      */
     val homeItemGestures: Flow<HomeItemGestures>
 
-    /** Replaces [item]'s claimed gestures. An empty set clears them, leaving nothing stored for that item. */
-    suspend fun setItemGestures(item: GridItem, gestures: Set<ItemGesture>)
+    /** Sets what [gesture] does on [item]; a null [action] clears it. */
+    suspend fun setItemGesture(item: GridItem, gesture: ItemGesture, action: GestureAction?)
 
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)

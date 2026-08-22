@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.home
 
-import android.widget.Toast
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +24,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -67,6 +65,7 @@ import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
@@ -78,6 +77,7 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetAreaGrid
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.layout.LayoutChange
@@ -154,6 +154,11 @@ internal fun HomeListSurface(
     state: HomeState,
     device: DeviceConfiguration,
     modifier: Modifier = Modifier,
+    /**
+     * Opens the action picker for one gesture on one item — a full-screen destination, so `app` performs
+     * the navigation and this surface only says which gesture was chosen.
+     */
+    onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
 
@@ -209,7 +214,6 @@ internal fun HomeListSurface(
     // The app whose Gestures sheet is open, and where its placeholder lands. Held by the surface rather than the
     // menu, which is gone by the time the sheet is up.
     var gesturesFor by remember { mutableStateOf<AppInfo?>(null) }
-    val context = LocalContext.current
     val listGeometry = if (viewport == Rect.Zero || rowHeightPx <= 0f) {
         null
     } else {
@@ -479,9 +483,7 @@ internal fun HomeListSurface(
                         )
                     },
                     gesturesOn = { state.itemGestures.gesturesOn(it) },
-                    onGesture = { app, what ->
-                        Toast.makeText(context, "${app.label}: $what", Toast.LENGTH_SHORT).show()
-                    },
+                    onGesture = { item, gesture -> viewModel.runGesture(item, gesture) },
                     metrics = listMetrics,
                 )
             },
@@ -554,15 +556,13 @@ internal fun HomeListSurface(
         // them.
         gesturesFor?.let { app ->
             val item = GridItem.App(app.componentKey)
-            val taken = state.itemGestures.gesturesOn(item)
             HomeItemGestureSheet(
                 label = app.label,
-                assigned = taken,
-                onToggle = { gesture ->
-                    viewModel.setItemGestures(
-                        item = item,
-                        gestures = if (gesture in taken) taken - gesture else taken + gesture,
-                    )
+                assigned = state.itemGestures.actionsOn(item),
+                describe = { describeGestureAction(it, state.catalog) },
+                onPick = { gesture ->
+                    gesturesFor = null
+                    onAssignGesture(item, gesture)
                 },
                 onDismiss = { gesturesFor = null },
                 // **The two the list cannot honor**, still assignable because the same key is live on the pager
@@ -629,7 +629,7 @@ private fun ListZone(
     onLaunch: (ComponentKey) -> Unit,
     onShowMenu: (AppInfo, Rect) -> Unit,
     gesturesOn: (GridItem) -> Set<ItemGesture>,
-    onGesture: (AppInfo, String) -> Unit,
+    onGesture: (GridItem, ItemGesture) -> Unit,
     metrics: IconMetrics,
     modifier: Modifier,
     onViewportChange: (Rect) -> Unit,
@@ -657,8 +657,8 @@ private fun ListZone(
                             doubleTap = ItemGesture.DOUBLE_TAP in gesturesOn(item),
                             onOpen = { onLaunch(app.componentKey) },
                             onShowMenu = { anchor -> onShowMenu(app, anchor) },
-                            onEdgeAction = { direction -> onGesture(app, direction.name.lowercase()) },
-                            onDoubleTap = { onGesture(app, "double tap") },
+                            onEdgeAction = { direction -> onGesture(item, direction.asItemGesture()) },
+                            onDoubleTap = { onGesture(item, ItemGesture.DOUBLE_TAP) },
                         ) { itemGestures ->
                             AppRowCell(
                                 app = app,
@@ -672,3 +672,20 @@ private fun ListZone(
         }
     }
 }
+
+/**
+ * What an assigned action is called on the sheet.
+ *
+ * **Resolved through the app catalog rather than stored**, for the reason home items resolve the same way: a label
+ * copied at assignment time goes stale when the app is renamed, and an app that has been uninstalled has no label
+ * at all — which is exactly the state worth showing, since a gesture pointing at nothing is otherwise invisible.
+ * A shortcut is the exception and carries its own, because resolving one costs a platform query per row.
+ */
+internal fun describeGestureAction(action: GestureAction, catalog: Map<ComponentKey, AppInfo>): String =
+    when (action) {
+        is GestureAction.LaunchApp -> catalog[action.component]?.label ?: MissingApp
+        is GestureAction.LaunchShortcut -> action.label
+    }
+
+/** An assignment whose app is no longer installed. Named so, rather than left blank, which reads as a bug. */
+private const val MissingApp = "App not installed"

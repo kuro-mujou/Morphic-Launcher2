@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.home
 
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
@@ -58,8 +56,10 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.WidgetSpan
@@ -226,6 +226,11 @@ internal fun HomePagerSurface(
     modifier: Modifier = Modifier,
     onOpenIconContainerSettings: (Long) -> Unit = {},
     onOpenWidgetContainerSettings: (Long) -> Unit = {},
+    /**
+     * Opens the action picker for one gesture on one item — a full-screen destination, so `app` performs
+     * the navigation and this surface only says which gesture was chosen.
+     */
+    onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
 
@@ -517,15 +522,9 @@ internal fun HomePagerSurface(
     // zone and not the other.
     val claimedOn: (HomeItem) -> Set<SwipeDirection> = { state.itemGestures.swipesOn(it.gridItem) }
     val doubleTapOn: (HomeItem) -> Boolean = { state.itemGestures.hasDoubleTapOn(it.gridItem) }
-    val context = LocalContext.current
-    val fireDoubleTap: (HomeItem) -> Unit = { item ->
-        Toast.makeText(context, "${item.menuLabel}: double tap", Toast.LENGTH_SHORT).show()
-    }
+    val fireDoubleTap: (HomeItem) -> Unit = { viewModel.runGesture(it.gridItem, ItemGesture.DOUBLE_TAP) }
     val fireGesture: (HomeItem, SwipeDirection) -> Unit = { item, direction ->
-        // A placeholder, and honest about being one: the action picker is unbuilt, so there is nothing to run. What
-        // this confirms is the part that was hard — that the swipe reached the item at all instead of panning the
-        // surface away.
-        Toast.makeText(context, "${item.menuLabel}: ${direction.name.lowercase()}", Toast.LENGTH_SHORT).show()
+        viewModel.runGesture(item.gridItem, direction.asItemGesture())
     }
 
     val menuHost = LocalMenuHost.current
@@ -930,15 +929,13 @@ internal fun HomePagerSurface(
         // icons rendered straight over the panel. Every other sheet on this surface is stacked here for the same
         // reason.
         gesturesFor?.let { target ->
-            val taken = state.itemGestures.gesturesOn(target.gridItem)
             HomeItemGestureSheet(
                 label = target.menuLabel,
-                assigned = taken,
-                onToggle = { gesture ->
-                    viewModel.setItemGestures(
-                        item = target.gridItem,
-                        gestures = if (gesture in taken) taken - gesture else taken + gesture,
-                    )
+                assigned = state.itemGestures.actionsOn(target.gridItem),
+                describe = { describeGestureAction(it, state.catalog) },
+                onPick = { gesture ->
+                    gesturesFor = null
+                    onAssignGesture(target.gridItem, gesture)
                 },
                 onDismiss = { gesturesFor = null },
             )

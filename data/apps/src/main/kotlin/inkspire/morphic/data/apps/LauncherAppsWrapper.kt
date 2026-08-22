@@ -86,10 +86,22 @@ interface LauncherAppsWrapper {
     fun shortcuts(component: ComponentKey): List<AppShortcut>
 
     /**
-     * Starts [shortcut] in the profile named by its [AppShortcut.userSerial]. May throw for the usual platform
-     * reasons (withdrawn since it was listed, profile locked); [AppShortcuts] owns the guard.
+     * Every shortcut published across all profiles, for a screen that lists them all.
+     *
+     * **One platform call per profile, not one per app.** `ShortcutQuery` filters by package only when
+     * asked to; leaving that off returns the lot. Asking per app would be a hundred binder round trips to
+     * build one list, and the action picker needs the whole thing before it can draw a single row.
      */
-    fun startShortcut(shortcut: AppShortcut)
+    fun allShortcuts(): List<AppShortcut>
+
+    /**
+     * Starts the shortcut [id] of [packageName] in the profile named by [userSerial]. May throw for the usual
+     * platform reasons (withdrawn since it was listed, profile locked); [AppShortcuts] owns the guard.
+     *
+     * The three fields rather than an [AppShortcut], because a *stored* assignment has only these — see
+     * `GestureAction.LaunchShortcut`.
+     */
+    fun startShortcut(id: String, packageName: String, userSerial: Long)
 
     /**
      * Emits the **packages touched** every time the set of installed apps may have changed — added, removed,
@@ -172,6 +184,23 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
         // "this launcher is not the active home app" is the ordinary reason for that rather than a fault.
         if (!launcherApps.hasShortcutHostPermission()) return emptyList()
         val user = userManager.getUserForSerialNumber(component.userSerial) ?: return emptyList()
+        return readShortcuts(user, component.userSerial, component.packageName)
+    }
+
+    override fun allShortcuts(): List<AppShortcut> {
+        if (!launcherApps.hasShortcutHostPermission()) return emptyList()
+        return userManager.userProfiles.flatMap { profile ->
+            readShortcuts(profile, serialForUser(profile), packageName = null)
+        }
+    }
+
+    /**
+     * One query, shared by both reads — [packageName] null asks for every package in [user].
+     *
+     * Shared rather than written twice because the *flags* are the part that would drift: a bulk read that forgot
+     * `FLAG_MATCH_PINNED` would quietly show fewer shortcuts on one screen than another, for the same app.
+     */
+    private fun readShortcuts(user: UserHandle, userSerial: Long, packageName: String?): List<AppShortcut> {
         val query = LauncherApps.ShortcutQuery()
             // All three kinds a launcher shows: the app's manifest shortcuts, the ones it publishes at runtime,
             // and any the user has pinned. L1 queried the same three.
@@ -180,7 +209,7 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
                     LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
                     LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED,
             )
-            .setPackage(component.packageName)
+            .apply { if (packageName != null) setPackage(packageName) }
         val shortcuts = launcherApps.getShortcuts(query, user).orEmpty()
         val densityDpi = resources.displayMetrics.densityDpi
         return shortcuts
@@ -191,7 +220,7 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
                 AppShortcut(
                     id = info.id,
                     packageName = info.`package`,
-                    userSerial = component.userSerial,
+                    userSerial = userSerial,
                     // `longLabel` where the app bothered to supply one — a menu row has room for it, and it is
                     // the more descriptive of the pair ("Compose a message" over "Compose").
                     label = (info.longLabel ?: info.shortLabel)?.toString().orEmpty(),
@@ -238,11 +267,11 @@ class DefaultLauncherAppsWrapper(context: Context) : LauncherAppsWrapper {
         awaitClose { launcherApps.unregisterCallback(callback) }
     }
 
-    override fun startShortcut(shortcut: AppShortcut) {
-        val user = userManager.getUserForSerialNumber(shortcut.userSerial) ?: return
+    override fun startShortcut(id: String, packageName: String, userSerial: Long) {
+        val user = userManager.getUserForSerialNumber(userSerial) ?: return
         launcherApps.startShortcut(
-            shortcut.packageName,
-            shortcut.id,
+            packageName,
+            id,
             /* sourceBounds = */ null,
             /* startActivityOptions = */ null,
             user,

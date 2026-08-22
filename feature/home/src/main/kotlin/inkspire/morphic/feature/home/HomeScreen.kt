@@ -11,8 +11,10 @@ import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.surface.AxisScroll
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
+import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.ItemGesture
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -41,6 +43,11 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenIconContainerSettings: (Long) -> Unit = {},
     onOpenWidgetContainerSettings: (Long) -> Unit = {},
+    /**
+     * Opens the action picker for one gesture on one item — a full-screen destination, so `app` performs
+     * the navigation and this surface only says which gesture was chosen.
+     */
+    onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
 ) {
     val viewModel = koinViewModel<HomeViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -59,8 +66,15 @@ fun HomeScreen(
             modifier = modifier,
             onOpenIconContainerSettings = onOpenIconContainerSettings,
             onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
+            onAssignGesture = onAssignGesture,
         )
-        HomeLayout.LIST_WITH_WIDGET_AREA -> HomeListSurface(viewModel, state, device, modifier)
+        HomeLayout.LIST_WITH_WIDGET_AREA -> HomeListSurface(
+            viewModel = viewModel,
+            state = state,
+            device = device,
+            modifier = modifier,
+            onAssignGesture = onAssignGesture,
+        )
     }
 }
 
