@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.grid.sideZoneFraction
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
@@ -33,7 +34,6 @@ import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
-import inkspire.morphic.feature.settings.component.SettingsGroupCard
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.label
@@ -184,7 +184,7 @@ private fun HomeZoneRows(
 ) {
     // The same panel the settings index puts its rows on — this hub is one tap from that list, and two runs of the
     // same row wearing different dress is exactly what a shared container prevents.
-    SettingsGroupCard {
+    MorphicGroupPanel {
         listOf(SettingsSection.HOME_GRID, SettingsSection.DOCK).forEach { section ->
             SettingsNavRow(
                 section = section,

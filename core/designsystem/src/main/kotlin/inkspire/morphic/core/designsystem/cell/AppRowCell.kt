@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,7 +28,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /** Row insets and the icon→label gap. Cell-internal styling, the counterpart of [CellPadH] for a grid cell. */
-private val RowPadH = 24.dp
+private val RowPadH = 8.dp
 private val RowPadV = 8.dp
 private val IconLabelGap = 16.dp
 
@@ -212,6 +213,7 @@ fun AppRowCell(
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
     itemGestures: Modifier = Modifier,
+    labelColor: Color? = null,
 ) {
     val colors = LocalMorphicColors.current
     BoxWithConstraints(modifier) {
@@ -264,7 +266,12 @@ fun AppRowCell(
                     style = labelStyle,
                     // The theme's content color, not the grid label's white-on-wallpaper: a list is read against
                     // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
-                    color = colors.content,
+                    //
+                    // **Overridable, for a row drawn on something other than that background.** A picker fills the
+                    // chosen row with `accent`, and a label fixed to `content` then vanishes into it — the icon
+                    // stays, the name goes, and the row reads as a blank bar. The caller knows what it painted
+                    // underneath; this cell cannot.
+                    color = labelColor ?: colors.content,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

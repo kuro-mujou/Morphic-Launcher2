@@ -11,11 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.GroupInsetH
+import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.model.HomeLayout
-import inkspire.morphic.feature.settings.component.GroupInsetH
 import inkspire.morphic.feature.settings.component.NavRowPadding
-import inkspire.morphic.feature.settings.component.SettingsGroupCard
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 
@@ -72,7 +72,7 @@ internal fun SettingsList(
                         // The first heading sits directly under the app bar, so it takes no break above it.
                         SettingsSectionHeader(group.header, spaceAbove = index > 0)
                     }
-                    SettingsGroupCard {
+                    MorphicGroupPanel {
                         group.sections.forEach { section ->
                             SettingsNavRow(
                                 section = section,

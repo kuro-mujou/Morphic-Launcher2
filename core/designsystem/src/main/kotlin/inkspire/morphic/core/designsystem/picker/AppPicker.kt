@@ -26,7 +26,6 @@ import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
-import java.text.Collator
 
 /** How tall one row is. A placeholder — see the "don't invent a dimension nothing owns yet" rule. */
 private val PickerRowHeight = 64.dp
@@ -72,10 +71,10 @@ fun AppPicker(
     // **A locale-aware collator, not `contains` on a lowercased string.** The APPS surface already learned this
     // one: `lowercase()` compares raw UTF-16, so an accented label sorts and matches as if it were a different
     // alphabet. Here it matters for matching "Éditeur" when the user types "e".
-    val collator = remember { Collator.getInstance().apply { strength = Collator.PRIMARY } }
+    val collator = remember { labelCollator() }
     val query by remember { derivedStateOf { searchState.text.toString().trim() } }
     val matches = remember(apps, query, collator) {
-        if (query.isEmpty()) apps else apps.filter { it.label.matches(query, collator) }
+        if (query.isEmpty()) apps else apps.filter { it.label.matchesLabel(query, collator) }
     }
 
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -111,18 +110,4 @@ fun AppPicker(
             Text("No apps match “$query”", modifier = Modifier.padding(16.dp))
         }
     }
-}
-
-/**
- * Whether [this] label contains [query], ignoring case and accents.
- *
- * Done by hand because `Collator` compares whole strings and there is no substring form: each window of the label
- * the same length as the query is compared, which is O(label × query) and fine for a label.
- */
-private fun String.matches(query: String, collator: Collator): Boolean {
-    if (query.length > length) return false
-    for (start in 0..length - query.length) {
-        if (collator.compare(substring(start, start + query.length), query) == 0) return true
-    }
-    return false
 }

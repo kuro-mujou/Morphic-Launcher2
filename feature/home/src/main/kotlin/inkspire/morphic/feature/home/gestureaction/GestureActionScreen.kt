@@ -1,19 +1,20 @@
 package inkspire.morphic.feature.home.gestureaction
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -30,9 +31,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.cell.AppIcon
+import inkspire.morphic.core.designsystem.cell.AppRowCell
+import inkspire.morphic.core.designsystem.component.GroupInsetH
+import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -81,7 +88,7 @@ internal fun GestureActionScreen(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
-            .uiInsetsPadding(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+            .uiInsetsPadding(),
     ) {
         Text(
             text = "Assign action to ${gesture.label}",
@@ -102,48 +109,255 @@ internal fun GestureActionScreen(
             SectionChip("Shortcuts") { scope.launch { listState.animateScrollToItem(shortcutsAt) } }
         }
 
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // **The clearing choice sits on a panel of its own**, above the two it is an alternative to. It is one
+            // row, so a heading over it would name a group of one.
             item(key = "none") {
-                // **First, not behind a chip of its own.** Clearing is the one choice every gesture can make, and a
-                // "Suggested" tab holding a single row would be a filter for nothing.
-                ChoiceRow(
-                    label = "None",
-                    selected = state.assigned == null,
-                    onClick = { viewModel.choose(null); onChosen() },
-                )
-            }
-            item(key = "apps-header") { SectionHeader("APPS") }
-            items(state.apps, key = { it.componentKey.flatten() }) { app ->
-                ChoiceRow(
-                    label = app.label,
-                    selected = (state.assigned as? GestureAction.LaunchApp)?.component == app.componentKey,
-                    onClick = { viewModel.chooseApp(app.componentKey); onChosen() },
-                )
-            }
-            item(key = "shortcuts-header") { SectionHeader("SHORTCUTS") }
-            if (state.loadingShortcuts) {
-                item(key = "shortcuts-loading") { SectionNote("Reading shortcuts…") }
-            } else if (state.shortcutGroups.isEmpty()) {
-                // Empty has two very different causes and only one is worth acting on, so it says both.
-                item(key = "shortcuts-empty") {
-                    SectionNote("No shortcuts. Apps publish these, and only the active home app may read them.")
+                Panel {
+                    ChoiceRow(
+                        label = "None",
+                        selected = state.assigned == null,
+                        onClick = { viewModel.choose(null); onChosen() },
+                    )
                 }
             }
-            state.shortcutGroups.forEach { group ->
-                item(key = "group-${group.app.componentKey.flatten()}") { GroupHeader(group.app) }
-                items(group.shortcuts, key = { "${group.app.componentKey.packageName}#${it.id}" }) { shortcut ->
-                    ChoiceRow(
-                        label = shortcut.label,
-                        selected = state.assigned.isThis(shortcut),
-                        indented = true,
-                        onClick = { viewModel.chooseShortcut(shortcut); onChosen() },
-                    )
+
+            item(key = "apps-header") { SectionHeader("APPS") }
+            item(key = "apps") {
+                Panel {
+                    // **One panel for the whole run, not one per row.** The panel is what says where the group ends,
+                    // which is the same reason the settings index draws its sections this way.
+                    state.apps.forEach { app ->
+                        AppChoiceRow(
+                            app = app,
+                            selected = (state.assigned as? GestureAction.LaunchApp)?.component == app.componentKey,
+                            onClick = { viewModel.chooseApp(app.componentKey); onChosen() },
+                        )
+                    }
+                    if (state.apps.isEmpty()) SectionNote("No apps match.")
+                }
+            }
+
+            item(key = "shortcuts-header") { SectionHeader("SHORTCUTS") }
+            item(key = "shortcuts") {
+                Panel {
+                    when {
+                        state.loadingShortcuts -> SectionNote("Reading shortcuts…")
+                        // Empty has two very different causes and only one is worth acting on, so it says both.
+                        state.shortcutGroups.isEmpty() ->
+                            SectionNote("No shortcuts. Apps publish these, and only the active home app may read them.")
+                        else -> state.shortcutGroups.forEachIndexed { index, group ->
+                            // **A rule between blocks, not under every row.** One app's shortcuts are a unit; what
+                            // needs separating is where one app ends and the next begins. A divider per row would
+                            // draw the panel as a grid of equals and lose the grouping the header just made.
+                            if (index > 0) BlockDivider()
+                            GroupHeader(group.app)
+                            group.shortcuts.forEach { shortcut ->
+                                ShortcutChoiceRow(
+                                    shortcut = shortcut,
+                                    selected = state.assigned.isThis(shortcut),
+                                    onClick = { viewModel.chooseShortcut(shortcut); onChosen() },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
     BackHandler(onBack = onBack)
+}
+
+/** A group of rows on one rounded panel, inset from the screen edges — the launcher's grouped-list container. */
+@Composable
+private fun Panel(content: @Composable ColumnScope.() -> Unit) {
+    MorphicGroupPanel(
+        modifier = Modifier.padding(horizontal = GroupInsetH, vertical = PanelGap),
+        content = content,
+    )
+}
+
+/** An app, drawn as it is everywhere else in the launcher: its own icon beside its label. */
+@Composable
+private fun AppChoiceRow(app: AppInfo, selected: Boolean, onClick: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (selected) colors.accent else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = RowPadding, vertical = RowPaddingV),
+    ) {
+        // **`AppRowCell` rather than a bitmap of our own**, so a picked icon is the one the user will actually see
+        // on home — the same shaped, baked icon, through the same metrics. It draws its own label too.
+        AppRowCell(
+            app = app,
+            modifier = Modifier
+                .weight(1f)
+                .height(AppRowHeight),
+            // The fill is the launcher's accent, so the label has to switch with it — a label fixed to the theme's
+            // content color vanished into the selected row, leaving the icon on a blank bar.
+            labelColor = if (selected) colors.onAccent else null,
+        )
+        if (selected) SelectedMark()
+    }
+}
+
+/** One of an app's shortcuts: the icon the app rasterized for it, and its own name. */
+@Composable
+private fun ShortcutChoiceRow(shortcut: AppShortcut, selected: Boolean, onClick: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    val content = if (selected) colors.onAccent else colors.content
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (selected) colors.accent else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(start = ShortcutIndent, end = RowPadding)
+            .padding(vertical = RowPaddingV),
+    ) {
+        // **Drawn as the app rasterized it, not run through `core:icon`.** A shortcut icon is the app's own
+        // badge-and-glyph composition, which `AppShortcut` says in as many words — restyling it into one of our
+        // layer stacks would produce something the app never published.
+        val icon = shortcut.icon
+        if (icon != null) {
+            Image(
+                bitmap = icon.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.size(ShortcutIcon),
+            )
+        } else {
+            // A shortcut the platform gave us no icon for still needs its row to line up with the others.
+            Box(Modifier.size(ShortcutIcon))
+        }
+        Text(
+            text = shortcut.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = RowPadding),
+        )
+        if (selected) SelectedMark()
+    }
+}
+
+/** The plain choice — no icon, because "None" is the absence of one. */
+@Composable
+private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (selected) colors.accent else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = RowPaddingV),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (selected) colors.onAccent else colors.content,
+            modifier = Modifier.weight(1f).padding(vertical = RowPadding),
+        )
+        if (selected) SelectedMark()
+    }
+}
+
+/**
+ * What marks the current choice *inside* a filled row.
+ *
+ * The fill already says "this one", so this is a second signal rather than the only one — worth having because a
+ * picker is scrolled through, and a row that scrolls past half-visible reads by its mark before its color.
+ */
+@Composable
+private fun SelectedMark() {
+    val colors = LocalMorphicColors.current
+    Box(
+        Modifier
+            .padding(start = RowPadding)
+            .size(MarkSize)
+            .clip(RoundedCornerShape(50))
+            .background(colors.onAccent),
+    )
+}
+
+/**
+ * A group of one app's shortcuts, headed by the app that publishes them — its icon beside its name.
+ *
+ * **The icon is the launcher's own**, through [AppIcon], so an app is recognized here exactly as it is on home. A
+ * shortcut's own icon is the app's to draw; the *app* is ours, and the two sitting in one column is what makes the
+ * indent read as "these belong to that".
+ */
+@Composable
+private fun GroupHeader(app: AppInfo) {
+    val colors = LocalMorphicColors.current
+    val sizePx = with(LocalDensity.current) { GroupIcon.roundToPx() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+    ) {
+        AppIcon(
+            component = app.componentKey,
+            contentDescription = null,
+            sizePx = sizePx,
+            modifier = Modifier.size(GroupIcon),
+        )
+        Text(
+            text = app.label,
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.contentMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = RowPadding),
+        )
+    }
+}
+
+/** The hairline between two apps' blocks — the palette's own divider, not a faded content color. */
+@Composable
+private fun BlockDivider() {
+    val colors = LocalMorphicColors.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .height(DividerThickness)
+            .background(colors.divider),
+    )
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    val colors = LocalMorphicColors.current
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        color = colors.contentMuted,
+        modifier = Modifier
+            .padding(horizontal = GroupInsetH + RowPadding)
+            .padding(top = SectionGap, bottom = 4.dp),
+    )
+}
+
+/** A line where rows would be, when a section is loading or genuinely has nothing. */
+@Composable
+private fun SectionNote(text: String) {
+    val colors = LocalMorphicColors.current
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = colors.contentMuted,
+        modifier = Modifier.padding(RowPadding),
+    )
 }
 
 /**
@@ -168,79 +382,6 @@ private fun GestureAction?.isThis(shortcut: AppShortcut): Boolean {
     return stored.id == shortcut.id &&
         stored.packageName == shortcut.packageName &&
         stored.userSerial == shortcut.userSerial
-}
-
-/** One choosable action. Selection reads by fill, as every selected thing in this launcher does. */
-@Composable
-private fun ChoiceRow(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    indented: Boolean = false,
-) {
-    val colors = LocalMorphicColors.current
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyLarge,
-        color = if (selected) colors.onAccent else colors.content,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ScreenPadding, vertical = RowInsetV)
-            .clip(RoundedCornerShape(RowCorner))
-            .background(if (selected) colors.accent else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(
-                start = if (indented) IndentedStart else RowPadding,
-                top = RowPadding,
-                bottom = RowPadding,
-                end = RowPadding,
-            ),
-    )
-}
-
-/** A group of one app's shortcuts, headed by the app it belongs to. */
-@Composable
-private fun GroupHeader(app: AppInfo) {
-    val colors = LocalMorphicColors.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding + RowPadding, vertical = RowPadding),
-    ) {
-        Box(Modifier.size(GroupDot).clip(RoundedCornerShape(GroupDot / 2)).background(colors.contentMuted))
-        Text(
-            text = app.label,
-            style = MaterialTheme.typography.labelLarge,
-            color = colors.contentMuted,
-            modifier = Modifier.padding(start = RowPadding),
-        )
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    val colors = LocalMorphicColors.current
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium,
-        color = colors.contentMuted,
-        modifier = Modifier
-            .padding(horizontal = ScreenPadding + RowPadding)
-            .padding(top = SectionGap, bottom = RowPadding),
-    )
-}
-
-/** A line where a section would be, when it is loading or genuinely has nothing. */
-@Composable
-private fun SectionNote(text: String) {
-    val colors = LocalMorphicColors.current
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = colors.contentMuted,
-        modifier = Modifier.padding(horizontal = ScreenPadding + RowPadding).padding(bottom = RowPadding),
-    )
 }
 
 /** A jump-to-section chip. It scrolls; it does not filter — see this screen's own note. */
@@ -270,12 +411,16 @@ private val ItemGesture.label: String
     }
 
 private val ScreenPadding = 16.dp
-private val RowPadding = 12.dp
-private val RowInsetV = 2.dp
-private val RowCorner = 12.dp
-private val IndentedStart = 36.dp
-private val SectionGap = 20.dp
-private val GroupDot = 8.dp
+private val PanelGap = 4.dp
+private val RowPadding = 8.dp
+private val AppRowHeight = 52.dp
+private val RowPaddingV = 4.dp
+private val ShortcutIndent = 40.dp
+private val ShortcutIcon = 24.dp
+private val GroupIcon = 28.dp
+private val DividerThickness = 1.dp
+private val MarkSize = 8.dp
+private val SectionGap = 16.dp
 private val ChipGap = 8.dp
 private val ChipPaddingH = 14.dp
 private val ChipPaddingV = 8.dp
