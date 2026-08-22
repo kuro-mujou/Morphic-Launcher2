@@ -14,7 +14,21 @@ import kotlinx.serialization.Serializable
  * `core:designsystem`. A pure enum with no Compose in it belongs here by the same rule that put [HomeEdge] here.
  */
 @Serializable
-enum class SwipeDirection { UP, DOWN, LEFT, RIGHT }
+enum class SwipeDirection {
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT,
+    ;
+
+    /**
+     * Which axis this travels along.
+     *
+     * Asked by a surface that owns one axis for itself and can only offer the other: home's list scrolls
+     * vertically, so a row may take a horizontal swipe and must not take a vertical one.
+     */
+    val isHorizontal: Boolean get() = this == LEFT || this == RIGHT
+}
 
 /**
  * The direction a movement of ([dx], [dy]) is going — its dominant axis, then its sign.

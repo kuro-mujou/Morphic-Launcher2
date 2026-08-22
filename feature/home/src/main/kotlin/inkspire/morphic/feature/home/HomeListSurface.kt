@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.home
 
+import android.widget.Toast
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -71,7 +73,9 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeListGrid
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetAreaGrid
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.sideZoneEdge
@@ -201,6 +205,11 @@ internal fun HomeListSurface(
     // it republishes every frame for free. `CategoryPage` is the worked example of the same rule.
     val scrollState = rememberScrollState()
     var viewport by remember { mutableStateOf(Rect.Zero) }
+
+    // The app whose Gestures sheet is open, and where its placeholder lands. Held by the surface rather than the
+    // menu, which is gone by the time the sheet is up.
+    var gesturesFor by remember { mutableStateOf<AppInfo?>(null) }
+    val context = LocalContext.current
     val listGeometry = if (viewport == Rect.Zero || rowHeightPx <= 0f) {
         null
     } else {
@@ -464,9 +473,14 @@ internal fun HomeListSurface(
                             label = app.label,
                             anchor = anchor,
                             surfaceActions = listOf(
+                                MenuAction("Gestures") { gesturesFor = app },
                                 MenuAction("Remove") { viewModel.removeFromList(app.componentKey) },
                             ),
                         )
+                    },
+                    gesturesOn = { state.itemGestures.gesturesOn(it) },
+                    onGesture = { app, what ->
+                        Toast.makeText(context, "${app.label}: $what", Toast.LENGTH_SHORT).show()
                     },
                     metrics = listMetrics,
                 )
@@ -535,8 +549,44 @@ internal fun HomeListSurface(
                 },
             )
         }
+
+        // Last in the stack, as on the pager pairing: a sheet declared before the zones would be painted over by
+        // them.
+        gesturesFor?.let { app ->
+            val item = GridItem.App(app.componentKey)
+            val taken = state.itemGestures.gesturesOn(item)
+            HomeItemGestureSheet(
+                label = app.label,
+                assigned = taken,
+                onToggle = { gesture ->
+                    viewModel.setItemGestures(
+                        item = item,
+                        gestures = if (gesture in taken) taken - gesture else taken + gesture,
+                    )
+                },
+                onDismiss = { gesturesFor = null },
+                // **The two the list cannot honor**, still assignable because the same key is live on the pager
+                // pairing — see the sheet's own note.
+                unavailable = VerticalGestures,
+                unavailableNote = VerticalUnavailable,
+            )
+        }
     }
 }
+
+/** The pair a scrolling list cannot take, since it owns that axis. */
+private val VerticalGestures = setOf(ItemGesture.SWIPE_UP, ItemGesture.SWIPE_DOWN)
+
+/**
+ * Said where a user would otherwise only find out by trying it.
+ *
+ * **Plain over explanatory.** An earlier version named the cause — that the list scrolls this way — on the grounds
+ * that a reason is more actionable than a refusal. It reads as an apology in a row of four short statuses, and the
+ * cause is one a user can see for themselves by looking at the screen. What they cannot see is that the gesture is
+ * stored and simply dormant here, which is what this says.
+ */
+private const val VerticalUnavailable = "Not supported on this layout"
+
 
 /**
  * The list itself: one scrolling lane of [AppRowCell], each row [rowHeight] tall.
@@ -578,6 +628,8 @@ private fun ListZone(
     onRelease: () -> Unit,
     onLaunch: (ComponentKey) -> Unit,
     onShowMenu: (AppInfo, Rect) -> Unit,
+    gesturesOn: (GridItem) -> Set<ItemGesture>,
+    onGesture: (AppInfo, String) -> Unit,
     metrics: IconMetrics,
     modifier: Modifier,
     onViewportChange: (Rect) -> Unit,
@@ -587,14 +639,26 @@ private fun ListZone(
             Column(Modifier.fillMaxSize().verticalScroll(scrollState, enabled = !dragging)) {
                 apps.forEach { app ->
                     key(app.componentKey.flatten()) {
+                        val item = GridItem.App(app.componentKey)
                         LauncherDragCell(
                             coordinator = coordinator,
-                            item = GridItem.App(app.componentKey),
+                            item = item,
                             gestureConfig = gestureConfig,
                             onRelease = onRelease,
                             modifier = Modifier.fillMaxWidth().height(rowHeight),
+                            // **Horizontal only, and the vertical pair is not a gap.** This list scrolls, and
+                            // a row that took a vertical swipe would take scrolling away from wherever the
+                            // user had assigned one — on a surface that is almost entirely rows. Nothing here
+                            // wants horizontal, so those cost nothing; the sheet says why the others are
+                            // absent rather than leaving a stored gesture silently inert.
+                            edgeActions = gesturesOn(item).mapNotNullTo(mutableSetOf()) {
+                                it.swipe?.takeIf(SwipeDirection::isHorizontal)
+                            },
+                            doubleTap = ItemGesture.DOUBLE_TAP in gesturesOn(item),
                             onOpen = { onLaunch(app.componentKey) },
                             onShowMenu = { anchor -> onShowMenu(app, anchor) },
+                            onEdgeAction = { direction -> onGesture(app, direction.name.lowercase()) },
+                            onDoubleTap = { onGesture(app, "double tap") },
                         ) { itemGestures ->
                             AppRowCell(
                                 app = app,

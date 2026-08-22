@@ -27,7 +27,12 @@ import inkspire.morphic.core.model.ItemGesture
  * sliding a surface in — which needs a real assignment to be reachable at all.
  *
  * @param label the item's own name, so the sheet says whose gestures these are.
- * @param assigned the directions this item has taken.
+ * @param assigned the gestures this item has taken.
+ * @param unavailable gestures the surface on screen cannot honor, shown with [unavailableNote] under them.
+   **Still assignable, deliberately**: an assignment belongs to the item and is keyed the same in both of
+   home's pairings, so one made here is live on the other. Hiding these rows would leave a stored gesture
+   that silently does nothing and no way to find out why.
+ * @param unavailableNote why, in the words of the surface that cannot honor them.
  */
 @Composable
 internal fun HomeItemGestureSheet(
@@ -35,6 +40,8 @@ internal fun HomeItemGestureSheet(
     assigned: Set<ItemGesture>,
     onToggle: (ItemGesture) -> Unit,
     onDismiss: () -> Unit,
+    unavailable: Set<ItemGesture> = emptySet(),
+    unavailableNote: String = "",
 ) {
     val colors = LocalMorphicColors.current
     // Sized to its rows rather than to a fraction of the screen: five short rows in a fixed half-screen box
@@ -57,6 +64,7 @@ internal fun HomeItemGestureSheet(
                 GestureRow(
                     gesture = gesture,
                     assigned = gesture in assigned,
+                    note = if (gesture in unavailable) unavailableNote else null,
                     onClick = { onToggle(gesture) },
                 )
             }
@@ -66,7 +74,7 @@ internal fun HomeItemGestureSheet(
 
 /** One direction and its state. The whole row is the target, as every settings row in this launcher is. */
 @Composable
-private fun GestureRow(gesture: ItemGesture, assigned: Boolean, onClick: () -> Unit) {
+private fun GestureRow(gesture: ItemGesture, assigned: Boolean, note: String?, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = RowPaddingV),
@@ -79,6 +87,11 @@ private fun GestureRow(gesture: ItemGesture, assigned: Boolean, onClick: () -> U
                 style = MaterialTheme.typography.bodySmall,
                 color = if (assigned) colors.accent else colors.contentMuted,
             )
+            // A warning rather than a description, which is the only kind of second line this launcher keeps:
+            // it says why a gesture the user set is not firing, and nothing on screen could show that.
+            if (note != null) {
+                Text(text = note, style = MaterialTheme.typography.bodySmall, color = colors.error)
+            }
         }
     }
 }
