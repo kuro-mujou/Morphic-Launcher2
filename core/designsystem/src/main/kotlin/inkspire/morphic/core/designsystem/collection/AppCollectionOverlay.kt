@@ -21,6 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -330,168 +332,174 @@ fun AppCollectionOverlay(
 
     // Root spans the screen; the floating proxy is a sibling of the content so its root-space offset isn't
     // shifted by the content's inset.
-    Box(modifier.fillMaxSize()) {
-        // **The frost, as its own node under the content** — the same `SurfaceBackdropLayer` the shell puts under a
-        // side surface, and here for the same two reasons. It fixes a real fault: this used to call
-        // `wallpaperBackdrop` directly, which meant liquid glass tried to draw its *refraction rim* across the whole
-        // screen, where the band falls under the system bars and costs a shader for almost nothing. The layer passes
-        // `refracts = false`, so glass renders here as its blur plus its saturation — see `SurfaceBackdropLayer`.
-        //
-        // And it separates the two motions. They move together today, but the frost and the card are no longer one
-        // node, so giving the card its own entrance later needs no restructuring.
-        //
-        // `Color.Black` is the scrim rather than the theme's background, unlike the shell's: this overlay draws its
-        // title and labels in white by construction, so black is what they are legible against on a device the
-        // launcher has never been given a wallpaper for. That is exactly what this drew before the backdrop existed.
-        SurfaceBackdropLayer(alpha = presence::value, scrimColor = Color.Black)
+    // **Everything in here is over this overlay's own film** — the layer below — so nothing inside may frost itself
+    // a second time: an icon plate or a menu panel sampling the wallpaper again cuts a sharper hole through the very
+    // sheet it is sitting on. Around the whole root rather than the card alone, because the floating drag proxy is a
+    // sibling of the card and is drawn over the same frost.
+    CompositionLocalProvider(LocalOverFilm provides true) {
+        Box(modifier.fillMaxSize()) {
+            // **The frost, as its own node under the content** — the same `SurfaceBackdropLayer` the shell puts under a
+            // side surface, and here for the same two reasons. It fixes a real fault: this used to call
+            // `wallpaperBackdrop` directly, which meant liquid glass tried to draw its *refraction rim* across the whole
+            // screen, where the band falls under the system bars and costs a shader for almost nothing. The layer passes
+            // `refracts = false`, so glass renders here as its blur plus its saturation — see `SurfaceBackdropLayer`.
+            //
+            // And it separates the two motions. They move together today, but the frost and the card are no longer one
+            // node, so giving the card its own entrance later needs no restructuring.
+            //
+            // `Color.Black` is the scrim rather than the theme's background, unlike the shell's: this overlay draws its
+            // title and labels in white by construction, so black is what they are legible against on a device the
+            // launcher has never been given a wallpaper for. That is exactly what this drew before the backdrop existed.
+            SurfaceBackdropLayer(alpha = presence::value, scrimColor = Color.Black)
 
-        // The card and everything in it. Structurally stable across the presenting flip — only `alpha` and the
-        // clickable's `enabled` change — because the cells inside own live pointer streams.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = presence.value }
-                .clickable(
-                    interactionSource = scrimInteraction,
-                    indication = null,
-                    enabled = presenting,
-                    onClick = onDismiss,
-                ),
-        ) {
-            BoxWithConstraints(
-                modifier = Modifier
+            // The card and everything in it. Structurally stable across the presenting flip — only `alpha` and the
+            // clickable's `enabled` change — because the cells inside own live pointer streams.
+            Box(
+                Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(uiInsets),
-                contentAlignment = Alignment.Center,
+                    .graphicsLayer { alpha = presence.value }
+                    .clickable(
+                        interactionSource = scrimInteraction,
+                        indication = null,
+                        enabled = presenting,
+                        onClick = onDismiss,
+                    ),
             ) {
-                val innerSize: DpSize = appCollectionInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = label,
-                        style = titleStyle,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(bottom = 12.dp),
-                    )
-                    // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
-                    Box(
-                        modifier = Modifier
-                            .size(innerSize)
-                            // The outline is always in the chain and switches *color*, so this chain stays
-                            // structurally stable across the drag flip — the same rule the backdrop above follows,
-                            // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
-                            // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
-                            .border(1.dp, if (session != null) Color.White else Color.Transparent)
-                            // Consumes a tap on the card's background so it doesn't reach the scrim and dismiss —
-                            // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
-                            // invisible but still laid out over the middle of the screen, and Compose stops
-                            // hit-testing at the topmost sibling it hits: an always-enabled clickable up here takes
-                            // every press aimed at the surface beneath, so items behind an invisible collection could
-                            // neither be launched nor lifted. The cells inside are deliberately *not* gated — one of
-                            // them owns the in-flight pointer stream this overlay is being kept alive for.
-                            .clickable(
-                                interactionSource = innerInteraction,
-                                indication = null,
-                                enabled = presenting,
-                                onClick = {},
-                            ),
-                    ) {
-                        LauncherPager(
-                            state = pagerState,
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(uiInsets),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val innerSize: DpSize = appCollectionInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = label,
+                            style = titleStyle,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        )
+                        // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
-                                .onGloballyPositioned {
-                                    val b = it.boundsInRoot()
-                                    geometry = GridGeometry(
-                                        originInRoot = Offset(b.left, b.top),
-                                        cellW = b.width / grid.cols,
-                                        cellH = b.height / grid.rows,
-                                        cols = grid.cols,
-                                        rows = grid.rows,
-                                    )
-                                    // Measuring only; whether these bounds are a live drop zone is the presented
-                                    // role's business, decided by the effect above.
-                                    innerBounds = b
-                                },
-                        ) { pageIndex ->
-                            LauncherGrid(
-                                config = grid,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                // The drop shadow for the slot the gap has opened, behind the cells (declared
-                                // first) and inside the page grid so it travels with the page. `gap` is an index
-                                // into the *display* order, which is the flat list these pages were chunked from —
-                                // so it names a page as well as a cell, and only the page holding it paints.
-                                if (presenting && session != null && gap >= 0 && gap / pageSize == pageIndex) {
-                                    val slot = gap % pageSize
-                                    Box(
-                                        Modifier.gridPlacement(
-                                            GridPlacement(0, slot / grid.cols, slot % grid.cols),
-                                        ),
-                                    ) {
-                                        DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
-                                    }
-                                }
-                                flowItems(
-                                    items = pages.getOrNull(pageIndex).orEmpty(),
-                                    itemKey = { it.componentKey.flatten() },
-                                ) { app, cellModifier ->
-                                    LauncherDragCell(
-                                        coordinator = coordinator,
-                                        item = GridItem.App(app.componentKey),
-                                        gestureConfig = gestureConfig,
-                                        onRelease = onRelease,
-                                        modifier = cellModifier,
-                                        onOpen = { onLaunch(app.componentKey) },
-                                        onShowMenu = { anchor -> onShowMenu(app, anchor) },
-                                    ) { itemGestures ->
-                                        AppCell(
-                                            app = app,
-                                            modifier = Modifier.fillMaxSize(),
-                                            metrics = metrics,
-                                            itemGestures = itemGestures,
+                                .size(innerSize)
+                                // The outline is always in the chain and switches *color*, so this chain stays
+                                // structurally stable across the drag flip — the same rule the backdrop above follows,
+                                // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
+                                // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
+                                .border(1.dp, if (session != null) Color.White else Color.Transparent)
+                                // Consumes a tap on the card's background so it doesn't reach the scrim and dismiss —
+                                // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
+                                // invisible but still laid out over the middle of the screen, and Compose stops
+                                // hit-testing at the topmost sibling it hits: an always-enabled clickable up here takes
+                                // every press aimed at the surface beneath, so items behind an invisible collection could
+                                // neither be launched nor lifted. The cells inside are deliberately *not* gated — one of
+                                // them owns the in-flight pointer stream this overlay is being kept alive for.
+                                .clickable(
+                                    interactionSource = innerInteraction,
+                                    indication = null,
+                                    enabled = presenting,
+                                    onClick = {},
+                                ),
+                        ) {
+                            LauncherPager(
+                                state = pagerState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
+                                    .onGloballyPositioned {
+                                        val b = it.boundsInRoot()
+                                        geometry = GridGeometry(
+                                            originInRoot = Offset(b.left, b.top),
+                                            cellW = b.width / grid.cols,
+                                            cellH = b.height / grid.rows,
+                                            cols = grid.cols,
+                                            rows = grid.rows,
                                         )
+                                        // Measuring only; whether these bounds are a live drop zone is the presented
+                                        // role's business, decided by the effect above.
+                                        innerBounds = b
+                                    },
+                            ) { pageIndex ->
+                                LauncherGrid(
+                                    config = grid,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    // The drop shadow for the slot the gap has opened, behind the cells (declared
+                                    // first) and inside the page grid so it travels with the page. `gap` is an index
+                                    // into the *display* order, which is the flat list these pages were chunked from —
+                                    // so it names a page as well as a cell, and only the page holding it paints.
+                                    if (presenting && session != null && gap >= 0 && gap / pageSize == pageIndex) {
+                                        val slot = gap % pageSize
+                                        Box(
+                                            Modifier.gridPlacement(
+                                                GridPlacement(0, slot / grid.cols, slot % grid.cols),
+                                            ),
+                                        ) {
+                                            DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
+                                        }
+                                    }
+                                    flowItems(
+                                        items = pages.getOrNull(pageIndex).orEmpty(),
+                                        itemKey = { it.componentKey.flatten() },
+                                    ) { app, cellModifier ->
+                                        LauncherDragCell(
+                                            coordinator = coordinator,
+                                            item = GridItem.App(app.componentKey),
+                                            gestureConfig = gestureConfig,
+                                            onRelease = onRelease,
+                                            modifier = cellModifier,
+                                            onOpen = { onLaunch(app.componentKey) },
+                                            onShowMenu = { anchor -> onShowMenu(app, anchor) },
+                                        ) { itemGestures ->
+                                            AppCell(
+                                                app = app,
+                                                modifier = Modifier.fillMaxSize(),
+                                                metrics = metrics,
+                                                itemGestures = itemGestures,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    // Page dots below the inner zone; the row's height is reserved even for a single page.
-                    Box(
-                        modifier = Modifier.height(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
+                        // Page dots below the inner zone; the row's height is reserved even for a single page.
+                        Box(
+                            modifier = Modifier.height(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (pages.size > 1) PageDots(count = pages.size, current = pagerState.currentPage)
+                        }
                     }
                 }
             }
-        }
 
-        // Floating proxy following the finger during a reorder drag (root space, above the content).
-        //
-        // Resolved once per dragged component and *held*, deliberately not re-derived from [appByComponent]: an app
-        // carried in from the surface is only in that map while the host still calls it `incoming`, and committing the
-        // drop ends exactly that — so re-deriving would lose the app mid-gesture and the icon under the finger would
-        // blink out. Same resolve-once-and-hold reasoning as the caller's own `incoming` lookup.
-        // A pointer holder draws nothing: whoever is presenting owns the proxy (the surface, once the drag has left
-        // every collection), so two overlays drawing one would put two icons under a single finger.
-        val geo = geometry
-        val dragApp = remember(draggedComponent) { draggedComponent?.let(appByComponent::get) }
-        if (presenting && session != null && geo != null && dragApp != null) {
-            val finger = session.fingerInRoot
-            FloatingDragIcon(
-                rootOffset = IntOffset(
-                    (finger.x - geo.cellW / 2f).roundToInt(),
-                    (finger.y - geo.cellH / 2f).roundToInt(),
-                ),
-                size = DpSize(
-                    with(LocalDensity.current) { geo.cellW.toDp() },
-                    with(LocalDensity.current) { geo.cellH.toDp() }),
-            ) {
-                // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target.
-                AppCell(app = dragApp, modifier = Modifier.fillMaxSize(), metrics = metrics)
+            // Floating proxy following the finger during a reorder drag (root space, above the content).
+            //
+            // Resolved once per dragged component and *held*, deliberately not re-derived from [appByComponent]: an app
+            // carried in from the surface is only in that map while the host still calls it `incoming`, and committing the
+            // drop ends exactly that — so re-deriving would lose the app mid-gesture and the icon under the finger would
+            // blink out. Same resolve-once-and-hold reasoning as the caller's own `incoming` lookup.
+            // A pointer holder draws nothing: whoever is presenting owns the proxy (the surface, once the drag has left
+            // every collection), so two overlays drawing one would put two icons under a single finger.
+            val geo = geometry
+            val dragApp = remember(draggedComponent) { draggedComponent?.let(appByComponent::get) }
+            if (presenting && session != null && geo != null && dragApp != null) {
+                val finger = session.fingerInRoot
+                FloatingDragIcon(
+                    rootOffset = IntOffset(
+                        (finger.x - geo.cellW / 2f).roundToInt(),
+                        (finger.y - geo.cellH / 2f).roundToInt(),
+                    ),
+                    size = DpSize(
+                        with(LocalDensity.current) { geo.cellW.toDp() },
+                        with(LocalDensity.current) { geo.cellH.toDp() }),
+                ) {
+                    // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target.
+                    AppCell(app = dragApp, modifier = Modifier.fillMaxSize(), metrics = metrics)
+                }
             }
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -218,7 +220,14 @@ private sealed interface ResolvedAnchor {
     data class Docked(val at: IntOffset, val dock: MenuDock) : ResolvedAnchor
 }
 
-/** The menu's own panel: the frost, the shape, and the rows inside them. */
+/**
+ * The menu's own panel: the frost, the shape, and the rows inside them.
+ *
+ * **Frosted over HOME, flat over the film** ([LocalOverFilm]). A menu raised on the APPS surface or in an open
+ * collection is already sitting on a blurred sheet of the wallpaper, and sampling it a second time cuts a *sharper*
+ * hole through that sheet rather than laying glass on it. The flat panel is the same color the frost falls back to
+ * with no wallpaper to sample, so what a menu looks like on a fresh install is what it looks like there.
+ */
 @Composable
 private fun MenuSurface(
     actions: List<MenuAction>,
@@ -234,7 +243,13 @@ private fun MenuSurface(
             .clip(RoundedCornerShape(16.dp))
             // The scrim is what the panel falls back to with no wallpaper to sample, so it must be opaque enough
             // to read a menu against on its own — the theme's elevated surface, which is exactly that color.
-            .wallpaperBackdrop(shape = RoundedCornerShape(16.dp), scrimColor = colors.surfaceElevated)
+            .then(
+                if (LocalOverFilm.current) {
+                    Modifier.background(colors.surfaceElevated)
+                } else {
+                    Modifier.wallpaperBackdrop(shape = RoundedCornerShape(16.dp), scrimColor = colors.surfaceElevated)
+                },
+            )
             .padding(vertical = 4.dp),
     ) {
         header?.invoke()

@@ -3,6 +3,7 @@ package inkspire.morphic.feature.apps
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -10,6 +11,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
@@ -155,92 +157,100 @@ fun AppsScreen(
     val menuHost = LocalMenuHost.current
     val gestureConfig = rememberAppsGestureConfig()
     val presented = LocalSurfacePresented.current
-    Box(
-        modifier
-            .fillMaxSize()
-            .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
-                menuHost?.showSurface(
-                    position = position,
-                    // The host appends the launcher-wide *Settings* row itself; this is the one verb the APPS
-                    // surface owns. Empty when there is nowhere to send it, which collapses the menu to that row.
-                    surfaceActions = onOpenLayoutSettings
-                        ?.let { listOf(MenuAction("Apps settings", onClick = it)) }
-                        .orEmpty(),
+    // **This whole surface sits on the shell's film**, which is the thing everything drawn here has to know before it
+    // frosts itself: a second sample of the wallpaper over a sheet that is already blurred is a sharper hole through
+    // it, not glass on it. Declared once at the root rather than per layout, for the surface menu's reason — five
+    // arrangements, and a new one must not be able to forget.
+    CompositionLocalProvider(LocalOverFilm provides true) {
+        Box(
+            modifier
+                .fillMaxSize()
+                .surfaceMenuGestures(gestureConfig, enabled = presented) { position ->
+                    menuHost?.showSurface(
+                        position = position,
+                        // The host appends the launcher-wide *Settings* row itself; this is the one verb the APPS
+                        // surface owns. Empty when there is nowhere to send it, which collapses the menu to that row.
+                        surfaceActions = onOpenLayoutSettings
+                            ?.let { listOf(MenuAction("Apps settings", onClick = it)) }
+                            .orEmpty(),
+                        // The menu is composed at the shell, so it cannot read the local above for itself.
+                        overFilm = true,
+                    )
+                },
+        ) {
+            when (layout) {
+                AppsLayout.VERTICAL_LIST -> AppsVerticalList(
+                    apps = state.apps,
+                    onLaunch = viewModel::launch,
+                    metrics = state.metricsFor(GridSlot.APPS_LIST),
+                    rowHeight = state.rowHeight,
+                    horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
                 )
-            },
-    ) {
-        when (layout) {
-            AppsLayout.VERTICAL_LIST -> AppsVerticalList(
-                apps = state.apps,
-                onLaunch = viewModel::launch,
-                metrics = state.metricsFor(GridSlot.APPS_LIST),
-                rowHeight = state.rowHeight,
-                horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
-            )
 
-            AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
-                apps = state.apps,
-                onLaunch = viewModel::launch,
-                metrics = state.metricsFor(GridSlot.APPS_SCROLL),
-                cols = state.colsFor(GridSlot.APPS_SCROLL, device),
-                horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
-            )
+                AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
+                    apps = state.apps,
+                    onLaunch = viewModel::launch,
+                    metrics = state.metricsFor(GridSlot.APPS_SCROLL),
+                    cols = state.colsFor(GridSlot.APPS_SCROLL, device),
+                    horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
+                )
 
-            AppsLayout.PAGER -> AppsPager(
-                pages = state.pagerPages,
-                onLaunch = viewModel::launch,
-                onMove = viewModel::movePagerItem,
-                onMerge = viewModel::mergePagerItem,
-                onReorderFolder = viewModel::reorderFolder,
-                onAddToFolder = viewModel::addToFolder,
-                onDropExtracted = viewModel::dropExtractedApp,
-                onMergeExtracted = viewModel::mergeExtractedApp,
-                metrics = state.metricsFor(GridSlot.APPS_PAGER),
-                // A folder opened over the pager is a different grid, so it takes its own sizing rather than
-                // inheriting the page's.
-                folderMetrics = state.metricsFor(GridSlot.FOLDER),
-                // The same grid the ViewModel paginates the store against — the fitted one computed above, passed down
-                // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
-                config = pagerFit,
-                horizontalPadding = pagerPadding,
-                wraps = state.wraps(GridSlot.APPS_PAGER),
-            )
+                AppsLayout.PAGER -> AppsPager(
+                    pages = state.pagerPages,
+                    onLaunch = viewModel::launch,
+                    onMove = viewModel::movePagerItem,
+                    onMerge = viewModel::mergePagerItem,
+                    onReorderFolder = viewModel::reorderFolder,
+                    onAddToFolder = viewModel::addToFolder,
+                    onDropExtracted = viewModel::dropExtractedApp,
+                    onMergeExtracted = viewModel::mergeExtractedApp,
+                    metrics = state.metricsFor(GridSlot.APPS_PAGER),
+                    // A folder opened over the pager is a different grid, so it takes its own sizing rather than
+                    // inheriting the page's.
+                    folderMetrics = state.metricsFor(GridSlot.FOLDER),
+                    // The same grid the ViewModel paginates the store against — the fitted one computed above, passed down
+                    // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
+                    config = pagerFit,
+                    horizontalPadding = pagerPadding,
+                    wraps = state.wraps(GridSlot.APPS_PAGER),
+                )
 
-            AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
-                categories = state.categories,
-                onLaunch = viewModel::launch,
-                onMove = viewModel::moveCategoryItem,
-                metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
-                cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
-                horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
-                wraps = state.wraps(GridSlot.APPS_CATEGORY),
-            )
-            // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
-            // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
-            // is rendered.
-            AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
-                categories = state.categories,
-                onLaunch = viewModel::launch,
-                // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
-                // op, because the destination id carries the difference.
-                onMove = viewModel::moveCategoryItem,
-                onReorder = viewModel::reorderCategory,
-                // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing; a card's
-                // preview slots take their own, which is `APPS_CARD`'s.
-                metrics = state.metricsFor(GridSlot.FOLDER),
-                slotMetrics = cardMetrics,
-                chrome = cardChrome,
-                // **Clamped where it is drawn**, as every other scrolling grid here is, and against the same width
-                // the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will
-                // not draw. The floor is a *card's*: two of its preview icons at their own guardrail, plus the
-                // paddings around and between them, which is `CellFit`'s ordinary inversion applied to a tile.
-                cardColumns = AppsCardGrid.fitCols(
-                    areaWidthDp = cardArea.widthDp,
-                    cols = state.colsFor(GridSlot.APPS_CARD, device),
-                    min = cardMinCell(cardMetrics, cardChrome),
-                ),
-                horizontalPadding = cardPadding,
-            )
+                AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
+                    categories = state.categories,
+                    onLaunch = viewModel::launch,
+                    onMove = viewModel::moveCategoryItem,
+                    metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
+                    cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
+                    horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
+                    wraps = state.wraps(GridSlot.APPS_CATEGORY),
+                )
+                // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
+                // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
+                // is rendered.
+                AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
+                    categories = state.categories,
+                    onLaunch = viewModel::launch,
+                    // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
+                    // op, because the destination id carries the difference.
+                    onMove = viewModel::moveCategoryItem,
+                    onReorder = viewModel::reorderCategory,
+                    // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing; a card's
+                    // preview slots take their own, which is `APPS_CARD`'s.
+                    metrics = state.metricsFor(GridSlot.FOLDER),
+                    slotMetrics = cardMetrics,
+                    chrome = cardChrome,
+                    // **Clamped where it is drawn**, as every other scrolling grid here is, and against the same width
+                    // the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will
+                    // not draw. The floor is a *card's*: two of its preview icons at their own guardrail, plus the
+                    // paddings around and between them, which is `CellFit`'s ordinary inversion applied to a tile.
+                    cardColumns = AppsCardGrid.fitCols(
+                        areaWidthDp = cardArea.widthDp,
+                        cols = state.colsFor(GridSlot.APPS_CARD, device),
+                        min = cardMinCell(cardMetrics, cardChrome),
+                    ),
+                    horizontalPadding = cardPadding,
+                )
+            }
         }
     }
 }

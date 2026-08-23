@@ -85,7 +85,13 @@ internal fun Modifier.appsItemGestures(
 internal fun rememberAppsItemMenu(): (AppInfo, Rect) -> Unit {
     val host = LocalMenuHost.current
     return remember(host) {
-        { app, anchor -> host?.showApp(component = app.componentKey, label = app.label, anchor = anchor) }
+        { app, anchor ->
+            // Always over the shell's film here, and over a collection's own film when one is open — either way this
+            // surface's menu must render flat rather than sample the wallpaper through a sheet of itself. Stated
+            // rather than read from `LocalOverFilm`, because the menu is composed at the shell and this lambda is
+            // what carries the answer to it.
+            host?.showApp(component = app.componentKey, label = app.label, anchor = anchor, overFilm = true)
+        }
     }
 }
 

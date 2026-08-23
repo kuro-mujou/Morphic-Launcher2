@@ -185,6 +185,25 @@ val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> {
 }
 
 /**
+ * Whether the content composed here is already drawn **over the full-screen film** — [SurfaceBackdropLayer].
+ *
+ * **Frost does not stack.** Everything below the film is already blurred, so a panel that samples the wallpaper again
+ * is not glass over what the user is looking at: it is a hole cut through to a *sharper* picture than its
+ * surroundings, and at a panel blur of zero that hole is the raw photograph. The same is true of an icon plate, which
+ * is a silhouette of that sharper picture floating on a blurred sheet. So a surface that arrives over the film says
+ * so once, here, and everything inside it renders flat instead.
+ *
+ * Provided `true` by `AppsScreen` and by `AppCollectionOverlay` — the two things that sit on a film — and by
+ * [inkspire.morphic.core.designsystem.menu.MenuOverlay] for a menu whose request was raised on one of them. The menu
+ * is the reason this is not read from the tree alone: it is composed at the shell, as a sibling *above* every
+ * surface, so its own position says nothing about what it is anchored to.
+ *
+ * False everywhere else, which is HOME and every settings preview: content sitting directly on the wallpaper, where
+ * frosting a panel is exactly the effect that was asked for.
+ */
+val LocalOverFilm = staticCompositionLocalOf { false }
+
+/**
  * Draws the blurred wallpaper behind this node's content, clipped to [shape] — the frosted-surface modifier.
  *
  * Sampling is by *position*: the node reports where it is on screen, and the matching crop of [LocalBackdrop]'s image

@@ -1009,7 +1009,7 @@ Five things worth knowing:
 show different pixels. That is the whole reason it is not a layer: a layer is baked, keyed by
 `IconId(component, layerSet, sizePx)` with no position in it, which is exactly what makes that cache shareable. L1
 kept its skin as a separate live Compose layer for the same reason and this file predicted the split ("distinct from
-the baked stack"). Six things:
+the baked stack"). Seven things:
 - **`AppIcon` (`core:designsystem/cell`) is the seam every surface goes through now, not `LauncherIcon`.** The
   primitive stays a component-plus-recipe in, one bitmap out; the plate and the zoom are the *cell's*, one layer out,
   because `wallpaperBackdrop` lives in `core:designsystem` and a bake cannot hold a position. One place, so a new
@@ -1031,6 +1031,18 @@ the baked stack"). Six things:
   glow is meant to escape its box, so above 1 it spills, visibly, while it is being set.
 - **The cost is paid only when a plate is on**: one backdrop node and one offscreen mask layer per icon, per frame.
   Real on a dense grid, and nothing at all for an appearance with no plate.
+- **It is absent on a surface that is already frosted** — `LocalOverFilm`, which is APPS and any open collection. A
+  plate is a piece *of* the wallpaper, and on a sheet of blurred wallpaper there is nothing for it to be a piece of:
+  it renders as a sharper patch floating on the frost. Dropped outright rather than flattened to its scrim, which
+  would be a gray blob behind every icon in the drawer — worse than a plate the user turned on not showing on the one
+  surface that cannot host it. The plate stays on HOME, which is where an icon sits on the picture directly. See
+  docs/DESIGN_SYSTEM.md → "The frosted backdrop and the full-screen frost".
+  - **The zoom goes with it, and that half is the one that fails silently.** `zoom` is the artwork's size *relative
+    to its plate*, so replaying it where no plate is drawn leaves an icon merely smaller than the ones beside it, for
+    a reason nothing on screen shows — the plate's absence is visible, a 0.8 artwork in a full-size box is not. So a
+    suppressed plate resolves the zoom to 1f and the icon fills its box, exactly as an un-plated one does. **Only
+    when *this* surface suppressed it**: a zoom stored against a plate the user switched *off* is a plain size choice
+    and stands wherever it is drawn, which is why the condition is the suppression rather than the absence.
 
 **Custom images: nothing is written until Save.** `CustomIconStore` splits decode from write — the path is
 *reserved* up front so the recipe can refer to an image that does not exist yet, the preview draws it from

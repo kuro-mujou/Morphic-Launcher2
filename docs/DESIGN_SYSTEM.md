@@ -156,6 +156,22 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     make a screenful of text unreadable is not a preference worth offering. **One shared blur strength across all five
     is load-bearing**: the bitmap is blurred upstream from it, so switching variants is a redraw with a different wash
     over an identical picture, never a re-decode.
+  - **A panel over the film does not frost at all** — `LocalOverFilm`, provided `true` by `AppsScreen` and by
+    `AppCollectionOverlay`. Frost does not stack: below the film everything is already blurred, so a panel that samples
+    the wallpaper a second time is not glass over what the user is looking at but a hole cut through to a *sharper*
+    picture than its surroundings — at a panel blur of zero, the raw photograph. Two consumers today: the context menu
+    (flat `surfaceElevated` instead of `wallpaperBackdrop`, which is the color it already fell back to with nothing to
+    sample) and the **icon plate**, which is dropped outright rather than flattened — a plate is a silhouette *of* the
+    wallpaper, and there is nothing on a film for it to be a piece of, while drawing its scrim would put a gray blob
+    behind every icon. Dropping the plate also drops its `zoom`, which is a size *relative to the plate*; see
+    docs/ICON_ARCHITECTURE.md.
+    - **The menu carries the answer on its request (`MenuRequest.overFilm`) rather than reading the local.** It is
+      composed at the shell as a sibling *above* every surface, so where it is drawn says nothing about what it is
+      anchored to. Capturing at *open* time is sound because the menu is modal — it holds the surface gesture lock for
+      as long as it is up, so nothing can arrive or leave underneath it. `MenuOverlay` re-provides the local from the
+      request, so the panel asks the same question an icon plate asks.
+    - This is **not** the compounding note below, which is film over film. Two films is a depth cue; a panel over a
+      film is a rendering fault.
   - **A folder over the drawer is frosted twice**, so its wash compounds (≈0.35 → ≈0.58). Accepted as a depth cue —
     it *is* one level deeper — rather than plumbed, since de-duplicating means telling the folder what is beneath it.
     Invisible under `Plain`, which has no wash to compound.

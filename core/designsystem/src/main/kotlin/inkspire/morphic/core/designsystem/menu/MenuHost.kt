@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.menu
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -14,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.model.ComponentKey
 
@@ -29,12 +31,19 @@ import inkspire.morphic.core.model.ComponentKey
  * @property shortcuts loads the app's own shortcuts, or null when there are none to offer (a folder, a surface). A
  *   **suspending lambda rather than a loaded list**, so the menu itself owns the load. Running that `LaunchedEffect`
  *   per surface is three places for the two stages to disagree.
+ * @property overFilm whether what this menu was raised on is already sitting on the full-screen frost, which decides
+ *   whether the panel frosts itself or renders flat — see [inkspire.morphic.core.designsystem.backdrop.LocalOverFilm].
+ *   **Carried on the request rather than read from the tree**, because the menu is composed at the shell above every
+ *   surface: where it is drawn says nothing about what it is anchored to. Reading it at *open* time is sound because
+ *   a menu is modal — it locks the surface swipe for as long as it is up — so nothing can arrive or leave underneath
+ *   it and make the answer stale.
  */
 data class MenuRequest(
     val anchor: MenuAnchor,
     val actions: List<MenuAction>,
     val title: String? = null,
     val shortcuts: (suspend () -> List<MenuAction>)? = null,
+    val overFilm: Boolean = false,
 )
 
 /**
@@ -84,10 +93,12 @@ class LauncherMenuHost(
         label: String,
         anchor: Rect,
         surfaceActions: List<MenuAction> = emptyList(),
+        overFilm: Boolean = false,
     ) {
         request = MenuRequest(
             anchor = MenuAnchor.Item(anchor),
             title = label,
+            overFilm = overFilm,
             actions = buildList {
                 add(MenuAction("App info") { onAppInfo(component) })
                 add(MenuAction("Edit icon") { onEditIcon(component) })
@@ -102,8 +113,8 @@ class LauncherMenuHost(
      * Opens the menu for anything that is **not** an app — a folder today. One stage, since there are no shortcuts
      * to offer, so the header shows no toggle.
      */
-    fun show(title: String, anchor: Rect, actions: List<MenuAction>) {
-        request = MenuRequest(anchor = MenuAnchor.Item(anchor), title = title, actions = actions)
+    fun show(title: String, anchor: Rect, actions: List<MenuAction>, overFilm: Boolean = false) {
+        request = MenuRequest(anchor = MenuAnchor.Item(anchor), title = title, actions = actions, overFilm = overFilm)
     }
 
     /**
@@ -116,10 +127,11 @@ class LauncherMenuHost(
      *
      * There is no title: see [MenuRequest.title].
      */
-    fun showSurface(position: Offset, surfaceActions: List<MenuAction> = emptyList()) {
+    fun showSurface(position: Offset, surfaceActions: List<MenuAction> = emptyList(), overFilm: Boolean = false) {
         request = MenuRequest(
             anchor = MenuAnchor.Press(position),
             actions = surfaceActions + MenuAction("Settings", onClick = onOpenSettings),
+            overFilm = overFilm,
         )
     }
 
@@ -162,7 +174,11 @@ fun MenuOverlay(host: LauncherMenuHost) {
     // Keyed on the request so opening a menu on a different item starts its own two-stage state and its own
     // entrance, rather than inheriting the previous item's stage — `AppCollectionOverlay`'s `key(folderId)` rule.
     key(request) {
-        RequestedMenu(request = request, onDismiss = host::dismiss)
+        // The one place the menu's frost is decided. Re-provided rather than read from here, so the panel asks the
+        // same question every icon plate asks and gets the answer the *anchored* surface gave.
+        CompositionLocalProvider(LocalOverFilm provides request.overFilm) {
+            RequestedMenu(request = request, onDismiss = host::dismiss)
+        }
     }
 }
 

@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.icon.compose.LauncherIcon
@@ -52,8 +53,25 @@ fun AppIcon(
     modifier: Modifier = Modifier,
     appearance: IconAppearance = localAppearanceOf(component),
 ) {
+    // **Absent over the film, not flattened.** A plate is a piece of the wallpaper cut to the icon's silhouette, and
+    // on a surface that is already a blurred sheet of that wallpaper there is nothing for it to be a piece *of* — it
+    // would read as a sharper patch floating on the frost. Drawing the scrim instead would be a gray blob behind
+    // every icon, which is worse than the plate the user turned on not appearing on this one surface.
+    val plated = appearance.plate.enabled && !LocalOverFilm.current
+
+    // **And the zoom goes with the plate it was set against.** [IconAppearance.zoom] is the artwork's size *relative
+    // to its plate* — the fraction that keeps an icon clear of the glass's edge — so replaying it where no plate is
+    // drawn leaves an icon that is simply smaller than every other icon in the row, for a reason nothing on screen
+    // shows. Dropping the plate silently costs the user the size they set everywhere else; dropping the zoom with it
+    // is what makes the icon its own size here.
+    //
+    // **Only when *this* surface suppressed the plate.** A zoom stored against a plate the user has switched *off* is
+    // a plain size choice and stands wherever it is drawn — which is why the condition is the suppression, not the
+    // absence of a plate.
+    val zoom = if (appearance.plate.enabled && !plated) 1f else appearance.zoom
+
     Box(modifier, contentAlignment = Alignment.Center) {
-        if (appearance.plate.enabled) {
+        if (plated) {
             Spacer(
                 Modifier
                     .matchParentSize()
@@ -73,10 +91,11 @@ fun AppIcon(
             // **The artwork scales, the plate does not** — that is the whole of what this zoom is for, and why it is
             // not `IconSizing`: an icon at 1f fills its box and so touches the plate's edge everywhere. Deliberately
             // unclipped, since an icon's own glow or shadow is meant to escape its box; a zoom above 1 therefore
-            // spills, which is visible while it is being set rather than a surprise later.
+            // spills, which is visible while it is being set rather than a surprise later. Resolved above, since
+            // what it is depends on whether the plate it was set against is being drawn at all.
             modifier = Modifier
                 .fillMaxSize()
-                .scale(appearance.zoom.coerceAtLeast(0f)),
+                .scale(zoom.coerceAtLeast(0f)),
         )
     }
 }

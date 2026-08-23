@@ -563,7 +563,10 @@ internal fun HomePagerSurface(
     // "Remove" here would be a row that does nothing (`RemoveFromGrid` on a folder member deletes no rows). Taking
     // an app out of a folder is a drag, which is the gesture this menu's own long-press leads into.
     val showFolderAppMenu: (AppInfo, Rect) -> Unit = { app, anchor ->
-        menuHost?.showApp(component = app.componentKey, label = app.label, anchor = anchor)
+        // **Over the film, unlike home's own item menu two zones below.** An open folder puts a full-screen frost
+        // over home, so this menu renders flat; the same app long-pressed on the grid outside the folder frosts, and
+        // that difference is the whole of what the flag says.
+        menuHost?.showApp(component = app.componentKey, label = app.label, anchor = anchor, overFilm = true)
     }
 
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, which is
