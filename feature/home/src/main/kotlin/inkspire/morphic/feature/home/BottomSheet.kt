@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.backdrop.filmBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
@@ -97,7 +99,19 @@ internal fun LauncherBottomSheet(
                 .pointerInput(Unit) { detectTapGestures { } }
                 .uiInsetsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            content = content,
-        )
+        ) {
+            // **This sheet is a film, so nothing inside it may frost again** — the rule `LocalOverFilm` carries,
+            // owed here the moment the sheet stopped being a panel. Two things inside one today would have broken
+            // it: an app icon with a plate in the container's app picker, and the widget picker's preview of a
+            // container, which is a frosted tile by construction. Both now fill flat, as a menu over APPS does.
+            //
+            // Around the *content* and not around the `Column`, for `SurfaceBackdropLayer`'s reason: the sheet's own
+            // `filmBackdrop` is in that modifier chain, and a provider above it would tell the sheet it was over
+            // itself and fill the whole thing flat.
+            val sheet = this
+            CompositionLocalProvider(LocalOverFilm provides true) {
+                sheet.content()
+            }
+        }
     }
 }
