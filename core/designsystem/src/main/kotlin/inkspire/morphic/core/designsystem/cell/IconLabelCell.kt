@@ -21,20 +21,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
  * A grid-cell label: single line, ellipsized, sized by [IconMetrics.labelScale].
  *
- * TODO(launcher wallpaper-adaptive UI): [color] defaults to white + a drop shadow so it stays legible over a
- *  dark-ish wallpaper. When the wallpaper-brightness subsystem lands, feed the adaptive content tint (black on
- *  a bright wallpaper / white on a dark one) instead of a fixed white.
+ * **It takes the theme's content color, and the halo behind it takes the theme's background.** Both flip together, so
+ * a label is near-black with a white halo on a bright wallpaper and white with a black one on a dark wallpaper — and
+ * on the APPS surface or in an open collection it is whatever the *film* wants, because those subtrees re-theme
+ * themselves (`OnFilm`). This is the "wallpaper-adaptive UI" a TODO here asked for; the brightness subsystem it was
+ * waiting on had landed, but nothing had connected the two, so the label stayed white on every wallpaper.
+ *
+ * **The halo is what carries the local variation, and it is doing real work.** A wallpaper is a photograph, so its
+ * *mean* luminance says little about the pixels under any one label: a bright picture with a dark corner will show a
+ * near-black label on near-black. Striking the halo from the background rather than always from black is what makes
+ * that survivable in both directions, where a fixed black shadow only ever rescues light text.
  */
 @Composable
 internal fun CellLabel(
     label: String,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
-    color: Color = Color.White,
+    color: Color = LocalMorphicColors.current.content,
 ) {
     val baseStyle = MaterialTheme.typography.labelSmall
     val fontSize = baseStyle.fontSize * metrics.labelScale
@@ -50,7 +58,7 @@ internal fun CellLabel(
             fontSize = fontSize,
             lineHeight = lineHeight,
             shadow = Shadow(
-                color = Color.Black.copy(alpha = 0.6f),
+                color = LocalMorphicColors.current.background.copy(alpha = 0.6f),
                 offset = Offset(0f, 2f),
                 blurRadius = 4f,
             ),

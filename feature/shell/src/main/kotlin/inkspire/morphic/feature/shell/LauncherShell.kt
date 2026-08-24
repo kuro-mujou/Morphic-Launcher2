@@ -13,16 +13,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.backdrop.BackdropState
+import inkspire.morphic.core.designsystem.backdrop.Film
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
+import inkspire.morphic.core.designsystem.backdrop.LocalFilm
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
+import inkspire.morphic.core.designsystem.backdrop.isDarkBackground
 import inkspire.morphic.core.designsystem.backdrop.rememberBackdropState
+import inkspire.morphic.core.designsystem.backdrop.resolveFilm
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.LocalDragCoordinator
@@ -62,7 +69,6 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.data.settings.SideBinding
-import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.apps.scrollAxes
@@ -127,8 +133,9 @@ fun LauncherShell(
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
     // half of that rule — its own surface, so its own `isSystemInDarkTheme()`. The two can therefore disagree, and
-    // should. `WallpaperBrightness.DARK` before the first read, which is what this line hardcoded until now.
-    LauncherTheme(darkTheme = state.brightness == WallpaperBrightness.DARK) {
+    // should. **And it is HOME's alone** now that it is not the launcher's only theme: everything drawn on the film
+    // re-themes itself (`OnFilm`), because a wash at 35% can invert the answer this line gives.
+    LauncherTheme(darkTheme = isDarkBackground(state.wallpaperLuminance)) {
         val scope = rememberCoroutineScope()
         val pagerState = rememberSurfacePagerState()
 
@@ -220,13 +227,11 @@ fun LauncherShell(
         // frosted surface samples *this launcher's* wallpaper, and the settings graph is a different zone with
         // different rules (its icon preview punches through to the real window instead). Providing these inside
         // `HomeScreen` is what makes a settings feature need a second provider of its own.
+        val film = shellFilm(state)
+
         CompositionLocalProvider(
-            LocalBackdrop provides rememberBackdropState(
-                panelImage = state.backdropImages.panel,
-                accentColor = state.backdropAccent,
-                windowSize = windowSize,
-                filmImage = state.backdropImages.film,
-            ),
+            LocalFilm provides film,
+            LocalBackdrop provides shellBackdrop(state, windowSize),
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
             LocalItemSwipeClaim provides itemSwipeClaim,
@@ -461,3 +466,34 @@ private fun SideBinding.toSurfaceBinding(
  * `AxisScroll.BOUNDED`-or-better — a layout with no pager is not gated on that axis at all.
  */
 private fun ShellState.wraps(slot: GridSlot?): Boolean = slot != null && pagerWraps[slot] == true
+
+/**
+ * The launcher's [Film], read from [ShellState] — the shell's half of a resolution `core:designsystem` owns.
+ *
+ * It exists to keep the reading **inside** `LauncherTheme` above and out of the shell's own body, which is where it
+ * has to be: both halves pass through `wallpaperTone`, so they must be struck under HOME's theme rather than under
+ * whatever theme the surface reading them has chosen. [LocalFilm] owns the rest of that reasoning.
+ */
+/**
+ * The [BackdropState] every frosted surface samples, read from [ShellState].
+ *
+ * Beside [shellFilm] and for the same reason: both are one expression each of "what is behind the chrome", and the
+ * shell's own body is about composing surfaces rather than about the wallpaper.
+ */
+@Composable
+private fun shellBackdrop(state: ShellState, windowSize: IntSize): BackdropState? = rememberBackdropState(
+    panelImage = state.backdropImages.panel,
+    accentColor = state.backdropAccent,
+    windowSize = windowSize,
+    filmImage = state.backdropImages.film,
+    luminance = state.wallpaperLuminance,
+)
+
+@Composable
+private fun shellFilm(state: ShellState): Film = resolveFilm(
+    effect = state.backdropEffect,
+    // Null when there is no picture to sample, which is what makes the answer fall back to HOME's own.
+    wallpaperLuminance = state.backdropImages.film?.let { state.wallpaperLuminance },
+    fallback = isDarkBackground(state.wallpaperLuminance),
+    accent = state.backdropAccent?.let(::Color),
+)

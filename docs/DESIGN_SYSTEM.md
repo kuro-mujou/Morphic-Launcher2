@@ -207,6 +207,50 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     it *is* one level deeper — rather than plumbed, since de-duplicating means telling the folder what is beneath it.
     Invisible under `Plain`, which has no wash to compound.
 
+## Adaptive content color
+
+- **Text is colored against what is *immediately* behind it, which is four different things.** The launcher used to
+  have one is-dark input — the wallpaper's brightness, fed to `LauncherTheme` at the shell — and that was right while
+  every surface sat on the wallpaper. It stopped being right when surfaces started sitting on the **film**, which is
+  the wallpaper *plus a wash*: a dark wash over a bright wallpaper leaves the shell saying "light theme, dark text"
+  while APPS, the sheets and the menu are all dark. The four backgrounds, and who answers for each:
+
+  | Background | Who themes it | Reading |
+  |---|---|---|
+  | the wallpaper (HOME) | `LauncherShell` | `isDarkBackground(wallpaperLuminance)` |
+  | the film (APPS, collections, sheets, menu) | `OnFilm` | `LocalFilm.isDark`, resolved once at the shell |
+  | a panel (container tiles) | `OnPanel` | the wallpaper washed at the **user's** own tint |
+  | a solid color (settings) | its own zone | `isSystemInDarkTheme()` |
+
+- **The wallpaper reading is a number now, not a verdict** (`WallpaperRepository.luminance`). A light/dark answer
+  cannot be blended with a wash at 35%, and blending is the whole job. The threshold moved to the one place that
+  still asks a yes/no question: `isDarkBackground`, at the WCAG crossover of 0.179 where contrast-against-white and
+  contrast-against-black cross. `data:wallpaper` keeps its own copy of that number for one job of its own, and the
+  duplication is safe because a derived constant has nothing to prefer and so nothing to drift.
+- **`OnFilm` is one call for two facts, because they are one fact.** A surface arriving over the film must not frost
+  itself again *and* must be themed against the film; the sets needing each are identical, and the second is the half
+  nobody remembers because forgetting it is invisible until someone picks a wash that crosses the threshold. Its four
+  call sites are `AppsScreen`, `AppCollectionOverlay`, `LauncherBottomSheet` and — theme only — `MenuOverlay`.
+- **The film is resolved once, at the shell, and that placement is load-bearing.** Both halves pass through
+  `wallpaperTone`, which is 70% `MaterialTheme.colorScheme.surfaceVariant`**, so it answers differently inside a
+  subtree that has re-themed itself. Evaluating the wash per surface would paint one material in two colors — the
+  folder's frost a different shade from the APPS frost behind it — and letting a surface decide its own darkness from
+  a tone that depends on that decision leaves it bistable near the crossover. `LocalFilm` carries both halves
+  together, since a wash weighed with one tone and painted with another is the silent disagreement they exist to
+  prevent.
+- **The menu is the case that proves the rule.** It is anchored to an item on HOME but frosted with `filmBackdrop`,
+  so its text answers to the *film* and not to the wallpaper an inch away from it. `MenuOverlay` therefore themes it
+  without setting `LocalOverFilm` — which would tell its own panel to fill flat — and over the film it does the
+  opposite: the panel is flat, its scrim is a theme color, and re-theming would re-decide a question the scrim
+  answers.
+- **Grid labels take the theme's content color and a halo struck from the theme's background.** Both flip together:
+  near-black text with a white halo on a bright wallpaper, white with a black halo on a dark one. The halo is doing
+  real work rather than decorating — a wallpaper is a photograph, so its *mean* says little about the pixels under
+  any one label, and a fixed black shadow only ever rescues light text. Per-label sampling would be the correct
+  answer and is deliberately not built: it costs a wallpaper read per cell, re-run on every scroll and page change.
+- **`SurfaceBackdropLayer` opts out of `LocalOverFilm` and is not wrapped in `OnFilm`** — a film is not drawn *on* a
+  film. Two of them stacking is the deliberate depth cue below.
+
 ## Grid horizontal padding
 
 - **Horizontal padding is width the grid does not get, and it goes *above* whatever publishes geometry** (S4g). Every

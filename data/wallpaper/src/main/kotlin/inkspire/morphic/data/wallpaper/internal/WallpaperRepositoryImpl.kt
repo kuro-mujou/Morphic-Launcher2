@@ -26,7 +26,6 @@ import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.RotatingWallpaperService
-import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.wallpaper.WallpaperFiles
 import inkspire.morphic.data.wallpaper.WallpaperImage
 import inkspire.morphic.data.wallpaper.WallpaperRepository
@@ -116,8 +115,8 @@ internal class WallpaperRepositoryImpl(
     private val displayedWallpaperChanges: Flow<WallpaperState> =
         combine(storedState, systemColorChanges()) { state, _ -> state }
 
-    override val brightness: Flow<WallpaperBrightness> = displayedWallpaperChanges
-        .map { resolveBrightness(it) }
+    override val luminance: Flow<Float> = displayedWallpaperChanges
+        .map { resolveLuminance(it) }
         .distinctUntilChanged()
         .flowOn(dispatchers.io)
 
@@ -370,7 +369,7 @@ internal class WallpaperRepositoryImpl(
     /**
      * Whether the image this launcher stored is still the one the system is showing.
      *
-     * One gate, two readers ([brightness] and [backdropSourcePath]), because "is our file what is behind the chrome?"
+     * One gate, two readers ([luminance] and [backdropSourcePath]), because "is our file what is behind the chrome?"
      * is one question and two answers to it could disagree. The id is the evidence: it was taken at the moment we set
      * the wallpaper, so it still matching means nothing has replaced ours since — including a wallpaper set outside
      * the launcher, which is the case a stored boolean could never notice.
@@ -444,12 +443,10 @@ internal class WallpaperRepositoryImpl(
      * id the system gave the wallpaper *at the moment we set it*, so it still matching the live id means nothing has
      * replaced ours since. That is the second job `WallpaperState`'s KDoc reserved the field for, now doing it.
      */
-    private fun resolveBrightness(state: WallpaperState): WallpaperBrightness {
-        systemBrightness(WallpaperManager.getInstance(appContext))?.let { return it }
-        if (!ownsSystemWallpaper(state)) return WallpaperBrightness.DARK
-        val path = state.appliedHome?.path ?: return WallpaperBrightness.DARK
-        val bitmap = decodeFile(path, BRIGHTNESS_SAMPLE_STEP) ?: return WallpaperBrightness.DARK
-        return brightnessOf(meanLuminance(bitmap))
+    private fun resolveLuminance(state: WallpaperState): Float {
+        systemLuminance(WallpaperManager.getInstance(appContext))?.let { return it }
+        val path = state.appliedHome?.path?.takeIf { ownsSystemWallpaper(state) } ?: return 0f
+        return decodeFile(path, BRIGHTNESS_SAMPLE_STEP)?.let { meanLuminance(it).toFloat() } ?: 0f
     }
 
     /**
@@ -488,15 +485,18 @@ internal class WallpaperRepositoryImpl(
      * asks, decided with area-weighted analysis rather than a single color, so it wins where it exists. The getter
      * arrived in 31 even though the constant dates from 27, which is the only reason for the second branch.
      */
-    private fun systemBrightness(manager: WallpaperManager): WallpaperBrightness? {
+    private fun systemLuminance(manager: WallpaperManager): Float? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
         val colors = runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull() ?: return null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        val measured = ColorUtils.calculateLuminance(colors.primaryColor.toArgb()).toFloat()
+        // **The hint is a verdict and this reading is a measurement, so the verdict is applied as a floor.** The OS
+        // says dark text wins over the whole picture, area-weighted; the primary color's own luminance is the only
+        // number on offer and can sit below the crossover even when the picture as a whole is bright. Raising it to
+        // the crossover keeps the number consistent with the verdict without inventing one — a made-up "bright"
+        // constant would read as a measurement and is not one.
+        val hinted = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT != 0
-        ) {
-            return WallpaperBrightness.LIGHT
-        }
-        return brightnessOf(ColorUtils.calculateLuminance(colors.primaryColor.toArgb()))
+        return if (hinted) measured.coerceAtLeast(DARK_TEXT_LUMINANCE) else measured
     }
 
     /**
@@ -516,9 +516,6 @@ internal class WallpaperRepositoryImpl(
         small.getPixels(pixels, 0, BRIGHTNESS_GRID, 0, 0, BRIGHTNESS_GRID, BRIGHTNESS_GRID)
         return pixels.sumOf { ColorUtils.calculateLuminance(it) } / pixels.size
     }
-
-    private fun brightnessOf(luminance: Double): WallpaperBrightness =
-        if (luminance >= DARK_TEXT_LUMINANCE) WallpaperBrightness.LIGHT else WallpaperBrightness.DARK
 
     /**
      * A `ContentObserver` on the image collection, turned into a flow - registered on collection and unregistered when
@@ -681,13 +678,16 @@ internal class WallpaperRepositoryImpl(
         const val GALLERY_SLACK_SECONDS = 2
 
         /**
-         * The relative luminance at which black text beats white text on a background.
+         * The crossover, needed here for one job: reconciling the OS's dark-text *hint* with the number it publishes
+         * beside it (see [systemLuminance]).
          *
-         * Not a taste value — it is where the two WCAG contrast ratios cross. Contrast against white is
-         * `1.05 / (L + 0.05)` and against black is `(L + 0.05) / 0.05`; setting them equal gives
-         * `(L + 0.05)² = 0.0525`, so `L ≈ 0.179`. Above it the wallpaper wants dark chrome, below it light.
+         * **The chrome's copy lives in `core:designsystem`** — `isDarkBackground` — because the question is asked of
+         * the film and the panel too, not only of the wallpaper, and this module can see neither. The two agree by
+         * both being the WCAG crossover rather than by one reading the other, which is safe precisely because it is a
+         * derived constant and not a preference. Contrast against white is `1.05 / (L + 0.05)` and against black is
+         * `(L + 0.05) / 0.05`; equal at `(L + 0.05)² = 0.0525`, so `L ≈ 0.179`.
          */
-        const val DARK_TEXT_LUMINANCE = 0.179
+        const val DARK_TEXT_LUMINANCE = 0.179f
 
         /** The stored image is decoded this much smaller for a brightness read — see `decodeFile`. */
         const val BRIGHTNESS_SAMPLE_STEP = 8

@@ -16,7 +16,6 @@ import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
-import inkspire.morphic.data.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.wallpaper.WallpaperRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -41,9 +40,10 @@ import kotlinx.coroutines.launch
  *   that edge two-finger-only. This is the one state field read for both halves of a binding at once — HOME's pager
  *   for the open policy, the bound layout's for the close — which is why it arrives as a map rather than as the two
  *   booleans a single surface would want.
- * @property brightness how bright the wallpaper behind the chrome is, which is the launcher's dark/light input.
- *   [WallpaperBrightness.DARK] until the first read, which is what the shell hardcoded before this existed — so a
- *   first frame looks exactly as it used to and then corrects if the wallpaper is bright.
+ * @property wallpaperLuminance how bright the wallpaper behind the chrome is — its mean relative luminance, which is
+ *   the launcher's dark/light input. **A number rather than a verdict** because most surfaces are not read against the
+ *   wallpaper at all but against the film, and a film's brightness is this blended with a wash. `0f` until the first
+ *   read, which is the darkest reading and so the same first frame the hardcoded `DARK` used to give.
  * @property backdropEffect how frosted surfaces render over the wallpaper. Handed down as-is rather than resolved,
  *   because *what* it means is a drawing decision and belongs to the modifier that draws it.
  * @property backdropImages the wallpaper pre-blurred at the two strengths frosted surfaces render at — the user's own,
@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 data class ShellState(
     val register: SurfaceRegister = SurfaceRegister.Default,
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
-    val brightness: WallpaperBrightness = WallpaperBrightness.DARK,
+    val wallpaperLuminance: Float = 0f,
     val backdropEffect: BackdropEffect = BackdropEffect.Default,
     val backdropImages: BackdropImages = BackdropImages(),
     val backdropAccent: Int? = null,
@@ -90,10 +90,11 @@ data class BackdropImages(
  * is the `combine` that was predicted, rather than a second `collectAsStateWithLifecycle` plus assembly logic in the
  * composable.
  *
- * **Two repositories, and they are unrelated on purpose.** The register is a preference and brightness is a reading of
+ * **Two repositories, and they are unrelated on purpose.** The register is a preference and the wallpaper's
+ * luminance is a reading of
  * the world; joining them is this holder's whole job, and neither store has to know the other exists.
  *
- * No write path: the shell *obeys* both. Editing the register is the settings surface's job, and brightness is not
+ * No write path: the shell *obeys* both. Editing the register is the settings surface's job, and a luminance is not
  * anybody's to set — it is what the wallpaper happens to be.
  */
 class ShellViewModel(
@@ -171,12 +172,12 @@ class ShellViewModel(
         // question — what is bound to each edge, and how the pagers behind those bindings page — are grouped first.
         combine(
             combine(settingsRepository.surfaceRegister, settingsRepository.pagerWraps, ::Pair),
-            wallpaperRepository.brightness,
+            wallpaperRepository.luminance,
             settingsRepository.backdropEffect,
             backdropImages(settingsRepository),
             wallpaperRepository.accentColor,
-        ) { (register, wraps), brightness, effect, images, accent ->
-            ShellState(register, wraps, brightness, effect, images, accent)
+        ) { (register, wraps), luminance, effect, images, accent ->
+            ShellState(register, wraps, luminance, effect, images, accent)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ShellState())
 
     /** Reports the orientation the shell is being drawn in, so the rotating pair's right half is sampled. */

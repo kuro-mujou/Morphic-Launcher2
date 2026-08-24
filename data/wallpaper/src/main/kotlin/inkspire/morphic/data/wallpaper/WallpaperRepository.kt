@@ -64,26 +64,6 @@ enum class WallpaperSource {
 enum class WallpaperTarget { HOME, LOCK, BOTH }
 
 /**
- * **How bright the wallpaper behind the launcher's chrome is** — the launcher's dark/light input.
- *
- * Launcher chrome sits *on* the wallpaper with nothing between, so what it has to contrast is the picture, not the
- * system's dark-mode switch. That is the whole of the design system's "one theme, two is-dark inputs" rule: settings is
- * a surface of our own and feeds `isSystemInDarkTheme()`, while the shell feeds this.
- *
- * Two values rather than three, with no `UNKNOWN`: the consumer is a theme, and a theme has to pick. What would be
- * "unknown" is [DARK], because that is what the shell hardcoded before this existed and it is the safer miss — light
- * chrome over an unexpectedly bright wallpaper is unreadable, where dark chrome over a dark one is merely dull.
- */
-enum class WallpaperBrightness {
-
-    /** A bright wallpaper — chrome should be dark-on-light. */
-    LIGHT,
-
-    /** A dark wallpaper, or nothing legible to go on — chrome should be light-on-dark. */
-    DARK,
-}
-
-/**
  * The region of a source image to keep, as fractions of it.
  *
  * **Fractions rather than pixels, because the crop is decided against a bitmap this module chose the size of.** The
@@ -201,7 +181,7 @@ object WallpaperFiles {
  * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5f.
  *
  * **All three sources are here — picked, captured and the rotating pair** — and the half that *reads* them has
- * started: [brightness] is the first, and it is the one reading that needs no image processing at all. Still absent:
+ * started: [luminance] is the first, and it is the one reading that needs no image processing at all. Still absent:
  * - **the blur and the dominant color** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
  *   need image processing, which belongs beside the graphics code rather than in a
  *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
@@ -213,7 +193,13 @@ interface WallpaperRepository {
     val wallpaper: Flow<WallpaperState>
 
     /**
-     * How bright the **currently displayed** wallpaper is — see [WallpaperBrightness]. Re-emits when it changes.
+     * How bright the **currently displayed** wallpaper is — its mean relative luminance, `0f..1f`. Re-emits when it
+     * changes.
+     *
+     * **A number rather than the light/dark verdict it used to be**, and the frosted chrome is why. A surface is read
+     * against what is *immediately* behind it, which for most of them is not the wallpaper but the film: the wallpaper
+     * blended toward a wash. That blend needs a quantity — a verdict cannot be mixed with a wash at 35% — so the
+     * threshold moved to the one place that still asks a yes/no question, `isDarkBackground` in `core:designsystem`.
      *
      * Note "currently displayed", not "the one we own": a launcher's chrome has to contrast whatever is actually behind
      * it, which may be a wallpaper another app set or a live wallpaper that is not ours. So this asks the *system*
@@ -227,14 +213,18 @@ interface WallpaperRepository {
      * saturation-weighted average, deliberately biased so a vivid accent beats washed-out gray, which is what an
      * *accent* wants and the opposite of what "is this bright?" wants. Those are separate readings of one image, and
      * the blur half of `Blur.kt` still has no consumer until the frosted backdrop lands.
+     *
+     * **Zero when nothing can be read**, which reproduces the `DARK` default this replaced: light chrome over an
+     * unexpectedly bright wallpaper is unreadable, where dark chrome over a dark one is merely dull, so the safer
+     * miss is the one that keeps the chrome light.
      */
-    val brightness: Flow<WallpaperBrightness>
+    val luminance: Flow<Float>
 
     /**
      * The wallpaper's **representative color** as ARGB, or null when it cannot be read — what
      * `BackdropTint.WALLPAPER` washes a frosted surface in.
      *
-     * The third reading of "what is displayed", beside [brightness] and [backdrop], and it takes the same two-step:
+     * The third reading of "what is displayed", beside [luminance] and [backdrop], and it takes the same two-step:
      * `WallpaperColors.getPrimaryColor` first, because the OS computed it over the wallpaper *actually* on screen
      * (another app's, a live one) with no permission and no decode; `dominantColor` over our own file only below API
      * 27 or when a live wallpaper publishes nothing, and then only if that file is provably what is displayed.

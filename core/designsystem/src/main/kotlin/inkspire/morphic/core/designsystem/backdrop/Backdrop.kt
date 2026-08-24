@@ -106,11 +106,15 @@ enum class BackdropRole {
  *   frost at all — a settings preview of one panel, which has only one strength to show and no film to get wrong.
  * @property tintColor the wallpaper's representative color, which every wash is blended toward — see
  *   [wallpaperTone]. `Color.Unspecified` when it could not be read, which makes the washes plain white and black.
+ * @property luminance the wallpaper's **mean relative luminance**, which is what a surface drawn on this has to
+ *   contrast. Here rather than beside the images because it describes the same picture and travels to the same
+ *   places: a panel asking "should my text be light?" is asking about the thing this state holds.
  */
 class BackdropState(
     val panel: BackdropImage,
     val film: BackdropImage = panel,
     val tintColor: Color = Color.Unspecified,
+    val luminance: Float = 0f,
 ) {
 
     /** The picture for [role] — the one seam a caller has to get right, and the only one there is. */
@@ -146,7 +150,8 @@ fun rememberBackdropState(
     accentColor: Int?,
     windowSize: IntSize,
     filmImage: Bitmap? = panelImage,
-): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize) {
+    luminance: Float = 0f,
+): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize, luminance) {
     if (panelImage == null || filmImage == null || windowSize.width == 0 || windowSize.height == 0) {
         null
     } else {
@@ -154,6 +159,7 @@ fun rememberBackdropState(
             panel = panelImage.asBackdropImage(windowSize),
             film = filmImage.asBackdropImage(windowSize),
             tintColor = accentColor?.let { Color(it) } ?: Color.Unspecified,
+            luminance = luminance,
         )
     }
 }
@@ -235,6 +241,10 @@ val LocalOverFilm = staticCompositionLocalOf { false }
  * @param role which of [BackdropState]'s pictures to sample. [BackdropRole.PANEL] for anything the user's own blur
  *   slider governs, which is everything bounded; the full-screen frost overrides it, and overrides [effect] in the
  *   same breath, because the two have to name the same strength — see [SurfaceBackdropLayer].
+ * @param tone overrides the wash's base color, which is otherwise struck from the theme here ([wallpaperTone]).
+ *   **The full-screen film has to pass one**, and the reason is that the tone is 70% `surfaceVariant`: two films
+ *   painted under two themes are two different colors for one material, which is exactly what per-surface theming
+ *   introduced. `Color.Unspecified` keeps the local reading, which is what a panel wants.
  * @param refracts whether this surface can be a **lens**. False for one whose edges are the screen's: liquid glass
  *   bends light in a band at its rim, and across a whole screen that band falls under the system bars — so a
  *   full-screen surface renders it as its blur plus its saturation boost instead, which is the part of the effect
@@ -246,6 +256,7 @@ fun Modifier.wallpaperBackdrop(
     scrimColor: Color = Color.Black.copy(alpha = 0.3f),
     refracts: Boolean = true,
     role: BackdropRole = BackdropRole.PANEL,
+    tone: Color = Color.Unspecified,
 ): Modifier = composed {
     // A thin `composed` layer that only reads the (rarely-changing) locals and hands them to the node through the
     // element. That is what makes an effect or backdrop change re-fire `update()` → `invalidateDraw()`: a reused node
@@ -262,7 +273,9 @@ fun Modifier.wallpaperBackdrop(
         backdrop = LocalBackdrop.current?.takeIf { !LocalOverFilm.current },
         view = LocalView.current,
         scrimColor = scrimColor,
-        wallpaperTone = wallpaperTone(),
+        // Unspecified means "work it out from the theme here", which is right for a panel: a panel is drawn on
+        // HOME, under the one theme the wallpaper chose. A **film** cannot do that — see [tone].
+        wallpaperTone = if (tone.isSpecified) tone else wallpaperTone(),
         refracts = refracts,
         role = role,
     )
@@ -288,6 +301,11 @@ fun Modifier.wallpaperBackdrop(
  * genuinely its own, floating on the wallpaper, is a [BackdropRole.PANEL] and keeps the user's blur and the rim: a
  * container tile on the home grid is the case, and `containerPanel` is where it is drawn.
  *
+ * **Everything about the film is resolved once, at the shell** — its wash and whether it is dark, together in
+ * [LocalFilm] — which is what makes it one material rather than one recipe evaluated in several places. The
+ * recipe alone was enough while there was a single theme; it stopped being enough the moment surfaces started theming
+ * themselves against the film, because the wash is struck from the theme.
+ *
  * **No rim, at any of these sizes.** A lens bends light in a band at its edge, and these edges are the screen's — the
  * band would fall under the system bars. What survives is the blur plus `BackdropEffect.saturation`, which is what
  * makes frost read as glass at any API.
@@ -309,6 +327,10 @@ fun Modifier.filmBackdrop(
     scrimColor = scrimColor,
     refracts = false,
     role = BackdropRole.FILM,
+    // The shell's tone, not this call site's — see [LocalFilmTone]. Without it a film drawn inside a subtree that
+    // re-themed itself (which every film-backed surface now does) would paint a different wash from the film beside
+    // it, for the same effect.
+    tone = filmTone(),
 )
 
 /**
@@ -338,7 +360,10 @@ fun wallpaperTone(accent: Color? = LocalBackdrop.current?.tintColor): Color {
  * reproducing the blur.
  */
 @Composable
-fun backdropTint(effect: BackdropEffect = LocalBackdropEffect.current): Color = tintOf(effect, wallpaperTone())
+fun backdropTint(
+    effect: BackdropEffect = LocalBackdropEffect.current,
+    tone: Color = wallpaperTone(),
+): Color = tintOf(effect, tone)
 
 /**
  * The wash for [effect], over a backdrop whose wallpaper color is [tone].

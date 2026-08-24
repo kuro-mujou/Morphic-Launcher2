@@ -16,7 +16,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
+import inkspire.morphic.core.designsystem.backdrop.filmIsDark
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
+import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.model.ComponentKey
 
 /**
@@ -174,10 +176,21 @@ fun MenuOverlay(host: LauncherMenuHost) {
     // Keyed on the request so opening a menu on a different item starts its own two-stage state and its own
     // entrance, rather than inheriting the previous item's stage — `AppCollectionOverlay`'s `key(folderId)` rule.
     key(request) {
-        // The one place the menu's frost is decided. Re-provided rather than read from here, so the panel asks the
-        // same question every icon plate asks and gets the answer the *anchored* surface gave.
-        CompositionLocalProvider(LocalOverFilm provides request.overFilm) {
-            RequestedMenu(request = request, onDismiss = host::dismiss)
+        // **The one place the menu's frost and its content color are decided**, and they are not the same answer.
+        //
+        // Over the film the panel fills flat with its scrim, which is a theme color — so it already contrasts
+        // whatever theme this menu inherited, and re-theming it would be re-deciding a question the scrim answers.
+        // Over HOME the panel frosts, and with `filmBackdrop`: the material is the film's, so the text on it has to
+        // be the film's too, even though the wallpaper directly around the menu may be the opposite brightness. That
+        // is the case a single global wallpaper reading gets wrong every time — a black menu over a bright wallpaper.
+        if (request.overFilm) {
+            CompositionLocalProvider(LocalOverFilm provides true) {
+                RequestedMenu(request = request, onDismiss = host::dismiss)
+            }
+        } else {
+            LauncherTheme(darkTheme = filmIsDark()) {
+                RequestedMenu(request = request, onDismiss = host::dismiss)
+            }
         }
     }
 }

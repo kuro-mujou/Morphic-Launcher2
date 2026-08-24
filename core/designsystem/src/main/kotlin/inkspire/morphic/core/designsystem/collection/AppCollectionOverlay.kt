@@ -21,7 +21,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +42,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
-import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
+import inkspire.morphic.core.designsystem.backdrop.OnFilm
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -69,6 +68,7 @@ import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
@@ -333,10 +333,12 @@ fun AppCollectionOverlay(
     // Root spans the screen; the floating proxy is a sibling of the content so its root-space offset isn't
     // shifted by the content's inset.
     // **Everything in here is over this overlay's own film** — the layer below — so nothing inside may frost itself
-    // a second time: an icon plate or a menu panel sampling the wallpaper again cuts a sharper hole through the very
-    // sheet it is sitting on. Around the whole root rather than the card alone, because the floating drag proxy is a
-    // sibling of the card and is drawn over the same frost.
-    CompositionLocalProvider(LocalOverFilm provides true) {
+    // a second time (an icon plate or a menu panel sampling the wallpaper again cuts a sharper hole through the very
+    // sheet it sits on), and everything in here takes its content color from that film. `OnFilm` is both. Around the
+    // whole root rather than the card alone, because the floating drag proxy is a sibling of the card and is drawn
+    // over the same frost — and because `SurfaceBackdropLayer` below opts out of the local by itself, so wrapping it
+    // costs nothing.
+    OnFilm {
         Box(modifier.fillMaxSize()) {
             // **The frost, as its own node under the content** — the same `SurfaceBackdropLayer` the shell puts under a
             // side surface, and here for the same two reasons. It fixes a real fault: this used to call
@@ -347,10 +349,12 @@ fun AppCollectionOverlay(
             // And it separates the two motions. They move together today, but the frost and the card are no longer one
             // node, so giving the card its own entrance later needs no restructuring.
             //
-            // `Color.Black` is the scrim rather than the theme's background, unlike the shell's: this overlay draws its
-            // title and labels in white by construction, so black is what they are legible against on a device the
-            // launcher has never been given a wallpaper for. That is exactly what this drew before the backdrop existed.
-            SurfaceBackdropLayer(alpha = presence::value, scrimColor = Color.Black)
+            // The theme's background as the scrim, like the shell's. It used to be `Color.Black`, because this
+            // overlay drew its title and labels in white *by construction* and black was what they were legible
+            // against with no wallpaper to sample. Nothing here is white by construction any more — the whole subtree
+            // is themed against this film (`OnFilm`) — so the scrim and the text come from one palette, which is what
+            // makes them agree in the no-wallpaper case instead of agreeing by coincidence.
+            SurfaceBackdropLayer(alpha = presence::value, scrimColor = LocalMorphicColors.current.background)
 
             // The card and everything in it. Structurally stable across the presenting flip — only `alpha` and the
             // clickable's `enabled` change — because the cells inside own live pointer streams.
@@ -376,7 +380,7 @@ fun AppCollectionOverlay(
                         Text(
                             text = label,
                             style = titleStyle,
-                            color = Color.White,
+                            color = LocalMorphicColors.current.content,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(bottom = 12.dp),
@@ -389,7 +393,10 @@ fun AppCollectionOverlay(
                                 // structurally stable across the drag flip — the same rule the backdrop above follows,
                                 // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
                                 // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
-                                .border(1.dp, if (session != null) Color.White else Color.Transparent)
+                                .border(
+                                    1.dp,
+                                    if (session != null) LocalMorphicColors.current.content else Color.Transparent,
+                                )
                                 // Consumes a tap on the card's background so it doesn't reach the scrim and dismiss —
                                 // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
                                 // invisible but still laid out over the middle of the screen, and Compose stops
@@ -508,13 +515,14 @@ fun AppCollectionOverlay(
 /** A row of small dots marking the collection's pages, the [current] one filled. */
 @Composable
 private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
+    val colors = LocalMorphicColors.current
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(count) { index ->
             Box(
                 modifier = Modifier
                     .size(6.dp)
                     .clip(CircleShape)
-                    .background(if (index == current) Color.White else Color.White.copy(alpha = 0.3f)),
+                    .background(if (index == current) colors.content else colors.contentDisabled),
             )
         }
     }

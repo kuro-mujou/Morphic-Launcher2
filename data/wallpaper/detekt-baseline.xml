@@ -6,7 +6,6 @@
     <ID>MagicNumber:Blur.kt$16</ID>
     <ID>MagicNumber:Blur.kt$24</ID>
     <ID>MagicNumber:Blur.kt$8</ID>
-    <ID>ReturnCount:WallpaperRepositoryImpl.kt$WallpaperRepositoryImpl$private fun resolveBrightness(state: WallpaperState): WallpaperBrightness</ID>
     <ID>TooManyFunctions:WallpaperRepository.kt$WallpaperRepository</ID>
     <ID>TooManyFunctions:WallpaperRepositoryImpl.kt$WallpaperRepositoryImpl : WallpaperRepository</ID>
   </CurrentIssues>

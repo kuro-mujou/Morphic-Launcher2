@@ -3,7 +3,6 @@ package inkspire.morphic.feature.apps
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -11,7 +10,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
-import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
+import inkspire.morphic.core.designsystem.backdrop.OnFilm
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
@@ -157,11 +156,12 @@ fun AppsScreen(
     val menuHost = LocalMenuHost.current
     val gestureConfig = rememberAppsGestureConfig()
     val presented = LocalSurfacePresented.current
-    // **This whole surface sits on the shell's film**, which is the thing everything drawn here has to know before it
-    // frosts itself: a second sample of the wallpaper over a sheet that is already blurred is a sharper hole through
-    // it, not glass on it. Declared once at the root rather than per layout, for the surface menu's reason — five
-    // arrangements, and a new one must not be able to forget.
-    CompositionLocalProvider(LocalOverFilm provides true) {
+    // **This whole surface sits on the shell's film**, which is two things everything drawn here has to know: not to
+    // frost itself again (a second sample over an already-blurred sheet is a sharper hole through it, not glass on
+    // it), and to take its content color from the *film* rather than from the wallpaper the film is made of. `OnFilm`
+    // is both. Declared once at the root rather than per layout, for the surface menu's reason — five arrangements,
+    // and a new one must not be able to forget.
+    OnFilm {
         Box(
             modifier
                 .fillMaxSize()

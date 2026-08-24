@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import inkspire.morphic.core.designsystem.backdrop.OnPanel
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.surface.claimSurfaceGestureWhilePressed
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -85,11 +86,14 @@ internal fun WidgetContainerCell(
         contentAlignment = Alignment.Center,
     ) {
         if (widgets.isEmpty()) {
-            ContainerAddGlyph(
-                contentDescription = "Add widget",
-                modifier = Modifier.fillMaxSize(),
-                onAdd = onAddWidget,
-            )
+            // The panel's theme, not home's — see the icon container's own note.
+            OnPanel {
+                ContainerAddGlyph(
+                    contentDescription = "Add widget",
+                    modifier = Modifier.fillMaxSize(),
+                    onAdd = onAddWidget,
+                )
+            }
             return@Box
         }
 

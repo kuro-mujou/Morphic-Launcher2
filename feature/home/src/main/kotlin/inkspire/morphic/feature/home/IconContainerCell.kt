@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import inkspire.morphic.core.designsystem.backdrop.OnPanel
 import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.container.slots
@@ -60,11 +61,15 @@ internal fun IconContainerCell(
         contentAlignment = Alignment.Center,
     ) {
         if (icons.isEmpty()) {
-            ContainerAddGlyph(
-                contentDescription = "Add app",
-                modifier = Modifier.fillMaxSize(),
-                onAdd = onAddIcon,
-            )
+            // Themed against the **panel**, which is neither the wallpaper nor the film: it carries the user's own
+            // blur and wash, so a dark tile can sit on a bright home screen and the glyph has to answer to the tile.
+            OnPanel {
+                ContainerAddGlyph(
+                    contentDescription = "Add app",
+                    modifier = Modifier.fillMaxSize(),
+                    onAdd = onAddIcon,
+                )
+            }
             return@BoxWithConstraints
         }
 
