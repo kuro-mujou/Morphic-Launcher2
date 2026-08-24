@@ -84,28 +84,55 @@ private fun ArrangementSlot.deflated(by: Float): ArrangementSlot {
 }
 
 /**
- * Rows and columns filling the box completely, with the column count chosen so the cells come out roughly square:
- * `sqrt(count × aspect)` is the column count at which `cols / rows` matches the box's own ratio.
+ * Rows and columns of **square** cells, centered in the box, with the column count chosen so the block comes out
+ * roughly the box's shape: `sqrt(count × aspect)` is the column count at which `cols / rows` matches the box's own
+ * ratio. Capped at [count] so a wide box holding two icons is two columns rather than three with a hole in it.
  *
- * Capped at [count] so a wide box holding two icons is two columns rather than three with a hole in it.
+ * **Square, which means the block does not fill the box** — the cell is the smaller of what each axis affords, and
+ * the slack is split as a margin. A cell that took `width / cols` by `height / rows` instead would put the icons on
+ * a lattice whose horizontal and vertical pitch differ, so a container that is not square would space its icons
+ * further apart across than down. That reads as a mistake rather than as a choice, and it is a mistake the eye
+ * catches before it can name.
+ *
+ * **The last row is centered** rather than left-flush, for the same reason: a trailing row of two under a row of
+ * five is a shape, and hanging it off the left edge makes it look like an unfinished row instead.
  */
 private fun gridSlots(count: Int, width: Float, height: Float): List<ArrangementSlot> {
     val aspect = width / height
     val cols = max(1, sqrt(count * aspect).roundToInt()).coerceAtMost(count)
     val rows = ceil(count.toFloat() / cols).toInt()
-    val cellW = width / cols
-    val cellH = height / rows
+    val cell = minOf(width / cols, height / rows)
+    val originX = (width - cols * cell) / 2f
+    val originY = (height - rows * cell) / 2f
     return List(count) { i ->
-        ArrangementSlot(x = (i % cols) * cellW, y = (i / cols) * cellH, width = cellW, height = cellH)
+        val row = i / cols
+        val col = i % cols
+        // Only the final row can be short, and it holds whatever the full rows above it did not take.
+        val inThisRow = if (row == rows - 1) count - row * cols else cols
+        ArrangementSlot(
+            x = originX + (cols - inThisRow) * cell / 2f + col * cell,
+            y = originY + row * cell,
+            width = cell,
+            height = cell,
+        )
     }
 }
 
 /**
  * Icons evenly spaced round a ring, starting at twelve o'clock and going clockwise.
  *
- * The icon size is the smaller of a fixed share of the radius and 90% of the **chord** between neighbors, which is
- * what keeps a crowded ring from overlapping itself: the chord shrinks as the count grows, so the icons do too. A
- * single icon has no neighbor and therefore no chord, so it is centered at its own size instead.
+ * **The ring grows with the count; the icons only shrink once it cannot.** Neighbours sit one pitch apart along the
+ * chord, so the radius that seats [count] of them is `pitch / (2·sin(π/count))` — small for three icons, which is
+ * what makes three read as a tight cluster rather than as three lonely points on a large circle. A ring is worth
+ * having at whatever size the contents ask for; a fixed radius makes the *icons* carry the whole adjustment, and
+ * they are the part the user is trying to look at.
+ *
+ * Past some count that radius no longer fits, and then the two constraints have to be solved together: the ring
+ * must reach `maxR` less half an icon, *and* the chord must still be a pitch. Substituting one into the other gives
+ * the closed form below — there is no iteration and no arbitrary cap, which matters because this runs per frame
+ * while a container is being resized.
+ *
+ * A single icon has no neighbour and therefore no chord, so it is centered at its own size instead.
  */
 private fun circleSlots(count: Int, width: Float, height: Float): List<ArrangementSlot> {
     val cx = width / 2f

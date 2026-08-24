@@ -99,6 +99,40 @@ class IconArrangementsTest {
         assertNoOverlap(slots)
     }
 
+    /**
+     * The cell is square in a box that does *not* divide into square cells — which `width`/`height` at six icons
+     * happens to do, so the rule needs a box that would expose a stretched cell. A shape whose horizontal and
+     * vertical pitch differ reads as a mistake, and the block giving up the slack instead is the fix.
+     */
+    @Test
+    fun `grid cells stay square in a box that does not divide evenly`() {
+        for (slot in IconArrangement.GRID.slots(6, 400f, 150f)) {
+            assertEquals(slot.width, slot.height, 0.01f)
+        }
+    }
+
+    /** A short last row is centered under the full rows, not hung off the left edge. */
+    @Test
+    fun `grid centers a short last row`() {
+        // 5 icons in a 3:2 box → 3 columns, so the last row holds 2 and must sit half a cell in.
+        val slots = IconArrangement.GRID.slots(5, width, height)
+        val topRow = slots.take(3)
+        val lastRow = slots.drop(3)
+        assertEquals(2, lastRow.size)
+        val topCenter = (topRow.first().centerX + topRow.last().centerX) / 2f
+        val lastCenter = (lastRow.first().centerX + lastRow.last().centerX) / 2f
+        assertEquals("the short row should share the block's center line", topCenter, lastCenter, 0.01f)
+    }
+
+    /** The whole block is centered in the box, so the margin it leaves is even on both sides. */
+    @Test
+    fun `grid centers its block in the box`() {
+        val slots = IconArrangement.GRID.slots(6, 400f, 150f)
+        val left = slots.minOf { it.x }
+        val right = 400f - slots.maxOf { it.x + it.width }
+        assertEquals(left, right, 0.01f)
+    }
+
     @Test
     fun `grid rows fill downward in reading order`() {
         val slots = IconArrangement.GRID.slots(6, width, height)
@@ -245,6 +279,9 @@ class IconArrangementsTest {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────────────
+
+    private val ArrangementSlot.centerX: Float get() = x + width / 2f
+    private val ArrangementSlot.centerY: Float get() = y + height / 2f
 
     /** Asserts no two slots share any area — for the arrangements that tile rather than deliberately cluster. */
     private fun assertNoOverlap(slots: List<ArrangementSlot>) {
