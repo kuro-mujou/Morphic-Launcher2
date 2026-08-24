@@ -126,7 +126,7 @@ internal const val WidgetContainerTitle = "Widget container"
 internal data class HomeResize(
     val item: GridItem,
     val zone: HomeZone,
-    val rules: WidgetResizeRules,
+    val rules: HomeResizeRules,
     val placement: GridPlacement,
     val moves: Map<GridItem, GridPlacement> = emptyMap(),
     val refused: Boolean = false,
@@ -913,7 +913,7 @@ internal fun HomePagerSurface(
             ResizeOverlay(
                 placement = session.placement,
                 geometry = zoneGeometry,
-                bounds = session.rules.asResizeBounds(zoneGeometry),
+                bounds = session.rules.asResizeBounds(zoneGeometry, zoneConfig),
                 refused = session.refused,
                 // Read back from state rather than from the captured `session`: several pointer events can arrive
                 // between two compositions, and each must resolve against the outcome of the one before it.
@@ -1077,17 +1077,50 @@ private fun geometryFor(zone: HomeZone, main: GridGeometry?, dock: GridGeometry?
     if (zone == HomeZone.DOCK) dock else main
 
 /**
- * The provider's resize rules as grid [ResizeBounds] — pixels turned into cells against [geometry].
+ * **What floors a resize, and the two kinds of thing HOME can resize differ in where that floor comes from.**
  *
- * `ceil`, because a widget needing part of a further cell needs the whole cell: rounding down would offer a size
- * the provider has already said it cannot draw at. Floored at one cell, since a footprint of nothing is not a
- * thing the grid can express.
+ * A widget's is the *provider's*, stated in pixels, which only the measured grid can turn into cells — so it is
+ * carried unresolved and converted at the one place holding both the geometry and the zone's config. A container has
+ * no provider to ask, so its floor is the launcher's own answer to "how small is still a container".
+ *
+ * A sealed type rather than a nullable widget rule, so a third resizable thing has to say what bounds it rather than
+ * inheriting a widget's by omission.
  */
-private fun WidgetResizeRules.asResizeBounds(geometry: GridGeometry): ResizeBounds = ResizeBounds(
+internal sealed interface HomeResizeRules {
+
+    /** A widget, bounded by what its provider says it can be drawn at. */
+    data class Widget(val rules: WidgetResizeRules) : HomeResizeRules
+
+    /** An icon or widget container, bounded by the grid rather than by any provider. */
+    data object Container : HomeResizeRules
+}
+
+/**
+ * These rules as grid [ResizeBounds], against the measured [geometry] and the zone's [config].
+ *
+ * **A widget's minimum is `ceil`ed**, because one needing part of a further cell needs the whole cell: rounding down
+ * would offer a size the provider has already said it cannot draw at. Floored at one cell, since a footprint of
+ * nothing is not a thing the grid can express.
+ *
+ * **A container's floor is one *visual* cell** — `cellMultiplier` logical ones — which is the smallest footprint
+ * anything on this grid occupies: a single app icon's. Below that a container would be smaller than one of the icons
+ * it exists to hold, which is not a size worth being able to reach. It is not `ContainerSpan`: that is where a
+ * container *lands*, and a default placement is not a minimum.
+ */
+private fun HomeResizeRules.asResizeBounds(geometry: GridGeometry, config: GridConfig): ResizeBounds = when (this) {
     // Both axes always: the provider's `resizeMode` is not honored here — see `WidgetResizeRules`.
-    horizontal = true,
-    vertical = true,
-    minColSpan = if (geometry.cellW > 0f) ceil(minWidthPx / geometry.cellW).toInt().coerceAtLeast(1) else 1,
-    minRowSpan = if (geometry.cellH > 0f) ceil(minHeightPx / geometry.cellH).toInt().coerceAtLeast(1) else 1,
-)
+    is HomeResizeRules.Widget -> ResizeBounds(
+        horizontal = true,
+        vertical = true,
+        minColSpan = if (geometry.cellW > 0f) ceil(rules.minWidthPx / geometry.cellW).toInt().coerceAtLeast(1) else 1,
+        minRowSpan = if (geometry.cellH > 0f) ceil(rules.minHeightPx / geometry.cellH).toInt().coerceAtLeast(1) else 1,
+    )
+
+    HomeResizeRules.Container -> ResizeBounds(
+        horizontal = true,
+        vertical = true,
+        minColSpan = config.cellMultiplier.coerceAtLeast(1),
+        minRowSpan = config.cellMultiplier.coerceAtLeast(1),
+    )
+}
 

@@ -19,7 +19,8 @@ import inkspire.morphic.data.widgets.AppWidgetHostController
  * collaborators as parameters. That is also what keeps it out of `HomePagerSurface`, which is the point — this is 85
  * lines of vocabulary, not of surface.
  *
- * @param onResize hands back the resize the widget arm started, since the overlay it drives is the surface's state.
+ * @param onResize hands back the resize an arm started, since the overlay it drives is the surface's state. Three
+ *   arms use it — a widget and both containers — and they differ only in what bounds the drag; see [HomeResizeRules].
  */
 @Suppress("LongParameterList")
 internal fun showHomeItemMenu(
@@ -63,18 +64,7 @@ internal fun showHomeItemMenu(
                 // because there is nothing to bound the drag with.
                 val rules = widgetHost.boundWidget(item.info.appWidgetId)?.resize
                 if (rules != null) {
-                    add(
-                        MenuAction("Resize") {
-                            onResize(
-                                HomeResize(
-                                    item = item.gridItem,
-                                    zone = item.zone,
-                                    rules = rules,
-                                    placement = item.placement,
-                                ),
-                            )
-                        },
-                    )
+                    add(resizeAction(item, HomeResizeRules.Widget(rules), onResize))
                 }
                 add(MenuAction("Remove widget") { viewModel.removeWidget(item.info.appWidgetId) })
             },
@@ -105,6 +95,11 @@ internal fun showHomeItemMenu(
             title = IconContainerTitle,
             anchor = anchor,
             actions = listOf(
+                // **Resizable like a widget, and it was only the menu that said otherwise.** Every layer below —
+                // the planner, the overlay, `Move` on the container's own placement table — already treated a
+                // container as one more placed rectangle; the row was simply never added. What differs is the
+                // floor, which no provider states here: see [HomeResizeRules.Container].
+                resizeAction(item, HomeResizeRules.Container, onResize),
                 MenuAction("Container settings") { onOpenIconContainerSettings(item.container.id) },
                 MenuAction("Remove container") {
                     viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
@@ -120,6 +115,9 @@ internal fun showHomeItemMenu(
             title = WidgetContainerTitle,
             anchor = anchor,
             actions = listOf(
+                // The icon container's reasoning exactly — and it matters more here, since what a widget container
+                // holds is itself sized by the container rather than by the grid.
+                resizeAction(item, HomeResizeRules.Container, onResize),
                 MenuAction("Container settings") { onOpenWidgetContainerSettings(item.container.id) },
                 MenuAction("Remove container") { viewModel.removeWidgetContainer(item.container.id) },
             ),
@@ -142,3 +140,17 @@ internal val HomeItem.menuLabel: String
         is HomeItem.IconContainer -> IconContainerTitle
         is HomeItem.WidgetContainer -> WidgetContainerTitle
     }
+
+/**
+ * The **Resize** row for [item], bounded by [rules].
+ *
+ * One builder for all three resizable kinds, because what a resize *is* does not differ between them: the same
+ * frame, the same planner, the same write. Only the floor does, which is the argument.
+ */
+private fun resizeAction(
+    item: HomeItem,
+    rules: HomeResizeRules,
+    onResize: (HomeResize) -> Unit,
+): MenuAction = MenuAction("Resize") {
+    onResize(HomeResize(item = item.gridItem, zone = item.zone, rules = rules, placement = item.placement))
+}
