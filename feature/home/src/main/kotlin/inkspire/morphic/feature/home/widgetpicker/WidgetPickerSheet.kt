@@ -106,6 +106,11 @@ import org.koin.androidx.compose.koinViewModel
  *   disabling it — the same nullable-lambda shape `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
  *   appears with nothing else here changing.
+ * @param hasRoomFor whether the surface could take an item of that footprint **right now**. Asked per entry, so
+ *   the Add row is absent for exactly the ones that would fail — see [DetailFrame]'s `onAdd`. It matters most on the
+ *   **widget area**, which is a single grid drawn all at once: unlike the pager it cannot grow a page, so a widget
+ *   bigger than the room left has nowhere to go and the user has to be told before binding one. The default admits
+ *   everything, for a caller with no limit to state.
  * @param onAddIconContainer adds an empty icon container, from its own detail page. Nullable on [onAddWidget]'s
  *   terms, and the caller passes null when the sheet was opened to fill a container — neither kind nests, so the
  *   section would be two rows that could not work. Null also **removes the row**, since a component with nowhere to
@@ -122,6 +127,7 @@ internal fun WidgetPickerSheet(
     onAddWidget: ((WidgetProvider) -> Unit)? = null,
     onAddIconContainer: (() -> Unit)? = null,
     onAddWidgetContainer: (() -> Unit)? = null,
+    hasRoomFor: (WidgetSpan) -> Boolean = { true },
 ) {
     val viewModel = koinViewModel<WidgetPickerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -175,6 +181,7 @@ internal fun WidgetPickerSheet(
                     cellHeightPx = cellHeightPx,
                     onBack = { opened = null },
                     onAddWidget = onAddWidget,
+                    hasRoomFor = hasRoomFor,
                 )
 
                 is PickerEntry.Component -> ComponentDetailPane(
@@ -182,6 +189,7 @@ internal fun WidgetPickerSheet(
                     grid = grid,
                     onBack = { opened = null },
                     onAdd = addFor(target.kind),
+                    hasRoomFor = hasRoomFor,
                 )
             }
         }
@@ -422,9 +430,14 @@ private fun DetailPane(
     cellHeightPx: Float,
     onBack: () -> Unit,
     onAddWidget: ((WidgetProvider) -> Unit)?,
+    hasRoomFor: (WidgetSpan) -> Boolean,
 ) {
     val pagerState = rememberPagerState { group.providers.size }
     val current = group.providers.getOrNull(pagerState.currentPage)
+    // **The span decides both the label and the verb**, so it is resolved once here rather than by each. A page
+    // reading "4 × 2" beside an Add button that cannot place a 4 × 2 is the disagreement this avoids.
+    val currentSpan = current?.let { spanOf(it, grid, cellWidthPx, cellHeightPx) }
+    val fits = currentSpan == null || hasRoomFor(currentSpan)
 
     DetailFrame(
         title = group.appLabel,
@@ -432,7 +445,7 @@ private fun DetailPane(
         // Absent, not disabled, while nothing can place a widget — see [WidgetPickerSheet]. The page is folded into
         // the same test rather than disabling the button under a finger: an out-of-range page is unreachable here,
         // since a group always publishes at least one provider, so it is a defensive null and not a state to show.
-        onAdd = if (onAddWidget != null && current != null) {
+        onAdd = if (onAddWidget != null && current != null && fits) {
             { onAddWidget(current) }
         } else {
             null
@@ -444,9 +457,16 @@ private fun DetailPane(
                 .fillMaxWidth()
                 .weight(1f),
         ) { page ->
+            val provider = group.providers[page]
+            val span = spanOf(provider, grid, cellWidthPx, cellHeightPx)
             WidgetPage(
-                provider = group.providers[page],
-                sizeLabel = sizeLabel(group.providers[page], grid, cellWidthPx, cellHeightPx),
+                provider = provider,
+                // Both null together — `spanOf` answers null for a null grid — but written as one test rather than
+                // leaning on that, since an early return here would blank the whole page instead of its size line.
+                sizeLabel = if (grid != null && span != null) span.visualLabel(grid) else "",
+                // Per *page*, not per current page: a pager settles between two widgets, and a notice that belonged
+                // to the one being swiped away would follow the finger across.
+                roomless = span != null && !hasRoomFor(span),
             )
         }
 
@@ -481,11 +501,15 @@ private fun ComponentDetailPane(
     grid: GridConfig?,
     onBack: () -> Unit,
     onAdd: (() -> Unit)?,
+    hasRoomFor: (WidgetSpan) -> Boolean,
 ) {
-    DetailFrame(title = kind.label, onBack = onBack, onAdd = onAdd) {
+    val span = grid?.let { containerSpan(it) }
+    val fits = span == null || hasRoomFor(span)
+    DetailFrame(title = kind.label, onBack = onBack, onAdd = onAdd.takeIf { fits }) {
         ComponentPage(
             kind = kind,
-            sizeLabel = containerSizeLabel(grid),
+            sizeLabel = if (grid != null && span != null) span.visualLabel(grid) else "",
+            roomless = !fits,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -558,7 +582,12 @@ private fun DetailFrame(
  * container is *made* of is only truthful over the wallpaper, which is where the user is about to put it.
  */
 @Composable
-private fun ComponentPage(kind: ComponentKind, sizeLabel: String, modifier: Modifier = Modifier) {
+private fun ComponentPage(
+    kind: ComponentKind,
+    sizeLabel: String,
+    roomless: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalMorphicColors.current
     Column(
         modifier = modifier.padding(16.dp),
@@ -591,28 +620,14 @@ private fun ComponentPage(kind: ComponentKind, sizeLabel: String, modifier: Modi
         Spacer(Modifier.height(12.dp))
         Text(text = kind.description, style = MaterialTheme.typography.bodyMedium, color = colors.content)
         Text(text = sizeLabel, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
+        if (roomless) RoomlessNotice()
     }
 }
 
-/**
- * "2 × 2" — the footprint a container lands with, in the same words a widget's is written in.
- *
- * Both halves are borrowed rather than written: the span is `HomeViewModel.ContainerSpan`, which is what actually
- * places the thing, and the formatting is `WidgetSpan.visualLabel`, which divides the cell multiplier back out. A
- * literal here would be right today and silently wrong the first time a container's default size moved.
- *
- * Empty when no grid has been measured, for [sizeLabel]'s reason: a footprint quoted against a grid that does not
- * exist yet is a confident lie.
- */
-private fun containerSizeLabel(grid: GridConfig?): String {
-    if (grid == null) return ""
-    val span = HomeViewModel.ContainerSpan * grid.cellMultiplier
-    return WidgetSpan(rowSpan = span, colSpan = span).visualLabel(grid)
-}
 
 /** One widget: its published preview at the top, the cells it would occupy underneath. */
 @Composable
-private fun WidgetPage(provider: WidgetProvider, sizeLabel: String) {
+private fun WidgetPage(provider: WidgetProvider, sizeLabel: String, roomless: Boolean) {
     val colors = LocalMorphicColors.current
     Column(
         modifier = Modifier
@@ -662,7 +677,27 @@ private fun WidgetPage(provider: WidgetProvider, sizeLabel: String) {
         if (sizeLabel.isNotEmpty()) {
             Text(text = sizeLabel, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
         }
+        if (roomless) RoomlessNotice()
     }
+}
+
+/**
+ * Says why there is no Add button on this page.
+ *
+ * **The button is absent rather than disabled**, which is this launcher's standing rule — so something has to carry
+ * the reason, or the page reads as one where adding was never offered. It sits directly under the footprint it is
+ * about, since the footprint *is* the reason.
+ *
+ * `error` rather than `contentMuted`: nothing has gone wrong yet, but this is the one line on the page a user has to
+ * read before wondering where the button went, and muted text beside a muted size label would not be read at all.
+ */
+@Composable
+private fun RoomlessNotice() {
+    Text(
+        text = "Not enough room",
+        style = MaterialTheme.typography.bodyMedium,
+        color = LocalMorphicColors.current.error,
+    )
 }
 
 /** Which page of the detail pager is showing. The folder overlay's dots, at this sheet's scale. */
@@ -693,18 +728,29 @@ private fun Dots(current: Int, count: Int, modifier: Modifier = Modifier) {
  * a **container** fills the container whatever it asked for, so its footprint is not the caller's to state. Empty
  * either way; the widget's name above it still reads on its own.
  */
-private fun sizeLabel(
+private fun spanOf(
     provider: WidgetProvider,
     grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
-): String {
-    if (grid == null) return ""
+): WidgetSpan? {
+    if (grid == null) return null
     return WidgetSpan.forMinSize(
         minWidthPx = provider.minWidthPx,
         minHeightPx = provider.minHeightPx,
         cellWidthPx = cellWidthPx,
         cellHeightPx = cellHeightPx,
         config = grid,
-    )?.visualLabel(grid).orEmpty()
+    )
+}
+
+/**
+ * The footprint a container lands with, on [grid].
+ *
+ * `HomeViewModel.ContainerSpan` rather than a literal, for [spanOf]'s reason applied to the other kind of entry: the
+ * number the page prints and the number the placement searches for have to be one number.
+ */
+private fun containerSpan(grid: GridConfig): WidgetSpan {
+    val span = HomeViewModel.ContainerSpan * grid.cellMultiplier
+    return WidgetSpan(rowSpan = span, colSpan = span)
 }

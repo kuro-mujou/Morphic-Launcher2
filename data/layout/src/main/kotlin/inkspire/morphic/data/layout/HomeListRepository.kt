@@ -62,11 +62,27 @@ interface HomeListRepository {
     suspend fun seedIfEmpty(apps: List<ComponentKey>)
 
     /**
+     * Adds [components] to the end of the list, skipping any already in it.
+     *
+     * **The op [setOrder] deliberately cannot do**, and the counterpart [remove] has had all along: membership is
+     * fixed by this pair, because a reported order is reconciled against what is stored and so can only rearrange
+     * what is already there. A picker handing `setOrder` a longer list would look like it worked and write nothing.
+     *
+     * **At the end, which is the only honest place.** The user picked apps, not positions — nothing in a picker
+     * expresses where in the list an app should go — and the end is the one spot that disturbs nothing they had
+     * already arranged. It is also what makes the addition findable: the caller scrolls to it, and "the end" is
+     * somewhere a caller can reason about where "wherever it sorted" is not.
+     *
+     * Order within [components] is kept, so apps land in the order they were ticked.
+     */
+    suspend fun add(components: List<ComponentKey>)
+
+    /**
      * Removes [component] from the list, if it is in it.
      *
-     * The one membership op, and it exists because a drag has to be able to take an app *out* — there is nowhere
-     * else on this layout's main area for it to go. Adding is [seedIfEmpty] plus, later, a picker; this is the half
-     * a gesture can reach today.
+     * One of the two membership ops — [add] is the other, and the picker that needed it exists now. A drag has to be
+     * able to take an app *out*, since there is nowhere else on this layout's main area for it to go; this is the
+     * half a gesture can reach.
      */
     suspend fun remove(component: ComponentKey)
 }

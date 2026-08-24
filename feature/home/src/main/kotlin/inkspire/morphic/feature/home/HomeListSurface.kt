@@ -1,13 +1,19 @@
 package inkspire.morphic.feature.home
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.cell.ActionRowCell
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -61,6 +68,7 @@ import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -281,6 +289,10 @@ internal fun HomeListSurface(
         val span = geo?.let {
             WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, areaConfig)
         }
+        // **Nothing to reveal here, unlike the pager's**, and that is a property of the zone rather than an omission:
+        // the widget area is one grid drawn all at once, so a widget it accepts is already on screen. What it can do
+        // that the pager cannot is *refuse* — see `HomeViewModel.freeRect` — which is why the picker below is given a
+        // capacity test and this is left to report a plain failure.
         span != null && viewModel.placeWidget(
             widget = WidgetInfo(
                 appWidgetId = bound.appWidgetId,
@@ -291,11 +303,22 @@ internal fun HomeListSurface(
             span = span,
             zone = HomeZone.WIDGET_AREA,
             config = areaConfig,
-        )
+        ) != null
     }
 
     // Whether the widget picker is up — surface-local, see the menu row below.
     var widgetPickerOpen by remember { mutableStateOf(false) }
+
+    // Whether the *app* picker is up — the Add apps row's sheet, held on the same terms.
+    var appPickerOpen by remember { mutableStateOf(false) }
+
+    // **The app an add just put on the list, held until there is a row to scroll to.**
+    //
+    // The pager's `pageToReveal` for the other pairing, and pending for the same reason one step along: `addToList`
+    // leads the store, but the row still has to be *composed* before there is a position to scroll to, and the app
+    // has to resolve through the catalog before it is drawn at all. Spent by the effect below on the first frame the
+    // list actually contains it.
+    var appToReveal by remember { mutableStateOf<ComponentKey?>(null) }
 
     // A widget in the area offers the one verb a widget has, exactly as it does on the pager pairing's grids —
     // removing it also releases its `appWidgetId`, which is why it goes through the ViewModel rather than being a
@@ -453,43 +476,71 @@ internal fun HomeListSurface(
                 }
             },
             main = { zoneModifier ->
-                ListZone(
-                    apps = displayedApps,
-                    rowHeight = rowHeight,
-                    scrollState = scrollState,
-                    dragging = coordinator.isDragging,
-                    modifier = zoneModifier,
-                    onViewportChange = { bounds -> viewport = bounds },
-                    coordinator = coordinator,
-                    gestureConfig = gestureConfig,
-                    // A release here only ends the drag; the landing is committed by whichever zone it fell in —
-                    // this list's, or one of the pager pairing's if the user has switched layouts mid-gesture.
-                    onRelease = { coordinator.drop() },
-                    onLaunch = { viewModel.launch(it) },
-                    // **"Remove" here is the list's own verb**, and it is neither `RemoveFromGrid` nor a reorder:
-                    // this list is an order store of its own, not a view of the pager's placements, so taking an
-                    // app off it is a *membership* write. Writing the order without that app looks equivalent and
-                    // is not — the store reconciles a reported order against real membership and would put the app
-                    // straight back at the end. See [HomeViewModel.removeFromList].
-                    onShowMenu = { app, anchor ->
-                        menuHost?.showApp(
-                            component = app.componentKey,
-                            label = app.label,
-                            anchor = anchor,
-                            surfaceActions = listOf(
-                                MenuAction("Gestures") { gesturesFor = app },
-                                MenuAction("Remove") { viewModel.removeFromList(app.componentKey) },
-                            ),
-                        )
-                    },
-                    gesturesOn = { state.itemGestures.gesturesOn(it) },
-                    onGesture = { item, gesture -> viewModel.runGesture(item, gesture) },
-                    metrics = listMetrics,
-                )
+                // **The Add apps row is pinned above the scroller, not the first item in it.** It is the one control
+                // on this surface that is not an app, and a control that scrolls away is one a user has to hunt for
+                // — the list is as long as their app drawer. Inside the main zone rather than beside the widget area,
+                // because it belongs to the *list*: it adds rows to this, not widgets to that.
+                Column(modifier = zoneModifier) {
+                    AddAppsRow(
+                        height = rowHeight,
+                        metrics = listMetrics,
+                        onClick = { appPickerOpen = true },
+                    )
+                    ListZone(
+                        apps = displayedApps,
+                        rowHeight = rowHeight,
+                        scrollState = scrollState,
+                        dragging = coordinator.isDragging,
+                        onViewportChange = { bounds -> viewport = bounds },
+                        coordinator = coordinator,
+                        gestureConfig = gestureConfig,
+                        // A release here only ends the drag; the landing is committed by whichever zone it fell in —
+                        // this list's, or one of the pager pairing's if the user has switched layouts mid-gesture.
+                        onRelease = { coordinator.drop() },
+                        onLaunch = { viewModel.launch(it) },
+                        // **"Remove" here is the list's own verb**, and it is neither `RemoveFromGrid` nor a reorder:
+                        // this list is an order store of its own, not a view of the pager's placements, so taking an
+                        // app off it is a *membership* write. Writing the order without that app looks equivalent and
+                        // is not — the store reconciles a reported order against real membership and would put the app
+                        // straight back at the end. See [HomeViewModel.removeFromList].
+                        onShowMenu = { app, anchor ->
+                            menuHost?.showApp(
+                                component = app.componentKey,
+                                label = app.label,
+                                anchor = anchor,
+                                surfaceActions = listOf(
+                                    MenuAction("Gestures") { gesturesFor = app },
+                                    MenuAction("Remove") { viewModel.removeFromList(app.componentKey) },
+                                ),
+                            )
+                        },
+                        gesturesOn = { state.itemGestures.gesturesOn(it) },
+                        onGesture = { item, gesture -> viewModel.runGesture(item, gesture) },
+                            metrics = listMetrics,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             },
         )
 
-        // Auto-scroll while a drag is held near the viewport's top or bottom, so an app can be carried to a part of
+        // **Scrolls to a just-added app.** Added apps land at the end of the list (`HomeListRepository.add` owns
+        // why), which on a list of any length is off screen — so an add with no reveal looks like nothing happened.
+        //
+        // The offset is the row's index times its height because this is a plain `Column` in a `verticalScroll`
+        // rather than a lazy list: there is no `scrollToItem`, and the arithmetic is exact precisely because every
+        // row is the same [rowHeight]. `ScrollState` clamps to its own range, so a short list that needs no scroll
+        // settles where it is rather than overshooting.
+        val rowHeightPx = with(LocalDensity.current) { rowHeight.toPx() }
+        LaunchedEffect(appToReveal, displayedApps) {
+            val target = appToReveal ?: return@LaunchedEffect
+            val index = displayedApps.indexOfFirst { it.componentKey == target }
+            // Not yet: the write has not reached the surface, or the app has not resolved through the catalog.
+            if (index < 0) return@LaunchedEffect
+            scrollState.animateScrollTo((index * rowHeightPx).roundToInt())
+            appToReveal = null
+        }
+
+    // Auto-scroll while a drag is held near the viewport's top or bottom, so an app can be carried to a part of
         // the list that is off screen. The re-send afterwards is the second half of that rule: the coordinator only
         // re-plans when the *finger* moves, and auto-scroll exists precisely to move content under a finger held
         // still — so the same position must be pushed again once the origin has republished, in the same
@@ -548,6 +599,36 @@ internal fun HomeListSurface(
                 onAddWidget = { provider ->
                     widgetPickerOpen = false
                     addWidget.start(provider.component)
+                },
+                // The one surface where this really refuses. Asked of the ViewModel rather than answered here, so
+                // the test and the placement are the same search — a picker that offered Add on a widget the area
+                // could not take would bind an id, fail, and hand it back with nothing to show for it.
+                hasRoomFor = { span ->
+                    viewModel.hasRoomFor(span.rowSpan, span.colSpan, HomeZone.WIDGET_AREA, areaConfig)
+                },
+            )
+        }
+
+        // **The Add apps picker.** Offers what is not already on the list — the picker has no idea what "already
+        // there" means, so the filtering is the caller's, exactly as its KDoc says. Sorted by label because the
+        // picker does not re-sort either: the order handed in is the order offered, and a picker over every
+        // installed app is unusable in any other one.
+        if (appPickerOpen) {
+            val listed = remember(state.listApps) { state.listApps.mapTo(mutableSetOf()) { it.componentKey } }
+            val addable = remember(state.catalog, listed) {
+                state.catalog.values
+                    .filterNot { it.componentKey in listed }
+                    .sortedBy { it.label.lowercase() }
+            }
+            AppSelectionSheet(
+                apps = addable,
+                onDismiss = { appPickerOpen = false },
+                onAdd = { picked ->
+                    appPickerOpen = false
+                    viewModel.addToList(picked)
+                    // The **first** of them, not the last: they land in the order ticked, so the first is the top of
+                    // the run that was just added and scrolling to it puts the whole run on screen below it.
+                    appToReveal = picked.firstOrNull()
                 },
             )
         }
@@ -694,3 +775,37 @@ internal fun describeGestureAction(action: GestureAction, catalog: Map<Component
 
 /** An assignment whose app is no longer installed. Named so, rather than left blank, which reads as a bug. */
 private const val MissingApp = "App not installed"
+
+/**
+ * The **Add apps** row that opens this surface's picker.
+ *
+ * **Pinned above the scroller by the caller, and shaped as a list row rather than as a button.** It is the only
+ * affordance on this pairing for putting an app on HOME — the pager pairing has a grid to drag onto, and this has one
+ * lane — so it has to read as part of the list while never leaving the screen. [ActionRowCell] is what makes the
+ * first half true: the glyph lands where every app icon below it lands, because the row's geometry is the rows'.
+ *
+ * The **divider is this row's, not the cell's**: it marks the seam between something pinned and something scrolling,
+ * which is a fact about where the caller put it rather than about what it is.
+ */
+@Composable
+private fun AddAppsRow(height: Dp, metrics: IconMetrics, onClick: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    Column {
+        ActionRowCell(
+            label = "Add apps",
+            metrics = metrics,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+                .clickable(onClick = onClick),
+        ) { size ->
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = null,
+                tint = colors.content,
+                modifier = Modifier.size(size),
+            )
+        }
+        HorizontalDivider(color = colors.divider)
+    }
+}

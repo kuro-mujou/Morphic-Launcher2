@@ -44,6 +44,10 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   it is how a color silently loses its transparency. Its hue is held as *state* rather than re-derived from the
   color, which is correctness and not economy — hue is undefined at black, white and every gray, so a picker that
   recomputed it would jump under the finger the moment the panel was dragged into a corner.
+- **`ActionRowCell`** (`cell/`) is a list row that is **not an app** — the home list's pinned *Add apps* row. It sits
+  beside `AppRowCell` because it has to share their inset, icon sizing and label style (`rowLabelStyle` is private
+  there so nothing can disagree about the last one), and it takes its mark as a **slot** rather than an `ImageVector`
+  because this module carries no material-icons dependency.
 - **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
   follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers are named and blocked
   rather than speculative — HOME's "Add app", the home list's "Add apps" row, and filling a folder without

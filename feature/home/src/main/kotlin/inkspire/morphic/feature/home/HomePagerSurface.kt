@@ -512,6 +512,23 @@ internal fun HomePagerSurface(
     // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
     var widgetPickerOpen by remember { mutableStateOf(false) }
 
+    // **The page an add just filed something on, held until the pager can reach it.**
+    //
+    // Every add here searches for room (`HomeViewModel.freeRect`) rather than being given a cell, so a widget or a
+    // container routinely lands on a page the user is not looking at — and on a page that *did not exist* a moment
+    // ago, since the search grows one rather than refusing. That is the whole reason this is a pending value and not
+    // a call: `pageCount` is derived from the items the store has echoed back, and `animateToPage` clamps, so
+    // scrolling in the same breath as the write would clamp to the last page that already existed and silently land
+    // one short. Held instead, and spent by the effect below on the first composition where the page is real.
+    var pageToReveal by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(pageToReveal, maxPage.value) {
+        val page = pageToReveal ?: return@LaunchedEffect
+        // Not yet: the store has not echoed the new page. Re-runs when `maxPage` moves, which is that echo.
+        if (page > maxPage.value) return@LaunchedEffect
+        pagerState.animateToPage(page)
+        pageToReveal = null
+    }
+
     // The item whose Gestures sheet is open, or null. Held here rather than in the menu because the menu is a
     // transient host and the sheet outlives it — the menu closes as the row is chosen.
     var gesturesFor by remember { mutableStateOf<HomeItem?>(null) }
@@ -556,7 +573,9 @@ internal fun HomePagerSurface(
         val span = geo?.let {
             WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
         }
-        span != null && viewModel.placeWidget(widget = info, span = span, zone = HomeZone.MAIN, config = config)
+        val at = span?.let { viewModel.placeWidget(widget = info, span = it, zone = HomeZone.MAIN, config = config) }
+        pageToReveal = at?.page
+        at != null
     }
 
     // An app *inside* a folder is offered less, and the missing verb is the point: it has no grid placement, so a
@@ -918,11 +937,17 @@ internal fun HomePagerSurface(
                 },
                 onAddIconContainer = {
                     widgetPickerOpen = false
-                    viewModel.createIconContainer(HomeZone.MAIN, config)
+                    pageToReveal = viewModel.createIconContainer(HomeZone.MAIN, config)?.page
                 },
                 onAddWidgetContainer = {
                     widgetPickerOpen = false
-                    viewModel.createWidgetContainer(HomeZone.MAIN, config)
+                    pageToReveal = viewModel.createWidgetContainer(HomeZone.MAIN, config)?.page
+                },
+                // Nothing is ever too big for this grid to take: the search grows a page rather than refusing, and
+                // the only refusal left is an item wider or taller than the grid itself. Asked all the same, so the
+                // picker's Add row is absent for exactly the widgets that could not be placed — see the sheet.
+                hasRoomFor = { span ->
+                    viewModel.hasRoomFor(span.rowSpan, span.colSpan, HomeZone.MAIN, config)
                 },
             )
         }

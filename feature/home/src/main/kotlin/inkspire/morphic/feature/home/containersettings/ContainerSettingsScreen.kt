@@ -47,16 +47,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
-import inkspire.morphic.core.designsystem.picker.AppPicker
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.model.AppInfo
-import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.widgets.AppWidgetHostController
+import inkspire.morphic.feature.home.AppSelectionSheet
 import inkspire.morphic.feature.home.ContainerIcon
-import inkspire.morphic.feature.home.LauncherBottomSheet
 import inkspire.morphic.feature.home.UnnamedWidget
 import inkspire.morphic.feature.home.asIconItem
 import inkspire.morphic.feature.home.listKey
@@ -268,47 +265,6 @@ fun ContainerSettingsScreen(
 
 /** Which sheet is over the screen. */
 private enum class ContainerSheet { Apps, Widgets }
-
-/**
- * The multi-select app picker, with its selection and its commit.
- *
- * A sheet of its own rather than inline, so the scratch selection is scoped to the sheet being on screen: dismissing
- * disposes it, which is what makes backing out leave nothing behind without anything having to reset it.
- */
-@Composable
-private fun AppSelectionSheet(
-    apps: List<AppInfo>,
-    onDismiss: () -> Unit,
-    onAdd: (List<ComponentKey>) -> Unit,
-) {
-    val colors = LocalMorphicColors.current
-    // A list, not a set, so the apps land in the order they were ticked — which is the only order the user has
-    // expressed, and the container stores one.
-    var picked by remember { mutableStateOf<List<ComponentKey>>(emptyList()) }
-
-    LauncherBottomSheet(onDismiss = onDismiss) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp)) {
-            Text(
-                text = "Add apps",
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.content,
-                modifier = Modifier.weight(1f),
-            )
-            // Disabled rather than hidden: the button is what tells a user the ticks are not yet committed, so it
-            // has to be visible before anything is ticked.
-            TextButton(onClick = { onAdd(picked) }, enabled = picked.isNotEmpty()) {
-                Text(if (picked.isEmpty()) "Add" else "Add ${picked.size}")
-            }
-        }
-        AppPicker(
-            apps = apps,
-            selected = picked.toSet(),
-            onPick = { component ->
-                picked = if (component in picked) picked - component else picked + component
-            },
-        )
-    }
-}
 
 /** The big "+ Add …" affordance the screen opens with. */
 @Composable

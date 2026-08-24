@@ -59,6 +59,18 @@ internal class HomeListRepositoryImpl(
         }
     }
 
+    override suspend fun add(components: List<ComponentKey>) {
+        withContext(dispatchers.io) {
+            val stored = order.first()
+            // Skipped rather than moved to the end: an app already in the list is one the user has already placed,
+            // and re-adding it from a picker should not quietly reorder what they arranged. `distinct` guards the
+            // other half — the same app cannot be ticked twice, but the list handed in is the caller's.
+            val added = components.distinct().filterNot { it in stored }
+            if (added.isEmpty()) return@withContext
+            write(stored + added)
+        }
+    }
+
     override suspend fun remove(component: ComponentKey) {
         withContext(dispatchers.io) { dao.deleteByComponent(component) }
     }

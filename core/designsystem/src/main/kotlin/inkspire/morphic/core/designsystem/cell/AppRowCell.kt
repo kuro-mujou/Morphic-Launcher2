@@ -276,3 +276,56 @@ fun AppRowCell(
         }
     }
 }
+
+/**
+ * A list row that is **not an app**: the same geometry as [AppRowCell], with a caller-drawn mark where the icon goes.
+ *
+ * **Here rather than in the feature that needed it, because the agreement is the whole point.** An affordance sitting
+ * at the top of a list of [AppRowCell]s has to share their inset, their icon sizing and their label style, or it
+ * reads as chrome bolted above the list instead of as its first row — and those three live in this file, one of them
+ * (`rowLabelStyle`) private precisely so nothing can disagree about it. A copy in `feature:home` would agree on the
+ * day it was written and drift the first time a row's padding moved.
+ *
+ * **The mark is a slot rather than an `ImageVector`**, which is not indirection for its own sake: this module carries
+ * no material-icons dependency on purpose (`TopActionZone` draws its own glyphs for the same reason), and pulling one
+ * in for a single "+" is the trade that note already refused. The caller draws the mark at the size it is handed —
+ * the size an app icon would have taken in this row, so the two line up down the column.
+ *
+ * `showIcon = false` — the pure-text list — drops the mark and its gap, for [AppRowCell]'s reason: the label starts
+ * at the row's own inset rather than where an icon used to end.
+ *
+ * @param mark drawn where an app's icon would be, given the exact size that icon would have been.
+ */
+@Composable
+fun ActionRowCell(
+    label: String,
+    modifier: Modifier = Modifier,
+    metrics: IconMetrics = LocalIconMetrics.current,
+    mark: @Composable (size: Dp) -> Unit,
+) {
+    val colors = LocalMorphicColors.current
+    BoxWithConstraints(modifier) {
+        val innerHeight = (maxHeight - 8.dp * 2).coerceAtLeast(0.dp)
+        val iconSize = metrics
+            .resolveIconSize(availWidth = maxWidth - 8.dp * 2, availHeight = innerHeight)
+            .coerceAtMost(innerHeight)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (metrics.showIcon) {
+                mark(iconSize)
+                Spacer(Modifier.width(16.dp))
+            }
+            Text(
+                text = label,
+                style = rowLabelStyle(metrics),
+                color = colors.content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
