@@ -1009,7 +1009,15 @@ class HomeViewModel(
          * size is a group of smudges: the container has to be bigger than the things it holds to be worth having.
          * It is a starting size, not a rule — a container is resized like any other placed item.
          */
-        private const val ContainerSpan = 2
+        /**
+         * How many **visual** cells a container takes each way when it is placed — multiplied by the grid's cell
+         * multiplier at the point of use.
+         *
+         * `internal` because the widget picker quotes it: its preview draws a square and labels it "2 × 2", and a
+         * literal there would be right today and silently wrong the first time this moved. The number belongs to
+         * whatever *places* a container, which is this.
+         */
+        internal const val ContainerSpan = 2
     }
 }
 

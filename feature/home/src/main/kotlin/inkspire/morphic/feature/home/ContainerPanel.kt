@@ -1,8 +1,15 @@
 package inkspire.morphic.feature.home
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -32,3 +39,47 @@ fun Modifier.containerPanel(): Modifier {
         .clip(RoundedCornerShape(16.dp))
         .wallpaperBackdrop(shape = RoundedCornerShape(16.dp), scrimColor = colors.surface)
 }
+
+/**
+ * The **"+" an empty container shows**, sized to the container it is in.
+ *
+ * Both containers show one, and the widget picker previews both, so it is one composable rather than four — which is
+ * also what makes the two cells agree. They did not: the icon container scaled its glyph to a fraction of the cell
+ * while the widget container took `IconButton`'s default 24dp, so the same "+" was two sizes on one home screen. The
+ * widget container's own KDoc already claimed parity ("as an icon container does"); this is that sentence becoming
+ * true.
+ *
+ * A **fraction of the smaller side**, not a dp: a container is sized by the grid it sits on, and a fixed glyph would
+ * be a speck in a 4×4 container and fill a 1×1 one.
+ *
+ * @param onAdd runs the container's own add flow — an app picker, or the widget bind. **Null draws the glyph
+ *   without a button**, which is what a *preview* wants: the "+" is part of the picture there, and a control that
+ *   ripples and does nothing is worse than no control.
+ */
+@Composable
+internal fun ContainerAddGlyph(
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    onAdd: (() -> Unit)? = null,
+) {
+    val colors = LocalMorphicColors.current
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val glyph: @Composable () -> Unit = {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = contentDescription,
+                tint = colors.contentMuted,
+                modifier = Modifier.size(maxWidth.coerceAtMost(maxHeight) * EmptyGlyphFraction),
+            )
+        }
+        if (onAdd == null) glyph() else IconButton(onClick = onAdd, content = glyph)
+    }
+}
+
+/**
+ * How much of a container's smaller side its empty "+" takes.
+ *
+ * Named rather than written at the call site because it is a **fraction**, not a dimension — the rule about writing
+ * a dp where it is used does not reach it, and `0.3f` sitting bare in a `size()` reads as neither.
+ */
+private const val EmptyGlyphFraction = 0.3f

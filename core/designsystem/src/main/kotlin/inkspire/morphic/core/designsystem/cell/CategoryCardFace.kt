@@ -43,7 +43,14 @@ const val CategoryPreviewCols = 2
 /** How many apps a card's preview shows at once. */
 const val CategoryPreviewSlots = CategoryPreviewCols * CategoryPreviewCols
 
-/** How translucent the card's fill is over the surface behind it — what the launcher's own cards are drawn at. */
+/**
+ * How translucent a fill is over the frost behind it — what the launcher's own cards are drawn at.
+ *
+ * **Named for the card because that is what set it, and shared because the situation repeats.** The widget picker's
+ * preview boxes are the second consumer: a translucent tile over a frosted surface, exactly this one, and the two
+ * looking alike is wanted rather than coincidental. A settings preview overrides it *upward* — see this file's
+ * `fillAlpha`, which owns why raw wallpaper needs more than frost does.
+ */
 const val CardAlpha = 0.10f
 
 /**

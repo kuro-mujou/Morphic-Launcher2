@@ -12,8 +12,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.cell.CardAlpha
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -63,14 +67,20 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.WidgetProvider
 import inkspire.morphic.data.widgets.WidgetProviderGroup
+import inkspire.morphic.feature.home.ContainerAddGlyph
+import inkspire.morphic.feature.home.HomeViewModel
 import inkspire.morphic.feature.home.LauncherBottomSheet
+import inkspire.morphic.feature.home.containerPanel
 import org.koin.androidx.compose.koinViewModel
 
 /**
  * **The widget picker** — a bottom sheet listing every installed widget, grouped by the app that publishes it, with
  * one app's widgets browsed as a pager of previews.
  *
- * A two-pane sheet: a list of apps that slides left to a detail pane for the one chosen, and back again.
+ * A two-pane sheet: a list that slides left to a detail pane for whatever was chosen, and back again. **Both kinds of
+ * entry reach that pane** — an app's widgets and the launcher's own components alike ([PickerEntry]) — so nothing on
+ * this sheet is placed by a single tap. Which is the point: a tile appearing on a home screen behind a sheet the user
+ * is still looking at gives them no chance to see what it was or how much room it took.
  * - **Colors come from the theme.** Hardcoding white here would make this the one surface ignoring the brightness
  *   signal the whole launcher theme is built on.
  * - **The sheet itself is [LauncherBottomSheet]** — the frosted panel, the scrim, the modality claim and `uiInsets`
@@ -80,7 +90,9 @@ import org.koin.androidx.compose.koinViewModel
  * **A "Components" section sits above the apps**: an icon container and a widget container, which are things
  * the launcher itself offers rather than things an app publishes — which is why they are their own section and not
  * two more rows in the list. They were absent while nothing could draw either; they arrived with the cells, on the
- * same rule that kept them out (a row that adds an item the user cannot see is worse than a missing one).
+ * same rule that kept them out (a row that adds an item the user cannot see is worse than a missing one). Each opens
+ * a page previewing **the cell it will become**, which is what an app's widget already got and what L1 could only
+ * approximate with a glyph.
  *
  * @param grid the grid a chosen widget would land on, used only to phrase its size ("3 × 2"). The *caller's* grid
  *   rather than one derived here, because home's two pairings put widgets in different zones — the pager on one,
@@ -94,9 +106,10 @@ import org.koin.androidx.compose.koinViewModel
  *   disabling it — the same nullable-lambda shape `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
  *   appears with nothing else here changing.
- * @param onAddIconContainer adds an empty icon container. Nullable on [onAddWidget]'s terms, and the caller passes
- *   null when the sheet was opened to fill a container — neither kind nests, so the section would be two rows that
- *   could not work.
+ * @param onAddIconContainer adds an empty icon container, from its own detail page. Nullable on [onAddWidget]'s
+ *   terms, and the caller passes null when the sheet was opened to fill a container — neither kind nests, so the
+ *   section would be two rows that could not work. Null also **removes the row**, since a component with nowhere to
+ *   go has nothing to preview.
  * @param onAddWidgetContainer the same, for a widget container.
  */
 @Composable
@@ -113,7 +126,16 @@ internal fun WidgetPickerSheet(
     val viewModel = koinViewModel<WidgetPickerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    var opened by remember { mutableStateOf<WidgetProviderGroup?>(null) }
+    var opened by remember { mutableStateOf<PickerEntry?>(null) }
+
+    // Which add flow a component's page commits to, resolved here because this is the layer holding both callbacks.
+    // Exhaustive over the enum, so a third component cannot be listed without saying what placing it does.
+    val addFor: (ComponentKind) -> (() -> Unit)? = { kind ->
+        when (kind) {
+            ComponentKind.ICON_CONTAINER -> onAddIconContainer
+            ComponentKind.WIDGET_CONTAINER -> onAddWidgetContainer
+        }
+    }
 
     LauncherBottomSheet(
         onDismiss = onDismiss,
@@ -136,22 +158,30 @@ internal fun WidgetPickerSheet(
             },
             label = "widgetPicker",
         ) { target ->
-            if (target == null) {
-                ListPane(
+            when (target) {
+                null -> ListPane(
                     groups = state.groups,
-                    onOpen = { opened = it },
+                    onOpen = { opened = PickerEntry.Widgets(it) },
                     onDismiss = onDismiss,
-                    onAddIconContainer = onAddIconContainer,
-                    onAddWidgetContainer = onAddWidgetContainer,
+                    // A component is listed only when something can place it — see [WidgetPickerSheet].
+                    components = ComponentKind.entries.filter { addFor(it) != null },
+                    onOpenComponent = { opened = PickerEntry.Component(it) },
                 )
-            } else {
-                DetailPane(
-                    group = target,
+
+                is PickerEntry.Widgets -> DetailPane(
+                    group = target.group,
                     grid = grid,
                     cellWidthPx = cellWidthPx,
                     cellHeightPx = cellHeightPx,
                     onBack = { opened = null },
                     onAddWidget = onAddWidget,
+                )
+
+                is PickerEntry.Component -> ComponentDetailPane(
+                    kind = target.kind,
+                    grid = grid,
+                    onBack = { opened = null },
+                    onAdd = addFor(target.kind),
                 )
             }
         }
@@ -166,8 +196,8 @@ private fun ListPane(
     groups: List<WidgetProviderGroup>?,
     onOpen: (WidgetProviderGroup) -> Unit,
     onDismiss: () -> Unit,
-    onAddIconContainer: (() -> Unit)? = null,
-    onAddWidgetContainer: (() -> Unit)? = null,
+    components: List<ComponentKind> = emptyList(),
+    onOpenComponent: (ComponentKind) -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
     val search = rememberTextFieldState()
@@ -222,28 +252,11 @@ private fun ListPane(
             // **Components come first, and only when nothing is being searched.** They are the launcher's own
             // offerings rather than any app's, so the search field — which filters apps by name — has nothing to
             // say about them, and leaving them pinned above a filtered list would read as two failed matches.
-            val components = listOfNotNull(
-                onAddIconContainer?.let {
-                    ComponentRowSpec(
-                        icon = Icons.Filled.GridView,
-                        label = "Icon container",
-                        description = "A panel that holds app and folder icons.",
-                        onClick = it,
-                    )
-                },
-                onAddWidgetContainer?.let {
-                    ComponentRowSpec(
-                        icon = Icons.Filled.Widgets,
-                        label = "Widget container",
-                        // Pages between its widgets rather than stacking them, which is what the wording says.
-                        description = "A panel that pages between several widgets.",
-                        onClick = it,
-                    )
-                },
-            )
             if (query.isBlank() && components.isNotEmpty()) {
                 item(key = "components-heading") { SectionHeading("Components") }
-                items(components, key = { it.label }) { spec -> ComponentRow(spec) }
+                items(components, key = { it.name }) { kind ->
+                    ComponentRow(kind) { onOpenComponent(kind) }
+                }
                 item(key = "apps-heading") { SectionHeading("Apps") }
             }
             items(filtered, key = { it.packageName }) { group ->
@@ -253,13 +266,45 @@ private fun ListPane(
     }
 }
 
-/** One **Components** row's content — kept as a value so the two are declared where the lambdas that fill them are. */
-private data class ComponentRowSpec(
-    val icon: ImageVector,
+/**
+ * One of the launcher's **own** placeable components, as opposed to an app's widget.
+ *
+ * An enum rather than a row built where its callback is, because each of these is now two views — a row in the list
+ * and a page in the detail pane — and a name that differed between them would be one component reading as two.
+ *
+ * @property icon stands for the component in the *list*. The detail page draws the real thing instead, so this is
+ *   the only place a glyph has to do the job.
+ */
+private enum class ComponentKind(
     val label: String,
     val description: String,
-    val onClick: () -> Unit,
-)
+    val icon: ImageVector,
+) {
+    ICON_CONTAINER(
+        label = "Icon container",
+        description = "A panel that holds app and folder icons.",
+        icon = Icons.Filled.GridView,
+    ),
+
+    // Pages between its widgets rather than stacking them, which is what the wording says.
+    WIDGET_CONTAINER(
+        label = "Widget container",
+        description = "A panel that pages between several widgets.",
+        icon = Icons.Filled.Widgets,
+    ),
+}
+
+/**
+ * What the detail pane is showing — one app's widgets, or one of the launcher's own components.
+ *
+ * **A sum type rather than two nullable states**, so "both open at once" is not representable: there is one pane and
+ * one back gesture, and a second flag would need a rule forbidding the state it invented. The same reason
+ * `LauncherMenuHost` holds one request for two kinds of menu.
+ */
+private sealed interface PickerEntry {
+    data class Widgets(val group: WidgetProviderGroup) : PickerEntry
+    data class Component(val kind: ComponentKind) : PickerEntry
+}
 
 /** A group label above a run of rows. Only drawn when there is more than one group to tell apart. */
 @Composable
@@ -280,13 +325,13 @@ private fun SectionHeading(text: String) {
  * container *does*, where an app's name plus a widget count does.
  */
 @Composable
-private fun ComponentRow(spec: ComponentRowSpec) {
+private fun ComponentRow(kind: ComponentKind, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = spec.onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -298,7 +343,7 @@ private fun ComponentRow(spec: ComponentRowSpec) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = spec.icon,
+                imageVector = kind.icon,
                 contentDescription = null,
                 tint = colors.content,
                 modifier = Modifier.size(18.dp),
@@ -306,9 +351,9 @@ private fun ComponentRow(spec: ComponentRowSpec) {
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = spec.label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
+            Text(text = kind.label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
             Text(
-                text = spec.description,
+                text = kind.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.contentMuted,
                 overflow = TextOverflow.Ellipsis,
@@ -378,23 +423,21 @@ private fun DetailPane(
     onBack: () -> Unit,
     onAddWidget: ((WidgetProvider) -> Unit)?,
 ) {
-    val colors = LocalMorphicColors.current
     val pagerState = rememberPagerState { group.providers.size }
+    val current = group.providers.getOrNull(pagerState.currentPage)
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.content)
-            }
-            Text(
-                text = group.appLabel,
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
+    DetailFrame(
+        title = group.appLabel,
+        onBack = onBack,
+        // Absent, not disabled, while nothing can place a widget — see [WidgetPickerSheet]. The page is folded into
+        // the same test rather than disabling the button under a finger: an out-of-range page is unreachable here,
+        // since a group always publishes at least one provider, so it is a defensive null and not a state to show.
+        onAdd = if (onAddWidget != null && current != null) {
+            { onAddWidget(current) }
+        } else {
+            null
+        },
+    ) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -418,13 +461,75 @@ private fun DetailPane(
         } else {
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
 
-        // Absent, not disabled, while nothing can place a widget — see [WidgetPickerSheet].
-        if (onAddWidget != null) {
-            val current = group.providers.getOrNull(pagerState.currentPage)
+/**
+ * The second pane for one of the launcher's **own** components: what it will look like, how much room it takes, and
+ * the same Add button an app's widget gets.
+ *
+ * **It reaches the pane at all because L1's did**, and the reason holds: tapping a row and having a tile appear on a
+ * home screen behind a sheet you are still looking at gives no chance to see what was placed or how big it is. What
+ * L1 showed there was a Material glyph in a box — a stand-in, because L1 had no way to draw a container outside its
+ * own grid. This one draws the **real cell**, which is the whole difference; see [ComponentPage].
+ *
+ * No pager and no dots: a component is one thing, where an app publishes several widgets.
+ */
+@Composable
+private fun ComponentDetailPane(
+    kind: ComponentKind,
+    grid: GridConfig?,
+    onBack: () -> Unit,
+    onAdd: (() -> Unit)?,
+) {
+    DetailFrame(title = kind.label, onBack = onBack, onAdd = onAdd) {
+        ComponentPage(
+            kind = kind,
+            sizeLabel = containerSizeLabel(grid),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        )
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/**
+ * The chrome both detail panes wear: a back button beside the title, the pane's own content, and **Add to home**.
+ *
+ * Extracted at the second pane rather than up front. The back row is identical in both and the button is the pane's
+ * one commit, so a component reached through a different-looking frame would read as a different kind of place.
+ *
+ * @param onAdd null when nothing can place this. **Absent, not disabled**, which is this launcher's standing rule
+ *   for a verb with no op behind it.
+ */
+@Composable
+private fun DetailFrame(
+    title: String,
+    onBack: () -> Unit,
+    onAdd: (() -> Unit)?,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = LocalMorphicColors.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.content)
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        content()
+
+        if (onAdd != null) {
             MorphicButton(
-                onClick = { current?.let(onAddWidget) },
-                enabled = current != null,
+                onClick = onAdd,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
@@ -433,6 +538,76 @@ private fun DetailPane(
             }
         }
     }
+}
+
+/**
+ * A component previewed as **the cell it will become** — the real container face, square, at the footprint it lands
+ * with.
+ *
+ * **The picture is the composable the grid itself draws**, not a drawing of it: `containerPanel` for the fill and the
+ * corner, [ContainerAddGlyph] for the "+". A hand-made likeness is the bug this codebase keeps rediscovering — it
+ * agrees on the day it is written and drifts the first time the real one is restyled — and a preview that has
+ * drifted is worse than none, because it is believed.
+ *
+ * **Square, because a container lands square** (`HomeViewModel.ContainerSpan` both ways). The label below reads that
+ * same constant back, so the shape and the number cannot disagree.
+ *
+ * **It renders flat rather than frosted, and that is right here.** The sheet is itself a film, so a frosted tile
+ * inside it fills with its scrim (`LocalOverFilm`) — the launcher's own no-double-blur rule, which a preview is
+ * subject to like anything else on a sheet. What it can show is the shape, the corner and the affordance; what a
+ * container is *made* of is only truthful over the wallpaper, which is where the user is about to put it.
+ */
+@Composable
+private fun ComponentPage(kind: ComponentKind, sizeLabel: String, modifier: Modifier = Modifier) {
+    val colors = LocalMorphicColors.current
+    Column(
+        modifier = modifier.padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // The same translucent fill a widget's preview gets — see [WidgetPage] — and here it is what makes the tile
+        // visible at all. A container over the film fills with its own scrim, which *is* `colors.surface`, so an
+        // opaque box behind it would be that exact color and the preview would be a "+" floating on nothing.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(colors.surface.copy(alpha = CardAlpha)),
+            contentAlignment = Alignment.Center,
+        ) {
+            // A wrapper sizes the square and the container fills it, rather than the aspect ratio going into
+            // `containerPanel`'s own chain — that modifier opens with `fillMaxSize`, so the two would race.
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight(0.7f)
+                    .aspectRatio(1f),
+            ) {
+                Box(modifier = Modifier.containerPanel(), contentAlignment = Alignment.Center) {
+                    ContainerAddGlyph(contentDescription = null, modifier = Modifier.fillMaxSize())
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(text = kind.description, style = MaterialTheme.typography.bodyMedium, color = colors.content)
+        Text(text = sizeLabel, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
+    }
+}
+
+/**
+ * "2 × 2" — the footprint a container lands with, in the same words a widget's is written in.
+ *
+ * Both halves are borrowed rather than written: the span is `HomeViewModel.ContainerSpan`, which is what actually
+ * places the thing, and the formatting is `WidgetSpan.visualLabel`, which divides the cell multiplier back out. A
+ * literal here would be right today and silently wrong the first time a container's default size moved.
+ *
+ * Empty when no grid has been measured, for [sizeLabel]'s reason: a footprint quoted against a grid that does not
+ * exist yet is a confident lie.
+ */
+private fun containerSizeLabel(grid: GridConfig?): String {
+    if (grid == null) return ""
+    val span = HomeViewModel.ContainerSpan * grid.cellMultiplier
+    return WidgetSpan(rowSpan = span, colSpan = span).visualLabel(grid)
 }
 
 /** One widget: its published preview at the top, the cells it would occupy underneath. */
@@ -446,12 +621,19 @@ private fun WidgetPage(provider: WidgetProvider, sizeLabel: String) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // **A translucent fill, not an opaque one, and the reason is what it does to a *white* preview.** Half the
+        // widgets on a device publish artwork on a plain light background; drawn on an opaque `surface`, which is
+        // near-white under a bright wallpaper, the artwork's own edge disappears and the widget reads as filling the
+        // whole box — a 1×1 clock looks like a 4×2 panel, and the size label underneath is the only thing saying
+        // otherwise. Over the sheet's frost this is blurred wallpaper with a light tint on it, so an edge shows.
+        // [CardAlpha] rather than a value chosen here: it is what the launcher's own cards are drawn at, in the same
+        // situation — a translucent tile over frost — and the two looking alike is the point.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .clip(RoundedCornerShape(20.dp))
-                .background(colors.surface),
+                .background(colors.surface.copy(alpha = CardAlpha)),
             contentAlignment = Alignment.Center,
         ) {
             val preview = provider.preview

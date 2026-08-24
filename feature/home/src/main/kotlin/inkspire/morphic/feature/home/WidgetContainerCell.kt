@@ -17,10 +17,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -89,13 +85,11 @@ internal fun WidgetContainerCell(
         contentAlignment = Alignment.Center,
     ) {
         if (widgets.isEmpty()) {
-            IconButton(onClick = onAddWidget) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Add widget",
-                    tint = colors.contentMuted,
-                )
-            }
+            ContainerAddGlyph(
+                contentDescription = "Add widget",
+                modifier = Modifier.fillMaxSize(),
+                onAdd = onAddWidget,
+            )
             return@Box
         }
 
