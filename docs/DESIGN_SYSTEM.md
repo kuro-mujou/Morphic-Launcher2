@@ -44,21 +44,31 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   it is how a color silently loses its transparency. Its hue is held as *state* rather than re-derived from the
   color, which is correctness and not economy — hue is undefined at black, white and every gray, so a picker that
   recomputed it would jump under the finger the moment the panel was dragged into a corner.
+- **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
+  follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers were named and blocked
+  rather than speculative — HOME's "Add app", the home list's "Add apps" row (built now, and this is what it opens),
+  and filling a folder without dragging. It takes a `List<AppInfo>`, never a repository, and matches with a
+  locale-aware `Collator` rather than `lowercase().contains` — the same lesson the APPS ordering already learned.
+  - **It is a grid of icons, which is L1's shape and the right one**: a picker is browsed by *recognition*, and an
+    icon is what an app is recognized by. The 64dp rows it drew before put a fraction as many apps on screen, which
+    is what made ticking several of them a scroll between each. Selection is a drawn disc-and-check at the icon's
+    top-end — drawn because this module carries no material-icons dependency, as `MorphicResetButton` and
+    `TopActionZone` also do. **No plate behind the picker's icons**, and nothing arranges it: every surface this
+    opens on sets `LocalOverFilm`, so `AppIcon` drops it. L1 needed an explicit `LocalSkinBackdropAllowed` for that.
+  - **Its multi-select consumers share one sheet** — `AppSelectionSheet` in `feature:home`, the title/`Add {n}`/picker
+    composition extracted when the home list became its second consumer. L1's near-duplicate second picker is the
+    outcome that shape exists to avoid.
 - **`ActionRowCell`** (`cell/`) is a list row that is **not an app** — the home list's pinned *Add apps* row. It sits
   beside `AppRowCell` because it has to share their inset, icon sizing and label style (`rowLabelStyle` is private
   there so nothing can disagree about the last one), and it takes its mark as a **slot** rather than an `ImageVector`
-  because this module carries no material-icons dependency.
-- **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
-  follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers are named and blocked
-  rather than speculative — HOME's "Add app", the home list's "Add apps" row, and filling a folder without
-  dragging. It takes a `List<AppInfo>`, never a repository, and matches with a locale-aware `Collator` rather than
-  `lowercase().contains` — the same lesson the APPS ordering already learned.
+  for the no-material-icons reason above.
 
 ## The wallpaper-brightness signal
 
 - **That brightness signal is L2's own idea, not a port, and it is now live** — worth knowing before looking for it
   in L1, which has no luminance analysis anywhere and themes from the system's dark mode. `LauncherShell` reads
-  `WallpaperRepository.brightness` and the hardcoded `darkTheme = true` is gone.
+  `WallpaperRepository.luminance` and the hardcoded `darkTheme = true` is gone. It is a *number* rather than the
+  light/dark verdict it started as; see "Adaptive content color" for why a verdict could not survive the film.
 - **It asks the system before it reads anything, and it did not need `Blur.kt`.** The plan had it waiting on the
   dominant-color half of L1's `Blur.kt`; both halves of that assumption were wrong.
   `WallpaperManager.getWallpaperColors` already answers the question over the wallpaper that is *actually displayed*
