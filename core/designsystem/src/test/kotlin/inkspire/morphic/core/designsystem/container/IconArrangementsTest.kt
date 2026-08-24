@@ -236,26 +236,32 @@ class IconArrangementsTest {
 
     // ── Fans ─────────────────────────────────────────────────────────────────────────────────────────────
 
-    /** Each fan anchors its first icon in its own corner — the one thing that distinguishes the four values. */
+    /**
+     * Each fan opens away from its own corner — the one thing that distinguishes the four values.
+     *
+     * The corner is the **pivot, not a slot**: the innermost arc stands half an icon clear of it, so this asks that
+     * the first icon is nearer that corner than any of the other three rather than flush in it.
+     */
     @Test
-    fun `each fan pivots on its own corner`() {
+    fun `each fan opens away from its own corner`() {
         val pivots = mapOf(
-            IconArrangement.FAN_TOP_LEFT to (true to true),
-            IconArrangement.FAN_TOP_RIGHT to (false to true),
-            IconArrangement.FAN_BOTTOM_LEFT to (true to false),
-            IconArrangement.FAN_BOTTOM_RIGHT to (false to false),
+            IconArrangement.FAN_TOP_LEFT to (0f to 0f),
+            IconArrangement.FAN_TOP_RIGHT to (width to 0f),
+            IconArrangement.FAN_BOTTOM_LEFT to (0f to height),
+            IconArrangement.FAN_BOTTOM_RIGHT to (width to height),
         )
-        for ((arrangement, corner) in pivots) {
-            val (left, top) = corner
+        val corners = pivots.values.toList()
+        for ((arrangement, pivot) in pivots) {
             val slot = arrangement.slots(6, width, height).first()
-            if (left) assertEquals("$arrangement", 0f, slot.x, 0.01f)
-            else assertEquals("$arrangement", width, slot.x + slot.width, 0.01f)
-            if (top) assertEquals("$arrangement", 0f, slot.y, 0.01f)
-            else assertEquals("$arrangement", height, slot.y + slot.height, 0.01f)
+            val own = hypot(slot.centerX - pivot.first, slot.centerY - pivot.second)
+            for (other in corners - pivot) {
+                val away = hypot(slot.centerX - other.first, slot.centerY - other.second)
+                assertTrue("$arrangement: first icon is not nearest its own corner", own < away)
+            }
         }
     }
 
-    /** Square cells in a non-square box — the fan shears rather than stays triangular if this is ever lost. */
+    /** Square cells in a non-square box — the fan shears rather than keeps its shape if this is ever lost. */
     @Test
     fun `fan cells stay square`() {
         for (slot in IconArrangement.FAN_TOP_LEFT.slots(6, width, height)) {
@@ -263,12 +269,33 @@ class IconArrangementsTest {
         }
     }
 
+    /**
+     * The fan's structure is **arcs at increasing radius**, so that is what is pinned rather than the coordinates.
+     *
+     * Deliberately not [assertNoOverlap]: that helper is for the arrangements that tile, and the fan clusters — its
+     * icons are square boxes on a polar lattice, so two on neighbouring arcs can be a full pitch apart and still
+     * share a corner's worth of area. `beehiveSlots` is tested the same way and for the same reason.
+     */
     @Test
-    fun `fan cascades along anti-diagonals without overlap`() {
-        val slots = IconArrangement.FAN_TOP_LEFT.slots(6, width, height)
-        // 6 icons → the smallest triangle holding them is g = 3, so cells are a third of the short side.
-        assertEquals(height / 3f, slots[0].width, 0.01f)
-        assertNoOverlap(slots)
+    fun `fan steps outward in arcs`() {
+        val slots = IconArrangement.FAN_TOP_LEFT.slots(9, width, height)
+        // Measured from the **pivot**, which stands half an icon in from the corner. From the corner itself the
+        // distance would also vary with the angle, and an icon at 45° would read as further out than one beside it
+        // on the same arc.
+        val pivot = slots[0].width / 2f
+        val radii = slots.map { hypot(it.centerX - pivot, it.centerY - pivot) }
+        for (i in 1 until radii.size) {
+            assertTrue("radius fell at $i: $radii", radii[i] >= radii[i - 1] - 0.01f)
+        }
+        // Nine icons cannot fit on one arc, so the shape must actually be nested rather than a single sweep.
+        assertTrue("expected more than one arc, got $radii", radii.distinctBy { (it * 100).toInt() }.size > 1)
+    }
+
+    /** Every icon one size, as the beehive does — the fan scales its whole cloud rather than each arc. */
+    @Test
+    fun `fan icons are all one size`() {
+        val slots = IconArrangement.FAN_TOP_LEFT.slots(9, width, height)
+        for (slot in slots) assertEquals(slots[0].width, slot.width, 0.01f)
     }
 
     // ── Beehive ──────────────────────────────────────────────────────────────────────────────────────────

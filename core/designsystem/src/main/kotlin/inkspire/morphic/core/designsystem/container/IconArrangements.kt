@@ -171,11 +171,22 @@ private fun circleSlots(count: Int, width: Float, height: Float): List<Arrangeme
 }
 
 /**
- * A corner-anchored diagonal cascade: one icon sits in the chosen corner and the rest fan inward along successive
- * anti-diagonals, making a triangular spread.
+ * A corner-anchored fan: icons on **concentric quarter-arcs** sweeping out of the chosen corner, each arc holding
+ * as many as its length affords.
  *
- * `g` is the smallest triangle that holds them all — the least `g` with `g(g+1)/2 ≥ count` — and the cell is a
- * square of `min(width, height) / g`, so the fan stays square in a non-square box rather than shearing.
+ * **The arcs are what the name promises, and the spacing is what makes them read as arcs.** Ring `k` sits at radius
+ * `k − 0.5` and takes as many icons as fit along its quarter-circumference at the same pitch that separates one
+ * ring from the next, so the density is uniform in polar terms. Spacing the rings and the icons independently is
+ * what turns a fan back into a grid that happens to be bent — the tangential step has to track the radial one.
+ *
+ * The last arc is usually partial and is **centered on its sweep**, for the reason [gridSlots] centers its last
+ * row: a short arc hung off one end reads as unfinished rather than as the shape ending.
+ *
+ * **The pivot is half an icon in from the corner, and the scale accounts for that on both ends.** Icons at the two
+ * extremes of a sweep have their centers on the box's own edges, so anchoring the pivot *on* the corner puts half
+ * of every arc's first and last icon outside the container. Solving `short = icon + maxR × scale` places the
+ * innermost and outermost icons flush instead. This is why the whole-cloud scale-to-fit [beehiveSlots] uses does
+ * not transfer unchanged: that cloud is centered and symmetric, and this one is anchored in a corner.
  *
  * [fromLeft] and [fromTop] are the chosen corner, decomposed. They are two booleans rather than a `FanCorner` enum
  * because [IconArrangement]'s own four `FAN_*` values already *are* that enum — a second one parallel
@@ -188,28 +199,50 @@ private fun fanSlots(
     fromLeft: Boolean,
     fromTop: Boolean,
 ): List<ArrangementSlot> {
-    var g = 1
-    while (g * (g + 1) / 2 < count) g++
-    val cell = minOf(width, height) / g
-
-    val cells = ArrayList<Pair<Int, Int>>(count)
-    var diagonal = 0
-    while (cells.size < count) {
-        var r = 0
-        while (r <= diagonal && cells.size < count) {
-            val c = diagonal - r
-            if (r < g && c < g) cells.add(r to c)
-            r++
-        }
-        diagonal++
+    val quarter = PI.toFloat() / 2f
+    // Radius and capacity of each arc, outward until they hold them all. Unit radial pitch, so a capacity is just
+    // how many unit steps fit along the arc, and the whole cloud is scaled to the box at the end.
+    val arcs = ArrayList<Pair<Float, Int>>()
+    var seated = 0
+    var k = 1
+    while (seated < count) {
+        val r = k - 0.5f
+        val capacity = max(1, (quarter * r).toInt() + 1)
+        arcs.add(r to capacity)
+        seated += capacity
+        k++
     }
 
-    return cells.map { (r, c) ->
+    val polar = ArrayList<Pair<Float, Float>>(count)
+    var remaining = count
+    for ((r, capacity) in arcs) {
+        val here = minOf(capacity, remaining)
+        if (capacity == 1) {
+            polar.add(r to quarter / 2f)
+        } else {
+            // The step a *full* arc would use, so a partial last arc keeps the spacing of the ones inside it
+            // rather than spreading to fill a sweep it cannot.
+            val step = quarter / (capacity - 1)
+            val start = quarter / 2f - (here - 1) * step / 2f
+            repeat(here) { i -> polar.add(r to (start + i * step)) }
+        }
+        remaining -= here
+        if (remaining == 0) break
+    }
+
+    val maxR = polar.maxOf { it.first }
+    val iconUnit = 0.8f
+    val short = minOf(width, height)
+    val scale = short / (maxR + iconUnit)
+    val icon = iconUnit * scale
+    return polar.map { (r, angle) ->
+        val x = icon / 2f + r * scale * cos(angle)
+        val y = icon / 2f + r * scale * sin(angle)
         ArrangementSlot(
-            x = if (fromLeft) c * cell else width - (c + 1) * cell,
-            y = if (fromTop) r * cell else height - (r + 1) * cell,
-            width = cell,
-            height = cell,
+            x = (if (fromLeft) x else width - x) - icon / 2f,
+            y = (if (fromTop) y else height - y) - icon / 2f,
+            width = icon,
+            height = icon,
         )
     }
 }
