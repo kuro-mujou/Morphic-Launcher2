@@ -103,7 +103,9 @@ sealed interface BackdropEffect {
      * from an untinted [Blur]. That is also iOS's own recipe for its materials, and it works on every API where the rim does
      * not. See `Modifier.wallpaperBackdrop`'s `refracts`.
      *
-     * The rim remains what a *panel* gets — a popup menu, the widget picker — on API 33+.
+     * **The rim is what a surface with edges of its own gets** — a container tile on the home grid, an icon's plate.
+     * Surfaces that borrow the *window's* edges give it up along with the tunable blur, whatever their size: the
+     * full-screen film, a bottom sheet on the screen's bottom edge, the context menu. See `Modifier.filmBackdrop`.
      *
      * @property blur Lens-source blur amount, `0..1`.
      * @property vibrancy Saturation boost on the refracted content, `0..1`.
@@ -155,9 +157,13 @@ sealed interface BackdropEffect {
      *
      * The frost behind an arriving surface is deliberately **not tunable**. It is what a screenful of content is read
      * against, and a strength or tint slider that can make that content unreadable is not a preference worth
-     * offering — so choosing the variant chooses the whole look, and the per-variant sliders govern the smaller
-     * frosted panels instead. Choosing between a blur and a lens, and which wash the blur carries, is the entire
-     * control a user has over it, which is the design this exists to express.
+     * offering — so choosing the variant chooses the whole look. Choosing between a blur and a lens, and which wash
+     * the blur carries, is the entire control a user has over it, which is the design this exists to express.
+     *
+     * **And it is what the context menu and the bottom sheets wear too**, though all three look bounded and could
+     * have been tuned: one launcher should have one frost, and a menu at the user's strength beside a sheet at the
+     * fixed one is two materials a second apart. What the per-variant sliders govern is a surface whose edges really
+     * are its own — a container tile, an icon's plate. See `BackdropRole.PANEL`.
      *
      * **Every variant blurs by the same amount**, and that is load-bearing rather than tidy: the blurred bitmap is
      * produced upstream from this strength, so one shared value means switching variants never re-blurs anything. It

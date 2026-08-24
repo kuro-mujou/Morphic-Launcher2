@@ -122,19 +122,22 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     (Apache-2.0) and the attribution must stay in the file.** It samples the *same* crop rectangle the blur path does,
     so switching effects does not shift the picture; the compiled shader and its bound bitmap live on the node, since
     a drag re-sends uniforms every frame and only the uniforms change.
-    - **The rim is a *panel's*, and a full-screen surface is not one** — `wallpaperBackdrop(refracts = false)`. A lens
-      needs an edge to bend light at; across a screen that band falls under the system bars, so it costs a shader and
-      shows nearly nothing. What a full-screen sheet renders instead is the blur plus `BackdropEffect.saturation` — a
-      `ColorMatrix` boost, no shader, every API — which is what makes frosted glass read as glass rather than as fog
-      and is iOS's own recipe for its materials. Side effect worth having: **below API 33 glass now looks like
-      something**, where it degraded to a plain untinted blur and was indistinguishable from `Plain`. That degradation
-      is still L1's own fallback for the rim itself.
+    - **The rim is a *panel's*, and a surface that borrows the window's edges is not one** —
+      `wallpaperBackdrop(refracts = false)`. A lens needs an edge to bend light at; across a screen that band falls
+      under the system bars, so it costs a shader and shows nearly nothing. What such a surface renders instead is the
+      blur plus `BackdropEffect.saturation` — a `ColorMatrix` boost, no shader, every API — which is what makes frosted
+      glass read as glass rather than as fog and is iOS's own recipe for its materials. Side effect worth having:
+      **below API 33 glass now looks like something**, where it degraded to a plain untinted blur and was
+      indistinguishable from `Plain`. That degradation is still L1's own fallback for the rim itself.
+    - **What still draws it is the container tile** (`containerPanel`) — a small thing floating on the wallpaper with
+      four edges genuinely its own, which is what a lens is for. The context menu and the bottom sheets each looked
+      like candidates and are not; `filmBackdrop` below owns the test.
   - **The backdrop is provided at the shell**, the same zone boundary the theme is applied at and for the same reason.
     L1 provided it inside its `HomeScreen`, which is why its settings feature needed a second provider of its own.
   - **`LocalLockedBackdrop` is not carried.** L1's second backdrop exists so a popup menu and the widget picker can
     stay frosted when the global effect is `NONE`; L2 has neither surface, so there is one local rather than two — and
-    the need it answered is now gone as well, since `Plain` still blurs and no effect leaves a surface unfrosted. Those
-    two panels are still what the effect sliders and the glass rim are waiting for.
+    the need it answered is now gone as well, since `Plain` still blurs and no effect leaves a surface unfrosted. What
+    the effect sliders reach is `BackdropRole.PANEL`: the **container tile** and the **icon plate**.
   - **The scrim is a required fallback, not a decoration.** With no backdrop — which is the state until the user gives
     the launcher an image — every frosted surface draws its own flat color, and only the caller knows what that is.
     The folder passes `Color.Black` (its title and labels are white by construction); the shell's layer passes the
@@ -143,7 +146,8 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
 - **The full-screen frost is `SurfaceBackdropLayer`, and it is a sibling in the stack rather than a modifier.** APPS and
   the folder paint nothing of their own and are read against one shared sheet of blurred wallpaper sitting **above HOME
   and below whatever covers it**. A frosted *panel* still samples its own crop (`wallpaperBackdrop`) and should — that
-  is what makes it read as glass sliding over the picture — but a surface that **arrives** wants the opposite, and that
+  is what makes an icon's plate read as glass sliding over the picture — but a surface that **arrives** wants the
+  opposite, and that
   is the whole reason this is a separate node: the content slides while the frost only *fades*. A blur traveling with
   the content reads as a sheet of frosted plastic being carried on screen rather than as the screen frosting over.
   - **Two motions, two drivers.** `SurfacePagerState.progress` — the pan collapsed to "how far in is the other surface",
@@ -156,12 +160,27 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     make a screenful of text unreadable is not a preference worth offering. **One shared blur strength across all five
     is load-bearing**: the bitmap is blurred upstream from it, so switching variants is a redraw with a different wash
     over an identical picture, never a re-decode.
+  - **The context menu and the bottom sheets wear the film's own material, not a panel's** — `Modifier.filmBackdrop`,
+    which is where the three arguments that have to agree are written once: the variant at fixed parameters, the
+    picture blurred to that strength (`BackdropRole.FILM`), and no rim. `SurfaceBackdropLayer` is the same call
+    without a shape. The reason is that a launcher should have **one** frost: a menu on HOME at the user's blur,
+    beside a sheet a swipe away at the fixed one, reads as two materials seen a second apart.
+    - **Three surfaces render the user's own effect, and they are a closed list**: the **icon container**, the
+      **widget container** (both `containerPanel`) and the **icon plate** (`AppIcon`). Everything else frosted takes
+      the film. That is the rule as stated, and the test below is why those three and not others.
+    - **The test is whose edges these are, not how big the surface is.** A bottom sheet spans the full width and sits
+      on the screen's bottom edge — at `SheetHeightFraction` it covers most of the height too — so its rim would run
+      along the window's own boundary, under the navigation bar, which is the case `refracts` exists to exclude. The
+      menu is anchored to an item but holds a screenful of rows, and a blur slider free to reach zero would seat them
+      on a sharp photograph. A **container tile** is the other answer: small, floating, four edges of its own, so it
+      keeps the sliders and the rim.
+    - Both gave up the blur slider along with the rim, since the picture and the recipe have to name one strength.
   - **A panel over the film does not frost at all** — `LocalOverFilm`, provided `true` by `AppsScreen` and by
     `AppCollectionOverlay`. Frost does not stack: below the film everything is already blurred, so a panel that samples
     the wallpaper a second time is not glass over what the user is looking at but a hole cut through to a *sharper*
-    picture than its surroundings — at a panel blur of zero, the raw photograph. Two consumers today: the context menu
-    (flat `surfaceElevated` instead of `wallpaperBackdrop`, which is the color it already fell back to with nothing to
-    sample) and the **icon plate**, which is dropped outright rather than flattened — a plate is a silhouette *of* the
+    picture than its surroundings. Two consumers today: the context menu (flat `surfaceElevated` instead of
+    `filmBackdrop`, which is the color it already fell back to with nothing to sample) and the **icon plate**, which
+    is dropped outright rather than flattened — a plate is a silhouette *of* the
     wallpaper, and there is nothing on a film for it to be a piece of, while drawing its scrim would put a gray blob
     behind every icon. Dropping the plate also drops its `zoom`, which is a size *relative to the plate*; see
     docs/ICON_ARCHITECTURE.md.

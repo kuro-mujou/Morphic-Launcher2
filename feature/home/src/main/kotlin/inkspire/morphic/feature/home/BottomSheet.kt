@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
+import inkspire.morphic.core.designsystem.backdrop.filmBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -31,6 +31,18 @@ private const val SheetHeightFraction = 0.7f
  * Extracted from `WidgetPickerSheet` when the icon container's app picker became the second thing needing exactly
  * this chrome, on the extract-at-the-second-consumer rule. It stays in `feature:home` rather than moving to
  * `core:designsystem` because both consumers are here; it moves when a third surface elsewhere wants one.
+ *
+ * **It is frosted with the film's material, not a panel's** (`Modifier.filmBackdrop`) — the same recipe the
+ * full-screen frost and the context menu use, at the same fixed strength and with no refraction rim. A sheet
+ * *borrows the window's edges*: it spans the full width and sits on the bottom edge, and at [SheetHeightFraction] it
+ * covers most of the height too — so its rim would run along the screen's own boundary, under the navigation bar,
+ * which is exactly the case `wallpaperBackdrop`'s `refracts` was written to exclude. The blur follows for the second
+ * half of the same reason: a sheet holds a screenful of rows, and what the user's slider is free to choose for a
+ * *floating* panel is not free here, where at zero it would seat a list of app names on a sharp photograph.
+ *
+ * That is the line between the two materials in this launcher, and it is the one `refracts` already draws: a surface
+ * with **edges of its own** is a lens and follows the sliders — a container tile on the grid (`containerPanel`); a
+ * surface **borrowing the window's** is a piece of the film — this, the context menu, the frost behind APPS.
  *
  * **The modality is one claim, and it buys two behaviors.** `SurfaceGestureLock` is the launcher's answer to "does
  * something on screen own the finger?", so holding it means `SurfacePager` will not slide another surface in from
@@ -76,9 +88,10 @@ internal fun LauncherBottomSheet(
                 // scales and densities nobody develops at.
                 .then(if (heightFraction != null) Modifier.fillMaxHeight(heightFraction) else Modifier)
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .wallpaperBackdrop(
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                // **The film's material, not a panel's** — see the note above on why a sheet is not a lens.
+                .filmBackdrop(
                     scrimColor = colors.surfaceElevated,
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 )
                 // Swallows taps on the sheet itself, so they do not reach the scrim behind it and dismiss.
                 .pointerInput(Unit) { detectTapGestures { } }

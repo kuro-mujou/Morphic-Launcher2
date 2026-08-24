@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
-import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
+import inkspire.morphic.core.designsystem.backdrop.filmBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
@@ -73,10 +73,8 @@ private const val MenuMaxHeightFraction = 0.6f
  * Everything about *where* it goes is [menuPlacementFor] / [menuOffsetFor] — pure, unit-tested, and given the
  * usable area rather than the raw window so a notch cannot push the menu under itself.
  *
- * **It is the launcher's first frosted panel.** `wallpaperBackdrop` with `refracts = true`, so — unlike the
- * full-screen sheet behind an arriving surface — this one is a *lens*: it has edges of its own for liquid glass to
- * bend light at, and it honors the user's chosen effect and its strength. Those sliders have been dormant since
- * the effects section landed precisely because no panel existed to read them.
+ * **It is frosted with the film's own material**, not with a panel's — see [MenuSurface], which owns why a menu gave
+ * up the user's blur strength and the liquid-glass rim to look like the sheet it appears a second away from.
  *
  * @param anchor what the menu belongs to — an item's bounds, or the point an empty-space long-press landed on.
  *   [MenuAnchor] owns why those two are placed and revealed differently.
@@ -227,6 +225,14 @@ private sealed interface ResolvedAnchor {
  * collection is already sitting on a blurred sheet of the wallpaper, and sampling it a second time cuts a *sharper*
  * hole through that sheet rather than laying glass on it. The flat panel is the same color the frost falls back to
  * with no wallpaper to sample, so what a menu looks like on a fresh install is what it looks like there.
+ *
+ * **And the frost it does draw is the film's, not a panel's** ([filmBackdrop]) — the same material the APPS surface is
+ * read against, clipped to a rounded rect. A launcher with one frost that appears at two strengths reads as two
+ * materials: a menu on HOME sat at the user's blur while the sheet a swipe away sat at the fixed one, and the two are
+ * on screen a second apart. So the menu follows the film and gives up the two things a *panel* has — the user's blur
+ * strength and, on API 33+, the liquid-glass rim. The rim is the deliberate half: an edge that bends light is exactly
+ * what would make this a different glass from the sheet it has to match. A container tile on the grid keeps both, and
+ * `filmBackdrop` owns the test that separates the two.
  */
 @Composable
 private fun MenuSurface(
@@ -242,12 +248,14 @@ private fun MenuSurface(
             .heightIn(max = maxHeight)
             .clip(RoundedCornerShape(16.dp))
             // The scrim is what the panel falls back to with no wallpaper to sample, so it must be opaque enough
-            // to read a menu against on its own — the theme's elevated surface, which is exactly that color.
+            // to read a menu against on its own — the theme's elevated surface, which is exactly that color. Over the
+            // film it is not a fallback but the panel itself, and the two being one color is what makes a menu look
+            // the same on a device with no wallpaper as it does on a surface that already carries the frost.
             .then(
                 if (LocalOverFilm.current) {
                     Modifier.background(colors.surfaceElevated)
                 } else {
-                    Modifier.wallpaperBackdrop(shape = RoundedCornerShape(16.dp), scrimColor = colors.surfaceElevated)
+                    Modifier.filmBackdrop(scrimColor = colors.surfaceElevated, shape = RoundedCornerShape(16.dp))
                 },
             )
             .padding(vertical = 4.dp),

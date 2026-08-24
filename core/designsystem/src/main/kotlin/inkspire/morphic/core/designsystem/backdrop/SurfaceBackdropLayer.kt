@@ -19,15 +19,14 @@ import androidx.compose.ui.graphics.graphicsLayer
  * two nodes — [alpha] here, translation on the pane.
  *
  * **Every effect blurs; what they differ in is the wash** — and at this size **only** the wash, because the frost is
- * not tunable. The stored effect is read for its *variant* and its parameters are replaced by fixed ones
- * (`BackdropEffect.fullScreenFilm`): a strength or tint slider that can make a screenful of text unreadable is not a
- * preference worth offering, so choosing the variant chooses the whole look and the sliders govern smaller panels.
+ * not tunable. The stored effect is read for its *variant* and its parameters are replaced by fixed ones: a strength
+ * or tint slider that can make a screenful of text unreadable is not a preference worth offering, so choosing the
+ * variant chooses the whole look.
  *
- * **Which is why it samples [BackdropRole.FILM] and not the panels' picture.** Those two statements are one decision
- * made twice — the fixed effect names a blur strength, and the film image is the wallpaper blurred *at* that strength —
- * so they are written on adjacent lines and must move together. Reading the panels' image here would put the user's
- * blur slider back in charge of this layer by the back door, and at a slider of zero it would hand a screenful of text
- * a sharp photograph to sit on.
+ * **The recipe is [filmBackdrop]'s, not this composable's**, which is what stops it drifting from the two smaller
+ * surfaces that wear the same material — the context menu and the launcher's bottom sheets, both clipped to a rounded
+ * rect and identical to this otherwise. The fixed effect names a blur strength and the film image is the wallpaper
+ * blurred *at* that strength, so the two have to be chosen together; there they are, once.
  *
  * | Effect | This layer |
  * |---|---|
@@ -38,8 +37,9 @@ import androidx.compose.ui.graphics.graphicsLayer
  *
  * The glass row is the one worth knowing: a lens needs an edge to bend light at, and at this size the rim would fall
  * under the system bars. What survives is the saturation ([BackdropEffect.saturation]) — which is what makes a
- * frosted sheet read as glass rather than as fog, is iOS's own recipe for its materials, and works on every API. The
- * rim stays what a *panel* gets. Hence `refracts = false` below.
+ * frosted sheet read as glass rather than as fog, is iOS's own recipe for its materials, and works on every API where
+ * the rim does not. The rim stays what a surface with **edges of its own** gets — a container tile on the home grid;
+ * see [filmBackdrop] for the test that decides which of the two a surface is.
  *
  * Since every film blurs by the same amount, switching variants never re-blurs the wallpaper — it is a redraw with a
  * different wash over an identical picture.
@@ -61,14 +61,9 @@ fun SurfaceBackdropLayer(
         modifier
             .fillMaxSize()
             .graphicsLayer { this.alpha = alpha().coerceIn(0f, 1f) }
-            // The stored effect's *variant*, at fixed parameters — the frost is not the sliders' to move. Read from
-            // the local here rather than taken as a parameter, so no caller can hand this layer a tuned one.
-            // No shape: the layer *is* the screen, so there is nothing to clip and nothing to round.
-            .wallpaperBackdrop(
-                effect = LocalBackdropEffect.current.fullScreenFilm,
-                scrimColor = scrimColor,
-                refracts = false,
-                role = BackdropRole.FILM,
-            ),
+            // The stored effect's *variant* at fixed parameters, the picture blurred to match, and no rim — all
+            // three from [filmBackdrop], which is where they are written now that the context menu wears the same
+            // material. No shape: the layer *is* the screen, so there is nothing to clip and nothing to round.
+            .filmBackdrop(scrimColor = scrimColor),
     )
 }

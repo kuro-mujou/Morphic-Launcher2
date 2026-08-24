@@ -648,8 +648,9 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
   shared `SurfaceBackdropLayer`, which is what the "APPS stays opaque" note had been promising since the window learned
   to show the wallpaper. It reshaped the model on the way through (`None` → `Plain`; every effect blurs), fixed a
   full-screen refraction rim in the folder, and left the effect *sliders* dormant — see the design-system and effects
-  notes for all four. What it is still waiting on is a frosted **panel**, which is where the sliders and the rim both
-  come back.
+  notes for all four. They have consumers now, and not the ones expected: the context menu and the bottom sheets both
+  turned out to belong to the **film** (`Modifier.filmBackdrop`), since each borrows the window's edges, so what reads
+  the sliders and draws the rim is the **container tile** and the **icon plate**.
 
 **Widgets are built: the picker, the host, the cell.** `data:widgets` holds two types with deliberately different
 jobs — `WidgetCatalog` answers "what *could* be added?" from `AppWidgetManager` with no host at all (a live read,
@@ -1033,16 +1034,19 @@ same screen: a chooser, then the sliders belonging to whatever is chosen. It is 
   said there could be none, on two grounds that have since been answered: the pane punches through to the window for the
   wallpaper (`BlendMode.Src` over `PunchThroughPane`, the same trick every icon preview here uses, which needed
   `Theme.Wallpaper` to exist), and the card is drawn by `wallpaperBackdrop` itself — sampling by screen position, so its
-  crop is continuous with the sharp wallpaper punched through around it. Nothing is approximated; it is a panel at the
-  size a menu is, with two lines of text on it, because legibility over a photograph is what the effect is *for*. L1 had
-  no preview here at all. Four things:
+  crop is continuous with the sharp wallpaper punched through around it. Nothing is approximated; it is a panel with two
+  lines of text on it, because legibility over a photograph is what the effect is *for*. L1 had no preview here at all.
+  What it previews is the **material** rather than any one surface, which became the point once the menu took the film's
+  recipe: the film fixes its own strength and the icon plate follows the sliders, so the card is drawn at the plate's
+  parameters — the ones every control here still moves — and shows the same variant and wash the film shows. It draws
+  **no rim** for the same reason nothing else does. Four things:
   - **`LocalBackdrop` is provided at the *pane*, not at the settings zone's root**, which is the narrower half of the
     shell's own rule rather than an exception to it. The shell provides it at a zone boundary because every surface in
     that zone samples the wallpaper; here exactly one thing does, and it is a preview rather than a surface, so anything
     higher would invite a second pane to frost itself against a picture nobody asked for. L1's mistake was different
     again — it provided the *launcher's* backdrop inside `HomeScreen`, so its settings feature needed a duplicate.
   - **Every parameter previews per frame, blur included — and blur is the only one that costs anything.** The wash and
-    all six liquid-glass parameters are draw-time reads of the effect, so the pane keeps the dragged value in state and
+    the saturation boost are draw-time reads of the effect, so the pane keeps the dragged value in state and
     hands it to the card. Blur lives in the *bitmap*, so it needs a second picture: `WallpaperRepository.backdropPreview`
     decodes the wallpaper **once** at a quarter of the screen and re-blurs that per emission, where `backdrop` is a
     subscription per strength (a fresh decode each time, which at 10–20ms a decode cannot keep up with a finger). Three
@@ -1428,10 +1432,14 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
     case sibling hit-testing genuinely does not cover is a press already **down** when an overlay appears, since a
     pointer keeps the hit path it was assigned at DOWN — but that is the gesture that opened the menu, which is
     supposed to keep running.
-- **Colors come from the theme and the panel is frosted.** L1 hardcoded `Color.White` throughout, which would be the
-  one place in the launcher ignoring the wallpaper-brightness signal the whole theme is built on. `wallpaperBackdrop`
-  with `refracts = true` makes this **the first frosted panel**, so the effects section's sliders and liquid glass's
-  rim finally have a consumer.
+- **Colors come from the theme and the panel is frosted with the film's own material.** L1 hardcoded `Color.White`
+  throughout, which would be the one place in the launcher ignoring the wallpaper-brightness signal the whole theme is
+  built on. The frost is `Modifier.filmBackdrop` — the same recipe `SurfaceBackdropLayer` uses, clipped to a rounded
+  rect — so a menu on HOME is a piece of the sheet the APPS surface is read against rather than a second glass at the
+  user's own strength. It was briefly the launcher's first *panel*, reading the stored strength and drawing liquid
+  glass's rim; both were given up for that, the rim deliberately, since a menu holds a screenful of rows and is
+  anchored to the window rather than floating on it. Over the film it draws no frost at all (`LocalOverFilm`) and
+  renders flat.
 - **One width for every menu** (248dp), where L1 sized each to its widest row: a row can then `fillMaxWidth`, so the
   whole row is the tap target rather than the text on it, and a menu stops changing width between icons.
 - **Unbuilt verbs are absent, not disabled.** L1 showed "Rename" and "Edit icon" grayed out; the settings sections'
@@ -1623,10 +1631,11 @@ a category card — rename and dissolve have no ops on the APPS order store, and
 `feature:settings` concern, so those long-presses show no menu at all rather than a menu of disabled rows. The
 **rename** is the one verb the menu is still owed on home, the icon studio's "Edit icon" having landed. A drag ejected from APPS draws
 **no floating proxy** for the frames the surface takes to close: the drawer stops painting one the moment it is no longer presented
-and home starts once it is, and neither owns the gap in between (the drop itself is unaffected). The effects section's five sliders are **live again**: the context
-menu is the launcher's first frosted *panel*, so it reads the stored strength and tint and it is the first surface
-with edges of its own for liquid glass's rim to bend light at. The full-screen frost stays fixed per variant by
-design, so those two now genuinely differ.
+and home starts once it is, and neither owns the gap in between (the drop itself is unaffected). The effects section governs **the film and the two real panels**: the context
+menu and the bottom sheets took the film's material, so the variant and the wash decide every menu, sheet, the APPS
+surface and an open collection alike, while the blur, wash-amount and lens sliders reach the **container tile** and
+the **icon plate**. Liquid glass's rim is the tile's alone — the one surface floating on the wallpaper with four
+edges genuinely its own.
 No item is reachable by an accessibility service — `launcherItemGestures` is raw
 `pointerInput` with no `semantics { onClick { … } }` (P7 gestures). **detekt runs on `check`** over a per-module
 baseline of the 316 findings that existed when it was added — new code is checked, the old backlog is a list rather

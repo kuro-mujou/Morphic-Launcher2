@@ -76,7 +76,15 @@ class BackdropImage(
  */
 enum class BackdropRole {
 
-    /** A bounded frosted surface — a menu, a sheet, a container. Blurred at the user's own strength. */
+    /**
+     * A bounded frosted surface with **edges of its own**, blurred at the user's own strength: a container tile on
+     * the home grid, an icon's plate.
+     *
+     * **"Bounded" means the surface's edges are not the window's**, which is the same line `wallpaperBackdrop`'s
+     * `refracts` draws and the reason these two things are one question rather than two. A context menu and a bottom
+     * sheet look bounded and are not — one is anchored to an item and the other to the screen's bottom edge, both
+     * hold a screenful of rows, and both take [FILM] instead. See [filmBackdrop].
+     */
     PANEL,
 
     /** The full-screen sheet a surface arrives over. Blurred at the fixed strength `fullScreenFilm` names. */
@@ -249,6 +257,45 @@ fun Modifier.wallpaperBackdrop(
         role = role,
     )
 }
+
+/**
+ * Draws the **full-screen film's own material** behind this node, clipped to [shape] — the launcher's one frost recipe.
+ *
+ * Three arguments to [wallpaperBackdrop] that have to agree, written in one place because getting them apart is
+ * invisible: the stored effect's *variant* at fixed parameters ([BackdropEffect.fullScreenFilm]), the picture blurred
+ * at exactly that strength ([BackdropRole.FILM]), and no rim. Sampling the film's picture while naming the panels'
+ * effect draws a wash tuned for a lighter blur over a heavier one; naming the film's effect while sampling the panels'
+ * picture is worse, since at a slider of zero that picture is the sharp wallpaper.
+ *
+ * **Three consumers, which is why this exists rather than being spelled out three times.** [SurfaceBackdropLayer] is
+ * the screen-sized sheet a surface arrives over; the context menu and the launcher's bottom sheets are the same
+ * material clipped to a rounded rect. They differ in [shape] and in nothing else — which is the point: a menu on HOME
+ * is a piece of the same frost the APPS surface is read against, at the same strength, so the two cannot look like
+ * different materials.
+ *
+ * **Which surfaces belong here is one test: whose edges are these?** A surface that borrows the *window's* — the
+ * film, a full-width sheet on the bottom edge, a menu holding a screenful of rows — takes this. A surface with edges
+ * genuinely its own, floating on the wallpaper, is a [BackdropRole.PANEL] and keeps the user's blur and the rim: a
+ * container tile on the home grid is the case, and `containerPanel` is where it is drawn.
+ *
+ * **No rim, at any of these sizes.** A lens bends light in a band at its edge, and these edges are the screen's — the
+ * band would fall under the system bars. What survives is the blur plus `BackdropEffect.saturation`, which is what
+ * makes frost read as glass at any API.
+ *
+ * @param scrimColor what to paint when there is no wallpaper to sample — required for [wallpaperBackdrop]'s reason:
+ *   only the caller knows what its own surface has to stay legible against.
+ */
+@Composable
+fun Modifier.filmBackdrop(
+    scrimColor: Color,
+    shape: Shape = RectangleShape,
+): Modifier = wallpaperBackdrop(
+    shape = shape,
+    effect = LocalBackdropEffect.current.fullScreenFilm,
+    scrimColor = scrimColor,
+    refracts = false,
+    role = BackdropRole.FILM,
+)
 
 /**
  * The wallpaper's color, softened against the current surface tone — the base every wash is built from.
