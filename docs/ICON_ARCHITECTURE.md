@@ -1031,7 +1031,7 @@ the baked stack"). Seven things:
   glow is meant to escape its box, so above 1 it spills, visibly, while it is being set.
 - **The cost is paid only when a plate is on**: one backdrop node and one offscreen mask layer per icon, per frame.
   Real on a dense grid, and nothing at all for an appearance with no plate.
-- **It is absent on a surface that is already frosted** — `LocalOverFilm`, which is APPS and any open collection. A
+- **It is absent on a surface that is already frosted** — `LocalOverFrost`, which is APPS and any open collection. A
   plate is a piece *of* the wallpaper, and on a sheet of blurred wallpaper there is nothing for it to be a piece of:
   it renders as a sharper patch floating on the frost. Dropped outright rather than flattened to its scrim, which
   would be a gray blob behind every icon in the drawer — worse than a plate the user turned on not showing on the one

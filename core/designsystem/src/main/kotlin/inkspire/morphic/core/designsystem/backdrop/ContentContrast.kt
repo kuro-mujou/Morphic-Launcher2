@@ -108,7 +108,7 @@ fun resolveFilm(effect: BackdropEffect, wallpaperLuminance: Float?, fallback: Bo
  * against the film rather than against the wallpaper.
  *
  * **One call for both, because they are one fact.** A surface that arrives over the film has to say so twice
- * otherwise — once so a menu or a plate inside it renders flat ([LocalOverFilm]), once so its text contrasts what it
+ * otherwise — once so a menu or a plate inside it renders flat ([LocalOverFrost]), once so its text contrasts what it
  * is actually sitting on — and the second is the half nobody remembers, because forgetting it is invisible until
  * someone picks a wash that crosses the threshold. The set of surfaces needing each is identical, so there is one
  * declaration and no way to get half of it.
@@ -119,7 +119,7 @@ fun resolveFilm(effect: BackdropEffect, wallpaperLuminance: Float?, fallback: Bo
 @Composable
 fun OnFilm(content: @Composable () -> Unit) {
     LauncherTheme(darkTheme = filmIsDark()) {
-        CompositionLocalProvider(LocalOverFilm provides true, content = content)
+        CompositionLocalProvider(LocalOverFrost provides true, content = content)
     }
 }
 
@@ -131,9 +131,11 @@ fun OnFilm(content: @Composable () -> Unit) {
  * theme says dark text and the tile underneath wants light. Unlike the film there is nothing global to resolve —
  * every panel is on HOME, under one theme, so the reading is local and cheap.
  *
- * **No [LocalOverFilm] here**, unlike [OnFilm]: a panel is small and bounded, and what is drawn *in* one is a handful
- * of icons rather than a screenful of chrome. (An icon plate inside a container is a panel on a panel and does stack
- * its blur — a real fault, but a rendering one rather than a contrast one, and not this rule's to fix.)
+ * **It sets [LocalOverFrost] as well**, exactly as [OnFilm] does, because a panel is already-blurred wallpaper for
+ * the same reason a film is. An icon plate inside a container was the case that proved it: a silhouette of the
+ * wallpaper, sampled a second time, floating on a tile that had already blurred it. This KDoc used to say the
+ * opposite — that a panel was too small for the rule to matter — which was wrong, and wrong in the way a stacking
+ * blur always is: visible only as a patch that looks slightly *sharper* than what surrounds it.
  *
  * Falls back to the enclosing theme when there is no wallpaper to sample, for [resolveFilm]'s reason: the panel is
  * then its own flat scrim, which is a theme color and contrasts by construction.
@@ -147,5 +149,7 @@ fun OnPanel(content: @Composable () -> Unit) {
     } else {
         isDarkBackground(washedLuminance(backdrop.luminance, backdropTint()))
     }
-    LauncherTheme(darkTheme = dark, content = content)
+    LauncherTheme(darkTheme = dark) {
+        CompositionLocalProvider(LocalOverFrost provides true, content = content)
+    }
 }

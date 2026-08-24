@@ -59,14 +59,14 @@ fun SurfaceBackdropLayer(
     modifier: Modifier = Modifier,
 ) {
     // **This layer *is* a film, so it is never over one — even when it composes inside another's subtree.** Which it
-    // routinely does: a collection opened on the APPS surface builds its own layer inside the `LocalOverFilm` that
+    // routinely does: a collection opened on the APPS surface builds its own layer inside the `LocalOverFrost` that
     // `AppsScreen` provides, and a collection on HOME wraps its own content in the same local. Without this, every one
     // of those would find the picture withheld (see [wallpaperBackdrop]) and paint a flat scrim where the frost goes.
     //
     // It is also the one place two films stacking is *wanted*: a folder over the drawer is frosted twice and its wash
     // compounds, which is a depth cue rather than the double-blur the local exists to stop. The rule the local carries
     // is about a **panel** over a film, and this is not a panel.
-    CompositionLocalProvider(LocalOverFilm provides false) {
+    CompositionLocalProvider(LocalOverFrost provides false) {
         Box(
             modifier
                 .fillMaxSize()

@@ -141,7 +141,7 @@ fun AppPicker(
  * **The whole cell is the target**, not the icon — a 48dp icon inside a 76dp cell leaves a ring of dead space that a
  * thumb lands in constantly, and in multi-select that miss costs a tick rather than a launch.
  *
- * **No plate behind the icon, and nothing here arranges that.** `AppIcon` drops it wherever `LocalOverFilm` is set,
+ * **No plate behind the icon, and nothing here arranges that.** `AppIcon` drops it wherever `LocalOverFrost` is set,
  * which is every surface this picker opens on — a bottom sheet, or the icon studio's own frosted screen. L1 had to
  * say so explicitly (`LocalSkinBackdropAllowed provides false`) because it had no such rule; here it falls out.
  *

@@ -1438,7 +1438,7 @@ under the finger; move on and it becomes a drag, exactly as `ItemGestureMachine`
   rect — so a menu on HOME is a piece of the sheet the APPS surface is read against rather than a second glass at the
   user's own strength. It was briefly the launcher's first *panel*, reading the stored strength and drawing liquid
   glass's rim; both were given up for that, the rim deliberately, since a menu holds a screenful of rows and is
-  anchored to the window rather than floating on it. Over the film it draws no frost at all (`LocalOverFilm`) and
+  anchored to the window rather than floating on it. Over the film it draws no frost at all (`LocalOverFrost`) and
   renders flat.
 - **One width for every menu** (248dp), where L1 sized each to its widest row: a row can then `fillMaxWidth`, so the
   whole row is the tap target rather than the text on it, and a menu stops changing width between icons.

@@ -170,7 +170,7 @@ fun AppsScreen(
                             ?.let { listOf(MenuAction("Apps settings", onClick = it)) }
                             .orEmpty(),
                         // The menu is composed at the shell, so it cannot read the local above for itself.
-                        overFilm = true,
+                        overFrost = true,
                     )
                 },
         ) {

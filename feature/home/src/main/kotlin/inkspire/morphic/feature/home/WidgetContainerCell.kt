@@ -155,16 +155,21 @@ internal fun WidgetContainerCell(
 
         // A single page is not paged, so it gets no dots — the same rule the folder's pager follows.
         if (widgets.size > 1) {
-            PageDots(
-                count = widgets.size,
-                current = pagerState.currentPage,
-                axis = axis,
-                modifier = Modifier.align(
-                    // On the trailing edge of whichever axis is *not* being swiped, so the dots never sit under the
-                    // finger that is changing them.
-                    if (axis == WidgetContainerAxis.VERTICAL) Alignment.CenterEnd else Alignment.BottomCenter,
-                ),
-            )
+            // On the trailing edge of whichever axis is *not* being swiped, so the dots never sit under the finger
+            // that is changing them.
+            val edge = if (axis == WidgetContainerAxis.VERTICAL) Alignment.CenterEnd else Alignment.BottomCenter
+            // **Themed against the panel, like the "+" beside them**, since they are drawn on the tile rather than
+            // on home. The scope is captured because [OnPanel]'s content is not a `BoxScope` and `align` needs one.
+            // The widgets themselves need nothing: an embedded `View` draws its own colors.
+            val tile = this
+            OnPanel {
+                PageDots(
+                    count = widgets.size,
+                    current = pagerState.currentPage,
+                    axis = axis,
+                    modifier = with(tile) { Modifier.align(edge) },
+                )
+            }
         }
     }
 }

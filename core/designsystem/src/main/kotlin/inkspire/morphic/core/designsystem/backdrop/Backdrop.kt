@@ -199,23 +199,27 @@ val LocalBackdropEffect = staticCompositionLocalOf<BackdropEffect> {
 }
 
 /**
- * Whether the content composed here is already drawn **over the full-screen film** — [SurfaceBackdropLayer].
+ * Whether **something already frosted is directly below** the content composed here.
  *
- * **Frost does not stack.** Everything below the film is already blurred, so a panel that samples the wallpaper again
- * is not glass over what the user is looking at: it is a hole cut through to a *sharper* picture than its
- * surroundings, and at a panel blur of zero that hole is the raw photograph. The same is true of an icon plate, which
- * is a silhouette of that sharper picture floating on a blurred sheet. So a surface that arrives over the film says
- * so once, here, and everything inside it renders flat instead.
+ * **Frost does not stack**, and that is the whole rule. Below an already-blurred thing everything is already blurred,
+ * so sampling the wallpaper again is not glass over what the user is looking at: it is a hole cut through to a
+ * *sharper* picture than its surroundings, and at a panel blur of zero that hole is the raw photograph. The same is
+ * true of an icon plate, which is a silhouette of that sharper picture floating on a blurred sheet.
  *
- * Provided `true` by `AppsScreen` and by `AppCollectionOverlay` — the two things that sit on a film — and by
- * [inkspire.morphic.core.designsystem.menu.MenuOverlay] for a menu whose request was raised on one of them. The menu
- * is the reason this is not read from the tree alone: it is composed at the shell, as a sibling *above* every
- * surface, so its own position says nothing about what it is anchored to.
+ * **Two kinds of thing set it, and the name is deliberately neither of them.** The full-screen film does
+ * ([OnFilm] — `AppsScreen`, `AppCollectionOverlay`, the bottom sheets), and so does a frosted *panel*
+ * ([OnPanel] — a container tile, whose icons would otherwise plate themselves against the tile they sit on). It was
+ * called `LocalOverFilm` while the film was the only one, which is exactly how the container's plates went on
+ * stacking blur unnoticed: the rule was general and the name was not.
  *
- * False everywhere else, which is HOME and every settings preview: content sitting directly on the wallpaper, where
- * frosting a panel is exactly the effect that was asked for.
+ * The menu sets it a third way, through `MenuRequest.overFrost`, and is the reason this cannot be read from the tree
+ * alone: it is composed at the shell, as a sibling *above* every surface, so its own position says nothing about what
+ * it is anchored to.
+ *
+ * False everywhere else, which is HOME's own grid and every settings preview: content sitting directly on the
+ * wallpaper, where frosting is exactly the effect that was asked for.
  */
-val LocalOverFilm = staticCompositionLocalOf { false }
+val LocalOverFrost = staticCompositionLocalOf { false }
 
 /**
  * Draws the blurred wallpaper behind this node's content, clipped to [shape] — the frosted-surface modifier.
@@ -227,13 +231,13 @@ val LocalOverFilm = staticCompositionLocalOf { false }
  * **Fills flat with [scrimColor] instead whenever sampling would be wrong**, which is two cases reaching one paint.
  * *Nothing to sample*: no backdrop provided, the state a device is in until the launcher is given a wallpaper — which
  * is why the parameter is not optional, since only the caller knows what color its surface has to stay readable
- * against. And *already blurred underneath*: [LocalOverFilm] says a full-screen frost sits directly below this node,
+ * against. And *already blurred underneath*: [LocalOverFrost] says a full-screen frost sits directly below this node,
  * and a second sample over one is not glass on what the user is looking at but a **sharper hole** through it — at a
  * panel blur of zero, the raw photograph. So a frosted thing appearing over a frosted full-screen thing goes solid,
  * and it does so here rather than at each call site, because the call site that forgets is invisible.
  *
  * A caller that wants the surface *gone* over the film rather than solid — the icon plate, which is a silhouette with
- * nothing on a film to be a silhouette of — checks [LocalOverFilm] itself and does not draw at all. That is the one
+ * nothing on a film to be a silhouette of — checks [LocalOverFrost] itself and does not draw at all. That is the one
  * escape, and it is a different answer to the same question rather than a bypass of this one.
  *
  * @param effect overrides the global [LocalBackdropEffect] for this one surface. Null follows the global choice, which
@@ -270,7 +274,7 @@ fun Modifier.wallpaperBackdrop(
         // below as a device with no wallpaper — so it is expressed as the picture being withheld rather than as a
         // flag the node has to weigh. One place, above every call site, because the call site that forgets is the
         // invisible one.
-        backdrop = LocalBackdrop.current?.takeIf { !LocalOverFilm.current },
+        backdrop = LocalBackdrop.current?.takeIf { !LocalOverFrost.current },
         view = LocalView.current,
         scrimColor = scrimColor,
         // Unspecified means "work it out from the theme here", which is right for a panel: a panel is drawn on
@@ -311,7 +315,7 @@ fun Modifier.wallpaperBackdrop(
  * makes frost read as glass at any API.
  *
  * **A film over a film is solid**, which costs this nothing to guarantee: [wallpaperBackdrop] fills flat wherever
- * [LocalOverFilm] is set, so a sheet or a menu raised over the APPS surface or an open collection renders as
+ * [LocalOverFrost] is set, so a sheet or a menu raised over the APPS surface or an open collection renders as
  * [scrimColor] rather than blurring an already-blurred picture.
  *
  * @param scrimColor what to paint when there is no wallpaper to sample — required for [wallpaperBackdrop]'s reason:

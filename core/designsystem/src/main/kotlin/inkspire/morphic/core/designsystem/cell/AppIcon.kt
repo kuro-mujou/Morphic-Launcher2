@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFrost
 import inkspire.morphic.core.designsystem.backdrop.wallpaperBackdrop
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.icon.compose.LauncherIcon
@@ -57,7 +57,7 @@ fun AppIcon(
     // on a surface that is already a blurred sheet of that wallpaper there is nothing for it to be a piece *of* — it
     // would read as a sharper patch floating on the frost. Drawing the scrim instead would be a gray blob behind
     // every icon, which is worse than the plate the user turned on not appearing on this one surface.
-    val plated = appearance.plate.enabled && !LocalOverFilm.current
+    val plated = appearance.plate.enabled && !LocalOverFrost.current
 
     // **And the zoom goes with the plate it was set against.** [IconAppearance.zoom] is the artwork's size *relative
     // to its plate* — the fraction that keeps an icon clear of the glass's edge — so replaying it where no plate is

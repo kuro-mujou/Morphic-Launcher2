@@ -15,7 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFrost
 import inkspire.morphic.core.designsystem.backdrop.filmIsDark
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -33,8 +33,8 @@ import inkspire.morphic.core.model.ComponentKey
  * @property shortcuts loads the app's own shortcuts, or null when there are none to offer (a folder, a surface). A
  *   **suspending lambda rather than a loaded list**, so the menu itself owns the load. Running that `LaunchedEffect`
  *   per surface is three places for the two stages to disagree.
- * @property overFilm whether what this menu was raised on is already sitting on the full-screen frost, which decides
- *   whether the panel frosts itself or renders flat — see [inkspire.morphic.core.designsystem.backdrop.LocalOverFilm].
+ * @property overFrost whether what this menu was raised on is already sitting on the full-screen frost, which decides
+ *   whether the panel frosts itself or renders flat — see [inkspire.morphic.core.designsystem.backdrop.LocalOverFrost].
  *   **Carried on the request rather than read from the tree**, because the menu is composed at the shell above every
  *   surface: where it is drawn says nothing about what it is anchored to. Reading it at *open* time is sound because
  *   a menu is modal — it locks the surface swipe for as long as it is up — so nothing can arrive or leave underneath
@@ -45,7 +45,7 @@ data class MenuRequest(
     val actions: List<MenuAction>,
     val title: String? = null,
     val shortcuts: (suspend () -> List<MenuAction>)? = null,
-    val overFilm: Boolean = false,
+    val overFrost: Boolean = false,
 )
 
 /**
@@ -95,12 +95,12 @@ class LauncherMenuHost(
         label: String,
         anchor: Rect,
         surfaceActions: List<MenuAction> = emptyList(),
-        overFilm: Boolean = false,
+        overFrost: Boolean = false,
     ) {
         request = MenuRequest(
             anchor = MenuAnchor.Item(anchor),
             title = label,
-            overFilm = overFilm,
+            overFrost = overFrost,
             actions = buildList {
                 add(MenuAction("App info") { onAppInfo(component) })
                 add(MenuAction("Edit icon") { onEditIcon(component) })
@@ -115,8 +115,8 @@ class LauncherMenuHost(
      * Opens the menu for anything that is **not** an app — a folder today. One stage, since there are no shortcuts
      * to offer, so the header shows no toggle.
      */
-    fun show(title: String, anchor: Rect, actions: List<MenuAction>, overFilm: Boolean = false) {
-        request = MenuRequest(anchor = MenuAnchor.Item(anchor), title = title, actions = actions, overFilm = overFilm)
+    fun show(title: String, anchor: Rect, actions: List<MenuAction>, overFrost: Boolean = false) {
+        request = MenuRequest(anchor = MenuAnchor.Item(anchor), title = title, actions = actions, overFrost = overFrost)
     }
 
     /**
@@ -129,11 +129,11 @@ class LauncherMenuHost(
      *
      * There is no title: see [MenuRequest.title].
      */
-    fun showSurface(position: Offset, surfaceActions: List<MenuAction> = emptyList(), overFilm: Boolean = false) {
+    fun showSurface(position: Offset, surfaceActions: List<MenuAction> = emptyList(), overFrost: Boolean = false) {
         request = MenuRequest(
             anchor = MenuAnchor.Press(position),
             actions = surfaceActions + MenuAction("Settings", onClick = onOpenSettings),
-            overFilm = overFilm,
+            overFrost = overFrost,
         )
     }
 
@@ -183,8 +183,8 @@ fun MenuOverlay(host: LauncherMenuHost) {
         // Over HOME the panel frosts, and with `filmBackdrop`: the material is the film's, so the text on it has to
         // be the film's too, even though the wallpaper directly around the menu may be the opposite brightness. That
         // is the case a single global wallpaper reading gets wrong every time — a black menu over a bright wallpaper.
-        if (request.overFilm) {
-            CompositionLocalProvider(LocalOverFilm provides true) {
+        if (request.overFrost) {
+            CompositionLocalProvider(LocalOverFrost provides true) {
                 RequestedMenu(request = request, onDismiss = host::dismiss)
             }
         } else {

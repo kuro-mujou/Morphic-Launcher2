@@ -219,7 +219,7 @@ private sealed interface ResolvedAnchor {
 /**
  * The menu's own panel: the frost, the shape, and the rows inside them.
  *
- * **Frosted over HOME, flat over the film** — [LocalOverFilm], and the switch is `wallpaperBackdrop`'s rather than
+ * **Frosted over HOME, flat over the film** — [LocalOverFrost], and the switch is `wallpaperBackdrop`'s rather than
  * this composable's: a menu raised on the APPS surface or in an open collection is already sitting on a blurred sheet
  * of the wallpaper, and sampling it a second time cuts a *sharper* hole through that sheet rather than laying glass
  * on it. The flat panel is the same color the frost falls back to with no wallpaper to sample, so what a menu looks

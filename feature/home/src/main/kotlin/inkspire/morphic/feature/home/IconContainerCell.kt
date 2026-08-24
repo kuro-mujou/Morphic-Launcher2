@@ -60,19 +60,6 @@ internal fun IconContainerCell(
             .then(itemGestures),
         contentAlignment = Alignment.Center,
     ) {
-        if (icons.isEmpty()) {
-            // Themed against the **panel**, which is neither the wallpaper nor the film: it carries the user's own
-            // blur and wash, so a dark tile can sit on a bright home screen and the glyph has to answer to the tile.
-            OnPanel {
-                ContainerAddGlyph(
-                    contentDescription = "Add app",
-                    modifier = Modifier.fillMaxSize(),
-                    onAdd = onAddIcon,
-                )
-            }
-            return@BoxWithConstraints
-        }
-
         val density = LocalDensity.current
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
@@ -82,39 +69,60 @@ internal fun IconContainerCell(
             arrangement.slots(icons.size, widthPx, heightPx)
         }
 
-        icons.forEachIndexed { index, icon ->
-            val slot = slots.getOrNull(index) ?: return@forEachIndexed
-            val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
-            Box(
-                modifier = Modifier
-                    // Absolute placement inside the container, so the arrangement owns the layout completely — there
-                    // is no row/column structure for a shape like the circle or the beehive to be forced into.
-                    .align(Alignment.TopStart)
-                    .offset { IntOffset(slot.x.roundToInt(), slot.y.roundToInt()) }
-                    .size(
-                        width = with(density) { slot.width.toDp() },
-                        height = with(density) { slot.height.toDp() },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                when (icon) {
-                    is ContainerIcon.App -> AppIcon(
-                        component = icon.info.componentKey,
-                        contentDescription = icon.info.label,
-                        sizePx = with(density) { slotSize.roundToPx() },
+        // **Everything inside the tile is on the tile**, which is two things and they were split for a while. It is
+        // themed against the panel — the panel carries the user's own blur and wash, so a dark tile can sit on a
+        // bright home screen — and nothing in it may frost itself again, which is what an icon's plate was doing:
+        // sampling the wallpaper a second time on a surface that had already blurred it. The empty state had this
+        // and the icons did not, so the glyph read correctly and every plated icon in a container did not.
+        //
+        // An inner `Box` because [OnPanel]'s content is not a `BoxScope` and the slots below place themselves
+        // absolutely. `containerPanel` stays on the *outer* modifier, above the provider, for the sheet's reason: a
+        // panel told it was over frost would fill flat, which is the tile itself disappearing.
+        OnPanel {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (icons.isEmpty()) {
+                    ContainerAddGlyph(
+                        contentDescription = "Add app",
+                        modifier = Modifier.fillMaxSize(),
+                        onAdd = onAddIcon,
+                    )
+                    return@Box
+                }
+                icons.forEachIndexed { index, icon ->
+                    val slot = slots.getOrNull(index) ?: return@forEachIndexed
+                    val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
+                    Box(
                         modifier = Modifier
-                            .size(slotSize)
-                            .clickable { onLaunch(icon.info.componentKey) },
-                    )
-                    // `backing = false` for the category cluster's reason: the container already has a fill, so a
-                    // plate inside it is a box within a box — and dropping the plate drops its inset with it, which
-                    // is only there to keep icons off the plate's own rounded edge.
-                    is ContainerIcon.Folder -> IconPreviewPlate(
-                        apps = icon.apps,
-                        size = slotSize,
-                        backing = false,
-                        modifier = Modifier.clickable { onOpenFolder(icon.folder.id) },
-                    )
+                            // Absolute placement inside the container, so the arrangement owns the layout completely — there
+                            // is no row/column structure for a shape like the circle or the beehive to be forced into.
+                            .align(Alignment.TopStart)
+                            .offset { IntOffset(slot.x.roundToInt(), slot.y.roundToInt()) }
+                            .size(
+                                width = with(density) { slot.width.toDp() },
+                                height = with(density) { slot.height.toDp() },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when (icon) {
+                            is ContainerIcon.App -> AppIcon(
+                                component = icon.info.componentKey,
+                                contentDescription = icon.info.label,
+                                sizePx = with(density) { slotSize.roundToPx() },
+                                modifier = Modifier
+                                    .size(slotSize)
+                                    .clickable { onLaunch(icon.info.componentKey) },
+                            )
+                            // `backing = false` for the category cluster's reason: the container already has a fill, so a
+                            // plate inside it is a box within a box — and dropping the plate drops its inset with it, which
+                            // is only there to keep icons off the plate's own rounded edge.
+                            is ContainerIcon.Folder -> IconPreviewPlate(
+                                apps = icon.apps,
+                                size = slotSize,
+                                backing = false,
+                                modifier = Modifier.clickable { onOpenFolder(icon.folder.id) },
+                            )
+                        }
+                    }
                 }
             }
         }

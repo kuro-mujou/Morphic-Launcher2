@@ -54,7 +54,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     is what made ticking several of them a scroll between each. Selection is a drawn disc-and-check at the icon's
     top-end — drawn because this module carries no material-icons dependency, as `MorphicResetButton` and
     `TopActionZone` also do. **No plate behind the picker's icons**, and nothing arranges it: every surface this
-    opens on sets `LocalOverFilm`, so `AppIcon` drops it. L1 needed an explicit `LocalSkinBackdropAllowed` for that.
+    opens on sets `LocalOverFrost`, so `AppIcon` drops it. L1 needed an explicit `LocalSkinBackdropAllowed` for that.
   - **Its multi-select consumers share one sheet** — `AppSelectionSheet` in `feature:home`, the title/`Add {n}`/picker
     composition extracted when the home list became its second consumer. L1's near-duplicate second picker is the
     outcome that shape exists to avoid.
@@ -210,7 +210,15 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
       on a sharp photograph. A **container tile** is the other answer: small, floating, four edges of its own, so it
       keeps the sliders and the rim.
     - Both gave up the blur slider along with the rim, since the picture and the recipe have to name one strength.
-  - **A panel over the film does not frost at all** — `LocalOverFilm`, provided `true` by `AppsScreen` and by
+  - **Frost does not stack, and the rule is about *anything* already frosted** — `LocalOverFrost`. Two kinds of thing
+    set it: the full-screen film (`OnFilm`) and a frosted **panel** (`OnPanel`, a container tile). It was called
+    `LocalOverFilm` while the film was the only one, and that name is exactly how a container's icon plates went on
+    stacking blur unnoticed — the rule was general and the name was not. An icon plate inside a container is a
+    silhouette of the wallpaper sampled a second time on a tile that had already blurred it.
+    - **Everything drawn on a panel is on the panel**, which is two things and they were split for a while: themed
+      against it *and* forbidden from frosting again. The container's empty "+" had the first and its icons had
+      neither, so the glyph read correctly while every plated icon in a container did not.
+  - **A panel over the film does not frost at all** — `LocalOverFrost`, provided `true` by `AppsScreen` and by
     `AppCollectionOverlay`. Frost does not stack: below the film everything is already blurred, so a panel that samples
     the wallpaper a second time is not glass over what the user is looking at but a hole cut through to a *sharper*
     picture than its surroundings. Two consumers today: the context menu (flat `surfaceElevated` instead of
@@ -219,7 +227,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     wallpaper, and there is nothing on a film for it to be a piece of, while drawing its scrim would put a gray blob
     behind every icon. Dropping the plate also drops its `zoom`, which is a size *relative to the plate*; see
     docs/ICON_ARCHITECTURE.md.
-    - **The rule lives in `wallpaperBackdrop`, not at the call sites.** With `LocalOverFilm` set it withholds the
+    - **The rule lives in `wallpaperBackdrop`, not at the call sites.** With `LocalOverFrost` set it withholds the
       picture from its draw node, which reaches the flat-fill path the node already had for a device with no
       wallpaper — so *any* frosted thing raised over the film goes solid without its author having to know the rule.
       Expressed as the picture being absent rather than as a flag the node weighs, because to the drawing those two
@@ -231,7 +239,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     - **The icon plate is the one escape**, and it is a different answer rather than a bypass: it checks the local
       itself and does not draw at all, because a silhouette of the wallpaper has nothing on a film to be a silhouette
       of, and its scrim would be a gray blob behind every icon.
-    - **The menu carries the answer on its request (`MenuRequest.overFilm`) rather than reading the local.** It is
+    - **The menu carries the answer on its request (`MenuRequest.overFrost`) rather than reading the local.** It is
       composed at the shell as a sibling *above* every surface, so where it is drawn says nothing about what it is
       anchored to. Capturing at *open* time is sound because the menu is modal — it holds the surface gesture lock for
       as long as it is up, so nothing can arrive or leave underneath it. `MenuOverlay` re-provides the local from the
@@ -275,7 +283,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   prevent.
 - **The menu is the case that proves the rule.** It is anchored to an item on HOME but frosted with `filmBackdrop`,
   so its text answers to the *film* and not to the wallpaper an inch away from it. `MenuOverlay` therefore themes it
-  without setting `LocalOverFilm` — which would tell its own panel to fill flat — and over the film it does the
+  without setting `LocalOverFrost` — which would tell its own panel to fill flat — and over the film it does the
   opposite: the panel is flat, its scrim is a theme color, and re-theming would re-decide a question the scrim
   answers.
 - **Grid labels take the theme's content color and a halo struck from the theme's background.** Both flip together:
@@ -283,7 +291,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   real work rather than decorating — a wallpaper is a photograph, so its *mean* says little about the pixels under
   any one label, and a fixed black shadow only ever rescues light text. Per-label sampling would be the correct
   answer and is deliberately not built: it costs a wallpaper read per cell, re-run on every scroll and page change.
-- **`SurfaceBackdropLayer` opts out of `LocalOverFilm` and is not wrapped in `OnFilm`** — a film is not drawn *on* a
+- **`SurfaceBackdropLayer` opts out of `LocalOverFrost` and is not wrapped in `OnFilm`** — a film is not drawn *on* a
   film. Two of them stacking is the deliberate depth cue below.
 
 ## Grid horizontal padding

@@ -597,7 +597,7 @@ internal fun HomePagerSurface(
         // **Over the film, unlike home's own item menu two zones below.** An open folder puts a full-screen frost
         // over home, so this menu renders flat; the same app long-pressed on the grid outside the folder frosts, and
         // that difference is the whole of what the flag says.
-        menuHost?.showApp(component = app.componentKey, label = app.label, anchor = anchor, overFilm = true)
+        menuHost?.showApp(component = app.componentKey, label = app.label, anchor = anchor, overFrost = true)
     }
 
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, which is

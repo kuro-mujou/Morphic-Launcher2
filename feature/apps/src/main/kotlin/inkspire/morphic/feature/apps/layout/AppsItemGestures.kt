@@ -88,9 +88,9 @@ internal fun rememberAppsItemMenu(): (AppInfo, Rect) -> Unit {
         { app, anchor ->
             // Always over the shell's film here, and over a collection's own film when one is open — either way this
             // surface's menu must render flat rather than sample the wallpaper through a sheet of itself. Stated
-            // rather than read from `LocalOverFilm`, because the menu is composed at the shell and this lambda is
+            // rather than read from `LocalOverFrost`, because the menu is composed at the shell and this lambda is
             // what carries the answer to it.
-            host?.showApp(component = app.componentKey, label = app.label, anchor = anchor, overFilm = true)
+            host?.showApp(component = app.componentKey, label = app.label, anchor = anchor, overFrost = true)
         }
     }
 }

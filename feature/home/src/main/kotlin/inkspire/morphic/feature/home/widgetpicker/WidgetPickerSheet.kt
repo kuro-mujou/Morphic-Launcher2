@@ -577,7 +577,7 @@ private fun DetailFrame(
  * same constant back, so the shape and the number cannot disagree.
  *
  * **It renders flat rather than frosted, and that is right here.** The sheet is itself a film, so a frosted tile
- * inside it fills with its scrim (`LocalOverFilm`) — the launcher's own no-double-blur rule, which a preview is
+ * inside it fills with its scrim (`LocalOverFrost`) — the launcher's own no-double-blur rule, which a preview is
  * subject to like anything else on a sheet. What it can show is the shape, the corner and the affordance; what a
  * container is *made* of is only truthful over the wallpaper, which is where the user is about to put it.
  */
