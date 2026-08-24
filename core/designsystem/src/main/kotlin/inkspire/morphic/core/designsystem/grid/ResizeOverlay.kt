@@ -1,5 +1,6 @@
 package inkspire.morphic.core.designsystem.grid
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -70,7 +71,15 @@ private const val FrameAlpha = 0.5f
  * @param onCommit the finger lifted off a handle. What to commit is whatever [onResize] last reported. The frame
  *   stays up afterwards, so the host must re-seed [placement] from what the grid actually holds now — a drag the
  *   grid refused would otherwise leave the frame describing a size nothing took.
- * @param onDismiss a press outside the frame: the user is done with this item.
+ * **Back dismisses it, and that is not a convenience.** Everything above says this overlay is modal — it consumes
+ * every event it sees and holds the surface lock for as long as it is composed — and its only other way out is a
+ * press *strictly outside* the item's own rect. That margin shrinks as the item grows, and a press inside is
+ * swallowed by design, so a large item can leave the whole surface reading as frozen: long-pressing empty space
+ * opens no menu, because this is still consuming the press. Every other modal in this launcher answers back (the
+ * open collection, the bottom sheets, the context menu); this one did not, and that made it the one modal a user
+ * could get stuck behind.
+ *
+ * @param onDismiss a press outside the frame, or back: the user is done with this item.
  */
 @Composable
 fun ResizeOverlay(
@@ -86,6 +95,9 @@ fun ResizeOverlay(
     // The surface swipe is not this overlay's to share — see the KDoc. Declarative, because the reason is simply
     // that the frame is on screen.
     LockSurfaceGesture(locked = true)
+
+    // The escape that does not depend on finding a gap beside the item — see the KDoc.
+    BackHandler(onBack = onDismiss)
 
     val colors = LocalMorphicColors.current
     val density = LocalDensity.current
