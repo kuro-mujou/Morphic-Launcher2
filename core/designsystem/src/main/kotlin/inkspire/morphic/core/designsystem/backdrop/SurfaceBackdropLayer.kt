@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.backdrop
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,13 +58,23 @@ fun SurfaceBackdropLayer(
     scrimColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier
-            .fillMaxSize()
-            .graphicsLayer { this.alpha = alpha().coerceIn(0f, 1f) }
-            // The stored effect's *variant* at fixed parameters, the picture blurred to match, and no rim — all
-            // three from [filmBackdrop], which is where they are written now that the context menu wears the same
-            // material. No shape: the layer *is* the screen, so there is nothing to clip and nothing to round.
-            .filmBackdrop(scrimColor = scrimColor),
-    )
+    // **This layer *is* a film, so it is never over one — even when it composes inside another's subtree.** Which it
+    // routinely does: a collection opened on the APPS surface builds its own layer inside the `LocalOverFilm` that
+    // `AppsScreen` provides, and a collection on HOME wraps its own content in the same local. Without this, every one
+    // of those would find the picture withheld (see [wallpaperBackdrop]) and paint a flat scrim where the frost goes.
+    //
+    // It is also the one place two films stacking is *wanted*: a folder over the drawer is frosted twice and its wash
+    // compounds, which is a depth cue rather than the double-blur the local exists to stop. The rule the local carries
+    // is about a **panel** over a film, and this is not a panel.
+    CompositionLocalProvider(LocalOverFilm provides false) {
+        Box(
+            modifier
+                .fillMaxSize()
+                .graphicsLayer { this.alpha = alpha().coerceIn(0f, 1f) }
+                // The stored effect's *variant* at fixed parameters, the picture blurred to match, and no rim — all
+                // three from [filmBackdrop], which is where they are written now that the context menu wears the same
+                // material. No shape: the layer *is* the screen, so there is nothing to clip and nothing to round.
+                .filmBackdrop(scrimColor = scrimColor),
+        )
+    }
 }

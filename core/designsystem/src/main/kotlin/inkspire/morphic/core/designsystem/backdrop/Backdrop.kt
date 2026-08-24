@@ -218,11 +218,17 @@ val LocalOverFilm = staticCompositionLocalOf { false }
  * is drawn into it. So a surface that moves (a pager swipe, a drag) slides over the wallpaper rather than carrying a
  * fixed patch of it, which is what makes the effect read as glass instead of as a texture.
  *
- * **Falls back to [scrimColor] whenever there is nothing to sample** — which now means exactly one thing, no
- * backdrop provided. That is why the parameter is not optional: a frosted surface has to be *opaque enough to read
- * against* on a device where the launcher has never been given a wallpaper, and the caller is the only one who knows
- * what that color is. (It used to mean two things, the other being an effect of `None`; every effect blurs now, so
- * that half is gone.)
+ * **Fills flat with [scrimColor] instead whenever sampling would be wrong**, which is two cases reaching one paint.
+ * *Nothing to sample*: no backdrop provided, the state a device is in until the launcher is given a wallpaper — which
+ * is why the parameter is not optional, since only the caller knows what color its surface has to stay readable
+ * against. And *already blurred underneath*: [LocalOverFilm] says a full-screen frost sits directly below this node,
+ * and a second sample over one is not glass on what the user is looking at but a **sharper hole** through it — at a
+ * panel blur of zero, the raw photograph. So a frosted thing appearing over a frosted full-screen thing goes solid,
+ * and it does so here rather than at each call site, because the call site that forgets is invisible.
+ *
+ * A caller that wants the surface *gone* over the film rather than solid — the icon plate, which is a silhouette with
+ * nothing on a film to be a silhouette of — checks [LocalOverFilm] itself and does not draw at all. That is the one
+ * escape, and it is a different answer to the same question rather than a bypass of this one.
  *
  * @param effect overrides the global [LocalBackdropEffect] for this one surface. Null follows the global choice, which
  *   is what almost everything should do.
@@ -249,7 +255,11 @@ fun Modifier.wallpaperBackdrop(
     this then BackdropElement(
         shape = shape,
         effect = effect ?: LocalBackdropEffect.current,
-        backdrop = LocalBackdrop.current,
+        // **A film underneath means there is nothing this node may sample**, which is the same thing to the drawing
+        // below as a device with no wallpaper — so it is expressed as the picture being withheld rather than as a
+        // flag the node has to weigh. One place, above every call site, because the call site that forgets is the
+        // invisible one.
+        backdrop = LocalBackdrop.current?.takeIf { !LocalOverFilm.current },
         view = LocalView.current,
         scrimColor = scrimColor,
         wallpaperTone = wallpaperTone(),
@@ -281,6 +291,10 @@ fun Modifier.wallpaperBackdrop(
  * **No rim, at any of these sizes.** A lens bends light in a band at its edge, and these edges are the screen's — the
  * band would fall under the system bars. What survives is the blur plus `BackdropEffect.saturation`, which is what
  * makes frost read as glass at any API.
+ *
+ * **A film over a film is solid**, which costs this nothing to guarantee: [wallpaperBackdrop] fills flat wherever
+ * [LocalOverFilm] is set, so a sheet or a menu raised over the APPS surface or an open collection renders as
+ * [scrimColor] rather than blurring an already-blurred picture.
  *
  * @param scrimColor what to paint when there is no wallpaper to sample — required for [wallpaperBackdrop]'s reason:
  *   only the caller knows what its own surface has to stay legible against.
@@ -534,8 +548,9 @@ private class BackdropNode(
         // resolved against one bitmap and drawn from another is a misalignment nobody would look for in a lambda.
         val picture = backdrop?.imageFor(role)
         val outline = outlineFor(size, layoutDirection, this)
-        // The one thing that means "nothing to sample": no backdrop at all. An effect cannot say it — every variant
-        // blurs, and a tint of NONE means no wash rather than no picture.
+        // No picture *for this node* — which is either no backdrop on the device at all or a film already under it,
+        // one question by the time it arrives here. An effect cannot say it: every variant blurs, and a tint of NONE
+        // means no wash rather than no picture. `wallpaperBackdrop` above is where the two become one.
         if (picture == null || size.width <= 0f || size.height <= 0f) {
             drawOutline(outline, color = scrimColor)
             drawContent()

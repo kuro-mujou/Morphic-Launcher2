@@ -10,7 +10,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -52,7 +51,6 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.backdrop.LocalOverFilm
 import inkspire.morphic.core.designsystem.backdrop.filmBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -221,10 +219,11 @@ private sealed interface ResolvedAnchor {
 /**
  * The menu's own panel: the frost, the shape, and the rows inside them.
  *
- * **Frosted over HOME, flat over the film** ([LocalOverFilm]). A menu raised on the APPS surface or in an open
- * collection is already sitting on a blurred sheet of the wallpaper, and sampling it a second time cuts a *sharper*
- * hole through that sheet rather than laying glass on it. The flat panel is the same color the frost falls back to
- * with no wallpaper to sample, so what a menu looks like on a fresh install is what it looks like there.
+ * **Frosted over HOME, flat over the film** — [LocalOverFilm], and the switch is `wallpaperBackdrop`'s rather than
+ * this composable's: a menu raised on the APPS surface or in an open collection is already sitting on a blurred sheet
+ * of the wallpaper, and sampling it a second time cuts a *sharper* hole through that sheet rather than laying glass
+ * on it. The flat panel is the same color the frost falls back to with no wallpaper to sample, so what a menu looks
+ * like on a fresh install is what it looks like there.
  *
  * **And the frost it does draw is the film's, not a panel's** ([filmBackdrop]) — the same material the APPS surface is
  * read against, clipped to a rounded rect. A launcher with one frost that appears at two strengths reads as two
@@ -247,17 +246,11 @@ private fun MenuSurface(
             .width(248.dp)
             .heightIn(max = maxHeight)
             .clip(RoundedCornerShape(16.dp))
-            // The scrim is what the panel falls back to with no wallpaper to sample, so it must be opaque enough
-            // to read a menu against on its own — the theme's elevated surface, which is exactly that color. Over the
-            // film it is not a fallback but the panel itself, and the two being one color is what makes a menu look
-            // the same on a device with no wallpaper as it does on a surface that already carries the frost.
-            .then(
-                if (LocalOverFilm.current) {
-                    Modifier.background(colors.surfaceElevated)
-                } else {
-                    Modifier.filmBackdrop(scrimColor = colors.surfaceElevated, shape = RoundedCornerShape(16.dp))
-                },
-            )
+            // The scrim is the theme's elevated surface, which is what a menu has to be readable against with no
+            // wallpaper to sample — and it is also what this fills with over the film, since `wallpaperBackdrop`
+            // makes that decision itself. One color for both, so a menu looks the same on a device with no wallpaper
+            // as it does on a surface already carrying the frost.
+            .filmBackdrop(scrimColor = colors.surfaceElevated, shape = RoundedCornerShape(16.dp))
             .padding(vertical = 4.dp),
     ) {
         header?.invoke()

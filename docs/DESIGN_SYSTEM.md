@@ -184,6 +184,18 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
     wallpaper, and there is nothing on a film for it to be a piece of, while drawing its scrim would put a gray blob
     behind every icon. Dropping the plate also drops its `zoom`, which is a size *relative to the plate*; see
     docs/ICON_ARCHITECTURE.md.
+    - **The rule lives in `wallpaperBackdrop`, not at the call sites.** With `LocalOverFilm` set it withholds the
+      picture from its draw node, which reaches the flat-fill path the node already had for a device with no
+      wallpaper — so *any* frosted thing raised over the film goes solid without its author having to know the rule.
+      Expressed as the picture being absent rather than as a flag the node weighs, because to the drawing those two
+      states are the same one, and detekt was right to reject the ninth parameter that said otherwise.
+    - **`SurfaceBackdropLayer` opts out, and has to.** A film composed inside another film's subtree is routine — a
+      collection opened on APPS builds its own inside `AppsScreen`'s local — so without the opt-out every one of those
+      would paint a flat scrim where its frost goes. It is also the one stacking that is *wanted*: two films
+      compounding is the depth cue below. The rule is about a **panel** over a film.
+    - **The icon plate is the one escape**, and it is a different answer rather than a bypass: it checks the local
+      itself and does not draw at all, because a silhouette of the wallpaper has nothing on a film to be a silhouette
+      of, and its scrim would be a gray blob behind every icon.
     - **The menu carries the answer on its request (`MenuRequest.overFilm`) rather than reading the local.** It is
       composed at the shell as a sibling *above* every surface, so where it is drawn says nothing about what it is
       anchored to. Capturing at *open* time is sound because the menu is modal — it holds the surface gesture lock for
