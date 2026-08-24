@@ -142,9 +142,23 @@ private fun circleSlots(count: Int, width: Float, height: Float): List<Arrangeme
         val size = maxR * 1.1f
         return listOf(ArrangementSlot(cx - size / 2f, cy - size / 2f, size, size))
     }
-    val ringR = maxR * 0.62f
-    val chord = 2f * ringR * sin(PI.toFloat() / count)
-    val size = minOf(maxR * 0.7f, chord * 0.9f)
+    // An icon's share of the pitch: neighbours a pitch apart leave a tenth of it as the gap between them.
+    val fill = 0.9f
+    val sinStep = sin(PI.toFloat() / count)
+    val idealSize = maxR * 0.7f
+    // The ring that seats `count` icons of `idealSize`, and the largest ring that still keeps one inside the box.
+    val idealR = idealSize / fill / (2f * sinStep)
+    val outermostR = maxR - idealSize / 2f
+    val ringR: Float
+    val size: Float
+    if (idealR <= outermostR) {
+        ringR = idealR
+        size = idealSize
+    } else {
+        // Solving `size / fill = 2·sin·(maxR − size/2)` for size — the ring is against the wall, so the icons give.
+        size = 2f * sinStep * maxR / (1f / fill + sinStep)
+        ringR = maxR - size / 2f
+    }
     return List(count) { i ->
         val angle = -PI.toFloat() / 2f + 2f * PI.toFloat() * i / count
         ArrangementSlot(

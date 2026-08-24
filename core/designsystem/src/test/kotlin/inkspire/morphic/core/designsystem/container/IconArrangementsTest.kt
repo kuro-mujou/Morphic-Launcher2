@@ -4,6 +4,7 @@ import inkspire.morphic.core.model.IconArrangement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.hypot
 
 /**
  * The icon-container layout maths, checked without a device — which is the point of it being a pure function over
@@ -195,6 +196,28 @@ class IconArrangementsTest {
         val few = IconArrangement.CIRCLE.slots(3, width, height).first().width
         val many = IconArrangement.CIRCLE.slots(12, width, height).first().width
         assertTrue("12 icons ($many) should be smaller than 3 ($few)", many < few)
+    }
+
+    /**
+     * The counterpart of the test above, and the half that is new: the icons keep their **full size** while the
+     * ring still has room to grow, and only start giving way once it is against the box. A fixed radius makes the
+     * icons carry the whole adjustment from the second one onward, which is what this pins against.
+     */
+    @Test
+    fun `circle keeps its icons full size until the ring is against the box`() {
+        val three = IconArrangement.CIRCLE.slots(3, width, height).first().width
+        val four = IconArrangement.CIRCLE.slots(4, width, height).first().width
+        assertEquals("a fourth icon should widen the ring, not shrink the icons", three, four, 0.01f)
+    }
+
+    /** And the ring is what absorbs the count until then — three icons cluster, eight stand well out. */
+    @Test
+    fun `circle grows its ring with the count`() {
+        fun ringRadius(count: Int): Float {
+            val slot = IconArrangement.CIRCLE.slots(count, width, height).first()
+            return hypot(slot.centerX - width / 2f, slot.centerY - height / 2f)
+        }
+        assertTrue("3 (${ringRadius(3)}) should ring tighter than 8 (${ringRadius(8)})", ringRadius(3) < ringRadius(8))
     }
 
     @Test
