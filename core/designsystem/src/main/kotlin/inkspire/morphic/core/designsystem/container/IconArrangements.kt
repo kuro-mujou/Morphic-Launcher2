@@ -13,6 +13,11 @@ import kotlin.math.sqrt
 /**
  * Where one icon sits inside an icon container — a box in **px, relative to the container's top-left**.
  *
+ * **It is the box the icon fills, with the gap already taken out of it**, and that is worth stating because the
+ * arrangements did not agree on it. The tiling shapes — grid and fan — returned *cells* that met edge to edge, so
+ * their icons touched; the circle returned the icon's own size, spaced by construction. One meaning now, applied in
+ * one place: see [slots]'s `gap`.
+ *
  * Px rather than dp because the caller measures its own cell in px (`BoxWithConstraints`) and every value here is a
  * fraction of that measurement; converting to dp and back would only add two rounding steps to arithmetic that is
  * already density-independent by construction.
@@ -36,10 +41,19 @@ data class ArrangementSlot(val x: Float, val y: Float, val width: Float, val hei
  *
  * @param count how many icons to place — every one gets a slot, however cramped; a container's *footprint* is what
  *   bounds how many are legible, and that is the grid's business rather than this function's.
+ * @param gap px between neighbouring icons. **Taken off here rather than by each shape**, so a new arrangement
+ *   cannot forget it and the four that exist did not each have to learn it: every slot is inset by half of this, so
+ *   two that met edge to edge now sit exactly [gap] apart. Zero — the default — is the old behavior, and is what the
+ *   shape tests assert against.
  */
-fun IconArrangement.slots(count: Int, width: Float, height: Float): List<ArrangementSlot> {
+fun IconArrangement.slots(
+    count: Int,
+    width: Float,
+    height: Float,
+    gap: Float = 0f,
+): List<ArrangementSlot> {
     if (count <= 0 || width <= 0f || height <= 0f) return emptyList()
-    return when (this) {
+    val placed = when (this) {
         IconArrangement.GRID -> gridSlots(count, width, height)
         IconArrangement.CIRCLE -> circleSlots(count, width, height)
         IconArrangement.FAN_TOP_LEFT -> fanSlots(count, width, height, fromLeft = true, fromTop = true)
@@ -48,6 +62,25 @@ fun IconArrangement.slots(count: Int, width: Float, height: Float): List<Arrange
         IconArrangement.FAN_BOTTOM_RIGHT -> fanSlots(count, width, height, fromLeft = false, fromTop = false)
         IconArrangement.BEEHIVE -> beehiveSlots(count, width, height)
     }
+    return if (gap > 0f) placed.map { it.deflated(gap / 2f) } else placed
+}
+
+/**
+ * This slot inset by [by] on every side.
+ *
+ * **Capped at a quarter of the slot**, so a fixed gap in a container packed with icons shrinks them rather than
+ * consuming them: without it a slot narrower than the gap would come out at zero and draw nothing at all, which is a
+ * worse answer than drawing them small. The same instinct as `resolveIconSize`'s lower guardrail being coerced back
+ * to the space that exists.
+ */
+private fun ArrangementSlot.deflated(by: Float): ArrangementSlot {
+    val inset = by.coerceAtMost(minOf(width, height) / 4f)
+    return ArrangementSlot(
+        x = x + inset,
+        y = y + inset,
+        width = width - inset * 2f,
+        height = height - inset * 2f,
+    )
 }
 
 /**

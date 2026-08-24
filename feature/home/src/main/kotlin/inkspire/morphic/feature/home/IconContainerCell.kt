@@ -12,9 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.backdrop.OnPanel
 import inkspire.morphic.core.designsystem.cell.AppIcon
+import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
+import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
 import inkspire.morphic.core.designsystem.container.slots
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
@@ -53,6 +57,7 @@ internal fun IconContainerCell(
     onLaunch: (ComponentKey) -> Unit = {},
     onOpenFolder: (Long) -> Unit = {},
     onAddIcon: () -> Unit = {},
+    metrics: IconMetrics = LocalIconMetrics.current,
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -63,10 +68,14 @@ internal fun IconContainerCell(
         val density = LocalDensity.current
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
+        // The gap between neighbouring icons. A fixed dp rather than a fraction of the tile: it is breathing room
+        // between two icons, which is a constant of how the eye separates them and not of how big the container is —
+        // a proportional gap would grow into a gulf on a large container and vanish on a small one.
+        val gapPx = with(density) { 8.dp.toPx() }
         // Keyed on everything the maths reads, so a resize or a membership change re-lays out and a recomposition
         // for any other reason does not.
-        val slots = remember(arrangement, icons.size, widthPx, heightPx) {
-            arrangement.slots(icons.size, widthPx, heightPx)
+        val slots = remember(arrangement, icons.size, widthPx, heightPx, gapPx) {
+            arrangement.slots(icons.size, widthPx, heightPx, gapPx)
         }
 
         // **Everything inside the tile is on the tile**, which is two things and they were split for a while. It is
@@ -91,6 +100,18 @@ internal fun IconContainerCell(
                 icons.forEachIndexed { index, icon ->
                     val slot = slots.getOrNull(index) ?: return@forEachIndexed
                     val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
+                    // **The slot says how much room there is; the metrics say how much of it an icon may take.**
+                    // Without this the icon *was* the slot, so a container holding two apps drew them at half the
+                    // tile — far larger than any icon on the grid around it, and growing further with every resize.
+                    // The ceiling is the user's own `maxIconDp`, the same guardrail every other surface resolves
+                    // through, which is why this is a metrics read and not a number invented here.
+                    //
+                    // **Unfloored, which is the container's one departure**: `minIconDp` keeps an icon on a *grid*
+                    // readable, and a container packs many into one cell, so small icons are what it is for. With the
+                    // floor applied the icons pinned at 24dp partway through a resize and stopped answering to the
+                    // drag — the container grew and its contents did not. Capped to the slot as well, so an
+                    // `iconPercent` above 1 cannot spend the gap its neighbour is using.
+                    val iconSize = metrics.resolveIconSizeUnfloored(slotSize, slotSize).coerceAtMost(slotSize)
                     Box(
                         modifier = Modifier
                             // Absolute placement inside the container, so the arrangement owns the layout completely — there
@@ -107,9 +128,9 @@ internal fun IconContainerCell(
                             is ContainerIcon.App -> AppIcon(
                                 component = icon.info.componentKey,
                                 contentDescription = icon.info.label,
-                                sizePx = with(density) { slotSize.roundToPx() },
+                                sizePx = with(density) { iconSize.roundToPx() },
                                 modifier = Modifier
-                                    .size(slotSize)
+                                    .size(iconSize)
                                     .clickable { onLaunch(icon.info.componentKey) },
                             )
                             // `backing = false` for the category cluster's reason: the container already has a fill, so a
@@ -117,7 +138,7 @@ internal fun IconContainerCell(
                             // is only there to keep icons off the plate's own rounded edge.
                             is ContainerIcon.Folder -> IconPreviewPlate(
                                 apps = icon.apps,
-                                size = slotSize,
+                                size = iconSize,
                                 backing = false,
                                 modifier = Modifier.clickable { onOpenFolder(icon.folder.id) },
                             )

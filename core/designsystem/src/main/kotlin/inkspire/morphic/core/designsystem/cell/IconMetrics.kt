@@ -44,8 +44,27 @@ data class IconMetrics(
  * so inverted guardrails never crash).
  */
 fun IconMetrics.resolveIconSize(availWidth: Dp, availHeight: Dp): Dp =
+    resolveIconSizeUnfloored(availWidth, availHeight)
+        .coerceAtLeast(minOf(minIconDp, maxIconDp))
+
+/**
+ * The same **without the lower guardrail** — [iconPercent] of the smaller bound, capped above and floored by nothing.
+ *
+ * **For a surface where the floor is the available space itself**, which is the icon container: it packs many icons
+ * into one grid cell, so small icons are what it is *for* rather than a state to be rescued from. `minIconDp` exists
+ * so an icon on a **grid** never becomes unreadable, and a container is not a grid.
+ *
+ * The floor also flattens the size where it bites: between `slot × iconPercent` falling under it and the slot itself
+ * falling under it, every slot resolves to the same `minIconDp` — so a stretch of a container's resize would move the
+ * tile and not its contents. That is a property of clamping rather than a fault anyone reported, and it is what the
+ * unfloored resolution is tested for.
+ *
+ * [resolveIconSize] is this plus the floor, rather than the two being written out separately: the upper guardrail and
+ * the percentage are the same rule for both, and only the floor differs.
+ */
+fun IconMetrics.resolveIconSizeUnfloored(availWidth: Dp, availHeight: Dp): Dp =
     (minOf(availWidth, availHeight) * iconPercent)
-        .coerceIn(minOf(minIconDp, maxIconDp), maxOf(minIconDp, maxIconDp))
+        .coerceAtMost(maxOf(minIconDp, maxIconDp))
 
 /** The current surface's [IconMetrics]; defaults to a sensible grid metric. */
 val LocalIconMetrics = staticCompositionLocalOf { IconMetrics() }

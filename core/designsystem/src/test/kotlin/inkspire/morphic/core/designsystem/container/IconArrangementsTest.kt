@@ -107,6 +107,52 @@ class IconArrangementsTest {
         assertTrue(slots[3].y > slots[0].y)
     }
 
+    // ── The gap ──────────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The gap's whole job: two icons that met edge to edge must end up exactly that far apart.
+     *
+     * Asserted on the **grid** because it is the arrangement that tiles, so it is the one where "touching" was the
+     * old behavior and where the distance between neighbours is a number rather than a chord.
+     */
+    @Test
+    fun `gap separates neighbouring icons by exactly that much`() {
+        val gap = 12f
+        val plain = IconArrangement.GRID.slots(6, width, height)
+        val spaced = IconArrangement.GRID.slots(6, width, height, gap = gap)
+
+        // Columns 0 and 1 of the first row: touching before, `gap` apart after.
+        assertEquals(plain[0].x + plain[0].width, plain[1].x, 0.01f)
+        assertEquals(spaced[0].x + spaced[0].width + gap, spaced[1].x, 0.01f)
+        // The slot loses the gap, and stays centered on the cell it came from.
+        assertEquals(plain[0].width - gap, spaced[0].width, 0.01f)
+        assertEquals(plain[0].x + plain[0].width / 2f, spaced[0].x + spaced[0].width / 2f, 0.01f)
+    }
+
+    /**
+     * A gap wider than the slot must shrink the icons, never erase them — see `deflated`'s cap. Without it a packed
+     * container would place slots of zero width and draw nothing at all.
+     */
+    @Test
+    fun `a gap larger than the slot still leaves an icon`() {
+        val slots = IconArrangement.GRID.slots(64, 100f, 100f, gap = 500f)
+        assertEquals(64, slots.size)
+        for (slot in slots) {
+            assertTrue("width ${slot.width}", slot.width > 0f)
+            assertTrue("height ${slot.height}", slot.height > 0f)
+        }
+    }
+
+    /** Every arrangement honors it, because the inset is applied once rather than by each shape. */
+    @Test
+    fun `every arrangement shrinks its slots for a gap`() {
+        for (arrangement in IconArrangement.entries) {
+            val plain = arrangement.slots(6, width, height).first().width
+            val spaced = arrangement.slots(6, width, height, gap = 10f).first().width
+            assertTrue("$arrangement", spaced < plain)
+        }
+    }
+
     // ── Circle ───────────────────────────────────────────────────────────────────────────────────────────
 
     /** The chord rule is what stops a crowded ring overlapping itself, so it is the property worth pinning. */

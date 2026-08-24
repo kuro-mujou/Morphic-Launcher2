@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
@@ -807,32 +809,43 @@ internal fun HomePagerSurface(
                     ),
                     size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
                 ) {
-                    // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target
-                    // (the lifted cell still owns the pointer stream).
-                    if (draggedApp != null) {
-                        AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
-                    } else if (draggedFolder != null) {
-                        FolderCell(
-                            label = draggedFolder.folder.label,
-                            apps = draggedFolder.apps,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else if (draggedIconContainer != null) {
-                        // The real cell, with no click handlers passed: a proxy is a rendering that follows the
-                        // finger, and its slots are not targets — the lifted cell still owns the pointer stream.
-                        IconContainerCell(
-                            icons = draggedIconContainer.icons,
-                            arrangement = draggedIconContainer.container.arrangement,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else if (draggedWidgetContainer != null) {
-                        WidgetContainerProxy(snapshot = containerShot, modifier = Modifier.fillMaxSize())
-                    } else if (widgetShot != null) {
-                        Image(
-                            bitmap = widgetShot.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                    // **The pager's metrics, on the same terms as the footprint above**: what is under the finger
+                    // must not resize as the drag crosses into the dock, and it must not differ from the cell it was
+                    // lifted out of either. Left ambient, these cells resolved against `IconMetrics()` — a 48dp
+                    // ceiling and nothing the user had set — so a container full of icons visibly shrank the moment
+                    // it left the grid. It read as a zoom because a container shows the difference once per icon;
+                    // an app and a folder had the same gap and showed it once.
+                    //
+                    // Provided rather than passed per cell, which is how the list surface's own proxy does it: a
+                    // cell added here later cannot be the one that forgets.
+                    CompositionLocalProvider(LocalIconMetrics provides layout.mainMetrics) {
+                        // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target
+                        // (the lifted cell still owns the pointer stream).
+                        if (draggedApp != null) {
+                            AppCell(app = draggedApp, modifier = Modifier.fillMaxSize())
+                        } else if (draggedFolder != null) {
+                            FolderCell(
+                                label = draggedFolder.folder.label,
+                                apps = draggedFolder.apps,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else if (draggedIconContainer != null) {
+                            // The real cell, with no click handlers passed: a proxy is a rendering that follows the
+                            // finger, and its slots are not targets — the lifted cell still owns the pointer stream.
+                            IconContainerCell(
+                                icons = draggedIconContainer.icons,
+                                arrangement = draggedIconContainer.container.arrangement,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else if (draggedWidgetContainer != null) {
+                            WidgetContainerProxy(snapshot = containerShot, modifier = Modifier.fillMaxSize())
+                        } else if (widgetShot != null) {
+                            Image(
+                                bitmap = widgetShot.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
             }
@@ -1049,6 +1062,9 @@ private fun HomeItemCell(
             arrangement = item.container.arrangement,
             modifier = cellModifier,
             itemGestures = itemGestures,
+            // The zone's own metrics, as every other cell here gets — a container's icons answer to the same
+            // guardrails as the icons on the grid around it.
+            metrics = metrics,
             onLaunch = onLaunch,
             onOpenFolder = onOpenFolder,
             onAddIcon = { onAddIconToContainer(item.container.id) },
