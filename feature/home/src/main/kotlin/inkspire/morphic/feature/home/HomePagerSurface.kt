@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
 import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
@@ -512,6 +513,17 @@ internal fun HomePagerSurface(
     // row states: the sheet is told the grid it sizes widgets against, and that grid is this surface's.
     var widgetPickerOpen by remember { mutableStateOf(false) }
 
+    // **What a folder's Add cell offers**: every installed app, sorted, built once for every folder on this
+    // surface — the overlay subtracts whatever the folder it is drawn in already holds. Sorted here because
+    // `AppPicker` does not re-sort, and a picker over every installed app is unusable in any other order.
+    //
+    // A folder taking an app in **moves** it rather than copying: `addAppsToFolder` takes it off its home page, or
+    // out of the folder that held it, because an app is in one place.
+    val offerableApps = remember(state.catalog) { state.catalog.values.sortedBy { it.label.lowercase() } }
+    val folderAdditions: (Long) -> AppAdditions = { folderId ->
+        AppAdditions(offerableApps) { picked -> viewModel.addAppsToFolder(folderId, picked) }
+    }
+
     // **The page an add just filed something on, held until the pager can reach it.**
     //
     // Every add here searches for room (`HomeViewModel.freeRect`) rather than being given a cell, so a widget or a
@@ -884,6 +896,11 @@ internal fun HomePagerSurface(
                     onRelease = ::handleRelease,
                     onDismiss = { folderHost.close() },
                     onShowMenu = showFolderAppMenu,
+                    // **Everything not already in this folder** — including apps on a home page and apps filed in
+                    // another folder, both of which `addAppsToFolder` moves rather than copies, because an app is in
+                    // one place. Only the presented folder offers it: a pointer holder is invisible, and an Add cell
+                    // it drew would be a target nobody can see.
+                    additions = if (presenting) folderAdditions(folder.folder.id) else null,
                 )
             }
         }
@@ -1073,3 +1090,4 @@ private fun WidgetResizeRules.asResizeBounds(geometry: GridGeometry): ResizeBoun
     minColSpan = if (geometry.cellW > 0f) ceil(minWidthPx / geometry.cellW).toInt().coerceAtLeast(1) else 1,
     minRowSpan = if (geometry.cellH > 0f) ceil(minHeightPx / geometry.cellH).toInt().coerceAtLeast(1) else 1,
 )
+

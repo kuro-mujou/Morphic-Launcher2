@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
 import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
@@ -159,6 +160,7 @@ fun AppsPager(
     horizontalPadding: Dp,
     wraps: Boolean,
     modifier: Modifier = Modifier,
+    folderAdditions: ((folderId: Long) -> AppAdditions)? = null,
 ) {
     val density = LocalDensity.current
     val perPage = config.rows * config.cols
@@ -493,6 +495,9 @@ fun AppsPager(
                         onRelease = ::handleRelease,
                         onShowMenu = showItemMenu,
                         onDismiss = { folderHost.close() },
+                        // Only the presented folder offers it; a pointer holder is invisible, and an Add cell it
+                        // drew would be a target nobody can see.
+                        additions = if (presenting) folderAdditions?.invoke(folder.folder.id) else null,
                     )
                 }
             }

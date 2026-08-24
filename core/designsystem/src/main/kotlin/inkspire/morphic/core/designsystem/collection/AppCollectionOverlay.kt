@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.OnFilm
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
+import inkspire.morphic.core.designsystem.cell.AddAppsCell
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -66,6 +67,7 @@ import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.pager.LauncherPager
 import inkspire.morphic.core.designsystem.pager.launcherPagerSwipe
 import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
+import inkspire.morphic.core.designsystem.picker.AppMultiPicker
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -141,7 +143,8 @@ private const val LeaveDwellMs = 1000L
  *   The host decides what the menu offers, because what an app inside a collection can be asked to do is not the same
  *   as what one on a grid can — it has no placement, so there is nothing to remove it from.
  *
- * TODO(launcher frosted UI): replace the solid-black backdrop with the deferred blur/frosted backdrop.
+ * @param additions what the trailing [AddAppsCell] offers and where its choices go. **Null offers no cell at all**
+ *   — absent, not disabled — which is what a collection with nothing to add passes.
  */
 @Composable
 fun AppCollectionOverlay(
@@ -159,8 +162,21 @@ fun AppCollectionOverlay(
     incoming: AppInfo? = null,
     presenting: Boolean = true,
     onShowMenu: (AppInfo, Rect) -> Unit = { _, _ -> },
+    additions: AppAdditions? = null,
 ) {
-    // Only the presented collection answers back; a pointer holder is invisible and must not intercept it.
+    // Whether the Add picker has replaced the card.
+    //
+    // **Held here rather than by the host**, unlike every other sheet in this launcher, and the presentation is why:
+    // the picker does not sit *over* this collection, it stands *in place of* it on the collection's own film. A host
+    // holding the flag would have to hide a card it does not draw, and all three hosts would have to arrange the
+    // same thing identically. Scoped to the overlay, so leaving the collection disposes the selection with it.
+    var picking by remember { mutableStateOf(false) }
+    // A collection that stops being presented — the user dragged an app out and it closed — takes its picker down
+    // with it, rather than leaving one composed against a card nobody can see.
+    if (!presenting && picking) picking = false
+
+    // Only the presented collection answers back; a pointer holder is invisible and must not intercept it. The
+    // picker installs its own handler *after* this one when it is up, so back leaves the picker first.
     if (presenting) BackHandler(onBack = onDismiss)
 
     val device = currentDeviceConfiguration()
@@ -195,7 +211,13 @@ fun AppCollectionOverlay(
     var innerBounds by remember { mutableStateOf<Rect?>(null) }
     var gap by remember { mutableStateOf(-1) }
 
-    val pageCount = rememberUpdatedState((orderComponents.size + pageSize - 1) / pageSize)
+    // **The Add cell takes a slot, so it is counted like one.** Without this a collection whose apps exactly fill
+    // its last page would have nowhere to draw the cell, and it would silently not appear on the one collection most
+    // in need of it. `+ 1` before the round-up is what grows a page for it, which is L1's `slots = ordered + null`
+    // said in the arithmetic rather than in the list — the list is left alone on purpose, since the reorder gap is
+    // an index into it and a pseudo-entry would shift every drop by one.
+    val addSlots = if (additions != null) 1 else 0
+    val pageCount = rememberUpdatedState((orderComponents.size + addSlots + pageSize - 1) / pageSize)
     val pagerState = rememberLauncherPagerState(pageCount = { pageCount.value.coerceAtLeast(1) }, infiniteScroll = { false })
 
     // The collection's drag hooks for the shared coordinator, kept stable and reading live state. onHover migrates
@@ -298,6 +320,9 @@ fun AppCollectionOverlay(
 
     val displayApps = movingGapDisplayOrder(effectiveOrder, draggedComponent, gap).mapNotNull(appByComponent::get)
     val pages = displayApps.chunked(pageSize)
+    // After the last app that is actually drawn, which follows the gap during a drag rather than the stored order:
+    // an app carried in from outside lengthens the flow while it is held, and the cell should sit after it.
+    val addSlot = displayApps.size
 
     val scrimInteraction = remember { MutableInteractionSource() }
     val innerInteraction = remember { MutableInteractionSource() }
@@ -358,14 +383,19 @@ fun AppCollectionOverlay(
 
             // The card and everything in it. Structurally stable across the presenting flip — only `alpha` and the
             // clickable's `enabled` change — because the cells inside own live pointer streams.
+            //
+            // **The picker hides it the same way, rather than taking it out of the tree**, for that same reason and
+            // one of its own: a collection is a *place*, and returning from Cancel should be a return rather than a
+            // rebuild that has forgotten which page you were on. Its cells stay hit-testable at zero alpha, which
+            // costs nothing because the picker is drawn above them and swallows every tap.
             Box(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = presence.value }
+                    .graphicsLayer { alpha = if (picking) 0f else presence.value }
                     .clickable(
                         interactionSource = scrimInteraction,
                         indication = null,
-                        enabled = presenting,
+                        enabled = presenting && !picking,
                         onClick = onDismiss,
                     ),
             ) {
@@ -448,6 +478,26 @@ fun AppCollectionOverlay(
                                             DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
                                         }
                                     }
+                                    // **The Add cell, at the flat slot after the last app.** Placed by
+                                    // coordinate rather than flowed with the items, for the reason `addSlots`
+                                    // gives: `flowItems` feeds the reorder, and this is not reorderable. The same
+                                    // `gridPlacement` the drop shadow above uses, against the same flat-slot
+                                    // arithmetic, so the cell lands exactly where the next app would.
+                                    if (additions != null && addSlot / pageSize == pageIndex) {
+                                        val slot = addSlot % pageSize
+                                        Box(
+                                            Modifier.gridPlacement(
+                                                GridPlacement(0, slot / grid.cols, slot % grid.cols),
+                                            ),
+                                        ) {
+                                            AddAppsCell(
+                                                label = "Add",
+                                                onClick = { picking = true },
+                                                modifier = Modifier.fillMaxSize(),
+                                                metrics = metrics,
+                                            )
+                                        }
+                                    }
                                     flowItems(
                                         items = pages.getOrNull(pageIndex).orEmpty(),
                                         itemKey = { it.componentKey.flatten() },
@@ -507,6 +557,23 @@ fun AppCollectionOverlay(
                     // No `itemGestures`: the proxy is a rendering that follows the finger, not a touch target.
                     AppCell(app = dragApp, modifier = Modifier.fillMaxSize(), metrics = metrics)
                 }
+            }
+
+            // **The Add picker, in the card's place on the card's own film.** Last in the stack so it is above the
+            // hidden card and takes the taps that would otherwise reach it, and so its `BackHandler` is the most
+            // recent and answers before the overlay's own dismiss.
+            if (picking && additions != null) {
+                // **What it already holds, subtracted here** — see [AppAdditions.offered]. Against `apps` rather
+                // than the live display order, which during a drag contains an app that has not joined yet.
+                val held = remember(apps) { apps.mapTo(mutableSetOf()) { it.componentKey } }
+                AppMultiPicker(
+                    apps = remember(additions, held) { additions.offered.filterNot { it.componentKey in held } },
+                    onCancel = { picking = false },
+                    onAdd = { chosen ->
+                        picking = false
+                        additions.onAdd(chosen)
+                    },
+                )
             }
         }
     }

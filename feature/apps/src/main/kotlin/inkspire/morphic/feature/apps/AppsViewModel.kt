@@ -509,17 +509,73 @@ class AppsViewModel(
      * the folder is dissolved and the survivor takes over its slot on the pager — the ordered-surface equivalent of
      * home's "the last app inherits its cell".
      */
-    private fun leaveFolderChanges(from: Long?, into: Long?, app: ComponentKey): List<AppsPagerChange> {
+    private fun leaveFolderChanges(from: Long?, into: Long?, app: ComponentKey): List<AppsPagerChange> =
+        leaveFolderChanges(from, into, listOf(app))
+
+    /**
+     * The same, for **several apps leaving one folder at once** — the picker's case.
+     *
+     * **A collection because the single-app form cannot be run twice.** Each call reads membership from state, and
+     * nothing in a batch updates that between changes: two apps leaving a three-app folder would each see two
+     * remaining, each conclude it survives, and leave it holding one — the state `DissolveFolder` exists to prevent.
+     */
+    private fun leaveFolderChanges(from: Long?, into: Long?, apps: List<ComponentKey>): List<AppsPagerChange> {
         if (from == null || from == into) return emptyList()
         val folder = folderById(from) ?: return emptyList()
-        if (app !in folder.folder.apps) return emptyList()
-        val remaining = folder.folder.apps.filter { it != app }
+        val leaving = apps.filter { it in folder.folder.apps }
+        if (leaving.isEmpty()) return emptyList()
+        val remaining = folder.folder.apps.filterNot { it in leaving }
+        val removals = leaving.map { AppsPagerChange.RemoveFromFolder(from, it) }
         return if (remaining.size > 1) {
-            listOf(AppsPagerChange.RemoveFromFolder(from, app))
+            removals
         } else {
-            listOf(
-                AppsPagerChange.RemoveFromFolder(from, app),
-                AppsPagerChange.DissolveFolder(from, remaining.singleOrNull()),
+            removals + AppsPagerChange.DissolveFolder(from, remaining.singleOrNull())
+        }
+    }
+
+    /**
+     * Adds [components] to folder [folderId] on the APPS pager — the folder's own *Add apps* picker committing.
+     *
+     * `HomeViewModel.addAppsToFolder`'s twin, and different only where the two stores are: a pager slot rather than a
+     * grid placement is what an app gives up by joining, so the vacating change is `RemoveFromPager`. The departures
+     * are collected per source folder and asked once, for the reason [leaveFolderChanges]'s collection form exists.
+     */
+    fun addAppsToFolder(folderId: Long, components: List<ComponentKey>) {
+        val known = folderById(folderId)?.folder?.apps ?: return
+        val added = components.distinct().filterNot { it in known }
+        if (added.isEmpty()) return
+        // Which folder each added app is leaving, grouped so each source is asked once. **Membership rather than
+        // where a drag started**, which is `HomeViewModel.folderHolding`'s reasoning: the picker has no drag to have
+        // started anywhere. Inline rather than a named lookup because this is its only caller.
+        val departures = state.value.pagerPages
+            .flatMap { page -> page.filterIsInstance<AppsItem.Folder>() }
+            .mapNotNull { folder ->
+                folder.folder.id.takeIf { it != folderId }
+                    ?.let { from -> added.filter { it in folder.folder.apps }.takeIf(List<*>::isNotEmpty)?.let { from to it } }
+            }
+            .flatMap { (from, apps) -> leaveFolderChanges(from, folderId, apps) }
+        applyPager(
+            listOf(AppsPagerChange.ReorderFolder(folderId, known + added)) +
+                added.map { AppsPagerChange.RemoveFromPager(IconItem.App(it)) } +
+                departures,
+        )
+    }
+
+    /**
+     * Files [components] into category [categoryId] — a category expansion's *Add apps* picker committing.
+     *
+     * **A re-file rather than an addition**, which is what makes it one op per app rather than a membership write: a
+     * category holds an app exactly once across the whole surface, so `Move` carries both halves — out of wherever it
+     * was, into this — and the destination id is the difference. Appended, at slots continuing the category's own
+     * order, so the picked apps land in the order they were ticked.
+     */
+    fun addAppsToCategory(categoryId: String, components: List<ComponentKey>) {
+        val known = state.value.categories.firstOrNull { it.category.id == categoryId }?.apps.orEmpty()
+        val added = components.distinct().filterNot { app -> known.any { it.componentKey == app } }
+        if (added.isEmpty()) return
+        viewModelScope.launch {
+            appsOrderRepository.applyCategory(
+                added.mapIndexed { index, app -> AppsCategoryChange.Move(app, categoryId, known.size + index) },
             )
         }
     }

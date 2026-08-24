@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
 import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
@@ -164,6 +165,7 @@ fun AppsCategoryCard(
     cardColumns: Int,
     horizontalPadding: Dp,
     modifier: Modifier = Modifier,
+    categoryAdditions: ((categoryId: String) -> AppAdditions)? = null,
 ) {
     val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
@@ -442,6 +444,9 @@ fun AppsCategoryCard(
                         onRelease = ::handleRelease,
                         onDismiss = { categoryHost.close() },
                         onShowMenu = showItemMenu,
+                        // **Filing rather than adding**, which is what a category is: an app belongs to exactly one,
+                        // so ticking it here takes it out of wherever it was. Only the presented expansion offers it.
+                        additions = if (presenting) categoryAdditions?.invoke(entry.category.id) else null,
                     )
                 }
             }

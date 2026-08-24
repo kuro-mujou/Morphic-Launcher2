@@ -48,9 +48,9 @@ import inkspire.morphic.core.model.ComponentKey
  * **Placed in `core:designsystem` on its first consumer rather than its second**, which is a deliberate exception
  * to this codebase's usual extract-when-the-second-arrives rule (`IconPreviewPlate`'s). The reason is that the
  * other consumers were already *named and blocked*: HOME's surface menu has no "Add app" verb, the home vertical
- * list had no "Add apps" row (so its contents were whatever the seed put there), and a folder cannot be filled
- * except by dragging. The list's row is built and this is what it opens, which is the bet paying out; the other two
- * are still waiting. L1 kept its equivalent here too — as well as a second, near-duplicate picker in `feature:home`,
+ * list had no "Add apps" row (so its contents were whatever the seed put there), and a folder could not be filled
+ * except by dragging. Two of the three are built and open this; only HOME's own surface menu is still waiting, which
+ * is the bet paying out. L1 kept its equivalent here too — as well as a second, near-duplicate picker in `feature:home`,
  * which is the outcome worth not repeating, and the reason both multi-select consumers here share one sheet.
  *
  * **It takes a list, not a repository.** `core:designsystem` has no business knowing where apps come from, and

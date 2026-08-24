@@ -46,8 +46,8 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   recomputed it would jump under the finger the moment the panel was dragged into a corner.
 - **`AppPicker`** (`picker/`) is the exception to the extract-on-the-second-consumer rule this module otherwise
   follows (`IconPreviewPlate`'s). It went in on its *first*, because the other consumers were named and blocked
-  rather than speculative — HOME's "Add app", the home list's "Add apps" row (built now, and this is what it opens),
-  and filling a folder without dragging. It takes a `List<AppInfo>`, never a repository, and matches with a
+  rather than speculative — HOME's "Add app", the home list's "Add apps" row and a folder's own Add cell (the last
+  two are built, and both open this). It takes a `List<AppInfo>`, never a repository, and matches with a
   locale-aware `Collator` rather than `lowercase().contains` — the same lesson the APPS ordering already learned.
   - **It is a grid of icons, which is L1's shape and the right one**: a picker is browsed by *recognition*, and an
     icon is what an app is recognized by. The 64dp rows it drew before put a fraction as many apps on screen, which
@@ -58,6 +58,27 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   - **Its multi-select consumers share one sheet** — `AppSelectionSheet` in `feature:home`, the title/`Add {n}`/picker
     composition extracted when the home list became its second consumer. L1's near-duplicate second picker is the
     outcome that shape exists to avoid.
+- **`AddAppsCell`** (`cell/`) is the **"Add" cell that trails a collection's apps** — L1's `FolderAddCell`, and the
+  affordance a folder had been missing. It is an `IconLabelCell` like every other cell in the grid, which is what
+  keeps its mark and label sized by the user's icon settings rather than drifting from the apps beside it; only the
+  mark differs, and it is outlined rather than filled because an outline reads as an empty slot waiting to be filled.
+  It takes its own `clickable` rather than `launcherItemGestures`, the one place a cell may: the shared contract
+  exists so an *item* has one gesture owner, and this is not an item — nothing to drag, no menu, no drop.
+  - **Pressing it hides the collection and puts the picker on the collection's own film** (`AppMultiPicker`), which
+    is L1's arrangement and the reason the overlay owns the flag rather than its hosts: the picker stands *in place
+    of* the card, not over it, so a host holding the state would have to hide a card it does not draw — three times,
+    identically. The alternative was a sheet over a card over a frost, three layers of chrome to reach a search
+    field. The card is hidden at zero alpha rather than removed, so Cancel is a return and not a rebuild that has
+    forgotten which page you were on, and the picker's root swallows taps so the hidden card beneath takes none.
+  - **All three hosts offer it** — a home folder, an APPS-pager folder, an APPS category card's expansion — through
+    one `AppAdditions`. The overlay subtracts what the collection already holds, so a surface builds **one** sorted
+    list for every collection on it. A category is the odd one: filing an app there takes it out of whatever category
+    held it, where a folder takes membership, which is why the two commits are separate ops.
+  - **The overlay reserves a slot for it in the arithmetic, not in the list.** `AppCollectionOverlay` counts one extra
+    slot into its page count so a collection whose apps exactly fill the last page grows a page, and places the cell
+    by coordinate at the flat slot after the last app — the same `gridPlacement` maths the drop shadow uses. L1
+    appended a `null` to its slot list instead; here the list *is* the reorder's index space, so a pseudo-entry would
+    shift every drop by one.
 - **`ActionRowCell`** (`cell/`) is a list row that is **not an app** — the home list's pinned *Add apps* row. It sits
   beside `AppRowCell` because it has to share their inset, icon sizing and label style (`rowLabelStyle` is private
   there so nothing can disagree about the last one), and it takes its mark as a **slot** rather than an `ImageVector`

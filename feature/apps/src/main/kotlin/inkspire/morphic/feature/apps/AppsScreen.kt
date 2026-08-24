@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -14,6 +15,7 @@ import inkspire.morphic.core.designsystem.backdrop.OnFilm
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
+import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.cardMinCell
 import inkspire.morphic.core.designsystem.grid.fitCols
@@ -113,18 +115,7 @@ fun AppsScreen(
     // The card grid's own margin and the width left for its lanes, computed here beside the pager's because the
     // settings section bounds its lane buttons against exactly this expression. Two derivations of "how wide is the
     // grid" that could disagree is the thing `usableWindowArea` exists to prevent.
-    val cardPadding = state.paddingFor(GridSlot.APPS_CARD).dp
-    // A card's own chrome and the sizing of one preview slot. Both stand in with the blueprint's own values until the
-    // store answers, which for the chrome is all-zero — the same thing a fresh install draws, so the first frame is
-    // not a different card.
-    val cardChrome = state.cardChrome ?: CardChrome()
-    val cardMetrics = state.metricsFor(GridSlot.APPS_CARD)
-    // The grid's own gutter comes off as well as the user's margin, so what is divided by the lane count is the width
-    // the *lanes* share. `cardMinCell` folds in the spacing between them, which is the other half of the same sum.
-    val cardArea = usableWindowArea(uiInsets).let {
-        val lanes = it.widthDp - cardPadding.value * 2 - 16.dp.value * 2
-        GridArea(widthDp = lanes.coerceAtLeast(1f), heightDp = it.heightDp)
-    }
+    val card = rememberCardGeometry(state, device)
     // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —
     // but the *report* below is gated on the store having answered. Paginating against a placeholder would write pages
     // nobody chose and then rewrite them, which is the trap home's settle effects are guarded against too.
@@ -153,6 +144,11 @@ fun AppsScreen(
     // layout cannot forget it. `surfaceMenuGestures` owns why a press that lands on an icon does not reach here, and
     // gating on presence is the floating proxy's rule: a surface panned off to one side must not answer a press meant
     // for the one in front of it.
+    // **What a collection's Add cell offers**: every installed app, sorted, built once for the whole surface —
+    // each overlay subtracts what it already holds. Two commits rather than one, because the two stores mean
+    // different things by "add": a folder takes membership, where a category is a filing an app has exactly one of.
+    val additions = rememberCollectionAdditions(state, viewModel)
+
     val menuHost = LocalMenuHost.current
     val gestureConfig = rememberAppsGestureConfig()
     val presented = LocalSurfacePresented.current
@@ -213,6 +209,7 @@ fun AppsScreen(
                     config = pagerFit,
                     horizontalPadding = pagerPadding,
                     wraps = state.wraps(GridSlot.APPS_PAGER),
+                    folderAdditions = additions.forFolder,
                 )
 
                 AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
@@ -237,18 +234,15 @@ fun AppsScreen(
                     // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing; a card's
                     // preview slots take their own, which is `APPS_CARD`'s.
                     metrics = state.metricsFor(GridSlot.FOLDER),
-                    slotMetrics = cardMetrics,
-                    chrome = cardChrome,
+                    slotMetrics = card.metrics,
+                    chrome = card.chrome,
                     // **Clamped where it is drawn**, as every other scrolling grid here is, and against the same width
                     // the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will
                     // not draw. The floor is a *card's*: two of its preview icons at their own guardrail, plus the
                     // paddings around and between them, which is `CellFit`'s ordinary inversion applied to a tile.
-                    cardColumns = AppsCardGrid.fitCols(
-                        areaWidthDp = cardArea.widthDp,
-                        cols = state.colsFor(GridSlot.APPS_CARD, device),
-                        min = cardMinCell(cardMetrics, cardChrome),
-                    ),
-                    horizontalPadding = cardPadding,
+                    cardColumns = card.columns,
+                    horizontalPadding = card.padding,
+                    categoryAdditions = additions.forCategory,
                 )
             }
         }
@@ -314,3 +308,72 @@ private fun AppsState.colsFor(slot: GridSlot, device: DeviceConfiguration): Int 
  */
 private val AppsState.rowHeight: Dp
     get() = (listRowHeightDp ?: checkNotNull(AppsListGrid.rowHeightDp)).dp
+
+/**
+ * Everything the **category card** layout is sized by, resolved together.
+ *
+ * Extracted because it is one measurement in four parts and only one of five layouts reads any of it — and because
+ * `AppsScreen`'s job is choosing between arrangements, not doing each one's arithmetic in its body.
+ *
+ * @property columns clamped **where it is drawn**, as every other scrolling grid here is, and against the same width
+ *   the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will not draw. The
+ *   floor is a *card's*: two preview icons at their own guardrail plus the paddings around and between them, which is
+ *   `CellFit`'s ordinary inversion applied to a tile.
+ */
+private class CardGeometry(
+    val padding: Dp,
+    val chrome: CardChrome,
+    val metrics: IconMetrics,
+    val columns: Int,
+)
+
+@Composable
+private fun rememberCardGeometry(state: AppsState, device: DeviceConfiguration): CardGeometry {
+    val padding = state.paddingFor(GridSlot.APPS_CARD).dp
+    // A card's own chrome and the sizing of one preview slot. Both stand in with the blueprint's own values until the
+    // store answers, which for the chrome is all-zero — the same thing a fresh install draws, so the first frame is
+    // not a different card.
+    val chrome = state.cardChrome ?: CardChrome()
+    val metrics = state.metricsFor(GridSlot.APPS_CARD)
+    // The grid's own gutter comes off as well as the user's margin, so what is divided by the lane count is the width
+    // the *lanes* share. `cardMinCell` folds in the spacing between them, which is the other half of the same sum.
+    val area = usableWindowArea(uiInsets).let {
+        val lanes = it.widthDp - padding.value * 2 - 16.dp.value * 2
+        GridArea(widthDp = lanes.coerceAtLeast(1f), heightDp = it.heightDp)
+    }
+    return CardGeometry(
+        padding = padding,
+        chrome = chrome,
+        metrics = metrics,
+        columns = AppsCardGrid.fitCols(
+            areaWidthDp = area.widthDp,
+            cols = state.colsFor(GridSlot.APPS_CARD, device),
+            min = cardMinCell(metrics, chrome),
+        ),
+    )
+}
+
+/** What a collection's Add cell offers on this surface, for each of the two kinds that have one. */
+private class CollectionAdditions(
+    val forFolder: (Long) -> AppAdditions,
+    val forCategory: (String) -> AppAdditions,
+)
+
+/**
+ * The **Add apps** offer for every collection on this surface: every installed app, sorted once.
+ *
+ * **Unfiltered on purpose** — each overlay subtracts what it already holds, which is the one thing it knows better
+ * than this does (see `AppAdditions.offered`). Sorted here because `AppPicker` does not re-sort, and a picker over
+ * every installed app is unusable in any other order.
+ *
+ * **Two commits rather than one**, because the two stores mean different things by "add": a folder takes membership,
+ * where a category is a filing an app has exactly one of, so putting it in one takes it out of another.
+ */
+@Composable
+private fun rememberCollectionAdditions(state: AppsState, viewModel: AppsViewModel): CollectionAdditions {
+    val offered = remember(state.apps) { state.apps.sortedBy { it.label.lowercase() } }
+    return CollectionAdditions(
+        forFolder = { folderId -> AppAdditions(offered) { viewModel.addAppsToFolder(folderId, it) } },
+        forCategory = { categoryId -> AppAdditions(offered) { viewModel.addAppsToCategory(categoryId, it) } },
+    )
+}

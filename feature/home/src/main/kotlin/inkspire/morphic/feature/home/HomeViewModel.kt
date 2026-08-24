@@ -947,16 +947,54 @@ class HomeViewModel(
      * by construction — but membership is read from state that can move underneath a long gesture (an uninstall, a
      * profile going away), and removing an app that isn't there must not also dissolve a folder whose count never fell.
      */
-    private fun leaveFolderChanges(folder: HomeItem.Folder, app: ComponentKey): List<LayoutChange> {
-        if (app !in folder.folder.apps) return emptyList()
-        val remaining = folder.folder.apps.filter { it != app }
-        if (remaining.size > 1) return listOf(LayoutChange.RemoveFromFolder(folder.folder.id, app))
+    private fun leaveFolderChanges(folder: HomeItem.Folder, app: ComponentKey): List<LayoutChange> =
+        leaveFolderChanges(folder, listOf(app))
+
+    /**
+     * The same, for **several apps leaving one folder at once** — the picker's case.
+     *
+     * **It takes a collection because the single-app form cannot be run twice.** Each call reads `folder.folder.apps`
+     * from state, and nothing in a batch updates that state between changes: two apps leaving a three-app folder
+     * would each see two remaining, each decide the folder survives, and leave it holding one app — the state
+     * auto-dissolve exists to prevent. Asked once about all of them, the count is right.
+     */
+    private fun leaveFolderChanges(folder: HomeItem.Folder, apps: List<ComponentKey>): List<LayoutChange> {
+        val leaving = apps.filter { it in folder.folder.apps }
+        if (leaving.isEmpty()) return emptyList()
+        val remaining = folder.folder.apps.filterNot { it in leaving }
+        if (remaining.size > 1) return leaving.map { LayoutChange.RemoveFromFolder(folder.folder.id, it) }
         return buildList {
             remaining.singleOrNull()?.let { last ->
                 add(LayoutChange.Move(GridItem.App(last), folder.placement, folder.zone))
             }
             add(LayoutChange.RemoveFromGrid(GridItem.Folder(folder.folder.id)))
         }
+    }
+
+    /**
+     * Adds [components] to folder [folderId] — the folder's own *Add apps* picker committing.
+     *
+     * **`AddToFolder` already carries most of the semantics**, which is why this is not the drag path repeated N
+     * times: the repository detaches the app from whatever folder held it, appends it at the end, and deletes its
+     * grid placement, so an app arriving from a home page or from another folder is one change either way.
+     *
+     * What it does *not* carry is **auto-dissolve**. Detaching the second-to-last app from another folder leaves that
+     * folder holding one, which is the state a folder is never supposed to rest in — so the departures are collected
+     * per source folder and asked once, [leaveFolderChanges]'s collection form. Per source rather than per app for
+     * the reason that overload exists: two apps out of one folder, asked separately, both conclude it survives.
+     *
+     * Apps already in this folder are dropped rather than re-appended, so a picker that offered one by mistake
+     * cannot silently reorder the folder.
+     */
+    fun addAppsToFolder(folderId: Long, components: List<ComponentKey>) {
+        val target = folderById(folderId) ?: return
+        val added = components.distinct().filterNot { it in target.folder.apps }
+        if (added.isEmpty()) return
+        val departures = added
+            .mapNotNull { app -> folderHolding(app)?.takeIf { it != folderId }?.let { it to app } }
+            .groupBy({ it.first }, { it.second })
+            .flatMap { (from, apps) -> folderById(from)?.let { leaveFolderChanges(it, apps) }.orEmpty() }
+        applyChanges(added.map { LayoutChange.AddToFolder(folderId, it) } + departures)
     }
 
     /** The placed folder [folderId], or null when it is gone (dissolved, or its definition not resolved yet). */
