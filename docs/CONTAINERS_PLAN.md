@@ -1,5 +1,10 @@
 # Containers port plan — icon container + widget container
 
+**Continued (2026-08-24):** this plan takes the icon container as far as its arrangement chooser (§3d) and stops.
+Its inner geometry, drag-reorder, drag-out and configuration are
+[ICON_CONTAINER_PLAN.md](ICON_CONTAINER_PLAN.md). Nothing below is superseded — that document extends §3d rather
+than replacing it.
+
 Both containers are **standalone items on the HOME grid** whose *contents* are ordered within them. The entities,
 the DAOs, the `LayoutChange` vocabulary and `LayoutRepositoryImpl.apply` all already exist; what does not exist is
 a cell that can draw either, a way to create one, or a way to put anything in one.
