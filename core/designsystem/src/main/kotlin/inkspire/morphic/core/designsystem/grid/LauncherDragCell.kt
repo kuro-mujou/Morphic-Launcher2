@@ -63,9 +63,17 @@ import kotlinx.coroutines.launch
  *   items of its own — an icon container, whose slots are separate things inside one cell. Null (the default), or
  *   a null result, means the press is on [item], which is the whole of what every other cell draws.
  *
- *   **It resolves once and all three verbs follow it**: the drag lifts that item, a tap opens it
- *   ([onOpenInner]), and a long-press raises its menu ([onShowInnerMenu]) anchored to its own rectangle rather
- *   than to the cell. Splitting them would let a cell drag one thing and launch another.
+ *   **It is asked once, at the down, and all three verbs follow that one answer**: the drag lifts that item, a
+ *   tap opens it ([onOpenInner]), and a long-press raises its menu ([onShowInnerMenu]) anchored to its own
+ *   rectangle rather than to the cell. Splitting them would let a cell drag one thing and launch another.
+ *
+ *   **The down is the anchor because a drag's own position is not the press**, and asking each verb where it
+ *   fired is the same bug in a quieter form. A drag out of the long-press menu begins only once the finger has
+ *   travelled [ItemGestureConfig.touchSlopPx] — 20dp on every surface here — so a question asked at that moment
+ *   is a question about a point 20dp from the icon the user pressed. A container's icon slot is barely wider
+ *   than that, so the answer came back null and the drag lifted the **container** instead — and it did so in
+ *   whichever direction the finger happened to leave the slot first, which is why dragging an icon sideways
+ *   reordered it and dragging the same icon downward picked up the group around it.
  *
  *   **A hook rather than a second [launcherItemGestures] on the inner items**, and the reason is in the contract:
  *   `ItemGesturePhase.MenuOpen` reports `ownsFinger`, so a nested machine and its parent both keep the finger from
@@ -110,6 +118,10 @@ fun LauncherDragCell(
     // cell on the surface otherwise, for a conversion nothing would ask for.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
+    // What the current press landed on, resolved at the down and held until the next one. Written and read on the
+    // pointer thread; nothing composes against it, which is why it costs no more than [coordinates] above does.
+    var pressed by remember { mutableStateOf<InnerCellItem?>(null) }
+
     // The press, resolved through this node's **live** coordinates rather than a rectangle published from layout:
     // the grid sits in a pager, and a stored bounds goes stale the moment the page moves under a finger held still.
     // The gesture contract already trusts the mirror of this call (`localToRoot`) for every drag position on every
@@ -139,12 +151,13 @@ fun LauncherDragCell(
                 config = gestureConfig,
                 edgeActions = edgeActions,
                 doubleTap = doubleTap,
-                onOpen = { root -> innerAt(root)?.let { onOpenInner(it.item) } ?: onOpen() },
+                onPress = { root -> pressed = innerAt(root) },
+                onOpen = { pressed?.let { onOpenInner(it.item) } ?: onOpen() },
                 onEdgeAction = onEdgeAction,
                 onDoubleTap = onDoubleTap,
                 onSwipePull = pull::onPull,
-                onShowMenu = { anchor, root ->
-                    val inner = innerAt(root)
+                onShowMenu = { anchor ->
+                    val inner = pressed
                     if (inner == null) {
                         onShowMenu(anchor)
                     } else {
@@ -152,7 +165,7 @@ fun LauncherDragCell(
                         onShowInnerMenu(inner.item, Rect(topLeft, inner.bounds.size))
                     }
                 },
-                onBeginDrag = { root -> coordinator.start(innerAt(root)?.item ?: item, root) },
+                onBeginDrag = { root -> coordinator.start(pressed?.item ?: item, root) },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },
                 onCancelDrag = { coordinator.cancel() },

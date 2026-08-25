@@ -54,17 +54,21 @@ import kotlin.time.Duration.Companion.milliseconds
  *   claims no swipes, so every swipe flows to the parent.
  * @param doubleTap this item has a double tap assigned, which is what arms the window a release waits out
  *   before [onOpen] fires. False (default) keeps the immediate launch every other item has always had.
- * @param onOpen a completed tap, at the given root position — **where** it landed, because content that holds
- *   items of its own needs to know which one was tapped and only this modifier ever sees the finger.
+ * @param onPress the finger came down, at the given root position — **the one place a press is located**, for
+ *   content that holds items of its own and has to know which of them the gesture is about. Reported here rather
+ *   than with each verb because the answer must not change while the press is in flight: a drag out of the menu
+ *   fires only once the finger has travelled [ItemGestureConfig.touchSlopPx], so a verb that located itself would
+ *   be asking about a point 20dp from what the user pressed. Fires on every down, a double tap's second press
+ *   included.
+ * @param onOpen a completed tap.
  * @param onEdgeAction a press-and-swipe in a registered direction (custom action; a toast for now).
  * @param onDoubleTap a second press inside the window on an item that has one assigned.
  * @param onSwipePull the finger has moved while a claimed swipe is in flight — the raw offset from the down, and
  *   the direction committed to. Null offset means the swipe ended and the item returns to rest, on release and on
  *   cancel alike. How far the item actually moves is the caller's: see [ItemGestureEffect.SwipeProgress].
- * @param onShowMenu the long-press fired at the given root position: open the item's context menu, anchored to
- *   the **rectangle this modifier is attached to** — which is the item's visible extent, since that is where
- *   the gestures are hung (see the
- *   scope note above). Reported from here rather than reconstructed by each surface, so a menu can never be
+ * @param onShowMenu the long-press fired: open the item's context menu, anchored to the **rectangle this
+ *   modifier is attached to** — which is the item's visible extent, since that is where the gestures are hung
+ *   (see the scope note above). Reported from here rather than reconstructed by each surface, so a menu can never be
  *   anchored to something other than what the user pressed; L1 rebuilt that rectangle three different ways.
  * @param onBeginDrag lift into a drag; the finger is at the given root position.
  * @param onDragTo the drag moved to the given root position.
@@ -76,11 +80,12 @@ fun Modifier.launcherItemGestures(
     config: ItemGestureConfig,
     edgeActions: Set<SwipeDirection> = emptySet(),
     doubleTap: Boolean = false,
-    onOpen: (rootPosition: Offset) -> Unit,
+    onPress: (rootPosition: Offset) -> Unit = {},
+    onOpen: () -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
     onDoubleTap: () -> Unit = {},
     onSwipePull: (direction: SwipeDirection, offsetFromDown: Offset?) -> Unit = { _, _ -> },
-    onShowMenu: (anchorInRoot: Rect, rootPosition: Offset) -> Unit,
+    onShowMenu: (anchorInRoot: Rect) -> Unit,
     onBeginDrag: (rootPosition: Offset) -> Unit,
     onDragTo: (rootPosition: Offset) -> Unit,
     onDrop: () -> Unit,
@@ -120,6 +125,7 @@ fun Modifier.launcherItemGestures(
     //
     // Keying the `pointerInput` on the callbacks instead would restart the gesture whenever one was re-created,
     // which for lambdas rebuilt every recomposition means tearing down an in-flight drag.
+    val currentOnPress by rememberUpdatedState(onPress)
     val currentOnOpen by rememberUpdatedState(onOpen)
     val currentOnEdgeAction by rememberUpdatedState(onEdgeAction)
     val currentOnSwipePull by rememberUpdatedState(onSwipePull)
@@ -170,7 +176,7 @@ fun Modifier.launcherItemGestures(
 
             fun perform(effects: List<ItemGestureEffect>, local: Offset) {
                 for (effect in effects) when (effect) {
-                    ItemGestureEffect.OpenItem -> currentOnOpen(rootOf(local))
+                    ItemGestureEffect.OpenItem -> currentOnOpen()
                     is ItemGestureEffect.EdgeAction -> currentOnEdgeAction(effect.direction)
                     is ItemGestureEffect.SwipeProgress -> {
                         lastPull = effect.direction
@@ -189,7 +195,7 @@ fun Modifier.launcherItemGestures(
                     // taken again immediately after being dropped — which a count absorbs, and which nothing can
                     // observe in between since this whole loop runs synchronously off the pointer thread.
                     ItemGestureEffect.ShowMenu -> {
-                        claimSurface(); currentOnShowMenu(anchorInRoot(), rootOf(local))
+                        claimSurface(); currentOnShowMenu(anchorInRoot())
                     }
 
                     ItemGestureEffect.DismissMenu -> {
@@ -234,6 +240,9 @@ fun Modifier.launcherItemGestures(
                         // correct — the pan asks about one direction — but it would make every press overwrite
                         // whatever a previous one left, and the release below already handles that.
                         if (edgeActions.isNotEmpty()) swipeClaim?.claim(edgeActions)
+                        // **Where the press is, reported before it can become anything else.** Every verb below
+                        // acts on what the finger came down on rather than on wherever it has since travelled.
+                        currentOnPress(rootOf(local))
                         perform(machine.onEvent(ItemGestureEvent.Down), local)
 
                         // The long-press timer runs beside the event loop; the machine ignores it if the gesture
