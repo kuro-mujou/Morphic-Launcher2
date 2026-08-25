@@ -109,7 +109,9 @@ fun <T> CoordinateDragGrid(
     onShowMenu: (T, anchorInRoot: Rect) -> Unit = { _, _ -> },
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
     onDoubleTap: (T) -> Unit = {},
-    liftedItemAt: ((item: T, localPosition: Offset, size: IntSize) -> GridItem)? = null,
+    innerItemAt: ((item: T, localPosition: Offset, size: IntSize) -> InnerCellItem?)? = null,
+    onOpenInner: (GridItem) -> Unit = {},
+    onShowInnerMenu: (GridItem, anchorInRoot: Rect) -> Unit = { _, _ -> },
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
     val session = coordinator.session
@@ -191,7 +193,9 @@ fun <T> CoordinateDragGrid(
                 onShowMenu = { anchor -> onShowMenu(item, anchor) },
                 onEdgeAction = { direction -> onEdgeAction(item, direction) },
                 onDoubleTap = { onDoubleTap(item) },
-                liftedItemAt = liftedItemAt?.let { at -> { local, size -> at(item, local, size) } },
+                innerItemAt = innerItemAt?.let { at -> { local, size -> at(item, local, size) } },
+                onOpenInner = onOpenInner,
+                onShowInnerMenu = onShowInnerMenu,
             ) { itemGestures ->
                 itemContent(item, Modifier.fillMaxSize(), itemGestures)
             }

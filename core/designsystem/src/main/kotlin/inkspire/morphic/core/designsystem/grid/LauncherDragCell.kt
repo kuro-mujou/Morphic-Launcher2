@@ -59,16 +59,27 @@ import kotlinx.coroutines.launch
  *
  * @param tracksFinger this item's placement is being driven directly by the finger right now (a live resize), so
  *   it must land on each new cell at once rather than glide there.
- * @param liftedItemAt what a drag beginning at the given **cell-local** position actually picks up, for content
- *   that holds items of its own — an icon container, whose slots are separate things inside one cell. Default
- *   null: every other cell lifts [item], which is the whole of what it draws.
+ * @param innerItemAt what a press at the given **cell-local** position is actually on, for content that holds
+ *   items of its own — an icon container, whose slots are separate things inside one cell. Null (the default), or
+ *   a null result, means the press is on [item], which is the whole of what every other cell draws.
+ *
+ *   **It resolves once and all three verbs follow it**: the drag lifts that item, a tap opens it
+ *   ([onOpenInner]), and a long-press raises its menu ([onShowInnerMenu]) anchored to its own rectangle rather
+ *   than to the cell. Splitting them would let a cell drag one thing and launch another.
  *
  *   **A hook rather than a second [launcherItemGestures] on the inner items**, and the reason is in the contract:
  *   `ItemGesturePhase.MenuOpen` reports `ownsFinger`, so a nested machine and its parent both keep the finger from
  *   the long-press onward and *both* fire `BeginDrag` on the next move — two `coordinator.start` calls, and which
- *   one survives is whichever ran last. The gesture contract deliberately arbitrates against *ancestors* (via
- *   consumption on `Initial`/`Final`) and has no notion of a sibling machine on the same press. One machine per
- *   press, deciding what it lifts, is the shape that fits it.
+ *   one survives is whichever ran last. The contract arbitrates against *ancestors* (via consumption on
+ *   `Initial`/`Final`) and has no notion of a sibling machine on the same press. One machine per press, deciding
+ *   what it acts on, is the shape that fits it.
+ *
+ *   It is also why inner content must carry **no `Modifier.clickable`**: that fires on release regardless of what
+ *   the gesture did, so a long-press would raise a menu and then launch the app underneath it, and a completed
+ *   drag would launch it on drop. Taps arrive here, through the one contract, exactly as CLAUDE.md says they do
+ *   for every other cell.
+ * @param onOpenInner a tap landed on an inner item (see [innerItemAt]).
+ * @param onShowInnerMenu a long-press landed on an inner item; the rectangle is that item's, in root coordinates.
  * @param onRelease the finger came up on this cell, ending the drag. It is **not** where the drop is committed —
  *   that belongs to the zone the drag landed in ([inkspire.morphic.core.designsystem.drag.DropZone.onDrop]), which
  *   may be on a different surface entirely from this cell. What the surface does here is its own bookkeeping about
@@ -88,7 +99,9 @@ fun LauncherDragCell(
     onShowMenu: (anchorInRoot: Rect) -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
     onDoubleTap: () -> Unit = {},
-    liftedItemAt: ((localPosition: Offset, size: IntSize) -> GridItem)? = null,
+    innerItemAt: ((localPosition: Offset, size: IntSize) -> InnerCellItem?)? = null,
+    onOpenInner: (GridItem) -> Unit = {},
+    onShowInnerMenu: (GridItem, anchorInRoot: Rect) -> Unit = { _, _ -> },
     content: @Composable (itemGestures: Modifier) -> Unit,
 ) {
     val isDragged = coordinator.session?.item == item
@@ -96,9 +109,18 @@ fun LauncherDragCell(
     // Only for content that lifts something other than itself, and only then: this is a layout callback on every
     // cell on the surface otherwise, for a conversion nothing would ask for.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    // The press, resolved through this node's **live** coordinates rather than a rectangle published from layout:
+    // the grid sits in a pager, and a stored bounds goes stale the moment the page moves under a finger held still.
+    // The gesture contract already trusts the mirror of this call (`localToRoot`) for every drag position on every
+    // surface. `localPositionOf` against the root rather than subtracting `positionInRoot()`, because the cell may
+    // be mid-`animatePlacement` — that modifier works in placement, so the difference is real.
+    fun innerAt(root: Offset): InnerCellItem? = innerItemAt?.let { at ->
+        coordinates?.let { at(it.localPositionOf(it.findRootCoordinates(), root), it.size) }
+    }
     Box(
         modifier
-            .then(if (liftedItemAt == null) Modifier else Modifier.onGloballyPositioned { coordinates = it })
+            .then(if (innerItemAt == null) Modifier else Modifier.onGloballyPositioned { coordinates = it })
             .then(if (isDragged || tracksFinger) Modifier else Modifier.animatePlacement())
             // **A draw-time translation, not a layout offset, and `animatePlacement` above is the reason.** That
             // modifier reads `positionInParent()` in `onPlaced` and renders the difference from where it is
@@ -117,25 +139,20 @@ fun LauncherDragCell(
                 config = gestureConfig,
                 edgeActions = edgeActions,
                 doubleTap = doubleTap,
-                onOpen = onOpen,
+                onOpen = { root -> innerAt(root)?.let { onOpenInner(it.item) } ?: onOpen() },
                 onEdgeAction = onEdgeAction,
                 onDoubleTap = onDoubleTap,
                 onSwipePull = pull::onPull,
-                onShowMenu = onShowMenu,
-                // Converted through this node's **live** coordinates rather than a rectangle published from layout:
-                // the grid sits in a pager, and a stored bounds goes stale the moment the page moves under a finger
-                // held still. The gesture contract already trusts the mirror of this call (`localToRoot`) for every
-                // drag position on every surface.
-                //
-                // `localPositionOf` against the root rather than subtracting `positionInRoot()`, because the cell
-                // above may be mid-`animatePlacement` — that modifier works in placement, so the difference is real
-                // and a subtraction would quietly ignore it.
-                onBeginDrag = { root ->
-                    val lifted = liftedItemAt?.let { at ->
-                        coordinates?.let { at(it.localPositionOf(it.findRootCoordinates(), root), it.size) }
-                    } ?: item
-                    coordinator.start(lifted, root)
+                onShowMenu = { anchor, root ->
+                    val inner = innerAt(root)
+                    if (inner == null) {
+                        onShowMenu(anchor)
+                    } else {
+                        val topLeft = coordinates?.localToRoot(inner.bounds.topLeft) ?: inner.bounds.topLeft
+                        onShowInnerMenu(inner.item, Rect(topLeft, inner.bounds.size))
+                    }
                 },
+                onBeginDrag = { root -> coordinator.start(innerAt(root)?.item ?: item, root) },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },
                 onCancelDrag = { coordinator.cancel() },
@@ -245,3 +262,12 @@ private class SwipePull(
  * neighbours on the tightest grid this launcher offers.
  */
 private const val PullResistance = 0.5f
+
+/**
+ * Something a cell draws *inside* itself that a press can land on — the item, and where it sits in cell-local px.
+ *
+ * The bounds travel with the item because a menu raised on it must point at **it** rather than at the cell around
+ * it: a container is several icons wide, so an anchor of the whole cell would put the menu next to a group when
+ * the user pressed one member of it.
+ */
+data class InnerCellItem(val item: GridItem, val bounds: Rect)

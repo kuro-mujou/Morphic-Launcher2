@@ -131,9 +131,19 @@ long press fires from a *timer*: with the finger held still there is no pointer 
 so nothing can tell them apart at the moment it matters.
 
 What is built instead keeps the container's single gesture exactly where it was — on the whole cell, per
-`LauncherDragCell`'s stated exception — and decides **what that press lifts** from where it landed:
-`LauncherDragCell` gained `liftedItemAt`, a hook giving the cell-local position and size, and the container answers
-with the icon under the finger or with itself. Nothing about menus, taps or the surface's own long-press changes.
+`LauncherDragCell`'s stated exception — and decides **what that press is on** from where it landed:
+`LauncherDragCell` gained `innerItemAt`, a hook giving the cell-local position and size, and the container answers
+with the icon under the finger or with nothing (meaning itself).
+
+**The resolution happens once and all three verbs follow it** — the drag lifts that item, a tap opens it
+(`onOpenInner`), and a long-press raises *its* menu (`onShowInnerMenu`), anchored to its own rectangle rather than
+to the cell. Splitting them would let one cell drag one thing and launch another. `launcherItemGestures` therefore
+reports the press position on `onOpen` and `onShowMenu` as well, which it already did for `onBeginDrag`.
+
+**A slot carries no `clickable`, and that is the same rule stated everywhere else** (CLAUDE.md: cells carry no
+`onClick`; taps arrive through the one gesture contract). It had one, and the bug was exactly what that rule
+exists to prevent: `clickable` fires on release whatever the gesture did, so a long-press raised a menu and then
+launched the app underneath it, and a completed reorder launched the icon it had just dropped.
 
 Two consequences worth knowing:
 

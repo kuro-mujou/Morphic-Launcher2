@@ -55,8 +55,8 @@ internal fun Modifier.appsItemGestures(
     val component = app.componentKey
     return launcherItemGestures(
         config = config,
-        onOpen = onOpen,
-        onShowMenu = { anchor -> showMenu(app, anchor) },
+        onOpen = { onOpen() },
+        onShowMenu = { anchor, _ -> showMenu(app, anchor) },
         onEdgeAction = {},
         onBeginDrag = { root ->
             coordinator.start(GridItem.App(component), root)

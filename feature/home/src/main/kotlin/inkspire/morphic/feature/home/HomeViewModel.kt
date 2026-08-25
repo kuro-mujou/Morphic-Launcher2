@@ -532,6 +532,15 @@ class HomeViewModel(
      * out of a folder, out of another container. So the picker needs no "is it placed?" test and no removal to pair
      * with, which is the same composition the drag path relies on.
      */
+    /**
+     * Takes [item] out of icon container [containerId] — **membership only, so it goes nowhere**, which is
+     * `ContainerSettingsViewModel.removeIcon`'s behavior and its reason: the grid has no cell reserved for it, and
+     * inventing one is a placement decision a menu row has no business making. Putting it somewhere is a drag.
+     */
+    fun removeIconFromContainer(containerId: Long, item: IconItem) {
+        applyChanges(listOf(LayoutChange.RemoveFromIconContainer(containerId, item)))
+    }
+
     /** Sets icon container [containerId]'s contents to [items] — a reorder, so membership is unchanged. */
     fun reorderIconContainer(containerId: Long, items: List<IconItem>) {
         applyChanges(listOf(LayoutChange.ReorderIconContainer(containerId, items)))

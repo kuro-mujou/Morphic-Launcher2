@@ -43,6 +43,7 @@ import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.GridSpan
+import inkspire.morphic.core.designsystem.grid.InnerCellItem
 import inkspire.morphic.core.designsystem.grid.ResizeBounds
 import inkspire.morphic.core.designsystem.grid.ResizeOverlay
 import inkspire.morphic.core.designsystem.grid.clampToGrid
@@ -54,7 +55,6 @@ import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
-import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
@@ -569,27 +569,73 @@ internal fun HomePagerSurface(
         viewModel.runGesture(item.gridItem, direction.asItemGesture())
     }
 
-    // **What a press on an icon container actually lifts** — one of its icons if the finger came down on one, and
+    // **What a press on an icon container is actually on** — one of its icons if the finger came down on one, and
     // the container itself everywhere else. Only a container answers anything but itself, which is why this is one
     // lambda for the whole surface rather than a property of each cell.
     //
     // The slack matters as much as the icons do: a ring's hollow middle and the space around a short arc are how a
     // container is picked up, resized, or long-pressed for its own menu, so [indexAt] answers on *containment*
     // rather than handing back the least-far icon.
-    val liftedInCell: (HomeItem, Offset, IntSize) -> GridItem = { item, local, size ->
-        val icon = (item as? HomeItem.IconContainer)?.let { container ->
-            iconContainerSlots(
+    val liftedInCell: (HomeItem, Offset, IntSize) -> InnerCellItem? = { item, local, size ->
+        (item as? HomeItem.IconContainer)?.let { container ->
+            val slots = iconContainerSlots(
                 arrangement = container.container.arrangement,
                 count = container.icons.size,
                 widthPx = size.width.toFloat(),
                 heightPx = size.height.toFloat(),
                 density = density,
-            ).indexAt(local)?.let { container.icons[it] }
+            )
+            slots.indexAt(local)?.let { i ->
+                val slot = slots[i]
+                InnerCellItem(
+                    item = container.icons[i].asIconItem().asGridItem(),
+                    bounds = Rect(slot.x, slot.y, slot.x + slot.width, slot.y + slot.height),
+                )
+            }
         }
-        icon?.asIconItem()?.asGridItem() ?: item.gridItem
+    }
+
+    // A tap on a container's icon does what a tap on that icon does anywhere else. It arrives here rather than
+    // through a `clickable` on the slot so that it fires **only** for a gesture the machine resolved as a tap —
+    // never after a long-press, and never on the release that ends a reorder.
+    val openInner: (GridItem) -> Unit = { inner ->
+        when (inner) {
+            is GridItem.App -> viewModel.launch(inner.component)
+            is GridItem.Folder -> folderHost.open(inner.folderId)
+            else -> Unit
+        }
     }
 
     val menuHost = LocalMenuHost.current
+    // **The icon's own menu, not its container's.** A long-press inside a container is aimed at what is under the
+    // finger, so it offers that app's or folder's verbs — plus the one verb that only makes sense here, taking it
+    // out of the container. `showFolderAppMenu` below is the same idea one holder over.
+    val showInnerMenu: (GridItem, Rect) -> Unit = { inner, anchor ->
+        val held = state.items.filterIsInstance<HomeItem.IconContainer>().firstNotNullOfOrNull { container ->
+            container.icons.firstOrNull { it.asIconItem().asGridItem() == inner }
+                ?.let { container.container.id to it }
+        }
+        val remove = held?.let { (containerId, icon) ->
+            MenuAction("Remove from container") { viewModel.removeIconFromContainer(containerId, icon.asIconItem()) }
+        }
+        when (val held2 = held?.second) {
+            is ContainerIcon.App -> menuHost?.showApp(
+                component = held2.info.componentKey,
+                label = held2.info.label,
+                anchor = anchor,
+                surfaceActions = listOfNotNull(remove),
+            )
+
+            is ContainerIcon.Folder -> menuHost?.show(
+                title = held2.folder.label,
+                anchor = anchor,
+                actions = listOfNotNull(remove),
+            )
+
+            null -> Unit
+        }
+    }
+
     val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
         showHomeItemMenu(
             item = item,
@@ -699,7 +745,9 @@ internal fun HomePagerSurface(
                     onGeometryChange = { dockGeometry = it },
                     onOpen = openItem,
                     onShowMenu = showMenu,
-                    liftedItemAt = liftedInCell,
+                    innerItemAt = liftedInCell,
+                    onOpenInner = openInner,
+                    onShowInnerMenu = showInnerMenu,
                 ) { item, cellModifier, itemGestures ->
                     HomeItemCell(
                         item = item,
@@ -707,8 +755,6 @@ internal fun HomePagerSurface(
                         cellModifier = cellModifier,
                         itemGestures = itemGestures,
                         metrics = layout.dockMetrics,
-                        onLaunch = viewModel::launch,
-                        onOpenFolder = folderHost::open,
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
                         onAddIconToContainer = onOpenIconContainerSettings,
                         onReorderContainer = viewModel::reorderIconContainer,
@@ -738,7 +784,9 @@ internal fun HomePagerSurface(
                     onGeometryChange = { geometry = it },
                     onOpen = openItem,
                     onShowMenu = showMenu,
-                    liftedItemAt = liftedInCell,
+                    innerItemAt = liftedInCell,
+                    onOpenInner = openInner,
+                    onShowInnerMenu = showInnerMenu,
                 ) { item, cellModifier, itemGestures ->
                     HomeItemCell(
                         item = item,
@@ -746,8 +794,6 @@ internal fun HomePagerSurface(
                         cellModifier = cellModifier,
                         itemGestures = itemGestures,
                         metrics = layout.mainMetrics,
-                        onLaunch = viewModel::launch,
-                        onOpenFolder = folderHost::open,
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
                         onAddIconToContainer = onOpenIconContainerSettings,
                         onReorderContainer = viewModel::reorderIconContainer,
@@ -1060,8 +1106,6 @@ private fun HomeItemCell(
     cellModifier: Modifier,
     itemGestures: Modifier,
     metrics: IconMetrics,
-    onLaunch: (ComponentKey) -> Unit = {},
-    onOpenFolder: (Long) -> Unit = {},
     onAddWidgetToContainer: (Long) -> Unit = {},
     onAddIconToContainer: (Long) -> Unit = {},
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
@@ -1105,8 +1149,6 @@ private fun HomeItemCell(
             // The zone's own metrics, as every other cell here gets — a container's icons answer to the same
             // guardrails as the icons on the grid around it.
             metrics = metrics,
-            onLaunch = onLaunch,
-            onOpenFolder = onOpenFolder,
             onAddIcon = { onAddIconToContainer(item.container.id) },
             containerId = item.container.id,
             onReorder = { items -> onReorderContainer(item.container.id, items) },

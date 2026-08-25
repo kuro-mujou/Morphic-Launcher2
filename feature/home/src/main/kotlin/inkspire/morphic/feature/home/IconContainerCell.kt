@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.home
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +25,6 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
-import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import kotlin.math.roundToInt
@@ -41,18 +39,17 @@ import kotlin.math.roundToInt
  * spacing the arrangement carefully computed would be eaten by per-cell padding. A slot *is* the icon's box. L1 used
  * `AppCell`/`FolderCell` here; that is the one thing from its version not carried.
  *
- * **Two tap targets, on the card's model.** Each slot launches its app or opens its folder; the container's own
- * [itemGestures] go on the **whole cell**, because a container fills its cell the way a widget does — that is
- * `LauncherDragCell`'s stated exception to the icon+label rule, not a departure from it. The two compose without
- * arbitration: `clickable` consumes the down on the Main pass, but `launcherItemGestures` takes
- * `awaitFirstDown(requireUnconsumed = false)` and reads movement with `positionChangedIgnoreConsumed()`, so a
- * long-press *on a slot* still reaches the cell's own gesture.
+ * **One gesture for the whole cell, which decides what it acts on from where the press landed** — a slot's icon,
+ * or the container itself for the slack between and around them. The container's [itemGestures] go on the whole
+ * cell because it fills its cell the way a widget does, which is `LauncherDragCell`'s stated exception to the
+ * icon+label rule; `innerItemAt` is how the press is then resolved within it, and `iconContainerSlots` is the
+ * geometry that resolution and the drawing below both read.
  *
- * **A long-press decides what it lifts from where it landed, and that is the cell's single gesture doing it** —
- * a slot lifts its own icon, the slack around the icons lifts the container. The slots are deliberately *not*
- * given gestures of their own: `ItemGesturePhase.MenuOpen` reports `ownsFinger`, so a nested machine and the
- * cell's would both keep the finger and both begin a drag. See `LauncherDragCell`'s `liftedItemAt`, which is
- * where the choice is made, and `iconContainerSlots`, which is the geometry both it and the drawing below read.
+ * **A slot carries no `clickable`, and that is not an omission.** It had one, and the bug it caused is the reason
+ * this rule exists everywhere else in the launcher (CLAUDE.md: cells carry no `onClick`; taps arrive through the
+ * one gesture contract): `clickable` fires on release no matter what the gesture did, so a long-press raised the
+ * container's menu and then launched the app underneath it, and a completed reorder launched the icon it had just
+ * dropped. Taps reach `onOpenInner` instead, which only fires for a gesture the machine actually resolved as a tap.
  *
  * **An empty container draws a "+", and it is a real button.** Something has to be drawn — an empty cell that
  * cannot be removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable widget.
@@ -67,8 +64,6 @@ internal fun IconContainerCell(
     arrangement: IconArrangement,
     modifier: Modifier = Modifier,
     itemGestures: Modifier = Modifier,
-    onLaunch: (ComponentKey) -> Unit = {},
-    onOpenFolder: (Long) -> Unit = {},
     onAddIcon: () -> Unit = {},
     metrics: IconMetrics = LocalIconMetrics.current,
     containerId: Long? = null,
@@ -154,9 +149,7 @@ internal fun IconContainerCell(
                                 component = icon.info.componentKey,
                                 contentDescription = icon.info.label,
                                 sizePx = with(density) { iconSize.roundToPx() },
-                                modifier = Modifier
-                                    .size(iconSize)
-                                    .clickable { onLaunch(icon.info.componentKey) },
+                                modifier = Modifier.size(iconSize),
                             )
                             // `backing = false` for the category cluster's reason: the container already has a fill, so a
                             // plate inside it is a box within a box — and dropping the plate drops its inset with it, which
@@ -165,7 +158,6 @@ internal fun IconContainerCell(
                                 apps = icon.apps,
                                 size = iconSize,
                                 backing = false,
-                                modifier = Modifier.clickable { onOpenFolder(icon.folder.id) },
                             )
                         }
                     }
