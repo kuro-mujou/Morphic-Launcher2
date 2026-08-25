@@ -487,35 +487,44 @@ break*: `arrangement` holds an enum name today, and re-interpreting that column 
 `@SerialName`s are short and explicit for `GridItem`'s reason one file over: this reaches a user's stored blob, so
 the discriminator must not be a class name that a refactor could move.
 
-### 6c. Grid — which axis is pinned, and to how many
+### 6c. Grid — how many rows, or how many columns
 
-**One setting, read from either axis.** The parameter is *which axis the user has fixed and to how many*; the
-other one grows with the item count, and the icons scale down to keep the whole list inside the container.
+Three settings, one of them at a time:
 
-- **Rows = 1** is a single row that stays a single row — icons are added along it, and it shrinks them rather than
-  wrapping. That is the macOS-dock shape: one strip across the bottom of a tablet, with the container's own frosted
-  panel as the dock's background.
-- **Columns = 3** is the mirror: three across, growing downward.
-- **Auto** is today's `sqrt(count × aspect)` derivation and stays the default, so an unconfigured container behaves
-  exactly as it does now.
+- **Auto** — today's `sqrt(count × aspect)` derivation. Stays the default, so an unconfigured container is
+  unchanged.
+- **Rows = n** — the container has `n` rows. The list fills them and the **columns** grow.
+- **Columns = n** — the container has `n` columns. The list fills them and the **rows** grow.
 
-**Why this is not expressible as a column count**, which is what an earlier draft of this section proposed and got
-wrong: a single row *can* be spelled `columns = n` for the n icons currently in it, but it is not **stable**. Add
-one icon and `columns = n` gives a second row holding one, while `rows = 1` keeps growing sideways. The two settings
-describe the same picture today and different intentions about tomorrow, and the intention is the thing worth
-storing. It is also what the control communicates: pinning an axis says *this is the direction icons are added in*.
+**The list is unbounded and the icons take the strain**, which is the rule every other shape here already follows:
+a container appends to the end of its list, its own bounds are the list's bounds, the arrangement places the whole
+list inside them, and the icons scale down until it fits. That is why 33 icons in a 2×2 container is a legal
+picture, and why `rows = 1` with two hundred icons is a very thin dock rather than an error. There is no capacity
+anywhere in this, and nothing is ever refused.
 
-**The list is unbounded, and pinning an axis does not change that.** A container appends to the end of its list,
-its own bounds are the list's bounds, the arrangement places the whole list inside them, and the icons scale down
-until it fits. That is not a rule invented for the grid — it is what every shape here already does, and it is why
-33 icons in a 2×2 container is a legal picture rather than an overflow. `rows = 1` and two hundred icons is a very
-thin dock, not an error.
+#### The pinned axis decides which way the list fills, and that is the actual code change
 
-**Rows and columns are not two dimensions of a frame.** There is no R × C in this container and no cell count to
-fill — they are the *same* setting read from either axis, "this many across" or "this many down", and exactly one
-of them is ever set. The one-of is that fact written down. A `Grid(rows, columns)` pair would not be a laxer
-version of it; it would be the wrong shape, inviting a reading — a fixed frame with a capacity — that this
-container has never had and §6c does not introduce:
+`gridSlots` today is row-major — `row = i / cols`, `col = i % cols` — because the column count is what it derives.
+That is still right for **Auto** and for **Columns = n**: the columns are known, so the list fills across a row and
+then wraps to the next.
+
+**Rows = n reverses it.** The row count is what is known and the column count is `ceil(count / rows)`, so the list
+fills *down* a column and wraps to the next one — `col = i / rows`, `row = i % rows`. Row-major with a pinned row
+count would need the column count to wrap against, which is the number being derived: the fill direction is not a
+preference here, it is forced by which axis was fixed.
+
+The consequence worth stating because it is easy to get backwards: with `rows = 1`, appending an icon puts it at
+the **right-hand end** of the strip, which is what a dock does. Under a row-major fill it would start a second row.
+
+The short last **column** then centres exactly as slice A's short last row does, and for the same reason — one
+expression each, on whichever axis is the wrapping one.
+
+#### Rows and columns are not two dimensions of a frame
+
+There is no R × C in this container and no cell count to fill. They are the same setting read from either axis, and
+exactly one of them is ever set — which is what the one-of records. A `Grid(rows, columns)` pair would not be a
+laxer version of it, it would be the wrong shape: it invites a fixed frame with a capacity, which is precisely what
+the paragraph above says this is not.
 
 ```kotlin
 @Serializable @SerialName("grid")
@@ -529,19 +538,22 @@ data class Grid(val fill: GridFill = GridFill.Auto) : IconArrangement
 ```
 
 The screen still shows the two controls the user thinks in — **Rows** and **Columns**, each *Auto* or a number —
-and setting one returns the other to Auto. Two controls over a one-of is the honest presentation of a choice that
-*is* two-sided; what it cannot do is let both be numbers at once.
+and setting one returns the other to Auto.
 
-**The geometry already does the right thing.** Slice A made the grid cell `min(availW/cols, availH/rows)` and
-centred the block, so a wide short container with `rows = 1` gives icons as tall as the strip, centred, until the
-count is high enough that the width binds and they shrink — which is what a dock does. Nothing in `gridSlots`
-changes except where the counts come from.
+#### The dock, and why it is already reachable
 
-**And the strip is already reachable.** A container's resize floor is `cellMultiplier` on *each* axis — one visual
-cell, not the 2×2 it is created at — so a 4×1 dock-shaped container can be dragged out today. Verified in
-`HomeResizeRules.Container`; worth knowing because this whole case would be theoretical if it could not.
+`rows = 1` in a wide, short container is the macOS-dock shape: one strip across the bottom of a tablet, with the
+container's own frosted panel as the dock's background.
 
-**This reverses §2f**, which declined a column count on the grounds that a pinned one fights the resize handle. That
+Nothing in the geometry needs adding. Slice A already made the grid cell `min(availW/cols, availH/rows)` and centred
+the block, so a wide strip with one row gives icons as tall as the strip, centred, until the count is high enough
+that the width binds and they shrink.
+
+And the shape can be dragged out today: a container's resize floor is `cellMultiplier` on *each* axis — one visual
+cell, not the 2×2 it is created at — verified in `HomeResizeRules.Container`. Worth knowing, because this whole
+case would be theoretical if it were not.
+
+**This reverses §2f**, which declined a column count on the grounds that a pinned one fights the resize handle. The
 objection is answered rather than ignored: `Auto` remains the default, so the derivation governs every container
 until someone deliberately overrides it — and a user who pins three columns and then widens the container is asking
 for three wide columns.
