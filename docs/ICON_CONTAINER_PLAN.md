@@ -1,6 +1,6 @@
 # Icon container — arrangement, reorder and configuration
 
-**Status:** slices A–E landed (2026-08-25), verified on an emulator. F and G remain.
+**Status:** slices A–F landed (2026-08-25), verified on an emulator. G remains.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
 chooser and stopped there. Everything in §0–§2 of that document still stands; this one does not revisit it.
@@ -359,10 +359,19 @@ that choice lives.
 **What it does not do is preview the contents.** A container lands empty, and which apps go in has nothing to do
 with which shape is being chosen — dots say "shape" without pretending to know.
 
-### 3f. Slice F — a live preview in the settings screen
+### 3f. Slice F — a live preview in the settings screen ✅
 
-§2e. A real `IconContainerCell` above the contents list, at a fixed preview size, fed `ContainerSettings.Icon`. It
-costs one item in the `LazyColumn` and makes the arrangement chooser mean something.
+An `IconContainerCell` above the contents list, over the real membership and the real arrangement — §2e's point,
+in its strongest form: not two implementations kept in step, but one implementation drawn twice. It follows the
+arrangement chooser as it is used, which is what that row of names was missing.
+
+Square, the same 2×2 footprint the picker previews at. `containerId` is left null, which is what stops the cell
+publishing a drop zone — a second target for an id the real container on home already answers for would outrank it
+at `z = 1`.
+
+**Only when the container has something in it.** The screen's order argues that adding comes first because an
+empty container is what it is most often opened on, and that is exactly when a preview is a large picture of a "+"
+the row below already offers.
 
 ### 3g. Slice G — per-container icon size and spacing
 

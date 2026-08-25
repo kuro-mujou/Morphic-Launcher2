@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -55,6 +56,7 @@ import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.AppSelectionSheet
 import inkspire.morphic.feature.home.ContainerIcon
 import inkspire.morphic.feature.home.IconArrangementSwatch
+import inkspire.morphic.feature.home.IconContainerCell
 import inkspire.morphic.feature.home.UnnamedWidget
 import inkspire.morphic.feature.home.asIconItem
 import inkspire.morphic.feature.home.listKey
@@ -141,6 +143,15 @@ fun ContainerSettingsScreen(
                     )
                     Spacer(Modifier.height(24.dp))
                 }
+            }
+
+            // **Above the add affordance, and only once there is something to show.** The screen's order argues that
+            // adding comes first because an empty container is what it is most often opened on — which is exactly
+            // when a preview would be a large picture of a "+" the row below already offers. With contents it is
+            // the subject of the screen, and the arrangement chooser at the bottom is otherwise a name with no
+            // consequence anyone can see from here.
+            (state.settings as? ContainerSettings.Icon)?.takeIf { it.icons.isNotEmpty() }?.let { icon ->
+                item("preview") { IconContainerPreviewTile(icons = icon.icons, arrangement = icon.arrangement) }
             }
 
             item("add") {
@@ -279,6 +290,37 @@ fun ContainerSettingsScreen(
 
 /** Which sheet is over the screen. */
 private enum class ContainerSheet { Apps, Widgets }
+
+/**
+ * The container as it will look, drawn by **the cell the home screen draws** rather than by a picture of it.
+ *
+ * `IconContainerCell` over the real contents and the real arrangement, so this cannot show a shape or a spacing the
+ * container does not have — the standing rule that two implementations of one thing are kept honest by a shared
+ * derivation, with the strongest form of it available here, which is not having a second implementation at all.
+ *
+ * **Square, because a container lands square** — the same 2×2 footprint the picker previews it at.
+ *
+ * `containerId` is deliberately left null: that is what stops the cell publishing a drop zone. A zone here would be
+ * a second target for the id the real container on home already answers for, and at `z = 1` it would outrank it.
+ */
+@Composable
+private fun IconContainerPreviewTile(icons: List<ContainerIcon>, arrangement: IconArrangement) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .aspectRatio(1f),
+        ) {
+            IconContainerCell(icons = icons, arrangement = arrangement)
+        }
+    }
+}
 
 /** The big "+ Add …" affordance the screen opens with. */
 @Composable
