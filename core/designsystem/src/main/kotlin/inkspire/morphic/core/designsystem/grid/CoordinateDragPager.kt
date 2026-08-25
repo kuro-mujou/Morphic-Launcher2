@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntSize
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
@@ -77,6 +78,7 @@ fun <T> CoordinateDragPager(
     onShowMenu: (T, anchorInRoot: Rect) -> Unit = { _, _ -> },
     onEdgeAction: (T, SwipeDirection) -> Unit = { _, _ -> },
     onDoubleTap: (T) -> Unit = {},
+    liftedItemAt: ((item: T, localPosition: Offset, size: IntSize) -> GridItem)? = null,
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
     val session = coordinator.session
@@ -169,6 +171,7 @@ fun <T> CoordinateDragPager(
                     onShowMenu = { anchor -> onShowMenu(item, anchor) },
                     onEdgeAction = { direction -> onEdgeAction(item, direction) },
                     onDoubleTap = { onDoubleTap(item) },
+                    liftedItemAt = liftedItemAt?.let { at -> { local, size -> at(item, local, size) } },
                 ) { itemGestures ->
                     itemContent(item, Modifier.fillMaxSize(), itemGestures)
                 }

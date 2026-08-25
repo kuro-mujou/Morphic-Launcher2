@@ -15,7 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
@@ -55,6 +59,16 @@ import kotlinx.coroutines.launch
  *
  * @param tracksFinger this item's placement is being driven directly by the finger right now (a live resize), so
  *   it must land on each new cell at once rather than glide there.
+ * @param liftedItemAt what a drag beginning at the given **cell-local** position actually picks up, for content
+ *   that holds items of its own — an icon container, whose slots are separate things inside one cell. Default
+ *   null: every other cell lifts [item], which is the whole of what it draws.
+ *
+ *   **A hook rather than a second [launcherItemGestures] on the inner items**, and the reason is in the contract:
+ *   `ItemGesturePhase.MenuOpen` reports `ownsFinger`, so a nested machine and its parent both keep the finger from
+ *   the long-press onward and *both* fire `BeginDrag` on the next move — two `coordinator.start` calls, and which
+ *   one survives is whichever ran last. The gesture contract deliberately arbitrates against *ancestors* (via
+ *   consumption on `Initial`/`Final`) and has no notion of a sibling machine on the same press. One machine per
+ *   press, deciding what it lifts, is the shape that fits it.
  * @param onRelease the finger came up on this cell, ending the drag. It is **not** where the drop is committed —
  *   that belongs to the zone the drag landed in ([inkspire.morphic.core.designsystem.drag.DropZone.onDrop]), which
  *   may be on a different surface entirely from this cell. What the surface does here is its own bookkeeping about
@@ -74,12 +88,17 @@ fun LauncherDragCell(
     onShowMenu: (anchorInRoot: Rect) -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
     onDoubleTap: () -> Unit = {},
+    liftedItemAt: ((localPosition: Offset, size: IntSize) -> GridItem)? = null,
     content: @Composable (itemGestures: Modifier) -> Unit,
 ) {
     val isDragged = coordinator.session?.item == item
     val pull = rememberSwipePull(gestureConfig)
+    // Only for content that lifts something other than itself, and only then: this is a layout callback on every
+    // cell on the surface otherwise, for a conversion nothing would ask for.
+    var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     Box(
         modifier
+            .then(if (liftedItemAt == null) Modifier else Modifier.onGloballyPositioned { coordinates = it })
             .then(if (isDragged || tracksFinger) Modifier else Modifier.animatePlacement())
             // **A draw-time translation, not a layout offset, and `animatePlacement` above is the reason.** That
             // modifier reads `positionInParent()` in `onPlaced` and renders the difference from where it is
@@ -103,7 +122,20 @@ fun LauncherDragCell(
                 onDoubleTap = onDoubleTap,
                 onSwipePull = pull::onPull,
                 onShowMenu = onShowMenu,
-                onBeginDrag = { root -> coordinator.start(item, root) },
+                // Converted through this node's **live** coordinates rather than a rectangle published from layout:
+                // the grid sits in a pager, and a stored bounds goes stale the moment the page moves under a finger
+                // held still. The gesture contract already trusts the mirror of this call (`localToRoot`) for every
+                // drag position on every surface.
+                //
+                // `localPositionOf` against the root rather than subtracting `positionInRoot()`, because the cell
+                // above may be mid-`animatePlacement` — that modifier works in placement, so the difference is real
+                // and a subtraction would quietly ignore it.
+                onBeginDrag = { root ->
+                    val lifted = liftedItemAt?.let { at ->
+                        coordinates?.let { at(it.localPositionOf(it.findRootCoordinates(), root), it.size) }
+                    } ?: item
+                    coordinator.start(lifted, root)
+                },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },
                 onCancelDrag = { coordinator.cancel() },

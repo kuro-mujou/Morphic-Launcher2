@@ -15,11 +15,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
@@ -59,6 +61,7 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetInfo
@@ -445,7 +448,15 @@ internal fun HomePagerSurface(
             }
             return
         }
-        // 3. An ordinary grid drag — or an app arriving from the APPS surface that no folder here holds.
+        // 3. The item was lifted out of one of home's icon containers. Like case 2 it must leave its holder in the
+        //    same batch as it lands, or it is drawn twice — once in the container and once on the grid. Unlike
+        //    case 2 it can be a folder as well as an app, which is why it is keyed on the whole item.
+        val sourceContainerId = viewModel.iconContainerHolding(outcome.item)
+        if (sourceContainerId != null) {
+            viewModel.dropExtractedIcon(sourceContainerId, outcome.item, plan, zone)
+            return
+        }
+        // 4. An ordinary grid drag — or an app arriving from the APPS surface that no folder here holds.
         if (plan.intent == DropIntent.MERGE) {
             viewModel.mergeChanges(outcome.item, plan.footprint, zone)?.let(viewModel::applyChanges)
         } else {
@@ -558,6 +569,26 @@ internal fun HomePagerSurface(
         viewModel.runGesture(item.gridItem, direction.asItemGesture())
     }
 
+    // **What a press on an icon container actually lifts** — one of its icons if the finger came down on one, and
+    // the container itself everywhere else. Only a container answers anything but itself, which is why this is one
+    // lambda for the whole surface rather than a property of each cell.
+    //
+    // The slack matters as much as the icons do: a ring's hollow middle and the space around a short arc are how a
+    // container is picked up, resized, or long-pressed for its own menu, so [indexAt] answers on *containment*
+    // rather than handing back the least-far icon.
+    val liftedInCell: (HomeItem, Offset, IntSize) -> GridItem = { item, local, size ->
+        val icon = (item as? HomeItem.IconContainer)?.let { container ->
+            iconContainerSlots(
+                arrangement = container.container.arrangement,
+                count = container.icons.size,
+                widthPx = size.width.toFloat(),
+                heightPx = size.height.toFloat(),
+                density = density,
+            ).indexAt(local)?.let { container.icons[it] }
+        }
+        icon?.asIconItem()?.asGridItem() ?: item.gridItem
+    }
+
     val menuHost = LocalMenuHost.current
     val showMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
         showHomeItemMenu(
@@ -668,6 +699,7 @@ internal fun HomePagerSurface(
                     onGeometryChange = { dockGeometry = it },
                     onOpen = openItem,
                     onShowMenu = showMenu,
+                    liftedItemAt = liftedInCell,
                 ) { item, cellModifier, itemGestures ->
                     HomeItemCell(
                         item = item,
@@ -679,6 +711,7 @@ internal fun HomePagerSurface(
                         onOpenFolder = folderHost::open,
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
                         onAddIconToContainer = onOpenIconContainerSettings,
+                        onReorderContainer = viewModel::reorderIconContainer,
                     )
                 }
             },
@@ -705,6 +738,7 @@ internal fun HomePagerSurface(
                     onGeometryChange = { geometry = it },
                     onOpen = openItem,
                     onShowMenu = showMenu,
+                    liftedItemAt = liftedInCell,
                 ) { item, cellModifier, itemGestures ->
                     HomeItemCell(
                         item = item,
@@ -716,6 +750,7 @@ internal fun HomePagerSurface(
                         onOpenFolder = folderHost::open,
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
                         onAddIconToContainer = onOpenIconContainerSettings,
+                        onReorderContainer = viewModel::reorderIconContainer,
                     )
                 }
             },
@@ -1029,6 +1064,7 @@ private fun HomeItemCell(
     onOpenFolder: (Long) -> Unit = {},
     onAddWidgetToContainer: (Long) -> Unit = {},
     onAddIconToContainer: (Long) -> Unit = {},
+    onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
 ) {
     when (item) {
         is HomeItem.App ->
@@ -1058,6 +1094,10 @@ private fun HomeItemCell(
         }
 
         is HomeItem.IconContainer -> IconContainerCell(
+            // **The whole membership, including whatever is being carried right now** — unlike the folder tile
+            // above, which filters the dragged app out of its preview. The container keeps it: hiding it here
+            // would shrink the list, re-flow the arrangement around a gap that is about to be filled, and leave
+            // the cell unable to recognize its own icon coming back. It draws it invisible in place instead.
             icons = item.icons,
             arrangement = item.container.arrangement,
             modifier = cellModifier,
@@ -1068,6 +1108,8 @@ private fun HomeItemCell(
             onLaunch = onLaunch,
             onOpenFolder = onOpenFolder,
             onAddIcon = { onAddIconToContainer(item.container.id) },
+            containerId = item.container.id,
+            onReorder = { items -> onReorderContainer(item.container.id, items) },
         )
 
         is HomeItem.WidgetContainer -> WidgetContainerCell(

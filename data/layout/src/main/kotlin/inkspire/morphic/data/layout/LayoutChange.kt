@@ -124,6 +124,18 @@ sealed interface LayoutChange {
     /** Removes [item] from icon container [containerId]. */
     data class RemoveFromIconContainer(val containerId: Long, val item: IconItem) : LayoutChange
 
+    /**
+     * Reorders icon container [containerId] to exactly [items] (a full new ordering), [ReorderFolder]'s shape one
+     * holder over.
+     *
+     * **A whole ordering rather than a move, because the surface reorders by *exchange*.** A container's icons sit
+     * at slots a shape decided — a ring, a honeycomb spiral — where "the index before this one" is not a place the
+     * user can point at. What a finger over a ring means is *that position*, so a drop swaps the two icons and
+     * leaves the rest where they are, and the honest way to say that is the resulting list. The folder's
+     * MovingGap insert is the other answer and stays the right one there: a folder's grid has a reading order.
+     */
+    data class ReorderIconContainer(val containerId: Long, val items: List<IconItem>) : LayoutChange
+
     /** Changes how icon container [containerId] arranges its icons. */
     data class SetIconContainerArrangement(
         val containerId: Long,

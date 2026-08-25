@@ -532,6 +532,11 @@ class HomeViewModel(
      * out of a folder, out of another container. So the picker needs no "is it placed?" test and no removal to pair
      * with, which is the same composition the drag path relies on.
      */
+    /** Sets icon container [containerId]'s contents to [items] — a reorder, so membership is unchanged. */
+    fun reorderIconContainer(containerId: Long, items: List<IconItem>) {
+        applyChanges(listOf(LayoutChange.ReorderIconContainer(containerId, items)))
+    }
+
     fun addAppToIconContainer(containerId: Long, component: ComponentKey) {
         applyChanges(listOf(LayoutChange.AddToIconContainer(containerId, IconItem.App(component))))
     }
@@ -1019,6 +1024,40 @@ class HomeViewModel(
         state.value.items.filterIsInstance<HomeItem.Folder>().firstOrNull { app in it.folder.apps }?.folder?.id
 
     /**
+     * [folderHolding] for icon containers, and it takes a whole [GridItem] because a container holds folders as
+     * well as apps — the two things a drag can lift out of one.
+     */
+    fun iconContainerHolding(item: GridItem): Long? {
+        val member = item.asIconItem() ?: return null
+        return state.value.items.filterIsInstance<HomeItem.IconContainer>()
+            .firstOrNull { member in it.container.items }?.container?.id
+    }
+
+    /**
+     * Commits an icon dragged **out** of icon container [containerId] and released on a grid — the container's
+     * counterpart of [dropExtractedApp] and [mergeExtractedApp], collapsed into one because the two differ here
+     * only in what the landing writes.
+     *
+     * **The removal goes first, and that ordering is load-bearing.** `RemoveFromIconContainer` deletes by component
+     * (or folder id) rather than by *container*, since the store's uniqueness index already says an item is in at
+     * most one — so running it after a landing that filed the item into another container would delete the row that
+     * landing had just written, and the icon would vanish from both. Leading with it is safe for the same reason:
+     * every add detaches first anyway.
+     */
+    fun dropExtractedIcon(containerId: Long, item: GridItem, plan: PlacementPlan, zone: HomeZone) {
+        val member = item.asIconItem() ?: return
+        val landing = if (plan.intent == DropIntent.MERGE) {
+            // Null means the merge has become impossible (the target is gone). Nothing is written at all then —
+            // dropping the removal on its own would strand the icon in neither the container nor the grid.
+            mergeChanges(item, plan.footprint, zone) ?: return
+        } else {
+            plan.moves.map { (moved, to) -> LayoutChange.Move(moved, to, zone) } +
+                LayoutChange.Move(item, plan.footprint, zone)
+        }
+        applyChanges(listOf(LayoutChange.RemoveFromIconContainer(containerId, member)) + landing)
+    }
+
+    /**
      * Builds the change for a drop that merged the dragged item onto whatever sits at [targetPlacement] in
      * [zone]: app→app creates a new folder at the target's cell; app→folder appends to it. Returns null when there
      * is no valid merge (target gone, or a combination not yet supported — folder-on-app, widgets and containers
@@ -1173,32 +1212,6 @@ private data class HomeDefinitions(
     val iconContainers: List<IconContainer>,
     val widgetContainers: List<WidgetContainer>,
 )
-
-/**
- * This item as something an **icon container** can hold, or null when it is not one of the two.
- *
- * The bridge between the grid's five-way [GridItem] and the container's two-way [IconItem], which exist separately
- * because they answer different questions — "what can sit on a grid?" against "what reads as a single tappable
- * icon?". A widget or a container is neither: it has no icon-sized representation, and a container inside a
- * container is a grouping inside a grouping.
- */
-private fun GridItem.asIconItem(): IconItem? = when (this) {
-    is GridItem.App -> IconItem.App(component)
-    is GridItem.Folder -> IconItem.Folder(folderId)
-    is GridItem.Widget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
-}
-
-/**
- * The same bridge the other way — which grid item this container member *was*, so the optimistic mirror can take
- * its placement away when it is filed into a container.
- *
- * Total where [asIconItem] is partial, which is the honest asymmetry: everything an icon container can hold is
- * something that could have been on the grid, but not everything on the grid is something it can hold.
- */
-private fun IconItem.asGridItem(): GridItem = when (this) {
-    is IconItem.App -> GridItem.App(component)
-    is IconItem.Folder -> GridItem.Folder(folderId)
-}
 
 /**
  * HOME's coordinate placements flattened into a single top-to-bottom order — **the vertical list's seed**.

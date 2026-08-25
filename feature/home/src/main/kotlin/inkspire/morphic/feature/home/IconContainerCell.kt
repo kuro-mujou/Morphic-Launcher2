@@ -7,21 +7,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import inkspire.morphic.core.designsystem.backdrop.OnPanel
 import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
-import inkspire.morphic.core.designsystem.container.slots
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
+import inkspire.morphic.core.model.IconItem
 import kotlin.math.roundToInt
 
 /**
@@ -39,7 +46,13 @@ import kotlin.math.roundToInt
  * `LauncherDragCell`'s stated exception to the icon+label rule, not a departure from it. The two compose without
  * arbitration: `clickable` consumes the down on the Main pass, but `launcherItemGestures` takes
  * `awaitFirstDown(requireUnconsumed = false)` and reads movement with `positionChangedIgnoreConsumed()`, so a
- * long-press *on a slot* still reaches the container's own menu and drag.
+ * long-press *on a slot* still reaches the cell's own gesture.
+ *
+ * **A long-press decides what it lifts from where it landed, and that is the cell's single gesture doing it** —
+ * a slot lifts its own icon, the slack around the icons lifts the container. The slots are deliberately *not*
+ * given gestures of their own: `ItemGesturePhase.MenuOpen` reports `ownsFinger`, so a nested machine and the
+ * cell's would both keep the finger and both begin a drag. See `LauncherDragCell`'s `liftedItemAt`, which is
+ * where the choice is made, and `iconContainerSlots`, which is the geometry both it and the drawing below read.
  *
  * **An empty container draws a "+", and it is a real button.** Something has to be drawn — an empty cell that
  * cannot be removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable widget.
@@ -58,9 +71,16 @@ internal fun IconContainerCell(
     onOpenFolder: (Long) -> Unit = {},
     onAddIcon: () -> Unit = {},
     metrics: IconMetrics = LocalIconMetrics.current,
+    containerId: Long? = null,
+    onReorder: (List<IconItem>) -> Unit = {},
 ) {
+    // `positionInRoot() + size`, never `boundsInRoot()`: this cell lives inside home's pager, and that call
+    // clips to every ancestor — so a container on a half-scrolled page would report a clipped rectangle and
+    // silently refuse drops over the part that was trimmed.
+    var boundsInRoot by remember { mutableStateOf<Rect?>(null) }
     BoxWithConstraints(
         modifier = modifier
+            .onGloballyPositioned { boundsInRoot = Rect(it.positionInRoot(), it.size.toSize()) }
             .containerPanel()
             .then(itemGestures),
         contentAlignment = Alignment.Center,
@@ -68,15 +88,17 @@ internal fun IconContainerCell(
         val density = LocalDensity.current
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
-        // The gap between neighbouring icons. A fixed dp rather than a fraction of the tile: it is breathing room
-        // between two icons, which is a constant of how the eye separates them and not of how big the container is —
-        // a proportional gap would grow into a gulf on a large container and vanish on a small one.
-        val gapPx = with(density) { 8.dp.toPx() }
+        // Through [iconContainerSlots] rather than calling `slots` here, because the surface hit-tests a press
+        // against the same geometry to decide whether a drag is lifting one icon or the whole container — and the
+        // gap is a bare dp, so a second copy of this call would put the touch targets a few dp off the picture.
+        //
         // Keyed on everything the maths reads, so a resize or a membership change re-lays out and a recomposition
         // for any other reason does not.
-        val slots = remember(arrangement, icons.size, widthPx, heightPx, gapPx) {
-            arrangement.slots(icons.size, widthPx, heightPx, gapPx)
+        val slots = remember(arrangement, icons.size, widthPx, heightPx, density) {
+            iconContainerSlots(arrangement, icons.size, widthPx, heightPx, density)
         }
+
+        val reorder = rememberIconContainerReorder(containerId, icons, slots, boundsInRoot, onReorder)
 
         // **Everything inside the tile is on the tile**, which is two things and they were split for a while. It is
         // themed against the panel — the panel carries the user's own blur and wash, so a dark tile can sit on a
@@ -97,7 +119,7 @@ internal fun IconContainerCell(
                     )
                     return@Box
                 }
-                icons.forEachIndexed { index, icon ->
+                reorder.shown.forEachIndexed { index, icon ->
                     val slot = slots.getOrNull(index) ?: return@forEachIndexed
                     val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
                     // **The slot says how much room there is; the metrics say how much of it an icon may take.**
@@ -114,6 +136,9 @@ internal fun IconContainerCell(
                     val iconSize = metrics.resolveIconSizeUnfloored(slotSize, slotSize).coerceAtMost(slotSize)
                     Box(
                         modifier = Modifier
+                            // The one being carried keeps its slot but is not drawn: the floating proxy under the
+                            // finger is standing in for it, and `LauncherDragCell` hides a lifted *cell* the same way.
+                            .alpha(if (icon.asIconItem() == reorder.lifted) 0f else 1f)
                             // Absolute placement inside the container, so the arrangement owns the layout completely — there
                             // is no row/column structure for a shape like the circle or the beehive to be forced into.
                             .align(Alignment.TopStart)

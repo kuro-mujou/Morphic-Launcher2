@@ -133,6 +133,34 @@ fun ContainerIcon.asIconItem(): IconItem = when (this) {
 }
 
 /**
+ * The same bridge the other way — which grid item this container member *was*, so the optimistic mirror can take
+ * its placement away when it is filed into a container, and so a drag lifting one *out* of a container can name
+ * what it is carrying.
+ *
+ * Total where [asIconItem] is partial, which is the honest asymmetry: everything an icon container can hold is
+ * something that could have been on the grid, but not everything on the grid is something it can hold.
+ */
+internal fun IconItem.asGridItem(): GridItem = when (this) {
+    is IconItem.App -> GridItem.App(component)
+    is IconItem.Folder -> GridItem.Folder(folderId)
+}
+
+/**
+ * This item as something an **icon container** can hold, or null when it is not one of the two.
+ *
+ * The bridge between the grid's five-way [GridItem] and the container's two-way [IconItem], which exist separately
+ * because they answer different questions — "what can sit on a grid?" against "what reads as a single tappable
+ * icon?". A widget or a container is neither: it has no icon-sized representation, and a container inside a
+ * container is a grouping inside a grouping.
+ */
+internal fun GridItem.asIconItem(): IconItem? = when (this) {
+    is GridItem.App -> IconItem.App(component)
+    is GridItem.Folder -> IconItem.Folder(folderId)
+    is GridItem.Widget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
+}
+
+
+/**
  * A stable key for a list row.
  *
  * Prefixed by kind because the two id spaces are unrelated: a folder id and a component are different things, so a
