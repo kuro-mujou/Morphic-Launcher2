@@ -345,10 +345,12 @@ which corner it opens from is a property of a container that already exists — 
 wallpaper. Asked here it would be four near-identical swatches and a decision the user has no way to judge yet, so
 the row shows one fan (`FAN_TOP_LEFT`, which fills in reading order) and the container's settings keep all seven.
 
-**The dot count is set by the fan**, which is the shape that needs the most of them: its arcs hold 1, then 3, then
-4, then 6, so eight is the first count showing three complete arcs and fourteen the first showing four. The row
-uses eight and the detail tile fourteen — below that a fan draws one arc and part of another, which reads as a
-scatter. Every other shape is legible well under either.
+**The dot count is a property of the shape, not of the caller**, because they do not become recognizable at the
+same number: a grid is a grid at six and only gets busier, a beehive wants its centre plus one complete ring —
+seven exactly, since an eighth starts a second ring that reads as a lump — and a ring is a ring almost
+immediately. The fan is the demanding one and the reason the count is per-shape at all: its arcs hold 1, then 3,
+then 4, then 6, so under eight it draws one arc and part of another, and fourteen is where four come out complete.
+`swatchCount` is exhaustive over the enum, so a new arrangement must say what shows it before it can be offered.
 
 The picker's `addFor` became `canAdd`: the sheet can still say *whether* a component is placeable, but it can no
 longer build the commit, because an icon container's page now carries a choice and the commit has to be made where

@@ -647,10 +647,6 @@ private fun ComponentPage(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(12.dp),
-                            // More than the row's, because there is room for it and the shape is the whole point
-                            // of this tile. Fourteen is where the fan's arcs come out complete — 1 + 3 + 4 + 6 —
-                            // so it reads as nested arcs rather than as a partial one trailing off.
-                            count = 14,
                         )
                     } else {
                         ContainerAddGlyph(contentDescription = null, modifier = Modifier.fillMaxSize())

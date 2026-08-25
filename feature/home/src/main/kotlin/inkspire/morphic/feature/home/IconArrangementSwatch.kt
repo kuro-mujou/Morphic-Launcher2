@@ -27,21 +27,18 @@ import inkspire.morphic.core.model.IconArrangement
  * are in the container has nothing to do with which shape the user is choosing. Dots say "shape" without
  * pretending to preview contents the container does not have yet.
  *
- * @param count how many dots to arrange. **Eight by default, and the fan is what sets the floor**: its icons sit
- *   on arcs holding 1, then 3, then 4, so anything under eight draws a single arc and part of another — which
- *   reads as a scatter rather than as a fan. Eight is the first count that shows three complete arcs. The other
- *   shapes are legible well below that, so the fan decides.
+ * How many dots it takes is [swatchCount] — a property of the shape rather than of the caller, since each one
+ * becomes itself at a different number.
  */
 @Composable
 internal fun IconArrangementSwatch(
     arrangement: IconArrangement,
     color: Color,
     modifier: Modifier = Modifier,
-    count: Int = 8,
 ) {
     val density = LocalDensity.current
     Canvas(modifier) {
-        val slots = iconContainerSlots(arrangement, count, size.width, size.height, density)
+        val slots = iconContainerSlots(arrangement, arrangement.swatchCount, size.width, size.height, density)
         val path = Path()
         slots.forEach { slot ->
             path.addRoundRect(
@@ -59,3 +56,29 @@ internal fun IconArrangementSwatch(
         drawOutline(Outline.Generic(path), color = color)
     }
 }
+
+/**
+ * How many dots it takes for an arrangement to look like itself.
+ *
+ * **Not one number for all of them**, because they do not become recognizable at the same count. A grid is a grid
+ * at six and only gets busier; a beehive needs its centre plus one complete ring, which is seven exactly, and an
+ * eighth dot starts a second ring that reads as a lump. A ring is a ring almost immediately — eight is chosen for
+ * evenness rather than for legibility.
+ *
+ * **The fan is the demanding one and the reason this is per-shape at all.** Its icons sit on arcs holding 1, then
+ * 3, then 4, then 6, so under eight it draws one arc and part of another — a scatter rather than a shape.
+ * Fourteen is where four arcs come out complete, and that is what makes the nesting read.
+ *
+ * Exhaustive, so a new [IconArrangement] must say what shows it before it can be offered.
+ */
+private val IconArrangement.swatchCount: Int
+    get() = when (this) {
+        IconArrangement.GRID -> 6
+        IconArrangement.CIRCLE -> 8
+        IconArrangement.BEEHIVE -> 7
+        IconArrangement.FAN_TOP_LEFT,
+        IconArrangement.FAN_TOP_RIGHT,
+        IconArrangement.FAN_BOTTOM_LEFT,
+        IconArrangement.FAN_BOTTOM_RIGHT,
+        -> 14
+    }
