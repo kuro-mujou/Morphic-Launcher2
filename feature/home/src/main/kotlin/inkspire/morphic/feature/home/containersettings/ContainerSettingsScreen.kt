@@ -97,10 +97,15 @@ import org.koin.core.parameter.parametersOf
  * sheet: the "+" used to open a picker directly, and that made adding the *only* thing an empty container could do —
  * with no way to reach the arrangement, the axis, or anything already inside it.
  *
- * **The order is not arbitrary.** The add affordance comes first because an empty container is the state this
- * screen is most often opened in; the contents follow, because they are what the add button produces; the options
- * come last, under a heading, because they describe a container that already has something in it. A settings list
- * that opened with switches would bury the one control that matters on first use.
+ * **The order is not arbitrary, and it is the reverse of what it was.** The options come first, then the add
+ * affordance, then the contents. The old order led with the add row because an empty container is the state this
+ * screen is first opened in — but that is one visit, and every later one is about the options, which a container
+ * holding fifty apps buried under fifty rows: opening the screen showed no control at all. **A list is unbounded,
+ * so nothing may sit after it.** The add row is still the second block and still on screen without scrolling on
+ * the empty container the old argument was about, so that case lost nothing.
+ *
+ * The sliders make it sharper than mere reachability: each one exists to move the preview above it, so a control
+ * that cannot share the screen with its own result is not usable while it is being used.
  *
  * **Two things are pinned and everything else scrolls: the toolbar and the preview**, each for its own reason.
  *
@@ -214,38 +219,45 @@ private fun ContainerSettingsContent(
                         .fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
+                    // **The controls come before the contents, and that is a reversal.** The old order put the add
+                    // affordance first because an empty container is what this screen is most often opened on. What
+                    // that missed is every later visit: a container with fifty apps in it put every control behind
+                    // fifty rows, so opening the screen showed no control at all. A list is unbounded, so nothing
+                    // may sit after it — and a slider in particular has to be on screen at the same time as the
+                    // preview it moves, which is the whole reason that preview is up there.
+                    state.settings?.let { settings ->
+                        item("options") {
+                            ContainerOptions(
+                                settings = settings,
+                                shownScales = shownScales,
+                                onChooseOption = { chooserOpen = true },
+                                onPreviewScales = { icons, spacing -> scaleOverride = icons to spacing },
+                                onCommitScales = viewModel::setScales,
+                                onWidgetOptions = viewModel::setWidgetOptions,
+                            )
+                        }
+                    }
+
                     item("add") {
-                        AddRow(
-                            label = route.addLabel(),
-                            onClick = {
-                                sheet = when (route) {
-                                    is ContainerSettingsRoute.Icon -> ContainerSheet.Apps
-                                    is ContainerSettingsRoute.Widget -> ContainerSheet.Widgets
-                                }
-                            },
-                        )
+                        Column {
+                            SectionSeparator()
+                            AddRow(
+                                label = route.addLabel(),
+                                onClick = {
+                                    sheet = when (route) {
+                                        is ContainerSettingsRoute.Icon -> ContainerSheet.Apps
+                                        is ContainerSettingsRoute.Widget -> ContainerSheet.Widgets
+                                    }
+                                },
+                            )
+                        }
                     }
 
-                    when (val settings = state.settings) {
-                        // Not yet, or gone. The chrome above is drawn either way, so neither flashes an error —
-                        // see [ContainerSettingsState.settings].
-                        null -> Unit
-                        is ContainerSettings.Icon -> iconContainerItems(
-                            settings = settings,
-                            shownScales = shownScales,
-                            onRemove = viewModel::removeIcon,
-                            onPreviewScales = { icons, spacing -> scaleOverride = icons to spacing },
-                            onCommitScales = viewModel::setScales,
-                            onChooseArrangement = { chooserOpen = true },
-                        )
-
-                        is ContainerSettings.Widget -> widgetContainerItems(
-                            settings = settings,
-                            onRemove = viewModel::removeWidget,
-                            onOptions = viewModel::setWidgetOptions,
-                            onChooseAxis = { chooserOpen = true },
-                        )
-                    }
+                    containerContents(
+                        settings = state.settings,
+                        onRemoveIcon = viewModel::removeIcon,
+                        onRemoveWidget = viewModel::removeWidget,
+                    )
                 }
             }
         }
@@ -309,84 +321,82 @@ private fun ContainerSettingsTopBar(title: String, onBack: () -> Unit) {
 private enum class ContainerSheet { Apps, Widgets }
 
 /**
- * An icon container's rows: what it holds, then how it is laid out and how densely.
+ * How a container behaves — its arrangement and scaling, or its axis and the two things it does on its own.
  *
- * A `LazyListScope` extension for [widgetContainerItems]' reason — these are items of the screen's one list, not a
- * block inside it.
+ * **One bounded block rather than list items**, which is what lets it sit above an unbounded list: these are a
+ * fixed handful of rows whichever kind of container this is, so nothing is lost by composing them together, and a
+ * `LazyListScope` extension would have had to be emitted from two places to get the ordering right.
  *
- * @param shownScales the scaling to draw the sliders at, which is the dragged value while one is in flight rather
- *   than the stored one. Null before the store has answered.
+ * @param shownScales the scaling to draw the sliders at — the dragged value while one is in flight rather than the
+ *   stored one. Null before the store has answered.
+ * @param onChooseOption opens whichever chooser this kind has; there is exactly one either way.
  */
-private fun LazyListScope.iconContainerItems(
-    settings: ContainerSettings.Icon,
+@Composable
+private fun ContainerOptions(
+    settings: ContainerSettings,
     shownScales: Pair<Int, Int>?,
-    onRemove: (IconItem) -> Unit,
+    onChooseOption: () -> Unit,
     onPreviewScales: (Int, Int) -> Unit,
     onCommitScales: (Int, Int) -> Unit,
-    onChooseArrangement: () -> Unit,
+    onWidgetOptions: (WidgetContainerAxis, Boolean, Boolean) -> Unit,
 ) {
-    items(settings.icons, key = { it.listKey() }) { icon ->
-        IconContentRow(icon = icon, onRemove = { onRemove(icon.asIconItem()) })
-    }
-    item("options") { OptionsHeading() }
-    item("arrangement") {
-        ChooserRow(title = "Arrangement", value = settings.arrangement.label, onClick = onChooseArrangement)
-    }
-    item("scales") {
-        ScaleRows(
-            iconScalePercent = shownScales?.first ?: settings.iconScalePercent,
-            spacingScalePercent = shownScales?.second ?: settings.spacingScalePercent,
-            onPreview = onPreviewScales,
-            onCommit = onCommitScales,
-        )
+    Column {
+        OptionsHeading()
+        when (settings) {
+            is ContainerSettings.Icon -> {
+                ChooserRow(title = "Arrangement", value = settings.arrangement.label, onClick = onChooseOption)
+                ScaleRows(
+                    iconScalePercent = shownScales?.first ?: settings.iconScalePercent,
+                    spacingScalePercent = shownScales?.second ?: settings.spacingScalePercent,
+                    onPreview = onPreviewScales,
+                    onCommit = onCommitScales,
+                )
+            }
+
+            is ContainerSettings.Widget -> {
+                ChooserRow(title = "Scroll orientation", value = settings.axis.label, onClick = onChooseOption)
+                SwitchRow(
+                    title = "Auto rotate widgets",
+                    description = "Automatically switch to the next widget at regular intervals",
+                    checked = settings.autoRotate,
+                    onCheckedChange = { onWidgetOptions(settings.axis, it, settings.resetOnReturn) },
+                )
+                SwitchRow(
+                    title = "Reset on return",
+                    description = "Return to the first widget when you come back to the home screen",
+                    checked = settings.resetOnReturn,
+                    onCheckedChange = { onWidgetOptions(settings.axis, settings.autoRotate, it) },
+                )
+            }
+        }
     }
 }
 
 /**
- * A widget container's rows: what it holds, then how it pages.
+ * What the container holds, one row each — the only unbounded part of the screen, and therefore the last.
  *
  * A `LazyListScope` extension rather than a composable, so these stay *items* of the screen's one list instead of
- * a block inside one — a nested column would lose the list's own keying and recycling. Split out for
- * [ContainerChooser]'s reason: the screen had outgrown being read in one pass.
+ * a block inside one: a container with fifty apps in it is exactly the case a nested column would compose in full.
  */
-private fun LazyListScope.widgetContainerItems(
-    settings: ContainerSettings.Widget,
-    onRemove: (Int) -> Unit,
-    onOptions: (WidgetContainerAxis, Boolean, Boolean) -> Unit,
-    onChooseAxis: () -> Unit,
+private fun LazyListScope.containerContents(
+    settings: ContainerSettings?,
+    onRemoveIcon: (IconItem) -> Unit,
+    onRemoveWidget: (Int) -> Unit,
 ) {
-    items(settings.widgets, key = { it.appWidgetId }) { widget ->
-        WidgetContentRow(widget = widget, onRemove = { onRemove(widget.appWidgetId) })
-    }
-    item("options") { OptionsHeading() }
-    item("axis") {
-        ChooserRow(
-            title = "Scroll orientation",
-            value = settings.axis.label,
-            onClick = onChooseAxis,
-        )
-    }
-    item("autoRotate") {
-        SwitchRow(
-            title = "Auto rotate widgets",
-            description = "Automatically switch to the next widget at regular intervals",
-            checked = settings.autoRotate,
-            onCheckedChange = {
-                onOptions(settings.axis, it, settings.resetOnReturn)
-            },
-        )
-    }
-    item("resetOnReturn") {
-        SwitchRow(
-            title = "Reset on return",
-            description = "Return to the first widget when you come back to the home screen",
-            checked = settings.resetOnReturn,
-            onCheckedChange = {
-                onOptions(settings.axis, settings.autoRotate, it)
-            },
-        )
+    when (settings) {
+        // Not yet, or gone. The chrome around this is drawn either way, so neither flashes an error — see
+        // [ContainerSettingsState.settings].
+        null -> Unit
+        is ContainerSettings.Icon -> items(settings.icons, key = { it.listKey() }) { icon ->
+            IconContentRow(icon = icon, onRemove = { onRemoveIcon(icon.asIconItem()) })
+        }
+
+        is ContainerSettings.Widget -> items(settings.widgets, key = { it.appWidgetId }) { widget ->
+            WidgetContentRow(widget = widget, onRemove = { onRemoveWidget(widget.appWidgetId) })
+        }
     }
 }
+
 
 /**
  * Whichever picker the container's add affordance opened, or nothing.
@@ -558,8 +568,15 @@ private fun IconContainerPreviewTile(settings: ContainerSettings?, shownScales: 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(164.dp)
-            .punchThroughHole(),
+            .height(196.dp)
+            // **After the punch, so the inset is inside the hole**, and therefore wallpaper rather than background:
+            // the ring draws no content, so `BlendMode.Src` clears it exactly as it clears around the container.
+            // That is the whole point — the preview is *over* the wallpaper, so what separates it from the hole's
+            // edge has to be wallpaper too, or the band stops reading as a window onto home.
+            //
+            // The height carries the inset on top of what the container gets, so raising this does not shrink it.
+            .punchThroughHole()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         val placed = icon.placed ?: return@BoxWithConstraints
@@ -615,18 +632,28 @@ private fun AddRow(label: String, onClick: () -> Unit) {
 @Composable
 private fun OptionsHeading() {
     val colors = LocalMorphicColors.current
+    Text(
+        text = "OPTIONS",
+        style = MaterialTheme.typography.labelMedium,
+        color = colors.contentMuted,
+        modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 8.dp),
+    )
+}
+
+/**
+ * The rule between **how a container behaves** and **what it holds**.
+ *
+ * It used to open [OptionsHeading], back when the options came last and the thing above them was the contents. With
+ * the two swapped it would have been a rule across the top of the list dividing nothing, so it moved to the seam it
+ * was always actually drawing.
+ */
+@Composable
+private fun SectionSeparator() {
+    val colors = LocalMorphicColors.current
     Column {
-        Spacer(Modifier.height(16.dp))
-        HorizontalDivider(
-            color = colors.outline,
-            modifier = Modifier.padding(horizontal = 24.dp)
-        )
-        Text(
-            text = "OPTIONS",
-            style = MaterialTheme.typography.labelMedium,
-            color = colors.contentMuted,
-            modifier = Modifier.padding(start = 24.dp, top = 20.dp, bottom = 8.dp),
-        )
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = colors.outline, modifier = Modifier.padding(horizontal = 24.dp))
+        Spacer(Modifier.height(20.dp))
     }
 }
 
