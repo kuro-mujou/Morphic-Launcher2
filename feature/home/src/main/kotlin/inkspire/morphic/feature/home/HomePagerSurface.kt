@@ -584,6 +584,9 @@ internal fun HomePagerSurface(
                 widthPx = size.width.toFloat(),
                 heightPx = size.height.toFloat(),
                 density = density,
+                // The container's own spacing, or the touch targets sit a few dp from the picture — which is the
+                // divergence `iconContainerSlots` exists to prevent, and it is silent when wrong.
+                spacingScalePercent = container.container.spacingScalePercent,
             )
             slots.indexAt(local)?.let { i ->
                 val slot = slots[i]
@@ -918,6 +921,8 @@ internal fun HomePagerSurface(
                             IconContainerCell(
                                 icons = draggedIconContainer.icons,
                                 arrangement = draggedIconContainer.container.arrangement,
+                                iconScalePercent = draggedIconContainer.container.iconScalePercent,
+                                spacingScalePercent = draggedIconContainer.container.spacingScalePercent,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (draggedWidgetContainer != null) {
@@ -1147,15 +1152,19 @@ private fun HomeItemCell(
             // the cell unable to recognize its own icon coming back. It draws it invisible in place instead.
             icons = item.icons,
             arrangement = item.container.arrangement,
+            iconScalePercent = item.container.iconScalePercent,
+            spacingScalePercent = item.container.spacingScalePercent,
             modifier = cellModifier,
             itemGestures = itemGestures,
             // The zone's own metrics, as every other cell here gets — a container's icons answer to the same
             // guardrails as the icons on the grid around it.
             metrics = metrics,
             onAddIcon = { onAddIconToContainer(item.container.id) },
-            containerId = item.container.id,
-            onReorder = { items -> onReorderContainer(item.container.id, items) },
-            onInsert = { icon, index -> onInsertIntoContainer(item.container.id, icon, index) },
+            dropTarget = IconContainerDropTarget(
+                containerId = item.container.id,
+                onReorder = { items -> onReorderContainer(item.container.id, items) },
+                onInsert = { icon, index -> onInsertIntoContainer(item.container.id, icon, index) },
+            ),
         )
 
         is HomeItem.WidgetContainer -> WidgetContainerCell(

@@ -24,11 +24,14 @@ internal fun iconContainerSlots(
     widthPx: Float,
     heightPx: Float,
     density: Density,
+    spacingScalePercent: Int = 100,
 ): List<ArrangementSlot> {
-    // The gap between neighbouring icons. A fixed dp rather than a fraction of the tile: it is breathing room
-    // between two icons, which is a constant of how the eye separates them and not of how big the container is —
-    // a proportional gap would grow into a gulf on a large container and vanish on a small one.
-    val gapPx = with(density) { 8.dp.toPx() }
+    // The gap between neighbouring icons, before the container's own scaling. A fixed dp rather than a fraction of
+    // the tile: it is breathing room between two icons, which is a constant of how the eye separates them and not
+    // of how big the container is — a proportional gap would grow into a gulf on a large container and vanish on a
+    // small one. What one number cannot suit is every *icon* size, and the scaling is the answer to that: the user
+    // adjusts it where they can see it, rather than a formula guessing.
+    val gapPx = with(density) { 8.dp.toPx() } * spacingScalePercent / 100f
     return arrangement.slots(count, widthPx, heightPx, gapPx)
 }
 

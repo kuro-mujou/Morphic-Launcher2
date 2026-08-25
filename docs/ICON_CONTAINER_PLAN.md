@@ -1,6 +1,6 @@
 # Icon container — arrangement, reorder and configuration
 
-**Status:** slices A–F landed (2026-08-25), verified on an emulator. G remains.
+**Status:** complete — slices A–G landed (2026-08-25), each verified on an emulator.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
 chooser and stopped there. Everything in §0–§2 of that document still stands; this one does not revisit it.
@@ -231,12 +231,21 @@ corner is the pivot, not a slot. `each fan pivots on its own corner` currently a
 has to be restated as "the fan opens away from its own corner" — the four values still differ only by which corner,
 which is what that test exists to protect.
 
-### 2h. Per-container size/spacing multiply, they do not replace
+### 2h. Per-container size/spacing multiply, and the slot is what bounds them
 
 `IconContainerCell` resolves through `metrics.resolveIconSizeUnfloored(...)`, deliberately capped by the user's own
-`maxIconDp` — *"the same guardrail every other surface resolves through"*. A per-container slider must be a
-multiplier applied to that result and still coerced to the slot, so a container cannot escape the global ceiling by
-its own setting. SL's 25–200% / 50–200% ranges are a reasonable starting shape.
+`maxIconDp`. A per-container slider is a **multiplier applied to that result**, so a container answers to the same
+settings as everything around it and then departs from them by a stated amount.
+
+**Superseded during implementation on one point.** This section said the global `maxIconDp` ceiling must still bind
+so a container could not escape it. It cannot: the resolve already returns `maxIconDp` for any slot larger than it
+and the slot size for any slot smaller, so *every* value above 100% coerced straight back and the control was inert
+at every count and every container size. A guardrail exists for icons nobody sized on purpose, and this slider is
+someone sizing them on purpose — the same relationship the icon-size settings have with their own defaults.
+
+What still binds is the **slot**, because past it neighbours overlap. That is also what makes the two sliders one
+control group rather than two: lowering the spacing enlarges the slot, which is how icons are given room to grow
+into. SL's ranges are adopted — 25–200% for the icon, 50–200% for the gap.
 
 ---
 
@@ -373,48 +382,21 @@ at `z = 1`.
 empty container is what it is most often opened on, and that is exactly when a preview is a large picture of a "+"
 the row below already offers.
 
-### 3g. Slice G — per-container icon size and spacing
+### 3g. Slice G — per-container icon size and spacing ✅
 
-`icon_container` gains two percent columns (default 100), `IconContainerEntity` and `iconContainersOf` carry them,
-`IconContainer` gains two fields, and `SetIconContainerMetrics(containerId, iconPercent, spacingPercent)` writes
-them. Two `MorphicSliderRow`s on the settings screen, under the preview from F, where they are visibly live.
+`icon_container` gained `iconScalePercent` and `spacingScalePercent` (default 100), carried through
+`IconContainerEntity` → `iconContainersOf` → `IconContainer`, written by `SetIconContainerScales`. Two
+`MorphicSliderRow`s under the arrangement, over the slice-F preview, which follows them **while they are dragged**
+(`onPreview`) rather than only on release — a slider that commits on release would otherwise leave the tile still
+through the whole gesture and jump at the end, which is the one moment the control has anything to say.
 
-**This bumps the DB to v6 and the app is on `fallbackToDestructiveMigration(dropAllTables = true)`** — the layout
-is wiped on next install. Acceptable pre-release, but do it in one bump alongside anything else that wants a column,
-not on its own.
+**DB v5 → v6, and the layout is wiped**, since the builder still falls back to a destructive migration. Confirmed
+on the emulator: the home screen came back re-seeded. Pre-launcher, so the cost is a dev database.
 
-A background toggle belongs here too if it is wanted, with one caveat: `containerPanel()` has three consumers and
-one of them is the **floating drag proxy**, which exists precisely so a picked-up container does not change
-appearance. A per-container toggle has to reach the proxy or it will.
+The hit-test in `HomePagerSurface` takes the spacing scale too. It has to: `iconContainerSlots` is the shared
+derivation precisely because a second copy of that call would put the touch targets a few dp from the picture, and
+a per-container gap is exactly the sort of thing that would have made them drift.
 
----
-
-## 4. Things to check while implementing
-
-- **The container's zone must not swallow a drag of the container itself.** `DropZone.accepts` is the hook; a
-  container hovering over its own bounds should resolve to the home grid, not to itself.
-- **A `CIRCLE` has a hollow center**, so a long-press there is a container press, not a slot press. Good — but it
-  means "the container's own menu" is reachable in some arrangements and cramped in others (`BEEHIVE` at high
-  counts leaves almost no gap). The settings screen is reachable from the item menu either way; confirm there is
-  always *some* route.
-- **Nearest-slot needs a miss radius.** A finger in the middle of a sparse `CIRCLE` is not near any slot; decide
-  whether that is "no swap" or "the nearest anyway", and make the preview say which.
-- **Slot count vs item count.** `slots()` returns one slot per item, so the geometry changes while a drag is in
-  flight if the item count changes. It does not during a reorder; it does during a drop-in. Resolve the target slot
-  against the **pre-drop** list.
-- `IconArrangementsTest` asserts every arrangement keeps its slots inside the box. The centered grid block still
-  does; confirm the capped circle does too at n=1 and n=2.
-- A **folder inside a container** is a draggable slot like any other, and it has no grid placement. Dragging one
-  out needs `folderPlacement` written, not just `appPlacement`.
-
-## 5. Deliberately not doing
-
-- **The collapse / `Icons visibility` feature.** An invisible tap region that shows nothing until touched is a
-  control that changes nothing, which is the standing rule's whole target — and we have a known gap where no item
-  is reachable by an accessibility service (`launcherItemGestures` carries no `semantics`), so a container whose
-  only affordance is an invisible region would be entirely unreachable rather than merely awkward. Revisit if and
-  when semantics land.
-- **The floating settings panel** — §2e.
-- **`Columns` / `Position`** — §2f.
-
-(Curved fans were briefly listed here and are **in** — §2g, slice A. The triangle is the thing being dropped.)
+**The background toggle is not taken.** It was listed here as optional, and `containerPanel` has three consumers,
+one of them the floating drag proxy — a per-container toggle has to reach the proxy or a picked-up container
+changes appearance mid-drag. Worth doing deliberately rather than as a rider on this.

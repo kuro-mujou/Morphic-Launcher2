@@ -27,7 +27,6 @@ import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
 import inkspire.morphic.core.model.IconArrangement
-import inkspire.morphic.core.model.IconItem
 import kotlin.math.roundToInt
 
 /**
@@ -67,9 +66,9 @@ internal fun IconContainerCell(
     itemGestures: Modifier = Modifier,
     onAddIcon: () -> Unit = {},
     metrics: IconMetrics = LocalIconMetrics.current,
-    containerId: Long? = null,
-    onReorder: (List<IconItem>) -> Unit = {},
-    onInsert: (IconItem, Int) -> Unit = { _, _ -> },
+    iconScalePercent: Int = 100,
+    spacingScalePercent: Int = 100,
+    dropTarget: IconContainerDropTarget? = null,
 ) {
     // `positionInRoot() + size`, never `boundsInRoot()`: this cell lives inside home's pager, and that call
     // clips to every ancestor — so a container on a half-scrolled page would report a clipped rectangle and
@@ -90,13 +89,12 @@ internal fun IconContainerCell(
         // previewed as it will land. The geometry comes back with it because how many slots there are is part of
         // that answer.
         val preview = rememberIconContainerPreview(
-            containerId = containerId,
+            target = dropTarget,
             icons = icons,
             arrangement = arrangement,
+            spacingScalePercent = spacingScalePercent,
             size = Size(widthPx, heightPx),
             bounds = boundsInRoot,
-            onReorder = onReorder,
-            onInsert = onInsert,
         )
         val slots = preview.slots
 
@@ -135,7 +133,16 @@ internal fun IconContainerCell(
                     // floor applied the icons pinned at 24dp partway through a resize and stopped answering to the
                     // drag — the container grew and its contents did not. Capped to the slot as well, so an
                     // `iconPercent` above 1 cannot spend the gap its neighbour is using.
-                    val iconSize = metrics.resolveIconSizeUnfloored(slotSize, slotSize).coerceAtMost(slotSize)
+                    //
+                    // **The container's own scaling multiplies that result, and is bounded by the slot rather than
+                    // by `maxIconDp`.** The plan said the global ceiling should still bind; implementing it showed
+                    // that it cannot — the resolve already returns `maxIconDp` for any slot larger than it, so
+                    // every value above 100% coerced straight back and the control was inert everywhere. A
+                    // guardrail exists for icons nobody sized on purpose, and this slider *is* sizing them on
+                    // purpose. The slot stays binding, because past it neighbours overlap; lowering the spacing is
+                    // how the slot is made bigger, which is why the two are offered together.
+                    val iconSize = (metrics.resolveIconSizeUnfloored(slotSize, slotSize) * iconScalePercent / 100f)
+                        .coerceAtMost(slotSize)
                     Box(
                         modifier = Modifier
                             // The one being carried keeps its slot but is not drawn: the floating proxy under the

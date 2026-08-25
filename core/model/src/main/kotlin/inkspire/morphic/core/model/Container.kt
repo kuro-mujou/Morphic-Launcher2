@@ -64,9 +64,22 @@ enum class IconArrangement {
 /**
  * A grid item that groups app/folder icons into one cell, laid out by [arrangement] (grid, circle, fan,
  * beehive). Holds [IconItem]s — apps or folders, never widgets or other containers.
+ *
+ * @property iconScalePercent how big its icons are as a percentage of what the surface's own sizing would give
+ *   them; 100 is that size exactly. A **multiplier over the resolved size**, not a size, so a container answers to
+ *   the same settings as everything around it and then departs from them by a stated amount. Bounded by the slot
+ *   the arrangement gave the icon, since past that neighbours overlap.
+ * @property spacingScalePercent the same for the gap between icons, against the container's own base gap.
+ *   Lowering it buys room the icons can then grow into, which is why the two sliders are worth having together.
  */
 @Serializable
-data class IconContainer(val id: Long, val arrangement: IconArrangement, val items: List<IconItem>)
+data class IconContainer(
+    val id: Long,
+    val arrangement: IconArrangement,
+    val items: List<IconItem>,
+    val iconScalePercent: Int = 100,
+    val spacingScalePercent: Int = 100,
+)
 
 /**
  * Which way a [WidgetContainer] is paged — **the direction the finger swipes** to reach the next widget, not a

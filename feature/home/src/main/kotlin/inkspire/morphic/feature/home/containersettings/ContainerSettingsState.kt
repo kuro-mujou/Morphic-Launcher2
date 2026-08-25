@@ -26,6 +26,8 @@ sealed interface ContainerSettings {
     data class Icon(
         val icons: List<ContainerIcon>,
         val arrangement: IconArrangement,
+        val iconScalePercent: Int,
+        val spacingScalePercent: Int,
     ) : ContainerSettings
 
     /**

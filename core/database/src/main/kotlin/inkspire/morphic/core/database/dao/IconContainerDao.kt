@@ -27,6 +27,10 @@ interface IconContainerDao {
     @Query("UPDATE icon_container SET arrangement = :arrangement WHERE id = :id")
     suspend fun setArrangement(id: Long, arrangement: IconArrangement)
 
+    /** Both scalings in one statement, because the settings screen writes them from one control group. */
+    @Query("UPDATE icon_container SET iconScalePercent = :icon, spacingScalePercent = :spacing WHERE id = :id")
+    suspend fun setScales(id: Long, icon: Int, spacing: Int)
+
     @Query("DELETE FROM icon_container WHERE id = :id")
     suspend fun delete(id: Long)
 }

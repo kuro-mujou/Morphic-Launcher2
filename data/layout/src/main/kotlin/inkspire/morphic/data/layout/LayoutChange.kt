@@ -148,6 +148,20 @@ sealed interface LayoutChange {
      */
     data class ReorderIconContainer(val containerId: Long, val items: List<IconItem>) : LayoutChange
 
+    /**
+     * Sets icon container [containerId]'s own icon and gap scaling, as percentages of what the surface would
+     * otherwise give them.
+     *
+     * One op for both, because the screen offers them as one group and lowering the spacing is how the icons are
+     * given room to grow — a user moving one is usually about to move the other, and two ops would write two
+     * states the container was never in.
+     */
+    data class SetIconContainerScales(
+        val containerId: Long,
+        val iconScalePercent: Int,
+        val spacingScalePercent: Int,
+    ) : LayoutChange
+
     /** Changes how icon container [containerId] arranges its icons. */
     data class SetIconContainerArrangement(
         val containerId: Long,

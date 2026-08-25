@@ -74,7 +74,12 @@ class ContainerSettingsViewModel(
             }
         }
         ContainerSettingsState(
-            settings = ContainerSettings.Icon(icons, container.arrangement),
+            settings = ContainerSettings.Icon(
+                icons = icons,
+                arrangement = container.arrangement,
+                iconScalePercent = container.iconScalePercent,
+                spacingScalePercent = container.spacingScalePercent,
+            ),
             availableApps = apps.notIn(container.items),
         )
     }
@@ -110,6 +115,16 @@ class ContainerSettingsViewModel(
      */
     fun setWidgetOptions(axis: WidgetContainerAxis, autoRotate: Boolean, resetOnReturn: Boolean) {
         write(LayoutChange.SetWidgetContainerOptions(route.containerId, axis, autoRotate, resetOnReturn))
+    }
+
+    /**
+     * Sets the container's own icon and gap scaling, as percentages of what the surface would otherwise give.
+     *
+     * Both in one write for [LayoutChange.SetIconContainerScales]'s reason: they are one control group, and moving
+     * one is usually the prelude to moving the other.
+     */
+    fun setScales(iconScalePercent: Int, spacingScalePercent: Int) {
+        write(LayoutChange.SetIconContainerScales(route.containerId, iconScalePercent, spacingScalePercent))
     }
 
     /**

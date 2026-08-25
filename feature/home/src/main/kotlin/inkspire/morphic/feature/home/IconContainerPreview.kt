@@ -40,6 +40,21 @@ internal data class IconContainerPreview(
 )
 
 /**
+ * A container that **answers for itself**: the id it publishes a zone under, and what a drop on it writes.
+ *
+ * The three travel together because they are meaningless apart — an id with no commit is a zone that swallows
+ * drops, and a commit with no id is a callback nothing can reach. Null is the other half of that: a container
+ * drawn as a *picture* of one (the floating drag proxy, the widget picker's preview, the settings screen's) has no
+ * id to publish and nothing to write, and making that one value rather than three stops a caller supplying half of
+ * it.
+ */
+internal data class IconContainerDropTarget(
+    val containerId: Long,
+    val onReorder: (List<IconItem>) -> Unit,
+    val onInsert: (IconItem, Int) -> Unit,
+)
+
+/**
  * Registers the container's own drop zone and reports what it should draw while a drag is over it.
  *
  * **A zone of its own rather than home's merge ring.** Merging onto a container is gated on the finger being
@@ -61,20 +76,19 @@ internal data class IconContainerPreview(
  * aside — it goes in instead. That is the trade an open collection already makes, and the container is still moved
  * by dragging the container.
  *
- * @param containerId null for a container being drawn as something other than itself — the floating drag proxy,
- *   the widget picker's preview. Those register nothing, which is what stops a proxy's zone shadowing the real
- *   container it is a picture of.
+ * @param target null for a container being drawn as something other than itself — the floating drag proxy, the
+ *   widget picker's preview, the settings screen's. Those register nothing, which is what stops a picture's zone
+ *   shadowing the real container it is a picture of.
  * @param bounds the cell's rectangle in root coordinates, or null before it has been measured.
  */
 @Composable
 internal fun rememberIconContainerPreview(
-    containerId: Long?,
+    target: IconContainerDropTarget?,
     icons: List<ContainerIcon>,
     arrangement: IconArrangement,
+    spacingScalePercent: Int,
     size: Size,
     bounds: Rect?,
-    onReorder: (List<IconItem>) -> Unit,
-    onInsert: (IconItem, Int) -> Unit,
 ): IconContainerPreview {
     val coordinator = LocalDragCoordinator.current
     val density = LocalDensity.current
@@ -83,11 +97,11 @@ internal fun rememberIconContainerPreview(
     val lifted = carried?.takeIf { it in members }
     // Something this container does not hold, hovering over it — so it is about to gain a slot. Resolved before
     // the slots are laid out, because it is what decides how many there are.
-    val incoming = carried?.takeIf { it !in members && coordinator.session?.activeZone == zoneIdOf(containerId) }
+    val incoming = carried?.takeIf { it !in members && coordinator.session?.activeZone == zoneIdOf(target) }
 
     val slotCount = icons.size + if (incoming != null) 1 else 0
-    val slots = remember(arrangement, slotCount, size, density) {
-        iconContainerSlots(arrangement, slotCount, size.width, size.height, density)
+    val slots = remember(arrangement, slotCount, size, density, spacingScalePercent) {
+        iconContainerSlots(arrangement, slotCount, size.width, size.height, density, spacingScalePercent)
     }
 
     // Which slot the finger is over. Written by the planner, which makes that a *command* rather than a query —
@@ -96,11 +110,11 @@ internal fun rememberIconContainerPreview(
     var hovered by remember { mutableStateOf(-1) }
     LaunchedEffect(carried) { if (carried == null) hovered = -1 }
 
-    if (coordinator != null && containerId != null && bounds != null) {
+    if (coordinator != null && target != null && bounds != null) {
         RegisterDropZone(
             coordinator = coordinator,
             zone = DropZone(
-                id = zoneIdOf(containerId)!!,
+                id = ZoneId("icon_container_${target.containerId}"),
                 bounds = bounds,
                 // Above the grid's own zone, so the finger inside a container is the container's. The open
                 // collection sits at the same height and never overlaps one: it is a full-screen overlay, and
@@ -115,7 +129,7 @@ internal fun rememberIconContainerPreview(
                     PlacementPlan(GridPlacement(0, 0, 0), DropIntent.REORDER)
                 },
                 onDrop = { outcome ->
-                    commitDrop(outcome.item.asIconItem(), members, hovered, onReorder, onInsert)
+                    commitDrop(outcome.item.asIconItem(), members, hovered, target.onReorder, target.onInsert)
                     hovered = -1
                 },
             ),
@@ -127,8 +141,9 @@ internal fun rememberIconContainerPreview(
     return IconContainerPreview(slots, previewOrder(icons, members, lifted, incoming != null, hovered), lifted)
 }
 
-/** The zone id a container publishes, or null for one that is not itself (a proxy, a picker preview). */
-private fun zoneIdOf(containerId: Long?): ZoneId? = containerId?.let { ZoneId("icon_container_$it") }
+/** The zone id a container publishes, or null for one that is not itself (a proxy, a preview). */
+private fun zoneIdOf(target: IconContainerDropTarget?): ZoneId? =
+    target?.let { ZoneId("icon_container_${it.containerId}") }
 
 /**
  * This list with the items at [a] and [b] exchanged — unchanged if either index is out of range or they are the

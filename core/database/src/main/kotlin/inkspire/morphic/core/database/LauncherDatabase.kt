@@ -77,10 +77,14 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
     // v4: widget_container gained `autoRotate` and `resetOnReturn`, the two behaviors its settings screen offers
     //     beside the axis. Genuinely per-container rather than per-surface, which is why they are columns here and
     //     not a `data:settings` slice: two stacks on one home screen may reasonably differ.
+    // v5 -> v6: icon_container gained `iconScalePercent` and `spacingScalePercent`, the two scalings its settings
+    //     screen offers beside the arrangement. Per-container for `autoRotate`'s reason one container over: two
+    //     groups on one home screen may reasonably want different densities, and one of them is usually a dock-like
+    //     row of many while the other is a handful.
     // The bump is required even though the builder falls back to a destructive migration — Room validates the
     // schema hash on open and would throw, not rebuild. Pre-launcher, so the cost of that rebuild is a dev
     // database, not user data; the first real migration is owed the moment this ships (P9).
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(

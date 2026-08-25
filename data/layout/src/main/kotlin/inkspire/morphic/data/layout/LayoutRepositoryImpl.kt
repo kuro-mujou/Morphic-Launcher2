@@ -174,6 +174,9 @@ internal class LayoutRepositoryImpl(
 
             is LayoutChange.ReorderIconContainer -> setIconContainerItems(change.containerId, change.items)
 
+            is LayoutChange.SetIconContainerScales ->
+                daos.iconContainer.setScales(change.containerId, change.iconScalePercent, change.spacingScalePercent)
+
             is LayoutChange.SetIconContainerArrangement ->
                 daos.iconContainer.setArrangement(change.containerId, change.arrangement)
 
