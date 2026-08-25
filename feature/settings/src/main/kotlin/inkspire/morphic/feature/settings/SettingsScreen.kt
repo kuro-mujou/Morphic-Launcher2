@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -33,21 +32,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.withSaveLayer
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.backdrop.PunchThroughLayer
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -320,51 +314,28 @@ private fun SettingsDetail(
 }
 
 /**
- * A settings pane, drawn into an **offscreen layer with its own background inside it** — which is what lets the icon
- * preview punch a hole through the pane and show the wallpaper behind the window.
+ * A settings pane, drawn as a [PunchThroughLayer] — which is what lets the icon preview punch a hole through it and
+ * show the wallpaper behind the window.
  *
- * Three things have to be true at once for that punch to work, and this is two of them (the third is the
- * `BlendMode.Src` on the preview itself, and the fourth is the window, which `app`'s theme now provides):
+ * The recipe itself moved to `core:designsystem` when the second consumer arrived (an icon container's settings
+ * preview); all four of its clauses, and why each fails silently, are on [PunchThroughLayer]. Every section here is
+ * already a plain scrolling column, so the punch is all there ever was to share — no per-detail sticky-header
+ * scaffold wrapped around it.
  *
- * - **The pane is composited offscreen** (`withSaveLayer`). `BlendMode.Src` *replaces* the destination pixels rather
- *   than blending with them, so it needs a destination of its own to replace — and that destination has to end up
- *   composited onto a transparent window.
- * - **The background is painted inside that layer**, which is what the modifier order says: `background` sits after
- *   `drawWithContent`, so it is part of the content the layer captures. Painted outside, it would be underneath the
- *   punched hole and would be exactly what the hole revealed.
- * - **Overscroll is off** for everything inside. A stretch re-composites the scrolling content into its own layer
- *   mid-gesture, and the punch stops reaching the window for as long as it does — the hole fills with the pane's
- *   color and springs back — the one part of the recipe that reads like superstition until you see it happen.
- *
- * Every section is already a plain scrolling column, so the punch is all there is to share — no per-detail
- * sticky-header scaffold wrapped around it.
- *
- * **Separately from the punch: the pane reaches the window edge and insets its own content.** It used to be the other
- * way round — the scaffold reserved the system bars, so the pane stopped above the navigation bar and the strip it
- * left showed the wallpaper through the transparent window, which is the one place the punch was never meant to reach.
- * Nothing but this pane knows what color that strip should be, so nothing but this pane can paint it. Applying it as
- * `contentPadding` would additionally let content scroll under the bar; that is not available here, because a pane
- * owns its own scroller and most of them are a plain `Column`.
+ * **Separately from the punch: the pane reaches the window edge and insets its own content**, which is why the
+ * padding is on the *content* rather than on the layer. It used to be the other way round — the scaffold reserved
+ * the system bars, so the pane stopped above the navigation bar and the strip it left showed the wallpaper through
+ * the transparent window, which is the one place the punch was never meant to reach. Nothing but this pane knows
+ * what color that strip should be, so nothing but this pane can paint it. Applying it as `contentPadding` would
+ * additionally let content scroll under the bar; that is not available here, because a pane owns its own scroller
+ * and most of them are a plain `Column`.
  *
  * @param insetSides which edges to keep content off — see [SettingsDetail].
  */
 @Composable
 private fun PunchThroughPane(insetSides: WindowInsetsSides, content: @Composable () -> Unit) {
-    val colors = LocalMorphicColors.current
-    CompositionLocalProvider(LocalOverscrollFactory provides null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithContent {
-                    drawIntoCanvas { canvas ->
-                        canvas.withSaveLayer(bounds = size.toRect(), paint = Paint()) { drawContent() }
-                    }
-                }
-                .background(colors.background)
-                .uiInsetsPadding(insetSides),
-        ) {
-            content()
-        }
+    PunchThroughLayer(background = LocalMorphicColors.current.background) {
+        Box(Modifier.fillMaxSize().uiInsetsPadding(insetSides)) { content() }
     }
 }
 

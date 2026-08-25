@@ -16,12 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.backdrop.punchThroughHole
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -63,11 +63,10 @@ private val DotPattern = floatArrayOf(2f, 6f)
  *   **solid** outline, the upper guardrail **dashed** and the
  *   lower **dotted**, with the caption naming them. The same rule that made the grid editor's add/remove buttons sit on
  *   the edge they affect rather than being told apart by color.
- * - **The wallpaper shows behind it.** The cell box composites with `BlendMode.Src`, so
- *   wherever it draws nothing it *clears* the pane instead of covering it; the pane is an offscreen layer over a window
- *   that shows the wallpaper (`PunchThroughPane` in `SettingsScreen`, and `windowShowWallpaper` in `app`'s theme), so
- *   what is revealed is the real wallpaper. Worth the machinery: an icon is judged against what it will sit on, and a
- *   gray panel is not that.
+ * - **The wallpaper shows behind it**, because the cell box is a `punchThroughHole` and the pane around it a
+ *   `PunchThroughLayer` — wherever the cell and its outlines draw nothing, the pane is cleared and the window's own
+ *   wallpaper is what shows. Worth the machinery: an icon is judged against what it will sit on, and a gray panel is
+ *   not that.
  *
  * @param app the sample to draw, or null while the app cache is still loading — the preview then shows its outlines
  *   alone, which is still the useful half (the sizes are what is being edited).
@@ -93,18 +92,14 @@ internal fun IconSizingPreview(
     val colors = LocalMorphicColors.current
 
     Column(modifier.fillMaxWidth()) {
-        // **The punch.** `BlendMode.Src` makes this layer *replace* the pixels under it rather than blend with them,
-        // so everywhere the cell and its outlines do not draw, the pane's own background is cleared to transparent —
-        // and since the pane is an offscreen layer over a window that shows the wallpaper, what shows through is the
-        // wallpaper. The title row and the caption sit outside this box, so they are unaffected.
-        //
-        // Only the cell is inside it, which is also why the box is the right level: a punch around the whole preview
-        // would clear the label and the legend too.
+        // **The punch** — see `punchThroughHole`. Only the cell is inside it, which is why the box is at this level
+        // rather than around the whole preview: everything in a hole punches, so the title row and the caption would
+        // clear their own background and read as text floating on the wallpaper.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(if (asRow) cellHeight + 12.dp * 2 else previewBoxHeight(cellHeight))
-                .graphicsLayer { blendMode = BlendMode.Src }
+                .punchThroughHole()
                 .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
