@@ -119,21 +119,30 @@ painted — correct here, because the preview *is* the two icons trading places.
 Consequence to accept deliberately: while a finger is inside a container's bounds, the home grid cannot be the drop
 target. That is what makes drop-at-the-finger work, and it is the same trade the open collection already makes.
 
-### 2c. Slots become drag sources, and the container keeps the cell
+### 2c. One gesture machine per press, deciding what it lifts
 
-Today a long-press anywhere on the container picks up the *container*, because `itemGestures` is on the cell root
-and slots are only `clickable`. Reorder needs a long-press on a slot to pick up **that icon** instead, while a
-long-press on the gaps still picks up the container.
+**Superseded during implementation.** This section planned to give each slot its own `launcherItemGestures` and
+arbitrate between it and the cell's. That does not work, and the reason is in the contract rather than in the
+tuning: `ItemGesturePhase.MenuOpen` reports `ownsFinger`, so from the long-press onward a nested machine *and* its
+parent both consider the finger theirs, and both fire `BeginDrag` on the next move — two `coordinator.start` calls,
+with whichever ran last surviving. The contract arbitrates against **ancestors** (consumption seen on `Initial`,
+and again on `Final` for a `Main`-pass parent) and has no notion of a sibling machine on the same press. Worse, the
+long press fires from a *timer*: with the finger held still there is no pointer event for either side to consume,
+so nothing can tell them apart at the moment it matters.
 
-`IconContainerCell`'s KDoc already explains why the current pair composes without arbitration (`clickable` consumes
-the down on the Main pass; `launcherItemGestures` uses `awaitFirstDown(requireUnconsumed = false)` and
-`positionChangedIgnoreConsumed()`). Adding a third participant makes that a real arbitration rather than a
-coincidence, and it is the part of this plan most likely to be wrong on the first try. The rule to hold to: the
-**slot's** gesture wins inside the slot, the container's wins outside it, and neither may consume a down that the
-other still needs. Expect to reach for `PointerEventPass.Initial` — a parent arbitrating with a child that also
-wants the stream has to run there or its logic never runs at all.
+What is built instead keeps the container's single gesture exactly where it was — on the whole cell, per
+`LauncherDragCell`'s stated exception — and decides **what that press lifts** from where it landed:
+`LauncherDragCell` gained `liftedItemAt`, a hook giving the cell-local position and size, and the container answers
+with the icon under the finger or with itself. Nothing about menus, taps or the surface's own long-press changes.
 
-This also un-blocks drag-out for free (§3d), which is why it is one slice rather than two.
+Two consequences worth knowing:
+
+- The hit-test must agree with the drawing to the pixel, so the slot geometry became one function both call —
+  `iconContainerSlots` in `feature:home`. The gap is a bare dp, so a second copy of that call would put the touch
+  targets a few dp off the picture and read as "that icon is hard to grab" rather than as a wrong number.
+- It answers on **containment**, not nearest: a ring's hollow middle and the slack around a short arc are how the
+  container itself is picked up, resized and long-pressed. Nearest-slot is the right question at *drop* time, when
+  a drag already in flight has to land somewhere, and `nearestIndexTo` is that separate answer.
 
 ### 2d. The gap becomes proportional to the icon, not to the container
 
