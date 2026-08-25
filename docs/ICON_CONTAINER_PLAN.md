@@ -489,8 +489,8 @@ the discriminator must not be a class name that a refactor could move.
 
 ### 6c. Grid — which axis is pinned, and to how many
 
-**Not a column count, and not rows × columns.** The parameter is *which axis the user has fixed*; the other one
-grows with the item count.
+**One setting, read from either axis.** The parameter is *which axis the user has fixed and to how many*; the
+other one grows with the item count, and the icons scale down to keep the whole list inside the container.
 
 - **Rows = 1** is a single row that stays a single row — icons are added along it, and it shrinks them rather than
   wrapping. That is the macOS-dock shape: one strip across the bottom of a tablet, with the container's own frosted
@@ -505,11 +505,17 @@ one icon and `columns = n` gives a second row holding one, while `rows = 1` keep
 describe the same picture today and different intentions about tomorrow, and the intention is the thing worth
 storing. It is also what the control communicates: pinning an axis says *this is the direction icons are added in*.
 
-**What was right in that draft is narrower than it looked**: it is pinning **both** that invents a capacity. Fixing
-R × C means answering "what happens to icon R×C+1?" — drop, paginate, overflow — and every answer is a concept
-nothing else in this container has, because everything else about it assumes any number of icons fits and shrinks
-them until they do. Pinning *one* axis needs no such answer. So the model makes both-pinned unrepresentable rather
-than merely discouraged:
+**The list is unbounded, and pinning an axis does not change that.** A container appends to the end of its list,
+its own bounds are the list's bounds, the arrangement places the whole list inside them, and the icons scale down
+until it fits. That is not a rule invented for the grid — it is what every shape here already does, and it is why
+33 icons in a 2×2 container is a legal picture rather than an overflow. `rows = 1` and two hundred icons is a very
+thin dock, not an error.
+
+**Rows and columns are not two dimensions of a frame.** There is no R × C in this container and no cell count to
+fill — they are the *same* setting read from either axis, "this many across" or "this many down", and exactly one
+of them is ever set. The one-of is that fact written down. A `Grid(rows, columns)` pair would not be a laxer
+version of it; it would be the wrong shape, inviting a reading — a fixed frame with a capacity — that this
+container has never had and §6c does not introduce:
 
 ```kotlin
 @Serializable @SerialName("grid")
