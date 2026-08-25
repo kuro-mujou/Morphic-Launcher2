@@ -27,15 +27,17 @@ import inkspire.morphic.core.model.IconArrangement
  * are in the container has nothing to do with which shape the user is choosing. Dots say "shape" without
  * pretending to preview contents the container does not have yet.
  *
- * @param count how many dots to arrange. Six by default — enough for every shape to be told apart (a ring reads as
- *   a ring, the fan curves, the beehive shows its centre) and few enough to stay legible at swatch size.
+ * @param count how many dots to arrange. **Eight by default, and the fan is what sets the floor**: its icons sit
+ *   on arcs holding 1, then 3, then 4, so anything under eight draws a single arc and part of another — which
+ *   reads as a scatter rather than as a fan. Eight is the first count that shows three complete arcs. The other
+ *   shapes are legible well below that, so the fan decides.
  */
 @Composable
 internal fun IconArrangementSwatch(
     arrangement: IconArrangement,
     color: Color,
     modifier: Modifier = Modifier,
-    count: Int = 6,
+    count: Int = 8,
 ) {
     val density = LocalDensity.current
     Canvas(modifier) {

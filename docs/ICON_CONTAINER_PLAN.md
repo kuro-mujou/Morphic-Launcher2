@@ -340,6 +340,16 @@ It has **two consumers**, which is what made it worth extracting: the picker cho
 chooser dialog now shows it beside each name. That dialog was text alone, and four of the seven names differ only
 by a direction that is far quicker to see than to read.
 
+**The picker offers four shapes, not seven values.** The `FAN_*` family is one shape in four orientations, and
+which corner it opens from is a property of a container that already exists — adjusted where it can be seen on the
+wallpaper. Asked here it would be four near-identical swatches and a decision the user has no way to judge yet, so
+the row shows one fan (`FAN_TOP_LEFT`, which fills in reading order) and the container's settings keep all seven.
+
+**The dot count is set by the fan**, which is the shape that needs the most of them: its arcs hold 1, then 3, then
+4, then 6, so eight is the first count showing three complete arcs and fourteen the first showing four. The row
+uses eight and the detail tile fourteen — below that a fan draws one arc and part of another, which reads as a
+scatter. Every other shape is legible well under either.
+
 The picker's `addFor` became `canAdd`: the sheet can still say *whether* a component is placeable, but it can no
 longer build the commit, because an icon container's page now carries a choice and the commit has to be made where
 that choice lives.

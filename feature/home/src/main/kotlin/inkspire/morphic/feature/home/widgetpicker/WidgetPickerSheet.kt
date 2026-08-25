@@ -647,6 +647,10 @@ private fun ComponentPage(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(12.dp),
+                            // More than the row's, because there is room for it and the shape is the whole point
+                            // of this tile. Fourteen is where the fan's arcs come out complete — 1 + 3 + 4 + 6 —
+                            // so it reads as nested arcs rather than as a partial one trailing off.
+                            count = 14,
                         )
                     } else {
                         ContainerAddGlyph(contentDescription = null, modifier = Modifier.fillMaxSize())
@@ -667,11 +671,28 @@ private fun ComponentPage(
 
 
 /**
- * The arrangements to choose between, as the shapes they make.
+ * The **shapes** an icon container can be given, one entry each.
  *
- * A scrolling row rather than a dialog: there are seven, they are told apart by looking rather than by reading, and
- * the choice is being made *while* the tile above shows the result — a dialog would cover the one thing worth
- * watching. The four fans read as one shape in four orientations, which the row's order keeps together.
+ * The four `FAN_*` values are one shape in four orientations, so the picker offers it once: which corner it opens
+ * from is a property of a container that already exists, adjusted where you can see it on the wallpaper, and four
+ * near-identical swatches here would ask the user to decide something they have no way to judge yet. The container's
+ * settings still list all seven — that is where the side is chosen.
+ *
+ * `FAN_TOP_LEFT` stands for the family because it fills in reading order: the first icon sits nearest the corner a
+ * left-to-right reader starts from.
+ */
+private val PickableArrangements = listOf(
+    IconArrangement.GRID,
+    IconArrangement.CIRCLE,
+    IconArrangement.FAN_TOP_LEFT,
+    IconArrangement.BEEHIVE,
+)
+
+/**
+ * The shapes to choose between, drawn as the shapes they make.
+ *
+ * A row rather than a dialog: they are told apart by looking rather than by reading, and the choice is being made
+ * *while* the tile above shows the result — a dialog would cover the one thing worth watching.
  */
 @Composable
 private fun ArrangementRow(selected: IconArrangement, onPick: (IconArrangement) -> Unit) {
@@ -683,11 +704,11 @@ private fun ArrangementRow(selected: IconArrangement, onPick: (IconArrangement) 
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconArrangement.entries.forEach { option ->
+        PickableArrangements.forEach { option ->
             val chosen = option == selected
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(60.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (chosen) colors.accent.copy(alpha = 0.22f) else colors.surface.copy(alpha = CardAlpha))
                     .clickable { onPick(option) }
