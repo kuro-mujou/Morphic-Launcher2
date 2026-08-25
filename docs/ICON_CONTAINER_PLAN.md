@@ -1,6 +1,6 @@
 # Icon container — arrangement, reorder and configuration
 
-**Status:** slices A–D landed (2026-08-25), verified on an emulator. E–G remain.
+**Status:** slices A–E landed (2026-08-25), verified on an emulator. F and G remain.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
 chooser and stopped there. Everything in §0–§2 of that document still stands; this one does not revisit it.
@@ -325,12 +325,27 @@ should **not** (it is a placed object with its own settings, and its empty state
 `ContainerSettingsViewModel.removeIcon`'s "it goes nowhere" stays true and stays correct — that is a different verb
 from dragging it somewhere.
 
-### 3e. Slice E — the arrangement is chosen before placement
+### 3e. Slice E — the arrangement is chosen before placement ✅
 
-`WidgetPickerSheet`'s `ComponentKind.ICON_CONTAINER` already has a detail page, and its KDoc already says the page
-*"draws the real thing"*. Add the seven arrangements there, previewed with the real cell over sample icons, and
-thread the choice through `onAddIconContainer` → `createIconContainer(zone, config, arrangement)`, deleting the
-hardcoded `IconArrangement.GRID`.
+`WidgetPickerSheet`'s icon-container detail page carries a scrolling row of the seven arrangements, and the tile
+above shows the chosen one at the size it will land. `createIconContainer` takes it; the hardcoded
+`IconArrangement.GRID` is gone.
+
+**The shapes are drawn by the arrangements themselves.** `IconArrangementSwatch` lays dots out through the same
+`iconContainerSlots` the real container uses, so a swatch cannot advertise a shape the container does not make —
+the anti-drift rule the page's own KDoc already argued for its "+". Slice A retuned three of these formulas and
+nothing here would have needed touching.
+
+It has **two consumers**, which is what made it worth extracting: the picker chooses by it, and the settings
+chooser dialog now shows it beside each name. That dialog was text alone, and four of the seven names differ only
+by a direction that is far quicker to see than to read.
+
+The picker's `addFor` became `canAdd`: the sheet can still say *whether* a component is placeable, but it can no
+longer build the commit, because an icon container's page now carries a choice and the commit has to be made where
+that choice lives.
+
+**What it does not do is preview the contents.** A container lands empty, and which apps go in has nothing to do
+with which shape is being chosen — dots say "shape" without pretending to know.
 
 ### 3f. Slice F — a live preview in the settings screen
 

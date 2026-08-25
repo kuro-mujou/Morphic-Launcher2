@@ -54,6 +54,7 @@ import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.AppSelectionSheet
 import inkspire.morphic.feature.home.ContainerIcon
+import inkspire.morphic.feature.home.IconArrangementSwatch
 import inkspire.morphic.feature.home.UnnamedWidget
 import inkspire.morphic.feature.home.asIconItem
 import inkspire.morphic.feature.home.listKey
@@ -218,6 +219,19 @@ fun ContainerSettingsScreen(
                     label = { it.label },
                     onPick = { viewModel.setArrangement(it) },
                     onDismiss = { chooserOpen = false },
+                    // The same swatch the picker chooses by, so the two places an arrangement is set show the same
+                    // shape. Names alone ("Fan from top left") are what this list had, and four of the seven differ
+                    // only by a direction that is far quicker to see than to read.
+                    leading = { option ->
+                        IconArrangementSwatch(
+                            arrangement = option,
+                            color = colors.contentMuted,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .padding(end = 0.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    },
                 )
 
                 is ContainerSettings.Widget -> ChooserDialog(
@@ -359,6 +373,7 @@ private fun <T> ChooserDialog(
     label: (T) -> String,
     onPick: (T) -> Unit,
     onDismiss: () -> Unit,
+    leading: @Composable (T) -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -378,6 +393,7 @@ private fun <T> ChooserDialog(
                     ) {
                         RadioButton(selected = option == selected, onClick = null)
                         Spacer(Modifier.width(12.dp))
+                        leading(option)
                         Text(label(option))
                     }
                 }

@@ -1048,9 +1048,9 @@ internal fun HomePagerSurface(
                     widgetPickerOpen = false
                     addWidget.start(provider.component)
                 },
-                onAddIconContainer = {
+                onAddIconContainer = { arrangement ->
                     widgetPickerOpen = false
-                    pageToReveal = viewModel.createIconContainer(HomeZone.MAIN, config)?.page
+                    pageToReveal = viewModel.createIconContainer(HomeZone.MAIN, config, arrangement)?.page
                 },
                 onAddWidgetContainer = {
                     widgetPickerOpen = false

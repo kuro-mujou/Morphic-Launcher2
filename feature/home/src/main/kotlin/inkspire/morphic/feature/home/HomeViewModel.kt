@@ -596,12 +596,12 @@ class HomeViewModel(
      *
      * @return where it landed, or null when nothing of that size fits — [placeWidget]'s contract exactly.
      */
-    fun createIconContainer(zone: HomeZone, config: GridConfig): GridPlacement? {
+    fun createIconContainer(zone: HomeZone, config: GridConfig, arrangement: IconArrangement): GridPlacement? {
         val at = freeContainerRect(zone, config) ?: return null
         applyChanges(
             listOf(
                 LayoutChange.CreateIconContainer(
-                    arrangement = IconArrangement.GRID,
+                    arrangement = arrangement,
                     items = emptyList(),
                     at = at,
                     zone = zone,

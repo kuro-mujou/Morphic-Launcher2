@@ -9,6 +9,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -64,11 +66,13 @@ import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
+import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.WidgetProvider
 import inkspire.morphic.data.widgets.WidgetProviderGroup
 import inkspire.morphic.feature.home.ContainerAddGlyph
 import inkspire.morphic.feature.home.HomeViewModel
+import inkspire.morphic.feature.home.IconArrangementSwatch
 import inkspire.morphic.feature.home.LauncherBottomSheet
 import inkspire.morphic.feature.home.containerPanel
 import org.koin.androidx.compose.koinViewModel
@@ -111,10 +115,10 @@ import org.koin.androidx.compose.koinViewModel
  *   **widget area**, which is a single grid drawn all at once: unlike the pager it cannot grow a page, so a widget
  *   bigger than the room left has nowhere to go and the user has to be told before binding one. The default admits
  *   everything, for a caller with no limit to state.
- * @param onAddIconContainer adds an empty icon container, from its own detail page. Nullable on [onAddWidget]'s
- *   terms, and the caller passes null when the sheet was opened to fill a container — neither kind nests, so the
- *   section would be two rows that could not work. Null also **removes the row**, since a component with nowhere to
- *   go has nothing to preview.
+ * @param onAddIconContainer adds an empty icon container, laid out the way its detail page was left. Nullable on
+ *   [onAddWidget]'s terms, and the caller passes null when the sheet was opened to fill a container — neither
+ *   kind nests, so the section would be two rows that could not work. Null also **removes the row**, since a
+ *   component with nowhere to go has nothing to preview.
  * @param onAddWidgetContainer the same, for a widget container.
  */
 @Composable
@@ -125,7 +129,7 @@ internal fun WidgetPickerSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onAddWidget: ((WidgetProvider) -> Unit)? = null,
-    onAddIconContainer: (() -> Unit)? = null,
+    onAddIconContainer: ((IconArrangement) -> Unit)? = null,
     onAddWidgetContainer: (() -> Unit)? = null,
     hasRoomFor: (WidgetSpan) -> Boolean = { true },
 ) {
@@ -134,12 +138,14 @@ internal fun WidgetPickerSheet(
 
     var opened by remember { mutableStateOf<PickerEntry?>(null) }
 
-    // Which add flow a component's page commits to, resolved here because this is the layer holding both callbacks.
-    // Exhaustive over the enum, so a third component cannot be listed without saying what placing it does.
-    val addFor: (ComponentKind) -> (() -> Unit)? = { kind ->
+    // Whether a component can be placed at all — the list only offers what something will accept. **Not** the add
+    // itself any more: an icon container's page carries a choice (which arrangement), so the commit has to be built
+    // where that choice lives. Exhaustive over the enum, so a third component cannot be listed without saying
+    // whether placing it is possible.
+    val canAdd: (ComponentKind) -> Boolean = { kind ->
         when (kind) {
-            ComponentKind.ICON_CONTAINER -> onAddIconContainer
-            ComponentKind.WIDGET_CONTAINER -> onAddWidgetContainer
+            ComponentKind.ICON_CONTAINER -> onAddIconContainer != null
+            ComponentKind.WIDGET_CONTAINER -> onAddWidgetContainer != null
         }
     }
 
@@ -170,7 +176,7 @@ internal fun WidgetPickerSheet(
                     onOpen = { opened = PickerEntry.Widgets(it) },
                     onDismiss = onDismiss,
                     // A component is listed only when something can place it — see [WidgetPickerSheet].
-                    components = ComponentKind.entries.filter { addFor(it) != null },
+                    components = ComponentKind.entries.filter(canAdd),
                     onOpenComponent = { opened = PickerEntry.Component(it) },
                 )
 
@@ -188,7 +194,8 @@ internal fun WidgetPickerSheet(
                     kind = target.kind,
                     grid = grid,
                     onBack = { opened = null },
-                    onAdd = addFor(target.kind),
+                    onAddIconContainer = onAddIconContainer,
+                    onAddWidgetContainer = onAddWidgetContainer,
                     hasRoomFor = hasRoomFor,
                 )
             }
@@ -500,16 +507,28 @@ private fun ComponentDetailPane(
     kind: ComponentKind,
     grid: GridConfig?,
     onBack: () -> Unit,
-    onAdd: (() -> Unit)?,
+    onAddIconContainer: ((IconArrangement) -> Unit)?,
+    onAddWidgetContainer: (() -> Unit)?,
     hasRoomFor: (WidgetSpan) -> Boolean,
 ) {
     val span = grid?.let { containerSpan(it) }
     val fits = span == null || hasRoomFor(span)
+    // **The shape is chosen before the container exists**, which is why this state lives here rather than in the
+    // container's settings: an arrangement is a property of the thing being placed, and picking it afterwards means
+    // placing something the user did not ask for and then correcting it. `GRID` opens because it is the plainest —
+    // a first container should not surprise anyone.
+    var arrangement by remember { mutableStateOf(IconArrangement.GRID) }
+    val onAdd: (() -> Unit)? = when (kind) {
+        ComponentKind.ICON_CONTAINER -> onAddIconContainer?.let { add -> { add(arrangement) } }
+        ComponentKind.WIDGET_CONTAINER -> onAddWidgetContainer
+    }
     DetailFrame(title = kind.label, onBack = onBack, onAdd = onAdd.takeIf { fits }) {
         ComponentPage(
             kind = kind,
             sizeLabel = if (grid != null && span != null) span.visualLabel(grid) else "",
             roomless = !fits,
+            arrangement = arrangement,
+            onArrangement = { arrangement = it },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -580,12 +599,20 @@ private fun DetailFrame(
  * inside it fills with its scrim (`LocalOverFrost`) — the launcher's own no-double-blur rule, which a preview is
  * subject to like anything else on a sheet. What it can show is the shape, the corner and the affordance; what a
  * container is *made* of is only truthful over the wallpaper, which is where the user is about to put it.
+ *
+ * **An icon container shows its arrangement instead of the "+"**, because on this page the arrangement is what the
+ * user is deciding and the tile is the only place to see it at the size it will land. The dots come from the same
+ * `iconContainerSlots` the real container lays out with (see [IconArrangementSwatch]), so this is still the shape
+ * the thing actually makes rather than a likeness of it. A widget container has nothing to choose and keeps the
+ * "+" it will show on home.
  */
 @Composable
 private fun ComponentPage(
     kind: ComponentKind,
     sizeLabel: String,
     roomless: Boolean,
+    arrangement: IconArrangement,
+    onArrangement: (IconArrangement) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -613,9 +640,23 @@ private fun ComponentPage(
                     .aspectRatio(1f),
             ) {
                 Box(modifier = Modifier.containerPanel(), contentAlignment = Alignment.Center) {
-                    ContainerAddGlyph(contentDescription = null, modifier = Modifier.fillMaxSize())
+                    if (kind == ComponentKind.ICON_CONTAINER) {
+                        IconArrangementSwatch(
+                            arrangement = arrangement,
+                            color = colors.content,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                        )
+                    } else {
+                        ContainerAddGlyph(contentDescription = null, modifier = Modifier.fillMaxSize())
+                    }
                 }
             }
+        }
+        if (kind == ComponentKind.ICON_CONTAINER) {
+            Spacer(Modifier.height(12.dp))
+            ArrangementRow(selected = arrangement, onPick = onArrangement)
         }
         Spacer(Modifier.height(12.dp))
         Text(text = kind.description, style = MaterialTheme.typography.bodyMedium, color = colors.content)
@@ -624,6 +665,43 @@ private fun ComponentPage(
     }
 }
 
+
+/**
+ * The arrangements to choose between, as the shapes they make.
+ *
+ * A scrolling row rather than a dialog: there are seven, they are told apart by looking rather than by reading, and
+ * the choice is being made *while* the tile above shows the result — a dialog would cover the one thing worth
+ * watching. The four fans read as one shape in four orientations, which the row's order keeps together.
+ */
+@Composable
+private fun ArrangementRow(selected: IconArrangement, onPick: (IconArrangement) -> Unit) {
+    val colors = LocalMorphicColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconArrangement.entries.forEach { option ->
+            val chosen = option == selected
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (chosen) colors.accent.copy(alpha = 0.22f) else colors.surface.copy(alpha = CardAlpha))
+                    .clickable { onPick(option) }
+                    .padding(9.dp),
+            ) {
+                IconArrangementSwatch(
+                    arrangement = option,
+                    color = if (chosen) colors.accent else colors.contentMuted,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
 
 /** One widget: its published preview at the top, the cells it would occupy underneath. */
 @Composable
