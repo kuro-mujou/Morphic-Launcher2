@@ -1,6 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
-**Status:** complete — slices A–G landed (2026-08-25), each verified on an emulator. Slice F was **revised the same
+**Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
+**Part two (§6) is planned and not started:** the arrangement grows parameters of its own. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -437,3 +438,153 @@ a per-container gap is exactly the sort of thing that would have made them drift
 **The background toggle is not taken.** It was listed here as optional, and `containerPanel` has three consumers,
 one of them the floating drag proxy — a per-container toggle has to reach the proxy or a picked-up container
 changes appearance mid-drag. Worth doing deliberately rather than as a rider on this.
+
+---
+
+## 6. Part two — the arrangement grows parameters of its own
+
+**Planned, not started.** Part one gave a container four shapes and left each of them with no settings. The shapes
+are good; what a user cannot do is say *how* a shape should place their icons, and for three of the four there is
+nothing to say it with.
+
+### 6a. Why the enum has to split
+
+`IconArrangement` is one enum doing two jobs — **which shape**, and **which variant of that shape** — and every
+place that hurts is already visible in part one:
+
+- The picker cannot offer the enum. `PickableArrangements` exists solely to filter seven values down to the four
+  that are actually *shapes*, and §3e had to write a paragraph explaining that the fan's corner is not a shape.
+- The fan cannot grow. Four corners are four values; adding the four edge anchors below would make eight, and the
+  picker's filter would then hide seven of them.
+- The grid cannot be parameterised at all. A column count is not an enum value, and no amount of naming makes it
+  one.
+
+So: **a shape, and the parameters that shape has.** Not one flat vocabulary of every combination.
+
+### 6b. The model — a sealed shape, stored as one blob
+
+```kotlin
+@Serializable
+sealed interface IconArrangement {
+    @Serializable @SerialName("grid")    data class Grid(val columns: Int? = null) : IconArrangement
+    @Serializable @SerialName("circle")  data class Circle(val startDegrees: Int = 0) : IconArrangement
+    @Serializable @SerialName("beehive") data class Beehive(val orientation: HexOrientation = POINTY) : IconArrangement
+    @Serializable @SerialName("fan")     data class Fan(val anchor: FanAnchor = TOP_LEFT) : IconArrangement
+}
+```
+
+Sealed rather than an enum plus four nullable columns, for the reason `HomeLayout` is one type and
+`ContainerSettings` is sealed: it makes **a column count on a circle unrepresentable**, rather than a field that is
+merely ignored there. A shape's parameters travel with the shape or they drift from it.
+
+**Stored as one serialized blob in a renamed column**, not as flat columns. That is the icon-layer lesson taken
+rather than relearned — CLAUDE.md records that L1 burned four destructive DB bumps discovering that a per-item
+recipe belongs in a blob — and the rename is the standing rule that *a key's name is the seam for a semantic
+break*: `arrangement` holds an enum name today, and re-interpreting that column in place fails silently. It becomes
+`arrangementSpec`, `IconArrangementConverter` serializes instead of calling `.name`, and the DB goes to **v7**
+(destructive, as v6 was; pre-release, so the cost is a dev database).
+
+`@SerialName`s are short and explicit for `GridItem`'s reason one file over: this reaches a user's stored blob, so
+the discriminator must not be a class name that a refactor could move.
+
+### 6c. Grid — columns, and rows are the consequence
+
+**Columns: `Auto`, or 1…8.** `Auto` is today's `sqrt(count × aspect)` derivation and stays the default, so a
+container nobody has configured behaves exactly as it does now.
+
+**Not rows as well, and this is the one suggestion I would push back on.** Rows are already determined:
+`ceil(count / columns)`. Asking for both invents a *capacity* — and the container has none. Everything else about it
+assumes any number of icons fits, because the arrangement shrinks them until they do; that is why 33 icons in a 2×2
+container is a legal picture rather than an error. Pinning R×C would need an answer to "what happens to icon
+R×C+1?" — drop it, paginate, scroll, overflow the footprint — and every one of those is a new concept this
+container does not otherwise have. Columns alone is the free parameter, and it gets the tall-narrow and short-wide
+arrangements that wanting rows is usually reaching for.
+
+**This reverses §2f**, which declined a column count on the grounds that a pinned one fights the resize handle. That
+objection is answered rather than ignored: `Auto` remains the default, so the derivation still governs every
+container until someone deliberately overrides it — and a user who pins three columns and then widens the container
+is asking for three wide columns.
+
+### 6d. Fan — one anchor, and the sweep follows from it
+
+Eight anchors, not four: the four **corners** and the four **edge midpoints**.
+
+```
+TOP_LEFT      TOP        TOP_RIGHT
+LEFT                     RIGHT
+BOTTOM_LEFT   BOTTOM     BOTTOM_RIGHT
+```
+
+A corner sweeps a **quarter** circle, an edge sweeps a **half** — which is the half-circle shape being asked for,
+arrived at without a second control. The sweep is implied by the kind of anchor, so "a corner with a 180° sweep"
+cannot be expressed and there is no pair of settings to keep in step. `fanSlots` already takes its corner as two
+booleans decomposed from the enum; it takes an anchor and a sweep angle derived from it instead, and the arc maths
+from slice A is unchanged — only the range the angles span.
+
+**A centre anchor with a full sweep is deliberately not added**, even though it would complete the table: that is
+the circle, and it is not the same circle. `Circle` is a *single* ring whose radius solves the chord so neighbours
+sit one pitch apart; the fan is *nested* arcs at a fixed radial pitch. They coincide at low counts and diverge
+completely at high ones, so folding them together would mean one of the two laws quietly losing.
+
+### 6e. Beehive — orientation, not rotation
+
+A hex lattice has six-fold symmetry, so a free angle is sixty distinct degrees pretending to be three hundred and
+sixty. The rotation that changes the picture is **30°**: pointy-top becomes flat-top. Two values, named for what
+they are.
+
+That is a better control than a slider would be, and cheaper: `beehiveSlots` projects axial coordinates through a
+pointy-top formula, and flat-top is the same projection with its two terms exchanged.
+
+### 6f. Circle — a start angle, and an honest note about it
+
+Offered last, or not at all. With `n` icons the ring has `n`-fold symmetry, so rotating by a whole step only
+permutes *which* icon sits at twelve o'clock — which reordering already does, better. Only a fraction of a step
+changes the shape, and only where `n` is small enough for the shape to have an orientation: three icons pointing up
+versus down is a real choice, twenty is a circle either way.
+
+So it is a real control at n≤6 and inert above it, which is worth knowing before it is built rather than after. If
+only one of §6c–§6f gets built, this is the one to drop.
+
+### 6g. The control is two rows, and the dialog goes away
+
+The shape row from §3e stays as it is — four swatches, one per sealed subtype. Under it, **a second row that
+belongs to the chosen shape**: the fan's eight anchors, the grid's column counts, the beehive's two orientations.
+Empty for a shape with nothing to say, which will be the circle if §6f is dropped.
+
+Both rows go in **both places**: the picker's detail page, where they are already, and the container's settings
+screen. In settings this **replaces the `ChooserRow` + `AlertDialog`** entirely. That dialog made sense when the
+screen had nothing to show; now there is a live preview pinned above it, and a dialog covers the one thing worth
+watching while choosing — which is exactly the argument §3e made for using a row in the picker, applied to the
+place the argument is now stronger. Two consumers of one control is what makes extracting it right rather than
+speculative.
+
+**The swatch needs no change at all**, and that is the split paying for itself immediately: `IconArrangementSwatch`
+takes an arrangement and lays dots out through `iconContainerSlots`, so once the arrangement carries its own
+anchor, a fan swatch draws the *right* corner without the swatch knowing what a corner is.
+
+### 6h. What else moves
+
+- `IconArrangement.slots()` keeps its shape: one exhaustive `when`, now over the sealed subtypes, each arm reading
+  the parameters it owns. A new shape still fails to compile until it says how it lays out.
+- `swatchCount` becomes a property of the sealed type, still exhaustive, still per-shape (§6 does not change the
+  numbers: grid 6, circle 8, beehive 7, fan 14).
+- `PickableArrangements` is deleted. The shape row is the four subtypes; the variant row is the parameter.
+- `ContainerLabels.label` splits: a shape name, and a variant name for the second row.
+- `SetIconContainerArrangement` carries the whole value, so it already fits.
+
+### 6i. Slices
+
+- **H — the model split, no new parameters.** `Fan` keeps only its four corners, `Grid.columns` is always null, the
+  other two take their defaults. Pure refactor: model, converter, DB v7, `slots()`, swatch, both call sites.
+  Nothing about the launcher should look different, and that is how it is verified.
+- **I — the two-row control.** The variant row appears and the settings dialog is replaced. With only the fan's
+  four corners to show, it is testable before any new geometry exists.
+- **J — grid columns.** `Auto` plus 1…8.
+- **K — fan edge anchors.** The half circle; the geometry from §6d.
+- **L — beehive orientation.** Flat-top.
+- **M — circle start angle.** Optional; see §6f.
+
+**H before everything, and alone.** It is the only slice that touches persistence, and it is behaviour-preserving —
+which means it can be verified by *nothing changing*, and any later slice that breaks something has a clean commit
+to bisect against. Shipping it together with J or K would confuse a migration bug with a geometry bug, and those
+look identical on screen.
