@@ -541,6 +541,16 @@ class HomeViewModel(
         applyChanges(listOf(LayoutChange.RemoveFromIconContainer(containerId, item)))
     }
 
+    /**
+     * Files [item] into icon container [containerId] at [index] — a drop from outside, which names a place.
+     *
+     * One op, because `AddToIconContainer` detaches the item from wherever it was as part of filing it: off the
+     * grid, out of a folder, out of another container. There is no removal to pair with it.
+     */
+    fun insertIntoIconContainer(containerId: Long, item: IconItem, index: Int) {
+        applyChanges(listOf(LayoutChange.AddToIconContainer(containerId, item, index)))
+    }
+
     /** Sets icon container [containerId]'s contents to [items] — a reorder, so membership is unchanged. */
     fun reorderIconContainer(containerId: Long, items: List<IconItem>) {
         applyChanges(listOf(LayoutChange.ReorderIconContainer(containerId, items)))

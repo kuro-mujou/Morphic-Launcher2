@@ -19,6 +19,7 @@ import inkspire.morphic.data.layout.mapper.foldersOf
 import inkspire.morphic.data.layout.mapper.iconContainersOf
 import inkspire.morphic.data.layout.mapper.toEntity
 import inkspire.morphic.data.layout.mapper.toEntry
+import inkspire.morphic.data.layout.mapper.toIconItem
 import inkspire.morphic.data.layout.mapper.toRow
 import inkspire.morphic.data.layout.mapper.toWidgetInfo
 import inkspire.morphic.data.layout.mapper.widgetContainersOf
@@ -164,13 +165,7 @@ internal class LayoutRepositoryImpl(
                 )
             }
 
-            is LayoutChange.AddToIconContainer -> {
-                // Detach *before* reading the next sort order, so re-adding an item already in this container
-                // appends it to what remains rather than leaving a gap where its old row was.
-                detachIconItem(change.item)
-                val next = (daos.iconContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
-                daos.iconContainerItem.upsert(listOf(change.item.toRow(change.containerId, next)))
-            }
+            is LayoutChange.AddToIconContainer -> addToIconContainer(change)
 
             is LayoutChange.RemoveFromIconContainer -> when (val item = change.item) {
                 is IconItem.App -> daos.iconContainerItem.removeByComponent(item.component)
@@ -251,6 +246,36 @@ internal class LayoutRepositoryImpl(
      * Clearing first is harmless on a container that has just been inserted and is what makes this a *set* rather
      * than an append, which is what a reorder needs.
      */
+    /**
+     * [LayoutChange.AddToIconContainer]: appends, or inserts at the requested slot.
+     *
+     * The two are one write because they differ only in *where*. Appending reads the current maximum and adds one,
+     * which is a single row; inserting has to renumber everything after the new item, so it reads the container and
+     * rewrites the whole order through [setIconContainerItems] — the same read-modify-write a reorder does, so
+     * there is one place `sortOrder` is authored rather than two that could disagree about density.
+     *
+     * **Both detach first**, and for the append that ordering is load-bearing: re-adding an item this container
+     * already holds must append it to what *remains*, not leave a gap where its old row was. The insert path gets
+     * the same for free, since [setIconContainerItems] detaches every item it writes.
+     */
+    private suspend fun addToIconContainer(change: LayoutChange.AddToIconContainer) {
+        val index = change.index
+        if (index == null) {
+            detachIconItem(change.item)
+            val next = (daos.iconContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
+            daos.iconContainerItem.upsert(listOf(change.item.toRow(change.containerId, next)))
+            return
+        }
+        val current = daos.iconContainerItem.getByContainer(change.containerId).map { it.toIconItem() }
+        // Minus itself first, so an item moved *within* its own container lands at the index the user aimed at
+        // rather than one past it — the list it was dropped onto is the one it is no longer part of.
+        val without = current.filterNot { it == change.item }
+        setIconContainerItems(
+            containerId = change.containerId,
+            items = without.toMutableList().also { it.add(index.coerceIn(0, it.size), change.item) },
+        )
+    }
+
     private suspend fun setIconContainerItems(containerId: Long, items: List<IconItem>) {
         daos.iconContainerItem.clearContainer(containerId)
         items.forEach { detachIconItem(it) }

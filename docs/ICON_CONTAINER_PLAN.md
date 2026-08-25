@@ -1,6 +1,6 @@
 # Icon container — arrangement, reorder and configuration
 
-**Status:** planned, nothing landed.
+**Status:** slices A–D landed (2026-08-25), verified on an emulator. E–G remain.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
 chooser and stopped there. Everything in §0–§2 of that document still stands; this one does not revisit it.
@@ -244,7 +244,7 @@ its own setting. SL's 25–200% / 50–200% ranges are a reasonable starting sha
 
 Each is device-testable alone. A–B–C is the spine; D–F are independent of each other.
 
-### 3a. Slice A — arrangement geometry (pure, no UI, no persistence)
+### 3a. Slice A — arrangement geometry (pure, no UI, no persistence) ✅
 
 `IconArrangements.kt` and `IconArrangementsTest` only. Three shapes change; the enum, the model and the DB do not.
 
@@ -280,7 +280,7 @@ Verify on device by resizing a container in each arrangement: nothing should she
 should read as a tight cluster rather than a sparse ring, and a `FAN_*` should curve — compare against the
 reference capture of SL's *Arch* at 9 and at 33 icons.
 
-### 3b. Slice B — reorder, end to end
+### 3b. Slice B — reorder, end to end ✅
 
 1. **`data:layout`** — `LayoutChange.ReorderIconContainer(containerId, items: List<IconItem>)`, and its `apply` arm
    mirroring `ReorderFolder` exactly: `iconContainerItem.clearContainer(id)` → `detachIconItem(each)` → `upsert`
@@ -294,16 +294,28 @@ reference capture of SL's *Arch* at 9 and at 33 icons.
 Verify on device in `GRID`, `CIRCLE` and `BEEHIVE`: dragging any icon onto any other exchanges exactly those two,
 and the arrangement is unchanged when the drag is cancelled.
 
-### 3c. Slice C — a drop from outside lands where the finger is
+### 3c. Slice C — a drop from outside lands where the finger is ✅
 
-With the zone from B in place, `AddToIconContainer` grows `index: Int? = null` (null appends, which is every
-existing caller). The `apply` arm stops using `maxSortOrder` for the indexed case and instead reads
-`getByContainer`, inserts at the index, and rewrites the order — the same read-modify-write `ReorderIconContainer`
-does, so there is one way sortOrder is authored rather than two.
+`AddToIconContainer` grew `index: Int? = null` — null appends, which is every picker caller, since filling a
+container from a list names a *set* rather than an arrangement. A drag names a place, so the container's zone
+resolves the slot and passes it. The indexed path reads the container and rewrites the whole order through
+`setIconContainerItems`, so there is one place `sortOrder` is authored rather than two that could disagree about
+density; the append path stays a single row.
 
-Home's merge path (`HomeViewModel.mergeChanges`) passes the slot the container's zone resolved.
+**The zone widened from "only my own members" to "anything an icon container can hold"**, which is what §2b's
+"deliberately accept" was pointing at: while the finger is inside those bounds the home grid is not the drop
+target, so an app can no longer be dragged *over* a container to shove it aside. The container is still moved by
+dragging the container.
 
-### 3d. Slice D — drag an item out
+The preview is the arrangement **opening up**: the slot list is laid out for `count + 1` while a newcomer hovers,
+and the entry at the hovered index is a hole (`shown` is `List<ContainerIcon?>`) because the floating proxy is
+already drawing it. Same list the drop commits, so the two cannot disagree.
+
+**`canMerge` / `mergeChanges` keep their icon-container arms.** They are now unreachable in the ordinary case —
+the zone outranks the merge ring — but not dead: a container that has not been measured yet publishes no zone
+(`bounds == null`), and the merge ring is what answers for that frame.
+
+### 3d. Slice D — drag an item out ✅
 
 Unlocked by B2, and small: a slot dragged onto the home grid commits `RemoveFromIconContainer` **plus** a `Move` —
 the composition rule CLAUDE.md already states for the APPS pager, and the reason `RemoveFrom*Container` is

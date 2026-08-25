@@ -118,8 +118,20 @@ sealed interface LayoutChange {
         val zone: HomeZone = HomeZone.MAIN,
     ) : LayoutChange
 
-    /** Adds [item] (an app or folder) to icon container [containerId]. Collapses L1's two typed adds. */
-    data class AddToIconContainer(val containerId: Long, val item: IconItem) : LayoutChange
+    /**
+     * Adds [item] (an app or folder) to icon container [containerId]. Collapses L1's two typed adds.
+     *
+     * @property index where it lands. **Null appends**, which is what filling one from a picker means — the user
+     *   named a set, not an arrangement. A drag names a *place*, so a drop resolves the slot under the finger and
+     *   passes it, and whatever was at that slot and after it shifts along. That is an insert rather than
+     *   [ReorderIconContainer]'s exchange, and the difference is which question the gesture answered: an item
+     *   already inside has a place to trade, one arriving from outside has none.
+     */
+    data class AddToIconContainer(
+        val containerId: Long,
+        val item: IconItem,
+        val index: Int? = null,
+    ) : LayoutChange
 
     /** Removes [item] from icon container [containerId]. */
     data class RemoveFromIconContainer(val containerId: Long, val item: IconItem) : LayoutChange

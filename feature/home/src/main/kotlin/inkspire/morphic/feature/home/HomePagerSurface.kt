@@ -758,6 +758,7 @@ internal fun HomePagerSurface(
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
                         onAddIconToContainer = onOpenIconContainerSettings,
                         onReorderContainer = viewModel::reorderIconContainer,
+                        onInsertIntoContainer = viewModel::insertIntoIconContainer,
                     )
                 }
             },
@@ -797,6 +798,7 @@ internal fun HomePagerSurface(
                         onAddWidgetToContainer = onOpenWidgetContainerSettings,
                         onAddIconToContainer = onOpenIconContainerSettings,
                         onReorderContainer = viewModel::reorderIconContainer,
+                        onInsertIntoContainer = viewModel::insertIntoIconContainer,
                     )
                 }
             },
@@ -1109,6 +1111,7 @@ private fun HomeItemCell(
     onAddWidgetToContainer: (Long) -> Unit = {},
     onAddIconToContainer: (Long) -> Unit = {},
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
+    onInsertIntoContainer: (Long, IconItem, Int) -> Unit = { _, _, _ -> },
 ) {
     when (item) {
         is HomeItem.App ->
@@ -1152,6 +1155,7 @@ private fun HomeItemCell(
             onAddIcon = { onAddIconToContainer(item.container.id) },
             containerId = item.container.id,
             onReorder = { items -> onReorderContainer(item.container.id, items) },
+            onInsert = { icon, index -> onInsertIntoContainer(item.container.id, icon, index) },
         )
 
         is HomeItem.WidgetContainer -> WidgetContainerCell(

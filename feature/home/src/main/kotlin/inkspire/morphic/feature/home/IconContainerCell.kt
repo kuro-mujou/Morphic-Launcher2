@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -68,6 +69,7 @@ internal fun IconContainerCell(
     metrics: IconMetrics = LocalIconMetrics.current,
     containerId: Long? = null,
     onReorder: (List<IconItem>) -> Unit = {},
+    onInsert: (IconItem, Int) -> Unit = { _, _ -> },
 ) {
     // `positionInRoot() + size`, never `boundsInRoot()`: this cell lives inside home's pager, and that call
     // clips to every ancestor — so a container on a half-scrolled page would report a clipped rectangle and
@@ -83,17 +85,20 @@ internal fun IconContainerCell(
         val density = LocalDensity.current
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
-        // Through [iconContainerSlots] rather than calling `slots` here, because the surface hit-tests a press
-        // against the same geometry to decide whether a drag is lifting one icon or the whole container — and the
-        // gap is a bare dp, so a second copy of this call would put the touch targets a few dp off the picture.
-        //
-        // Keyed on everything the maths reads, so a resize or a membership change re-lays out and a recomposition
-        // for any other reason does not.
-        val slots = remember(arrangement, icons.size, widthPx, heightPx, density) {
-            iconContainerSlots(arrangement, icons.size, widthPx, heightPx, density)
-        }
-
-        val reorder = rememberIconContainerReorder(containerId, icons, slots, boundsInRoot, onReorder)
+        // **The container asks what it should be drawing, not what it holds** — an icon being carried out of it
+        // keeps its slot, one being carried *in* has already been given one, and a rearrangement in progress is
+        // previewed as it will land. The geometry comes back with it because how many slots there are is part of
+        // that answer.
+        val preview = rememberIconContainerPreview(
+            containerId = containerId,
+            icons = icons,
+            arrangement = arrangement,
+            size = Size(widthPx, heightPx),
+            bounds = boundsInRoot,
+            onReorder = onReorder,
+            onInsert = onInsert,
+        )
+        val slots = preview.slots
 
         // **Everything inside the tile is on the tile**, which is two things and they were split for a while. It is
         // themed against the panel — the panel carries the user's own blur and wash, so a dark tile can sit on a
@@ -114,7 +119,9 @@ internal fun IconContainerCell(
                     )
                     return@Box
                 }
-                reorder.shown.forEachIndexed { index, icon ->
+                preview.shown.forEachIndexed { index, icon ->
+                    // The gap a newcomer is about to fill: a slot with nothing to draw in it yet.
+                    if (icon == null) return@forEachIndexed
                     val slot = slots.getOrNull(index) ?: return@forEachIndexed
                     val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
                     // **The slot says how much room there is; the metrics say how much of it an icon may take.**
@@ -133,7 +140,7 @@ internal fun IconContainerCell(
                         modifier = Modifier
                             // The one being carried keeps its slot but is not drawn: the floating proxy under the
                             // finger is standing in for it, and `LauncherDragCell` hides a lifted *cell* the same way.
-                            .alpha(if (icon.asIconItem() == reorder.lifted) 0f else 1f)
+                            .alpha(if (icon.asIconItem() == preview.lifted) 0f else 1f)
                             // Absolute placement inside the container, so the arrangement owns the layout completely — there
                             // is no row/column structure for a shape like the circle or the beehive to be forced into.
                             .align(Alignment.TopStart)
