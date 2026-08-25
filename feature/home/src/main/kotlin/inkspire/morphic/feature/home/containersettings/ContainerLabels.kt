@@ -17,20 +17,6 @@ internal fun ContainerSettingsRoute.title(): String = when (this) {
     is ContainerSettingsRoute.Widget -> "Widget stack"
 }
 
-/**
- * The line under the heading, saying what the thing is *for*.
- *
- * Both mention dragging, because that is the faster route and the one a user will not discover from this screen —
- * it is the only place the two ways in are stated together.
- */
-internal fun ContainerSettingsRoute.description(): String = when (this) {
-    is ContainerSettingsRoute.Icon ->
-        "Group apps and folders into one cell. Add them here, or drag an icon onto the container on your home screen."
-
-    is ContainerSettingsRoute.Widget ->
-        "Keep several widgets in one cell and swipe between them. Add them here, or drag a widget onto the stack."
-}
-
 /** The add affordance's label. */
 internal fun ContainerSettingsRoute.addLabel(): String = when (this) {
     is ContainerSettingsRoute.Icon -> "Add apps"

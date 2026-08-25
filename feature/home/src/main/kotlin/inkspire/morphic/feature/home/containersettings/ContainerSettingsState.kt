@@ -4,6 +4,7 @@ import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.data.layout.PlacedItem
 import inkspire.morphic.feature.home.ContainerIcon
 
 /**
@@ -22,12 +23,19 @@ sealed interface ContainerSettings {
      *
      * [icons] is the same resolved type the cell draws from, so the row list and the container itself cannot
      * disagree about what is in it.
+     *
+     * @property placed where the container sits on home, or null when the placement store has not answered — a real
+     *   state rather than only a loading one, since the definitions and the placements are two stores answering
+     *   separately. The preview needs it to draw the container at the size home draws it, and it needs **this**
+     *   span rather than the 2x2 a container lands with: one that has since been resized is a different shape, and
+     *   previewing the shape it used to be is the one thing this preview exists not to do.
      */
     data class Icon(
         val icons: List<ContainerIcon>,
         val arrangement: IconArrangement,
         val iconScalePercent: Int,
         val spacingScalePercent: Int,
+        val placed: PlacedItem? = null,
     ) : ContainerSettings
 
     /**

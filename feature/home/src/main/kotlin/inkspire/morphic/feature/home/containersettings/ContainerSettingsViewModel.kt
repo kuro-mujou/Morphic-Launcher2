@@ -51,14 +51,21 @@ class ContainerSettingsViewModel(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ContainerSettingsState())
 
     /**
-     * The icon container's, joined through the same three stores the home surface uses — the container definitions,
-     * the folder definitions a nested folder resolves through, and the app cache everything resolves through.
+     * The icon container's, joined through the same four stores the home surface uses — the container definitions,
+     * the folder definitions a nested folder resolves through, the app cache everything resolves through, and the
+     * placements, for **where** the container sits.
+     *
+     * The placement is the preview's, and it is followed from the store rather than carried in the route: a route
+     * describes an arrival, while a container can be moved or resized from home while its settings are on the back
+     * stack, at which point a placement captured on the way in would describe a container that is no longer that
+     * shape.
      */
     private fun iconState() = combine(
         layoutRepository.iconContainers(),
         layoutRepository.folders(),
         appRepository.observeApps(),
-    ) { containers, folders, apps ->
+        layoutRepository.placements(HomeViewModel.ORIENTATION),
+    ) { containers, folders, apps, placements ->
         val container = containers.firstOrNull { it.id == route.containerId }
             ?: return@combine ContainerSettingsState()
         val infoByComponent = apps.associateBy { it.componentKey }
@@ -79,6 +86,7 @@ class ContainerSettingsViewModel(
                 arrangement = container.arrangement,
                 iconScalePercent = container.iconScalePercent,
                 spacingScalePercent = container.spacingScalePercent,
+                placed = placements[GridItem.IconContainer(container.id)],
             ),
             availableApps = apps.notIn(container.items),
         )

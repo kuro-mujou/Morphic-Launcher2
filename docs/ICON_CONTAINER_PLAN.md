@@ -1,6 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
-**Status:** complete — slices A–G landed (2026-08-25), each verified on an emulator.
+**Status:** complete — slices A–G landed (2026-08-25), each verified on an emulator. Slice F was **revised the same
+day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
 chooser and stopped there. Everything in §0–§2 of that document still stands; this one does not revisit it.
@@ -374,13 +375,49 @@ An `IconContainerCell` above the contents list, over the real membership and the
 in its strongest form: not two implementations kept in step, but one implementation drawn twice. It follows the
 arrangement chooser as it is used, which is what that row of names was missing.
 
-Square, the same 2×2 footprint the picker previews at. `containerId` is left null, which is what stops the cell
-publishing a drop zone — a second target for an id the real container on home already answers for would outrank it
-at `z = 1`.
+`containerId` is left null, which is what stops the cell publishing a drop zone — a second target for an id the
+real container on home already answers for would outrank it at `z = 1`.
 
 **Only when the container has something in it.** The screen's order argues that adding comes first because an
 empty container is what it is most often opened on, and that is exactly when a preview is a large picture of a "+"
 the row below already offers.
+
+**Revised 2026-08-25 — pinned, punched through, and drawn at true scale.** The slice as first built drew the cell at
+a size of its own (55% of the width, square) above a scrolling list, and it was wrong in three ways that only showed
+on a device:
+
+- **It scrolled away.** Every control under it changes how the container looks, so a preview that leaves the screen
+  while a slider is being dragged cannot be judged while it is being used — the one moment it has anything to say.
+  It is now a sibling of the list rather than an item in it, beside the toolbar, which is the whole of "pinned".
+- **It was not a scale model, it was a different container.** Two things inside a container are absolute rather than
+  proportional — the icon gap is a flat 8dp and an icon is capped at the user's `maxIconDp` — so a 148dp box gave
+  its icons a *larger* share of their slots (the cap stopped binding) and its gaps a smaller one, and `gridSlots`
+  chose a different column count outright, reading the box's own aspect ratio. Drawn "at the size it lands" it
+  agreed with nothing.
+
+  The fix is to lay the cell out at its **real dp footprint** and scale the finished drawing (`graphicsLayer`,
+  `requiredSize`), so panel corner, gaps, icons and arrangement shrink together and the whole difference is one
+  scale factor. The footprint comes from `rememberContainerFootprint`, which asks the surface's own functions —
+  `homeZoneArea` (extracted from `rememberHomePagerLayout` for this second caller), the blueprint's `fitGridConfig`,
+  and `GridArea.footprintOf`. It also carries the zone's `IconMetrics`, because a settings screen's ambient
+  `maxIconDp` is not home's and that alone would have kept the icons wrong. The span is the container's **live
+  placement**, not the 2×2 it landed with, so a resized container previews as the shape it is.
+- **It sat on a settings background.** A container is a frosted panel whose entire appearance is a function of what
+  it is over, so the screen is now a `PunchThroughLayer` and the preview a `punchThroughHole` — the recipe the icon
+  sizing preview already used, moved to `core:designsystem` when this became its second consumer.
+
+Two things about the screen around it changed with the same commit and for the same reason — the space the preview
+needs had to come from somewhere: the **title moved into a pinned toolbar** and the description paragraph was
+deleted outright (a screen reached by pressing *Settings* on a container does not have to say what a container is),
+and the list's system-bar padding became **layout** padding rather than content padding. That last one is a stated
+departure from the launcher's own rule: a surface pads its content so rows pass under the bars because the wallpaper
+is behind them, but this is a solid-background list whose bottom row is a *slider*, and a slider under the
+navigation bar cannot be dragged by the finger the bar is taking.
+
+The screen also never opened a `LauncherTheme` — the only destination in `LauncherNavHost` that did not — so
+`MaterialTheme` fell through to M3's baseline and every stock component on it was purple. It was silent because
+`LocalMorphicColors` has a `MorphicColors.Dark` **default**, so the explicit reads all resolved to something
+plausible while the bridged ones did not.
 
 ### 3g. Slice G — per-container icon size and spacing ✅
 

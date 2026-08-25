@@ -4,8 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.IconMetrics
+import inkspire.morphic.core.designsystem.grid.GridArea
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
@@ -13,9 +15,11 @@ import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DockGrid
 import inkspire.morphic.core.model.GridConfig
+import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomePagerGrid
+import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.SideZoneEdge
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
@@ -57,14 +61,10 @@ internal data class HomePagerLayout(
  *
  * The order below is the dependency order, and each step is why the next one can be taken:
  *
- * 1. **The window**, from `usableWindowArea(uiInsets)` — the same expression the settings sections and the APPS
- *    surface read, so a bound computed for this screen somewhere else describes the same screen.
- * 2. **Where the dock sits** ([SideZoneEdge]) and how thick it is, which decides everything after it: a bottom strip
+ * 1. **Where the dock sits** ([SideZoneEdge]) and how thick it is, which decides everything after it: a bottom strip
  *    on three configurations and a trailing rail in phone landscape, the one posture with no height to spare.
- * 3. **The margins come off before anything is fitted.** Each zone has its own — a user may inset the pager without
- *    touching the dock — and each is taken off twice, once per edge. Fitting against the full width would size cells
- *    the grid then has no room to draw.
- * 4. **Each grid is fitted to the area it actually gets**, through the same `fitGridConfig` the settings sections
+ * 2. **Each zone's area**, from [homeZoneArea] — the window, less the other zone, less this zone's own margin.
+ * 3. **Each grid is fitted to the area it actually gets**, through the same `fitGridConfig` the settings sections
  *    bound their editors with. The section says how many rows may be *chosen* and this says how many are *drawn*;
  *    one formula is what keeps those two answers the same.
  *
@@ -80,19 +80,14 @@ internal data class HomePagerLayout(
  */
 @Composable
 internal fun rememberHomePagerLayout(state: HomeState, device: DeviceConfiguration): HomePagerLayout {
-    val window = usableWindowArea(uiInsets)
-
     val dockEdge = device.sideZoneEdge(HomeLayout.PAGER_WITH_DOCK)
     val dockSizing = state.side
     val dockExtent = (dockSizing?.extentDp ?: checkNotNull(DockGrid.extentDp)).dp
-    val split = window.splitForSideZone(dockExtent.value, dockEdge)
 
-    // Horizontal on both zones whichever edge the dock is on: a rail's margin insets *within* its width, which is
-    // what a "side margin" means on a vertical strip too.
     val mainPadding = state.paddingFor(GridSlot.HOME_MAIN).dp
     val dockPadding = state.paddingFor(GridSlot.HOME_DOCK).dp
-    val mainArea = split.main.copy(widthDp = (split.main.widthDp - mainPadding.value * 2).coerceAtLeast(1f))
-    val dockArea = split.side.copy(widthDp = (split.side.widthDp - dockPadding.value * 2).coerceAtLeast(1f))
+    val mainArea = homeZoneArea(HomeZone.MAIN, dockExtent, dockEdge, mainPadding)
+    val dockArea = homeZoneArea(HomeZone.DOCK, dockExtent, dockEdge, dockPadding)
 
     // The dock is the one grid with an extent of its own: the user sets how thick the strip is *and* how many rows
     // and columns divide it, and `fitGridConfig` clamps those counts to what the extent and the icon size allow. On
@@ -141,3 +136,45 @@ internal fun rememberHomePagerLayout(state: HomeState, device: DeviceConfigurati
         dockFromStore = dockSizing != null,
     )
 }
+
+/**
+ * **The dp area [zone]'s grid is actually drawn in** — the window, less the other zone, less this zone's own margin.
+ *
+ * Shared rather than inlined because a second caller arrived that has to agree with the surface *exactly*: an icon
+ * container's settings screen draws the container at the size home draws it, and the only way that stays true is for
+ * both to ask one question. A settings screen deriving its own idea of the area is how a preview becomes a
+ * confident lie — it agrees on the day it is written and drifts the first time the dock's extent changes meaning.
+ *
+ * Three things it settles, in dependency order:
+ *
+ * 1. **The window**, from `usableWindowArea(uiInsets)` — the same expression the settings sections and the APPS
+ *    surface read, so a bound computed for this screen somewhere else describes the same screen.
+ * 2. **The split**, which the edge decides the *axis* of and the extent the *amount* of (see `splitForSideZone`).
+ * 3. **The margin comes off before anything is fitted**, and horizontally whichever edge the dock is on: a rail's
+ *    margin insets *within* its width, which is what a "side margin" means on a vertical strip too. Fitting against
+ *    the full width would size cells the grid then has no room to draw.
+ *
+ * [HomeZone.WIDGET_AREA] answers with the side zone's area exactly as [HomeZone.DOCK] does — the two are the same
+ * region under the two pairings, and which one a window has is [HomeLayout]'s business rather than this arithmetic's.
+ *
+ * @param dockExtent the side zone's thickness — its height on a strip, its width on a rail.
+ * @param padding [zone]'s own horizontal margin, taken off **both** edges.
+ */
+@Composable
+internal fun homeZoneArea(zone: HomeZone, dockExtent: Dp, dockEdge: SideZoneEdge, padding: Dp): GridArea {
+    val split = usableWindowArea(uiInsets).splitForSideZone(dockExtent.value, dockEdge)
+    val area = if (zone == HomeZone.MAIN) split.main else split.side
+    return area.copy(widthDp = (area.widthDp - padding.value * 2).coerceAtLeast(1f))
+}
+
+/**
+ * **How big [placement]'s footprint is in dp**, on a grid of [config] drawn in this area.
+ *
+ * Spans are in *logical* cells and the area divides into logical cells, so this needs no `cellMultiplier` of its own
+ * — which is the point of expressing it as a fraction of the area rather than as a cell size times a visual span.
+ * The multiplier is the one number in this system that is easy to apply twice.
+ */
+internal fun GridArea.footprintOf(placement: GridPlacement, config: GridConfig): DpSize = DpSize(
+    width = (widthDp * placement.colSpan / config.cols).dp,
+    height = (heightDp * placement.rowSpan / config.rows).dp,
+)
