@@ -225,17 +225,21 @@ private fun ContainerSettingsContent(
                     // fifty rows, so opening the screen showed no control at all. A list is unbounded, so nothing
                     // may sit after it — and a slider in particular has to be on screen at the same time as the
                     // preview it moves, which is the whole reason that preview is up there.
-                    state.settings?.let { settings ->
-                        item("options") {
-                            ContainerOptions(
-                                settings = settings,
-                                shownScales = shownScales,
-                                onChooseOption = { chooserOpen = true },
-                                onPreviewScales = { icons, spacing -> scaleOverride = icons to spacing },
-                                onCommitScales = viewModel::setScales,
-                                onWidgetOptions = viewModel::setWidgetOptions,
-                            )
-                        }
+                    // **Emitted unconditionally, even before the stores answer**, and that is not defensiveness —
+                    // a `settings?.let { item(…) }` here *prepends* an item once the answer arrives, and a keyed
+                    // lazy list holds its anchor: the first visible item stays where it is, so the new one lands
+                    // above the viewport and is never seen. It only looked like a routing bug because it needs a
+                    // list long enough to scroll — a short one clamps back to the top and shows it — so a container
+                    // with a few apps in it was fine and the same container with twenty-four was not.
+                    item("options") {
+                        ContainerOptions(
+                            settings = state.settings,
+                            shownScales = shownScales,
+                            onChooseOption = { chooserOpen = true },
+                            onPreviewScales = { icons, spacing -> scaleOverride = icons to spacing },
+                            onCommitScales = viewModel::setScales,
+                            onWidgetOptions = viewModel::setWidgetOptions,
+                        )
                     }
 
                     item("add") {
@@ -333,7 +337,7 @@ private enum class ContainerSheet { Apps, Widgets }
  */
 @Composable
 private fun ContainerOptions(
-    settings: ContainerSettings,
+    settings: ContainerSettings?,
     shownScales: Pair<Int, Int>?,
     onChooseOption: () -> Unit,
     onPreviewScales: (Int, Int) -> Unit,
@@ -341,8 +345,12 @@ private fun ContainerOptions(
     onWidgetOptions: (WidgetContainerAxis, Boolean, Boolean) -> Unit,
 ) {
     Column {
+        // **Drawn before the stores answer, which is what keeps this item in the list from the first frame.** The
+        // rows below cannot be, since they have nothing to show yet — but the item must not *appear* late, and the
+        // heading is what gives it a height to hold. See the emit site for what happens when it does appear late.
         OptionsHeading()
         when (settings) {
+            null -> Unit
             is ContainerSettings.Icon -> {
                 ChooserRow(title = "Arrangement", value = settings.arrangement.label, onClick = onChooseOption)
                 ScaleRows(
