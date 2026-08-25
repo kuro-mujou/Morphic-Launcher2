@@ -502,22 +502,36 @@ list inside them, and the icons scale down until it fits. That is why 33 icons i
 picture, and why `rows = 1` with two hundred icons is a very thin dock rather than an error. There is no capacity
 anywhere in this, and nothing is ever refused.
 
-#### The pinned axis decides which way the list fills, and that is the actual code change
+#### The fill is reading order, always; the setting only moves where the wrap comes from
 
-`gridSlots` today is row-major — `row = i / cols`, `col = i % cols` — because the column count is what it derives.
-That is still right for **Auto** and for **Columns = n**: the columns are known, so the list fills across a row and
-then wraps to the next.
+Left to right, then down — in all three modes. **List order is reading order**, so the seventh icon is the seventh
+thing you look at, whatever the setting is. That matters more here than anywhere else, because reordering is a drag
+onto a *position*: an order the eye cannot follow is one the finger cannot aim at.
 
-**Rows = n reverses it.** The row count is what is known and the column count is `ceil(count / rows)`, so the list
-fills *down* a column and wraps to the next one — `col = i / rows`, `row = i % rows`. Row-major with a pinned row
-count would need the column count to wrap against, which is the number being derived: the fill direction is not a
-preference here, it is forced by which axis was fixed.
+What the setting changes is only where the wrapping count comes from:
 
-The consequence worth stating because it is easy to get backwards: with `rows = 1`, appending an icon puts it at
-the **right-hand end** of the strip, which is what a dock does. Under a row-major fill it would start a second row.
+| Setting | Columns used | The container grows |
+|---|---|---|
+| `Auto` | `sqrt(count × aspect)` | either way, as the count decides |
+| `Columns = n` | `n` | **downward** — new rows appear at the bottom |
+| `Rows = n` | `ceil(count / n)` | **rightward** — new columns appear at the right |
 
-The short last **column** then centres exactly as slice A's short last row does, and for the same reason — one
-expression each, on whichever axis is the wrapping one.
+That last column is the whole of what the two settings mean to a user: pin the rows and the container extends
+sideways, pin the columns and it extends down. `rows = 1` therefore appends at the right-hand end of the strip,
+which is what a dock does.
+
+**A correction to an earlier draft of this section**, which claimed a pinned row count *forced* a column-major fill
+because row-major would need the derived column count to wrap against. It would, and that count is available:
+`ceil(count / rows)` is known before any slot is placed. Both orders were always computable, so the direction was a
+real choice rather than a consequence — and reading order is the choice.
+
+**The pinned count divides its axis even when there are too few icons to fill it.** Three rows with two icons is one
+column of two, laid out on a three-row division, not a two-row one. Otherwise the icons would resize on every add
+until the container filled up, which is the opposite of what pinning an axis is for.
+
+Implementation is smaller than the discussion: `gridSlots`' fill expressions — `row = i / cols`, `col = i % cols` —
+do not change at all. Only the provenance of `cols` does, and slice A's centred short last row keeps working
+because it was written against `cols` rather than against the derivation.
 
 #### Rows and columns are not two dimensions of a frame
 
@@ -547,7 +561,8 @@ container's own frosted panel as the dock's background.
 
 Nothing in the geometry needs adding. Slice A already made the grid cell `min(availW/cols, availH/rows)` and centred
 the block, so a wide strip with one row gives icons as tall as the strip, centred, until the count is high enough
-that the width binds and they shrink.
+that the width binds and they shrink. With `rows = 1` the two fill orders coincide — every column holds one icon —
+so the dock is the one case that never depended on the question above.
 
 And the shape can be dragged out today: a container's resize floor is `cellMultiplier` on *each* axis — one visual
 cell, not the 2×2 it is created at — verified in `HomeResizeRules.Container`. Worth knowing, because this whole
