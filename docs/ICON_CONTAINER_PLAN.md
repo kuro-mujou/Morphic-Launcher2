@@ -466,7 +466,7 @@ So: **a shape, and the parameters that shape has.** Not one flat vocabulary of e
 ```kotlin
 @Serializable
 sealed interface IconArrangement {
-    @Serializable @SerialName("grid")    data class Grid(val columns: Int? = null) : IconArrangement
+    @Serializable @SerialName("grid")    data class Grid(val fill: GridFill = GridFill.Auto) : IconArrangement
     @Serializable @SerialName("circle")  data class Circle(val startDegrees: Int = 0) : IconArrangement
     @Serializable @SerialName("beehive") data class Beehive(val orientation: HexOrientation = POINTY) : IconArrangement
     @Serializable @SerialName("fan")     data class Fan(val anchor: FanAnchor = TOP_LEFT) : IconArrangement
@@ -487,23 +487,58 @@ break*: `arrangement` holds an enum name today, and re-interpreting that column 
 `@SerialName`s are short and explicit for `GridItem`'s reason one file over: this reaches a user's stored blob, so
 the discriminator must not be a class name that a refactor could move.
 
-### 6c. Grid — columns, and rows are the consequence
+### 6c. Grid — which axis is pinned, and to how many
 
-**Columns: `Auto`, or 1…8.** `Auto` is today's `sqrt(count × aspect)` derivation and stays the default, so a
-container nobody has configured behaves exactly as it does now.
+**Not a column count, and not rows × columns.** The parameter is *which axis the user has fixed*; the other one
+grows with the item count.
 
-**Not rows as well, and this is the one suggestion I would push back on.** Rows are already determined:
-`ceil(count / columns)`. Asking for both invents a *capacity* — and the container has none. Everything else about it
-assumes any number of icons fits, because the arrangement shrinks them until they do; that is why 33 icons in a 2×2
-container is a legal picture rather than an error. Pinning R×C would need an answer to "what happens to icon
-R×C+1?" — drop it, paginate, scroll, overflow the footprint — and every one of those is a new concept this
-container does not otherwise have. Columns alone is the free parameter, and it gets the tall-narrow and short-wide
-arrangements that wanting rows is usually reaching for.
+- **Rows = 1** is a single row that stays a single row — icons are added along it, and it shrinks them rather than
+  wrapping. That is the macOS-dock shape: one strip across the bottom of a tablet, with the container's own frosted
+  panel as the dock's background.
+- **Columns = 3** is the mirror: three across, growing downward.
+- **Auto** is today's `sqrt(count × aspect)` derivation and stays the default, so an unconfigured container behaves
+  exactly as it does now.
+
+**Why this is not expressible as a column count**, which is what an earlier draft of this section proposed and got
+wrong: a single row *can* be spelled `columns = n` for the n icons currently in it, but it is not **stable**. Add
+one icon and `columns = n` gives a second row holding one, while `rows = 1` keeps growing sideways. The two settings
+describe the same picture today and different intentions about tomorrow, and the intention is the thing worth
+storing. It is also what the control communicates: pinning an axis says *this is the direction icons are added in*.
+
+**What was right in that draft is narrower than it looked**: it is pinning **both** that invents a capacity. Fixing
+R × C means answering "what happens to icon R×C+1?" — drop, paginate, overflow — and every answer is a concept
+nothing else in this container has, because everything else about it assumes any number of icons fits and shrinks
+them until they do. Pinning *one* axis needs no such answer. So the model makes both-pinned unrepresentable rather
+than merely discouraged:
+
+```kotlin
+@Serializable @SerialName("grid")
+data class Grid(val fill: GridFill = GridFill.Auto) : IconArrangement
+
+@Serializable sealed interface GridFill {
+    @Serializable @SerialName("auto")    data object Auto : GridFill
+    @Serializable @SerialName("columns") data class Columns(val count: Int) : GridFill
+    @Serializable @SerialName("rows")    data class Rows(val count: Int) : GridFill
+}
+```
+
+The screen still shows the two controls the user thinks in — **Rows** and **Columns**, each *Auto* or a number —
+and setting one returns the other to Auto. Two controls over a one-of is the honest presentation of a choice that
+*is* two-sided; what it cannot do is let both be numbers at once.
+
+**The geometry already does the right thing.** Slice A made the grid cell `min(availW/cols, availH/rows)` and
+centred the block, so a wide short container with `rows = 1` gives icons as tall as the strip, centred, until the
+count is high enough that the width binds and they shrink — which is what a dock does. Nothing in `gridSlots`
+changes except where the counts come from.
+
+**And the strip is already reachable.** A container's resize floor is `cellMultiplier` on *each* axis — one visual
+cell, not the 2×2 it is created at — so a 4×1 dock-shaped container can be dragged out today. Verified in
+`HomeResizeRules.Container`; worth knowing because this whole case would be theoretical if it could not.
 
 **This reverses §2f**, which declined a column count on the grounds that a pinned one fights the resize handle. That
-objection is answered rather than ignored: `Auto` remains the default, so the derivation still governs every
-container until someone deliberately overrides it — and a user who pins three columns and then widens the container
-is asking for three wide columns.
+objection is answered rather than ignored: `Auto` remains the default, so the derivation governs every container
+until someone deliberately overrides it — and a user who pins three columns and then widens the container is asking
+for three wide columns.
 
 ### 6d. Fan — one anchor, and the sweep follows from it
 
@@ -579,7 +614,8 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   Nothing about the launcher should look different, and that is how it is verified.
 - **I — the two-row control.** The variant row appears and the settings dialog is replaced. With only the fan's
   four corners to show, it is testable before any new geometry exists.
-- **J — grid columns.** `Auto` plus 1…8.
+- **J — the grid's fill axis.** `Auto`, or rows or columns pinned to a count. The tablet-dock case is
+  the acceptance test: a 4×1 container with `rows = 1` should stay one row as icons are added.
 - **K — fan edge anchors.** The half circle; the geometry from §6d.
 - **L — beehive orientation.** Flat-top.
 - **M — circle start angle.** Optional; see §6f.
