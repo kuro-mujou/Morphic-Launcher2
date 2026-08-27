@@ -1,7 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
 **Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
-**Part two (§6) has begun:** slices H–K landed 2026-08-27; L and M are planned. Slice F was **revised the same
+**Part two (§6) has begun:** slices H–L landed 2026-08-27; M is planned, and §6f already argues for dropping it. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -602,8 +602,14 @@ A hex lattice has six-fold symmetry, so a free angle is sixty distinct degrees p
 sixty. The rotation that changes the picture is **30°**: pointy-top becomes flat-top. Two values, named for what
 they are.
 
-That is a better control than a slider would be, and cheaper: `beehiveSlots` projects axial coordinates through a
-pointy-top formula, and flat-top is the same projection with its two terms exchanged.
+That is a better control than a slider would be, and cheaper: `beehiveSlots` projects axial coordinates through one
+of the two standard hex formulas, and the other is the same projection with the three-halves step on the other axis.
+
+**Correction, made while building slice L: the existing projection is *flat*-top, not pointy-top.** The paragraph
+above said otherwise because `beehiveSlots`' own KDoc did, and the KDoc was wrong — `x = 3/2·q, y = √3·r + √3/2·q`
+is the flat-top formula, and the picture agrees (a flat-top cell has a neighbour directly above and below it, which
+is what every beehive in this launcher has always drawn). So [FLAT_TOP] is the default, not `POINTY`. Had the plan
+been followed to the letter, every existing beehive would have quietly re-laid itself out on upgrade.
 
 ### 6f. Circle — a start angle, and an honest note about it
 
@@ -755,7 +761,26 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   Verified on the emulator: `Fan(TOP)` hangs nested half-arcs from the middle of the top edge and spreads both ways;
   `Fan(LEFT)` sweeps right from the left edge; the corners look as they did; `{"type":"fan","anchor":"LEFT"}` is
   stored and drawn again after a force-stop.
-- **L — beehive orientation.** Flat-top.
+- **L — beehive orientation.** ✅ `HexOrientation` is `FLAT_TOP | POINTY_TOP`, `beehiveSlots` takes it, and the
+  two projections differ by which axis carries the three-halves step — the 30° turn as arithmetic rather than as a
+  rotation. Everything after the projection is shared, and a test pins the part that would fail silently if it were
+  not: both orientations keep exactly one pitch between neighbours.
+
+  **The default is flat-top, which is the opposite of what §6e said** — see the correction there. The plan trusted a
+  KDoc, the KDoc was wrong, and following it would have re-laid out every stored beehive on upgrade. No DB bump
+  either way: `{"type":"beehive"}` decodes as flat-top, pinned by a test as the grid's `auto` is.
+
+  **The variant row is swatches here, where the grid's could not be.** Two orientations are two different pictures
+  at every count — unlike `columns = 2` and `rows = 3`, which draw the same block at six icons — so the tiles say
+  the whole thing and no label is needed on them.
+
+  The constants are `FLAT_TOP` and `POINTY_TOP` rather than §6b's `POINTY`, so that the constant and the label read
+  alike; `ContainerLabels.label` names both ("Beehive, flat top"), because unlike the grid's *Auto* neither value is
+  the absence of a choice.
+
+  Verified on the emulator: the two tiles draw visibly different lattices, the pinned preview follows,
+  `{"type":"beehive","orientation":"POINTY_TOP"}` is stored, and the honeycomb comes back turned that way after a
+  force-stop.
 - **M — circle start angle.** Optional; see §6f.
 
 **H before everything, and alone.** It is the only slice that touches persistence, and it is behaviour-preserving —

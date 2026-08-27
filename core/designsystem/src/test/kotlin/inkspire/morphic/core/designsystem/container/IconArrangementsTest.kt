@@ -2,10 +2,12 @@ package inkspire.morphic.core.designsystem.container
 
 import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.GridFill
+import inkspire.morphic.core.model.HexOrientation
 import inkspire.morphic.core.model.IconArrangement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
@@ -37,8 +39,8 @@ class IconArrangementsTest {
         IconArrangement.Grid(GridFill.Columns(3)),
         IconArrangement.Grid(GridFill.Rows(3)),
         IconArrangement.Circle,
-        IconArrangement.Beehive,
-    ) + FanAnchor.entries.map { IconArrangement.Fan(it) }
+    ) + HexOrientation.entries.map { IconArrangement.Beehive(it) } +
+        FanAnchor.entries.map { IconArrangement.Fan(it) }
 
     // ── Shared invariants ────────────────────────────────────────────────────────────────────────────────
 
@@ -442,9 +444,62 @@ class IconArrangementsTest {
 
     // ── Beehive ──────────────────────────────────────────────────────────────────────────────────────────
 
+    /**
+     * The two orientations are the same lattice turned 30°, which is the only rotation that changes the picture —
+     * and they must therefore *be* different pictures, or the control is offering a choice that does nothing.
+     */
+    @Test
+    fun `the two hex orientations lay out differently`() {
+        val flat = IconArrangement.Beehive(HexOrientation.FLAT_TOP).slots(7, width, height)
+        val pointy = IconArrangement.Beehive(HexOrientation.POINTY_TOP).slots(7, width, height)
+        assertTrue("the orientations should not agree", flat != pointy)
+    }
+
+    /**
+     * What the names mean, in the only terms the geometry has: a **flat-top** cell has a neighbour directly above
+     * and below it, and a **pointy-top** cell has one directly to each side. Anything else about the two is the
+     * same lattice, so this is the property that says which is which.
+     */
+    @Test
+    fun `flat top stacks vertically and pointy top stacks across`() {
+        val flat = IconArrangement.Beehive(HexOrientation.FLAT_TOP).slots(7, width, height)
+        val pointy = IconArrangement.Beehive(HexOrientation.POINTY_TOP).slots(7, width, height)
+        val flatCentre = flat.first()
+        val pointyCentre = pointy.first()
+        assertTrue(
+            "flat top should have a neighbour straight above or below",
+            flat.drop(1).any { abs(it.centerX - flatCentre.centerX) < 0.01f },
+        )
+        assertTrue(
+            "flat top should have nothing straight beside it",
+            flat.drop(1).none { abs(it.centerY - flatCentre.centerY) < 0.01f },
+        )
+        assertTrue(
+            "pointy top should have a neighbour straight beside it",
+            pointy.drop(1).any { abs(it.centerY - pointyCentre.centerY) < 0.01f },
+        )
+        assertTrue(
+            "pointy top should have nothing straight above or below",
+            pointy.drop(1).none { abs(it.centerX - pointyCentre.centerX) < 0.01f },
+        )
+    }
+
+    /** Turning the lattice must not disturb the packing: every neighbour is still one pitch away. */
+    @Test
+    fun `both orientations keep one pitch between neighbours`() {
+        for (orientation in HexOrientation.entries) {
+            val slots = IconArrangement.Beehive(orientation).slots(7, width, height)
+            val centre = slots.first()
+            val distances = slots.drop(1).map { hypot(it.centerX - centre.centerX, it.centerY - centre.centerY) }
+            for (distance in distances) {
+                assertEquals("$orientation ring is not round: $distances", distances.first(), distance, 0.01f)
+            }
+        }
+    }
+
     @Test
     fun `beehive centers its first icon`() {
-        val slot = IconArrangement.Beehive.slots(7, width, height).first()
+        val slot = IconArrangement.Beehive().slots(7, width, height).first()
         assertEquals(width / 2f, slot.x + slot.width / 2f, 0.01f)
         assertEquals(height / 2f, slot.y + slot.height / 2f, 0.01f)
     }
@@ -456,14 +511,14 @@ class IconArrangementsTest {
      */
     @Test
     fun `beehive shrinks its icons as rings are added`() {
-        val oneRing = IconArrangement.Beehive.slots(7, width, height).first().width
-        val twoRings = IconArrangement.Beehive.slots(19, width, height).first().width
+        val oneRing = IconArrangement.Beehive().slots(7, width, height).first().width
+        val twoRings = IconArrangement.Beehive().slots(19, width, height).first().width
         assertTrue("19 icons ($twoRings) should be smaller than 7 ($oneRing)", twoRings < oneRing)
     }
 
     @Test
     fun `beehive icons are square and all one size`() {
-        val slots = IconArrangement.Beehive.slots(7, width, height)
+        val slots = IconArrangement.Beehive().slots(7, width, height)
         for (slot in slots) {
             assertEquals(slot.width, slot.height, 0.01f)
             assertEquals(slots[0].width, slot.width, 0.01f)

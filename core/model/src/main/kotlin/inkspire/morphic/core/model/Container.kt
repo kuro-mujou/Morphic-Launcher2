@@ -82,10 +82,10 @@ sealed interface IconArrangement {
     @SerialName("circle")
     data object Circle : IconArrangement
 
-    /** A honeycomb — one icon in the middle, then complete hexagonal rings outward. */
+    /** A honeycomb — one icon in the middle, then complete hexagonal rings outward, at [orientation]. */
     @Serializable
     @SerialName("beehive")
-    data object Beehive : IconArrangement
+    data class Beehive(val orientation: HexOrientation = HexOrientation.FLAT_TOP) : IconArrangement
 
     /** Concentric arcs sweeping out of [anchor]. */
     @Serializable
@@ -124,6 +124,19 @@ sealed interface GridFill {
     @SerialName("rows")
     data class Rows(val count: Int) : GridFill
 }
+
+/**
+ * Which way an [IconArrangement.Beehive]'s lattice is turned — **two values, not an angle**.
+ *
+ * A hex lattice has six-fold symmetry, so a free rotation would be sixty distinct degrees pretending to be three
+ * hundred and sixty, and every one of them but two leaves the honeycomb looking merely crooked. The half turn that
+ * changes the picture is 30°, and it is the difference between a cell with a point at the top and one with a flat
+ * side there — which is what these are named for rather than for the degrees.
+ *
+ * [FLAT_TOP] is the default because it is what every beehive was before the choice existed.
+ */
+@Serializable
+enum class HexOrientation { FLAT_TOP, POINTY_TOP }
 
 /**
  * The point an [IconArrangement.Fan] pivots on — where its arcs sweep *out of*, rather than where its first icon

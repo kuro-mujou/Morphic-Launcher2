@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.container
 
 import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.GridFill
+import inkspire.morphic.core.model.HexOrientation
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.PI
 import kotlin.math.abs
@@ -61,7 +62,7 @@ fun IconArrangement.slots(
     val placed = when (this) {
         is IconArrangement.Grid -> gridSlots(count, width, height, fill)
         IconArrangement.Circle -> circleSlots(count, width, height)
-        IconArrangement.Beehive -> beehiveSlots(count, width, height)
+        is IconArrangement.Beehive -> beehiveSlots(count, width, height, orientation)
         is IconArrangement.Fan -> fanSlots(count, width, height, anchor)
     }
     return if (gap > 0f) placed.map { it.deflated(gap / 2f) } else placed
@@ -354,11 +355,21 @@ private val BeehiveDirections = arrayOf(1 to 0, 1 to -1, 0 to -1, -1 to 0, -1 to
  * Icons packed as a honeycomb: one in the middle, then complete hexagonal rings outward.
  *
  * Coordinates are generated in axial (q, r) form — walk ring `k` by starting at `(-k, k)` and taking `k` steps in
- * each of the six [BeehiveDirections] — then converted to pixel centers by the standard pointy-top hex projection.
- * The whole cloud is then scaled to fit the box, which is what makes the result independent of how many rings it
- * took: eight icons and eighty both fill the container, at different icon sizes.
+ * each of the six [BeehiveDirections] — then converted to pixel centers by the standard hex projection for
+ * [orientation]. The whole cloud is then scaled to fit the box, which is what makes the result independent of how
+ * many rings it took: eight icons and eighty both fill the container, at different icon sizes.
+ *
+ * **The two projections differ by which axis carries the three-halves step**, which is the 30° turn expressed as
+ * arithmetic rather than as a rotation: a flat-top cell has a neighbour directly above and below it, a pointy-top
+ * one has a neighbour directly left and right. Everything after this — the pitch, the icon's share of it, the
+ * scale-to-fit — is the same for both, since a hex lattice is a hex lattice whichever way it is turned.
  */
-private fun beehiveSlots(count: Int, width: Float, height: Float): List<ArrangementSlot> {
+private fun beehiveSlots(
+    count: Int,
+    width: Float,
+    height: Float,
+    orientation: HexOrientation,
+): List<ArrangementSlot> {
     val coords = ArrayList<Pair<Int, Int>>(count)
     coords.add(0 to 0)
     var k = 1
@@ -378,7 +389,12 @@ private fun beehiveSlots(count: Int, width: Float, height: Float): List<Arrangem
     }
 
     val sqrt3 = sqrt(3f)
-    val centers = coords.map { (q, r) -> (1.5f * q) to (sqrt3 * r + sqrt3 / 2f * q) }
+    val centers = coords.map { (q, r) ->
+        when (orientation) {
+            HexOrientation.FLAT_TOP -> (1.5f * q) to (sqrt3 * r + sqrt3 / 2f * q)
+            HexOrientation.POINTY_TOP -> (sqrt3 * q + sqrt3 / 2f * r) to (1.5f * r)
+        }
+    }
     var maxAbsX = 0f
     var maxAbsY = 0f
     centers.forEach { (x, y) ->

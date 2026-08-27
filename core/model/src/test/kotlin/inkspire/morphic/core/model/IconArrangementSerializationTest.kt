@@ -23,7 +23,8 @@ class IconArrangementSerializationTest {
         IconArrangement.Grid(GridFill.Columns(3)),
         IconArrangement.Grid(GridFill.Rows(1)),
         IconArrangement.Circle,
-        IconArrangement.Beehive,
+        IconArrangement.Beehive(),
+        IconArrangement.Beehive(HexOrientation.POINTY_TOP),
         IconArrangement.Fan(FanAnchor.TOP_LEFT),
         IconArrangement.Fan(FanAnchor.TOP_RIGHT),
         IconArrangement.Fan(FanAnchor.BOTTOM_LEFT),
@@ -47,7 +48,7 @@ class IconArrangementSerializationTest {
         val names = mapOf(
             IconArrangement.Grid() to "grid",
             IconArrangement.Circle to "circle",
-            IconArrangement.Beehive to "beehive",
+            IconArrangement.Beehive() to "beehive",
             IconArrangement.Fan(FanAnchor.TOP_LEFT) to "fan",
         )
         for ((arrangement, name) in names) {
@@ -65,6 +66,13 @@ class IconArrangementSerializationTest {
     fun `a grid stored without a fill decodes as auto`() {
         val decoded = json.decodeFromString(IconArrangement.serializer(), """{"type":"grid"}""")
         assertEquals(IconArrangement.Grid(GridFill.Auto), decoded)
+    }
+
+    /** A beehive stored before it could be turned decodes as the orientation every beehive already had. */
+    @Test
+    fun `a beehive stored without an orientation decodes as flat top`() {
+        val decoded = json.decodeFromString(IconArrangement.serializer(), """{"type":"beehive"}""")
+        assertEquals(IconArrangement.Beehive(HexOrientation.FLAT_TOP), decoded)
     }
 
     /** A pinned axis travels in the blob, count and all — [GridFill] is a shape of its own down there. */

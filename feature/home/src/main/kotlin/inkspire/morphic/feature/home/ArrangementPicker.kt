@@ -25,6 +25,7 @@ import inkspire.morphic.core.designsystem.cell.CardAlpha
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.GridFill
+import inkspire.morphic.core.model.HexOrientation
 import inkspire.morphic.core.model.IconArrangement
 
 /**
@@ -72,7 +73,13 @@ internal fun ArrangementPicker(
                 onFill = { onArrangement(IconArrangement.Grid(it)) },
             )
 
-            IconArrangement.Circle, IconArrangement.Beehive -> Unit
+            is IconArrangement.Beehive -> SwatchRow(
+                options = HexOrientation.entries.map { IconArrangement.Beehive(it) },
+                selected = arrangement,
+                onPick = onArrangement,
+            )
+
+            IconArrangement.Circle -> Unit
         }
     }
 }
@@ -82,15 +89,15 @@ internal fun ArrangementPicker(
  *
  * That is what keeps the two rows from disagreeing: tapping the shape you are on is then a no-op rather than a
  * reset to a setting you did not ask for, and plain equality decides which tile is selected without anyone
- * comparing types. A shape being switched *to* opens at its default — [FanAnchor.TOP_LEFT] for the fan, which
- * fills in reading order, and [GridFill.Auto] for the grid, which is the derivation every container had before it
- * could be told otherwise.
+ * comparing types. A shape being switched *to* opens at its default, and each shape's default is what it was
+ * before it could be told otherwise: [GridFill.Auto], [HexOrientation.FLAT_TOP], and [FanAnchor.TOP_LEFT], which
+ * fills in reading order.
  */
 private fun shapeOptions(current: IconArrangement): List<IconArrangement> = listOf(
     current as? IconArrangement.Grid ?: IconArrangement.Grid(),
     IconArrangement.Circle,
     current as? IconArrangement.Fan ?: IconArrangement.Fan(),
-    IconArrangement.Beehive,
+    current as? IconArrangement.Beehive ?: IconArrangement.Beehive(),
 )
 
 /**

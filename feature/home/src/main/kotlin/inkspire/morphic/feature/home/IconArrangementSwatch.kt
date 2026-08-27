@@ -76,6 +76,6 @@ private val IconArrangement.swatchCount: Int
     get() = when (this) {
         is IconArrangement.Grid -> 6
         IconArrangement.Circle -> 8
-        IconArrangement.Beehive -> 7
+        is IconArrangement.Beehive -> 7
         is IconArrangement.Fan -> 14
     }

@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home.containersettings
 
 import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.GridFill
+import inkspire.morphic.core.model.HexOrientation
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
 
@@ -45,8 +46,20 @@ internal val IconArrangement.label: String
         }
 
         IconArrangement.Circle -> "Circle"
-        IconArrangement.Beehive -> "Beehive"
+        is IconArrangement.Beehive -> "Beehive, " + orientation.label
         is IconArrangement.Fan -> "Fan from ${anchor.label}"
+    }
+
+/**
+ * A hex orientation's display name.
+ *
+ * Named for the cell rather than for the turn, because "flat top" is a thing to look for in the picture and "30
+ * degrees" is a thing to work out from it.
+ */
+internal val HexOrientation.label: String
+    get() = when (this) {
+        HexOrientation.FLAT_TOP -> "flat top"
+        HexOrientation.POINTY_TOP -> "pointy top"
     }
 
 /** [count] of [word], pluralized — the only plural this vocabulary has, so it is a line rather than a facility. */
