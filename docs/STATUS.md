@@ -711,7 +711,49 @@ The distinction runs all the way through: `WidgetProvider` has no id and `BoundW
     handle the **down** receives nothing further (the filter records that return value and stops dispatching), so it
     can never claim and the frame must answer for it there — otherwise the claim outlives the gesture and locks the
     swipe for the session.
-- **Still to come**: resize, widget containers, and the widget area's shrink eviction (it cannot evict to a list).
+- **Still to come**: the widget area's shrink eviction (it cannot evict to a list). Resize and widget containers
+  have since landed — see the arrangement entry below and `CONTAINERS_PLAN.md`.
+
+**An icon container's arrangement is a shape plus that shape's own settings** — part two of
+[ICON_CONTAINER_PLAN.md](ICON_CONTAINER_PLAN.md) (slices H–L, 2026-08-27), each verified on the emulator.
+`IconArrangement` was a flat enum of seven values and is now a sealed interface of **four shapes**: `Grid(fill)`,
+`Circle`, `Beehive(orientation)`, `Fan(anchor)`. The split is what made three of the four settable at all — a column
+count is not an enum value however it is named, and four fan corners were four values where eight anchors would have
+been eight.
+- **It is stored as a serialized blob, and the column was renamed to say so.** `icon_container.arrangement` held an
+  enum name; `arrangementSpec` holds JSON, at **DB v7** (destructive, as v6 was). The rename is the standing rule
+  about a key being the seam for a semantic break — re-reading the old column in place would have decoded every
+  `GRID` as an unreadable blob and silently reset the container's shape.
+- **And the blob is what made the three feature slices free.** J, K and L each added a parameter with **no schema
+  change and no migration**: kotlinx-serialization does not encode a default, so `{"type":"grid"}` decodes into a
+  `Grid` that has since grown a `fill`, and an enum gains a constant rather than renaming one. Three tests pin the
+  parameterless forms, because that failure is silent — a container that quietly reverts, not an error.
+- **One control sets it, in both places that set it** (`ArrangementPicker`, `feature:home`): a row of shapes, and
+  under it the row belonging to the chosen shape. It replaced the settings screen's `AlertDialog`, which covered the
+  live preview at the one moment the preview had something to say. The widget picker's detail page uses the same
+  composable, so the shape chosen before a container exists and the shape adjusted afterwards are one control.
+- **The grid's second row is numbers, not pictures, and that is not an inconsistency.** At six icons `columns = 2`
+  and `rows = 3` draw the *same* block and differ only in which way it grows, so two swatches would mean opposite
+  things while looking identical. Everything else's variants are pictures — eight fan anchors, two hex orientations —
+  and `IconArrangementSwatch` drew every one of them without being touched, because it lays its dots out through the
+  same `iconContainerSlots` the container does.
+- **What each shape gained.** The grid pins **one** axis or neither (`GridFill`), so pinning the columns grows it
+  downward and pinning the rows grows it right — `rows = 1` in a wide container is the macOS-dock shape, and the
+  acceptance test is that it stays one row as icons are added. The fan gained the four **edge** anchors, where the
+  sweep follows from the kind of anchor (a quarter circle at a corner, a half at an edge) rather than from a second
+  control; its old corner-and-mirror decomposition could not express one, since an edge's cloud spills both ways
+  along an axis. The beehive gained its two lattice **orientations**, the 30° turn being the only rotation that
+  changes a six-fold-symmetric picture.
+- **The beehive's default is flat-top, and the plan said pointy** — because `beehiveSlots`' KDoc said pointy while
+  its formula was the flat-top one, and the plan inherited the claim. Following it would have re-laid out every
+  stored beehive on upgrade, silently. The KDoc is corrected; the correction is recorded in the plan's §6e.
+- **The circle keeps no settings, deliberately.** A start angle was slice M and was dropped rather than deferred:
+  with `n` icons a ring has `n`-fold symmetry, so a whole step only permutes which icon sits at twelve o'clock —
+  which reordering does better — and only a fraction of a step changes the shape at all. It is a real control at
+  n ≤ 6 and inert above it, and a control whose worth depends on how many icons happen to be in the container is
+  worse than an absent one.
+- **Known bound**: the grid's count chips stop at eight, which is where a phone-sized container's columns stop being
+  aimable. Nothing in the geometry enforces it — a larger stored count still lays out; it just cannot be chosen.
 
 **Next after that: HOME's second pairing is built, so widgets are the thing it is waiting on.** `LIST_WITH_WIDGET_AREA`
 renders, is configurable, and reorders — and its widget area is an empty, correctly-sized, correctly-refusing drop
