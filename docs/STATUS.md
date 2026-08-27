@@ -739,7 +739,11 @@ been eight.
   same `iconContainerSlots` the container does.
 - **What each shape gained.** The grid pins **one** axis or neither (`GridFill`), so pinning the columns grows it
   downward and pinning the rows grows it right — `rows = 1` in a wide container is the macOS-dock shape, and the
-  acceptance test is that it stays one row as icons are added. The fan gained the four **edge** anchors, where the
+  acceptance test is that it stays one row as icons are added. **The fill runs along the pinned axis** (pinned rows
+  fill *down* the columns) and a pinned tail is flush rather than centred, which is a device correction to how it
+  first shipped: reading across a pinned row count makes the wrap depend on the total, so the tail landed ragged and
+  an add shuffled icons between rows. Along the pinned axis an icon's cell is a function of its index alone, so an
+  add lands at the growing edge and moves nothing. The fan gained the four **edge** anchors, where the
   sweep follows from the kind of anchor (a quarter circle at a corner, a half at an edge) rather than from a second
   control; its old corner-and-mirror decomposition could not express one, since an edge's cloud spills both ways
   along an axis. The beehive gained its two lattice **orientations**, the 30° turn being the only rotation that

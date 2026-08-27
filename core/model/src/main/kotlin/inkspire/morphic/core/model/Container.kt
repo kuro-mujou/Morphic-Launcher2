@@ -72,7 +72,7 @@ data class Folder(val id: Long, val label: String, val apps: List<ComponentKey>)
  */
 @Serializable
 sealed interface IconArrangement {
-    /** Rows and columns of square cells, filled in reading order and wrapped where [fill] says to. */
+    /** Rows and columns of square cells, filled and wrapped the way [fill] says. */
     @Serializable
     @SerialName("grid")
     data class Grid(val fill: GridFill = GridFill.Auto) : IconArrangement
@@ -96,10 +96,16 @@ sealed interface IconArrangement {
 /**
  * Where an [IconArrangement.Grid] wraps — **one axis pinned, or neither**.
  *
- * The icons are laid out in reading order whichever this is; all that changes is where the wrapping count comes
- * from, and therefore **which way the block grows** as icons are added: pin the columns and it extends downward,
- * pin the rows and it extends to the right (`Rows(1)` is a dock). Reading order is not negotiable — a container is
- * reordered by dragging onto a *position*, and an order the eye cannot follow is one the finger cannot aim at.
+ * What it settles is **which way the block grows** as icons are added — pin the columns and it extends downward,
+ * pin the rows and it extends to the right (`Rows(1)` is a dock) — and, with it, the direction the list fills:
+ * **the fill runs along the pinned axis**, so the newest icon is always at the growing edge and nothing already
+ * placed moves to make room. [Auto] pins neither and reads across like a page.
+ *
+ * That coupling is the correction a device made to an earlier draft of this, which had the fill read across in all
+ * three modes. Filling across a *pinned row count* makes the wrap depend on the total — ten icons in three rows
+ * wrap at four, thirteen wrap at five — so the tail lands ragged and an add shuffles icons between rows. On a
+ * surface reordered by dragging onto a *position*, that is the worse of the two costs: an order the eye has to be
+ * told about is still aimable, and an arrangement that re-flows under the finger is not.
  *
  * **A one-of rather than a `rows` and a `columns` together**, because there is no R × C frame here and no capacity
  * to fill: the container's own bounds are the list's bounds and the icons scale until everything fits. A pair would

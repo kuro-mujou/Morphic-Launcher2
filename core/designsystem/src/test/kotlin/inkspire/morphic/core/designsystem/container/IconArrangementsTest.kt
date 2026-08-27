@@ -186,9 +186,47 @@ class IconArrangementsTest {
     fun `pinned rows wrap at the columns that count implies`() {
         val slots = IconArrangement.Grid(GridFill.Rows(2)).slots(7, width, height)
         assertEquals(2, slots.map { it.y }.distinct().size)
-        // Four across the top, three centered under them.
+        // Seven icons two rows tall is four columns: three full pairs and a single at the top of the fourth.
+        assertEquals(4, slots.map { it.x }.distinct().size)
         assertEquals(4, slots.count { it.y == slots.first().y })
         assertNoOverlap(slots)
+    }
+
+    /**
+     * **The fill runs along the pinned axis**, so pinned rows fill *down* — which is what makes an added icon land
+     * at the growing edge instead of re-flowing the ones already there.
+     *
+     * Ten icons in three rows: three down the first column, three down the second, three down the third, and the
+     * tenth alone at the **top** of the fourth. Flush rather than centred in its column, for the same reason: that
+     * is the slot the eleventh will land beside.
+     */
+    @Test
+    fun `pinned rows fill down the columns`() {
+        val slots = IconArrangement.Grid(GridFill.Rows(3)).slots(10, width, height)
+        assertEquals("the first three share a column", slots[0].x, slots[2].x, 0.01f)
+        assertTrue("and descend within it", slots[0].y < slots[1].y && slots[1].y < slots[2].y)
+        assertTrue("the fourth starts the next column", slots[3].x > slots[0].x)
+        assertEquals("the fourth is back at the top", slots[0].y, slots[3].y, 0.01f)
+        assertEquals("ten icons three rows tall is four columns", 4, slots.map { it.x }.distinct().size)
+        assertEquals("the last sits at the top of its column", slots[0].y, slots[9].y, 0.01f)
+        assertNoOverlap(slots)
+    }
+
+    /**
+     * The property the fill direction was chosen for: **an add moves nothing**.
+     *
+     * A pinned axis makes an icon's cell a function of its index alone — `(i % rows, i / rows)` or
+     * `(i / cols, i % cols)` — so the eleventh icon appends at the growing edge. Filling *across* a pinned row
+     * count instead makes the wrap depend on the total, and icons jump rows on the add; centring a short tail does
+     * the same thing at half a cell's scale. This is the test both of those fail.
+     */
+    @Test
+    fun `a pinned axis keeps every icon where it was when one is added`() {
+        for (fill in listOf(GridFill.Rows(3), GridFill.Columns(3))) {
+            val ten = IconArrangement.Grid(fill).slots(10, width, height)
+            val eleven = IconArrangement.Grid(fill).slots(11, width, height)
+            assertEquals("$fill moved what was already placed", ten, eleven.take(10))
+        }
     }
 
     /**
@@ -221,13 +259,19 @@ class IconArrangementsTest {
         assertEquals(height / 3f, sizes.first(), 0.01f)
     }
 
-    /** The same rule across: three columns asked for is three columns wide, with two icons centered in them. */
+    /**
+     * The same rule across: three columns asked for is three columns wide, whatever is in them.
+     *
+     * The icons are **flush** in the block rather than centred in it, which is the pinned tail's rule: the third
+     * icon has to land beside the second rather than shifting both.
+     */
     @Test
     fun `a pinned column count is not capped by the icon count`() {
         val slots = IconArrangement.Grid(GridFill.Columns(4)).slots(2, width, height)
         assertEquals(width / 4f, slots.first().width, 0.01f)
-        val blockCenter = (slots.first().centerX + slots.last().centerX) / 2f
-        assertEquals("the short row should sit in the middle of the block", width / 2f, blockCenter, 0.01f)
+        // A four-column block in a 300-wide box is the whole width, so its first column opens at the left edge.
+        assertEquals("the row should start at the block's edge", 0f, slots.first().x, 0.01f)
+        assertEquals(slots.first().x + slots.first().width, slots.last().x, 0.01f)
     }
 
     /** Auto is what an unconfigured container has always had, so it must still derive from the box. */

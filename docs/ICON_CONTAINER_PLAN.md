@@ -505,36 +505,39 @@ list inside them, and the icons scale down until it fits. That is why 33 icons i
 picture, and why `rows = 1` with two hundred icons is a very thin dock rather than an error. There is no capacity
 anywhere in this, and nothing is ever refused.
 
-#### The fill is reading order, always; the setting only moves where the wrap comes from
+#### The fill runs along the pinned axis
 
-Left to right, then down — in all three modes. **List order is reading order**, so the seventh icon is the seventh
-thing you look at, whatever the setting is. That matters more here than anywhere else, because reordering is a drag
-onto a *position*: an order the eye cannot follow is one the finger cannot aim at.
+| Setting | Fill | Wrap at | The container grows |
+|---|---|---|---|
+| `Auto` | left to right, then down | `sqrt(count × aspect)` columns | either way, as the count decides |
+| `Columns = n` | left to right, then down | `n` columns | **downward** — new rows appear at the bottom |
+| `Rows = n` | **top to bottom, then right** | `n` rows | **rightward** — new columns appear at the right |
 
-What the setting changes is only where the wrapping count comes from:
+The last column is what the two settings mean to a user: pin the rows and the container extends sideways, pin the
+columns and it extends down. The fill column is what makes that behave — **the list advances along the axis the
+user fixed, and the container grows along the axis they left free**, so an added icon lands at the growing edge.
 
-| Setting | Columns used | The container grows |
-|---|---|---|
-| `Auto` | `sqrt(count × aspect)` | either way, as the count decides |
-| `Columns = n` | `n` | **downward** — new rows appear at the bottom |
-| `Rows = n` | `ceil(count / n)` | **rightward** — new columns appear at the right |
+**Twice-corrected, and the second correction came from a device.** An early draft claimed a pinned row count
+*forced* a column-major fill; that was wrong, since `ceil(count / rows)` is known before any slot is placed and both
+orders were always computable. The draft after it kept reading order in all three modes on the strength of "the
+seventh icon is the seventh thing you look at" — which is true, and is not the whole cost. Reading *across* a pinned
+row count makes the wrap depend on the total: ten icons in three rows wrap at four, thirteen wrap at five, so the
+fifth icon jumps a whole row on an add, and the tail lands ragged (at eleven icons, half a cell off the columns
+above). Filling *along* the pinned axis makes an icon's cell a function of its index alone — `(i % rows, i / rows)`
+— so nothing already placed ever moves. On a surface reordered by dragging onto a *position*, an arrangement that
+re-flows under the finger is the worse of the two.
 
-That last column is the whole of what the two settings mean to a user: pin the rows and the container extends
-sideways, pin the columns and it extends down. `rows = 1` therefore appends at the right-hand end of the strip,
-which is what a dock does.
-
-**A correction to an earlier draft of this section**, which claimed a pinned row count *forced* a column-major fill
-because row-major would need the derived column count to wrap against. It would, and that count is available:
-`ceil(count / rows)` is known before any slot is placed. Both orders were always computable, so the direction was a
-real choice rather than a consequence — and reading order is the choice.
+**A pinned tail is flush, not centred**, on both settings and for the same reason. Slice A centres a short last row
+because a derived block is a *shape* being composed; a pinned axis is a frame being filled, and the next icon has
+to land where the eye is already looking. Centring also moves what is already there — two icons centred in a
+four-column block shift when the third arrives.
 
 **The pinned count divides its axis even when there are too few icons to fill it.** Three rows with two icons is one
 column of two, laid out on a three-row division, not a two-row one. Otherwise the icons would resize on every add
 until the container filled up, which is the opposite of what pinning an axis is for.
 
-Implementation is smaller than the discussion: `gridSlots`' fill expressions — `row = i / cols`, `col = i % cols` —
-do not change at all. Only the provenance of `cols` does, and slice A's centred short last row keeps working
-because it was written against `cols` rather than against the derivation.
+Implementation: `gridSlots` is a `when` over the fill into `rowMajorSlots` (Auto and pinned columns, the first
+centring its short row and the second not) and `columnMajorSlots` (pinned rows). Auto is untouched by all of it.
 
 #### Rows and columns are not two dimensions of a frame
 
@@ -705,10 +708,17 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   Verified on the emulator: the settings screen shows four shapes inline with no dialog, picking the fan grows the
   corner row, picking a corner moves the pinned preview and relights both rows; the picker's detail page does the
   same and its tile follows; and the widget container's axis dialog still opens and writes.
-- **J — the grid's fill axis.** ✅ `GridFill` is `Auto | Columns(n) | Rows(n)`, and `gridSlots` takes it. The two
-  expressions that place an icon — `i / cols` and `i % cols` — are untouched, exactly as §6c predicted: only the
-  provenance of `cols` moved, into `columnsFor`. **No DB bump**, which is H's additive-blob claim being spent for
-  the first time: a stored `{"type":"grid"}` decodes as `Grid(Auto)`, and a test pins that so it cannot rot.
+- **J — the grid's fill axis.** ✅ `GridFill` is `Auto | Columns(n) | Rows(n)`, and `gridSlots` takes it. **No DB
+  bump**, which is H's additive-blob claim being spent for the first time: a stored `{"type":"grid"}` decodes as
+  `Grid(Auto)`, and a test pins that so it cannot rot.
+
+  **Revised 2026-08-27 after device testing, and §6c is rewritten with it.** As first built the fill read across in
+  all three modes, which is what that section said; on a device the tail gave it away — ten icons in three rows
+  wrapped at four and left the last two indented, eleven left them half a cell off the columns above, and a
+  thirteenth re-flowed the whole container. Pinned rows now fill **down** the columns and a pinned tail is **flush**,
+  so an icon's cell is a function of its index and an add moves nothing. `gridSlots` became a `when` into
+  `rowMajorSlots` / `columnMajorSlots`; the claim below that its two placement expressions were untouched held only
+  for the version that was wrong.
 
   **A pinned axis sizes the cell; the icons you have are centered on what they occupy.** §6c settled the first half
   ("the pinned count divides its axis even when there are too few icons to fill it") and left the second open, and

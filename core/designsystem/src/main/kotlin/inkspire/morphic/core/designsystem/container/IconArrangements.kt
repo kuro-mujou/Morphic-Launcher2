@@ -87,7 +87,7 @@ private fun ArrangementSlot.deflated(by: Float): ArrangementSlot {
 }
 
 /**
- * Rows and columns of **square** cells, centered in the box, filled left to right and then down.
+ * Rows and columns of **square** cells, the block centered in the box, filled the way [fill] says.
  *
  * **Square, which means the block does not fill the box** — the cell is the smaller of what each axis affords, and
  * the slack is split as a margin. A cell that took `width / cols` by `height / rows` instead would put the icons on
@@ -95,29 +95,63 @@ private fun ArrangementSlot.deflated(by: Float): ArrangementSlot {
  * further apart across than down. That reads as a mistake rather than as a choice, and it is a mistake the eye
  * catches before it can name.
  *
- * **The last row is centered** rather than left-flush, for the same reason: a trailing row of two under a row of
- * five is a shape, and hanging it off the left edge makes it look like an unfinished row instead.
+ * **The fill runs *along* the pinned axis**, which is the one thing to keep hold of here: pinned columns fill left
+ * to right and wrap downward, pinned rows fill top to bottom and wrap to the right, and [GridFill.Auto] — which
+ * pins nothing — reads across like a page. Said the other way: the list always advances along the axis the user
+ * fixed, and the container grows along the axis they left free.
  *
- * **[fill] changes only where the wrapping count comes from**, which is why the two expressions that place an icon
- * — `i / cols` and `i % cols` — are untouched by it. Reading order is the fill in all three modes; what the setting
- * chooses is which way the block *grows* as the list does, and a pinned axis is what stops that growth going both
- * ways at once.
+ * That is not a matter of taste. With the fill along the pinned axis, an icon's cell is `(i % rows, i / rows)` or
+ * `(i / cols, i % cols)` — a function of its index alone — so **adding an icon lands it at the growing edge and
+ * moves nothing already placed**. Filling across a *pinned row count* instead makes the wrap depend on the total:
+ * ten icons in three rows wrap at four, thirteen wrap at five, and the fifth icon jumps a whole row on the add.
+ * On a surface that is reordered by dragging onto a position, an arrangement that re-flows under the finger is
+ * worse than one that has to be read down a column.
  */
-private fun gridSlots(count: Int, width: Float, height: Float, fill: GridFill): List<ArrangementSlot> {
-    val cols = columnsFor(count, width, height, fill)
-    // The rows the icons occupy, and the rows the cell is *sized* against. They differ only where the user pinned a
-    // row count the list has not filled yet — see [divisionRows].
-    val usedRows = ceil(count.toFloat() / cols).toInt()
-    val cell = minOf(width / cols, height / divisionRows(count, cols, fill))
+private fun gridSlots(count: Int, width: Float, height: Float, fill: GridFill): List<ArrangementSlot> = when (fill) {
+    GridFill.Auto -> rowMajorSlots(count, width, height, autoColumns(count, width, height), centerShortRow = true)
+    is GridFill.Columns -> rowMajorSlots(count, width, height, max(1, fill.count), centerShortRow = false)
+    is GridFill.Rows -> columnMajorSlots(count, width, height, max(1, fill.count))
+}
+
+/**
+ * The column count [GridFill.Auto] derives from the box.
+ *
+ * `sqrt(count × aspect)` is the column count at which `cols / rows` matches the box's own ratio, so a resized
+ * container keeps its block roughly the box's shape. It is capped at [count], so a wide box holding two icons is
+ * two columns rather than three with a hole in it — a cap a *pinned* count deliberately does not get, since three
+ * columns asked for is three columns of width whatever is in them.
+ */
+private fun autoColumns(count: Int, width: Float, height: Float): Int =
+    max(1, sqrt(count * (width / height)).roundToInt()).coerceAtMost(count)
+
+/**
+ * Left to right, then down — [cols] wide, with the rows following from the count.
+ *
+ * **[centerShortRow] is what tells a derived block from a pinned one.** A trailing row of two under a row of five
+ * is a shape, and hanging it off the left edge makes it look like an unfinished row instead — so [GridFill.Auto]
+ * centers it. A pinned column count is not a shape being composed, it is a frame being filled, and there the
+ * centering is what makes the tail look wrong: it lands the last icons half a cell off the columns above, and it
+ * *moves* them when the next icon arrives. Flush is what makes the next slot the one the eye expects.
+ */
+private fun rowMajorSlots(
+    count: Int,
+    width: Float,
+    height: Float,
+    cols: Int,
+    centerShortRow: Boolean,
+): List<ArrangementSlot> {
+    val rows = ceil(count.toFloat() / cols).toInt()
+    val cell = minOf(width / cols, height / rows)
     val originX = (width - cols * cell) / 2f
-    val originY = (height - usedRows * cell) / 2f
+    val originY = (height - rows * cell) / 2f
     return List(count) { i ->
         val row = i / cols
         val col = i % cols
         // Only the final row can be short, and it holds whatever the full rows above it did not take.
-        val inThisRow = if (row == usedRows - 1) count - row * cols else cols
+        val inThisRow = if (row == rows - 1) count - row * cols else cols
+        val indent = if (centerShortRow) (cols - inThisRow) * cell / 2f else 0f
         ArrangementSlot(
-            x = originX + (cols - inThisRow) * cell / 2f + col * cell,
+            x = originX + indent + col * cell,
             y = originY + row * cell,
             width = cell,
             height = cell,
@@ -126,34 +160,30 @@ private fun gridSlots(count: Int, width: Float, height: Float, fill: GridFill): 
 }
 
 /**
- * How many columns the icons wrap at.
+ * Top to bottom, then rightward — [rows] tall, with the columns following from the count. The pinned-rows fill.
  *
- * [GridFill.Auto] derives it from the box: `sqrt(count × aspect)` is the column count at which `cols / rows`
- * matches the box's own ratio, so a resized container keeps its block roughly the box's shape. It is capped at
- * [count], so a wide box holding two icons is two columns rather than three with a hole in it.
+ * **The height is divided by the pinned count, not by the rows in use**, so a container told to keep three rows
+ * divides by three from its first icon: sizing against what is filled would shrink every icon on each add until
+ * the container filled up, which is the opposite of what pinning an axis is for. The icons that *do* exist are
+ * still centered on what they occupy, which only differs while the first column is filling.
  *
- * **A pinned count is not capped that way, and the difference is the whole of what pinning means**: three columns
- * asked for is three columns of width, and two icons sit in the middle of them rather than quietly becoming a
- * two-column grid that re-sizes itself on the next add. [GridFill.Rows] reaches the same place from the other
- * side — the rows are given, so the columns are however many that takes.
+ * The trailing column is flush at the top rather than centered, for [rowMajorSlots]'s reason one axis over: it is
+ * the growing edge, and the next icon has to land where the eye is already looking.
  */
-private fun columnsFor(count: Int, width: Float, height: Float, fill: GridFill): Int = when (fill) {
-    GridFill.Auto -> max(1, sqrt(count * (width / height)).roundToInt()).coerceAtMost(count)
-    is GridFill.Columns -> max(1, fill.count)
-    is GridFill.Rows -> ceil(count.toFloat() / max(1, fill.count)).toInt()
-}
-
-/**
- * The rows the **cell size** is divided against, which is the pinned count itself when rows are pinned.
- *
- * A container told to keep three rows has to divide its height by three from the first icon, not from the third:
- * sizing against the rows in use would shrink every icon on each add until the container filled up, which is the
- * opposite of what pinning an axis is for. The icons it does have are still centered on what they occupy — that is
- * `usedRows` back in [gridSlots], and it is why the two counts are separate.
- */
-private fun divisionRows(count: Int, cols: Int, fill: GridFill): Int = when (fill) {
-    is GridFill.Rows -> max(1, fill.count)
-    GridFill.Auto, is GridFill.Columns -> ceil(count.toFloat() / cols).toInt()
+private fun columnMajorSlots(count: Int, width: Float, height: Float, rows: Int): List<ArrangementSlot> {
+    val cols = ceil(count.toFloat() / rows).toInt()
+    val usedRows = minOf(rows, count)
+    val cell = minOf(width / cols, height / rows)
+    val originX = (width - cols * cell) / 2f
+    val originY = (height - usedRows * cell) / 2f
+    return List(count) { i ->
+        ArrangementSlot(
+            x = originX + (i / rows) * cell,
+            y = originY + (i % rows) * cell,
+            width = cell,
+            height = cell,
+        )
+    }
 }
 
 /**
