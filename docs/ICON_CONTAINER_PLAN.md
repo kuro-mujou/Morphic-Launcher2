@@ -1,7 +1,8 @@
 # Icon container — arrangement, reorder and configuration
 
 **Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
-**Part two (§6) has begun:** slices H–L landed 2026-08-27; M is planned, and §6f already argues for dropping it. Slice F was **revised the same
+**Part two (§6) is complete:** slices H–L landed 2026-08-27, each verified on the emulator; **M was dropped**, on
+the grounds §6f had already written down. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -621,6 +622,12 @@ versus down is a real choice, twenty is a circle either way.
 So it is a real control at n≤6 and inert above it, which is worth knowing before it is built rather than after. If
 only one of §6c–§6f gets built, this is the one to drop.
 
+**Dropped, 2026-08-27.** The paragraph above is the whole reason and nothing since has weakened it: the other three
+shapes each gained a setting that changes the picture at every count, and this one would change it at four counts
+and do nothing at the rest — a control whose value depends on how many icons happen to be in the container is worse
+than an absent one, which is this launcher's standing rule. The circle keeps its variant row empty, and the sealed
+subtype stays parameterless, so nothing has to be undone if this is ever reconsidered.
+
 ### 6g. The control is two rows, and the dialog goes away
 
 The shape row from §3e stays as it is — four swatches, one per sealed subtype. Under it, **a second row that
@@ -781,7 +788,8 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   Verified on the emulator: the two tiles draw visibly different lattices, the pinned preview follows,
   `{"type":"beehive","orientation":"POINTY_TOP"}` is stored, and the honeycomb comes back turned that way after a
   force-stop.
-- **M — circle start angle.** Optional; see §6f.
+- **M — circle start angle.** ❌ Dropped rather than built; see §6f. The circle keeps no parameters, which is also
+  what keeps `Circle` a `data object` and its arm of the control's `when` a bare `Unit`.
 
 **H before everything, and alone.** It is the only slice that touches persistence, and it is behaviour-preserving —
 which means it can be verified by *nothing changing*, and any later slice that breaks something has a clean commit
