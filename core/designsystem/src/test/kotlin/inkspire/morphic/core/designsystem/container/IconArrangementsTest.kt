@@ -1,5 +1,6 @@
 package inkspire.morphic.core.designsystem.container
 
+import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.IconArrangement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,8 +20,23 @@ class IconArrangementsTest {
     private val width = 300f
     private val height = 200f
 
-    /** Every arrangement, so a new enum value is covered by the shared invariants the moment it is added. */
-    private val all = IconArrangement.entries
+    /**
+     * Every arrangement, so the shared invariants cover each of them.
+     *
+     * **Spelled out, and that is the price of the shapes carrying their own parameters**: `entries` used to enroll a
+     * new value here the moment it was declared, and a sealed type has no such list. A shape added without a line
+     * here is checked by nothing, which is why the exhaustive `when`s in `slots` and `swatchCount` are what actually
+     * force a new shape to be finished — this list is a reminder, not a guard.
+     */
+    private val all = listOf<IconArrangement>(
+        IconArrangement.Grid,
+        IconArrangement.Circle,
+        IconArrangement.Beehive,
+        IconArrangement.Fan(FanAnchor.TOP_LEFT),
+        IconArrangement.Fan(FanAnchor.TOP_RIGHT),
+        IconArrangement.Fan(FanAnchor.BOTTOM_LEFT),
+        IconArrangement.Fan(FanAnchor.BOTTOM_RIGHT),
+    )
 
     // ── Shared invariants ────────────────────────────────────────────────────────────────────────────────
 
@@ -64,7 +80,7 @@ class IconArrangementsTest {
     }
 
     /**
-     * Degenerate input is answered identically by all seven, which is what hoisting the guard out of the seven
+     * Degenerate input is answered identically by every shape, which is what hoisting the guard out of the four
      * bodies bought — L1 repeated it in each and so could have lost it from one.
      */
     @Test
@@ -82,7 +98,7 @@ class IconArrangementsTest {
     /** The grid is the one arrangement that tiles: its slots must cover the box exactly and never overlap. */
     @Test
     fun `grid tiles the box without gaps or overlap`() {
-        val slots = IconArrangement.GRID.slots(6, width, height)
+        val slots = IconArrangement.Grid.slots(6, width, height)
         // 6 icons in a 3:2 box → 3 columns × 2 rows, each cell a third by a half.
         assertEquals(3, slots.map { it.x }.distinct().size)
         assertEquals(2, slots.map { it.y }.distinct().size)
@@ -94,7 +110,7 @@ class IconArrangementsTest {
     /** A count below the natural column width must not leave holes: two icons in a wide box are two columns. */
     @Test
     fun `grid never has more columns than icons`() {
-        val slots = IconArrangement.GRID.slots(2, 1000f, 100f)
+        val slots = IconArrangement.Grid.slots(2, 1000f, 100f)
         assertEquals(2, slots.size)
         assertEquals(1, slots.map { it.y }.distinct().size)
         assertNoOverlap(slots)
@@ -107,7 +123,7 @@ class IconArrangementsTest {
      */
     @Test
     fun `grid cells stay square in a box that does not divide evenly`() {
-        for (slot in IconArrangement.GRID.slots(6, 400f, 150f)) {
+        for (slot in IconArrangement.Grid.slots(6, 400f, 150f)) {
             assertEquals(slot.width, slot.height, 0.01f)
         }
     }
@@ -116,7 +132,7 @@ class IconArrangementsTest {
     @Test
     fun `grid centers a short last row`() {
         // 5 icons in a 3:2 box → 3 columns, so the last row holds 2 and must sit half a cell in.
-        val slots = IconArrangement.GRID.slots(5, width, height)
+        val slots = IconArrangement.Grid.slots(5, width, height)
         val topRow = slots.take(3)
         val lastRow = slots.drop(3)
         assertEquals(2, lastRow.size)
@@ -128,7 +144,7 @@ class IconArrangementsTest {
     /** The whole block is centered in the box, so the margin it leaves is even on both sides. */
     @Test
     fun `grid centers its block in the box`() {
-        val slots = IconArrangement.GRID.slots(6, 400f, 150f)
+        val slots = IconArrangement.Grid.slots(6, 400f, 150f)
         val left = slots.minOf { it.x }
         val right = 400f - slots.maxOf { it.x + it.width }
         assertEquals(left, right, 0.01f)
@@ -136,7 +152,7 @@ class IconArrangementsTest {
 
     @Test
     fun `grid rows fill downward in reading order`() {
-        val slots = IconArrangement.GRID.slots(6, width, height)
+        val slots = IconArrangement.Grid.slots(6, width, height)
         // Item 3 opens the second row: back to the left edge, one row down.
         assertEquals(slots[0].x, slots[3].x, 0.01f)
         assertTrue(slots[3].y > slots[0].y)
@@ -153,8 +169,8 @@ class IconArrangementsTest {
     @Test
     fun `gap separates neighbouring icons by exactly that much`() {
         val gap = 12f
-        val plain = IconArrangement.GRID.slots(6, width, height)
-        val spaced = IconArrangement.GRID.slots(6, width, height, gap = gap)
+        val plain = IconArrangement.Grid.slots(6, width, height)
+        val spaced = IconArrangement.Grid.slots(6, width, height, gap = gap)
 
         // Columns 0 and 1 of the first row: touching before, `gap` apart after.
         assertEquals(plain[0].x + plain[0].width, plain[1].x, 0.01f)
@@ -170,7 +186,7 @@ class IconArrangementsTest {
      */
     @Test
     fun `a gap larger than the slot still leaves an icon`() {
-        val slots = IconArrangement.GRID.slots(64, 100f, 100f, gap = 500f)
+        val slots = IconArrangement.Grid.slots(64, 100f, 100f, gap = 500f)
         assertEquals(64, slots.size)
         for (slot in slots) {
             assertTrue("width ${slot.width}", slot.width > 0f)
@@ -181,7 +197,7 @@ class IconArrangementsTest {
     /** Every arrangement honors it, because the inset is applied once rather than by each shape. */
     @Test
     fun `every arrangement shrinks its slots for a gap`() {
-        for (arrangement in IconArrangement.entries) {
+        for (arrangement in all) {
             val plain = arrangement.slots(6, width, height).first().width
             val spaced = arrangement.slots(6, width, height, gap = 10f).first().width
             assertTrue("$arrangement", spaced < plain)
@@ -193,8 +209,8 @@ class IconArrangementsTest {
     /** The chord rule is what stops a crowded ring overlapping itself, so it is the property worth pinning. */
     @Test
     fun `circle shrinks its icons as the ring fills`() {
-        val few = IconArrangement.CIRCLE.slots(3, width, height).first().width
-        val many = IconArrangement.CIRCLE.slots(12, width, height).first().width
+        val few = IconArrangement.Circle.slots(3, width, height).first().width
+        val many = IconArrangement.Circle.slots(12, width, height).first().width
         assertTrue("12 icons ($many) should be smaller than 3 ($few)", many < few)
     }
 
@@ -205,8 +221,8 @@ class IconArrangementsTest {
      */
     @Test
     fun `circle keeps its icons full size until the ring is against the box`() {
-        val three = IconArrangement.CIRCLE.slots(3, width, height).first().width
-        val four = IconArrangement.CIRCLE.slots(4, width, height).first().width
+        val three = IconArrangement.Circle.slots(3, width, height).first().width
+        val four = IconArrangement.Circle.slots(4, width, height).first().width
         assertEquals("a fourth icon should widen the ring, not shrink the icons", three, four, 0.01f)
     }
 
@@ -214,7 +230,7 @@ class IconArrangementsTest {
     @Test
     fun `circle grows its ring with the count`() {
         fun ringRadius(count: Int): Float {
-            val slot = IconArrangement.CIRCLE.slots(count, width, height).first()
+            val slot = IconArrangement.Circle.slots(count, width, height).first()
             return hypot(slot.centerX - width / 2f, slot.centerY - height / 2f)
         }
         assertTrue("3 (${ringRadius(3)}) should ring tighter than 8 (${ringRadius(8)})", ringRadius(3) < ringRadius(8))
@@ -222,14 +238,14 @@ class IconArrangementsTest {
 
     @Test
     fun `circle centers a lone icon rather than putting it on the ring`() {
-        val slot = IconArrangement.CIRCLE.slots(1, width, height).single()
+        val slot = IconArrangement.Circle.slots(1, width, height).single()
         assertEquals(width / 2f, slot.x + slot.width / 2f, 0.01f)
         assertEquals(height / 2f, slot.y + slot.height / 2f, 0.01f)
     }
 
     @Test
     fun `circle starts at twelve o'clock`() {
-        val first = IconArrangement.CIRCLE.slots(4, width, height).first()
+        val first = IconArrangement.Circle.slots(4, width, height).first()
         assertEquals(width / 2f, first.x + first.width / 2f, 0.01f)
         assertTrue("the first icon should be above center", first.y + first.height / 2f < height / 2f)
     }
@@ -245,10 +261,10 @@ class IconArrangementsTest {
     @Test
     fun `each fan opens away from its own corner`() {
         val pivots = mapOf(
-            IconArrangement.FAN_TOP_LEFT to (0f to 0f),
-            IconArrangement.FAN_TOP_RIGHT to (width to 0f),
-            IconArrangement.FAN_BOTTOM_LEFT to (0f to height),
-            IconArrangement.FAN_BOTTOM_RIGHT to (width to height),
+            IconArrangement.Fan(FanAnchor.TOP_LEFT) to (0f to 0f),
+            IconArrangement.Fan(FanAnchor.TOP_RIGHT) to (width to 0f),
+            IconArrangement.Fan(FanAnchor.BOTTOM_LEFT) to (0f to height),
+            IconArrangement.Fan(FanAnchor.BOTTOM_RIGHT) to (width to height),
         )
         val corners = pivots.values.toList()
         for ((arrangement, pivot) in pivots) {
@@ -264,7 +280,7 @@ class IconArrangementsTest {
     /** Square cells in a non-square box — the fan shears rather than keeps its shape if this is ever lost. */
     @Test
     fun `fan cells stay square`() {
-        for (slot in IconArrangement.FAN_TOP_LEFT.slots(6, width, height)) {
+        for (slot in IconArrangement.Fan(FanAnchor.TOP_LEFT).slots(6, width, height)) {
             assertEquals(slot.width, slot.height, 0.01f)
         }
     }
@@ -278,7 +294,7 @@ class IconArrangementsTest {
      */
     @Test
     fun `fan steps outward in arcs`() {
-        val slots = IconArrangement.FAN_TOP_LEFT.slots(9, width, height)
+        val slots = IconArrangement.Fan(FanAnchor.TOP_LEFT).slots(9, width, height)
         // Measured from the **pivot**, which stands half an icon in from the corner. From the corner itself the
         // distance would also vary with the angle, and an icon at 45° would read as further out than one beside it
         // on the same arc.
@@ -294,7 +310,7 @@ class IconArrangementsTest {
     /** Every icon one size, as the beehive does — the fan scales its whole cloud rather than each arc. */
     @Test
     fun `fan icons are all one size`() {
-        val slots = IconArrangement.FAN_TOP_LEFT.slots(9, width, height)
+        val slots = IconArrangement.Fan(FanAnchor.TOP_LEFT).slots(9, width, height)
         for (slot in slots) assertEquals(slots[0].width, slot.width, 0.01f)
     }
 
@@ -302,7 +318,7 @@ class IconArrangementsTest {
 
     @Test
     fun `beehive centers its first icon`() {
-        val slot = IconArrangement.BEEHIVE.slots(7, width, height).first()
+        val slot = IconArrangement.Beehive.slots(7, width, height).first()
         assertEquals(width / 2f, slot.x + slot.width / 2f, 0.01f)
         assertEquals(height / 2f, slot.y + slot.height / 2f, 0.01f)
     }
@@ -314,14 +330,14 @@ class IconArrangementsTest {
      */
     @Test
     fun `beehive shrinks its icons as rings are added`() {
-        val oneRing = IconArrangement.BEEHIVE.slots(7, width, height).first().width
-        val twoRings = IconArrangement.BEEHIVE.slots(19, width, height).first().width
+        val oneRing = IconArrangement.Beehive.slots(7, width, height).first().width
+        val twoRings = IconArrangement.Beehive.slots(19, width, height).first().width
         assertTrue("19 icons ($twoRings) should be smaller than 7 ($oneRing)", twoRings < oneRing)
     }
 
     @Test
     fun `beehive icons are square and all one size`() {
-        val slots = IconArrangement.BEEHIVE.slots(7, width, height)
+        val slots = IconArrangement.Beehive.slots(7, width, height)
         for (slot in slots) {
             assertEquals(slot.width, slot.height, 0.01f)
             assertEquals(slots[0].width, slot.width, 0.01f)

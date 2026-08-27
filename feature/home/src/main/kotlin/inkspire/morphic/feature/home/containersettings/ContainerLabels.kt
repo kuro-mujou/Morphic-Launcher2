@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.home.containersettings
 
+import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
 
@@ -24,20 +25,26 @@ internal fun ContainerSettingsRoute.addLabel(): String = when (this) {
 }
 
 /**
- * An arrangement's display name.
+ * An arrangement's display name — the shape, and for a fan the corner it pivots on.
  *
- * The four fans are named by the corner they pivot on rather than by a direction, because that corner is what a
- * user sees: one icon sits in it and the rest cascade inward.
+ * The fan is named by its corner rather than by a direction because the corner is what a user sees: the arcs sweep
+ * out of it and the icons open away from it.
  */
 internal val IconArrangement.label: String
     get() = when (this) {
-        IconArrangement.GRID -> "Grid"
-        IconArrangement.CIRCLE -> "Circle"
-        IconArrangement.FAN_TOP_LEFT -> "Fan from top left"
-        IconArrangement.FAN_TOP_RIGHT -> "Fan from top right"
-        IconArrangement.FAN_BOTTOM_LEFT -> "Fan from bottom left"
-        IconArrangement.FAN_BOTTOM_RIGHT -> "Fan from bottom right"
-        IconArrangement.BEEHIVE -> "Beehive"
+        IconArrangement.Grid -> "Grid"
+        IconArrangement.Circle -> "Circle"
+        IconArrangement.Beehive -> "Beehive"
+        is IconArrangement.Fan -> "Fan from ${anchor.label}"
+    }
+
+/** A fan anchor's display name, read as the tail of an arrangement's — "Fan from *top left*". */
+internal val FanAnchor.label: String
+    get() = when (this) {
+        FanAnchor.TOP_LEFT -> "top left"
+        FanAnchor.TOP_RIGHT -> "top right"
+        FanAnchor.BOTTOM_LEFT -> "bottom left"
+        FanAnchor.BOTTOM_RIGHT -> "bottom right"
     }
 
 /**

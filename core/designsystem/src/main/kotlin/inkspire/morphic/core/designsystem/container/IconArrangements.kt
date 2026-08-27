@@ -1,5 +1,6 @@
 package inkspire.morphic.core.designsystem.container
 
+import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.PI
 import kotlin.math.abs
@@ -28,12 +29,15 @@ data class ArrangementSlot(val x: Float, val y: Float, val width: Float, val hei
  * Lays [count] icons out inside a [width] × [height] px box, the way this [IconArrangement] says to — the whole of
  * an icon container's inner layout, and **pure**, so it is unit-tested rather than eyeballed on a device.
  *
- * **One exhaustive function, not an interface and a registry.** An `Arrangement` interface with seven
- * implementations and an `arrangementFor(type)` mapping is one implementation per enum value, with nothing outside
- * that file ever implementing it. That is the wrong-interface-abstraction smell
- * `GridBlueprint` already had removed: it buys extensibility nobody can use (the enum is closed, so a new
- * arrangement is a new enum value either way) and costs a registry that can fall out of step with the enum it maps.
- * A `when` cannot: a new [IconArrangement] value **fails to compile** here until it says how it lays out.
+ * **One exhaustive function, not an interface and a registry.** An `Arrangement` interface with four
+ * implementations and an `arrangementFor(shape)` mapping is one implementation per shape, with nothing outside that
+ * file ever implementing it. That is the wrong-interface-abstraction smell `GridBlueprint` already had removed: it
+ * buys extensibility nobody can use (the type is sealed, so a new arrangement is a new subtype either way) and
+ * costs a registry that can fall out of step with the type it maps. A `when` cannot: a new [IconArrangement]
+ * **fails to compile** here until it says how it lays out.
+ *
+ * Each arm reads the parameters its own shape carries, which is the other half of what sealing bought — a fan's
+ * anchor is reachable only in the arm that draws arcs.
  *
  * The shapes are the feature. What is *not* repeated is the degenerate-input guard, hoisted here so every
  * arrangement answers an
@@ -54,13 +58,10 @@ fun IconArrangement.slots(
 ): List<ArrangementSlot> {
     if (count <= 0 || width <= 0f || height <= 0f) return emptyList()
     val placed = when (this) {
-        IconArrangement.GRID -> gridSlots(count, width, height)
-        IconArrangement.CIRCLE -> circleSlots(count, width, height)
-        IconArrangement.FAN_TOP_LEFT -> fanSlots(count, width, height, fromLeft = true, fromTop = true)
-        IconArrangement.FAN_TOP_RIGHT -> fanSlots(count, width, height, fromLeft = false, fromTop = true)
-        IconArrangement.FAN_BOTTOM_LEFT -> fanSlots(count, width, height, fromLeft = true, fromTop = false)
-        IconArrangement.FAN_BOTTOM_RIGHT -> fanSlots(count, width, height, fromLeft = false, fromTop = false)
-        IconArrangement.BEEHIVE -> beehiveSlots(count, width, height)
+        IconArrangement.Grid -> gridSlots(count, width, height)
+        IconArrangement.Circle -> circleSlots(count, width, height)
+        IconArrangement.Beehive -> beehiveSlots(count, width, height)
+        is IconArrangement.Fan -> fanSlots(count, width, height, anchor)
     }
     return if (gap > 0f) placed.map { it.deflated(gap / 2f) } else placed
 }
@@ -188,17 +189,22 @@ private fun circleSlots(count: Int, width: Float, height: Float): List<Arrangeme
  * innermost and outermost icons flush instead. This is why the whole-cloud scale-to-fit [beehiveSlots] uses does
  * not transfer unchanged: that cloud is centered and symmetric, and this one is anchored in a corner.
  *
- * [fromLeft] and [fromTop] are the chosen corner, decomposed. They are two booleans rather than a `FanCorner` enum
- * because [IconArrangement]'s own four `FAN_*` values already *are* that enum — a second one parallel
- * to it would be a taxonomy to keep in step, and only the `when` above can reach this.
+ * [anchor] is decomposed into two booleans **here rather than on [FanAnchor] itself**, because which way a fan
+ * mirrors is this function's arithmetic and not a property of the model — the same reason the geometry lives in
+ * this module at all. Exhaustive, so an anchor that is not a corner cannot be added without saying what it sweeps.
  */
 private fun fanSlots(
     count: Int,
     width: Float,
     height: Float,
-    fromLeft: Boolean,
-    fromTop: Boolean,
+    anchor: FanAnchor,
 ): List<ArrangementSlot> {
+    val (fromLeft, fromTop) = when (anchor) {
+        FanAnchor.TOP_LEFT -> true to true
+        FanAnchor.TOP_RIGHT -> false to true
+        FanAnchor.BOTTOM_LEFT -> true to false
+        FanAnchor.BOTTOM_RIGHT -> false to false
+    }
     val quarter = PI.toFloat() / 2f
     // Radius and capacity of each arc, outward until they hold them all. Unit radial pitch, so a capacity is just
     // how many unit steps fit along the arc, and the whole cloud is scaled to the box at the end.

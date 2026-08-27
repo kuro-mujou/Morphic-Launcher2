@@ -66,6 +66,7 @@ import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
@@ -441,6 +442,23 @@ private fun ContainerSheets(
 }
 
 /**
+ * Every arrangement this chooser offers — the four shapes, with the fan's corners spelled out.
+ *
+ * A flat list because the *control* is flat: one radio row per combination is what a dialog can show, and a sealed
+ * type has no `entries` to hand it. So this is the chooser's own vocabulary rather than the model's, which is why
+ * the corners are enumerated here and in no other place.
+ */
+private val ArrangementOptions = listOf<IconArrangement>(
+    IconArrangement.Grid,
+    IconArrangement.Circle,
+    IconArrangement.Fan(FanAnchor.TOP_LEFT),
+    IconArrangement.Fan(FanAnchor.TOP_RIGHT),
+    IconArrangement.Fan(FanAnchor.BOTTOM_LEFT),
+    IconArrangement.Fan(FanAnchor.BOTTOM_RIGHT),
+    IconArrangement.Beehive,
+)
+
+/**
  * The one chooser a container has, whichever kind it is — an arrangement or a scroll axis.
  *
  * Split out of the screen because it is a dialog *over* it rather than part of its list, and because the screen had
@@ -456,7 +474,7 @@ private fun ContainerChooser(
     when (settings) {
         is ContainerSettings.Icon -> ChooserDialog(
             title = "Arrangement",
-            options = IconArrangement.entries,
+            options = ArrangementOptions,
             selected = settings.arrangement,
             label = { it.label },
             onPick = { viewModel.setArrangement(it) },

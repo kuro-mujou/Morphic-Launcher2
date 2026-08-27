@@ -1,7 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
 **Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
-**Part two (§6) is planned and not started:** the arrangement grows parameters of its own. Slice F was **revised the same
+**Part two (§6) has begun:** slice H landed 2026-08-27; I–M are planned. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -642,9 +642,31 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
 
 ### 6i. Slices
 
-- **H — the model split, no new parameters.** `Fan` keeps only its four corners, `Grid.columns` is always null, the
-  other two take their defaults. Pure refactor: model, converter, DB v7, `slots()`, swatch, both call sites.
-  Nothing about the launcher should look different, and that is how it is verified.
+- **H — the model split, no new parameters.** ✅ `IconArrangement` is a sealed interface: `Grid`, `Circle` and
+  `Beehive` are `data object`s, `Fan` carries the `FanAnchor` its four values already were. `icon_container.arrangement`
+  became `arrangementSpec`, holding a serialized shape rather than an enum name, at **DB v7** (destructive, as v6 was).
+
+  **The other three parameters are not declared yet**, which is the one departure from §6b as written: `GridFill`,
+  `startDegrees` and `HexOrientation` have no consumer until J, L and M, and a field nothing reads is a model in a
+  vacuum. Nothing is owed for deferring them — kotlinx-serialization does not encode a default, so `{"type":"grid"}`
+  decodes into a `Grid` that later grows a defaulted `fill`, and neither the blob nor the schema changes when it does.
+
+  Two things the split cost immediately, both small and both worth knowing before I:
+  - **The settings dialog needs a flat list of the seven combinations**, since a sealed type has no `entries` and a
+    radio row per combination is what a dialog shows. `ArrangementOptions` in `ContainerSettingsScreen` is that list,
+    and it is the control's vocabulary rather than the model's — I deletes it with the dialog.
+  - **`IconArrangementsTest` enrolls its arrangements by hand** for the same reason, where `entries` used to do it the
+    moment a value was declared. The exhaustive `when`s in `slots()` and `swatchCount` are what still force a new shape
+    to be finished; the list is a reminder.
+
+  An unreadable blob resolves to `Grid` rather than throwing — `IconAppearanceCodec`'s bargain, so one container loses
+  its shape instead of every surface drawing it. That failure is silent, so `IconArrangementSerializationTest` pins the
+  round trip and the short discriminators.
+
+  Verified on the emulator rather than a device, the author being away from theirs: the wipe re-seeded and home came
+  back; the picker's four swatches and the dialog's seven rows are unchanged, names included; a fan set to *bottom
+  right* stored `{"type":"fan","anchor":"BOTTOM_RIGHT"}`, survived a force-stop, and drew from the right corner on a
+  cold start; all four shapes render; a drag inside the container still exchanges exactly two icons.
 - **I — the two-row control.** The variant row appears and the settings dialog is replaced. With only the fan's
   four corners to show, it is testable before any new geometry exists.
 - **J — the grid's fill axis.** `Auto`, or rows or columns pinned to a count. The tablet-dock case is

@@ -53,13 +53,52 @@ sealed interface IconItem {
 @Serializable
 data class Folder(val id: Long, val label: String, val apps: List<ComponentKey>)
 
-/** How the icons inside an [IconContainer] are arranged. */
+/**
+ * How the icons inside an [IconContainer] are arranged — **a shape, and the parameters that shape has**.
+ *
+ * Sealed rather than one flat value per combination, because those are two different questions and only the first
+ * is one a user can answer cold: a grid, a ring, a honeycomb or a fan is picked from a picture, while *which
+ * corner* a fan opens from is adjusted afterwards on a container that exists. Flattened, the second question
+ * multiplies the first — four corners are four values, eight anchors would be eight — so anything offering "the
+ * shapes" has to filter the vocabulary back down to what it meant, and a shape whose parameter is not an enum
+ * value at all (a column count) cannot be expressed here however it is named.
+ *
+ * A shape's parameters travel with the shape, which is what makes a corner on a circle unrepresentable rather than
+ * a field that is merely ignored there — [HomeLayout]'s reason for being one type.
+ *
+ * **Stored as a serialized blob**, so a shape can grow a parameter without a column. The [SerialName]s are short
+ * and explicit for [GridItem]'s reason: this reaches a user's stored data, so the discriminator must not be a class
+ * name that a refactor could move.
+ */
 @Serializable
-enum class IconArrangement {
-    GRID, CIRCLE,
-    FAN_TOP_LEFT, FAN_TOP_RIGHT, FAN_BOTTOM_LEFT, FAN_BOTTOM_RIGHT,
-    BEEHIVE,
+sealed interface IconArrangement {
+    /** Rows and columns of square cells, the column count following the container's own proportions. */
+    @Serializable
+    @SerialName("grid")
+    data object Grid : IconArrangement
+
+    /** A single ring, the icons spaced evenly around it. */
+    @Serializable
+    @SerialName("circle")
+    data object Circle : IconArrangement
+
+    /** A honeycomb — one icon in the middle, then complete hexagonal rings outward. */
+    @Serializable
+    @SerialName("beehive")
+    data object Beehive : IconArrangement
+
+    /** Concentric arcs sweeping out of [anchor]. */
+    @Serializable
+    @SerialName("fan")
+    data class Fan(val anchor: FanAnchor = FanAnchor.TOP_LEFT) : IconArrangement
 }
+
+/**
+ * The corner an [IconArrangement.Fan] pivots on — the point its arcs sweep out of, which is where the fan opens
+ * *away* from rather than where its first icon sits.
+ */
+@Serializable
+enum class FanAnchor { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
 /**
  * A grid item that groups app/folder icons into one cell, laid out by [arrangement] (grid, circle, fan,

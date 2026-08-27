@@ -158,7 +158,7 @@ internal class LayoutRepositoryImpl(
 
             // ── Icon containers ──
             is LayoutChange.CreateIconContainer -> {
-                val id = daos.iconContainer.insert(IconContainerEntity(arrangement = change.arrangement))
+                val id = daos.iconContainer.insert(IconContainerEntity(arrangementSpec = change.arrangement))
                 setIconContainerItems(id, change.items)
                 daos.iconContainerPlacement.upsert(
                     listOf(GridItem.IconContainer(id).toEntity(orientation, change.zone, change.at)),

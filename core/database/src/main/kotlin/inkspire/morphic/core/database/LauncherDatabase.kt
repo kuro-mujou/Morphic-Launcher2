@@ -81,10 +81,14 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
     //     screen offers beside the arrangement. Per-container for `autoRotate`'s reason one container over: two
     //     groups on one home screen may reasonably want different densities, and one of them is usually a dock-like
     //     row of many while the other is a handful.
+    // v6 -> v7: icon_container.arrangement became `arrangementSpec`, holding a serialized shape-plus-parameters
+    //     rather than an enum name. A rename rather than a re-read of the same column, for `icon_override`'s
+    //     reason on v3: the stored value changed *meaning*, and re-interpreting it in place would decode every
+    //     `GRID` as an unreadable blob and silently reset the container's shape.
     // The bump is required even though the builder falls back to a destructive migration — Room validates the
     // schema hash on open and would throw, not rebuild. Pre-launcher, so the cost of that rebuild is a dev
     // database, not user data; the first real migration is owed the moment this ships (P9).
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(

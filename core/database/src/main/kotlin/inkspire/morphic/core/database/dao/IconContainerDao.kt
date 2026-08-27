@@ -24,7 +24,7 @@ interface IconContainerDao {
     @Update
     suspend fun update(container: IconContainerEntity)
 
-    @Query("UPDATE icon_container SET arrangement = :arrangement WHERE id = :id")
+    @Query("UPDATE icon_container SET arrangementSpec = :arrangement WHERE id = :id")
     suspend fun setArrangement(id: Long, arrangement: IconArrangement)
 
     /** Both scalings in one statement, because the settings screen writes them from one control group. */

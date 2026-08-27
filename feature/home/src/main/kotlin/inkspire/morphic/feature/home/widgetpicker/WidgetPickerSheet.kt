@@ -65,6 +65,7 @@ import inkspire.morphic.core.designsystem.cell.CardAlpha
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.data.layout.WidgetSpan
@@ -515,9 +516,9 @@ private fun ComponentDetailPane(
     val fits = span == null || hasRoomFor(span)
     // **The shape is chosen before the container exists**, which is why this state lives here rather than in the
     // container's settings: an arrangement is a property of the thing being placed, and picking it afterwards means
-    // placing something the user did not ask for and then correcting it. `GRID` opens because it is the plainest —
-    // a first container should not surprise anyone.
-    var arrangement by remember { mutableStateOf(IconArrangement.GRID) }
+    // placing something the user did not ask for and then correcting it. The grid opens because it is the plainest
+    // — a first container should not surprise anyone.
+    var arrangement by remember { mutableStateOf<IconArrangement>(IconArrangement.Grid) }
     val onAdd: (() -> Unit)? = when (kind) {
         ComponentKind.ICON_CONTAINER -> onAddIconContainer?.let { add -> { add(arrangement) } }
         ComponentKind.WIDGET_CONTAINER -> onAddWidgetContainer
@@ -669,19 +670,18 @@ private fun ComponentPage(
 /**
  * The **shapes** an icon container can be given, one entry each.
  *
- * The four `FAN_*` values are one shape in four orientations, so the picker offers it once: which corner it opens
- * from is a property of a container that already exists, adjusted where you can see it on the wallpaper, and four
- * near-identical swatches here would ask the user to decide something they have no way to judge yet. The container's
- * settings still list all seven — that is where the side is chosen.
+ * A fan is offered once rather than once per corner: the corner is a parameter of a container that already exists,
+ * adjusted where it can be seen on the wallpaper, and four near-identical swatches here would ask the user to
+ * decide something they have no way to judge yet. The container's settings are where the corner is chosen.
  *
- * `FAN_TOP_LEFT` stands for the family because it fills in reading order: the first icon sits nearest the corner a
- * left-to-right reader starts from.
+ * [FanAnchor.TOP_LEFT] stands for the family because it fills in reading order: the innermost arc sits nearest the
+ * corner a left-to-right reader starts from.
  */
-private val PickableArrangements = listOf(
-    IconArrangement.GRID,
-    IconArrangement.CIRCLE,
-    IconArrangement.FAN_TOP_LEFT,
-    IconArrangement.BEEHIVE,
+private val PickableArrangements = listOf<IconArrangement>(
+    IconArrangement.Grid,
+    IconArrangement.Circle,
+    IconArrangement.Fan(FanAnchor.TOP_LEFT),
+    IconArrangement.Beehive,
 )
 
 /**

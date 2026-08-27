@@ -69,16 +69,13 @@ internal fun IconArrangementSwatch(
  * 3, then 4, then 6, so under eight it draws one arc and part of another — a scatter rather than a shape.
  * Fourteen is where four arcs come out complete, and that is what makes the nesting read.
  *
- * Exhaustive, so a new [IconArrangement] must say what shows it before it can be offered.
+ * Exhaustive, so a new [IconArrangement] must say what shows it before it can be offered. A count belongs to the
+ * *shape* and not to its parameters, which is why the fan answers once for every corner it can pivot on.
  */
 private val IconArrangement.swatchCount: Int
     get() = when (this) {
-        IconArrangement.GRID -> 6
-        IconArrangement.CIRCLE -> 8
-        IconArrangement.BEEHIVE -> 7
-        IconArrangement.FAN_TOP_LEFT,
-        IconArrangement.FAN_TOP_RIGHT,
-        IconArrangement.FAN_BOTTOM_LEFT,
-        IconArrangement.FAN_BOTTOM_RIGHT,
-        -> 14
+        IconArrangement.Grid -> 6
+        IconArrangement.Circle -> 8
+        IconArrangement.Beehive -> 7
+        is IconArrangement.Fan -> 14
     }

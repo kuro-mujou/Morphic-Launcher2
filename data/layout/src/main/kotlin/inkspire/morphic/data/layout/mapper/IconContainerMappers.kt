@@ -17,7 +17,7 @@ internal fun iconContainersOf(
     return containers.map { container ->
         IconContainer(
             id = container.id,
-            arrangement = container.arrangement,
+            arrangement = container.arrangementSpec,
             items = itemsByContainer[container.id].orEmpty().map { it.toIconItem() },
             iconScalePercent = container.iconScalePercent,
             spacingScalePercent = container.spacingScalePercent,
