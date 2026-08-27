@@ -46,10 +46,8 @@ import inkspire.morphic.core.model.IconArrangement
  * control with no op behind it, and the reason the row above must not move when one appears (it does not: it is
  * the row above).
  *
- * **Both places that set an arrangement use this one control**: the widget picker, where the shape is chosen before
- * the container exists, and the container's own settings. Two consumers is what made extracting it right rather
- * than speculative — and it is what replaced the settings dialog, which covered the live preview at the one moment
- * the preview had something to say.
+ * **This is the container's settings screen's control. The widget picker takes [ArrangementShapeRow] alone** — see
+ * there for why the variant row does not travel with it.
  */
 @Composable
 internal fun ArrangementPicker(
@@ -58,7 +56,7 @@ internal fun ArrangementPicker(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SwatchRow(options = shapeOptions(arrangement), selected = arrangement, onPick = onArrangement)
+        ArrangementShapeRow(arrangement = arrangement, onArrangement = onArrangement)
         // Exhaustive, so a shape that grows a parameter has to say here how it is set before the control can offer
         // it — the same guard `slots` and `swatchCount` apply to the geometry and the picture.
         when (arrangement) {
@@ -82,6 +80,32 @@ internal fun ArrangementPicker(
             IconArrangement.Circle -> Unit
         }
     }
+}
+
+/**
+ * The four shapes on their own — **what the widget picker offers**, where nothing is placed yet.
+ *
+ * A variant is a property of a container that *exists*: which corner a fan opens from, or how many rows a grid
+ * keeps, is judged against that container's real footprint, over the wallpaper, with its real icons in it. The
+ * picker has none of those — its tile is dots at a nominal size — so a variant chosen here is a decision the user
+ * has no way to judge, and one they would have to re-make on the settings screen anyway. **The shape is the whole
+ * of what can honestly be asked before placement**, which is the argument `ICON_CONTAINER_PLAN` §3e made about the
+ * fan's four corners, holding for every parameter since.
+ *
+ * So the two places are deliberately *not* the same control: this row, and [ArrangementPicker] which opens with it.
+ */
+@Composable
+internal fun ArrangementShapeRow(
+    arrangement: IconArrangement,
+    onArrangement: (IconArrangement) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SwatchRow(
+        options = shapeOptions(arrangement),
+        selected = arrangement,
+        onPick = onArrangement,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -172,9 +196,10 @@ private fun SwatchRow(
     options: List<IconArrangement>,
     selected: IconArrangement,
     onPick: (IconArrangement) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

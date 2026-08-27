@@ -728,10 +728,11 @@ been eight.
   change and no migration**: kotlinx-serialization does not encode a default, so `{"type":"grid"}` decodes into a
   `Grid` that has since grown a `fill`, and an enum gains a constant rather than renaming one. Three tests pin the
   parameterless forms, because that failure is silent — a container that quietly reverts, not an error.
-- **One control sets it, in both places that set it** (`ArrangementPicker`, `feature:home`): a row of shapes, and
-  under it the row belonging to the chosen shape. It replaced the settings screen's `AlertDialog`, which covered the
-  live preview at the one moment the preview had something to say. The widget picker's detail page uses the same
-  composable, so the shape chosen before a container exists and the shape adjusted afterwards are one control.
+- **One control sets it** (`ArrangementPicker`, `feature:home`): a row of shapes, and under it the row belonging to
+  the chosen shape. It replaced the settings screen's `AlertDialog`, which covered the live preview at the one moment
+  the preview had something to say. **The widget picker takes the shape row alone** — a variant is judged against a
+  container that exists, at its real footprint and over the wallpaper, and the picker has neither, so what can
+  honestly be asked before placement is the shape.
 - **The grid's second row is numbers, not pictures, and that is not an inconsistency.** At six icons `columns = 2`
   and `rows = 3` draw the *same* block and differ only in which way it grows, so two swatches would mean opposite
   things while looking identical. Everything else's variants are pictures — eight fan anchors, two hex orientations —

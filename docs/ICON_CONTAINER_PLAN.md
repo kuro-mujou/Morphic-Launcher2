@@ -637,12 +637,19 @@ The shape row from §3e stays as it is — four swatches, one per sealed subtype
 belongs to the chosen shape**: the fan's eight anchors, the grid's column counts, the beehive's two orientations.
 Empty for a shape with nothing to say, which will be the circle if §6f is dropped.
 
-Both rows go in **both places**: the picker's detail page, where they are already, and the container's settings
-screen. In settings this **replaces the `ChooserRow` + `AlertDialog`** entirely. That dialog made sense when the
-screen had nothing to show; now there is a live preview pinned above it, and a dialog covers the one thing worth
-watching while choosing — which is exactly the argument §3e made for using a row in the picker, applied to the
-place the argument is now stronger. Two consumers of one control is what makes extracting it right rather than
-speculative.
+In settings this **replaces the `ChooserRow` + `AlertDialog`** entirely. That dialog made sense when the screen had
+nothing to show; now there is a live preview pinned above it, and a dialog covers the one thing worth watching while
+choosing — which is exactly the argument §3e made for using a row in the picker, applied to the place the argument
+is now stronger.
+
+**Corrected on a device, 2026-08-27: only the *shape* row goes in the picker.** This section said both rows went in
+both places, and building it that way was a quiet override of §3e, which had already decided the opposite for the
+fan's corners: a variant belongs to a container that *exists*, judged at its real footprint, over the wallpaper,
+with its real icons in it. The picker has none of those — its tile is dots at a nominal size — so a variant chosen
+there is a decision the user cannot judge and would re-make in settings anyway. §3e's argument holds for every
+parameter added since, so `ArrangementShapeRow` is what the picker takes and `ArrangementPicker` (that row, plus the
+variant row) is the settings screen's. The shape row is still the shared piece, which is what made extracting it
+right.
 
 **The swatch needs no change at all**, and that is the split paying for itself immediately: `IconArrangementSwatch`
 takes an arrangement and lays dots out through `iconContainerSlots`, so once the arrangement carries its own
@@ -686,9 +693,11 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   right* stored `{"type":"fan","anchor":"BOTTOM_RIGHT"}`, survived a force-stop, and drew from the right corner on a
   cold start; all four shapes render; a drag inside the container still exchanges exactly two icons.
 - **I — the two-row control.** ✅ `ArrangementPicker` (`feature:home`) is the shape row plus, under it, the row
-  belonging to the chosen shape — the fan's four corners today, nothing for the other three. Both places that set an
-  arrangement now use it, and the settings dialog is gone with `ArrangementOptions`, `PickableArrangements` and
-  `ChooserDialog`'s `leading` slot. The dialog left behind serves the widget container's axis alone, and stays a
+  belonging to the chosen shape — the fan's four corners today, nothing for the other three. The settings dialog is
+  gone with `ArrangementOptions`, `PickableArrangements` and `ChooserDialog`'s `leading` slot.
+
+  **Revised 2026-08-27 after device testing: the picker takes the shape row alone** (`ArrangementShapeRow`), for the
+  reason §6g now records — the whole control in both places was an override of §3e that nobody had argued for. The dialog left behind serves the widget container's axis alone, and stays a
   dialog for a reason worth stating: two directions have no picture to choose by, so the words *are* the choice.
 
   **The shape row's fan tile draws the corner the container is already set to.** That is what keeps the two rows

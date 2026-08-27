@@ -68,7 +68,7 @@ import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.WidgetProvider
 import inkspire.morphic.data.widgets.WidgetProviderGroup
-import inkspire.morphic.feature.home.ArrangementPicker
+import inkspire.morphic.feature.home.ArrangementShapeRow
 import inkspire.morphic.feature.home.ContainerAddGlyph
 import inkspire.morphic.feature.home.HomeViewModel
 import inkspire.morphic.feature.home.IconArrangementSwatch
@@ -655,7 +655,7 @@ private fun ComponentPage(
         }
         if (kind == ComponentKind.ICON_CONTAINER) {
             Spacer(Modifier.height(12.dp))
-            ArrangementPicker(arrangement = arrangement, onArrangement = onArrangement)
+            ArrangementShapeRow(arrangement = arrangement, onArrangement = onArrangement)
         }
         Spacer(Modifier.height(12.dp))
         Text(text = kind.description, style = MaterialTheme.typography.bodyMedium, color = colors.content)

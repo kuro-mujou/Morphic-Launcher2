@@ -451,7 +451,8 @@ private fun ContainerSheets(
  * A dialog was right while this screen had nothing else to show: seven radio rows were the only way to see the
  * options at all. It is wrong now that a live preview is pinned above, because a dialog covers exactly the thing
  * worth watching while choosing — which is the argument the widget picker's row was built on, applied where it is
- * stronger. Both places now share [ArrangementPicker], and neither of them hides the result.
+ * stronger. The shape row is shared with the widget picker; the variant row under it belongs to this screen alone,
+ * since a variant is judged against a container that exists.
  *
  * The name stays even though the tiles are pictures, because a corner is quicker to see than to read but a *shape*
  * still wants saying — and this is the row a heading belongs to.
