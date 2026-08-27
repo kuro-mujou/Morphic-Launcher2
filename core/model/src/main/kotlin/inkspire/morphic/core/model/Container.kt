@@ -72,10 +72,10 @@ data class Folder(val id: Long, val label: String, val apps: List<ComponentKey>)
  */
 @Serializable
 sealed interface IconArrangement {
-    /** Rows and columns of square cells, the column count following the container's own proportions. */
+    /** Rows and columns of square cells, filled in reading order and wrapped where [fill] says to. */
     @Serializable
     @SerialName("grid")
-    data object Grid : IconArrangement
+    data class Grid(val fill: GridFill = GridFill.Auto) : IconArrangement
 
     /** A single ring, the icons spaced evenly around it. */
     @Serializable
@@ -91,6 +91,38 @@ sealed interface IconArrangement {
     @Serializable
     @SerialName("fan")
     data class Fan(val anchor: FanAnchor = FanAnchor.TOP_LEFT) : IconArrangement
+}
+
+/**
+ * Where an [IconArrangement.Grid] wraps — **one axis pinned, or neither**.
+ *
+ * The icons are laid out in reading order whichever this is; all that changes is where the wrapping count comes
+ * from, and therefore **which way the block grows** as icons are added: pin the columns and it extends downward,
+ * pin the rows and it extends to the right (`Rows(1)` is a dock). Reading order is not negotiable — a container is
+ * reordered by dragging onto a *position*, and an order the eye cannot follow is one the finger cannot aim at.
+ *
+ * **A one-of rather than a `rows` and a `columns` together**, because there is no R × C frame here and no capacity
+ * to fill: the container's own bounds are the list's bounds and the icons scale until everything fits. A pair would
+ * invite exactly the fixed frame this is not, and leave "both pinned" to mean something nobody can define.
+ *
+ * [Auto] is the default, so a container nobody has configured is laid out as it always was.
+ */
+@Serializable
+sealed interface GridFill {
+    /** The column count follows the container's proportions, so the block stays roughly the box's shape. */
+    @Serializable
+    @SerialName("auto")
+    data object Auto : GridFill
+
+    /** Exactly [count] columns; rows appear underneath as the list grows. */
+    @Serializable
+    @SerialName("columns")
+    data class Columns(val count: Int) : GridFill
+
+    /** Exactly [count] rows; columns appear to the right as the list grows. */
+    @Serializable
+    @SerialName("rows")
+    data class Rows(val count: Int) : GridFill
 }
 
 /**

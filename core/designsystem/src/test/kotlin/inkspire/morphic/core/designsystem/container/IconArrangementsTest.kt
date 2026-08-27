@@ -1,6 +1,7 @@
 package inkspire.morphic.core.designsystem.container
 
 import inkspire.morphic.core.model.FanAnchor
+import inkspire.morphic.core.model.GridFill
 import inkspire.morphic.core.model.IconArrangement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -29,7 +30,9 @@ class IconArrangementsTest {
      * force a new shape to be finished — this list is a reminder, not a guard.
      */
     private val all = listOf<IconArrangement>(
-        IconArrangement.Grid,
+        IconArrangement.Grid(),
+        IconArrangement.Grid(GridFill.Columns(3)),
+        IconArrangement.Grid(GridFill.Rows(3)),
         IconArrangement.Circle,
         IconArrangement.Beehive,
         IconArrangement.Fan(FanAnchor.TOP_LEFT),
@@ -98,7 +101,7 @@ class IconArrangementsTest {
     /** The grid is the one arrangement that tiles: its slots must cover the box exactly and never overlap. */
     @Test
     fun `grid tiles the box without gaps or overlap`() {
-        val slots = IconArrangement.Grid.slots(6, width, height)
+        val slots = IconArrangement.Grid().slots(6, width, height)
         // 6 icons in a 3:2 box → 3 columns × 2 rows, each cell a third by a half.
         assertEquals(3, slots.map { it.x }.distinct().size)
         assertEquals(2, slots.map { it.y }.distinct().size)
@@ -110,7 +113,7 @@ class IconArrangementsTest {
     /** A count below the natural column width must not leave holes: two icons in a wide box are two columns. */
     @Test
     fun `grid never has more columns than icons`() {
-        val slots = IconArrangement.Grid.slots(2, 1000f, 100f)
+        val slots = IconArrangement.Grid().slots(2, 1000f, 100f)
         assertEquals(2, slots.size)
         assertEquals(1, slots.map { it.y }.distinct().size)
         assertNoOverlap(slots)
@@ -123,7 +126,7 @@ class IconArrangementsTest {
      */
     @Test
     fun `grid cells stay square in a box that does not divide evenly`() {
-        for (slot in IconArrangement.Grid.slots(6, 400f, 150f)) {
+        for (slot in IconArrangement.Grid().slots(6, 400f, 150f)) {
             assertEquals(slot.width, slot.height, 0.01f)
         }
     }
@@ -132,7 +135,7 @@ class IconArrangementsTest {
     @Test
     fun `grid centers a short last row`() {
         // 5 icons in a 3:2 box → 3 columns, so the last row holds 2 and must sit half a cell in.
-        val slots = IconArrangement.Grid.slots(5, width, height)
+        val slots = IconArrangement.Grid().slots(5, width, height)
         val topRow = slots.take(3)
         val lastRow = slots.drop(3)
         assertEquals(2, lastRow.size)
@@ -144,7 +147,7 @@ class IconArrangementsTest {
     /** The whole block is centered in the box, so the margin it leaves is even on both sides. */
     @Test
     fun `grid centers its block in the box`() {
-        val slots = IconArrangement.Grid.slots(6, 400f, 150f)
+        val slots = IconArrangement.Grid().slots(6, 400f, 150f)
         val left = slots.minOf { it.x }
         val right = 400f - slots.maxOf { it.x + it.width }
         assertEquals(left, right, 0.01f)
@@ -152,10 +155,87 @@ class IconArrangementsTest {
 
     @Test
     fun `grid rows fill downward in reading order`() {
-        val slots = IconArrangement.Grid.slots(6, width, height)
+        val slots = IconArrangement.Grid().slots(6, width, height)
         // Item 3 opens the second row: back to the left edge, one row down.
         assertEquals(slots[0].x, slots[3].x, 0.01f)
         assertTrue(slots[3].y > slots[0].y)
+    }
+
+    // ── The grid's fill axis ─────────────────────────────────────────────────────────────────────────────
+
+/**
+     * A pinned column count is the wrap, whatever the box would have derived.
+     *
+     * Counted as **how many share the first row** rather than as distinct x values, which is not the same number: a
+     * short last row is centered, so its icons sit half a cell off the columns above and count as their own. That
+     * is the rule slice A put in, and it is worth stating here because the naive assertion passes by luck at some
+     * counts and not others.
+     */
+    @Test
+    fun `pinned columns wrap at exactly that many`() {
+        val slots = IconArrangement.Grid(GridFill.Columns(3)).slots(7, width, height)
+        assertEquals(3, slots.count { it.y == slots.first().y })
+        // Seven icons at three columns is three rows: three, three, and a short one.
+        assertEquals(3, slots.map { it.y }.distinct().size)
+        assertNoOverlap(slots)
+    }
+
+    /** Pinned rows reach the same place from the other side: the columns are however many the list takes. */
+    @Test
+    fun `pinned rows wrap at the columns that count implies`() {
+        val slots = IconArrangement.Grid(GridFill.Rows(2)).slots(7, width, height)
+        assertEquals(2, slots.map { it.y }.distinct().size)
+        // Four across the top, three centered under them.
+        assertEquals(4, slots.count { it.y == slots.first().y })
+        assertNoOverlap(slots)
+    }
+
+    /**
+     * The acceptance test for the dock: **one row stays one row**, however many icons arrive.
+     *
+     * An unpinned grid answers a growing list by adding rows, which is exactly what a strip across the bottom of a
+     * tablet must not do. Nothing else here says the icons may not shrink — they must, and do.
+     */
+    @Test
+    fun `one pinned row stays one row as icons are added`() {
+        for (count in 1..8) {
+            val slots = IconArrangement.Grid(GridFill.Rows(1)).slots(count, 1000f, 120f)
+            assertEquals("$count icons", 1, slots.map { it.y }.distinct().size)
+            assertEquals("$count icons", count, slots.map { it.x }.distinct().size)
+        }
+    }
+
+    /**
+     * A pinned axis divides its side from the first icon, not from the current count.
+     *
+     * Sizing against the rows *in use* would shrink every icon on each add until the container filled up, which is
+     * the opposite of what pinning is for: the point is that adding an icon does not resize the ones already there.
+     */
+    @Test
+    fun `a pinned row count divides the height before the icons fill it`() {
+        val three = IconArrangement.Grid(GridFill.Rows(3))
+        val sizes = (1..3).map { three.slots(it, width, height).first().height }
+        for (size in sizes) assertEquals("icons resized as the list grew: $sizes", sizes.first(), size, 0.01f)
+        // And it is genuinely a third of the height rather than the whole of it.
+        assertEquals(height / 3f, sizes.first(), 0.01f)
+    }
+
+    /** The same rule across: three columns asked for is three columns wide, with two icons centered in them. */
+    @Test
+    fun `a pinned column count is not capped by the icon count`() {
+        val slots = IconArrangement.Grid(GridFill.Columns(4)).slots(2, width, height)
+        assertEquals(width / 4f, slots.first().width, 0.01f)
+        val blockCenter = (slots.first().centerX + slots.last().centerX) / 2f
+        assertEquals("the short row should sit in the middle of the block", width / 2f, blockCenter, 0.01f)
+    }
+
+    /** Auto is what an unconfigured container has always had, so it must still derive from the box. */
+    @Test
+    fun `auto is the default and derives its columns from the box`() {
+        val default = IconArrangement.Grid().slots(6, width, height)
+        val auto = IconArrangement.Grid(GridFill.Auto).slots(6, width, height)
+        assertEquals(auto, default)
+        assertEquals(3, auto.map { it.x }.distinct().size)
     }
 
     // ── The gap ──────────────────────────────────────────────────────────────────────────────────────────
@@ -169,8 +249,8 @@ class IconArrangementsTest {
     @Test
     fun `gap separates neighbouring icons by exactly that much`() {
         val gap = 12f
-        val plain = IconArrangement.Grid.slots(6, width, height)
-        val spaced = IconArrangement.Grid.slots(6, width, height, gap = gap)
+        val plain = IconArrangement.Grid().slots(6, width, height)
+        val spaced = IconArrangement.Grid().slots(6, width, height, gap = gap)
 
         // Columns 0 and 1 of the first row: touching before, `gap` apart after.
         assertEquals(plain[0].x + plain[0].width, plain[1].x, 0.01f)
@@ -186,7 +266,7 @@ class IconArrangementsTest {
      */
     @Test
     fun `a gap larger than the slot still leaves an icon`() {
-        val slots = IconArrangement.Grid.slots(64, 100f, 100f, gap = 500f)
+        val slots = IconArrangement.Grid().slots(64, 100f, 100f, gap = 500f)
         assertEquals(64, slots.size)
         for (slot in slots) {
             assertTrue("width ${slot.width}", slot.width > 0f)

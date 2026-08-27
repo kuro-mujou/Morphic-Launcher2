@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
  * `ignoreUnknownKeys` is what makes that additive both ways: a build that has not heard of a newer parameter drops
  * it rather than throwing, exactly as the icon and settings blobs do.
  *
- * **An unreadable value falls back to [IconArrangement.Grid] rather than failing the read**, which is
+ * **An unreadable value falls back to a plain [IconArrangement.Grid] rather than failing the read**, which is
  * `IconAppearanceCodec`'s bargain one store over: the cost of a blob nobody can decode should be that one container
  * loses its shape — visible, and fixable from its settings — rather than every surface that draws it. The only way
  * to reach it is a value written by a build that knew a shape this one does not.
@@ -27,7 +27,7 @@ class IconArrangementConverter {
     @TypeConverter
     fun fromJson(value: String): IconArrangement =
         runCatching { json.decodeFromString(IconArrangement.serializer(), value) }
-            .getOrDefault(IconArrangement.Grid)
+            .getOrDefault(IconArrangement.Grid())
 
     private companion object {
         val json = Json { ignoreUnknownKeys = true }

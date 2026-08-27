@@ -516,7 +516,7 @@ private fun ComponentDetailPane(
     // container's settings: an arrangement is a property of the thing being placed, and picking it afterwards means
     // placing something the user did not ask for and then correcting it. The grid opens because it is the plainest
     // — a first container should not surprise anyone.
-    var arrangement by remember { mutableStateOf<IconArrangement>(IconArrangement.Grid) }
+    var arrangement by remember { mutableStateOf<IconArrangement>(IconArrangement.Grid()) }
     val onAdd: (() -> Unit)? = when (kind) {
         ComponentKind.ICON_CONTAINER -> onAddIconContainer?.let { add -> { add(arrangement) } }
         ComponentKind.WIDGET_CONTAINER -> onAddWidgetContainer

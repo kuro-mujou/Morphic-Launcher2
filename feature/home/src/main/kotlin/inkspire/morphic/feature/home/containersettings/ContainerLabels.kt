@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.home.containersettings
 
 import inkspire.morphic.core.model.FanAnchor
+import inkspire.morphic.core.model.GridFill
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
 
@@ -25,18 +26,31 @@ internal fun ContainerSettingsRoute.addLabel(): String = when (this) {
 }
 
 /**
- * An arrangement's display name — the shape, and for a fan the corner it pivots on.
+ * An arrangement's display name — **the shape and what it is set to**, in one string rather than two.
+ *
+ * A shape whose parameter is a picture (the fan's corner) and one whose parameter is a number (the grid's pinned
+ * axis) still share a caption, so the caption says the whole thing: the row carrying it names *this* container's
+ * arrangement, and a bare "Grid" over a control set to three columns would be the one part of the screen not
+ * saying so. The control below it is where either is changed.
  *
  * The fan is named by its corner rather than by a direction because the corner is what a user sees: the arcs sweep
  * out of it and the icons open away from it.
  */
 internal val IconArrangement.label: String
     get() = when (this) {
-        IconArrangement.Grid -> "Grid"
+        is IconArrangement.Grid -> when (val fill = fill) {
+            GridFill.Auto -> "Grid"
+            is GridFill.Columns -> "Grid, " + plural(fill.count, "column")
+            is GridFill.Rows -> "Grid, " + plural(fill.count, "row")
+        }
+
         IconArrangement.Circle -> "Circle"
         IconArrangement.Beehive -> "Beehive"
         is IconArrangement.Fan -> "Fan from ${anchor.label}"
     }
+
+/** [count] of [word], pluralized — the only plural this vocabulary has, so it is a line rather than a facility. */
+private fun plural(count: Int, word: String): String = if (count == 1) "1 " + word else "$count ${word}s"
 
 /** A fan anchor's display name, read as the tail of an arrangement's — "Fan from *top left*". */
 internal val FanAnchor.label: String

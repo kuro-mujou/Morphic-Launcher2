@@ -74,7 +74,7 @@ internal fun IconArrangementSwatch(
  */
 private val IconArrangement.swatchCount: Int
     get() = when (this) {
-        IconArrangement.Grid -> 6
+        is IconArrangement.Grid -> 6
         IconArrangement.Circle -> 8
         IconArrangement.Beehive -> 7
         is IconArrangement.Fan -> 14

@@ -18,7 +18,7 @@ import inkspire.morphic.core.model.IconArrangement
 @Entity(tableName = "icon_container")
 data class IconContainerEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
-    val arrangementSpec: IconArrangement = IconArrangement.Grid,
+    val arrangementSpec: IconArrangement = IconArrangement.Grid(),
     val iconScalePercent: Int = 100,
     val spacingScalePercent: Int = 100,
 )

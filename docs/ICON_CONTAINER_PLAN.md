@@ -1,7 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
 **Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
-**Part two (§6) has begun:** slices H and I landed 2026-08-27; J–M are planned. Slice F was **revised the same
+**Part two (§6) has begun:** slices H, I and J landed 2026-08-27; K–M are planned. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -692,8 +692,39 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   Verified on the emulator: the settings screen shows four shapes inline with no dialog, picking the fan grows the
   corner row, picking a corner moves the pinned preview and relights both rows; the picker's detail page does the
   same and its tile follows; and the widget container's axis dialog still opens and writes.
-- **J — the grid's fill axis.** `Auto`, or rows or columns pinned to a count. The tablet-dock case is
-  the acceptance test: a 4×1 container with `rows = 1` should stay one row as icons are added.
+- **J — the grid's fill axis.** ✅ `GridFill` is `Auto | Columns(n) | Rows(n)`, and `gridSlots` takes it. The two
+  expressions that place an icon — `i / cols` and `i % cols` — are untouched, exactly as §6c predicted: only the
+  provenance of `cols` moved, into `columnsFor`. **No DB bump**, which is H's additive-blob claim being spent for
+  the first time: a stored `{"type":"grid"}` decodes as `Grid(Auto)`, and a test pins that so it cannot rot.
+
+  **A pinned axis sizes the cell; the icons you have are centered on what they occupy.** §6c settled the first half
+  ("the pinned count divides its axis even when there are too few icons to fill it") and left the second open, and
+  it is not a detail: with three rows pinned and two icons, dividing by three *and* laying them out against three
+  would hang both off the top of the container with an empty row below. So `divisionRows` sizes and `usedRows`
+  places, and they differ only in the case that argument was about. In `Auto` they are the same number, so nothing
+  about an unconfigured container changed.
+
+  A pinned count is **not** capped at the icon count the way `Auto`'s is — three columns asked for is three columns
+  wide with two icons centered in them, rather than a two-column grid that silently re-sizes itself on the next add.
+  That cap exists so a derived count does not leave a hole; a count someone typed is not a derivation.
+
+  **The grid's variant row is numbers, not swatches, and that is a departure from §6g.** A fan's four corners are
+  four different pictures at any count; a grid's two pinned axes are not — at six icons `columns = 2` and
+  `rows = 3` draw the *same* three-by-two block and differ only in which way it grows. A swatch can only show the
+  count in front of it, so the grid would have offered two identical tiles meaning opposite things. It is two
+  labeled chip rows instead (**Rows** and **Columns**, each *Auto* or a number), which is the pair §6c said the user
+  thinks in; setting either returns the other to *Auto* on its own, because the model holds one of them.
+
+  `ContainerLabels.label` still composes rather than splitting (slice I's decision, now tested by the case §6h had
+  in mind): the caption reads "Grid, 1 row".
+
+  One test of my own had to be corrected rather than the code: **distinct x values are not the column count**,
+  because slice A centers a short last row half a cell off the columns above. The assertion counts what shares the
+  first row now.
+
+  Verified on the emulator — the acceptance test in full: a container widened to the screen and shortened to a
+  strip, `rows = 1`, fourteen icons added one after another, one row throughout with the icons shrinking to fit;
+  `{"type":"grid","fill":{"type":"rows","count":1}}` stored, and the strip drawn again after a force-stop.
 - **K — fan edge anchors.** The half circle; the geometry from §6d.
 - **L — beehive orientation.** Flat-top.
 - **M — circle start angle.** Optional; see §6f.
