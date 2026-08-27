@@ -52,12 +52,21 @@ internal val IconArrangement.label: String
 /** [count] of [word], pluralized — the only plural this vocabulary has, so it is a line rather than a facility. */
 private fun plural(count: Int, word: String): String = if (count == 1) "1 " + word else "$count ${word}s"
 
-/** A fan anchor's display name, read as the tail of an arrangement's — "Fan from *top left*". */
+/**
+ * A fan anchor's display name, read as the tail of an arrangement's — "Fan from *top left*".
+ *
+ * An edge is named by the edge alone ("Fan from top"), which is also how it differs from the corners beside it: the
+ * name says where it pivots, and the sweep follows from that rather than needing saying.
+ */
 internal val FanAnchor.label: String
     get() = when (this) {
         FanAnchor.TOP_LEFT -> "top left"
+        FanAnchor.TOP -> "top"
         FanAnchor.TOP_RIGHT -> "top right"
+        FanAnchor.LEFT -> "left"
+        FanAnchor.RIGHT -> "right"
         FanAnchor.BOTTOM_LEFT -> "bottom left"
+        FanAnchor.BOTTOM -> "bottom"
         FanAnchor.BOTTOM_RIGHT -> "bottom right"
     }
 

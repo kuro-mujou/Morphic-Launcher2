@@ -1,7 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
 **Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
-**Part two (§6) has begun:** slices H, I and J landed 2026-08-27; K–M are planned. Slice F was **revised the same
+**Part two (§6) has begun:** slices H–K landed 2026-08-27; L and M are planned. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -725,7 +725,36 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   Verified on the emulator — the acceptance test in full: a container widened to the screen and shortened to a
   strip, `rows = 1`, fourteen icons added one after another, one row throughout with the icons shrinking to fit;
   `{"type":"grid","fill":{"type":"rows","count":1}}` stored, and the strip drawn again after a force-stop.
-- **K — fan edge anchors.** The half circle; the geometry from §6d.
+- **K — fan edge anchors.** ✅ `FanAnchor` gained `TOP`, `RIGHT`, `BOTTOM` and `LEFT`. The four existing names are
+  untouched, so this is additive in the blob and there is no migration — the enum is serialized by constant name.
+
+  **The mirror had to go, and that is the whole of the work.** The four corners were computed in a top-left frame
+  and reflected by two booleans, which cannot express an edge: a corner's cloud spills one way along each axis and
+  an edge's spills *both* ways along one of them. So an anchor now resolves to a pivot position per axis plus a
+  **signed** arc, and the reflection disappears — every anchor is the same arithmetic at a different angle.
+
+  The corners come out unchanged because the mirrored form was that same arc reflected. Keeping the *fill order*
+  unchanged is what fixes the signs: a corner fills from its **horizontal** edge round to its vertical one, which is
+  a negative sweep for two of the four. An edge fills from its top or left end, where the eye enters.
+
+  Two things generalized rather than being added to:
+  - **The sweep is centered on the inward normal**, a quarter circle wide at a corner and a half at an edge. That is
+    the table in `FanAnchor.pivot()`, and it is why the kind of anchor implies the angle — §6d's point, which is
+    what keeps this one control rather than two to hold in step.
+  - **The scale takes the reach on each axis**: `dimension / (iconUnit + spread × maxR)`, where `spread` is two on
+    an axis the pivot is centered on and one where it sits against an edge. For a corner that is exactly slice A's
+    `short / (maxR + iconUnit)`, so nothing about the four of them moved.
+
+  The ring capacity takes the sweep's magnitude, so an edge ring seats about twice as many icons as a corner ring at
+  the same radius. That is the point rather than a side effect: the tangential pitch is what it always was, and a
+  ring twice as long holds twice as many at it.
+
+  **The control needed no change at all** — the variant row is `FanAnchor.entries` and the swatch draws whatever it
+  is handed, so eight tiles appeared and each drew its own anchor. That is §6g's claim spent a second time.
+
+  Verified on the emulator: `Fan(TOP)` hangs nested half-arcs from the middle of the top edge and spreads both ways;
+  `Fan(LEFT)` sweeps right from the left edge; the corners look as they did; `{"type":"fan","anchor":"LEFT"}` is
+  stored and drawn again after a force-stop.
 - **L — beehive orientation.** Flat-top.
 - **M — circle start angle.** Optional; see §6f.
 

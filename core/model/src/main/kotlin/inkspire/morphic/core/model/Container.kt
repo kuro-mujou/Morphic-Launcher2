@@ -126,11 +126,30 @@ sealed interface GridFill {
 }
 
 /**
- * The corner an [IconArrangement.Fan] pivots on — the point its arcs sweep out of, which is where the fan opens
- * *away* from rather than where its first icon sits.
+ * The point an [IconArrangement.Fan] pivots on — where its arcs sweep *out of*, rather than where its first icon
+ * sits. The four corners of the container and the four edge midpoints.
+ *
+ * **The kind of anchor is also the size of the sweep**: a corner has a quarter circle in front of it and an edge
+ * has a half, so the half-circle fan is reached by choosing where it pivots and nothing else. There is deliberately
+ * no second setting for the angle — "a corner with a 180 degree sweep" is not a shape this makes, and a pair of
+ * settings would be a pair to keep in step.
+ *
+ * **There is no center**, though it would complete the table, because that is the circle — and not the same circle:
+ * [IconArrangement.Circle] is a *single* ring solving its radius from the chord so neighbours sit one pitch apart,
+ * where a fan is *nested* arcs at a fixed radial pitch. They agree at small counts and diverge completely at large
+ * ones, so folding them together would mean one of the two laws quietly losing.
  */
 @Serializable
-enum class FanAnchor { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+enum class FanAnchor {
+    TOP_LEFT,
+    TOP,
+    TOP_RIGHT,
+    LEFT,
+    RIGHT,
+    BOTTOM_LEFT,
+    BOTTOM,
+    BOTTOM_RIGHT,
+}
 
 /**
  * A grid item that groups app/folder icons into one cell, laid out by [arrangement] (grid, circle, fan,

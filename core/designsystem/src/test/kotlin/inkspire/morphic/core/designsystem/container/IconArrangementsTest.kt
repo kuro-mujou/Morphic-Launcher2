@@ -24,10 +24,13 @@ class IconArrangementsTest {
     /**
      * Every arrangement, so the shared invariants cover each of them.
      *
-     * **Spelled out, and that is the price of the shapes carrying their own parameters**: `entries` used to enroll a
-     * new value here the moment it was declared, and a sealed type has no such list. A shape added without a line
-     * here is checked by nothing, which is why the exhaustive `when`s in `slots` and `swatchCount` are what actually
-     * force a new shape to be finished — this list is a reminder, not a guard.
+     * **The shapes are spelled out, and that is the price of them carrying their own parameters**: `entries` used to
+     * enroll a new value here the moment it was declared, and a sealed type has no such list. A shape added without
+     * a line here is checked by nothing, which is why the exhaustive `when`s in `slots` and `swatchCount` are what
+     * actually force a new shape to be finished — this list is a reminder, not a guard.
+     *
+     * The fan's anchors *are* still an enum, so they enroll themselves, which is what covers every new one against
+     * the invariants below the day it is added.
      */
     private val all = listOf<IconArrangement>(
         IconArrangement.Grid(),
@@ -35,11 +38,7 @@ class IconArrangementsTest {
         IconArrangement.Grid(GridFill.Rows(3)),
         IconArrangement.Circle,
         IconArrangement.Beehive,
-        IconArrangement.Fan(FanAnchor.TOP_LEFT),
-        IconArrangement.Fan(FanAnchor.TOP_RIGHT),
-        IconArrangement.Fan(FanAnchor.BOTTOM_LEFT),
-        IconArrangement.Fan(FanAnchor.BOTTOM_RIGHT),
-    )
+    ) + FanAnchor.entries.map { IconArrangement.Fan(it) }
 
     // ── Shared invariants ────────────────────────────────────────────────────────────────────────────────
 
@@ -357,6 +356,53 @@ class IconArrangementsTest {
         }
     }
 
+    /**
+     * An **edge** fan sweeps a half circle, so its icons fall on both sides of the anchor rather than into one
+     * quadrant of the box. That is the whole difference between the two families of anchor, and it is what makes
+     * the half-circle shape reachable without a second setting for the angle.
+     */
+    @Test
+    fun `an edge fan spreads to both sides of its anchor`() {
+        val slots = IconArrangement.Fan(FanAnchor.TOP).slots(9, width, height)
+        assertTrue("nothing left of center: $slots", slots.any { it.centerX < width / 2f - 1f })
+        assertTrue("nothing right of center: $slots", slots.any { it.centerX > width / 2f + 1f })
+        // A corner fan of the same size stays on its own side, which is what it is being contrasted with.
+        val corner = IconArrangement.Fan(FanAnchor.TOP_LEFT).slots(9, width, height)
+        assertTrue("a corner fan should not cross the far half", corner.all { it.centerX < width * 0.75f })
+    }
+
+    /** Twice the arc at the same radius seats about twice the icons — the density that makes it read as a fan. */
+    @Test
+    fun `an edge arc seats more icons than a corner arc`() {
+        fun innermost(anchor: FanAnchor): Int {
+            val slots = IconArrangement.Fan(anchor).slots(12, width, height)
+            val pivot = anchorPoint(anchor)
+            val radii = slots.map { hypot(it.centerX - pivot.first, it.centerY - pivot.second) }
+            val smallest = radii.min()
+            return radii.count { it <= smallest + 0.01f }
+        }
+        assertTrue(
+            "edge ${innermost(FanAnchor.TOP)} vs corner ${innermost(FanAnchor.TOP_LEFT)}",
+            innermost(FanAnchor.TOP) > innermost(FanAnchor.TOP_LEFT),
+        )
+    }
+
+    /** Each edge anchor pivots on its own edge, the way each corner pivots on its own. */
+    @Test
+    fun `each edge fan opens away from its own edge`() {
+        val edges = listOf(FanAnchor.TOP, FanAnchor.RIGHT, FanAnchor.BOTTOM, FanAnchor.LEFT)
+        for (anchor in edges) {
+            val slots = IconArrangement.Fan(anchor).slots(9, width, height)
+            fun nearest(point: Pair<Float, Float>) =
+                slots.minOf { hypot(it.centerX - point.first, it.centerY - point.second) }
+
+            val own = nearest(anchorPoint(anchor))
+            for (other in edges - anchor) {
+                assertTrue("$anchor sits nearer $other's edge", own < nearest(anchorPoint(other)))
+            }
+        }
+    }
+
     /** Square cells in a non-square box — the fan shears rather than keeps its shape if this is ever lost. */
     @Test
     fun `fan cells stay square`() {
@@ -425,6 +471,18 @@ class IconArrangementsTest {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────────────
+
+    /** Where an anchor sits on the box's boundary — a corner, or the middle of an edge. */
+    private fun anchorPoint(anchor: FanAnchor): Pair<Float, Float> = when (anchor) {
+        FanAnchor.TOP_LEFT -> 0f to 0f
+        FanAnchor.TOP -> width / 2f to 0f
+        FanAnchor.TOP_RIGHT -> width to 0f
+        FanAnchor.LEFT -> 0f to height / 2f
+        FanAnchor.RIGHT -> width to height / 2f
+        FanAnchor.BOTTOM_LEFT -> 0f to height
+        FanAnchor.BOTTOM -> width / 2f to height
+        FanAnchor.BOTTOM_RIGHT -> width to height
+    }
 
     private val ArrangementSlot.centerX: Float get() = x + width / 2f
     private val ArrangementSlot.centerY: Float get() = y + height / 2f

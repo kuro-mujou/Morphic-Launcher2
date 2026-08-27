@@ -225,9 +225,14 @@ private fun circleSlots(count: Int, width: Float, height: Float): List<Arrangeme
  * innermost and outermost icons flush instead. This is why the whole-cloud scale-to-fit [beehiveSlots] uses does
  * not transfer unchanged: that cloud is centered and symmetric, and this one is anchored in a corner.
  *
- * [anchor] is decomposed into two booleans **here rather than on [FanAnchor] itself**, because which way a fan
- * mirrors is this function's arithmetic and not a property of the model — the same reason the geometry lives in
- * this module at all. Exhaustive, so an anchor that is not a corner cannot be added without saying what it sweeps.
+ * **[anchor] decides the sweep, and that is why there is no second setting for it.** A corner has a quarter circle
+ * to fill and an edge has a half, so "a corner with a 180° sweep" cannot be expressed and there is no pair of
+ * controls to keep in step. The arc arithmetic is the same either way — an edge fan simply seats about twice as
+ * many icons per ring, because a ring twice as long holds twice as many at one tangential pitch.
+ *
+ * The resolution lives here rather than on [FanAnchor] because a pivot fraction and a signed angle are this
+ * function's arithmetic, not something the model should know. Exhaustive, so a new anchor cannot be added without
+ * saying where it sits and what it sweeps.
  */
 private fun fanSlots(
     count: Int,
@@ -235,13 +240,8 @@ private fun fanSlots(
     height: Float,
     anchor: FanAnchor,
 ): List<ArrangementSlot> {
-    val (fromLeft, fromTop) = when (anchor) {
-        FanAnchor.TOP_LEFT -> true to true
-        FanAnchor.TOP_RIGHT -> false to true
-        FanAnchor.BOTTOM_LEFT -> true to false
-        FanAnchor.BOTTOM_RIGHT -> false to false
-    }
-    val quarter = PI.toFloat() / 2f
+    val pivot = anchor.pivot()
+    val span = abs(pivot.sweep)
     // Radius and capacity of each arc, outward until they hold them all. Unit radial pitch, so a capacity is just
     // how many unit steps fit along the arc, and the whole cloud is scaled to the box at the end.
     val arcs = ArrayList<Pair<Float, Int>>()
@@ -249,24 +249,25 @@ private fun fanSlots(
     var k = 1
     while (seated < count) {
         val r = k - 0.5f
-        val capacity = max(1, (quarter * r).toInt() + 1)
+        val capacity = max(1, (span * r).toInt() + 1)
         arcs.add(r to capacity)
         seated += capacity
         k++
     }
 
+    val middle = pivot.start + pivot.sweep / 2f
     val polar = ArrayList<Pair<Float, Float>>(count)
     var remaining = count
     for ((r, capacity) in arcs) {
         val here = minOf(capacity, remaining)
         if (capacity == 1) {
-            polar.add(r to quarter / 2f)
+            polar.add(r to middle)
         } else {
             // The step a *full* arc would use, so a partial last arc keeps the spacing of the ones inside it
-            // rather than spreading to fill a sweep it cannot.
-            val step = quarter / (capacity - 1)
-            val start = quarter / 2f - (here - 1) * step / 2f
-            repeat(here) { i -> polar.add(r to (start + i * step)) }
+            // rather than spreading to fill a sweep it cannot. Signed, so it fills in the anchor's own direction.
+            val step = pivot.sweep / (capacity - 1)
+            val first = middle - (here - 1) * step / 2f
+            repeat(here) { i -> polar.add(r to (first + i * step)) }
         }
         remaining -= here
         if (remaining == 0) break
@@ -274,18 +275,75 @@ private fun fanSlots(
 
     val maxR = polar.maxOf { it.first }
     val iconUnit = 0.8f
-    val short = minOf(width, height)
-    val scale = short / (maxR + iconUnit)
+    // Each axis has to hold the icon plus the cloud's reach along it, and the reach is *two* radii where the pivot
+    // is centered on that axis — an edge fan spills both ways from its anchor where a corner fan spills one.
+    val scale = minOf(
+        width / (iconUnit + pivot.x.spread * maxR),
+        height / (iconUnit + pivot.y.spread * maxR),
+    )
     val icon = iconUnit * scale
+    val originX = pivot.x.along(width, icon)
+    val originY = pivot.y.along(height, icon)
     return polar.map { (r, angle) ->
-        val x = icon / 2f + r * scale * cos(angle)
-        val y = icon / 2f + r * scale * sin(angle)
         ArrangementSlot(
-            x = (if (fromLeft) x else width - x) - icon / 2f,
-            y = (if (fromTop) y else height - y) - icon / 2f,
+            x = originX + r * scale * cos(angle) - icon / 2f,
+            y = originY + r * scale * sin(angle) - icon / 2f,
             width = icon,
             height = icon,
         )
+    }
+}
+
+/** Where a fan's pivot sits along one axis. [FanPivot] pairs two of these with the arc swept from them. */
+private enum class PivotAt {
+    LOW,
+    CENTER,
+    HIGH,
+    ;
+
+    /** How many radii the cloud reaches along this axis — both ways from a centered pivot, one way from an edge. */
+    val spread: Float get() = if (this == CENTER) 2f else 1f
+
+    /** The pivot's own coordinate, half an icon in from the edge it sits on. */
+    fun along(extent: Float, icon: Float): Float = when (this) {
+        LOW -> icon / 2f
+        CENTER -> extent / 2f
+        HIGH -> extent - icon / 2f
+    }
+}
+
+/**
+ * An anchor as geometry: where it pivots, and the arc it sweeps from there.
+ *
+ * Angles are screen convention — `0` points right and they grow *clockwise*, because y grows downward. [sweep] is
+ * **signed**, and its sign is the order the icons fill in rather than anything about the shape: the arc it covers
+ * is the same either way.
+ */
+private data class FanPivot(val x: PivotAt, val y: PivotAt, val start: Float, val sweep: Float)
+
+/**
+ * The eight anchors, as the arcs they mean.
+ *
+ * Every sweep is **centered on the inward normal** — the direction that points into the container from where the
+ * anchor sits — and is a quarter circle wide at a corner, a half circle at an edge. That is the whole difference
+ * between the two families, and it is why the kind of anchor implies the sweep rather than a second control
+ * offering "a corner with a half sweep", which is not a shape this makes.
+ *
+ * The **direction** each one fills in is the other half of the table, and it is a convention rather than a
+ * consequence. A corner starts on its *horizontal* edge and sweeps round to its vertical one, which is the order
+ * the four corners have always filled in; an edge starts at its top or left end, which is where the eye enters.
+ */
+private fun FanAnchor.pivot(): FanPivot {
+    val quarter = PI.toFloat() / 2f
+    return when (this) {
+        FanAnchor.TOP_LEFT -> FanPivot(PivotAt.LOW, PivotAt.LOW, start = 0f, sweep = quarter)
+        FanAnchor.TOP -> FanPivot(PivotAt.CENTER, PivotAt.LOW, start = 2f * quarter, sweep = -2f * quarter)
+        FanAnchor.TOP_RIGHT -> FanPivot(PivotAt.HIGH, PivotAt.LOW, start = 2f * quarter, sweep = -quarter)
+        FanAnchor.RIGHT -> FanPivot(PivotAt.HIGH, PivotAt.CENTER, start = 3f * quarter, sweep = -2f * quarter)
+        FanAnchor.BOTTOM_RIGHT -> FanPivot(PivotAt.HIGH, PivotAt.HIGH, start = 2f * quarter, sweep = quarter)
+        FanAnchor.BOTTOM -> FanPivot(PivotAt.CENTER, PivotAt.HIGH, start = 2f * quarter, sweep = 2f * quarter)
+        FanAnchor.BOTTOM_LEFT -> FanPivot(PivotAt.LOW, PivotAt.HIGH, start = 0f, sweep = -quarter)
+        FanAnchor.LEFT -> FanPivot(PivotAt.LOW, PivotAt.CENTER, start = 3f * quarter, sweep = 2f * quarter)
     }
 }
 
