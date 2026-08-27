@@ -66,7 +66,6 @@ import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
@@ -74,8 +73,8 @@ import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.data.widgets.WidgetProvider
 import inkspire.morphic.feature.home.AppSelectionSheet
+import inkspire.morphic.feature.home.ArrangementPicker
 import inkspire.morphic.feature.home.ContainerIcon
-import inkspire.morphic.feature.home.IconArrangementSwatch
 import inkspire.morphic.feature.home.IconContainerCell
 import inkspire.morphic.feature.home.UnnamedWidget
 import inkspire.morphic.feature.home.asIconItem
@@ -236,6 +235,7 @@ private fun ContainerSettingsContent(
                         ContainerOptions(
                             settings = state.settings,
                             shownScales = shownScales,
+                            onArrangement = viewModel::setArrangement,
                             onChooseOption = { chooserOpen = true },
                             onPreviewScales = { icons, spacing -> scaleOverride = icons to spacing },
                             onCommitScales = viewModel::setScales,
@@ -267,9 +267,9 @@ private fun ContainerSettingsContent(
             }
         }
 
-        state.settings?.let { settings ->
+        (state.settings as? ContainerSettings.Widget)?.let { settings ->
             if (chooserOpen) {
-                ContainerChooser(
+                AxisChooser(
                     settings = settings,
                     viewModel = viewModel,
                     onDismiss = { chooserOpen = false },
@@ -334,12 +334,15 @@ private enum class ContainerSheet { Apps, Widgets }
  *
  * @param shownScales the scaling to draw the sliders at — the dragged value while one is in flight rather than the
  *   stored one. Null before the store has answered.
- * @param onChooseOption opens whichever chooser this kind has; there is exactly one either way.
+ * @param onArrangement sets the icon container's arrangement in place — there is no dialog; see
+ *   [ArrangementSetting].
+ * @param onChooseOption opens the widget container's axis chooser, the one dialog left on this screen.
  */
 @Composable
 private fun ContainerOptions(
     settings: ContainerSettings?,
     shownScales: Pair<Int, Int>?,
+    onArrangement: (IconArrangement) -> Unit,
     onChooseOption: () -> Unit,
     onPreviewScales: (Int, Int) -> Unit,
     onCommitScales: (Int, Int) -> Unit,
@@ -353,7 +356,7 @@ private fun ContainerOptions(
         when (settings) {
             null -> Unit
             is ContainerSettings.Icon -> {
-                ChooserRow(title = "Arrangement", value = settings.arrangement.label, onClick = onChooseOption)
+                ArrangementSetting(arrangement = settings.arrangement, onArrangement = onArrangement)
                 ScaleRows(
                     iconScalePercent = shownScales?.first ?: settings.iconScalePercent,
                     spacingScalePercent = shownScales?.second ?: settings.spacingScalePercent,
@@ -410,7 +413,7 @@ private fun LazyListScope.containerContents(
 /**
  * Whichever picker the container's add affordance opened, or nothing.
  *
- * Out of the screen for [ContainerChooser]'s reason: these are surfaces *over* the list rather than part of it, and
+ * Out of the screen for [AxisChooser]'s reason: these are surfaces *over* the list rather than part of it, and
  * the two sheets between them carry most of what the screen was doing.
  */
 @Composable
@@ -442,67 +445,52 @@ private fun ContainerSheets(
 }
 
 /**
- * Every arrangement this chooser offers — the four shapes, with the fan's corners spelled out.
+ * The arrangement, set **in the list rather than through a dialog** — its name, and the picker its shape is chosen
+ * with.
  *
- * A flat list because the *control* is flat: one radio row per combination is what a dialog can show, and a sealed
- * type has no `entries` to hand it. So this is the chooser's own vocabulary rather than the model's, which is why
- * the corners are enumerated here and in no other place.
- */
-private val ArrangementOptions = listOf<IconArrangement>(
-    IconArrangement.Grid,
-    IconArrangement.Circle,
-    IconArrangement.Fan(FanAnchor.TOP_LEFT),
-    IconArrangement.Fan(FanAnchor.TOP_RIGHT),
-    IconArrangement.Fan(FanAnchor.BOTTOM_LEFT),
-    IconArrangement.Fan(FanAnchor.BOTTOM_RIGHT),
-    IconArrangement.Beehive,
-)
-
-/**
- * The one chooser a container has, whichever kind it is — an arrangement or a scroll axis.
+ * A dialog was right while this screen had nothing else to show: seven radio rows were the only way to see the
+ * options at all. It is wrong now that a live preview is pinned above, because a dialog covers exactly the thing
+ * worth watching while choosing — which is the argument the widget picker's row was built on, applied where it is
+ * stronger. Both places now share [ArrangementPicker], and neither of them hides the result.
  *
- * Split out of the screen because it is a dialog *over* it rather than part of its list, and because the screen had
- * grown past the point where one more `when` could be read at a glance.
+ * The name stays even though the tiles are pictures, because a corner is quicker to see than to read but a *shape*
+ * still wants saying — and this is the row a heading belongs to.
  */
 @Composable
-private fun ContainerChooser(
-    settings: ContainerSettings,
+private fun ArrangementSetting(arrangement: IconArrangement, onArrangement: (IconArrangement) -> Unit) {
+    val colors = LocalMorphicColors.current
+    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
+        Text(text = "Arrangement", style = MaterialTheme.typography.bodyLarge, color = colors.content)
+        Text(
+            text = arrangement.label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.contentMuted,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+        ArrangementPicker(arrangement = arrangement, onArrangement = onArrangement)
+    }
+}
+
+/**
+ * The widget container's scroll axis — **the last chooser dialog on this screen**, and it stays one because two
+ * directions have no picture worth showing: the words are the whole of the choice.
+ *
+ * Split out of the screen because it is a dialog *over* it rather than part of its list.
+ */
+@Composable
+private fun AxisChooser(
+    settings: ContainerSettings.Widget,
     viewModel: ContainerSettingsViewModel,
     onDismiss: () -> Unit,
 ) {
-    val colors = LocalMorphicColors.current
-    when (settings) {
-        is ContainerSettings.Icon -> ChooserDialog(
-            title = "Arrangement",
-            options = ArrangementOptions,
-            selected = settings.arrangement,
-            label = { it.label },
-            onPick = { viewModel.setArrangement(it) },
-            onDismiss = onDismiss,
-            // The same swatch the picker chooses by, so the two places an arrangement is set show the same
-            // shape. Names alone ("Fan from top left") are what this list had, and four of the seven differ
-            // only by a direction that is far quicker to see than to read.
-            leading = { option ->
-                IconArrangementSwatch(
-                    arrangement = option,
-                    color = colors.contentMuted,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .padding(end = 0.dp),
-                )
-                Spacer(Modifier.width(12.dp))
-            },
-        )
-
-        is ContainerSettings.Widget -> ChooserDialog(
-            title = "Scroll orientation",
-            options = WidgetContainerAxis.entries,
-            selected = settings.axis,
-            label = { it.label },
-            onPick = { viewModel.setWidgetOptions(it, settings.autoRotate, settings.resetOnReturn) },
-            onDismiss = onDismiss,
-        )
-    }
+    ChooserDialog(
+        title = "Scroll orientation",
+        options = WidgetContainerAxis.entries,
+        selected = settings.axis,
+        label = { it.label },
+        onPick = { viewModel.setWidgetOptions(it, settings.autoRotate, settings.resetOnReturn) },
+        onDismiss = onDismiss,
+    )
 }
 
 /**
@@ -737,7 +725,6 @@ private fun <T> ChooserDialog(
     label: (T) -> String,
     onPick: (T) -> Unit,
     onDismiss: () -> Unit,
-    leading: @Composable (T) -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -757,7 +744,6 @@ private fun <T> ChooserDialog(
                     ) {
                         RadioButton(selected = option == selected, onClick = null)
                         Spacer(Modifier.width(12.dp))
-                        leading(option)
                         Text(label(option))
                     }
                 }

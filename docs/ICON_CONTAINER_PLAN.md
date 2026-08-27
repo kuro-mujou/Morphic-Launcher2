@@ -1,7 +1,7 @@
 # Icon container — arrangement, reorder and configuration
 
 **Status:** part one complete — slices A–G landed (2026-08-25), each verified on a device.
-**Part two (§6) has begun:** slice H landed 2026-08-27; I–M are planned. Slice F was **revised the same
+**Part two (§6) has begun:** slices H and I landed 2026-08-27; J–M are planned. Slice F was **revised the same
 day** after device testing; see the note at the end of §3f.
 **Covers:** the icon container's inner geometry, drag-reorder of its contents, drag-out, and how it is configured.
 **Extends** [CONTAINERS_PLAN.md](CONTAINERS_PLAN.md), whose §3d ("Slice 3 — arrangement and axis") shipped the
@@ -355,6 +355,8 @@ by a direction that is far quicker to see than to read.
 which corner it opens from is a property of a container that already exists — adjusted where it can be seen on the
 wallpaper. Asked here it would be four near-identical swatches and a decision the user has no way to judge yet, so
 the row shows one fan (`FAN_TOP_LEFT`, which fills in reading order) and the container's settings keep all seven.
+(Since §6i's slice I the settings no longer list seven either: the corner moved to a second row under the shape,
+which is the same argument carried one step further.)
 
 **The dot count is a property of the shape, not of the caller**, because they do not become recognizable at the
 same number: a grid is a grid at six and only gets busier, a beehive wants its centre plus one complete ring —
@@ -667,8 +669,29 @@ anchor, a fan swatch draws the *right* corner without the swatch knowing what a 
   back; the picker's four swatches and the dialog's seven rows are unchanged, names included; a fan set to *bottom
   right* stored `{"type":"fan","anchor":"BOTTOM_RIGHT"}`, survived a force-stop, and drew from the right corner on a
   cold start; all four shapes render; a drag inside the container still exchanges exactly two icons.
-- **I — the two-row control.** The variant row appears and the settings dialog is replaced. With only the fan's
-  four corners to show, it is testable before any new geometry exists.
+- **I — the two-row control.** ✅ `ArrangementPicker` (`feature:home`) is the shape row plus, under it, the row
+  belonging to the chosen shape — the fan's four corners today, nothing for the other three. Both places that set an
+  arrangement now use it, and the settings dialog is gone with `ArrangementOptions`, `PickableArrangements` and
+  `ChooserDialog`'s `leading` slot. The dialog left behind serves the widget container's axis alone, and stays a
+  dialog for a reason worth stating: two directions have no picture to choose by, so the words *are* the choice.
+
+  **The shape row's fan tile draws the corner the container is already set to.** That is what keeps the two rows
+  from contradicting each other — tapping the shape you are on becomes a no-op rather than a reset to a corner
+  nobody asked for, and plain equality decides which tile is lit without anything comparing types. §6g's claim that
+  the swatch needs no change is what makes it free: it takes an arrangement and lays dots out through
+  `iconContainerSlots`, so it drew the right corner the first time it was asked.
+
+  **The second row is absent, not empty**, for the launcher's standing rule about a control with nothing behind it.
+  Nothing marks where it would be, and the row above does not move when it appears.
+
+  **`ContainerLabels.label` did not split, and that is a departure from §6h.** A shape name plus a variant name has
+  no consumer while the only variant is a *picture*: the settings row still captions the whole name ("Fan from
+  bottom right"), which is the one part of the choice quicker to read than to look at. J and L bring the first
+  variants that must be named — a column count and an orientation — and the split is theirs to make.
+
+  Verified on the emulator: the settings screen shows four shapes inline with no dialog, picking the fan grows the
+  corner row, picking a corner moves the pinned preview and relights both rows; the picker's detail page does the
+  same and its tile follows; and the widget container's axis dialog still opens and writes.
 - **J — the grid's fill axis.** `Auto`, or rows or columns pinned to a count. The tablet-dock case is
   the acceptance test: a 4×1 container with `rows = 1` should stay one row as icons are added.
 - **K — fan edge anchors.** The half circle; the geometry from §6d.

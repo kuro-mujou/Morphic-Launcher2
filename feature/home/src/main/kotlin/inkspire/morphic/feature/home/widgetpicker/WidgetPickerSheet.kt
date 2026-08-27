@@ -9,7 +9,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +28,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -65,12 +63,12 @@ import inkspire.morphic.core.designsystem.cell.CardAlpha
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.model.FanAnchor
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.WidgetProvider
 import inkspire.morphic.data.widgets.WidgetProviderGroup
+import inkspire.morphic.feature.home.ArrangementPicker
 import inkspire.morphic.feature.home.ContainerAddGlyph
 import inkspire.morphic.feature.home.HomeViewModel
 import inkspire.morphic.feature.home.IconArrangementSwatch
@@ -657,7 +655,7 @@ private fun ComponentPage(
         }
         if (kind == ComponentKind.ICON_CONTAINER) {
             Spacer(Modifier.height(12.dp))
-            ArrangementRow(selected = arrangement, onPick = onArrangement)
+            ArrangementPicker(arrangement = arrangement, onArrangement = onArrangement)
         }
         Spacer(Modifier.height(12.dp))
         Text(text = kind.description, style = MaterialTheme.typography.bodyMedium, color = colors.content)
@@ -666,59 +664,6 @@ private fun ComponentPage(
     }
 }
 
-
-/**
- * The **shapes** an icon container can be given, one entry each.
- *
- * A fan is offered once rather than once per corner: the corner is a parameter of a container that already exists,
- * adjusted where it can be seen on the wallpaper, and four near-identical swatches here would ask the user to
- * decide something they have no way to judge yet. The container's settings are where the corner is chosen.
- *
- * [FanAnchor.TOP_LEFT] stands for the family because it fills in reading order: the innermost arc sits nearest the
- * corner a left-to-right reader starts from.
- */
-private val PickableArrangements = listOf<IconArrangement>(
-    IconArrangement.Grid,
-    IconArrangement.Circle,
-    IconArrangement.Fan(FanAnchor.TOP_LEFT),
-    IconArrangement.Beehive,
-)
-
-/**
- * The shapes to choose between, drawn as the shapes they make.
- *
- * A row rather than a dialog: they are told apart by looking rather than by reading, and the choice is being made
- * *while* the tile above shows the result — a dialog would cover the one thing worth watching.
- */
-@Composable
-private fun ArrangementRow(selected: IconArrangement, onPick: (IconArrangement) -> Unit) {
-    val colors = LocalMorphicColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PickableArrangements.forEach { option ->
-            val chosen = option == selected
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (chosen) colors.accent.copy(alpha = 0.22f) else colors.surface.copy(alpha = CardAlpha))
-                    .clickable { onPick(option) }
-                    .padding(9.dp),
-            ) {
-                IconArrangementSwatch(
-                    arrangement = option,
-                    color = if (chosen) colors.accent else colors.contentMuted,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-}
 
 /** One widget: its published preview at the top, the cells it would occupy underneath. */
 @Composable
