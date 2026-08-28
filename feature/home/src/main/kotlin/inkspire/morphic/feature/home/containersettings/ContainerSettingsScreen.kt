@@ -36,7 +36,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -60,6 +59,7 @@ import inkspire.morphic.core.designsystem.backdrop.punchThroughHole
 import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
+import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -367,17 +367,19 @@ private fun ContainerOptions(
 
             is ContainerSettings.Widget -> {
                 ChooserRow(title = "Scroll orientation", value = settings.axis.label, onClick = onChooseOption)
-                SwitchRow(
-                    title = "Auto rotate widgets",
-                    description = "Automatically switch to the next widget at regular intervals",
+                MorphicSwitchRow(
+                    label = "Auto rotate widgets",
+                    supportingText = "Automatically switch to the next widget at regular intervals",
                     checked = settings.autoRotate,
                     onCheckedChange = { onWidgetOptions(settings.axis, it, settings.resetOnReturn) },
+                    modifier = Modifier.padding(horizontal = 24.dp),
                 )
-                SwitchRow(
-                    title = "Reset on return",
-                    description = "Return to the first widget when you come back to the home screen",
+                MorphicSwitchRow(
+                    label = "Reset on return",
+                    supportingText = "Return to the first widget when you come back to the home screen",
                     checked = settings.resetOnReturn,
                     onCheckedChange = { onWidgetOptions(settings.axis, settings.autoRotate, it) },
+                    modifier = Modifier.padding(horizontal = 24.dp),
                 )
             }
         }
@@ -684,36 +686,6 @@ private fun ChooserRow(title: String, value: String, onClick: () -> Unit) {
     ) {
         Text(text = title, style = MaterialTheme.typography.bodyLarge, color = colors.content)
         Text(text = value, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
-    }
-}
-
-/** A setting that is on or off. The whole row toggles it, not just the switch — a switch is a small target. */
-@Composable
-private fun SwitchRow(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    val colors = LocalMorphicColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 24.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 16.dp)
-        ) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = colors.content)
-            Text(text = description, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
-        }
-        // `onCheckedChange = null` so the row owns the tap: two overlapping targets would let a press land on the
-        // switch and do nothing when it missed by 2dp. The same reason the multi-select picker's checkbox is inert.
-        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
