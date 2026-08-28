@@ -165,6 +165,29 @@ class ContainerSettingsViewModel(
      * a widget genuinely is destroyed here — there is no drawer for it to fall back to, so leaving it bound would
      * leak rather than preserve.
      */
+    /**
+     * Moves [appWidgetId] one place toward the front of the container's order, or one place back.
+     *
+     * **A step rather than a destination**, because the control is a pair of buttons — see the screen for why it is
+     * not a drag. The current order comes from the state the screen is already drawing, so the two cannot disagree
+     * about what "one place" meant; a move that would leave the list (the first widget going up) is refused here as
+     * well as disabled there, since the state can move under a press.
+     */
+    fun moveWidget(appWidgetId: Int, up: Boolean) {
+        val order = (state.value.settings as? ContainerSettings.Widget)
+            ?.widgets
+            ?.map { it.appWidgetId }
+            ?: return
+        val from = order.indexOf(appWidgetId)
+        val to = if (up) from - 1 else from + 1
+        if (from < 0 || to !in order.indices) return
+        val moved = order.toMutableList().apply {
+            this[from] = this[to]
+            this[to] = appWidgetId
+        }
+        write(LayoutChange.ReorderWidgetContainer(route.containerId, moved))
+    }
+
     fun removeWidget(appWidgetId: Int) {
         write(
             LayoutChange.RemoveFromWidgetContainer(route.containerId, appWidgetId),

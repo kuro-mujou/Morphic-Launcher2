@@ -198,6 +198,17 @@ sealed interface LayoutChange {
     data class RemoveFromWidgetContainer(val containerId: Long, val appWidgetId: Int) : LayoutChange
 
     /**
+     * Reorders widget container [containerId] to exactly [appWidgetIds] — the page order, which is the only order a
+     * container that shows one widget at a time has.
+     *
+     * A whole ordering rather than a move, which is [ReorderIconContainer]'s shape for a different reason. There the
+     * gesture *is* an exchange; here the gesture is a step, and the list is still the honest op — the store keeps a
+     * `sortOrder` per row, so "move this one up" is a statement about two rows and the resulting order is what says
+     * which two without the repository having to re-derive them.
+     */
+    data class ReorderWidgetContainer(val containerId: Long, val appWidgetIds: List<Int>) : LayoutChange
+
+    /**
      * Sets widget container [containerId]'s three settings — how it is paged, and the two behaviors that page it
      * without being asked.
      *

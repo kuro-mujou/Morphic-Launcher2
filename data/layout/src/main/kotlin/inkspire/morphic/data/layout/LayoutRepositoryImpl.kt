@@ -206,6 +206,16 @@ internal class LayoutRepositoryImpl(
 
             is LayoutChange.RemoveFromWidgetContainer -> daos.widgetContainerItem.removeByWidget(change.appWidgetId)
 
+            // **Upserted in place, where the icon container's twin clears the container first.** Both would give the
+            // right rows, and the difference is what is observable in between: `apply` is not one transaction, so a
+            // cleared container can be emitted empty — which for *widgets* means every hosted view torn down and
+            // rebuilt to change two numbers. `widget_container_item`'s primary key is (containerId, appWidgetId), so
+            // an upsert updates each row's `sortOrder` by key and nothing is ever briefly missing. Safe because a
+            // reorder names the members it already has: no row is added or removed by it.
+            is LayoutChange.ReorderWidgetContainer -> daos.widgetContainerItem.upsert(
+                change.appWidgetIds.mapIndexed { i, id -> WidgetContainerItemEntity(change.containerId, id, i) },
+            )
+
             is LayoutChange.SetWidgetContainerOptions -> daos.widgetContainer.setOptions(
                 id = change.containerId,
                 axis = change.axis,

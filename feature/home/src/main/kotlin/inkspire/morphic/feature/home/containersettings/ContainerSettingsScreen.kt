@@ -22,12 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -262,6 +266,7 @@ private fun ContainerSettingsContent(
                         settings = state.settings,
                         onRemoveIcon = viewModel::removeIcon,
                         onRemoveWidget = viewModel::removeWidget,
+                        onMoveWidget = viewModel::moveWidget,
                     )
                 }
             }
@@ -396,6 +401,7 @@ private fun LazyListScope.containerContents(
     settings: ContainerSettings?,
     onRemoveIcon: (IconItem) -> Unit,
     onRemoveWidget: (Int) -> Unit,
+    onMoveWidget: (Int, Boolean) -> Unit,
 ) {
     when (settings) {
         // Not yet, or gone. The chrome around this is drawn either way, so neither flashes an error — see
@@ -405,9 +411,16 @@ private fun LazyListScope.containerContents(
             IconContentRow(icon = icon, onRemove = { onRemoveIcon(icon.asIconItem()) })
         }
 
-        is ContainerSettings.Widget -> items(settings.widgets, key = { it.appWidgetId }) { widget ->
-            WidgetContentRow(widget = widget, onRemove = { onRemoveWidget(widget.appWidgetId) })
-        }
+        is ContainerSettings.Widget ->
+            itemsIndexed(settings.widgets, key = { _, widget -> widget.appWidgetId }) { index, widget ->
+                WidgetContentRow(
+                    widget = widget,
+                    canMoveUp = index > 0,
+                    canMoveDown = index < settings.widgets.lastIndex,
+                    onMove = { up -> onMoveWidget(widget.appWidgetId, up) },
+                    onRemove = { onRemoveWidget(widget.appWidgetId) },
+                )
+            }
     }
 }
 
@@ -727,6 +740,29 @@ private fun <T> ChooserDialog(
     )
 }
 
+/**
+ * One step of a reorder — an arrow that grays at the end of the list rather than disappearing.
+ *
+ * The tint is stated rather than left to M3's disabled alpha, so the two states are the palette's own
+ * `contentMuted` and `contentDisabled` and read the same in both themes.
+ */
+@Composable
+private fun MoveButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalMorphicColors.current
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(40.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) colors.contentMuted else colors.contentDisabled,
+        )
+    }
+}
+
 /** One app or nested folder in the container, with the button that takes it out. */
 @Composable
 private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
@@ -746,11 +782,51 @@ private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
     }
 }
 
-/** One widget in the container. Named by its provider's label, which is all the layout store keeps about it. */
+/**
+ * One widget in the container. Named by its provider's label, which is all the layout store keeps about it.
+ *
+ * **It carries the reorder, because nothing else can.** A container's icons are reordered by dragging one onto
+ * another *on the surface*, but a widget container shows one widget at a time — there is no second widget on screen
+ * to drag onto, and the thing being ordered is the page sequence. This list is where that sequence is visible, so
+ * this is where it is changed.
+ *
+ * **Two buttons rather than a drag**, which is the icon studio's answer to the same question and its reason: a
+ * disabled button says which move is impossible *before* it is attempted, where a refused drag does nothing and
+ * cannot explain itself. Here the impossible moves are exactly the two ends, so the first row's up and the last
+ * row's down are the list's own boundary, drawn.
+ *
+ * They are **disabled rather than absent**, against the launcher's usual rule for a verb with no op behind it: the
+ * three trailing buttons are a column down the list, and dropping one from the first row would slide the other two
+ * sideways — moving the target a finger is aiming at, on the row it is aiming at it from.
+ */
 @Composable
-private fun WidgetContentRow(widget: WidgetInfo, onRemove: () -> Unit) {
+private fun WidgetContentRow(
+    widget: WidgetInfo,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMove: (up: Boolean) -> Unit,
+    onRemove: () -> Unit,
+) {
     val colors = LocalMorphicColors.current
-    ContentRow(label = widget.label.ifBlank { UnnamedWidget }, onRemove = onRemove) {
+    val label = widget.label.ifBlank { UnnamedWidget }
+    ContentRow(
+        label = label,
+        onRemove = onRemove,
+        trailing = {
+            MoveButton(
+                icon = Icons.Filled.KeyboardArrowUp,
+                contentDescription = "Move $label up",
+                enabled = canMoveUp,
+                onClick = { onMove(true) },
+            )
+            MoveButton(
+                icon = Icons.Filled.KeyboardArrowDown,
+                contentDescription = "Move $label down",
+                enabled = canMoveDown,
+                onClick = { onMove(false) },
+            )
+        },
+    ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -770,7 +846,12 @@ private fun WidgetContentRow(widget: WidgetInfo, onRemove: () -> Unit) {
 
 /** The shared shape of a contents row: something drawn, a name, and a remove. */
 @Composable
-private fun ContentRow(label: String, onRemove: () -> Unit, leading: @Composable () -> Unit) {
+private fun ContentRow(
+    label: String,
+    onRemove: () -> Unit,
+    trailing: @Composable () -> Unit = {},
+    leading: @Composable () -> Unit,
+) {
     val colors = LocalMorphicColors.current
     Row(
         modifier = Modifier
@@ -789,6 +870,7 @@ private fun ContentRow(label: String, onRemove: () -> Unit, leading: @Composable
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        trailing()
         IconButton(onClick = onRemove) {
             Icon(Icons.Filled.Close, contentDescription = "Remove $label", tint = colors.contentMuted)
         }
