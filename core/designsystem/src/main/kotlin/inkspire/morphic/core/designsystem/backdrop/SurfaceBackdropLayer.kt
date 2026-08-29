@@ -70,7 +70,9 @@ fun SurfaceBackdropLayer(
         Box(
             modifier
                 .fillMaxSize()
-                .graphicsLayer { this.alpha = alpha().coerceIn(0f, 1f) }
+                .graphicsLayer {
+                    this.alpha = alpha().coerceIn(0f, 1f)
+                }
                 // The stored effect's *variant* at fixed parameters, the picture blurred to match, and no rim — all
                 // three from [filmBackdrop], which is where they are written now that the context menu wears the same
                 // material. No shape: the layer *is* the screen, so there is nothing to clip and nothing to round.

@@ -110,8 +110,13 @@ fun IconLabelCell(
 
         if (!metrics.showLabel) {
             val iconDp = metrics.resolveIconSize(availW, maxHeight - 4.dp * 2)
-            Box(modifier = padding, contentAlignment = Alignment.Center) {
-                Box(itemGestures) { icon(iconDp) }
+            Box(
+                modifier = padding,
+                contentAlignment = Alignment.Center
+            ) {
+                Box(itemGestures) {
+                    icon(iconDp)
+                }
             }
             return@BoxWithConstraints
         }
@@ -120,14 +125,20 @@ fun IconLabelCell(
         val iconArea = (maxHeight - 4.dp * 2 - 4.dp - labelHeight).coerceAtLeast(0.dp)
         val iconDp = metrics.resolveIconSize(availW, iconArea).coerceAtMost(iconArea)
         // Outer box centers the group in the cell; the group itself wraps content and carries the gestures.
-        Box(modifier = padding, contentAlignment = Alignment.Center) {
+        Box(
+            modifier = padding,
+            contentAlignment = Alignment.Center
+        ) {
             Column(
                 modifier = itemGestures,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 icon(iconDp)
-                Spacer(Modifier.height(4.dp))
-                CellLabel(label = label, metrics = metrics)
+                Spacer(modifier = Modifier.height(4.dp))
+                CellLabel(
+                    label = label,
+                    metrics = metrics
+                )
             }
         }
     }

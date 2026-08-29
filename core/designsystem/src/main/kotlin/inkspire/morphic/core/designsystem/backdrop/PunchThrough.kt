@@ -56,7 +56,12 @@ fun PunchThroughLayer(
                 .fillMaxSize()
                 .drawWithContent {
                     drawIntoCanvas { canvas ->
-                        canvas.withSaveLayer(bounds = size.toRect(), paint = Paint()) { drawContent() }
+                        canvas.withSaveLayer(
+                            bounds = size.toRect(),
+                            paint = Paint()
+                        ) {
+                            drawContent()
+                        }
                     }
                 }
                 // **After `drawWithContent`, which is what makes it part of what the layer captures.** Painted

@@ -70,10 +70,13 @@ fun AppIcon(
     // absence of a plate.
     val zoom = if (appearance.plate.enabled && !plated) 1f else appearance.zoom
 
-    Box(modifier, contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
         if (plated) {
             Spacer(
-                Modifier
+                modifier = Modifier
                     .matchParentSize()
                     .shapeMask(appearance.plate.shape)
                     .wallpaperBackdrop(

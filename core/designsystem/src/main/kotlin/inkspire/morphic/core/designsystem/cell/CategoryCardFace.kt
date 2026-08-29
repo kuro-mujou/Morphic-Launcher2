@@ -105,7 +105,10 @@ fun CategoryCardFace(
 ) {
     val colors = LocalMorphicColors.current
     val shape: Shape = RoundedCornerShape(chrome.cornerRadiusDp.dp)
-    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         // **The tile is the square, and the background is the tile's** — the title sits below it, outside the fill.
         // `aspectRatio` before `padding`, so the icon area *including* its outer padding is the square: a user
         // widening that padding then shrinks the icons inside a block whose footprint does not move, which is what
@@ -128,13 +131,15 @@ fun CategoryCardFace(
                 repeat(CategoryPreviewCols) { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                         repeat(CategoryPreviewCols) { col ->
-                            Box(Modifier.size(size)) { slot(row * CategoryPreviewCols + col, size) }
+                            Box(modifier = Modifier.size(size)) {
+                                slot(row * CategoryPreviewCols + col, size)
+                            }
                         }
                     }
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = title,
             style = cardTitleStyle(chrome),

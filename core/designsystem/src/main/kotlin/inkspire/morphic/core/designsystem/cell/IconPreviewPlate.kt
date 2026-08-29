@@ -80,10 +80,21 @@ fun IconPreviewPlate(
 
 /** One row of the 2×2 preview: two icon slots (or empty spacers) sized to [slot]. */
 @Composable
-private fun PreviewRow(left: AppInfo?, right: AppInfo?, slot: Dp, gap: Dp) {
+private fun PreviewRow(
+    left: AppInfo?,
+    right: AppInfo?,
+    slot: Dp,
+    gap: Dp
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-        PreviewIcon(left, slot)
-        PreviewIcon(right, slot)
+        PreviewIcon(
+            app = left,
+            slot = slot
+        )
+        PreviewIcon(
+            app = right,
+            slot = slot
+        )
     }
 }
 
@@ -91,7 +102,7 @@ private fun PreviewRow(left: AppInfo?, right: AppInfo?, slot: Dp, gap: Dp) {
 @Composable
 private fun PreviewIcon(app: AppInfo?, slot: Dp) {
     if (app == null) {
-        Box(Modifier.size(slot))
+        Box(modifier = Modifier.size(slot))
         return
     }
     val sizePx = with(LocalDensity.current) { slot.roundToPx() }

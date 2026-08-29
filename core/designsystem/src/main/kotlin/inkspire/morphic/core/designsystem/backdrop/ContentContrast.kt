@@ -119,7 +119,10 @@ fun resolveFilm(effect: BackdropEffect, wallpaperLuminance: Float?, fallback: Bo
 @Composable
 fun OnFilm(content: @Composable () -> Unit) {
     LauncherTheme(darkTheme = filmIsDark()) {
-        CompositionLocalProvider(LocalOverFrost provides true, content = content)
+        CompositionLocalProvider(
+            value = LocalOverFrost provides true,
+            content = content
+        )
     }
 }
 
@@ -150,6 +153,9 @@ fun OnPanel(content: @Composable () -> Unit) {
         isDarkBackground(washedLuminance(backdrop.luminance, backdropTint()))
     }
     LauncherTheme(darkTheme = dark) {
-        CompositionLocalProvider(LocalOverFrost provides true, content = content)
+        CompositionLocalProvider(
+            value = LocalOverFrost provides true,
+            content = content
+        )
     }
 }

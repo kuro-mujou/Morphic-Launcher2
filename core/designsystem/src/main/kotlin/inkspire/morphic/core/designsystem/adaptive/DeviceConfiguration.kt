@@ -9,9 +9,7 @@ import inkspire.morphic.core.model.DeviceConfiguration
  * Maps a [WindowSizeClass] to a [DeviceConfiguration]. Width decides phone vs tablet; a short height at any
  * width is treated as a phone in landscape.
  */
-fun DeviceConfiguration.Companion.fromWindowSizeClass(
-    windowSizeClass: WindowSizeClass,
-): DeviceConfiguration {
+fun DeviceConfiguration.Companion.fromWindowSizeClass(windowSizeClass: WindowSizeClass): DeviceConfiguration {
     val width = windowSizeClass.minWidthDp
     val height = windowSizeClass.minHeightDp
     return when {
@@ -30,5 +28,4 @@ fun DeviceConfiguration.Companion.fromWindowSizeClass(
 /** The current [DeviceConfiguration], derived from the active window's adaptive info. */
 @Composable
 @Suppress("DEPRECATION")
-fun currentDeviceConfiguration(): DeviceConfiguration =
-    DeviceConfiguration.fromWindowSizeClass(currentWindowAdaptiveInfo().windowSizeClass)
+fun currentDeviceConfiguration(): DeviceConfiguration = DeviceConfiguration.fromWindowSizeClass(currentWindowAdaptiveInfo().windowSizeClass)

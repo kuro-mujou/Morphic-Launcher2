@@ -55,8 +55,20 @@ fun AddAppsCell(
                 val mid = size.minDimension / 2f
                 val arm = size.minDimension * 0.4f
                 val stroke = size.minDimension * 0.12f
-                drawLine(colors.content, Offset(mid - arm, mid), Offset(mid + arm, mid), stroke, StrokeCap.Round)
-                drawLine(colors.content, Offset(mid, mid - arm), Offset(mid, mid + arm), stroke, StrokeCap.Round)
+                drawLine(
+                    color = colors.content,
+                    start = Offset(mid - arm, mid),
+                    end = Offset(mid + arm, mid),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = colors.content,
+                    start = Offset(mid, mid - arm),
+                    end = Offset(mid, mid + arm),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
             }
         }
     }

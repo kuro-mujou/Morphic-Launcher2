@@ -401,7 +401,12 @@ private fun tintOf(effect: BackdropEffect, tone: Color): Color = when (effect) {
  * *kept* in the model meanwhile — same as `customTintArgb` — so choosing a color again returns to the wash the user had.
  */
 internal fun BackdropEffect.Blur.wash(tone: Color): Color =
-    if (tint == BackdropTint.NONE) Color.Transparent else tint.washColor(tone, customTintArgb).copy(alpha = tintAmount)
+    if (tint == BackdropTint.NONE) {
+        Color.Transparent
+    } else {
+        tint.washColor(tone, customTintArgb)
+            .copy(alpha = tintAmount)
+    }
 
 /**
  * **What color a [BackdropTint] actually is**, opaque — the alpha is [BackdropEffect.Blur.tintAmount]'s and applied by
@@ -511,9 +516,7 @@ private class BackdropNode(
     private var wallpaperTone: Color,
     private var refracts: Boolean,
     private var role: BackdropRole,
-) : Modifier.Node(),
-    DrawModifierNode,
-    GlobalPositionAwareModifierNode {
+) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode {
 
     private var topLeft = Offset.Zero
     private val screenLoc = IntArray(2)
@@ -619,8 +622,7 @@ private class BackdropNode(
         outline: Outline,
     ) {
         val cornerPx = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f
-        val refractionHeight = (effect.depth * GLASS_MAX_DEPTH_DP.dp.toPx())
-            .coerceAtMost(minOf(size.width, size.height) * 0.5f)
+        val refractionHeight = (effect.depth * GLASS_MAX_DEPTH_DP.dp.toPx()).coerceAtMost(minOf(size.width, size.height) * 0.5f)
         val refractionAmount = effect.refraction * GLASS_MAX_REFRACTION_DP.dp.toPx()
         val glass = liquidGlass ?: LiquidGlass().also { liquidGlass = it }
         drawPath(

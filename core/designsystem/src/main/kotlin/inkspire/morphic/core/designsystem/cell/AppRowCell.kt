@@ -211,7 +211,7 @@ fun AppRowCell(
     labelColor: Color? = null,
 ) {
     val colors = LocalMorphicColors.current
-    BoxWithConstraints(modifier) {
+    BoxWithConstraints(modifier = modifier) {
         // The icon is bounded by the row's inner box on both axes; in practice the height wins, since a row is
         // far wider than it is tall. Clamped again to that height so a short row can't be overflowed by the
         // metrics' lower guardrail.
@@ -304,7 +304,7 @@ fun ActionRowCell(
     mark: @Composable (size: Dp) -> Unit,
 ) {
     val colors = LocalMorphicColors.current
-    BoxWithConstraints(modifier) {
+    BoxWithConstraints(modifier = modifier) {
         val innerHeight = (maxHeight - 8.dp * 2).coerceAtLeast(0.dp)
         val iconSize = metrics
             .resolveIconSize(availWidth = maxWidth - 8.dp * 2, availHeight = innerHeight)
@@ -317,7 +317,7 @@ fun ActionRowCell(
         ) {
             if (metrics.showIcon) {
                 mark(iconSize)
-                Spacer(Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(16.dp))
             }
             Text(
                 text = label,

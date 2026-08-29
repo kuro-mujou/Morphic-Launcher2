@@ -24,7 +24,15 @@ fun FolderCell(
     metrics: IconMetrics = LocalIconMetrics.current,
     itemGestures: Modifier = Modifier,
 ) {
-    IconLabelCell(label = label, modifier = modifier, metrics = metrics, itemGestures = itemGestures) { iconSize ->
-        IconPreviewPlate(apps = apps, size = iconSize)
+    IconLabelCell(
+        label = label,
+        modifier = modifier,
+        metrics = metrics,
+        itemGestures = itemGestures
+    ) { iconSize ->
+        IconPreviewPlate(
+            apps = apps,
+            size = iconSize
+        )
     }
 }

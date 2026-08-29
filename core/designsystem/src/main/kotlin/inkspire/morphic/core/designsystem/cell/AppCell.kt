@@ -23,7 +23,12 @@ fun AppCell(
     metrics: IconMetrics = LocalIconMetrics.current,
     itemGestures: Modifier = Modifier,
 ) {
-    IconLabelCell(label = app.label, modifier = modifier, metrics = metrics, itemGestures = itemGestures) { iconSize ->
+    IconLabelCell(
+        label = app.label,
+        modifier = modifier,
+        metrics = metrics,
+        itemGestures = itemGestures
+    ) { iconSize ->
         val sizePx = with(LocalDensity.current) { iconSize.roundToPx() }
         AppIcon(
             component = app.componentKey,
