@@ -665,7 +665,11 @@ internal fun HomePagerSurface(
         )
         val geo = geometry
         val span = geo?.let {
-            WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, config)
+            WidgetSpan.forWidget(
+                bound.targetCols, bound.targetRows,
+                bound.minWidthPx, bound.minHeightPx,
+                it.cellW, it.cellH, config,
+            )
         }
         val at = span?.let { viewModel.placeWidget(widget = info, span = it, zone = HomeZone.MAIN, config = config) }
         pageToReveal = at?.page

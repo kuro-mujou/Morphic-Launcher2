@@ -34,6 +34,44 @@ data class WidgetSpan(val colSpan: Int, val rowSpan: Int) {
     companion object {
 
         /**
+         * The footprint a provider is placed at — **the size it declares, if it declares one, and a size derived
+         * from its minimums otherwise.**
+         *
+         * Android 12 let a provider state its default size directly, in cells: [targetCols] × [targetRows]
+         * (`targetCellWidth`/`targetCellHeight`). That is the widget saying "I am 2 × 2", and it is what a user
+         * reads in the picker — so when it is present it wins outright, turned into logical cells by the multiplier
+         * and clamped to the grid. Deriving a span from the minimum pixels instead is what made the picker's "2 × 2"
+         * land as a taller footprint on home: `ceil(minHeight / cellHeight)` answers a different question (the
+         * fewest cells the widget *fits* in) than the one the provider already answered (the size it *wants*), and
+         * on a grid whose cells are not the provider's the two disagree by a cell.
+         *
+         * [forMinSize] is the fallback, for a provider too old to state a target or one that leaves it at zero. Both
+         * clamp **down** to the grid, which is the "resize it to fit" case: a widget larger than the screen lands at
+         * the largest footprint that could be placed, and the view is then told that size and re-lays itself out.
+         *
+         * The same function feeds the picker and every home surface, so the number the label prints and the number
+         * the placement searches for cannot drift — the drift this fixes.
+         */
+        fun forWidget(
+            targetCols: Int,
+            targetRows: Int,
+            minWidthPx: Int,
+            minHeightPx: Int,
+            cellWidthPx: Float,
+            cellHeightPx: Float,
+            config: GridConfig,
+        ): WidgetSpan? {
+            if (targetCols > 0 && targetRows > 0) {
+                val multiplier = config.cellMultiplier.coerceAtLeast(1)
+                return WidgetSpan(
+                    colSpan = (targetCols * multiplier).coerceIn(multiplier, config.cols),
+                    rowSpan = (targetRows * multiplier).coerceIn(multiplier, config.rows),
+                )
+            }
+            return forMinSize(minWidthPx, minHeightPx, cellWidthPx, cellHeightPx, config)
+        }
+
+        /**
          * The smallest span that holds a widget whose provider states [minWidthPx] × [minHeightPx], on a grid of
          * [config] whose cells measure [cellWidthPx] × [cellHeightPx].
          *

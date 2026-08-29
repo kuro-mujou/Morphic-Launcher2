@@ -101,6 +101,8 @@ internal class DefaultWidgetCatalog(
                     component = info.provider,
                     label = info.loadLabel(packageManager).orEmpty(),
                     preview = info.preview(densityDpi),
+                    targetCols = info.targetCols(),
+                    targetRows = info.targetRows(),
                     minWidthPx = info.minWidth,
                     minHeightPx = info.minHeight,
                 )

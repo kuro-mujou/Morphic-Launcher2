@@ -17,14 +17,20 @@ import android.graphics.Bitmap
  * @property preview the artwork the app publishes for this widget, already rasterized at the device density, or
  *   null when it publishes neither a preview nor an icon. A [Bitmap] in a data model for `AppShortcut`'s reason:
  *   it is someone else's artwork, read fresh for a sheet that is about to be shown and thrown away when it closes.
- * @property minWidthPx the smallest size the provider says it can be drawn at, in pixels — what the picker turns
- *   into a "4 × 2" label against whichever grid the widget would land on, and what the placement slice will size
- *   its footprint from. Left in the platform's own units because only the grid knows what a cell is.
+ * @property targetCols the default width the provider declares **in cells** (`targetCellWidth`, Android 12+), or
+ *   0 when it declares none. This is the widget's own answer to "how big am I", so it is preferred over the
+ *   min-pixel derivation when placing — see `WidgetSpan.forWidget`.
+ * @property targetRows the default height in cells, the same way.
+ * @property minWidthPx the smallest size the provider says it can be drawn at, in pixels — the fallback the picker
+ *   turns into a "4 × 2" label when no target is declared, and what the placement sizes from then. Left in the
+ *   platform's own units because only the grid knows what a cell is.
  */
 data class WidgetProvider(
     val component: ComponentName,
     val label: String,
     val preview: Bitmap?,
+    val targetCols: Int,
+    val targetRows: Int,
     val minWidthPx: Int,
     val minHeightPx: Int,
 )

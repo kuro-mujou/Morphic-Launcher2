@@ -287,7 +287,11 @@ internal fun HomeListSurface(
     val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
         val geo = areaGeometry
         val span = geo?.let {
-            WidgetSpan.forMinSize(bound.minWidthPx, bound.minHeightPx, it.cellW, it.cellH, areaConfig)
+            WidgetSpan.forWidget(
+                bound.targetCols, bound.targetRows,
+                bound.minWidthPx, bound.minHeightPx,
+                it.cellW, it.cellH, areaConfig,
+            )
         }
         // **Nothing to reveal here, unlike the pager's**, and that is a property of the zone rather than an omission:
         // the widget area is one grid drawn all at once, so a widget it accepts is already on screen. What it can do

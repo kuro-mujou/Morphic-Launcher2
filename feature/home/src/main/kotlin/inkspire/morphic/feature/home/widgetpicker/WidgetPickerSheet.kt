@@ -102,9 +102,9 @@ import org.koin.androidx.compose.koinViewModel
  *   the widget area on the other — and each surface already knows its own. **Null when there is no grid to land
  *   on**, which is the widget container's case: every page of a container fills the container, so a footprint would
  *   be a promise nothing keeps.
- * @param cellWidthPx the measured cell size of that grid; a widget's span is its stated minimum divided by this.
- *   Zero before the surface has been measured, which [WidgetSpan.forMinSize] answers with no label at all rather
- *   than a wrong one.
+ * @param cellWidthPx the measured cell size of that grid; a widget's span is its declared cell size, or its stated
+ *   minimum divided by this when it declares none. Zero before the surface has been measured, which
+ *   [WidgetSpan.forWidget] answers with no label at all rather than a wrong one.
  * @param onAddWidget **null while nothing can place a widget yet**, which hides the Add button rather than
  *   disabling it — the same nullable-lambda shape `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
@@ -775,7 +775,9 @@ private fun spanOf(
     cellHeightPx: Float,
 ): WidgetSpan? {
     if (grid == null) return null
-    return WidgetSpan.forMinSize(
+    return WidgetSpan.forWidget(
+        targetCols = provider.targetCols,
+        targetRows = provider.targetRows,
         minWidthPx = provider.minWidthPx,
         minHeightPx = provider.minHeightPx,
         cellWidthPx = cellWidthPx,

@@ -42,6 +42,34 @@ class WidgetSpanTest {
         assertEquals(WidgetSpan(8, 10), spanFor(5_000, 5_000))
     }
 
+    private fun widgetSpan(targetCols: Int, targetRows: Int, minWidthPx: Int = 400, minHeightPx: Int = 200) =
+        WidgetSpan.forWidget(targetCols, targetRows, minWidthPx, minHeightPx, cell, cell, config)
+
+    @Test
+    fun `a declared target size wins over the min-pixel derivation`() {
+        // The widget says "2 x 2 cells", so it lands at 2 visual cells regardless of what its minimums would round
+        // to. 2 visual cells is 4 logical, on a multiplier-2 grid.
+        assertEquals(WidgetSpan(4, 4), widgetSpan(targetCols = 2, targetRows = 2, minWidthPx = 401, minHeightPx = 201))
+    }
+
+    @Test
+    fun `no declared target falls back to the min-pixel span`() {
+        assertEquals(spanFor(400, 200), widgetSpan(targetCols = 0, targetRows = 0))
+    }
+
+    @Test
+    fun `a target larger than the grid is clamped to it`() {
+        assertEquals(WidgetSpan(8, 10), widgetSpan(targetCols = 20, targetRows = 20))
+    }
+
+    @Test
+    fun `a target survives an unmeasured grid, since cells do not enter into it`() {
+        assertEquals(
+            WidgetSpan(4, 4),
+            WidgetSpan.forWidget(2, 2, 400, 200, cellWidthPx = 0f, cellHeightPx = 0f, config = config),
+        )
+    }
+
     @Test
     fun `an unmeasured grid answers nothing`() {
         assertNull(WidgetSpan.forMinSize(400, 200, cellWidthPx = 0f, cellHeightPx = cell, config = config))
