@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home.containersettings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,15 +23,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,15 +47,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.backdrop.PunchThroughLayer
 import inkspire.morphic.core.designsystem.backdrop.punchThroughHole
@@ -180,8 +183,14 @@ private fun ContainerSettingsContent(
     // the value never flickers back through the round trip. `AppCollectionOverlay`'s `orderOverride` is the same
     // shape for the same reason.
     var scaleOverride by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // The widget list's drag-reorder — the screen's other optimistic layer, and for the stronger version of the
+    // same reason: a dragged row has to stay under the finger holding it. See [WidgetReorderState].
+    val reorder = rememberWidgetReorder()
     val storedScales = (state.settings as? ContainerSettings.Icon)?.let { it.iconScalePercent to it.spacingScalePercent }
     LaunchedEffect(storedScales) { if (scaleOverride == storedScales) scaleOverride = null }
+    val storedWidgets = (state.settings as? ContainerSettings.Widget)?.widgets
+    LaunchedEffect(storedWidgets) { storedWidgets?.let(reorder::settled) }
     val shownScales = scaleOverride ?: storedScales
 
     // The add flow, owned here now that the picker is opened from this screen rather than from the surface. The
@@ -264,9 +273,10 @@ private fun ContainerSettingsContent(
 
                     containerContents(
                         settings = state.settings,
+                        reorder = reorder,
                         onRemoveIcon = viewModel::removeIcon,
                         onRemoveWidget = viewModel::removeWidget,
-                        onMoveWidget = viewModel::moveWidget,
+                        onReorderWidgets = viewModel::reorderWidgets,
                     )
                 }
             }
@@ -399,9 +409,10 @@ private fun ContainerOptions(
  */
 private fun LazyListScope.containerContents(
     settings: ContainerSettings?,
+    reorder: WidgetReorderState,
     onRemoveIcon: (IconItem) -> Unit,
     onRemoveWidget: (Int) -> Unit,
-    onMoveWidget: (Int, Boolean) -> Unit,
+    onReorderWidgets: (List<Int>) -> Unit,
 ) {
     when (settings) {
         // Not yet, or gone. The chrome around this is drawn either way, so neither flashes an error — see
@@ -411,16 +422,36 @@ private fun LazyListScope.containerContents(
             IconContentRow(icon = icon, onRemove = { onRemoveIcon(icon.asIconItem()) })
         }
 
-        is ContainerSettings.Widget ->
-            itemsIndexed(settings.widgets, key = { _, widget -> widget.appWidgetId }) { index, widget ->
+        is ContainerSettings.Widget -> {
+            val shown = reorder.shown(settings.widgets)
+            items(shown, key = { it.appWidgetId }) { widget ->
+                val dragging = reorder.dragged == widget.appWidgetId
                 WidgetContentRow(
                     widget = widget,
-                    canMoveUp = index > 0,
-                    canMoveDown = index < settings.widgets.lastIndex,
-                    onMove = { up -> onMoveWidget(widget.appWidgetId, up) },
+                    dragging = dragging,
+                    onDragStart = { reorder.begin(widget.appWidgetId, settings.widgets) },
+                    onDrag = reorder::drag,
+                    onDragEnd = { reorder.drop(settings.widgets)?.let(onReorderWidgets) },
+                    onDragCancel = reorder::cancel,
                     onRemove = { onRemoveWidget(widget.appWidgetId) },
+                    // **The dragged row is placed by hand and the rest are animated**, which is the whole of the
+                    // motion: the one under the finger follows it exactly (no spring may lag a held row), and the
+                    // ones it passes slide into the places the swap already gave them. `zIndex` so it crosses over
+                    // them rather than under.
+                    modifier = Modifier
+                        .onSizeChanged { reorder.measureRow(it.height) }
+                        .then(
+                            if (dragging) {
+                                Modifier
+                                    .zIndex(1f)
+                                    .graphicsLayer { translationY = reorder.offset }
+                            } else {
+                                Modifier.animateItem()
+                            },
+                        ),
                 )
             }
+        }
     }
 }
 
@@ -741,25 +772,48 @@ private fun <T> ChooserDialog(
 }
 
 /**
- * One step of a reorder — an arrow that grays at the end of the list rather than disappearing.
+ * The grab bar a row is reordered by.
  *
- * The tint is stated rather than left to M3's disabled alpha, so the two states are the palette's own
- * `contentMuted` and `contentDisabled` and read the same in both themes.
+ * **Every callback is read through `rememberUpdatedState`**, which is load-bearing rather than tidy and is the
+ * studio rail's lesson exactly: `pointerInput(Unit)` runs its block *once*, so a lambda referenced directly inside
+ * it stays the one built by the first composition — here that would be a drag committing against the list as it was
+ * when the screen opened. Keying the `pointerInput` on the list instead would restart the block on the drag's own
+ * first frame and cancel the gesture that changed it.
+ *
+ * The drag is **consumed**, which is what keeps the list from scrolling under it: a child is dispatched before its
+ * ancestors on the main pass, so the scroller sees a change already spoken for.
  */
 @Composable
-private fun MoveButton(
-    icon: ImageVector,
+private fun DragHandle(
     contentDescription: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(40.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (enabled) colors.contentMuted else colors.contentDisabled,
-        )
+    val currentStart by rememberUpdatedState(onDragStart)
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentEnd by rememberUpdatedState(onDragEnd)
+    val currentCancel by rememberUpdatedState(onDragCancel)
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { currentStart() },
+                    onDragEnd = { currentEnd() },
+                    onDragCancel = { currentCancel() },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        currentDrag(amount.y)
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Filled.DragHandle, contentDescription = contentDescription, tint = colors.contentMuted)
     }
 }
 
@@ -790,43 +844,44 @@ private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
  * to drag onto, and the thing being ordered is the page sequence. This list is where that sequence is visible, so
  * this is where it is changed.
  *
- * **Two buttons rather than a drag**, which is the icon studio's answer to the same question and its reason: a
- * disabled button says which move is impossible *before* it is attempted, where a refused drag does nothing and
- * cannot explain itself. Here the impossible moves are exactly the two ends, so the first row's up and the last
- * row's down are the list's own boundary, drawn.
+ * **A handle, dragged**, where this first shipped as a pair of move-up/move-down buttons. The buttons were the
+ * icon studio's answer to the same question and they answer it well — a disabled one says which move is impossible
+ * before it is attempted — but two of them plus the remove button is three targets on a row whose whole content is
+ * a name, and the clutter is what a reader sees first. A handle is one target and says "hold me" without a word;
+ * what it gives up is the studio's argument, and the list's ends are still legible because a row simply stops
+ * moving when there is nothing past it.
  *
- * They are **disabled rather than absent**, against the launcher's usual rule for a verb with no op behind it: the
- * three trailing buttons are a column down the list, and dropping one from the first row would slide the other two
- * sideways — moving the target a finger is aiming at, on the row it is aiming at it from.
+ * **The handle rather than the row**, which is the rail's reason one screen over: the row is not otherwise
+ * draggable, but it sits in a list that scrolls, so a drag begun anywhere on it would have to be told from a scroll
+ * by direction and would lose that argument on a diagonal. A grab bar has nothing else to mean.
  */
 @Composable
 private fun WidgetContentRow(
     widget: WidgetInfo,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMove: (up: Boolean) -> Unit,
+    dragging: Boolean,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
     val label = widget.label.ifBlank { UnnamedWidget }
     ContentRow(
         label = label,
         onRemove = onRemove,
-        trailing = {
-            MoveButton(
-                icon = Icons.Filled.KeyboardArrowUp,
-                contentDescription = "Move $label up",
-                enabled = canMoveUp,
-                onClick = { onMove(true) },
-            )
-            MoveButton(
-                icon = Icons.Filled.KeyboardArrowDown,
-                contentDescription = "Move $label down",
-                enabled = canMoveDown,
-                onClick = { onMove(false) },
-            )
-        },
+        // A row under the finger is lifted off the list it is crossing; the rest of the screen is flat, so the lift
+        // is a fill rather than a shadow.
+        modifier = modifier.background(if (dragging) colors.surfaceElevated else Color.Transparent),
     ) {
+        DragHandle(
+            contentDescription = "Reorder $label",
+            onDragStart = onDragStart,
+            onDrag = onDrag,
+            onDragEnd = onDragEnd,
+            onDragCancel = onDragCancel,
+        )
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -849,12 +904,13 @@ private fun WidgetContentRow(
 private fun ContentRow(
     label: String,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
     trailing: @Composable () -> Unit = {},
     leading: @Composable () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(64.dp)
             .padding(horizontal = 24.dp),
