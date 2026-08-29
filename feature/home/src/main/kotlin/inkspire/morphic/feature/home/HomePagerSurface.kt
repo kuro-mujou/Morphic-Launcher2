@@ -36,6 +36,7 @@ import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
 import inkspire.morphic.core.designsystem.drag.FloatingDragIcon
+import inkspire.morphic.core.designsystem.drag.GrabCenter
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
@@ -330,7 +331,7 @@ internal fun HomePagerSurface(
     // would then have had to know about the APPS drawer too. A planner now travels with the zone that answers it, so
     // the folder's arm went to `AppCollectionOverlay` and these two are the whole of home's.
     val mainPlanner = remember(config) {
-        DropPlanner { item, fingerInRoot ->
+        DropPlanner { item, fingerInRoot, grabInItem ->
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             planCoordinateDrop(
@@ -341,11 +342,12 @@ internal fun HomePagerSurface(
                 item = item,
                 span = liveSpanOf.value(item, config),
                 fingerInRoot = fingerInRoot,
+                grabInItem = grabInItem,
             )
         }
     }
     val dockPlanner = remember(dockConfig) {
-        DropPlanner { item, fingerInRoot ->
+        DropPlanner { item, fingerInRoot, grabInItem ->
             val geo = dockGeometry ?: return@DropPlanner null
             planCoordinateDrop(
                 geo = geo,
@@ -355,6 +357,7 @@ internal fun HomePagerSurface(
                 item = item,
                 span = liveSpanOf.value(item, dockConfig),
                 fingerInRoot = fingerInRoot,
+                grabInItem = grabInItem,
             )
         }
     }
@@ -892,10 +895,19 @@ internal fun HomePagerSurface(
                 draggedIconContainer != null || draggedWidgetContainer != null
             if (hasProxy && folderHost.openCollectionId == null) {
                 val finger = session.fingerInRoot
+                // **A cell-filling item is placed under the grab; an icon under the finger's centre.** A widget or
+                // a container *is* its footprint, so grabbing one near an edge and centring the proxy on the finger
+                // jumps it half a cell the instant the drag begins — the glitch this fixes. An app or a folder is
+                // grabbed by a small centred icon, so `grabInItem` is near centre for it anyway; forcing the centre
+                // keeps it exactly where it was and cannot drift if that small target is ever off-centre.
+                val grab = when (session.item) {
+                    is GridItem.Widget, is GridItem.WidgetContainer, is GridItem.IconContainer -> session.grabInItem
+                    is GridItem.App, is GridItem.Folder -> GrabCenter
+                }
                 FloatingDragIcon(
                     rootOffset = IntOffset(
-                        (finger.x - footprintW / 2f).roundToInt(),
-                        (finger.y - footprintH / 2f).roundToInt(),
+                        (finger.x - grab.x * footprintW).roundToInt(),
+                        (finger.y - grab.y * footprintH).roundToInt(),
                     ),
                     size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
                 ) {

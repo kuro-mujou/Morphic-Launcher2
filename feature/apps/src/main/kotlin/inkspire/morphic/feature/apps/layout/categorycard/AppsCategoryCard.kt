@@ -209,7 +209,7 @@ fun AppsCategoryCard(
     var hoveredCategoryId by remember { mutableStateOf<String?>(null) }
 
     val planner = remember {
-        DropPlanner { _, fingerInRoot ->
+        DropPlanner { _, fingerInRoot, _ ->
             val card = cardAt(fingerInRoot)
             hoveredCategoryId = card
             // No card under the finger means no landing exists, not "land where you are": every app is filed in some

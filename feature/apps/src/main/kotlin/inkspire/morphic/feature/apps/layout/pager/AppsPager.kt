@@ -202,7 +202,7 @@ fun AppsPager(
     var mergeTarget by remember { mutableStateOf<AppsItem?>(null) }
 
     val planner = remember(config) {
-        DropPlanner { item, fingerInRoot ->
+        DropPlanner { item, fingerInRoot, _ ->
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             val stored = livePages.value.getOrNull(page).orEmpty()

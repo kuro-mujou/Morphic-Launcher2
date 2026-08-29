@@ -58,8 +58,8 @@ internal fun Modifier.appsItemGestures(
         onOpen = { onOpen() },
         onShowMenu = { anchor -> showMenu(app, anchor) },
         onEdgeAction = {},
-        onBeginDrag = { root ->
-            coordinator.start(GridItem.App(component), root)
+        onBeginDrag = { root, grab ->
+            coordinator.start(GridItem.App(component), root, grab)
             eject?.invoke()
         },
         onDragTo = coordinator::moveTo,

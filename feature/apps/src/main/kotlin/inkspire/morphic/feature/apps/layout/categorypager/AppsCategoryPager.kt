@@ -173,7 +173,7 @@ fun AppsCategoryPager(
     var gapPage by remember { mutableIntStateOf(-1) }
 
     val planner = remember(cols) {
-        DropPlanner { item, fingerInRoot ->
+        DropPlanner { item, fingerInRoot, _ ->
             val page = pagerState.currentPage
             val geo = geometries[page] ?: return@DropPlanner null
             val stored = liveCategories.value.getOrNull(page)?.apps.orEmpty().map { GridItem.App(it.componentKey) }

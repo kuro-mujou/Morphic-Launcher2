@@ -38,9 +38,12 @@ data class GridGeometry(
      * rather than defaulted, because its only ever use was that mistake and a parameter is an invitation to repeat
      * it. A surface that genuinely wants whole-cell alignment can round the result itself and say so.
      */
-    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
-        val topLeftX = fingerInRoot.x - originInRoot.x - colSpan * cellW / 2f
-        val topLeftY = fingerInRoot.y - originInRoot.y - rowSpan * cellH / 2f
+    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int, grabInItem: Offset): Cell {
+        // Offset by *where in the item* the finger grabbed, not by half the footprint — so the shadow snaps under
+        // the proxy, which is drawn by the same grab. `(0.5, 0.5)` is the centred behaviour, which is what an app
+        // or a folder passes and what the footprint did for everything before widgets could be grabbed at an edge.
+        val topLeftX = fingerInRoot.x - originInRoot.x - grabInItem.x * colSpan * cellW
+        val topLeftY = fingerInRoot.y - originInRoot.y - grabInItem.y * rowSpan * cellH
         return Cell(
             row = snapToLattice(topLeftY / cellH, rows - rowSpan),
             col = snapToLattice(topLeftX / cellW, cols - colSpan),

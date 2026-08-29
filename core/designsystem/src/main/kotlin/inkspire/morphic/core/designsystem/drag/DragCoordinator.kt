@@ -20,12 +20,25 @@ import inkspire.morphic.core.model.PlacementPlan
  *
  * @property item what is being dragged (identity, for accept-checks and the eventual commit).
  * @property fingerInRoot the finger position in root/window coordinates.
+ * @property grabInItem **where within the item the finger came down**, as a fraction of the item's own bounds
+ *   (0..1 each axis) — so a proxy can be placed to keep that point under the finger rather than snapping its centre
+ *   there. `(0.5, 0.5)` is the centre, and the default for a lift that reported none. It matters only for an item
+ *   whose touch target *is* its whole footprint: an app or a folder is grabbed by a small centred icon, so its
+ *   grab is near centre anyway, but a widget fills its cell and can be grabbed at an edge — centring the proxy on
+ *   the finger then jumps it half a widget the instant the drag begins.
  * @property activeZone the zone currently under the finger that accepts [item], or null (over a gap/edge).
  * @property plan what dropping now would do in [activeZone]; null when there is no zone or no droppable target.
  */
+/**
+ * The centre of an item in [DragSession.grabInItem]'s fractional coordinates — the grab of an item lifted by a
+ * small centred target (an app, a folder), and the default when a lift reports no grab.
+ */
+val GrabCenter: Offset = Offset(0.5f, 0.5f)
+
 data class DragSession(
     val item: GridItem,
     val fingerInRoot: Offset,
+    val grabInItem: Offset = GrabCenter,
     val activeZone: ZoneId?,
     val plan: PlacementPlan?,
 )
@@ -124,9 +137,15 @@ class DragCoordinator {
         zones.remove(id)
     }
 
-    /** Begins dragging [item] with the finger at [fingerInRoot] (root coordinates), resolving the first plan. */
-    fun start(item: GridItem, fingerInRoot: Offset) {
-        session = DragSession(item, fingerInRoot, activeZone = null, plan = null)
+    /**
+     * Begins dragging [item] with the finger at [fingerInRoot] (root coordinates), resolving the first plan.
+     *
+     * [grabInItem] is the finger's position within the item at lift, as a fraction of its bounds — carried so the
+     * proxy can be placed under the grab rather than under the item's centre; see [DragSession.grabInItem]. Defaults
+     * to the centre for a caller that does not report it.
+     */
+    fun start(item: GridItem, fingerInRoot: Offset, grabInItem: Offset = GrabCenter) {
+        session = DragSession(item, fingerInRoot, grabInItem, activeZone = null, plan = null)
         moveTo(fingerInRoot)
     }
 
@@ -134,7 +153,7 @@ class DragCoordinator {
     fun moveTo(fingerInRoot: Offset) {
         val current = session ?: return
         val zone = activeZoneAt(fingerInRoot, current.item)
-        val plan = zone?.planner?.plan(current.item, fingerInRoot)
+        val plan = zone?.planner?.plan(current.item, fingerInRoot, current.grabInItem)
         session = current.copy(fingerInRoot = fingerInRoot, activeZone = zone?.id, plan = plan)
     }
 

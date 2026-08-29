@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.home
 
 import androidx.compose.ui.geometry.Offset
+import inkspire.morphic.core.designsystem.drag.GrabCenter
 import inkspire.morphic.core.designsystem.grid.Cell
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.GridSpan
@@ -51,6 +52,10 @@ import kotlin.math.abs
  *   plan drew a 1×1 shadow and the `Move` it produced resized the widget to match on drop. The caller reads it
  *   from the item's own placement, which is the only place that knows.
  * @param occupants the zone's items *excluding* [item], already restricted to [page].
+ * @param grabInItem where within the dragged item the finger sits (fraction of its bounds); the footprint is
+ *   snapped so that point lands under the finger, matching the proxy. Defaults to the centre. **Only the footprint
+ *   position uses it** — which occupant is under the finger, and where in it, stay questions about the finger
+ *   itself (you point at a folder's ring to merge into it), so the merge/push reads below keep [fingerInRoot].
  * @return the plan the live drop shadow and the eventual commit both read, or null when there is nothing to plan.
  */
 internal fun planCoordinateDrop(
@@ -61,10 +66,11 @@ internal fun planCoordinateDrop(
     item: GridItem,
     span: GridSpan,
     fingerInRoot: Offset,
+    grabInItem: Offset = GrabCenter,
 ): PlacementPlan {
     // Whatever size the item is, free to land on any logical cell in *position* — see
     // [GridGeometry.snapTopLeftCell] for why the lattice is the logical one rather than the visual one.
-    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span.colSpan, rowSpan = span.rowSpan)
+    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span.colSpan, rowSpan = span.rowSpan, grabInItem = grabInItem)
     val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span.rowSpan, colSpan = span.colSpan)
 
     val target = geo.cellAt(fingerInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }

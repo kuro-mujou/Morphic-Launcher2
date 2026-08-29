@@ -268,7 +268,7 @@ fun AppCollectionOverlay(
                 id = CollectionZoneId,
                 bounds = it,
                 z = 1,
-                planner = { item, finger -> delegate.onHover(item, finger) },
+                planner = { item, finger, _ -> delegate.onHover(item, finger) },
                 accepts = { item -> item is GridItem.App },
                 onDrop = { outcome -> delegate.commitReorder(outcome.item) },
             )

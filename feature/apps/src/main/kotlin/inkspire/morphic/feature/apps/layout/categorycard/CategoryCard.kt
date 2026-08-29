@@ -201,7 +201,7 @@ private fun Modifier.categoryOpenGestures(
     onEdgeAction = {},
     // A card is not draggable: reordering the categories themselves is category management, deferred with the rest of
     // it. An app *inside* an expansion is what drags here.
-    onBeginDrag = {},
+    onBeginDrag = { _, _ -> },
     onDragTo = {},
     onDrop = {},
     onCancelDrag = {},

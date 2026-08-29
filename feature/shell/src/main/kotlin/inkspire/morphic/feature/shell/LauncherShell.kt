@@ -385,7 +385,7 @@ private fun TopActionOverlay(
             // A plan only in DELETE mode, because only there does a release mean anything: a non-null plan is what
             // makes the coordinator dispatch a *landing* rather than treat the release as a cancel. ADD_TO_HOME
             // returns null on purpose — its commit is the dwell, so lifting the finger over it means "never mind".
-            planner = { _, _ -> if (mode == TopActionMode.DELETE) TopActionRemovePlan else null },
+            planner = { _, _, _ -> if (mode == TopActionMode.DELETE) TopActionRemovePlan else null },
             onDrop = { outcome ->
                 when (target) {
                     TopActionTarget.REMOVE -> onRemove(outcome.item)

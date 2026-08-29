@@ -165,7 +165,7 @@ fun LauncherDragCell(
                         onShowInnerMenu(inner.item, Rect(topLeft, inner.bounds.size))
                     }
                 },
-                onBeginDrag = { root -> coordinator.start(pressed?.item ?: item, root) },
+                onBeginDrag = { root, grab -> coordinator.start(pressed?.item ?: item, root, grab) },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },
                 onCancelDrag = { coordinator.cancel() },

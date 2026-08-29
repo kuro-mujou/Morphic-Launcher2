@@ -21,7 +21,7 @@ class DragCoordinatorTest {
     private fun app(name: String): GridItem = GridItem.App(ComponentKey("pkg", name))
 
     /** A planner that always reports the same plan, so tests isolate the coordinator's own routing. */
-    private fun plannerReturning(plan: PlacementPlan?) = DropPlanner { _, _ -> plan }
+    private fun plannerReturning(plan: PlacementPlan?) = DropPlanner { _, _, _ -> plan }
 
     private val placePlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.PLACE)
 

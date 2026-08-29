@@ -251,7 +251,7 @@ internal fun HomeListSurface(
     // (`CoordinateDragGrid` still registers its zone, so an app carried over it falls through to the list beneath
     // rather than being refused on release) — hence the constant `null` one zone over.
     val planner = remember {
-        DropPlanner { item, fingerInRoot ->
+        DropPlanner { item, fingerInRoot, _ ->
             val geo = liveGeometry.value ?: return@DropPlanner null
             val app = (item as? GridItem.App)?.component ?: return@DropPlanner null
             // **An app arriving from the APPS surface is not in this list, so there is no gap to migrate** — it
@@ -432,7 +432,7 @@ internal fun HomeListSurface(
                     acceptsItem = { it is GridItem.Widget || it is GridItem.WidgetContainer },
                     // The same shared planner the pager pairing's two zones use — a zone is described by its
                     // geometry, its dimensions and its occupants, not by an algorithm of its own.
-                    planner = { item, finger ->
+                    planner = { item, finger, grabInItem ->
                         areaGeometry?.let { geo ->
                             planCoordinateDrop(
                                 geo = geo,
@@ -450,6 +450,7 @@ internal fun HomeListSurface(
                                     ?.let { GridSpan(colSpan = it.colSpan, rowSpan = it.rowSpan) }
                                     ?: GridSpan(areaConfig.cellMultiplier, areaConfig.cellMultiplier),
                                 fingerInRoot = finger,
+                                grabInItem = grabInItem,
                             )
                         }
                     },
