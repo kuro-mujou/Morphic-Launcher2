@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings
 
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.SurfaceTransition
 
 /**
  * A human name for an [AppsLayout] — **the settings feature's display vocabulary, in one place**.
@@ -45,4 +46,31 @@ internal val HomeLayout.label: String
     get() = when (this) {
         HomeLayout.PAGER_WITH_DOCK -> "Pages + dock"
         HomeLayout.LIST_WITH_WIDGET_AREA -> "List + widgets"
+    }
+
+/**
+ * A human name for a [SurfaceTransition] — the crossing animation, in the same one place.
+ *
+ * L1's own names, ported: they describe the *motion* a user sees ("Zoom out", "Fade through") rather than the enum
+ * constant, which is the vocabulary rule the rest of this file follows.
+ */
+internal val SurfaceTransition.label: String
+    get() = when (this) {
+        SurfaceTransition.SLIDE -> "Slide"
+        SurfaceTransition.PARALLAX -> "Parallax"
+        SurfaceTransition.ZOOM -> "Zoom out"
+        SurfaceTransition.DEPTH -> "Depth"
+        SurfaceTransition.FADE -> "Fade through"
+        SurfaceTransition.RISE -> "Rise"
+    }
+
+/** One line on what the motion looks like — the picker's subtitle, since the six names alone under-describe them. */
+internal val SurfaceTransition.description: String
+    get() = when (this) {
+        SurfaceTransition.SLIDE -> "The surfaces slide together, following your finger"
+        SurfaceTransition.PARALLAX -> "Home drifts slower than the surface for a sense of depth"
+        SurfaceTransition.ZOOM -> "Home shrinks away as the surface arrives"
+        SurfaceTransition.DEPTH -> "Home tilts and recedes into the distance"
+        SurfaceTransition.FADE -> "A straight cross-fade, no motion"
+        SurfaceTransition.RISE -> "The surface rises up over a stationary home"
     }

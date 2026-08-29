@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceRegister
@@ -53,6 +54,15 @@ class SurfaceRegisterViewModel(
     fun bindApps(edge: HomeEdge, layout: AppsLayout?) {
         val binding = layout?.let(SideBinding::Apps)
         viewModelScope.launch { settingsRepository.setSide(edge, binding) }
+    }
+
+    /**
+     * Sets the crossing animation played between HOME and a side surface — the whole register's one global choice,
+     * unlike the per-edge [bindApps]. `feature:shell` reads the same flow, so the next swipe uses it with nothing to
+     * apply.
+     */
+    fun setTransition(transition: SurfaceTransition) {
+        viewModelScope.launch { settingsRepository.setSurfaceTransition(transition) }
     }
 
     // **No `setHomeLayout` here.** HOME's pairing is written by `SettingsShellViewModel`, beside the read the Home

@@ -1,22 +1,38 @@
 package inkspire.morphic.feature.settings.register
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.feature.settings.SettingsSection
+import inkspire.morphic.feature.settings.label
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -36,11 +52,12 @@ import org.koin.androidx.compose.koinViewModel
  * that the *edges* were the part with a shape, not the options — so the options moved into a modal
  * ([SideBindingPicker]) and the edges got the picture.
  *
- * **HOME's pairing is *not* offered here, and neither is `transition`.** The rule is unchanged — a control appears
- * when the thing it configures exists — but the pairing fails a different test: it would exist twice. A picker on the
- * center card and the segmented control at the head of the Home section are two live controls for one setting, and the
- * section is where a user goes to change home. So the center card carries only its gear. What this cross keeps is what
- * it is for: **where** surfaces are. `SurfacePager` still implements only `SLIDE`, so the transition stays out.
+ * **HOME's pairing is *not* offered here; the crossing `transition` now is.** The rule is unchanged — a control
+ * appears when the thing it configures exists — but the pairing fails a different test: it would exist twice. A picker
+ * on the center card and the segmented control at the head of the Home section are two live controls for one setting,
+ * and the section is where a user goes to change home. So the center card carries only its gear. The transition has no
+ * such second home: it is a property of the *crossing* between surfaces, which is exactly what the register is about,
+ * so its picker sits under the cross now that `SurfacePager` draws all six.
  *
  * **One picker, hoisted**, rather than one per slot: *which* edge is being filled is this screen's state, so at most one
  * dialog exists whatever the cross is doing.
@@ -57,6 +74,7 @@ internal fun SurfaceRegisterDetail(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     var picking by remember { mutableStateOf<HomeEdge?>(null) }
+    var pickingTransition by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -70,6 +88,17 @@ internal fun SurfaceRegisterDetail(
             onPick = { picking = it },
             onOpenSettings = onOpenSection,
         )
+
+        Spacer(Modifier.height(20.dp))
+
+        // The one setting that belongs to the crossing itself rather than to an edge — so it sits under the cross,
+        // not on it. A row that opens a modal, like the edges do, since six motions each want a line describing them.
+        MorphicGroupPanel {
+            TransitionRow(
+                transition = state.register.transition,
+                onClick = { pickingTransition = true },
+            )
+        }
     }
 
     val edge = picking
@@ -82,6 +111,50 @@ internal fun SurfaceRegisterDetail(
                 picking = null
             },
             onDismiss = { picking = null },
+        )
+    }
+
+    if (pickingTransition) {
+        SurfaceTransitionPicker(
+            selected = state.register.transition,
+            onSelect = { transition ->
+                viewModel.setTransition(transition)
+                pickingTransition = false
+            },
+            onDismiss = { pickingTransition = false },
+        )
+    }
+}
+
+/**
+ * The row that opens the [SurfaceTransitionPicker]: names the setting and shows the [transition] in force, with a
+ * chevron because a tap opens a modal.
+ *
+ * Inline here rather than through `SettingsNavRow`, which is keyed to a `SettingsSection` and resolves its title from
+ * `meta` — this row names a *setting within* a section, not a section, and carries a live value rather than a glyph.
+ */
+@Composable
+private fun TransitionRow(transition: SurfaceTransition, onClick: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Text(
+            text = "Switch animation",
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.content,
+            modifier = Modifier.weight(1f),
+        )
+        Text(text = transition.label, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = colors.contentMuted,
         )
     }
 }

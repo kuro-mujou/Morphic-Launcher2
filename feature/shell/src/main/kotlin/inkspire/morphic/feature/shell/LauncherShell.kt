@@ -91,7 +91,8 @@ import org.koin.compose.koinInject
  * defaults deliberately don't choose an edge, because which edge opens the app list is a product decision and the data
  * layer is not where product decisions should be made quietly.
  *
- * **Still to come**, deferred from `SurfacePager` rather than forgotten: the five transitions beyond SLIDE.
+ * **The crossing animation is a user setting too**, read from the same `SurfaceRegister` and handed to `SurfacePager`
+ * as [inkspire.morphic.core.model.SurfaceTransition]; the Screen manager section is where it is chosen.
  */
 @Composable
 fun LauncherShell(
@@ -242,11 +243,12 @@ fun LauncherShell(
             // A `Box` because the eject band below is a **sibling** of the pager rather than content inside it — see
             // that call. The caller's [modifier] moves out here with the stacking.
             Box(modifier.fillMaxSize()) {
-                // TODO(SurfacePager): `state.register.transition` is read but not applied — only SLIDE is implemented, so
-                //  the other five values are stored and ignored until the transforms land. Deliberately not faked.
                 SurfacePager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
+                    // The user's chosen crossing animation, live from the register — the settings picker writes it and
+                    // this reads the same flow, so a change takes on the next swipe with nothing to apply.
+                    transition = state.register.transition,
                     sideContent = state.register.sides.mapValues { (edge, binding) ->
                         binding.toSurfaceBinding(
                             edge = edge,

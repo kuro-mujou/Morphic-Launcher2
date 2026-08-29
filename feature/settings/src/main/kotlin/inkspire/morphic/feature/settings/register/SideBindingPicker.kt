@@ -1,25 +1,13 @@
 package inkspire.morphic.feature.settings.register
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
@@ -54,14 +42,14 @@ internal fun SideBindingPicker(
         title = { Text("${edge.label} edge") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                PickerRow(
+                RegisterPickerRow(
                     label = "None",
                     subtitle = "This edge is not swipeable",
                     selected = selected == null,
                     onClick = { onSelect(null) },
                 )
                 AppsLayout.entries.forEach { layout ->
-                    PickerRow(
+                    RegisterPickerRow(
                         label = layout.label,
                         subtitle = null,
                         selected = selected == layout,
@@ -76,29 +64,6 @@ internal fun SideBindingPicker(
         titleContentColor = colors.content,
         textContentColor = colors.content,
     )
-}
-
-/** One choice: what it is called, and whether it is the one in force. */
-@Composable
-private fun PickerRow(label: String, subtitle: String?, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalMorphicColors.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .selectable(selected = selected, onClick = onClick)
-            .padding(vertical = 10.dp),
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.contentMuted)
-            }
-        }
-    }
 }
 
 /** The edge's own name, for the dialog title. Sentence case, since it is read as a phrase rather than a heading. */

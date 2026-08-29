@@ -11,10 +11,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.SurfaceTransition
 import kotlin.math.roundToInt
 
 /**
@@ -26,9 +28,10 @@ import kotlin.math.roundToInt
  * [sideContent]'s keys — an edge with no entry can't be opened — and each binding's [SurfaceBinding.swipe]
  * decides whether one finger or two is needed to reach it.
  *
- * **Deliberately minimal.** Only the SLIDE transform is wired (HOME and the side surface translate together, no
- * scale/fade/parallax). That is why the side surfaces are an open `Map<HomeEdge, …>` slot rather than the real
- * HOME/APPS layouts — the harness drops plain boxes in, the shell drops the real screens in.
+ * **Any of the six [SurfaceTransition]s can drive the pan**, chosen by [transition] (SLIDE is offset alone; the rest
+ * add scale, fade, parallax or a depth tilt — see [surfaceSlotTransform]). The side surfaces stay an open
+ * `Map<HomeEdge, …>` slot rather than the real HOME/APPS layouts — the harness drops plain boxes in, the shell drops
+ * the real screens in.
  *
  * **A side slot is composed only while its surface is on screen at all, or while [retainedEdges] holds it.** This
  * used to compose every bound slot at all times, which was invisible with one binding and an ANR with four: each is
@@ -46,6 +49,8 @@ import kotlin.math.roundToInt
  * edge, which is how every surface behaved before this existed.
  *
  * @param state the pan position + operations; also learns the swipeable edges + their finger policy here.
+ * @param transition how HOME and a side surface animate past each other. A single global choice, applied to every
+ *   slot; the caller reads it from settings. Defaults to [SurfaceTransition.SLIDE], which is what the harness wants.
  * @param sideContent the binding for each swipeable edge. Absent edge = not swipeable.
  * @param retainedEdges edges to keep composed regardless of the pan. **The drag toolkit's "keep a source surface
  *   composed while a drag from it is in flight" rule, which the caller owns because only it knows about drags:** an
@@ -64,6 +69,7 @@ import kotlin.math.roundToInt
 fun SurfacePager(
     state: SurfacePagerState,
     modifier: Modifier = Modifier,
+    transition: SurfaceTransition = SurfaceTransition.SLIDE,
     sideContent: Map<HomeEdge, SurfaceBinding> = emptyMap(),
     enabled: () -> Boolean = { true },
     overlay: @Composable () -> Unit = {},
@@ -103,7 +109,7 @@ fun SurfacePager(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .surfaceSlide(state) { centerSlide(state.panX, state.panY) }) {
+                .surfaceTransform(state, transition, edge = null)) {
             // Each slot gets its own channel for "where is my content resting", which is what makes the nested-scroll
             // hand-off work without the shell wiring anything: content calls `ReportScrollEdges` and the gesture reads
             // whichever slot the swipe is crossing. The pager composes the slots, so the pager owns them — rather
@@ -122,7 +128,7 @@ fun SurfacePager(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .surfaceSlide(state) { sideSlide(edge, state.panX, state.panY) }) {
+                    .surfaceTransform(state, transition, edge)) {
                 // **A composed surface is not necessarily an on-screen one**, which is what
                 // [LocalSurfacePresented] exists to say: a slot stays composed through the whole of a pan and, when
                 // [retainedEdges] holds it, for the whole of a drag lifted on it. Anything that must belong to
@@ -140,30 +146,36 @@ fun SurfacePager(
 }
 
 /**
- * Offsets a full-screen surface slot by a [fraction] of the viewport (`1f` == one viewport). The [fraction]
- * lambda — and the viewport size it scales against — are read *inside* [offset]'s layout-phase block, so a pan
- * change re-places the slot without recomposing. Every slot fills the same parent, so the viewport dimensions
- * on [state] are also each slot's own size, threaded rather than read from `size`, which `offset` does not expose.
+ * Places and draws one surface slot for the current pan under [transition] — [edge]'s side surface, or HOME when
+ * [edge] is null. The [SlotTransform] is resolved *inside* the layout- and draw-phase blocks (reading the pan
+ * animatables and the viewport size on [state]), so a pan re-places and re-draws the slot without recomposing.
+ * Every slot fills the same parent, so the viewport dimensions on [state] are also each slot's own size — threaded
+ * rather than read from `size`, which neither [offset] nor [graphicsLayer] exposes here.
+ *
+ * The `graphicsLayer` is chained only when the transition needs one ([SurfaceTransition.usesGraphicsLayer]): SLIDE
+ * moves with offset alone, so it pays for no layer, while the other five scale, fade or tilt.
  */
-private fun Modifier.surfaceSlide(state: SurfacePagerState, fraction: () -> Offset): Modifier = offset {
-    val f = fraction()
-    IntOffset((f.x * state.viewportWidth).roundToInt(), (f.y * state.viewportHeight).roundToInt())
-}
-
-/**
- * Where HOME sits: it simply slides opposite the pan, so panning toward a side surface pushes HOME the other
- * way by the same amount.
- */
-private fun centerSlide(panX: Float, panY: Float): Offset = Offset(-panX, -panY)
-
-/**
- * Where a side surface sits: parked one full viewport off its edge, then slid by the pan so it tracks in as
- * HOME slides out. At rest (pan `0`) each side surface is exactly off-screen; at full pan it covers the
- * viewport. E.g. LEFT starts at `x = -1` and reaches `0` when [panX] hits `-1`.
- */
-private fun sideSlide(edge: HomeEdge, panX: Float, panY: Float): Offset = when (edge) {
-    HomeEdge.LEFT -> Offset(-(1f + panX), -panY)
-    HomeEdge.RIGHT -> Offset(1f - panX, -panY)
-    HomeEdge.TOP -> Offset(-panX, -(1f + panY))
-    HomeEdge.BOTTOM -> Offset(-panX, 1f - panY)
+private fun Modifier.surfaceTransform(
+    state: SurfacePagerState,
+    transition: SurfaceTransition,
+    edge: HomeEdge?,
+): Modifier {
+    val positioned = offset {
+        val t = surfaceSlotTransform(transition, edge, state.panX, state.panY)
+        IntOffset((t.offsetX * state.viewportWidth).roundToInt(), (t.offsetY * state.viewportHeight).roundToInt())
+    }
+    return if (!transition.usesGraphicsLayer()) {
+        positioned
+    } else {
+        positioned.graphicsLayer {
+            val t = surfaceSlotTransform(transition, edge, state.panX, state.panY)
+            scaleX = t.scale
+            scaleY = t.scale
+            alpha = t.alpha
+            rotationX = t.rotationX
+            rotationY = t.rotationY
+            cameraDistance = t.cameraDistance
+            transformOrigin = TransformOrigin(t.pivotX, t.pivotY)
+        }
+    }
 }
