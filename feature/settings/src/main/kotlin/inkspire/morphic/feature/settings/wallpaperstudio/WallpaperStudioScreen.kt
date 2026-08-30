@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -14,17 +15,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +44,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.feature.settings.iconstudio.StudioIconButton
 import org.koin.androidx.compose.koinViewModel
@@ -61,6 +70,10 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     val viewModel: WallpaperStudioViewModel = koinViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
+
+    // Which chooser the bottom bar is showing — the designs or the palettes. UI position, not recipe, so it is
+    // remembered across rotation but never stored.
+    var showColors by rememberSaveable { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
 
@@ -119,35 +132,84 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                 .padding(12.dp),
         )
 
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WallpaperDesign.entries.forEach { design ->
-                    DesignChip(
-                        label = design.label,
-                        selected = design == state.recipe.design,
-                        onClick = { viewModel.pickDesign(design) },
-                    )
+        BottomChooser(
+            showColors = showColors,
+            onToggleColors = { showColors = !showColors },
+            currentDesign = state.recipe.design,
+            currentPaletteColors = state.recipe.palette.colors,
+            onPickDesign = viewModel::pickDesign,
+            onSetPalette = viewModel::setPalette,
+            onShuffle = viewModel::shuffle,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/**
+ * The bottom bar: the color toggle, the chooser it flips between (the designs or the palettes), and the shuffle.
+ *
+ * **One chooser slot, two contents.** The toggle swaps the middle between the design chips and the palette pills
+ * rather than stacking both, so the bar stays one row over the wallpaper. The shuffle re-seeds whichever design is
+ * showing — a new variation, the same for both choosers.
+ */
+@Composable
+private fun BottomChooser(
+    showColors: Boolean,
+    onToggleColors: () -> Unit,
+    currentDesign: WallpaperDesign,
+    currentPaletteColors: List<Int>,
+    onPickDesign: (WallpaperDesign) -> Unit,
+    onSetPalette: (List<Int>) -> Unit,
+    onShuffle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The one toggle between the two choosers — lit while the palettes are showing.
+        StudioIconButton(
+            icon = Icons.Default.Palette,
+            contentDescription = "Colors",
+            onClick = onToggleColors,
+            selected = showColors,
+        )
+        Box(modifier = Modifier.weight(1f)) {
+            if (showColors) {
+                // Lazy, because the bank runs to a couple of hundred palettes — the picker ribbon's reason.
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(ColorPalettes.all, key = { it.name }) { palette ->
+                        PalettePill(
+                            colors = palette.colors,
+                            selected = palette.colors == currentPaletteColors,
+                            onClick = { onSetPalette(palette.colors) },
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    WallpaperDesign.entries.forEach { design ->
+                        DesignChip(
+                            label = design.label,
+                            selected = design == currentDesign,
+                            onClick = { onPickDesign(design) },
+                        )
+                    }
                 }
             }
-            StudioIconButton(
-                icon = Icons.Default.Casino,
-                contentDescription = "Shuffle",
-                onClick = viewModel::shuffle,
-            )
         }
+        StudioIconButton(
+            icon = Icons.Default.Casino,
+            contentDescription = "Shuffle",
+            onClick = onShuffle,
+        )
     }
 }
 
@@ -166,6 +228,28 @@ private fun DesignChip(label: String, selected: Boolean, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelLarge,
             color = if (selected) Color.Black else Color.White,
         )
+    }
+}
+
+/**
+ * One palette in the color chooser — its colors packed into a pill, the whole thing a tap that recolors the design.
+ *
+ * **Tapping applies the *whole* palette, not one swatch** — the difference from the icon picker's ribbon, where each
+ * swatch is its own pick. A wallpaper's generator wants a set of colors, so the pill is one unit. The one showing is
+ * ringed so the chooser says which it is.
+ */
+@Composable
+private fun PalettePill(colors: List<Int>, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .then(if (selected) Modifier.border(2.dp, Color.White, shape) else Modifier)
+            .clickable(onClick = onClick),
+    ) {
+        colors.forEach { swatch ->
+            Box(modifier = Modifier.size(width = 16.dp, height = 34.dp).background(Color(swatch)))
+        }
     }
 }
 

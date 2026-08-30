@@ -75,6 +75,13 @@ class WallpaperStudioViewModel(
         rerender()
     }
 
+    /** Recolor the current design with [colors] — a chosen palette, keeping the design and seed. */
+    fun setPalette(colors: List<Int>) {
+        if (colors == mutableState.value.recipe.palette.colors) return
+        mutableState.update { it.copy(recipe = it.recipe.copy(palette = Palette(colors))) }
+        rerender()
+    }
+
     /**
      * Sets the picture on screen as the system wallpaper, then calls [onApplied].
      *
