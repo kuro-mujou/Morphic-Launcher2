@@ -199,7 +199,11 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   stores-then-applies the on-screen bitmap to HOME+LOCK. Device-verified: design a Flow Field, tap apply, it is the
   launcher's wallpaper. **Deferred:** the Vertical/Squared **aspect toggle**, and undo. The per-generator interpolated
   morph stays deferred; the crossfade is the motion for now.
-- **W3 — color.** The palette strip + suggested palettes + shuffle + lock; the picker's opacity + palette tab.
+- **W3 — color. ✅ core (2026-08-30)** A color chooser in the studio's bottom bar: a palette toggle flips the chooser
+  between the designs and the **191 palettes** (`ColorPalettes.all` — the featured dozen + the harvested cool bank),
+  and tapping a palette recolors the current design with a crossfade (`setPalette` → re-render). Device-verified.
+  **Deferred to a later pass:** an editable per-stop strip, color opacity, a palette **lock** across design changes,
+  and a palette **shuffle**.
 - **W4 — filters.** The `FilterPipeline` panel, reusing the icon effect helpers — Ripple, Pixelate, ProgressiveBlur,
   Grain, Chromatic, Vignette, Color grading first (all reuse), then the new ones (Kaleidoscope, Scanlines, CRT).
 - **W5 — the rest of the generators.** Fill out toward the 22, group by group, each with its Style parameters.
