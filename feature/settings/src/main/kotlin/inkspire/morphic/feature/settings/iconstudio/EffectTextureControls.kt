@@ -25,11 +25,13 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.icon.IconPatterns
+import inkspire.morphic.core.model.icon.DitherKernel
 import inkspire.morphic.core.model.icon.Falloff
 import inkspire.morphic.core.model.icon.IconPattern
 import inkspire.morphic.core.model.icon.LayerEffect
 import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.withEffect
+import kotlin.math.roundToInt
 
 // The controls for the effects that rework a layer's own pixels: a tiled pattern, an extrusion, a chromatic
 // split, the four per-pixel passes — ripple, grain, pixelate and progressive blur — and the glass that bends them.
@@ -208,12 +210,66 @@ internal fun GlassControls(
 }
 
 /**
+ * The layer's colors crushed to a coarse palette and the rounding error scattered — see `LayerEffect.Dither`.
+ *
+ * **Kernel first, because it is the character.** Floyd–Steinberg is the fine classic grain, Atkinson the
+ * high-contrast Macintosh look, Ordered the regular Bayer cross-hatch — the choice a user makes before touching a
+ * number. **Levels** is how coarse the palette is (two is the boldest, eight nearly gone) and **Coarseness** is how
+ * big the grain's cells are.
+ */
+@Composable
+internal fun DitherControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val dither = effects.effectOrNull<LayerEffect.Dither>() ?: LayerEffect.Dither()
+
+    LabeledControl("Kernel") {
+        MorphicSegmentedButtons(
+            options = listOf("Floyd", "Atkinson", "Ordered"),
+            selectedIndex = dither.kernel.ordinal,
+            onSelect = { index ->
+                onUpdate { it.withEffect(dither.copy(kernel = DitherKernel.entries[index])) }
+                onCommit()
+            },
+        )
+    }
+
+    SliderControl(
+        label = "Levels",
+        value = dither.levels.toFloat(),
+        valueRange = 2f..DitherMaxLevels,
+        step = 1f,
+        default = DitherDefaults.levels.toFloat(),
+        format = { "%.0f".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(dither.copy(levels = value.roundToInt())) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Coarseness",
+        value = dither.coarseness,
+        valueRange = DitherCoarsenessFloor..DitherCoarsenessReach,
+        default = DitherDefaults.coarseness,
+        onValueChange = { value -> onUpdate { it.withEffect(dither.copy(coarseness = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
  * How soft the blurred end may get, as a fraction of the box.
  *
  * A tenth already scales the layer down to ten pixels a side before growing it back, which is past the point where
  * anything of the artwork survives — the ceiling is where the control stops doing more rather than where it breaks.
  */
 private const val BlurReach = 0.1f
+
+/** The most palette steps per channel the dither offers — past here the pattern is gone and it is a plain quantize. */
+private const val DitherMaxLevels = 8f
+
+/** The finest and coarsest a dither's cells go, as a fraction of the box — fine grain through chunky blocks. */
+private const val DitherCoarsenessFloor = 0.01f
+private const val DitherCoarsenessReach = 0.12f
 
 /**
  * How far a glass bends the sampling, at most, as a fraction of the box.

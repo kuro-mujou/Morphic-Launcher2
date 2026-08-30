@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BlurLinear
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.BorderOuter
+import androidx.compose.material.icons.filled.Deblur
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.FlipToFront
@@ -292,6 +293,15 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
      * neighbourhood resample like [RIPPLE] and [GRAIN] — so it is baked, never live.
      */
     GLASS("Glass", Icons.Default.WaterDrop, EffectKind.ADDITION),
+
+    /**
+     * The layer's colors crushed to a coarse palette and the rounding error scattered — see `LayerEffect.Dither`.
+     *
+     * **With the per-pixel passes it is one of.** A dither reworks the layer's own pixels — quantized and diffused
+     * on a cell grid — so it is baked, never live, and sits beside [RIPPLE], [GRAIN] and [PIXELATE] rather than with
+     * the color adjustments, even though what it *changes* is color: it is a texture, not a grade.
+     */
+    DITHER("Dither", Icons.Default.Deblur, EffectKind.ADDITION),
     ;
 
     /**
@@ -353,6 +363,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         PIXELATE -> effects.filterIsInstance<LayerEffect.Pixelate>().firstOrNull()
         PROGRESSIVE_BLUR -> effects.filterIsInstance<LayerEffect.ProgressiveBlur>().firstOrNull()
         GLASS -> effects.filterIsInstance<LayerEffect.Glass>().firstOrNull()
+        DITHER -> effects.filterIsInstance<LayerEffect.Dither>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -417,6 +428,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         PIXELATE -> PixelateDefaults
         PROGRESSIVE_BLUR -> ProgressiveBlurDefaults
         GLASS -> GlassDefaults
+        DITHER -> DitherDefaults
     }
 
 }

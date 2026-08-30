@@ -38,8 +38,10 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -421,6 +423,9 @@ class IconRenderer(
                 // because it always has a bend or a sheen to draw — `activeEffects` reaches this arm only then — so
                 // there is never nothing to do and `replace` is always handed a fresh buffer.
                 is LayerEffect.Glass -> replace { glassed(it, effect, sizePx, bake) }
+
+                // No guard, like the glass: an enabled dither always quantizes, so there is never nothing to do.
+                is LayerEffect.Dither -> replace { dithered(it, effect, sizePx, bake) }
 
                 // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
                 // thrown and laid on plainly, or light centered on the edge and screened onto it.
@@ -819,6 +824,116 @@ class IconRenderer(
             top += cellPx
         }
         return out
+    }
+
+    /**
+     * [source] with its colors crushed to a coarse palette and the rounding error dithered — the riso / newsprint
+     * look.
+     *
+     * **Two passes over a *cell* grid, not the pixel grid.** The cells are sized as a fraction of the box
+     * ([LayerDither.cellPx]) so the grain is the same at every bake size, and each cell's color is the
+     * alpha-weighted average [LayerPixelate.averageArgb] already computes — so a transparent edge does not drag the
+     * dither toward black. The first pass quantizes every cell and, for a diffusion kernel, spreads each cell's
+     * rounding error onto its neighbours; the second paints each pixel its cell's quantized color while **keeping the
+     * pixel's own alpha**, so the silhouette stays smooth and only the color is dithered.
+     *
+     * **Single-threaded, deliberately, where the other per-cell passes band across cores.** An error-diffusion
+     * kernel is sequential by nature — a cell cannot be quantized until the cells before it have handed it their
+     * error — so it cannot be split into independent bands without seams along the boundaries. An ordered kernel
+     * could be parallel, but running it down a second path to save a millisecond on a bake that is already off the
+     * main thread and cached is not worth the divergence. The cancellation check is once a cell-row, which is what
+     * keeps a preview abandonable.
+     */
+    private fun dithered(source: Bitmap, dither: LayerEffect.Dither, sizePx: Int, bake: CoroutineContext): Bitmap {
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+
+        val cellPx = LayerDither.cellPx(dither.coarseness, sizePx)
+        val cols = ceil(sizePx / cellPx.toFloat()).toInt()
+        val rows = cols
+        val stepSize = LayerDither.stepSize(dither.levels)
+        val diffusion = LayerDither.diffusionOf(dither.kernel)
+
+        // The working color per cell, mutable so a diffusion kernel can add its neighbours' error in — held as
+        // floats because the error is fractional and rounding it per hop would lose the whole point of diffusing it.
+        val workR = FloatArray(cols * rows)
+        val workG = FloatArray(cols * rows)
+        val workB = FloatArray(cols * rows)
+        for (cy in 0 until rows) {
+            for (cx in 0 until cols) {
+                val argb = LayerPixelate.averageArgb(pixels, sizePx, cx * cellPx, cy * cellPx, cellPx)
+                val i = cy * cols + cx
+                val red = argb shr 16 and 0xFF
+                val green = argb shr 8 and 0xFF
+                val blue = argb and 0xFF
+                workR[i] = red.toFloat()
+                workG[i] = green.toFloat()
+                workB[i] = blue.toFloat()
+            }
+        }
+
+        // Spreads a cell's rounding error onto the cells [diffusion] points at from it — a local function so the scan
+        // below is not nested a loop and a branch deeper than it can be read, and so the work buffers are captured
+        // rather than passed as eleven parameters. Only ever called on the diffusion path, where [diffusion] is set.
+        fun spread(cx: Int, cy: Int, er: Float, eg: Float, eb: Float) {
+            for (tap in diffusion ?: return) {
+                val nx = cx + tap.dx
+                val ny = cy + tap.dy
+                if (nx in 0 until cols && ny in 0 until rows) {
+                    val j = ny * cols + nx
+                    workR[j] += er * tap.weight
+                    workG[j] += eg * tap.weight
+                    workB[j] += eb * tap.weight
+                }
+            }
+        }
+
+        val outR = IntArray(cols * rows)
+        val outG = IntArray(cols * rows)
+        val outB = IntArray(cols * rows)
+        for (cy in 0 until rows) {
+            bake.ensureActive()
+            for (cx in 0 until cols) {
+                val i = cy * cols + cx
+                if (diffusion == null) {
+                    // Ordered: bias the channel by the cell's place in the Bayer grid, then quantize. No error to
+                    // carry, so each cell is independent.
+                    val t = LayerDither.orderedThreshold(cx, cy, stepSize)
+                    outR[i] = LayerDither.quantize(workR[i].roundToInt() + t, stepSize)
+                    outG[i] = LayerDither.quantize(workG[i].roundToInt() + t, stepSize)
+                    outB[i] = LayerDither.quantize(workB[i].roundToInt() + t, stepSize)
+                } else {
+                    val nr = LayerDither.quantize(workR[i].roundToInt(), stepSize)
+                    val ng = LayerDither.quantize(workG[i].roundToInt(), stepSize)
+                    val nb = LayerDither.quantize(workB[i].roundToInt(), stepSize)
+                    // The error is what each channel lost to rounding, taken before the cell is overwritten.
+                    val er = workR[i] - nr
+                    val eg = workG[i] - ng
+                    val eb = workB[i] - nb
+                    outR[i] = nr
+                    outG[i] = ng
+                    outB[i] = nb
+                    spread(cx, cy, er, eg, eb)
+                }
+            }
+        }
+
+        // Each pixel takes its cell's quantized color and keeps its own alpha — so a fully transparent pixel stays
+        // transparent whatever color its cell resolved to, and a half-covered edge stays half covered.
+        val out = IntArray(pixels.size)
+        for (y in 0 until sizePx) {
+            for (x in 0 until sizePx) {
+                val at = y * sizePx + x
+                val alpha = pixels[at] ushr 24 and 0xFF
+                val ci = (y / cellPx) * cols + (x / cellPx)
+                val packed = (alpha shl 24) or (outR[ci] shl 16) or (outG[ci] shl 8) or outB[ci]
+                out[at] = packed
+            }
+        }
+
+        val bitmap = createBitmap(sizePx, sizePx)
+        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
+        return bitmap
     }
 
     /**

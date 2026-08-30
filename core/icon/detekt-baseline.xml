@@ -44,6 +44,9 @@
     <ID>MagicNumber:LayerComposite.kt$LayerComposite$255</ID>
     <ID>MagicNumber:LayerComposite.kt$LayerComposite$255f</ID>
     <ID>MagicNumber:LayerComposite.kt$LayerComposite$8</ID>
+    <ID>MagicNumber:LayerDither.kt$LayerDither$0.5f</ID>
+    <ID>MagicNumber:LayerDither.kt$LayerDither$16f</ID>
+    <ID>MagicNumber:LayerDither.kt$LayerDither$255</ID>
     <ID>MagicNumber:LayerGlass.kt$LayerGlass$0xFF</ID>
     <ID>MagicNumber:LayerGlass.kt$LayerGlass$0xFF000000</ID>
     <ID>MagicNumber:LayerGlass.kt$LayerGlass$16</ID>

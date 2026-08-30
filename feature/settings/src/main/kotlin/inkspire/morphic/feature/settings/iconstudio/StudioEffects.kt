@@ -158,6 +158,7 @@ internal fun EffectsControls(
             EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
             EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, onEffects, onCommit)
             EffectSlice.GLASS -> GlassControls(target.effects, onEffects, onCommit)
+            EffectSlice.DITHER -> DitherControls(target.effects, onEffects, onCommit)
         }
     }
 }

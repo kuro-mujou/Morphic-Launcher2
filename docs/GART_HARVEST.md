@@ -39,6 +39,9 @@ additive things.
 Recommended order: **glass → dither → OKLCH ramps → palettes.** One killer new effect, one stylistic family,
 one quality lift, one content win — all clean ports.
 
+**Shipped so far: `Glass` and `Dither`** (`LayerEffect.Glass`, `LayerEffect.Dither`), both device-verified. OKLCH
+ramps and palettes remain.
+
 ### 1. Glass / refraction — new effect class, highest value
 
 `glass/glassBall.kt`. Per-pixel Snell's-law spherical refraction: read the pixels underneath, bend them through a

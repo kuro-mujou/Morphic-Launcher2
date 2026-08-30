@@ -203,6 +203,46 @@ enum class OutlinePosition {
     OUTSIDE,
 }
 
+/**
+ * The pattern a [LayerEffect.Dither] quantizes with — how the error of rounding each pixel to a coarser palette is
+ * spread so the eye reads the missing colors back.
+ *
+ * **Two families under one enum, because they answer the same question with different mechanisms.** An
+ * *error-diffusion* kernel ([FLOYD_STEINBERG], [ATKINSON]) pushes each pixel's rounding error onto its
+ * not-yet-visited neighbours, so the pattern is organic and content-aware — but strictly sequential, since a pixel
+ * cannot be quantized until the ones before it have handed it their error. An *ordered* kernel ([ORDERED]) compares
+ * each pixel against a fixed threshold matrix instead, so the pattern is a regular cross-hatch and every pixel is
+ * independent. The renderer takes the two paths differently for exactly that reason; see `LayerDither`.
+ *
+ * Persisted inside the layer set, so the names are an on-disk contract. An id a later build adds resolves to the
+ * default on an older one, which is why the reader defaults rather than throwing.
+ */
+@Serializable
+enum class DitherKernel {
+
+    /**
+     * Floyd–Steinberg — the classic. Spreads the error across four neighbours (mostly to the right and below), which
+     * gives the fine, slightly wandering grain everyone pictures when they hear "dither".
+     */
+    @SerialName("floydSteinberg")
+    FLOYD_STEINBERG,
+
+    /**
+     * Atkinson — the early-Macintosh look. Diffuses only **three quarters** of the error and drops the rest, so
+     * highlights blow out and shadows crush; the result is higher-contrast and cleaner, with more white showing
+     * through. The recognizable one, distinct from Floyd–Steinberg at a glance.
+     */
+    @SerialName("atkinson")
+    ATKINSON,
+
+    /**
+     * Ordered (4×4 Bayer) — a fixed cross-hatch threshold rather than diffused error. Regular and mechanical, the
+     * newsprint / early-game look, and the one family that is parallel per pixel.
+     */
+    @SerialName("ordered")
+    ORDERED,
+}
+
 @Serializable
 sealed interface LayerEffect {
 
@@ -1389,6 +1429,68 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer's colors crushed to a coarse palette and the rounding error scattered so the eye reads the missing
+     * shades back — the riso / newsprint / early-game look, harvested from the gart study.
+     *
+     * **Per channel, not to a chosen palette.** Each of red, green and blue is rounded to [levels] steps
+     * independently, which is the general primitive; a two-tone or monochrome dither is this stacked *after* a
+     * `Duotone` or a `Color` with no saturation, so the palette is one effect's job and the dithering is another's.
+     * That composes to more looks than a palette field here would, and keeps this effect one idea.
+     *
+     * **[coarseness] is a fraction of the box, and it is not optional decoration — it is what makes the effect look
+     * the same at every bake size.** A dither run at the bake's own resolution would be twice as fine on a 288px
+     * folder icon as on a 96px list one, so one recipe would read as two different textures. Quantizing on a grid of
+     * cells sized as a fraction of the box fixes the grain to the icon rather than to the pixels. It is *not* a
+     * `Pixelate` in disguise: that draws gapped, rounded dots of a single averaged color, where this fills solid
+     * cells of a *quantized, error-diffused* one — stacking the two is a third thing again.
+     *
+     * **[kernel] chooses both the look and, underneath, whether the pass can be parallel** — see [DitherKernel]. The
+     * renderer reads each cell from an alpha-weighted average (so a transparent edge does not drag the color toward
+     * black) and writes the quantized color back *keeping each pixel's own alpha*, so the silhouette stays smooth and
+     * only the color is dithered.
+     *
+     * **Per-cell resample, so baked-only** — like every effect that reworks a layer's own pixels, the live path
+     * (AGSL, API 33+) is unreachable against a `minSdk` of 26, so [drawsLive] is false and the studio previews from
+     * the bake.
+     *
+     * @property kernel the diffusion or threshold pattern.
+     * @property levels how many steps each color channel is crushed to, **2 or more**. Two is the boldest — each
+     *   channel becomes fully off or fully on, so eight colors carry the whole icon and the pattern is loudest.
+     *   Raising it keeps more of the original and softens the dither toward invisibility.
+     * @property coarseness one dither cell's side as a fraction of the box. Bigger is chunkier grain.
+     */
+    @Serializable
+    @SerialName("dither")
+    data class Dither(
+        val kernel: DitherKernel = DitherKernel.FLOYD_STEINBERG,
+        /**
+         * **The boldest setting, because the pattern is the point.** At two levels a channel is only ever off or on,
+         * so the dither carries every tone and is impossible to miss — which is what an effect should be the moment
+         * it is switched on. Softening it by raising the count is the obvious next move; arriving there is not.
+         */
+        val levels: Int = 2,
+        /**
+         * **Fine, but plainly a grain of dots** — a thirtieth of the box is two pixels on a 96px list icon and six on
+         * a 288px folder one, the same texture at both. Coarse enough to read *as* dithering rather than as a filter,
+         * fine enough that the artwork survives being made of it.
+         */
+        val coarseness: Float = 0.03f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * **The switch is the off, and there is no identity value the controls can reach** — so this is the theoretical
+         * one they cannot. Rounding each channel to a full 256 steps is a step of one, which changes nothing; the
+         * slider stops far short of it, so this only ever guards a stored recipe that did not. A dither that is
+         * *enabled* always draws, which is the honest shape for an effect whose whole nature is to replace colors.
+         */
+        override val isIdentity: Boolean get() = levels >= 256
+
+        /** Per-cell sampling, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * One of the built-in color looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *
@@ -1471,6 +1573,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.Pixelate -> copy(enabled = enabled)
     is LayerEffect.ProgressiveBlur -> copy(enabled = enabled)
     is LayerEffect.Glass -> copy(enabled = enabled)
+    is LayerEffect.Dither -> copy(enabled = enabled)
 }
 
 /**
