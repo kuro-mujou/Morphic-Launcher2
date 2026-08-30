@@ -6,7 +6,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -114,13 +114,10 @@ fun MorphicColorPicker(
 @Composable
 private fun PaletteRibbon(palettes: List<ColorPalette>, onPick: (Int) -> Unit, outline: Color) {
     val pill = RoundedCornerShape(7.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        palettes.forEach { palette ->
+    // Lazy, because the bank runs to a couple of hundred palettes now — a plain scrolling Row would compose every
+    // pill and every swatch up front the moment the picker opened.
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(palettes, key = { it.name }) { palette ->
             Row(
                 modifier = Modifier
                     .clip(pill)

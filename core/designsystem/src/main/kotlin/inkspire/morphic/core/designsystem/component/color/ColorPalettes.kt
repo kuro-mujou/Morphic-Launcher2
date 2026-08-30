@@ -14,26 +14,29 @@ package inkspire.morphic.core.designsystem.component.color
 data class ColorPalette(val name: String, val colors: List<Int>)
 
 /**
- * The curated palettes the studio's color picker offers below the hue bar — the "palettes" harvested from the gart
- * study, reworked for icon theming rather than ported wholesale.
+ * Builds a [ColorPalette] from `0xAARRGGBB` longs — shared by the featured set in [ColorPalettes] and the harvested
+ * [coolPalettes] bank, which is why it is a top-level helper rather than either file's own.
+ */
+internal fun palette(name: String, vararg colors: Long): ColorPalette =
+    ColorPalette(name, colors.map { it.toInt() })
+
+/**
+ * The palettes the color picker offers — a **featured** dozen, hand-picked and named, then the wider
+ * **[coolPalettes]** bank harvested from the gart study.
  *
- * **A dozen moods, not three hundred colors.** gart ships ~300 palettes, most of them data colormaps or flat dumps
- * of a few hundred named colors (its `NipponColors` alone is 250). The value here is a *short, opinionated* set a
- * user can scan in one pass, so this is a hand-picked spread across warm/cool/earth/jewel/neutral, six colors each.
+ * **Two tiers on purpose.** [featured] is a short, opinionated spread across warm/cool/earth/jewel/neutral that a
+ * user can scan in one pass — four of them seeded from gart's theming-oriented files (`MidCenturyColors`,
+ * `RetroColors`, `CyanotypeColors`, the pink family of `NipponColors`; BSD-2, © 2022 Igor Spasić), the rest curated
+ * here. The cool bank is the *quantity* behind it: ~175 more aesthetic sets for when the featured dozen is not
+ * enough. Together they are [all], which is what the picker shows.
  *
- * **Four are seeded from gart's genuinely theming-oriented files** — `MidCenturyColors`, `RetroColors`,
- * `CyanotypeColors`, and the pink family of `NipponColors` (all BSD-2, © 2022 Igor Spasić) — trimmed to six and
- * re-ordered light-to-dark. The rest are curated here.
- *
- * The colors are all in the `all` list's own property initializer, which is why the literals below do not each need
- * a name: they are arrangement, read at a glance, exactly the case the dp-literal rule is about one layer over.
+ * Still no data-viz colormaps (viridis and the like) from gart — built to map data, they read garish on a launcher
+ * surface, and neither tier ports them.
  */
 object ColorPalettes {
 
-    private fun palette(name: String, vararg colors: Long): ColorPalette =
-        ColorPalette(name, colors.map { it.toInt() })
-
-    val all: List<ColorPalette> = listOf(
+    /** The hand-picked, named palettes — the ones a user meets first. */
+    val featured: List<ColorPalette> = listOf(
         // Grayscale first — the launcher's own register, and the neutrals a mono icon is built from.
         palette("Mono", 0xFFFFFFFF, 0xFFC7C7C7, 0xFF8F8F8F, 0xFF5A5A5A, 0xFF2E2E2E, 0xFF000000),
         // gart · MidCenturyColors.
@@ -52,4 +55,7 @@ object ColorPalettes {
         palette("Synth", 0xFFFEE440, 0xFF00F5D4, 0xFF00BBF9, 0xFF9B5DE5, 0xFFF15BB5, 0xFF0A0A12),
         palette("Desert", 0xFFF4E9CD, 0xFFE4C590, 0xFFD9A566, 0xFFB97A56, 0xFF8C5A3C, 0xFF5A3A28),
     )
+
+    /** Every palette the picker offers: the [featured] dozen, then the wider [coolPalettes] bank. */
+    val all: List<ColorPalette> = featured + coolPalettes
 }
