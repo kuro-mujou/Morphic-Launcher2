@@ -1,0 +1,192 @@
+# Wallpaper Studio
+
+**Status:** design draft, **nothing built** (2026-08-30). Drawn from a walkthrough of Smart Launcher's Wallpaper
+Studio (`net.smartlauncher.wallpaperstudio`, driven over adb) and from the [gart harvest assessment](GART_HARVEST.md).
+This is the *what and in what order*; it is not committed to slices yet, and the open questions at the end are real.
+
+**Covers:** a built-in generative wallpaper editor — a sibling to the icon studio — plus the seam to the community
+sharing feature (which stays deferred here).
+
+**Why in-house:** Smart Launcher charges for launcher + icon studio + wallpaper studio as three apps (~3× to the
+user). One Kotlin/Skia codebase serving both studios is the differentiator. See [[wallpaper-studio-plan]] memory and
+CLAUDE.md's cost note.
+
+**Companions:** [GART_HARVEST.md](GART_HARVEST.md) (the engine source), [ICON_ARCHITECTURE.md](ICON_ARCHITECTURE.md)
+(the effect pipeline this reuses), [STATUS.md](STATUS.md) (`data:wallpaper`'s existing state).
+
+---
+
+## The thesis: most of this is already built
+
+The single most important finding of the walkthrough is that Smart Launcher's studio is **three axes over a live
+preview** — a *design* (generator), a *palette*, and a stack of *filters* — and **we have already built two of the
+three** while harvesting gart for the icon studio.
+
+- **Filters** — their list is Ripple, Kaleidoscope, Pixelate, Progressive blur, Grain, Color grading, Scanlines,
+  Chromatic aberration, Vignette, CRT curvature, Noise. Our `core:icon` `LayerEffect` pipeline already implements
+  **Ripple, Pixelate, ProgressiveBlur, Grain, ChromaticSplit, Vignette, and the color grades (Color / Duotone /
+  Tritone / Dither)** — most of the list, device-verified. A wallpaper filter is one of our per-pixel effect passes
+  run on a *generated bitmap* instead of an icon.
+- **Palette** — their color panel is an editable N-color palette strip, curated *suggested palettes*, shuffle, lock,
+  and a per-slot picker. We have `ColorPalettes` (`core:designsystem`) and `MorphicColorPicker` already.
+- **Design** — the ~22 generators are the **genuinely new** work, and they are exactly what **gart** is
+  (Delaunay, Voronoi, flow fields, marching squares, Poisson, metaballs, …).
+
+So the icon-studio harvest was not a detour: it pre-built the wallpaper studio's whole effect layer. The new work is
+the **generative engine** and the **editor UI** around it.
+
+---
+
+## What Smart Launcher's studio actually is (the reference)
+
+A live full-screen preview with save/apply/undo up top, a **Vertical / Squared** aspect toggle, and a bottom toolbar
+of four panels:
+
+1. **Designs** — swipe up/down (or a grid) cycles ~22 generators; every one renders in the active palette.
+2. **Color** — an editable N-color palette strip (+add stop), **Suggested palettes**, **Shuffle**, **Lock** (pin the
+   palette while swapping designs), per-slot picker (SV + hue + **opacity** + hex, Picker/Palette tabs).
+3. **Style** — per-design parameters (Flow Field: a variant selector *Eclectic/Pearls* + *Density*).
+4. **Filters** — post-process passes, each a toggle + parameters.
+
+Plus a **Community** feed (Populars / New / Top week/month, author attribution, likes) — the sharing surface.
+
+### The 22 designs, mapped to gart primitives
+
+| Design | Gart primitive | Group |
+|---|---|---|
+| Triangular Facets | Delaunay triangulation | tessellation |
+| Modern Mosaic, Vitrall | Voronoi (+ Lloyd relax for even cells) | tessellation |
+| Polygon Cascade | Delaunay/Voronoi variant | tessellation |
+| Flow Field, Neon Ribbons, Ribbon Flow, Flow Lines, Shape Trail | flow field + streamline tracer (curl noise) | flow |
+| Topography | contour tracing (marching squares / JFA distance field) | field |
+| Flowing Blobs | metaballs / thresholded noise | field |
+| Mesh Gradient, Soft Overlaps | multi-point gradient / overlapping translucent discs | gradient |
+| Confetti Dots | Poisson-disk sampling | scatter |
+| Dot Grid | regular grid sampling | scatter |
+| Bauhaus Blocks, Rounded Tiles | geometric tiling (quarter-circles, rounded rects) | tiling |
+| Diagonal Bands, Gradient Columns, Layered Waves, Wave Dividers, Ribbed Glass | procedural gradients + wave dividers | gradient |
+
+Every group has a gart implementation to port. **Flow, tessellation, and field are the three that carry the
+"wow"** and are the ones to lead with.
+
+---
+
+## Architecture
+
+**One pipeline, three axes, one output.** A wallpaper is `render(design, params, palette) → base bitmap`, then
+`filters.fold(base) → final bitmap`, then handed to `WallpaperRepository`.
+
+```
+WallpaperRecipe ─┐
+  design + params │→ Generator.render(size, palette) → base Bitmap
+  palette         ┘
+  filters ─────────→ FilterPipeline.apply(base) → final Bitmap ──→ WallpaperRepository.setImage/apply
+  aspect (V/Sq)
+```
+
+- **`Generator`** — a design's renderer: `render(size: IntSize, palette: Palette, params: DesignParams, seed): Bitmap`.
+  Deterministic in `seed` (so a recipe re-renders identically and *shuffle* is just a new seed). Lives in
+  `core:graphics` alongside `BitmapBlur`.
+- **`FilterPipeline`** — an ordered list of per-pixel passes, **reusing the icon studio's pure effect helpers**
+  (`LayerRipple`, `LayerGrain`, `LayerPixelate`, `LayerDither`, `LayerTritone`, `Oklab`, …). See "Filters" below.
+- **`WallpaperRecipe`** — the stored unit (design id + params + palette + filter list + aspect + seed), one serialized
+  blob **per orientation** (the studio's Vertical/Squared, and portrait/landscape). Follows the icon studio's
+  one-blob-per-detached-thing persistence, *not* flat columns — the lesson CLAUDE.md already records.
+
+### Module map
+
+| Piece | Module | Notes |
+|---|---|---|
+| `WallpaperDesign` (id enum), `DesignParams`, `WallpaperRecipe`, `Palette` | `core:model` | plain data + serialization, like `IconAppearance` |
+| Generators (Delaunay, Voronoi, flow, contour, …) + `Generator` interface + `FilterPipeline` | **`core:graphics`** | the gart port; currently holds only `BitmapBlur`, so it grows into the engine |
+| Perceptual color, noise fields shared with generators | `core:graphics` (or reuse `core:icon`'s `Oklab`) | see "the one refactor" |
+| Curated palettes, picker (+opacity, +palette tab) | `core:designsystem` | extend `ColorPalettes` + `MorphicColorPicker` |
+| Persistence of recipes | `data:wallpaper` | it already owns `WallpaperRepository.setImage/apply/setRotatingImage` and a live-wallpaper service |
+| The editor screen (preview + Designs/Color/Style/Filters panels) | **`feature:wallpaperstudio`** (new) | MVVM per screen, mirrors `feature:settings/iconstudio` |
+| Community feed + sharing | deferred | its own feature + backend, out of this plan |
+
+### The one refactor worth doing: a shared bitmap-filter runner
+
+The icon effect passes live in `IconRenderer` and operate on a **square icon bitmap**, but the *silently-wrong* math
+is already extracted into **pure, bitmap-size-agnostic helpers** (`LayerRipple.sampleDistancePx`,
+`LayerGrain.displace`, `LayerDither.quantize`, `LayerTritone.apply`, `Oklab.mix`, `LayerPixelate.averageArgb`, …).
+Those take `pixels + coords`, not "an icon". So the wallpaper `FilterPipeline` **reuses the helpers directly** and
+writes its own loop over a `width × height` bitmap — no duplication of the risky arithmetic, which is exactly the
+shared-derivation rule the codebase runs on.
+
+Two things a wallpaper filter must decide that an icon bake did not:
+
+- **"Fraction of the box" becomes fraction of the short side.** Icon effects scale by `sizePx` (a square). A
+  wallpaper is not square, so a ripple amplitude or a grain cell is a fraction of `min(width, height)` — decided once,
+  in the runner.
+- **Silhouette effects do not apply.** Glow, Shadow, Outline, InnerShadow, InnerGlow, Bevel and Glass all read the
+  layer's *alpha* as a shape; a wallpaper is fully opaque, so it has no silhouette. The reusable subset is exactly the
+  **non-silhouette per-pixel effects** — which is also exactly Smart Launcher's filter list. Kaleidoscope, Scanlines
+  and CRT curvature are the genuinely new filters to add (Noise ≈ our Grain).
+
+---
+
+## Color / palette
+
+Reuse and extend what the icon studio has:
+
+- **`ColorPalettes`** already ships a dozen curated sets — the studio's *Suggested palettes*.
+- **`MorphicColorPicker`** already has the SV panel + hue bar + the palette ribbon. Add: an **opacity slider** (a
+  wallpaper color legitimately carries alpha, unlike an icon tint — this is the one place the icon picker's "no alpha"
+  rule is reversed) and a **Picker/Palette tab**.
+- **New for the studio:** an editable N-stop palette strip, **shuffle** (re-seed the palette from a suggested set or
+  from harmony rules), and **lock** (keep the palette while swapping designs — a `palette-locked` flag on the editor
+  state, not the recipe).
+
+Generators consume a `Palette` (ordered colors) and sample it — a tessellation fills cells from it, a flow field
+colors strokes along it, a gradient interpolates it (perceptually, via `Oklab` — the Tritone work pays off again).
+
+---
+
+## Phase plan
+
+Sequenced so each phase is a usable slice, leading with the pieces that carry the look and reuse the most.
+
+- **W0 — model + engine skeleton.** `WallpaperDesign`/`DesignParams`/`WallpaperRecipe`/`Palette` in `core:model`; the
+  `Generator` interface + `FilterPipeline` in `core:graphics`; wire recipe persistence into `data:wallpaper`. No UI.
+- **W1 — first three generators, end to end.** One from each headline group — **Triangular Facets** (Delaunay),
+  **Flow Field** (streamlines), **Mesh Gradient** (gradient) — rendered to a bitmap and *set as wallpaper*. Proves the
+  whole pipeline on device with the smallest surface.
+- **W2 — the editor shell.** `feature:wallpaperstudio`: live preview, the design picker (swipe + grid), the
+  aspect toggle, save/apply/undo. Mirror `feature:settings/iconstudio`'s MVVM.
+- **W3 — color.** The palette strip + suggested palettes + shuffle + lock; the picker's opacity + palette tab.
+- **W4 — filters.** The `FilterPipeline` panel, reusing the icon effect helpers — Ripple, Pixelate, ProgressiveBlur,
+  Grain, Chromatic, Vignette, Color grading first (all reuse), then the new ones (Kaleidoscope, Scanlines, CRT).
+- **W5 — the rest of the generators.** Fill out toward the 22, group by group, each with its Style parameters.
+- **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
+  *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
+
+---
+
+## Key decisions & deferrals
+
+- **A recipe is a seed + parameters, not a bitmap.** Generation is deterministic, so the stored unit is tiny and
+  *shuffle* is a re-seed. This is also what makes community sharing cheap (share the recipe, re-render locally) and
+  what lets a recipe re-render at any resolution / aspect.
+- **Persistence is one blob per orientation**, following the icon studio — never flat columns (the four-DB-bump lesson).
+- **Filters reuse the icon pipeline's pure helpers**, generalized to a non-square bitmap by one runner; no fork of the
+  risky arithmetic.
+- **Silhouette effects are out**; only non-silhouette per-pixel filters apply to an opaque wallpaper.
+- **Live/animated wallpapers are deferred.** `data:wallpaper` already has a `RotatingWallpaperService`, and gart's
+  simulations (fluid, reaction-diffusion, n-body) are *animated* by nature — an obvious phase-2, but the first cut is
+  **static** bakes, matching Smart Launcher's default and keeping battery/perf out of the critical path.
+- **Community is deferred** to W6+ and needs a backend decision.
+
+---
+
+## Open questions (for the planning conversation)
+
+1. **Generator subset for v1.** All 22, or a strong ~8–10 across the groups? (Recommend the latter — lead with flow,
+   tessellation, field, gradient.)
+2. **`core:graphics` vs a new `core:art` module** for the engine. `core:graphics` is the honest home (it is already
+   "bitmap work"), but the engine is large; a dedicated module may earn its place.
+3. **Static-only v1, or animated live wallpaper in scope?** (Recommend static first.)
+4. **Where the editor lives** — a new `feature:wallpaperstudio`, or a section under `feature:settings` beside the
+   existing `wallpaper/` screen. (Recommend its own feature; it is a full surface, like the icon studio.)
+5. **Community timing** — designed in from the recipe format now (so recipes are shareable by construction), or fully
+   deferred?

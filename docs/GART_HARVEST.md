@@ -103,6 +103,11 @@ Directly useful as duotone/bloom presets **and** as the seed for the community t
 
 ## Not for icons — the wallpaper-studio engine
 
+*Now planned in detail: [WALLPAPER_STUDIO_PLAN.md](WALLPAPER_STUDIO_PLAN.md), drawn from a walkthrough of Smart
+Launcher's studio. Its headline finding — the studio's whole **filter** layer is already built as the icon effect
+pipeline, so only the **generators** below are genuinely new.*
+
+
 Overkill for a 96px icon; **exactly** what a wallpaper studio is made of. When that plan starts, gart is less "a
 source of techniques" and more "the reference implementation of the whole feature":
 
