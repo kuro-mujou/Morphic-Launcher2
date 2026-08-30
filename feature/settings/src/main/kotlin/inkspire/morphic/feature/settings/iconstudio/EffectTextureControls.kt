@@ -32,7 +32,7 @@ import inkspire.morphic.core.model.icon.effectOrNull
 import inkspire.morphic.core.model.icon.withEffect
 
 // The controls for the effects that rework a layer's own pixels: a tiled pattern, an extrusion, a chromatic
-// split, and the four per-pixel passes — ripple, grain, pixelate and progressive blur.
+// split, the four per-pixel passes — ripple, grain, pixelate and progressive blur — and the glass that bends them.
 
 /**
  * How soft the blurred end gets, how much stays sharp, and where the sharp part is.
@@ -135,12 +135,96 @@ internal fun ProgressiveBlurControls(
 }
 
 /**
+ * The layer read as a slab of glass and seen through — see `LayerEffect.Glass`.
+ *
+ * **Grouped with the per-pixel passes rather than with the light overlays**, though it strikes a sheen like a
+ * bevel's: what it *does* is bend the layer's own pixels, which is this file's subject, and the sheen is drawn on
+ * the pixels it bent. It is `Bevel`'s twin one file over — the same surface, lit there and refracted here.
+ *
+ * **Refraction and Softness are two different jobs.** Refraction is how far the surface bends what is under it;
+ * Softness is how rounded that surface is — and it shapes the surface both the bend *and* the sheen read, so at
+ * zero the glass is a hard-edged shard and turning it up rounds the whole glyph into a lens. Neither is floored:
+ * refraction at zero is a legitimate sheen-only glass, and softness at zero is a legitimate hard edge.
+ */
+@Composable
+internal fun GlassControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val glass = effects.effectOrNull<LayerEffect.Glass>() ?: LayerEffect.Glass()
+
+    SliderControl(
+        label = "Refraction",
+        value = glass.refraction,
+        valueRange = 0f..RefractionReach,
+        default = GlassDefaults.refraction,
+        onValueChange = { value -> onUpdate { it.withEffect(glass.copy(refraction = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Softness",
+        value = glass.softness,
+        valueRange = 0f..GlassSoftnessReach,
+        default = GlassDefaults.softness,
+        onValueChange = { value -> onUpdate { it.withEffect(glass.copy(softness = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    LabeledControl("Sheen") {
+        ColorField(argb = glass.highlightArgb) { argb ->
+            onUpdate { it.withEffect(glass.copy(highlightArgb = argb)) }
+        }
+    }
+    SliderControl(
+        label = "Sheen strength",
+        value = glass.highlightStrength,
+        valueRange = 0f..1f,
+        default = GlassDefaults.highlightStrength,
+        onValueChange = { value -> onUpdate { it.withEffect(glass.copy(highlightStrength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+
+    SliderControl(
+        label = "Angle",
+        value = glass.angleDegrees,
+        valueRange = 0f..360f,
+        step = AngleStep,
+        default = GlassDefaults.angleDegrees,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(glass.copy(angleDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+    SliderControl(
+        label = "Altitude",
+        value = glass.altitudeDegrees,
+        valueRange = 0f..90f,
+        step = AngleStep,
+        default = GlassDefaults.altitudeDegrees,
+        format = { "%.0f°".format(it) },
+        onValueChange = { value -> onUpdate { it.withEffect(glass.copy(altitudeDegrees = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
  * How soft the blurred end may get, as a fraction of the box.
  *
  * A tenth already scales the layer down to ten pixels a side before growing it back, which is past the point where
  * anything of the artwork survives — the ceiling is where the control stops doing more rather than where it breaks.
  */
 private const val BlurReach = 0.1f
+
+/**
+ * How far a glass bends the sampling, at most, as a fraction of the box.
+ *
+ * A quarter of the box is already a violent lens — the artwork tears loose of its own silhouette past it — so the
+ * ceiling is where the look stops being glass rather than where the math breaks.
+ */
+private const val RefractionReach = 0.25f
+
+/** How rounded a glass body may get, as a fraction of the box — enough to dome a whole glyph without dissolving it. */
+private const val GlassSoftnessReach = 0.3f
 
 /**
  * How big the dots are, how much of their cells they fill, and how round they come out.

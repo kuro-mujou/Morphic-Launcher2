@@ -1306,6 +1306,89 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer read as a **slab of glass** and seen through: its own alpha, softened, becomes a raised surface, and
+     * where that surface slopes the artwork beneath it is bent — magnified under the swell, sheared at the edges —
+     * with a bright specular sheen struck across it. The "liquid glass" look, where the glyph itself is the lens
+     * rather than a bubble laid over it.
+     *
+     * **The one effect built by marrying two that already exist, which is why it is trustworthy blind.** The surface
+     * is [Bevel]'s exactly — the layer's alpha blurred into a height map, its slope taken by the same Sobel through
+     * the same [LayerSurface] — so a glass and a bevel on one icon read as lit by the same light. What is new is only
+     * what the slope is *spent on*: a bevel paints light and shadow bands from it; this **displaces the sampling**
+     * along it, so the pixels move rather than the shading. The `resample` machinery [Ripple] uses does the moving.
+     *
+     * **[softness] is load-bearing, not a finish.** With none, the height map is the raw alpha — flat across the
+     * glyph's interior and a cliff at its edge — so only a rim of fringing appears and the thing reads as a bad
+     * outline rather than as glass. Softening the alpha first rounds the whole glyph into a swell with slope
+     * *everywhere*, which is what lets the interior magnify. It is the counterpart of a bevel's `size`, and wants to
+     * be larger here: a bevel only has to catch a light at the edge, where this has to bend a whole surface.
+     *
+     * **Neighbourhood-read, so baked-only.** Each output pixel needs the slope *around* it — a Sobel over the height
+     * — which is arithmetic over an `IntArray` in the bake and AGSL (API 33+) live, against a `minSdk` of 26. So it
+     * answers [drawsLive] false and the studio previews it from the bake, exactly as [Bevel] and [Ripple] do.
+     *
+     * @property refraction how far a fully-sloped part of the surface bends the sampling, as a fraction of the icon's
+     *   box. Also half the switch: a surface that bends nothing is just a sheen. A fraction so one recipe refracts
+     *   the same baked at 96px for a list row and at 288px for a folder.
+     * @property softness how far the alpha is blurred before its slope is read, as a fraction of the box — how
+     *   rounded the glass body is. See the note above; this shapes the surface both the bend and the sheen read, and
+     *   changes nothing on its own.
+     * @property highlightArgb the specular sheen struck across the swell, **screened** onto the bent artwork so it
+     *   brightens rather than covers it — what most says "glass".
+     * @property highlightStrength how strongly the sheen is laid on. The other half of the switch: with no bend and
+     *   no sheen there is no glass.
+     * @property angleDegrees where the light comes from, clockwise from straight down — [Bevel.angleDegrees]'s
+     *   convention exactly, so 45° is a light from the top-left and a glass agrees with a bevel and a shadow on the
+     *   same icon about where the light is.
+     * @property altitudeDegrees how high the light stands, 0..90. Low rakes a long bright streak across the swell;
+     *   overhead lifts the whole surface evenly. [Bevel.altitudeDegrees]'s control, read by the same [LayerSurface].
+     */
+    @Serializable
+    @SerialName("glass")
+    data class Glass(
+        /**
+         * **A visible bend on arrival**, like every other addition. A twelfth of the box is plainly a lens at every
+         * size the launcher bakes, and short of the amount at which the artwork tears loose of its own silhouette.
+         */
+        val refraction: Float = 0.08f,
+        /**
+         * **Rounder than a bevel's edge**, for the reason in the type's KDoc: this bends a whole surface where a
+         * bevel only catches a light at its rim, so the swell has to reach the glyph's interior to magnify it. An
+         * eighth of the box rounds a typical glyph into a readable lens without dissolving its shape.
+         */
+        val softness: Float = 0.12f,
+        val highlightArgb: Int = 0xFFFFFFFF.toInt(),
+        /**
+         * **Half strength**, not full: a glass sheen at full white is a flat band laid over the artwork rather than
+         * a highlight on it, and the swell underneath stops reading. Turning it up is the obvious move once the
+         * glass is visible.
+         */
+        val highlightStrength: Float = 0.5f,
+        /** From the top-left, agreeing with [Bevel] and [Shadow] about where the light is. */
+        val angleDegrees: Float = 45f,
+        /**
+         * **A low light**, where a bevel stands its at 45: a glass reads by the long bright streak a raking light
+         * draws across its swell, and an overhead one flattens that into an even lift that says "matte" rather than
+         * "glass".
+         */
+        val altitudeDegrees: Float = 30f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Nothing bent and nothing shining.
+         *
+         * **Not a clause for [softness].** That only shapes the surface the other two read; on its own it moves no
+         * pixel and adds no light, so a surface rounded to any degree with neither a bend nor a sheen on it is still
+         * the layer untouched — which is what the two real clauses already say.
+         */
+        override val isIdentity: Boolean get() = refraction <= 0f && highlightStrength <= 0f
+
+        /** A Sobel neighbourhood read, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * One of the built-in color looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *
@@ -1387,6 +1470,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.Grain -> copy(enabled = enabled)
     is LayerEffect.Pixelate -> copy(enabled = enabled)
     is LayerEffect.ProgressiveBlur -> copy(enabled = enabled)
+    is LayerEffect.Glass -> copy(enabled = enabled)
 }
 
 /**

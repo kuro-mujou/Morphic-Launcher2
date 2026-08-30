@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.TripOrigin
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Vignette
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.runtime.Composable
@@ -282,6 +283,15 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
 
     /** Sharp in one region and softening away from it. A blur *and* a ramp, so baked, never live. */
     PROGRESSIVE_BLUR("Focus", Icons.Default.BlurLinear, EffectKind.ADDITION),
+
+    /**
+     * The layer read as a slab of glass and seen through — see `LayerEffect.Glass`.
+     *
+     * **Bevel's twin, but grouped with the per-pixel passes it is one of rather than beside [BEVEL].** Both read the
+     * layer's alpha as a lit surface; a bevel paints that surface, this bends the artwork through it, which is a
+     * neighbourhood resample like [RIPPLE] and [GRAIN] — so it is baked, never live.
+     */
+    GLASS("Glass", Icons.Default.WaterDrop, EffectKind.ADDITION),
     ;
 
     /**
@@ -342,6 +352,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         GRAIN -> effects.filterIsInstance<LayerEffect.Grain>().firstOrNull()
         PIXELATE -> effects.filterIsInstance<LayerEffect.Pixelate>().firstOrNull()
         PROGRESSIVE_BLUR -> effects.filterIsInstance<LayerEffect.ProgressiveBlur>().firstOrNull()
+        GLASS -> effects.filterIsInstance<LayerEffect.Glass>().firstOrNull()
         FILTER -> effects.filterIsInstance<LayerEffect.Filter>().firstOrNull()
     }
 
@@ -405,6 +416,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         GRAIN -> GrainDefaults
         PIXELATE -> PixelateDefaults
         PROGRESSIVE_BLUR -> ProgressiveBlurDefaults
+        GLASS -> GlassDefaults
     }
 
 }

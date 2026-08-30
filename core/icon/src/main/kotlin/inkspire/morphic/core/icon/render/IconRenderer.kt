@@ -417,6 +417,11 @@ class IconRenderer(
                         replace { bevelled(it, effect, radius, sizePx, bake) }
                     }
 
+                // No radius guard, unlike the bevel above: a glass floors its own surface blur ([LayerGlass.radiusPx])
+                // because it always has a bend or a sheen to draw — `activeEffects` reaches this arm only then — so
+                // there is never nothing to do and `replace` is always handed a fresh buffer.
+                is LayerEffect.Glass -> replace { glassed(it, effect, sizePx, bake) }
+
                 // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
                 // thrown and laid on plainly, or light centered on the edge and screened onto it.
                 is LayerEffect.InnerShadow -> replace {
@@ -999,31 +1004,22 @@ class IconRenderer(
         val out = IntArray(pixels.size)
 
         overRows(sizePx, bake) { y ->
+            // One slope scratch per row, never shared across bands — [LayerSurface.slope]'s contract, and the same
+            // rule [resample] follows: two threads writing the same two floats is a race that shows as scattered
+            // wrong pixels rather than as anything that looks like one.
+            val slope = FloatArray(2)
             for (x in 0 until sizePx) {
                 val at = y * sizePx + x
                 val pixel = pixels[at]
                 // Nothing to light where there is no surface. Also the common case by far, an icon being mostly
-                // transparent, so it is worth skipping the twelve neighbourhood reads below.
+                // transparent, so it is worth skipping the neighbourhood read below.
                 if (pixel ushr 24 == 0) {
                     out[at] = pixel
                     continue
                 }
 
-                // Sobel over the height field, divided by its own weight so the result is a rise per pixel. Sampled
-                // through `clamp`, so the box's own border reads as a continuation of itself rather than as a cliff
-                // — an edge treated as a drop would light the whole rim of every full-bleed layer.
-                val slopeX = scale * (
-                    heights.at(x + 1, y - 1, sizePx) + 2f * heights.at(x + 1, y, sizePx) +
-                        heights.at(x + 1, y + 1, sizePx) - heights.at(x - 1, y - 1, sizePx) -
-                        2f * heights.at(x - 1, y, sizePx) - heights.at(x - 1, y + 1, sizePx)
-                    ) / 8f
-                val slopeY = scale * (
-                    heights.at(x - 1, y + 1, sizePx) + 2f * heights.at(x, y + 1, sizePx) +
-                        heights.at(x + 1, y + 1, sizePx) - heights.at(x - 1, y - 1, sizePx) -
-                        2f * heights.at(x, y - 1, sizePx) - heights.at(x + 1, y - 1, sizePx)
-                    ) / 8f
-
-                out[at] = LayerBevel.lit(pixel, LayerBevel.relief(slopeX, slopeY, light), bevel)
+                LayerSurface.slope(heights, sizePx, x, y, scale, slope)
+                out[at] = LayerBevel.lit(pixel, LayerBevel.relief(slope[0], slope[1], light), bevel)
             }
         }
 
@@ -1033,7 +1029,54 @@ class IconRenderer(
     }
 
     /**
-     * [source]'s own alpha, blurred by [radiusPx] and aligned back to the box — the bevel's height map.
+     * [source] read as a slab of glass and seen through — the refractive emboss.
+     *
+     * **[bevelled]'s twin, and deliberately so.** The surface is identical — the same alpha blurred into a height
+     * map, the same [LayerSurface] slope, the same [LayerBevel.light] — which is what makes a glass and a bevel on
+     * one icon agree about the light. Where the bevel *lights* the slope, this **bends the sampling through it**
+     * ([LayerGlass.sourceOf]) and then screens the sheen on ([LayerGlass.sheened]).
+     *
+     * **Every pixel is processed, where [bevelled] skips the transparent ones.** A bevel only affects a surface that
+     * is already there, so a transparent pixel stays transparent; a glass *moves* pixels, so a transparent one may
+     * read an opaque neighbour — which is exactly the magnification that pulls artwork out past its own edge. The
+     * skip that is safe for light is a hole for refraction.
+     */
+    private suspend fun glassed(
+        source: Bitmap,
+        glass: LayerEffect.Glass,
+        sizePx: Int,
+        bake: CoroutineContext,
+    ): Bitmap {
+        val radiusPx = LayerGlass.radiusPx(glass, sizePx)
+        val heights = blurredAlpha(source, radiusPx, sizePx)
+        val light = LayerBevel.light(glass.angleDegrees, glass.altitudeDegrees)
+        val scale = LayerBevel.slopeScale(radiusPx)
+        val refractPx = LayerGlass.refractionPx(glass, sizePx)
+
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+        val out = IntArray(pixels.size)
+
+        overRows(sizePx, bake) { y ->
+            // Per row, for [bevelled]'s reason: [LayerSurface.slope] and [LayerGlass.sourceOf] each write a scratch,
+            // and a scratch shared across bands is the one race this split could introduce.
+            val slope = FloatArray(2)
+            val at = FloatArray(2)
+            for (x in 0 until sizePx) {
+                LayerSurface.slope(heights, sizePx, x, y, scale, slope)
+                LayerGlass.sourceOf(x, y, slope[0], slope[1], refractPx, at)
+                val sampled = LayerSample.bilinear(pixels, sizePx, at[0], at[1])
+                out[y * sizePx + x] = LayerGlass.sheened(sampled, LayerBevel.relief(slope[0], slope[1], light), glass)
+            }
+        }
+
+        val bitmap = createBitmap(sizePx, sizePx)
+        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
+        return bitmap
+    }
+
+    /**
+     * [source]'s own alpha, blurred by [radiusPx] and aligned back to the box — the surface a bevel or a glass reads.
      *
      * `extractAlpha` hands back a mask **grown** to fit the blur, with the offset it grew by; drawing it back at that
      * offset is what re-aligns it with the layer, and forgetting to would slide the whole relief up and to the left
@@ -1053,10 +1096,6 @@ class IconRenderer(
         aligned.recycle()
         return FloatArray(pixels.size) { (pixels[it] ushr 24) / 255f }
     }
-
-    /** The height at ([x], [y]), with the box's own border reading as a continuation rather than as a cliff. */
-    private fun FloatArray.at(x: Int, y: Int, sizePx: Int): Float =
-        this[y.coerceIn(0, sizePx - 1) * sizePx + x.coerceIn(0, sizePx - 1)]
 
     /**
      * [source] with a hard band of color following its silhouette — the stroke.

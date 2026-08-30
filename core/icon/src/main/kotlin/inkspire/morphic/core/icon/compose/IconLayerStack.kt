@@ -413,6 +413,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     is LayerEffect.Grain,
     is LayerEffect.Pixelate,
     is LayerEffect.ProgressiveBlur,
+    is LayerEffect.Glass,
         -> Modifier
 
     // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what

@@ -225,7 +225,7 @@ edited and wrong on every surface is a bug the editor structurally cannot show y
 between the baked path and the live path is made of **shared derivations, never shared intentions** —
 read the doc before touching either.
 
-Full design record — layer model, both render paths, all nineteen effects, the studio, the plate,
+Full design record — layer model, both render paths, all twenty effects, the studio, the plate,
 persistence: **[docs/ICON_ARCHITECTURE.md](docs/ICON_ARCHITECTURE.md)**.
 Plans: [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md) (S1–S8),
 [docs/ICON_EFFECTS_PLAN.md](docs/ICON_EFFECTS_PLAN.md) (the effect expansion; §8 is phase 2).

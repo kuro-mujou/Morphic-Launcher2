@@ -157,6 +157,7 @@ internal fun EffectsControls(
             EffectSlice.GRAIN -> GrainControls(target.effects, onEffects, onCommit)
             EffectSlice.PIXELATE -> PixelateControls(target.effects, onEffects, onCommit)
             EffectSlice.PROGRESSIVE_BLUR -> ProgressiveBlurControls(target.effects, onEffects, onCommit)
+            EffectSlice.GLASS -> GlassControls(target.effects, onEffects, onCommit)
         }
     }
 }

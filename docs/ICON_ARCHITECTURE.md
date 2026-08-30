@@ -163,10 +163,13 @@ enforces. Per layer:
   `LayerEffect.InnerShadow` and `LayerEffect.InnerGlow` (the silhouette's complement blurred *inside* it, laid on
   or screened), `LayerEffect.Ripple`
   `LayerEffect.Grain`, `LayerEffect.Pixelate` and `LayerEffect.ProgressiveBlur` (waves, noise, cells and a masked
-  blur), `LayerEffect.Filter` (one of the built-in looks, by id) and
-  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colors). **Ten of the nineteen do not draw live** —
+  blur), `LayerEffect.Glass` (the layer read as a slab of glass and refracted through — Bevel's surface bent rather
+  than lit), `LayerEffect.Filter` (one of the built-in looks, by id) and
+  `LayerEffect.Duotone` (the tonal range mapped onto two chosen colors). **Eleven of the twenty do not draw live** —
   everything that needs a blur or a per-pixel pass — which is what `drawsLive` and the bake-backed preview exist for.
-  **All thirteen the plan set out are built, and so are all six of phase 2**; see the notes below for each, and
+  **All thirteen the plan set out are built, and so are all six of phase 2**; a twentieth, `Glass`, is the first
+  harvested from the gart study ([docs/GART_HARVEST.md](GART_HARVEST.md)) — it shares `LayerSurface` with `Bevel`,
+  refracting the surface where the bevel lights it. See the notes below for each, and
   [docs/ICON_EFFECTS_PLAN.md](ICON_EFFECTS_PLAN.md) — whose **§8 is the phase-2 assessment**: six more effects
   checked against the built code, of which four are re-pointing what already exists, plus a per-effect mask that is
   deliberately *not* the "extract the falloff" the proposal asked for.
