@@ -7,6 +7,9 @@ android {
 }
 
 dependencies {
+    // The wallpaper generator seam paints from a `Palette` and a `DesignParams`, and renders a `WallpaperDesign`.
+    implementation(projects.core.model)
+
     // `createBitmap`, for the one entry point that hands back a bitmap rather than filling an array.
     implementation(libs.androidx.core.ktx)
 
