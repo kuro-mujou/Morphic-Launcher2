@@ -105,6 +105,39 @@ WallpaperRecipe ─┐
 | The editor screen (preview + Designs/Color/Style/Filters panels) | **`feature:wallpaperstudio`** (new) | MVVM per screen, mirrors `feature:settings/iconstudio` |
 | Community feed + sharing | deferred | its own feature + backend, out of this plan |
 
+### Motion: the swipe is a discrete re-seed with an animated transition — not a continuous phase
+
+The studio's premium feel is a **motion layer** the first walkthrough missed: swiping mutates the current design in
+place. A video analysis (Gemini, 2026-08-30) read this as a *continuous `phase` parameter* bound to the swipe delta
+(a Z-axis in the noise). **Probing it on the emulator contradicts that** and matters for the architecture:
+
+- Swiping past a threshold on *Confetti Dots* re-rolled the dot arrangement **and the palette** together, as one
+  undoable step. A pure geometric phase would never touch the palette.
+- A small, slow sub-threshold drag did **nothing**. A continuous phase would give a small visible morph for a small
+  input.
+
+So the mechanism is a **discrete re-seed on a threshold/fling, with a smooth transition animation between the two
+states** — not a continuous function of the finger. (The video *does* show real motion; that is the transition, which
+a post-release screenshot cannot capture. Both readings see motion; they disagree on whether it is a parameter or a
+transition.)
+
+**This is the better model for us, not just the truer one.** A continuous phase forces every generator to be
+continuous in its input — easy for 3D-noise designs (flow, metaballs, contours), but **impossible to do without pops
+for a tessellation**, whose *topology* changes discretely. The transition model keeps generators as plain static
+`render(seed) → bitmap` functions and puts the motion in a layer above them:
+
+- **`Generator.render(size, palette, params, seed): Bitmap`** stays **static and deterministic** — no `phase`. This is
+  also what keeps a **recipe = seed** (a saved wallpaper is a seed + palette + filters, nothing to animate).
+- A **`TransitionController`** animates between the outgoing bitmap and a freshly re-seeded one. The **universal**
+  transition is a **crossfade** (works for all 22 designs for free); a **per-generator interpolated morph** (points
+  drifting, discs gliding) is an *optional* enhancement layered on the designs where it is cheap — the noise-based
+  ones — and never required.
+- A **swipe** re-rolls the seed (and the palette, unless **locked**); **switching design** from the grid crossfades
+  old→new. Both are the same transition machinery.
+
+Whether the noise-based designs *also* carry an in-drag continuous morph (which the video may show and a screenshot
+cannot) is left open below — but it is an enhancement on those specific generators, not the base mechanism.
+
 ### The one refactor worth doing: a shared bitmap-filter runner
 
 The icon effect passes live in `IconRenderer` and operate on a **square icon bitmap**, but the *silently-wrong* math
@@ -152,8 +185,11 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
 - **W1 — first three generators, end to end.** One from each headline group — **Triangular Facets** (Delaunay),
   **Flow Field** (streamlines), **Mesh Gradient** (gradient) — rendered to a bitmap and *set as wallpaper*. Proves the
   whole pipeline on device with the smallest surface.
-- **W2 — the editor shell.** `feature:wallpaperstudio`: live preview, the design picker (swipe + grid), the
-  aspect toggle, save/apply/undo. Mirror `feature:settings/iconstudio`'s MVVM.
+- **W2 — the editor shell + transitions.** `feature:wallpaperstudio`: live preview, the design picker (swipe + grid),
+  the aspect toggle, save/apply/undo. The **`TransitionController`** with a **crossfade** between the outgoing bitmap
+  and a re-seeded one — swipe re-rolls the seed, grid-select crossfades design→design. This is where the premium
+  motion lives; the per-generator interpolated morph is deferred to a later pass. Mirror `feature:settings/iconstudio`'s
+  MVVM.
 - **W3 — color.** The palette strip + suggested palettes + shuffle + lock; the picker's opacity + palette tab.
 - **W4 — filters.** The `FilterPipeline` panel, reusing the icon effect helpers — Ripple, Pixelate, ProgressiveBlur,
   Grain, Chromatic, Vignette, Color grading first (all reuse), then the new ones (Kaleidoscope, Scanlines, CRT).
@@ -181,7 +217,16 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
 
 ## Open questions (for the planning conversation)
 
-1. **Generator subset for v1.** All 22, or a strong ~8–10 across the groups? (Recommend the latter — lead with flow,
+1. **Performance during the transition/interaction.** Re-rolling a full-screen generate + the filter stack on every
+   swipe (and animating a crossfade over it) is heavy in software. Draft quality during the drag (reduced scale, or
+   filters skipped) and a high-quality bake on release is the likely answer; the noise-based filters may want AGSL
+   (API 33+) to stay smooth, which would mean the wallpaper filter path is GPU for the live preview and the reused
+   **CPU** icon helpers only for the final bake. This is the biggest technical risk and W2/W4 have to prove it.
+2. **Is there an in-drag continuous morph on the noise-based designs?** The evidence says the base mechanism is a
+   discrete re-seed + crossfade, but a video may show the flow/contour/metaball designs *also* morphing continuously
+   during the drag. If wanted, that is a per-generator enhancement (3D-noise `z = swipe`), not the base model — decide
+   whether it is in v1 or a later pass.
+3. **Generator subset for v1.** All 22, or a strong ~8–10 across the groups? (Recommend the latter — lead with flow,
    tessellation, field, gradient.)
 2. **`core:graphics` vs a new `core:art` module** for the engine. `core:graphics` is the honest home (it is already
    "bitmap work"), but the engine is large; a dedicated module may earn its place.
