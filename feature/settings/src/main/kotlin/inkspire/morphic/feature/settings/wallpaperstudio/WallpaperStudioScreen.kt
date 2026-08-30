@@ -1,0 +1,165 @@
+package inkspire.morphic.feature.settings.wallpaperstudio
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.model.wallpaper.WallpaperDesign
+import inkspire.morphic.feature.settings.iconstudio.StudioIconButton
+import org.koin.androidx.compose.koinViewModel
+import kotlin.math.abs
+
+/**
+ * The wallpaper studio's editor: a full-bleed live preview with the designs to pick from and a shuffle.
+ *
+ * **The preview is the wallpaper, edge to edge; the controls float over it inset from the bars.** A wallpaper is
+ * judged full-screen, so the picture takes the whole surface and the back button, the design row and the shuffle sit
+ * on top of it rather than beside it — the same placement decision the icon studio's color picker makes for the same
+ * reason.
+ *
+ * **A [Crossfade] on the render is the transition.** When a new design or a shuffled seed produces a fresh bitmap it
+ * dissolves over the old one rather than snapping, which is the whole of the studio's premium motion at this stage —
+ * the discrete re-seed with an animated fade the plan settled on, not a continuous morph.
+ *
+ * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — mapped here to the
+ * discrete re-roll it actually is. Picking a design is the row; applying it as the wallpaper is the next slice.
+ */
+@Composable
+fun WallpaperStudioScreen(onBack: () -> Unit) {
+    val viewModel: WallpaperStudioViewModel = koinViewModel()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
+
+    BackHandler(onBack = onBack)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                var travelled = 0f
+                val threshold = with(density) { 110.dp.toPx() }
+                detectHorizontalDragGestures(
+                    onDragStart = { travelled = 0f },
+                    onDragEnd = { if (abs(travelled) > threshold) viewModel.shuffle() },
+                ) { _, amount -> travelled += amount }
+            },
+    ) {
+        // The preview measures itself and hands its pixel size to the model, so the render is exactly the resolution
+        // it is shown at. `onGloballyPositioned` would do, but the size is all that is wanted.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { viewModel.setViewport(it.width, it.height) },
+        ) {
+            Crossfade(targetState = state.bitmap, label = "wallpaperPreview") { bitmap ->
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Wallpaper preview",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+
+        StudioIconButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Back",
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(12.dp),
+        )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                WallpaperDesign.entries.forEach { design ->
+                    DesignChip(
+                        label = design.label,
+                        selected = design == state.recipe.design,
+                        onClick = { viewModel.pickDesign(design) },
+                    )
+                }
+            }
+            StudioIconButton(
+                icon = Icons.Default.Casino,
+                contentDescription = "Shuffle",
+                onClick = viewModel::shuffle,
+            )
+        }
+    }
+}
+
+/** One design in the picker row — its name, lit when it is the one showing. */
+@Composable
+private fun DesignChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.White.copy(alpha = if (selected) 0.9f else 0.18f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) Color.Black else Color.White,
+        )
+    }
+}
+
+/** A short, human name for the picker — the enum name is a code identifier, not a label. */
+private val WallpaperDesign.label: String
+    get() = when (this) {
+        WallpaperDesign.LINEAR_GRADIENT -> "Gradient"
+        WallpaperDesign.MESH_GRADIENT -> "Mesh"
+        WallpaperDesign.FLOW_FIELD -> "Flow"
+        WallpaperDesign.TRIANGULAR_FACETS -> "Facets"
+    }

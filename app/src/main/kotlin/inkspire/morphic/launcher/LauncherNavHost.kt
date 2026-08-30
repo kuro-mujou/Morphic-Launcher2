@@ -25,6 +25,8 @@ import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCaptureScreen
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropScreen
+import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioRoute
+import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioScreen
 import inkspire.morphic.feature.shell.LauncherShell
 
 /**
@@ -130,6 +132,11 @@ fun LauncherNavHost(modifier: Modifier = Modifier) {
                 entry<IconStudioRoute.App> { route ->
                     IconStudioScreen(
                         route = route,
+                        onBack = { navigator.goBack() },
+                    )
+                }
+                entry<WallpaperStudioRoute> {
+                    WallpaperStudioScreen(
                         onBack = { navigator.goBack() },
                     )
                 }

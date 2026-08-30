@@ -76,6 +76,7 @@ import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.navigation.LocalNavigator
 import inkspire.morphic.data.wallpaper.WallpaperTarget
+import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
@@ -171,6 +172,17 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
                 onPickPortrait = { portraitPicker.launch(imageRequest) },
                 onPickLandscape = { landscapePicker.launch(imageRequest) },
             )
+        }
+
+        item(key = "studio") {
+            MorphicButton(
+                onClick = { navigator.goTo(WallpaperStudioRoute) },
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth(),
+            ) {
+                Text("Design a wallpaper")
+            }
         }
 
         wallpaperShelf(title = "My wallpapers") {

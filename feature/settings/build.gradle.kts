@@ -47,6 +47,9 @@ dependencies {
     implementation(projects.data.icons)
     implementation(projects.core.icon)
 
+    // The wallpaper studio's generative engine.
+    implementation(projects.core.graphics)
+
     // Haze — the studio's floating surfaces, and **the launcher's only other blur system**, which is worth a word
     // because a near-copy of an existing mechanism is normally the mistake this rewrite keeps un-making.
     //
