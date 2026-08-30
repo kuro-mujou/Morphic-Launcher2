@@ -31,4 +31,18 @@ enum class WallpaperDesign {
      */
     @SerialName("meshGradient")
     MESH_GRADIENT,
+
+    /**
+     * Streamlines traced through a noise flow field and drawn as strokes — the swirl. The first design built on the
+     * real generative engine: a particle dropped in the field follows it, and hundreds of them trace the streaks.
+     */
+    @SerialName("flowField")
+    FLOW_FIELD,
+
+    /**
+     * The frame tiled into flat-shaded triangles over a palette gradient — the low-poly look. A jittered grid rather
+     * than a Delaunay of random points, so the facets are even and there are no slivers.
+     */
+    @SerialName("triangularFacets")
+    TRIANGULAR_FACETS,
 }

@@ -47,5 +47,7 @@ object Generators {
     fun forDesign(design: WallpaperDesign): Generator = when (design) {
         WallpaperDesign.LINEAR_GRADIENT -> LinearGradientGenerator
         WallpaperDesign.MESH_GRADIENT -> MeshGradientGenerator
+        WallpaperDesign.FLOW_FIELD -> FlowFieldGenerator
+        WallpaperDesign.TRIANGULAR_FACETS -> TriangularFacetsGenerator
     }
 }
