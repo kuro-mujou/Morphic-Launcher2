@@ -512,12 +512,18 @@ internal fun HomePagerSurface(
             // A widget handles its own taps — its content is another app's views, and every button in it is
             // theirs. The launcher's job here is to *not* intercept.
             is HomeItem.Widget -> Unit
-            // **Neither container opens, and that is the design rather than a gap.** A container has no expanded
-            // view: its contents are already on screen, so what a tap means is whatever it landed on. An icon
-            // container's slots launch and open for themselves (`IconContainerCell`), a widget container's pages
-            // are the widget's own — and a tap on the gaps between them is a tap on the container itself, which
-            // has nothing to do.
-            is HomeItem.IconContainer, is HomeItem.WidgetContainer -> Unit
+            // **A filled container has no expanded view; an empty one opens its add flow.** A container's contents
+            // are already on screen, so a tap on a filled one means whatever it landed on — an icon container's slots
+            // launch and open for themselves (`IconContainerCell`), a widget container's pages are the widget's own,
+            // and a tap on the gaps between them is a tap on the container itself, which has nothing to do. An
+            // *empty* container is all gap, and its only content is a "+"; the glyph is drawn without a button (the
+            // overlap that caused, see `ContainerAddGlyph`), so reaching its add flow is this branch's job. Settings
+            // is the add flow for both: an icon container's app picker and a widget container's bind both live there.
+            is HomeItem.IconContainer ->
+                if (item.icons.isEmpty()) onOpenIconContainerSettings(item.container.id) else Unit
+
+            is HomeItem.WidgetContainer ->
+                if (item.widgets.isEmpty()) onOpenWidgetContainerSettings(item.container.id) else Unit
         }
     }
 
@@ -765,8 +771,6 @@ internal fun HomePagerSurface(
                         cellModifier = cellModifier,
                         itemGestures = itemGestures,
                         metrics = layout.dockMetrics,
-                        onAddWidgetToContainer = onOpenWidgetContainerSettings,
-                        onAddIconToContainer = onOpenIconContainerSettings,
                         onReorderContainer = viewModel::reorderIconContainer,
                         onInsertIntoContainer = viewModel::insertIntoIconContainer,
                     )
@@ -805,8 +809,6 @@ internal fun HomePagerSurface(
                         cellModifier = cellModifier,
                         itemGestures = itemGestures,
                         metrics = layout.mainMetrics,
-                        onAddWidgetToContainer = onOpenWidgetContainerSettings,
-                        onAddIconToContainer = onOpenIconContainerSettings,
                         onReorderContainer = viewModel::reorderIconContainer,
                         onInsertIntoContainer = viewModel::insertIntoIconContainer,
                     )
@@ -1119,8 +1121,6 @@ internal fun HomePagerSurface(
  *   contract instead; a container's slots are the one place a cell needs a click of its own, because the container
  *   is the item and its slots are not.
  * @param onOpenFolder the same, for a folder nested in an icon container.
- * @param onAddWidgetToContainer the "+" of an *empty* widget container, by container id.
- * @param onAddIconToContainer the same, for an empty icon container.
  */
 @Composable
 private fun HomeItemCell(
@@ -1129,8 +1129,6 @@ private fun HomeItemCell(
     cellModifier: Modifier,
     itemGestures: Modifier,
     metrics: IconMetrics,
-    onAddWidgetToContainer: (Long) -> Unit = {},
-    onAddIconToContainer: (Long) -> Unit = {},
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
     onInsertIntoContainer: (Long, IconItem, Int) -> Unit = { _, _, _ -> },
 ) {
@@ -1175,7 +1173,6 @@ private fun HomeItemCell(
             // The zone's own metrics, as every other cell here gets — a container's icons answer to the same
             // guardrails as the icons on the grid around it.
             metrics = metrics,
-            onAddIcon = { onAddIconToContainer(item.container.id) },
             dropTarget = IconContainerDropTarget(
                 containerId = item.container.id,
                 onReorder = { items -> onReorderContainer(item.container.id, items) },
@@ -1190,7 +1187,6 @@ private fun HomeItemCell(
             itemGestures = itemGestures,
             autoRotate = item.container.autoRotate,
             resetOnReturn = item.container.resetOnReturn,
-            onAddWidget = { onAddWidgetToContainer(item.container.id) },
         )
     }
 }

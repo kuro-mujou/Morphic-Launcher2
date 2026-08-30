@@ -62,8 +62,10 @@ private const val AutoRotateIntervalMs = 5_000L
  * right for this one item and wrong for a plain widget.
  *
  * **An empty container gets a "+"**, as an icon container does: something has to be drawn, or a cell that cannot be
- * removed reads as a rendering fault. It runs the add flow this surface already holds — bind a widget, then the
- * provider's configuration screen — aimed at this container rather than at the grid.
+ * removed reads as a rendering fault. It is a plain glyph, not a button — a tap on the empty cell reaches the add
+ * flow this surface already holds (bind a widget, then the provider's configuration screen) through `onOpen`, the
+ * same gesture contract every tap uses, rather than through a second `onClick` that would fire on release after a
+ * long-press had already opened the menu.
  */
 @Composable
 internal fun WidgetContainerCell(
@@ -73,7 +75,6 @@ internal fun WidgetContainerCell(
     itemGestures: Modifier = Modifier,
     autoRotate: Boolean = false,
     resetOnReturn: Boolean = false,
-    onAddWidget: () -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
     val coordinator = requireDragCoordinator()
@@ -91,7 +92,6 @@ internal fun WidgetContainerCell(
                 ContainerAddGlyph(
                     contentDescription = "Add widget",
                     modifier = Modifier.fillMaxSize(),
-                    onAdd = onAddWidget,
                 )
             }
             return@Box

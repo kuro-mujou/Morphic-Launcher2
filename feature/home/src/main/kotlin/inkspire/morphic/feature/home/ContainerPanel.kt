@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,34 +44,28 @@ fun Modifier.containerPanel(): Modifier {
  *
  * Both containers show one, and the widget picker previews both, so it is one composable rather than four — which is
  * also what makes the two cells agree. They did not: the icon container scaled its glyph to a fraction of the cell
- * while the widget container took `IconButton`'s default 24dp, so the same "+" was two sizes on one home screen. The
- * widget container's own KDoc already claimed parity ("as an icon container does"); this is that sentence becoming
- * true.
+ * while the widget container took `IconButton`'s default 24dp, so the same "+" was two sizes on one home screen. That
+ * `IconButton` is gone: it drew a *second* control over a cell that already has the surface's one gesture contract on
+ * it, so a long-press raised the container's menu and the button's own `onClick` then fired the add flow on release —
+ * the overlap this launcher removed everywhere else (CLAUDE.md: cells carry no `onClick`). The "+" is now a plain
+ * glyph, and the empty cell's tap reaches the add flow through `onOpen` like every other tap.
  *
  * A **fraction of the smaller side**, not a dp: a container is sized by the grid it sits on, and a fixed glyph would
  * be a speck in a 4×4 container and fill a 1×1 one.
- *
- * @param onAdd runs the container's own add flow — an app picker, or the widget bind. **Null draws the glyph
- *   without a button**, which is what a *preview* wants: the "+" is part of the picture there, and a control that
- *   ripples and does nothing is worse than no control.
  */
 @Composable
 internal fun ContainerAddGlyph(
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    onAdd: (() -> Unit)? = null,
 ) {
     val colors = LocalMorphicColors.current
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        val glyph: @Composable () -> Unit = {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = contentDescription,
-                tint = colors.contentMuted,
-                modifier = Modifier.size(maxWidth.coerceAtMost(maxHeight) * EmptyGlyphFraction),
-            )
-        }
-        if (onAdd == null) glyph() else IconButton(onClick = onAdd, content = glyph)
+        Icon(
+            imageVector = Icons.Filled.Add,
+            contentDescription = contentDescription,
+            tint = colors.contentMuted,
+            modifier = Modifier.size(maxWidth.coerceAtMost(maxHeight) * EmptyGlyphFraction),
+        )
     }
 }
 

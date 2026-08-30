@@ -59,25 +59,3 @@ Not just "use `rememberSaveable`". Two questions come with it:
 - **How far should it persist?** `rememberSaveable` also survives process death, so HOME would reopen on page three
   a day later. That may be right for the APPS pager and wrong for HOME, and it is a product decision rather than a
   mechanical one.
-
----
-
-## 2. An empty container's "+" fires on release after a long press
-
-**Reproduced on device (2026-08-25).**
-
-Long-press the "+" of an **empty** icon container and hold: the container's own menu opens, correctly. Lift the
-finger: the container's settings open too. One press, two outcomes — and the menu is left behind whatever landed on
-top of it.
-
-It is the same overlap `3c4ec1a` fixed for container *slots*, surviving in the one place that change did not reach.
-`ContainerAddGlyph` is a real `IconButton` inside the cell while the cell's own `launcherItemGestures` sit on the
-whole cell, and `clickable` fires on release regardless of what the gesture did. A filled container behaved exactly
-this way until its slots stopped carrying one.
-
-The fix is the same one, and it is the launcher's stated rule (CLAUDE.md: cells carry no `onClick`; taps arrive
-through the one gesture contract): the "+" should be reached by the cell's own `onOpen`, not by a button.
-
-**Not urgent, and worth saying why:** the two things it does are the two things you might want from that press, so
-it is confusing rather than destructive. It also only exists in the empty state, which is the shortest-lived one a
-container has.

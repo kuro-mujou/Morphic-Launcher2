@@ -51,12 +51,13 @@ import kotlin.math.roundToInt
  * container's menu and then launched the app underneath it, and a completed reorder launched the icon it had just
  * dropped. Taps reach `onOpenInner` instead, which only fires for a gesture the machine actually resolved as a tap.
  *
- * **An empty container draws a "+", and it is a real button.** Something has to be drawn — an empty cell that
- * cannot be removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable widget.
- * It opens `core:designsystem`'s `AppPicker`, which is **this component's first consumer**: it went into the design
- * system ahead of any caller precisely because three of them were named and blocked, and the container's "+" turned
- * out to be the fourth and the first to arrive. Dragging an icon in still works and is the faster route; the button
- * is what makes an empty container usable without one.
+ * **An empty container draws a "+", and it is a plain glyph — not a button.** Something has to be drawn — an empty
+ * cell that cannot be removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable
+ * widget. A tap on it reaches the add flow the same way a tap on a slot reaches its app: through the cell's one
+ * gesture contract (`onOpen`), which resolves the empty container to its settings. It used to be a real `IconButton`,
+ * and that reintroduced the exact overlap the rule above removes — a long-press raised the container's menu and the
+ * button's `onClick` then opened settings on release, one press with two outcomes. Dragging an icon in still works
+ * and is the faster route; the "+" is what makes an empty container usable without one.
  */
 @Composable
 internal fun IconContainerCell(
@@ -64,7 +65,6 @@ internal fun IconContainerCell(
     arrangement: IconArrangement,
     modifier: Modifier = Modifier,
     itemGestures: Modifier = Modifier,
-    onAddIcon: () -> Unit = {},
     metrics: IconMetrics = LocalIconMetrics.current,
     iconScalePercent: Int = 100,
     spacingScalePercent: Int = 100,
@@ -113,7 +113,6 @@ internal fun IconContainerCell(
                     ContainerAddGlyph(
                         contentDescription = "Add app",
                         modifier = Modifier.fillMaxSize(),
-                        onAdd = onAddIcon,
                     )
                     return@Box
                 }
