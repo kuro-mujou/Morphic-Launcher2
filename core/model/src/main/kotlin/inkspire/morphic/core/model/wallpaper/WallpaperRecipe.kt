@@ -11,11 +11,9 @@ import kotlinx.serialization.Serializable
  * phone and a tablet; and the studio's **shuffle** is nothing but a new [seed]. It is also what will make community
  * sharing cheap — a shared recipe is a few bytes re-rendered locally, not a multi-megabyte image.
  *
- * **Filters are not here yet.** The plan's filter stack (the icon studio's effect pipeline, run on the generated
- * bitmap) lands in a later slice, which is where the exact filter type — and which effects a *non-silhouette*
- * wallpaper may carry — is decided. Adding a defaulted `filters` field then is additive and reads every recipe
- * written before it unchanged, so it is left out now rather than committed to a shape prematurely. See
- * `docs/WALLPAPER_STUDIO_PLAN.md` (W4).
+ * **[filters] are the post-process the generator's bitmap is put through** — a strength per [WallpaperFilter], absent
+ * meaning off. Defaulted empty, so a recipe from before filters existed reads back unchanged, and
+ * `encodeDefaults = false` writes nothing for an unfiltered wallpaper.
  *
  * **Persisted per orientation.** A recipe is composed for a shape ([aspect]) and, like the home grid's coordinate
  * placements, a portrait and a landscape framing are stored separately — the render layer's business, not this
@@ -34,6 +32,7 @@ import kotlinx.serialization.Serializable
  *   it under `encodeDefaults = false`.
  * @property palette the colors the generator paints from.
  * @property aspect the shape it is composed for.
+ * @property filters the post-process passes and their strengths, applied to the finished bitmap.
  */
 @Serializable
 data class WallpaperRecipe(
@@ -42,4 +41,5 @@ data class WallpaperRecipe(
     val params: DesignParams = DesignParams(),
     val palette: Palette = Palette.Fallback,
     val aspect: WallpaperAspect = WallpaperAspect.VERTICAL,
+    val filters: Map<WallpaperFilter, Float> = emptyMap(),
 )

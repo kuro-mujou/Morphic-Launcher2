@@ -140,12 +140,20 @@ cannot) is left open below — but it is an enhancement on those specific genera
 
 ### The one refactor worth doing: a shared bitmap-filter runner
 
+**Blocked by a module boundary — the reason W4's filters are drawn fresh instead.** The idea below is still the right
+end state, but it cannot be built as written: the icon helpers live in `core:icon`, which **depends on** `core:graphics`
+(for `BitmapBlur`), so `core:graphics`'s `FilterPipeline` cannot reach back into them without a dependency cycle. The
+fix is to lift the pure per-pixel helpers *down* into `core:graphics` (or a new leaf both modules see) — a real move,
+deferred until a second consumer makes it pay. W4 shipped its four passes (Blur/Vignette/Grain/Scanlines) written
+directly in `core:graphics` in the meantime; only Grain overlaps the icon helpers, so the duplication bought by waiting
+is one small function, not the whole list.
+
 The icon effect passes live in `IconRenderer` and operate on a **square icon bitmap**, but the *silently-wrong* math
 is already extracted into **pure, bitmap-size-agnostic helpers** (`LayerRipple.sampleDistancePx`,
 `LayerGrain.displace`, `LayerDither.quantize`, `LayerTritone.apply`, `Oklab.mix`, `LayerPixelate.averageArgb`, …).
-Those take `pixels + coords`, not "an icon". So the wallpaper `FilterPipeline` **reuses the helpers directly** and
-writes its own loop over a `width × height` bitmap — no duplication of the risky arithmetic, which is exactly the
-shared-derivation rule the codebase runs on.
+Those take `pixels + coords`, not "an icon". So a wallpaper `FilterPipeline` **could reuse the helpers directly** and
+write its own loop over a `width × height` bitmap — no duplication of the risky arithmetic, which is exactly the
+shared-derivation rule the codebase runs on — *once the modules allow it*.
 
 Two things a wallpaper filter must decide that an icon bake did not:
 
@@ -204,8 +212,17 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   and tapping a palette recolors the current design with a crossfade (`setPalette` → re-render). Device-verified.
   **Deferred to a later pass:** an editable per-stop strip, color opacity, a palette **lock** across design changes,
   and a palette **shuffle**.
-- **W4 — filters.** The `FilterPipeline` panel, reusing the icon effect helpers — Ripple, Pixelate, ProgressiveBlur,
-  Grain, Chromatic, Vignette, Color grading first (all reuse), then the new ones (Kaleidoscope, Scanlines, CRT).
+- **W4 — filters. ✅ (2026-08-30)** A third bottom-bar chooser (a *tune* toggle beside the palette one) flips to filter
+  chips; each is a switch that turns a `WallpaperFilter` on at a default strength and re-renders with a crossfade. Four
+  passes shipped — **Blur, Vignette, Grain, Scanlines** — all device-verified on a Flow field. `FilterPipeline` became
+  a concrete `object` (`apply(bitmap, Map<WallpaperFilter, Float>)`): blur reuses `BitmapBlur`, the other three are
+  small pure `IntArray` passes with their own `FilterPipelineTest`. The recipe gained `filters: Map<WallpaperFilter,
+  Float>` (defaulted empty, so old recipes read back).
+  **The plan's "reuse the icon effect helpers" did not survive contact:** `core:graphics` cannot depend on `core:icon`
+  (the arrow runs the other way, for `BitmapBlur`), so the passes are drawn fresh here rather than borrowed. Unifying
+  the two studios' per-pixel math — the "shared bitmap-filter runner" below — is the real refactor left for later; it
+  is not a prerequisite for shipping filters. A strength **slider** per filter is the obvious next refinement (the
+  recipe already stores a `Float`, so no model change); chips commit a fixed default for now.
 - **W5 — the rest of the generators.** Fill out toward the 22, group by group, each with its Style parameters.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.

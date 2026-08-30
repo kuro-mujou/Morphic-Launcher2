@@ -3,9 +3,11 @@ package inkspire.morphic.feature.settings.wallpaperstudio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
+import inkspire.morphic.core.graphics.wallpaper.FilterPipeline
 import inkspire.morphic.core.graphics.wallpaper.Generators
 import inkspire.morphic.core.model.wallpaper.Palette
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
+import inkspire.morphic.core.model.wallpaper.WallpaperFilter
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
 import inkspire.morphic.data.wallpaper.WallpaperRepository
 import inkspire.morphic.data.wallpaper.WallpaperSource
@@ -32,8 +34,10 @@ import kotlin.random.Random
  * the picture is exactly the resolution it is shown at rather than a fixed guess scaled to fit. Nothing renders until
  * a size is known.
  *
- * No repository yet: this slice previews and mutates but does not *apply*. Setting a generated bitmap as the system
- * wallpaper is the next slice, and it needs a bitmap seam `WallpaperRepository` does not have.
+ * **A filter change re-renders from the generator, not from the shown bitmap.** The filter stack is not reversible
+ * (a blur cannot be un-blurred), so there is no filtered bitmap to peel a pass off — the honest thing is to redraw the
+ * generator and re-apply the whole (cheaper) stack. Generation dominates that cost anyway, so folding the filters into
+ * the same [rerender] keeps one render path rather than a second incremental one.
  */
 class WallpaperStudioViewModel(
     private val wallpaperRepository: WallpaperRepository,
@@ -83,6 +87,21 @@ class WallpaperStudioViewModel(
     }
 
     /**
+     * Turn [filter] on at its default strength, or off if it is already on — the studio's filter chips.
+     *
+     * A chip is a switch, so the recipe only ever carries a filter at one strength here; the [WallpaperRecipe]'s
+     * `Float` per filter leaves room for a strength slider later without a model change.
+     */
+    fun toggleFilter(filter: WallpaperFilter) {
+        mutableState.update {
+            val filters = it.recipe.filters.toMutableMap()
+            if (filters.remove(filter) == null) filters[filter] = DefaultStrengths.getValue(filter)
+            it.copy(recipe = it.recipe.copy(filters = filters))
+        }
+        rerender()
+    }
+
+    /**
      * Sets the picture on screen as the system wallpaper, then calls [onApplied].
      *
      * **Applies the bitmap the user is looking at, not a re-render.** The preview already fills the screen, so its
@@ -116,8 +135,10 @@ class WallpaperStudioViewModel(
         val recipe = mutableState.value.recipe
         renderJob?.cancel()
         renderJob = viewModelScope.launch(Dispatchers.Default) {
-            val bitmap = Generators.forDesign(recipe.design)
+            val base = Generators.forDesign(recipe.design)
                 .render(width, height, recipe.palette, recipe.params, recipe.seed)
+            ensureActive()
+            val bitmap = FilterPipeline.apply(base, recipe.filters)
             ensureActive()
             mutableState.update { it.copy(bitmap = bitmap) }
         }
@@ -127,5 +148,13 @@ class WallpaperStudioViewModel(
 
         /** What the studio opens on — one of the curated sets, warm-and-cool so any design has somewhere to go. */
         val DefaultPalette = Palette(ColorPalettes.all.first { it.name == "Dusk" }.colors)
+
+        /** The strength a filter turns on at when its chip is tapped — a visible-but-not-overwhelming default each. */
+        val DefaultStrengths = mapOf(
+            WallpaperFilter.BLUR to 0.4f,
+            WallpaperFilter.VIGNETTE to 0.6f,
+            WallpaperFilter.GRAIN to 0.5f,
+            WallpaperFilter.SCANLINES to 0.6f,
+        )
     }
 }

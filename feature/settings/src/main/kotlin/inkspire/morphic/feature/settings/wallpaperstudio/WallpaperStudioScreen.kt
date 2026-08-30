@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
+import inkspire.morphic.core.model.wallpaper.WallpaperFilter
+import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
 import inkspire.morphic.feature.settings.iconstudio.StudioIconButton
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.abs
@@ -71,9 +74,9 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
 
-    // Which chooser the bottom bar is showing — the designs or the palettes. UI position, not recipe, so it is
-    // remembered across rotation but never stored.
-    var showColors by rememberSaveable { mutableStateOf(false) }
+    // Which chooser the bottom bar is showing — the designs, the palettes, or the filters. UI position, not recipe, so
+    // it is remembered across rotation but never stored.
+    var mode by rememberSaveable { mutableStateOf(ChooserMode.DESIGNS) }
 
     BackHandler(onBack = onBack)
 
@@ -133,33 +136,37 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
         )
 
         BottomChooser(
-            showColors = showColors,
-            onToggleColors = { showColors = !showColors },
-            currentDesign = state.recipe.design,
-            currentPaletteColors = state.recipe.palette.colors,
+            mode = mode,
+            onModeToggle = { tapped -> mode = if (mode == tapped) ChooserMode.DESIGNS else tapped },
+            recipe = state.recipe,
             onPickDesign = viewModel::pickDesign,
             onSetPalette = viewModel::setPalette,
+            onToggleFilter = viewModel::toggleFilter,
             onShuffle = viewModel::shuffle,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 }
 
+/** Which of the three choosers the bottom bar is showing. [DESIGNS] is home — the two toggles flip to and from it. */
+private enum class ChooserMode { DESIGNS, COLORS, FILTERS }
+
 /**
- * The bottom bar: the color toggle, the chooser it flips between (the designs or the palettes), and the shuffle.
+ * The bottom bar: the two chooser toggles, the chooser they flip between (designs, palettes or filters), and the
+ * shuffle.
  *
- * **One chooser slot, two contents.** The toggle swaps the middle between the design chips and the palette pills
- * rather than stacking both, so the bar stays one row over the wallpaper. The shuffle re-seeds whichever design is
- * showing — a new variation, the same for both choosers.
+ * **One chooser slot, three contents.** The palette and filter toggles swap the middle rather than stacking, so the
+ * bar stays one row over the wallpaper; either toggle flips back to the designs when it is already on. The shuffle
+ * re-seeds whichever design is showing — a new variation, the same whatever the chooser.
  */
 @Composable
 private fun BottomChooser(
-    showColors: Boolean,
-    onToggleColors: () -> Unit,
-    currentDesign: WallpaperDesign,
-    currentPaletteColors: List<Int>,
+    mode: ChooserMode,
+    onModeToggle: (ChooserMode) -> Unit,
+    recipe: WallpaperRecipe,
     onPickDesign: (WallpaperDesign) -> Unit,
     onSetPalette: (List<Int>) -> Unit,
+    onToggleFilter: (WallpaperFilter) -> Unit,
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -171,38 +178,59 @@ private fun BottomChooser(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // The one toggle between the two choosers — lit while the palettes are showing.
         StudioIconButton(
             icon = Icons.Default.Palette,
             contentDescription = "Colors",
-            onClick = onToggleColors,
-            selected = showColors,
+            onClick = { onModeToggle(ChooserMode.COLORS) },
+            selected = mode == ChooserMode.COLORS,
+        )
+        StudioIconButton(
+            icon = Icons.Default.Tune,
+            contentDescription = "Filters",
+            onClick = { onModeToggle(ChooserMode.FILTERS) },
+            selected = mode == ChooserMode.FILTERS,
         )
         Box(modifier = Modifier.weight(1f)) {
-            if (showColors) {
-                // Lazy, because the bank runs to a couple of hundred palettes — the picker ribbon's reason.
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(ColorPalettes.all, key = { it.name }) { palette ->
-                        PalettePill(
-                            colors = palette.colors,
-                            selected = palette.colors == currentPaletteColors,
-                            onClick = { onSetPalette(palette.colors) },
-                        )
+            when (mode) {
+                ChooserMode.COLORS ->
+                    // Lazy, because the bank runs to a couple of hundred palettes — the picker ribbon's reason.
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(ColorPalettes.all, key = { it.name }) { palette ->
+                            PalettePill(
+                                colors = palette.colors,
+                                selected = palette.colors == recipe.palette.colors,
+                                onClick = { onSetPalette(palette.colors) },
+                            )
+                        }
                     }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    WallpaperDesign.entries.forEach { design ->
-                        DesignChip(
-                            label = design.label,
-                            selected = design == currentDesign,
-                            onClick = { onPickDesign(design) },
-                        )
+
+                ChooserMode.FILTERS ->
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        WallpaperFilter.entries.forEach { filter ->
+                            ChooserChip(
+                                label = filter.label,
+                                selected = filter in recipe.filters,
+                                onClick = { onToggleFilter(filter) },
+                            )
+                        }
                     }
-                }
+
+                ChooserMode.DESIGNS ->
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        WallpaperDesign.entries.forEach { design ->
+                            ChooserChip(
+                                label = design.label,
+                                selected = design == recipe.design,
+                                onClick = { onPickDesign(design) },
+                            )
+                        }
+                    }
             }
         }
         StudioIconButton(
@@ -213,9 +241,9 @@ private fun BottomChooser(
     }
 }
 
-/** One design in the picker row — its name, lit when it is the one showing. */
+/** One labelled chip in the picker row — a design or a filter, lit when it is the one showing / turned on. */
 @Composable
-private fun DesignChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun ChooserChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -260,4 +288,13 @@ private val WallpaperDesign.label: String
         WallpaperDesign.MESH_GRADIENT -> "Mesh"
         WallpaperDesign.FLOW_FIELD -> "Flow"
         WallpaperDesign.TRIANGULAR_FACETS -> "Facets"
+    }
+
+/** A short, human name for the filter chip — the enum name is a code identifier, not a label. */
+private val WallpaperFilter.label: String
+    get() = when (this) {
+        WallpaperFilter.BLUR -> "Blur"
+        WallpaperFilter.VIGNETTE -> "Vignette"
+        WallpaperFilter.GRAIN -> "Grain"
+        WallpaperFilter.SCANLINES -> "Scanlines"
     }
