@@ -39,8 +39,16 @@ additive things.
 Recommended order: **glass → dither → OKLCH ramps → palettes.** One killer new effect, one stylistic family,
 one quality lift, one content win — all clean ports.
 
-**Shipped so far: `Glass` and `Dither`** (`LayerEffect.Glass`, `LayerEffect.Dither`), both device-verified. OKLCH
-ramps and palettes remain.
+**Shipped so far: `Glass`, `Dither` and `Tritone`** (`LayerEffect.Glass`, `LayerEffect.Dither`,
+`LayerEffect.Tritone`), all device-verified. Palettes remain.
+
+The perceptual-color item (#4 below) landed as **`Tritone`**, not as a change to `Bloom` or `Duotone`. Tracing the
+real ramp code overturned the premise here: every ramp in `LayerGradient` (Bloom, Gloss, Vignette) is a *single
+hue* fading to its own transparent, so OKLCH does nothing there. The only two-hue interpolation is `Duotone`'s, and
+that is a `ColorMatrix` shared with ten authored filter presets — OKLCH-ifying it in place would either break that
+shared derivation or force rewriting the whole `Filter` matrix path. So perceptual color went in additively as a
+new three-color grade (`Oklab` + `LayerTritone`), leaving the live matrix `Duotone` untouched. **OKLab, not OKLCH**
+— a straight perceptual line is predictable for a curated ramp where OKLCH's hue arc can swing the long way round.
 
 ### 1. Glass / refraction — new effect class, highest value
 

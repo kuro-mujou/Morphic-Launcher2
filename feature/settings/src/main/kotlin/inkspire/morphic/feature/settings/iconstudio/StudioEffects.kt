@@ -141,6 +141,7 @@ internal fun EffectsControls(
             EffectSlice.COLOR -> ColorControls(target.effects, onEffects, onCommit)
             EffectSlice.FILTER -> FilterControls(target.effects, onEffects, onCommit)
             EffectSlice.DUOTONE -> DuotoneControls(target.effects, onEffects, onCommit)
+            EffectSlice.TRITONE -> TritoneControls(target.effects, onEffects, onCommit)
             EffectSlice.BLOOM -> BloomControls(target.effects, onEffects, onCommit)
             EffectSlice.GLOSS -> GlossControls(target.effects, onEffects, onCommit)
             EffectSlice.VIGNETTE -> VignetteControls(target.effects, onEffects, onCommit)

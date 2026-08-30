@@ -559,9 +559,9 @@ above). What is left of §8 is the **effect mask**, which was always last becaus
 of effects. **One plan claim is already overturned** — the
 "missing alpha-inverting matrix" was never needed: destination-out over a filled buffer *is* the inversion, and
 outline's erosion is that same op twice. One number worth watching: four of the six do not draw live, taking the total to ten
-of nineteen — and twelve of twenty-one now `Glass` and `Dither` (the first two effects harvested from the gart
-study) have landed, both non-live — and `drawsLive` is all-or-nothing per icon — so most recipes worth making will
-preview from the bake, and the live path narrows to the plain ones.
+of nineteen — and thirteen of twenty-two now `Glass`, `Dither` and `Tritone` (the first three effects harvested from
+the gart study) have landed, all non-live — and `drawsLive` is all-or-nothing per icon — so most recipes worth
+making will preview from the bake, and the live path narrows to the plain ones.
 
 Thirteen effects were drawn from captures of another icon studio, and the plan's whole finding is that
 **only the *live* path has API restrictions**: the bake owns a software bitmap, so a blur is a `BlurMaskFilter` and

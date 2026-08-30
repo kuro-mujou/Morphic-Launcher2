@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BlurLinear
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.BorderOuter
+import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.Deblur
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.FlipToBack
@@ -198,6 +199,16 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     DUOTONE("Duotone", Icons.Default.Palette, EffectKind.ADDITION),
 
     /**
+     * The layer's tones mapped onto a **three-color** ramp, interpolated perceptually — see `LayerEffect.Tritone`.
+     *
+     * **Beside [DUOTONE] because it is its richer sibling.** A duotone is two colors and a live matrix; this adds a
+     * mid color and interpolates in OKLab, so the mid-tones read as a real color rather than sRGB's gray dip — at
+     * the cost of being baked, never live. The two are a deliberate pair, not a redundancy: the cheap grade and the
+     * vivid one.
+     */
+    TRITONE("Tritone", Icons.Default.Contrast, EffectKind.ADDITION),
+
+    /**
      * Light or shade spilling across the artwork — the two-stop overlay, linear or radial.
      *
      * **This is the entry that used to read "Gradient"**, and the rename is the rule rather than a preference: every
@@ -346,6 +357,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
         OPACITY, BLEND -> null
         COLOR -> effects.filterIsInstance<LayerEffect.Color>().firstOrNull()
         DUOTONE -> effects.filterIsInstance<LayerEffect.Duotone>().firstOrNull()
+        TRITONE -> effects.filterIsInstance<LayerEffect.Tritone>().firstOrNull()
         BLOOM -> effects.filterIsInstance<LayerEffect.Bloom>().firstOrNull()
         GLOSS -> effects.filterIsInstance<LayerEffect.Gloss>().firstOrNull()
         VIGNETTE -> effects.filterIsInstance<LayerEffect.Vignette>().firstOrNull()
@@ -411,6 +423,7 @@ internal enum class EffectSlice(val label: String, val icon: ImageVector, val ki
     fun seeded(): LayerEffect? = when (this) {
         OPACITY, BLEND, COLOR, FILTER -> null
         DUOTONE -> DuotoneDefaults
+        TRITONE -> TritoneDefaults
         BLOOM -> BloomDefaults
         GLOSS -> GlossDefaults
         VIGNETTE -> VignetteDefaults

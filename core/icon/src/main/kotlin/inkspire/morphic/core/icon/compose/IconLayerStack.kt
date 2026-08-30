@@ -415,6 +415,7 @@ private fun effectModifier(effect: LayerEffect, spec: IconLayerSpec?, inkFit: Sh
     is LayerEffect.ProgressiveBlur,
     is LayerEffect.Glass,
     is LayerEffect.Dither,
+    is LayerEffect.Tritone,
         -> Modifier
 
     // **The only effect that draws the content instead of over it**, so the layer's own pixels never appear: what

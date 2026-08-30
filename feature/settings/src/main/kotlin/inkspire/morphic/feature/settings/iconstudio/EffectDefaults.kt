@@ -36,6 +36,7 @@ internal const val UnitFloor = 0.05f
  * *is* both answers, and the sliders that read `1f` and `0f` for hue, saturation and brightness were right all along.
  */
 internal val DuotoneDefaults = LayerEffect.Duotone()
+internal val TritoneDefaults = LayerEffect.Tritone()
 internal val BloomDefaults = LayerEffect.Bloom()
 internal val GlossDefaults = LayerEffect.Gloss()
 internal val VignetteDefaults = LayerEffect.Vignette()

@@ -427,6 +427,8 @@ class IconRenderer(
                 // No guard, like the glass: an enabled dither always quantizes, so there is never nothing to do.
                 is LayerEffect.Dither -> replace { dithered(it, effect, sizePx, bake) }
 
+                is LayerEffect.Tritone -> replace { tritoned(it, effect, sizePx, bake) }
+
                 // The same halo again, cast by the *complement* of the silhouette and laid back inside it — a recess
                 // thrown and laid on plainly, or light centered on the edge and screened onto it.
                 is LayerEffect.InnerShadow -> replace {
@@ -928,6 +930,37 @@ class IconRenderer(
                 val ci = (y / cellPx) * cols + (x / cellPx)
                 val packed = (alpha shl 24) or (outR[ci] shl 16) or (outG[ci] shl 8) or outB[ci]
                 out[at] = packed
+            }
+        }
+
+        val bitmap = createBitmap(sizePx, sizePx)
+        bitmap.setPixels(out, 0, sizePx, 0, 0, sizePx, sizePx)
+        return bitmap
+    }
+
+    /**
+     * [source] with its tones mapped onto a three-color ramp — the tritone.
+     *
+     * **Unlike the dither, this bands across cores**, because it is genuinely per pixel with nothing carried between
+     * them: the OKLab ramp is built once up front ([LayerTritone.ramp]), and each pixel then only reads a luminance
+     * and a table entry, so the rows are independent and [overRows] splits them the way `resample` does.
+     */
+    private suspend fun tritoned(
+        source: Bitmap,
+        tritone: LayerEffect.Tritone,
+        sizePx: Int,
+        bake: CoroutineContext,
+    ): Bitmap {
+        val ramp = LayerTritone.ramp(tritone.shadowArgb, tritone.midArgb, tritone.highlightArgb)
+
+        val pixels = IntArray(sizePx * sizePx)
+        source.getPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
+        val out = IntArray(pixels.size)
+
+        overRows(sizePx, bake) { y ->
+            for (x in 0 until sizePx) {
+                val at = y * sizePx + x
+                out[at] = LayerTritone.apply(pixels[at], ramp, tritone.strength)
             }
         }
 

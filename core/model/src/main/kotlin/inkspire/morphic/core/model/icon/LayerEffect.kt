@@ -1491,6 +1491,71 @@ sealed interface LayerEffect {
     }
 
     /**
+     * The layer's tones mapped onto a **three-color** ramp — shadows to [shadowArgb], mid-tones to [midArgb],
+     * highlights to [highlightArgb] — interpolated perceptually. [Duotone]'s richer sibling, and the first effect
+     * built on the OKLab color-space work harvested from the gart study.
+     *
+     * **Why this is not just a `Duotone` with an extra color.** A duotone is a *color matrix*: it interpolates its
+     * two ends by a straight line in sRGB, which is cheap and live-drawable but dips through a gray, muddy midpoint
+     * — a violet and a gold meet at a dead mauve. A matrix cannot do anything else; a curve through a *third* color
+     * is not expressible as one, and neither is honest perceptual interpolation. So this is a per-pixel pass that
+     * builds a lookup table in **OKLab** ([LayerTritone] via [Oklab]), where the mid band reads as a real color. The
+     * two coexist honestly: [Duotone] stays the cheap live two-color theming control, this is the vivid baked grade.
+     *
+     * **OKLab, not OKLCh** — for a ramp whose colors the user picked, a straight perceptual line is predictable
+     * where OKLCh's hue arc can pass through a color neither end implies. See [Oklab].
+     *
+     * **The mid sits at the halfway tone**, fixed. A movable midpoint is a real thing to want and a plain addition
+     * later; it is left out of the first cut so the effect is three colors and a strength, not a gradient editor.
+     *
+     * **Per-pixel, so baked-only** — the grade is a luminance lookup per pixel, which is `IntArray` arithmetic in the
+     * bake and AGSL (API 33+) live, against a `minSdk` of 26. So [drawsLive] is false and the studio previews from
+     * the bake, as every recolor-by-tone here must.
+     *
+     * @property shadowArgb what the darkest tones map to. Its alpha is ignored — a ramp has no opacity of its own,
+     *   and the layer's own alpha carries through untouched, which keeps this a recoloring rather than a fill.
+     * @property midArgb what the mid-tones map to — the color the two segments meet at, and the whole reason this is
+     *   not a duotone.
+     * @property highlightArgb what the lightest tones map to.
+     * @property strength how far the mapping is taken, 0..1 — the layer untouched through to the full grade. A
+     *   per-pixel blend toward the mapped color, which is this effect's own switch: at zero it changes nothing.
+     */
+    @Serializable
+    @SerialName("tritone")
+    data class Tritone(
+        /**
+         * **A cool deep shadow and a warm sand highlight, [Duotone]'s own ends** — so a user who knows the duotone
+         * default meets a familiar grade, with the mid the new thing. The two being opposite in temperature is what
+         * keeps the ramp legible rather than reading as a tint.
+         */
+        val shadowArgb: Int = 0xFF241B4E.toInt(),
+        /**
+         * **A rose off the line between the ends**, chosen so the mid is visibly its own color rather than what the
+         * shadow and highlight would have blended to anyway — which is the whole point the effect has to make on
+         * arrival. A mid that sat on the violet-to-sand line would make this look like a duotone that cost more.
+         */
+        val midArgb: Int = 0xFFB65A78.toInt(),
+        /** @see shadowArgb */
+        val highlightArgb: Int = 0xFFFFD9A0.toInt(),
+        /**
+         * **The full grade**, like [Duotone]: a partial map reads as a wash over the app's own colors, where the
+         * whole of what this is for is that the app's colors stop mattering. Backing off is the obvious next move.
+         */
+        val strength: Float = 1f,
+        override val enabled: Boolean = true,
+    ) : LayerEffect {
+
+        /**
+         * Taken none of the way is the only way this paints nothing — [Duotone]'s reasoning exactly. There is no
+         * triple of colors that leaves an icon unchanged, so the strength is the floor and the switch is the off.
+         */
+        override val isIdentity: Boolean get() = strength <= 0f
+
+        /** A per-pixel luminance lookup, so AGSL and API 33+ live — where the bake reads an `IntArray` at every API. */
+        override val drawsLive: Boolean get() = false
+    }
+
+    /**
      * One of the built-in color looks, by id — see [IconFilter] for why the table lives in `core:icon` and why
      * this is a fixed vocabulary rather than curated content.
      *
@@ -1574,6 +1639,7 @@ fun LayerEffect.withEnabled(enabled: Boolean): LayerEffect = when (this) {
     is LayerEffect.ProgressiveBlur -> copy(enabled = enabled)
     is LayerEffect.Glass -> copy(enabled = enabled)
     is LayerEffect.Dither -> copy(enabled = enabled)
+    is LayerEffect.Tritone -> copy(enabled = enabled)
 }
 
 /**

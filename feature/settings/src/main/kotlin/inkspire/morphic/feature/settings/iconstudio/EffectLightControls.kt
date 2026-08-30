@@ -63,6 +63,50 @@ internal fun DuotoneControls(
 }
 
 /**
+ * The layer's tones mapped onto a three-color ramp, interpolated perceptually — see `LayerEffect.Tritone`.
+ *
+ * **`DuotoneControls` with a mid color**, which is the whole of what separates the two effects: a shadow, a
+ * mid-tone and a highlight, in the order the ramp climbs, and a strength. The perceptual interpolation is the
+ * renderer's business, not a control here — there is nothing to choose about it.
+ */
+@Composable
+internal fun TritoneControls(
+    effects: List<LayerEffect>,
+    onUpdate: ((List<LayerEffect>) -> List<LayerEffect>) -> Unit,
+    onCommit: () -> Unit,
+) {
+    val tritone = effects.effectOrNull<LayerEffect.Tritone>() ?: LayerEffect.Tritone()
+
+    // In the order the ramp climbs — shadows are the end it is measured from.
+    LabeledControl("Shadows") {
+        ColorField(argb = tritone.shadowArgb) { argb ->
+            onUpdate { it.withEffect(tritone.copy(shadowArgb = argb)) }
+        }
+    }
+
+    LabeledControl("Mid-tones") {
+        ColorField(argb = tritone.midArgb) { argb ->
+            onUpdate { it.withEffect(tritone.copy(midArgb = argb)) }
+        }
+    }
+
+    LabeledControl("Highlights") {
+        ColorField(argb = tritone.highlightArgb) { argb ->
+            onUpdate { it.withEffect(tritone.copy(highlightArgb = argb)) }
+        }
+    }
+
+    SliderControl(
+        label = "Strength",
+        value = tritone.strength,
+        valueRange = 0f..1f,
+        default = TritoneDefaults.strength,
+        onValueChange = { value -> onUpdate { it.withEffect(tritone.copy(strength = value)) } },
+        onValueChangeFinished = onCommit,
+    )
+}
+
+/**
  * The bloom's falloff, its color, and how strongly it is laid on.
  *
  * **Strength doubles as the on/off switch**: at zero the effect is identity and `withEffect` drops it from the list
