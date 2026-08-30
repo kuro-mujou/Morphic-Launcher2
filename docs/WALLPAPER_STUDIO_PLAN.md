@@ -191,11 +191,14 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   verified by **`GeneratorRenderHarness`** — an instrumentation test that paints every `WallpaperDesign` to a PNG in
   `/sdcard/Pictures/genharness` for a human to judge (the one thing an `IntArray` test cannot). *Not* yet set as
   wallpaper — that seam is W2.
-- **W2 — the editor shell + transitions.** `feature:wallpaperstudio`: live preview, the design picker (swipe + grid),
-  the aspect toggle, save/apply/undo. The **`TransitionController`** with a **crossfade** between the outgoing bitmap
-  and a re-seeded one — swipe re-rolls the seed, grid-select crossfades design→design. This is where the premium
-  motion lives; the per-generator interpolated morph is deferred to a later pass. Mirror `feature:settings/iconstudio`'s
-  MVVM.
+- **W2 — the editor + apply. ✅ (2026-08-30)** Built as **`feature:settings/wallpaperstudio`** (a subpackage, mirroring
+  `iconstudio` — *not* its own module; that settles the open question below). **W2a:** the editor screen — a full-bleed
+  live preview, the design picker (tap + horizontal-swipe-to-shuffle), a **`Crossfade`** transition, off-thread
+  rendering at the preview's pixel size, reached via Settings→Wallpaper→"Design a wallpaper". **W2b:** *applying* it —
+  `WallpaperRepository` gained a **bitmap `setImage`** (it was URI/file-only), and the studio's check button
+  stores-then-applies the on-screen bitmap to HOME+LOCK. Device-verified: design a Flow Field, tap apply, it is the
+  launcher's wallpaper. **Deferred:** the Vertical/Squared **aspect toggle**, and undo. The per-generator interpolated
+  morph stays deferred; the crossfade is the motion for now.
 - **W3 — color.** The palette strip + suggested palettes + shuffle + lock; the picker's opacity + palette tab.
 - **W4 — filters.** The `FilterPipeline` panel, reusing the icon effect helpers — Ripple, Pixelate, ProgressiveBlur,
   Grain, Chromatic, Vignette, Color grading first (all reuse), then the new ones (Kaleidoscope, Scanlines, CRT).
