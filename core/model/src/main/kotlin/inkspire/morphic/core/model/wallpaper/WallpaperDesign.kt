@@ -24,4 +24,11 @@ enum class WallpaperDesign {
      */
     @SerialName("linearGradient")
     LINEAR_GRADIENT,
+
+    /**
+     * A soft field where seeded points each pull the picture toward a palette color — the lava-lamp blend. The first
+     * of the gart-harvest designs, and the gentlest: pure inverse-distance weighting, no geometry.
+     */
+    @SerialName("meshGradient")
+    MESH_GRADIENT,
 }
