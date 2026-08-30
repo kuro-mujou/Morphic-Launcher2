@@ -180,11 +180,17 @@ colors strokes along it, a gradient interpolates it (perceptually, via `Oklab` �
 
 Sequenced so each phase is a usable slice, leading with the pieces that carry the look and reuse the most.
 
-- **W0 — model + engine skeleton.** `WallpaperDesign`/`DesignParams`/`WallpaperRecipe`/`Palette` in `core:model`; the
-  `Generator` interface + `FilterPipeline` in `core:graphics`; wire recipe persistence into `data:wallpaper`. No UI.
-- **W1 — first three generators, end to end.** One from each headline group — **Triangular Facets** (Delaunay),
-  **Flow Field** (streamlines), **Mesh Gradient** (gradient) — rendered to a bitmap and *set as wallpaper*. Proves the
-  whole pipeline on device with the smallest surface.
+- **W0 — model + engine skeleton. ✅ (2026-08-30)** `WallpaperDesign` / `DesignParams` / `WallpaperRecipe` / `Palette`
+  in `core:model`; the `Generator` interface + a total `Generators` `when` + `FilterPipeline` seam in `core:graphics`;
+  one trivial `LinearGradientGenerator` to prove recipe → bitmap. Recipe persistence deferred to W2 (no consumer yet).
+  The design enum grows one value per built generator, so the registry stays total.
+- **W1 — first three generators, end to end. ✅ (2026-08-30)** **Mesh Gradient** (inverse-distance blend), **Flow
+  Field** (`PerlinNoise2d` + streamline tracing), **Triangular Facets** (jittered-grid low-poly) — each rendering a
+  full 1080×2400 wallpaper, device-verified. Two decisions worth carrying forward: **Facets uses a jittered grid, not
+  Delaunay** (even facets, no slivers; the irregular-shard look is Voronoi/*Vitrall*'s job), and generator *looks* are
+  verified by **`GeneratorRenderHarness`** — an instrumentation test that paints every `WallpaperDesign` to a PNG in
+  `/sdcard/Pictures/genharness` for a human to judge (the one thing an `IntArray` test cannot). *Not* yet set as
+  wallpaper — that seam is W2.
 - **W2 — the editor shell + transitions.** `feature:wallpaperstudio`: live preview, the design picker (swipe + grid),
   the aspect toggle, save/apply/undo. The **`TransitionController`** with a **crossfade** between the outgoing bitmap
   and a re-seeded one — swipe re-rolls the seed, grid-select crossfades design→design. This is where the premium
