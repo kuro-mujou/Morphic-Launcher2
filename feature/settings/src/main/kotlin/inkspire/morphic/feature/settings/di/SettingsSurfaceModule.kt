@@ -29,7 +29,7 @@ val settingsSurfaceModule = module {
     viewModel { SettingsShellViewModel(get()) }
     viewModel { SurfaceRegisterViewModel(get()) }
     viewModel { WallpaperViewModel(get()) }
-    viewModel { WallpaperStudioViewModel() }
+    viewModel { WallpaperStudioViewModel(get()) }
     viewModel { DockViewModel(get(), get(), get()) }
     viewModel { GridSizeViewModel(get(), get(), get()) }
     viewModel { HomeHubViewModel(get()) }

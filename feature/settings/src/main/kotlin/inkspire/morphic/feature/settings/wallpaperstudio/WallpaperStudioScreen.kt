@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -101,6 +102,19 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(12.dp),
+        )
+
+        StudioIconButton(
+            icon = Icons.Default.Check,
+            contentDescription = "Set as wallpaper",
+            onClick = { viewModel.apply(onApplied = onBack) },
+            // Nothing to apply until the first render lands, and one write at a time — the model guards the second,
+            // this greys the button while it runs so the guard is visible rather than silent.
+            enabled = state.bitmap != null && !state.applying,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
                 .statusBarsPadding()
                 .padding(12.dp),
         )

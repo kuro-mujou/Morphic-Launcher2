@@ -274,6 +274,16 @@ interface WallpaperRepository {
     )
 
     /**
+     * Stores [bitmap] as the wallpaper image directly — the path for a picture that is *generated* rather than
+     * decoded from a file (the wallpaper studio's output).
+     *
+     * **No crop and no scale, unlike the URI form.** A generated bitmap is produced at exactly the size it should
+     * be, so there is nothing to frame or resample; it is written as-is. Like the URI form this only *stores* —
+     * [apply] is what puts it on the system — and it marks the stored image not-yet-applied for the same reason.
+     */
+    suspend fun setImage(bitmap: Bitmap, source: WallpaperSource)
+
+    /**
      * Sets the stored image as the system wallpaper on [target], and records the id the system gave it — **but only
      * when [target] included the home wallpaper.** `appliedSystemId` is evidence about the picture the launcher's chrome
      * sits on, which is the home one; a lock-only apply writes nothing there and leaves whatever was already claimed

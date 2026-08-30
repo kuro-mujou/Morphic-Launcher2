@@ -14,8 +14,11 @@ import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
  *
  * @property recipe the current design, seed and palette — the source of truth the render is a function of.
  * @property bitmap the recipe rendered at the preview's size, or null before the first render lands.
+ * @property applying whether a set-as-wallpaper write is in flight — the apply button reads it to disable itself so a
+ *   second tap cannot start a second write over the first.
  */
 data class WallpaperStudioState(
     val recipe: WallpaperRecipe,
     val bitmap: Bitmap? = null,
+    val applying: Boolean = false,
 )

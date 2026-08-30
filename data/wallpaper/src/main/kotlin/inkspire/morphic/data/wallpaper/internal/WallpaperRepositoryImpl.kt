@@ -228,6 +228,18 @@ internal class WallpaperRepositoryImpl(
         }
     }
 
+    override suspend fun setImage(bitmap: Bitmap, source: WallpaperSource): Unit = withContext(dispatchers.io) {
+        // No decode and no crop-and-scale — a generated bitmap is already the exact size it should be, so it is
+        // written as-is. Everything else is the URI form's, including leaving the rest of the state untouched.
+        val file = writeImage(bitmap)
+        updateState {
+            it.copy(
+                image = WallpaperImage(file.absolutePath, bitmap.width, bitmap.height, source),
+                imageApplied = false,
+            )
+        }
+    }
+
     override suspend fun apply(target: WallpaperTarget): Unit = withContext(dispatchers.io) {
         val image = wallpaper.first().image ?: return@withContext
         // A capture is a picture *of* the wallpaper. Setting it would at best change nothing and at worst re-encode

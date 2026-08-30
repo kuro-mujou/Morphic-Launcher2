@@ -7,6 +7,9 @@ import inkspire.morphic.core.graphics.wallpaper.Generators
 import inkspire.morphic.core.model.wallpaper.Palette
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
+import inkspire.morphic.data.wallpaper.WallpaperRepository
+import inkspire.morphic.data.wallpaper.WallpaperSource
+import inkspire.morphic.data.wallpaper.WallpaperTarget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -32,7 +35,9 @@ import kotlin.random.Random
  * No repository yet: this slice previews and mutates but does not *apply*. Setting a generated bitmap as the system
  * wallpaper is the next slice, and it needs a bitmap seam `WallpaperRepository` does not have.
  */
-class WallpaperStudioViewModel : ViewModel() {
+class WallpaperStudioViewModel(
+    private val wallpaperRepository: WallpaperRepository,
+) : ViewModel() {
 
     private var viewportWidth = 0
     private var viewportHeight = 0
@@ -68,6 +73,32 @@ class WallpaperStudioViewModel : ViewModel() {
     fun shuffle() {
         mutableState.update { it.copy(recipe = it.recipe.copy(seed = Random.nextLong())) }
         rerender()
+    }
+
+    /**
+     * Sets the picture on screen as the system wallpaper, then calls [onApplied].
+     *
+     * **Applies the bitmap the user is looking at, not a re-render.** The preview already fills the screen, so its
+     * bitmap is at the display's resolution and is exactly what was approved — what-you-see-is-what-you-get, and one
+     * fewer render. It is marked [WallpaperSource.PICKED] because a generated wallpaper the user chose to set *is* a
+     * chosen image as far as the rest of the system is concerned; a distinct "generated" source is a later refinement
+     * for the my-designs shelf.
+     *
+     * **[onApplied] runs on the main dispatcher after the work**, so it is safe for the screen to navigate away in it —
+     * the apply has already finished by the time it fires, and leaving earlier would only cancel an apply the user did
+     * not wait for.
+     */
+    fun apply(onApplied: () -> Unit) {
+        val bitmap = mutableState.value.bitmap ?: return
+        if (mutableState.value.applying) return
+
+        mutableState.update { it.copy(applying = true) }
+        viewModelScope.launch {
+            wallpaperRepository.setImage(bitmap, WallpaperSource.PICKED)
+            wallpaperRepository.apply(WallpaperTarget.BOTH)
+            mutableState.update { it.copy(applying = false) }
+            onApplied()
+        }
     }
 
     private fun rerender() {
