@@ -2,13 +2,20 @@ package inkspire.morphic.core.designsystem.component.color
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,12 +54,16 @@ private val HueStops = listOf(
  * from outside.
  *
  * @param argb the current color. Its alpha is ignored on the way in and always opaque on the way out.
+ * @param palettes the curated swatch sets offered below the hue bar. Defaulted to [ColorPalettes.all] so the picker
+ *   works out of the box; a parameter rather than a hard reference so this generic component stays one — a caller
+ *   with its own sets can pass them, and one that wants none passes an empty list.
  */
 @Composable
 fun MorphicColorPicker(
     argb: Int,
     onArgbChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    palettes: List<ColorPalette> = ColorPalettes.all,
 ) {
     val colors = LocalMorphicColors.current
     val currentOnChange by rememberUpdatedState(onArgbChange)
@@ -80,6 +91,51 @@ fun MorphicColorPicker(
             onChange = { hue -> update(floatArrayOf(hue, hsv[1], hsv[2])) },
             outline = colors.outline,
         )
+        // A picked swatch goes in the same door a drag does — `update` re-seeds the hue and panel from it, so the
+        // knobs jump to the color the user tapped rather than the picker showing one thing and reporting another.
+        if (palettes.isNotEmpty()) {
+            PaletteRibbon(palettes = palettes, onPick = { update(it.toHsv()) }, outline = colors.outline)
+        }
+    }
+}
+
+/**
+ * The curated palettes as one horizontally-scrolling row of pills, each pill a palette's colors packed side by side
+ * and each segment a tap that picks that color.
+ *
+ * **Scrolls sideways rather than stacking**, which is the placement decision: this sits inside a bottom-anchored
+ * panel whose height is already near the tool panel's, so a wrapping grid of a dozen palettes would push the hue bar
+ * and the icon it is judged against off the top. One short row that scrolls keeps the whole picker the height it was.
+ *
+ * **No labels in this first cut.** A pill reads as "a set that goes together" on its own, and a name under each
+ * would double the row's height for identification the colors mostly carry themselves. A named, filterable palette
+ * list is the natural next step, and where the community sets would live.
+ */
+@Composable
+private fun PaletteRibbon(palettes: List<ColorPalette>, onPick: (Int) -> Unit, outline: Color) {
+    val pill = RoundedCornerShape(7.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        palettes.forEach { palette ->
+            Row(
+                modifier = Modifier
+                    .clip(pill)
+                    .border(1.dp, outline.copy(alpha = 0.3f), pill),
+            ) {
+                palette.colors.forEach { swatch ->
+                    Box(
+                        modifier = Modifier
+                            .size(width = 20.dp, height = 28.dp)
+                            .background(Color(swatch))
+                            .clickable { onPick(swatch) },
+                    )
+                }
+            }
+        }
     }
 }
 

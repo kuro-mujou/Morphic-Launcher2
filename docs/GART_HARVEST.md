@@ -39,8 +39,13 @@ additive things.
 Recommended order: **glass → dither → OKLCH ramps → palettes.** One killer new effect, one stylistic family,
 one quality lift, one content win — all clean ports.
 
-**Shipped so far: `Glass`, `Dither` and `Tritone`** (`LayerEffect.Glass`, `LayerEffect.Dither`,
-`LayerEffect.Tritone`), all device-verified. Palettes remain.
+**The icon-studio harvest is done: `Glass`, `Dither`, `Tritone` and the curated palettes are all shipped and
+device-verified.** What remains of the study is the wallpaper-studio engine (below), a separate arc.
+
+The palettes landed as a curated `ColorPalettes` library (`core:designsystem`) plus a swatch ribbon in
+`MorphicColorPicker`, so every color field across every effect gets them — not as a change to any one effect. A
+dozen cohesive six-color sets (four seeded from gart's own theming files, the rest curated), deliberately not
+gart's ~300 data-viz colormaps. A named, filterable list is where the community palette-sharing would extend it.
 
 The perceptual-color item (#4 below) landed as **`Tritone`**, not as a change to `Bloom` or `Duotone`. Tracing the
 real ramp code overturned the premise here: every ramp in `LayerGradient` (Bloom, Gloss, Vignette) is a *single
