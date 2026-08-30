@@ -159,6 +159,7 @@ fun AppsPager(
     config: GridConfig,
     horizontalPadding: Dp,
     wraps: Boolean,
+    rememberPage: Boolean,
     modifier: Modifier = Modifier,
     folderAdditions: ((folderId: Long) -> AppAdditions)? = null,
 ) {
@@ -178,6 +179,7 @@ fun AppsPager(
     val pagerState = rememberLauncherPagerState(
         pageCount = { livePages.value.size.coerceAtLeast(1) },
         infiniteScroll = { liveWraps.value },
+        rememberPage = rememberPage,
     )
 
     // **Where this pager is resting, for the surface swipe.** Reaching HOME from a LEFT or RIGHT binding crosses

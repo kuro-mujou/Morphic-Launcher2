@@ -329,6 +329,18 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                     checked = wraps,
                     onCheckedChange = viewModel::setWraps,
                 )
+                // **Under infinite scroll, and on the two pagers alone** — said by `rememberPage` being null on every
+                // other layout, the wrap switch's own shape. Home has no such row: its pager always remembers, which
+                // is a product line rather than a default, so there is nothing to offer. Only the APPS pagers, which a
+                // user leaves and returns to, get the choice.
+                state.rememberPage?.let { rememberPage ->
+                    MorphicSwitchRow(
+                        label = "Remember page",
+                        supportingText = "Reopen the drawer on the page you last left it on.",
+                        checked = rememberPage,
+                        onCheckedChange = viewModel::setRememberPage,
+                    )
+                }
             }
 
             // The chrome choosers sit with the layout group rather than the icon group, because what they place is

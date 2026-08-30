@@ -358,4 +358,23 @@ interface SettingsRepository {
      * blueprint defaults are off.
      */
     suspend fun setPagerWrap(slot: GridSlot, wraps: Boolean?)
+
+    /**
+     * Whether each pager **reopens on the page it was left on** — resolved, and keyed by the grid that pages.
+     *
+     * [pagerWraps]'s twin, the same shape and for the same reasons. Contains an entry for **every grid that offers the
+     * setting**, which is fewer than [pagerWraps]'s: only the two APPS pagers carry a [GridBlueprint.remembersPage], so
+     * HOME is absent here — it always remembers, with no toggle. A slot with nothing stored resolves to its blueprint's
+     * default (on), so a reader never has to know whether the user has been here.
+     */
+    val pagerRemembersPage: Flow<Map<GridSlot, Boolean>>
+
+    /**
+     * Turns [slot]'s page memory on or off, or clears it back to the blueprint when [remembers] is null.
+     *
+     * **Throws for a slot that has no remember-page setting**, as [setPagerWrap] does for a non-pager: only a grid whose
+     * `GridBlueprint.remembersPage` is non-null is askable, which is the two APPS pagers. HOME's pager pages but offers
+     * no such toggle, so it is not askable here.
+     */
+    suspend fun setPagerRemembersPage(slot: GridSlot, remembers: Boolean?)
 }

@@ -87,4 +87,65 @@ class SurfacePagingTest {
         assertNull(FolderGrid.wraps)
         assertFalse(FolderGrid.pages)
     }
+
+    @Test
+    fun `page memory nothing stored follows the blueprint`() {
+        val paging = SurfacePaging.Default
+        // Both directions of the base, since the remember default is on where wrap's is off.
+        assertTrue(paging.remembersPageFor(GridSlot.APPS_PAGER, base = true))
+        assertFalse(paging.remembersPageFor(GridSlot.APPS_PAGER, base = false))
+    }
+
+    @Test
+    fun `a stored page-memory value overrides the blueprint in both directions`() {
+        // The load-bearing direction here is *off*: the blueprint defaults page memory on, so a user turning it off
+        // must survive — `remembersPage[slot] ?: base` gives it, a `contains` check would not.
+        val off = SurfacePaging.Default.withRememberPage(GridSlot.APPS_PAGER, false)
+        assertFalse(off.remembersPageFor(GridSlot.APPS_PAGER, base = true))
+
+        val on = SurfacePaging.Default.withRememberPage(GridSlot.APPS_PAGER, true)
+        assertTrue(on.remembersPageFor(GridSlot.APPS_PAGER, base = false))
+    }
+
+    @Test
+    fun `clearing page memory removes the entry rather than storing the default`() {
+        val stored = SurfacePaging.Default.withRememberPage(GridSlot.APPS_CATEGORY, false)
+        assertEquals(mapOf(GridSlot.APPS_CATEGORY to false), stored.remembersPage)
+
+        val cleared = stored.withRememberPage(GridSlot.APPS_CATEGORY, null)
+        assertEquals(emptyMap<GridSlot, Boolean>(), cleared.remembersPage)
+        assertEquals(SurfacePaging.Default, cleared)
+    }
+
+    @Test
+    fun `wrap and page memory are stored independently`() {
+        // One map must not disturb the other — they are two behaviors of the same pager.
+        val paging = SurfacePaging.Default
+            .withWrap(GridSlot.APPS_PAGER, true)
+            .withRememberPage(GridSlot.APPS_PAGER, false)
+
+        assertTrue(paging.wrapsFor(GridSlot.APPS_PAGER, base = false))
+        assertFalse(paging.remembersPageFor(GridSlot.APPS_PAGER, base = true))
+    }
+
+    /**
+     * Page memory's counterpart to the wrap-default spec — a deliberately *different* set: only the two APPS pagers
+     * offer the toggle, and both default on. Home pages and wraps but must be absent here (it always remembers, with
+     * no control), which is the line the repository's `RememberPageGrids` draws.
+     */
+    @Test
+    fun `exactly the two APPS pagers declare a page-memory default, and both start on`() {
+        val remembering = GridSlot.entries.filter { it.blueprint.remembersPage != null }
+        assertEquals(
+            listOf(GridSlot.APPS_PAGER, GridSlot.APPS_CATEGORY).sorted(),
+            remembering.sorted(),
+        )
+        for (slot in remembering) assertTrue("$slot should default to remembering", slot.blueprint.remembersPage!!)
+
+        assertTrue(AppsPagerGrid.remembersPage!!)
+        assertTrue(AppsCategoryGrid.remembersPage!!)
+
+        // Home pages, but offers no remember toggle — it always remembers. Null is what the repository refuses.
+        assertNull(HomePagerGrid.remembersPage)
+    }
 }

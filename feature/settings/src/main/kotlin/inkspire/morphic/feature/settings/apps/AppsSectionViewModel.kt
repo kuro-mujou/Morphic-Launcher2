@@ -97,6 +97,18 @@ internal val ConfigurableLayouts: List<AppsLayout> = listOf(
  * Every field but [layout] is null until the screen reports its device, since all of them are resolved per device
  * configuration. Null is "not yet", exactly as in the dock's and home's sections.
  */
+/**
+ * The four sources that are **not keyed by the selected grid**, grouped so the section's outer `combine` stays within
+ * its five flows — the same folding [AppsViewModel]'s `PerDevice` does, one screen over. `Triple` covered three of
+ * them until page memory made a fourth.
+ */
+private data class SurfacePagingBits(
+    val chrome: AppsChrome,
+    val wraps: Map<GridSlot, Boolean>,
+    val remembersPage: Map<GridSlot, Boolean>,
+    val card: CardChrome?,
+)
+
 data class AppsSectionState(
     val layout: AppsLayout = ConfigurableLayouts.first(),
     val size: GridDefault? = null,
@@ -105,6 +117,7 @@ data class AppsSectionState(
     val paddingDp: Int? = null,
     val chrome: AppsChrome = AppsChrome.Default,
     val wraps: Boolean? = null,
+    val rememberPage: Boolean? = null,
     val card: CardChrome? = null,
     val boundLayouts: Set<AppsLayout> = emptySet(),
 )
@@ -191,13 +204,14 @@ class AppsSectionViewModel(
                         },
                         settingsRepository.rowHeight(GridSlot.APPS_LIST, configuration),
                         settingsRepository.horizontalPadding(current.slot, configuration),
-                        // Seven sources against `combine`'s five, so the three that are **not keyed by the selected
-                        // grid** are grouped: the chrome slice is one value for the whole surface, wrapping is a
-                        // behavior, and the card's tile chrome belongs to one fixed slot. The four above all follow
-                        // whichever layout's chip is selected.
+                        // Eight sources against `combine`'s five, so the four that are **not keyed by the selected
+                        // grid** are grouped: the chrome slice is one value for the whole surface, wrapping and page
+                        // memory are behaviors, and the card's tile chrome belongs to one fixed slot. The four above
+                        // all follow whichever layout's chip is selected.
                         combine(
                             settingsRepository.appsChrome,
                             settingsRepository.pagerWraps,
+                            settingsRepository.pagerRemembersPage,
                             // Asked only of the grid that draws tiles; `cardChrome` rightly throws for the rest, and
                             // the null is what tells the screen to draw no card group — `icon`'s convention, one
                             // group over.
@@ -206,14 +220,18 @@ class AppsSectionViewModel(
                             } else {
                                 settingsRepository.cardChrome(current.slot, configuration)
                             },
-                            ::Triple,
+                            ::SurfacePagingBits,
                         ),
-                    ) { size, icon, rowHeight, padding, (chrome, wraps, card) ->
+                    ) { size, icon, rowHeight, padding, bits ->
                         // Null on the three layouts that do not page, which is what tells the screen to draw no
                         // control — and what makes the toggle follow the chip: selecting the category pager selects
-                        // *its* grid's setting, not the plain pager's.
-                        val pagerWraps = current.pagerSlot?.let { wraps[it] }
-                        AppsSectionState(current, size, icon, rowHeight, padding, chrome, pagerWraps, card)
+                        // *its* grid's setting, not the plain pager's. Page memory follows the same slot; only the two
+                        // pagers carry it, so home never appears in either map.
+                        val pagerWraps = current.pagerSlot?.let { bits.wraps[it] }
+                        val pagerRemembers = current.pagerSlot?.let { bits.remembersPage[it] }
+                        AppsSectionState(
+                            current, size, icon, rowHeight, padding, bits.chrome, pagerWraps, pagerRemembers, bits.card,
+                        )
                     }
                 }
             }
@@ -354,6 +372,18 @@ class AppsSectionViewModel(
     fun setWraps(value: Boolean) {
         val slot = layout.value.pagerSlot ?: return
         viewModelScope.launch { settingsRepository.setPagerWrap(slot, value) }
+    }
+
+    /**
+     * Turns the **selected** pager's page memory on or off.
+     *
+     * [setWraps]'s twin, guarded by the same `pagerSlot` — a stale press while a non-paging chip is selected writes
+     * nothing rather than reaching a repository that would throw. Only the two APPS pagers offer this, so the guard is
+     * exactly the set the store accepts.
+     */
+    fun setRememberPage(value: Boolean) {
+        val slot = layout.value.pagerSlot ?: return
+        viewModelScope.launch { settingsRepository.setPagerRemembersPage(slot, value) }
     }
 
     /**

@@ -50,6 +50,7 @@ private data class AppsSizing(
     val listRowHeightDp: Int?,
     val padding: Map<GridSlot, Int>,
     val wraps: Map<GridSlot, Boolean>,
+    val remembersPage: Map<GridSlot, Boolean>,
     val card: CardChrome?,
 )
 
@@ -275,15 +276,16 @@ class AppsViewModel(
      * It also groups honestly — these change together when a settings section is edited, and none of them is content.
      */
     private val sizing: Flow<AppsSizing> =
-    // Six sources against `combine`'s five, so the three **per-device maps** are grouped first. They are the
-    // honest three to fold: each is `posture`-gated and each resolves the same way, where the two below are a
-        // single value and a setting with no device dimension at all.
+    // Seven sources against `combine`'s five, so the four **per-device maps** are grouped first. They are the
+    // honest ones to fold: each is `posture`-gated and each resolves the same way, where the three below are a
+        // single value and two settings with no device dimension at all.
         combine(
             combine(iconSizings, gridCols, paddings, cardChrome, ::PerDevice),
             pagerConfig,
             listRowHeight,
             settingsRepository.pagerWraps,
-        ) { perDevice, pager, rowHeight, wraps ->
+            settingsRepository.pagerRemembersPage,
+        ) { perDevice, pager, rowHeight, wraps, remembersPage ->
             AppsSizing(
                 icon = perDevice.icon,
                 cols = perDevice.cols,
@@ -291,6 +293,7 @@ class AppsViewModel(
                 listRowHeightDp = rowHeight,
                 padding = perDevice.padding,
                 wraps = wraps,
+                remembersPage = remembersPage,
                 card = perDevice.card,
             )
         }
@@ -330,6 +333,7 @@ class AppsViewModel(
                 listRowHeightDp = configured.listRowHeightDp,
                 horizontalPaddingDp = configured.padding,
                 pagerWraps = configured.wraps,
+                pagerRemembersPage = configured.remembersPage,
                 cardChrome = configured.card,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())

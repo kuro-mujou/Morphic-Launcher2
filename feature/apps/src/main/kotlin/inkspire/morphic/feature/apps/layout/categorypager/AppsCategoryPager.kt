@@ -117,6 +117,7 @@ fun AppsCategoryPager(
     cols: Int,
     horizontalPadding: Dp,
     wraps: Boolean,
+    rememberPage: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -133,6 +134,7 @@ fun AppsCategoryPager(
     val pagerState = rememberLauncherPagerState(
         pageCount = { liveCategories.value.size.coerceAtLeast(1) },
         infiniteScroll = { liveWraps.value },
+        rememberPage = rememberPage,
     )
 
     // One geometry per page rather than one for the surface, because each page's grid scrolls independently — see

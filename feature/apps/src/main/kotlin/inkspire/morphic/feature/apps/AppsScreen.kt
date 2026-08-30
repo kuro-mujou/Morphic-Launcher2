@@ -209,6 +209,7 @@ fun AppsScreen(
                     config = pagerFit,
                     horizontalPadding = pagerPadding,
                     wraps = state.wraps(GridSlot.APPS_PAGER),
+                    rememberPage = state.remembersPage(GridSlot.APPS_PAGER),
                     folderAdditions = additions.forFolder,
                 )
 
@@ -220,6 +221,7 @@ fun AppsScreen(
                     cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
                     horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
                     wraps = state.wraps(GridSlot.APPS_CATEGORY),
+                    rememberPage = state.remembersPage(GridSlot.APPS_CATEGORY),
                 )
                 // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
                 // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it

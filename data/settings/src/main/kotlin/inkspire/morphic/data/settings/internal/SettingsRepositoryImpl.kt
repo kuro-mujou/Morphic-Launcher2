@@ -185,6 +185,16 @@ private val WrappableGrids: Map<GridSlot, Boolean> =
     GridSlot.entries.mapNotNull { slot -> slot.blueprint.wraps?.let { slot to it } }.toMap()
 
 /**
+ * The grids whose **page memory** the user may configure, with the blueprint default each falls back to.
+ *
+ * [WrappableGrids]'s twin over [GridBlueprint.remembersPage], and deliberately a different set: HOME's pager wraps and
+ * so appears above, but offers no remember toggle and so is absent here. Built from the registry for the same reason —
+ * adding a pager with a remember setting is a `remembersPage = …` on its blueprint and nothing else.
+ */
+private val RememberPageGrids: Map<GridSlot, Boolean> =
+    GridSlot.entries.mapNotNull { slot -> slot.blueprint.remembersPage?.let { slot to it } }.toMap()
+
+/**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
  *
  * **A read decodes one slice, and a write rewrites one slice.** The alternative is a mutator that deserializes the
@@ -413,6 +423,17 @@ internal class SettingsRepositoryImpl(
     override suspend fun setPagerWrap(slot: GridSlot, wraps: Boolean?) {
         require(slot in WrappableGrids) { "$slot is not a pager whose wrapping is configurable" }
         update(SurfacePagingSlice) { withWrap(slot, wraps) }
+    }
+
+    // Resolved for every remember-capable grid at once, exactly as [pagerWraps] is — a different, smaller slot set
+    // ([RememberPageGrids]), since HOME offers no such toggle.
+    override val pagerRemembersPage: Flow<Map<GridSlot, Boolean>> = dataStore.read(SurfacePagingSlice) { paging ->
+        RememberPageGrids.mapValues { (slot, base) -> paging.remembersPageFor(slot, base) }
+    }
+
+    override suspend fun setPagerRemembersPage(slot: GridSlot, remembers: Boolean?) {
+        require(slot in RememberPageGrids) { "$slot is not a pager whose page memory is configurable" }
+        update(SurfacePagingSlice) { withRememberPage(slot, remembers) }
     }
 
     /**

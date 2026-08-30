@@ -4,11 +4,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -28,12 +32,17 @@ import kotlin.math.roundToInt
  * @param pageCountProvider current number of pages (coerced to >= 1).
  * @param dragModeProvider true while an item drag is in progress — forces bounded paging.
  * @param infiniteScrollProvider the user's toggle: may the pager wrap when *not* dragging.
+ * @param initialPage the page to open on — 0 for a fresh pager, or a restored page from [settledPage] when the
+ *   surface remembers where it was. Seeded straight into the position float; it is left *unclamped* here on purpose,
+ *   because the real page count is not knowable at construction (the store answers a frame later), and
+ *   [LauncherPager]'s `settleWithinPageCount` pulls an out-of-range restored page back in once it is.
  */
 @Stable
 class LauncherPagerState(
     private val pageCountProvider: () -> Int,
     private val dragModeProvider: () -> Boolean = { false },
     private val infiniteScrollProvider: () -> Boolean = { true },
+    initialPage: Int = 0,
 ) {
     val pageCount: Int get() = pageCountProvider().coerceAtLeast(1)
     val dragMode: Boolean get() = dragModeProvider()
@@ -50,7 +59,7 @@ class LauncherPagerState(
     var containerHeight: Int by mutableIntStateOf(0)
         internal set
 
-    private val positionAnimatable = Animatable(0f)
+    private val positionAnimatable = Animatable(initialPage.toFloat())
 
     /**
      * The scroll position (in page units) the layout places from. Within range it is the raw position; **past a
@@ -78,6 +87,16 @@ class LauncherPagerState(
         } else {
             positionAnimatable.value.roundToInt().mod(pageCount)
         }
+
+    /**
+     * The page to persist so the surface can reopen on it — the nearest page to the current position, always a real
+     * one in `[0, pageCount)`.
+     *
+     * Not [currentPage]: this is read for *storage*, so it never returns a wrapped index that a later, differently-sized
+     * pager could not honor. It is [currentPage]'s bounded branch unconditionally, which is what a restore wants — a
+     * plain page number, clamped to what exists now.
+     */
+    val settledPage: Int get() = positionAnimatable.value.roundToInt().coerceIn(0, pageCount - 1)
 
     /**
      * True when the pager has nothing further to the **left** — it is resting on its first page and bounded.
@@ -211,10 +230,41 @@ class LauncherPagerState(
     }
 }
 
-/** Remembers a [LauncherPagerState]. The providers are read live, so pass lambdas over your state. */
+/**
+ * Remembers a [LauncherPagerState]. The providers are read live, so pass lambdas over your state.
+ *
+ * **[rememberPage] decides whether the page survives leaving the surface.** `NavDisplay` disposes a surface's
+ * composition when it is navigated away from and rebuilds it on return, so a plain `remember` reopens every pager at
+ * page zero — the launcher's page-forgetting bug. When [rememberPage] is true (the default — home always wants it, and
+ * the APPS pagers default to it), the settled page is held in a `rememberSaveable` that the nav host restores, and the
+ * state is re-seeded from it. Off means the surface always reopens at page zero.
+ *
+ * **Only the page int is saved, never the state.** The three providers must come fresh from the call site on every
+ * restore — a saved `LauncherPagerState` would carry a stale `pageCount` lambda closed over the previous composition,
+ * exactly the hazard CLAUDE.md records for `rememberSliderState`. So the lambdas are always live and only the page
+ * rides in the bundle; `LauncherPager` re-fits a restored page that no longer exists.
+ *
+ * The write-back reads [LauncherPagerState.settledPage], which changes only when the resting page does — not on every
+ * frame of a drag — so the saved value tracks the page without churn.
+ */
 @Composable
 fun rememberLauncherPagerState(
     pageCount: () -> Int,
     dragMode: () -> Boolean = { false },
     infiniteScroll: () -> Boolean = { true },
-): LauncherPagerState = remember { LauncherPagerState(pageCount, dragMode, infiniteScroll) }
+    rememberPage: Boolean = true,
+): LauncherPagerState {
+    val savedPage = rememberSaveable { mutableIntStateOf(0) }
+    val state = remember {
+        // **Read the seed without observation, on purpose.** This factory returns a value, so it is not its own
+        // restart scope — a plain snapshot read of `savedPage` here would subscribe the *caller* (a whole surface),
+        // recomposing it every time the write-back below advances the page. The seed is wanted once, at construction.
+        val seed = if (rememberPage) Snapshot.withoutReadObservation { savedPage.intValue } else 0
+        LauncherPagerState(pageCount, dragMode, infiniteScroll, initialPage = seed)
+    }
+    LaunchedEffect(state, rememberPage) {
+        if (!rememberPage) return@LaunchedEffect
+        snapshotFlow { state.settledPage }.collect { savedPage.intValue = it }
+    }
+    return state
+}

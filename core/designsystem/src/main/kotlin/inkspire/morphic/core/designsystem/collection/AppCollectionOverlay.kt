@@ -218,7 +218,14 @@ fun AppCollectionOverlay(
     // an index into it and a pseudo-entry would shift every drop by one.
     val addSlots = if (additions != null) 1 else 0
     val pageCount = rememberUpdatedState((orderComponents.size + addSlots + pageSize - 1) / pageSize)
-    val pagerState = rememberLauncherPagerState(pageCount = { pageCount.value.coerceAtLeast(1) }, infiniteScroll = { false })
+    // **Opens on page one every time**, unlike the surfaces that remember: this is a transient overlay a tap opens
+    // and dismisses, not a place navigated away from and back to, so a remembered page would reopen a folder
+    // somewhere other than its start. `rememberPage = false` keeps its pre-memory behavior.
+    val pagerState = rememberLauncherPagerState(
+        pageCount = { pageCount.value.coerceAtLeast(1) },
+        infiniteScroll = { false },
+        rememberPage = false,
+    )
 
     // The collection's drag hooks for the shared coordinator, kept stable and reading live state. onHover migrates
     // the reorder gap; commitReorder densifies and persists (optimistically first).

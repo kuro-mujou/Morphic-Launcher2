@@ -92,6 +92,7 @@ data class AppsState(
     val listRowHeightDp: Int? = null,
     val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
+    val pagerRemembersPage: Map<GridSlot, Boolean> = emptyMap(),
     val cardChrome: CardChrome? = null,
 )
 
@@ -103,6 +104,16 @@ data class AppsState(
  * `AppsLayout.pagerSlot`'s answer rather than a second branch here.
  */
 fun AppsState.wraps(slot: GridSlot?): Boolean = slot != null && pagerWraps[slot] == true
+
+/**
+ * Whether [slot] reopens on the page it was left on — **true until the store answers**, which is also the blueprint's
+ * default (on), so no frame ever shows a pager forgetting its page before it settles.
+ *
+ * The default falls the opposite way to [wraps]'s: remembering is the resting behavior, so an absent entry reads as on
+ * rather than off. Slot-keyed for [wraps]'s reason — this surface has two pagers and which is on screen is
+ * `AppsLayout.pagerSlot`'s answer.
+ */
+fun AppsState.remembersPage(slot: GridSlot?): Boolean = slot != null && pagerRemembersPage[slot] != false
 
 /**
  * The blank margin at [slot]'s left and right edges, in dp — zero until the store answers.

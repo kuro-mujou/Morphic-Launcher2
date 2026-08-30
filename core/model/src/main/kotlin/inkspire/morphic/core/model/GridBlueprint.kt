@@ -309,6 +309,19 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   `AxisScroll.INFINITE` makes the one-finger swipe on that axis `OneFingerSwipe.NEVER` — with wrapping on by
  *   default, a horizontal edge binding could only be opened with **two fingers**, and a user who never found this
  *   setting would never know why. Off by default, opt in.
+ * @property remembersPage the default for this pager's **remember-page toggle**, or **null** for a grid that has no
+ *   such toggle. [wraps]'s convention, one axis over: it is what lets `SettingsRepository` refuse a slot with no
+ *   remember setting rather than every caller checking first.
+ *
+ *   Null is *not* the same as "does not remember" — it means the user has no control over it. HOME's pager is null
+ *   here yet always restores its page (the pager primitive's own default); that is a deliberate product line — a
+ *   home screen returning to page one after a detour is a surprise, so it is not offered as a choice. The two APPS
+ *   pagers *are* the user's to set, since an app drawer is a place you leave and come back to, and reopening it on
+ *   the page you left is worth being able to turn off.
+ *
+ *   **On by default**, unlike [wraps]: remembering is the behavior a user expects, and it carries none of wrapping's
+ *   gesture cost. A separate axis from [wraps] entirely — one is *whether the pages loop*, the other *whether the
+ *   surface reopens where you left it* — so the same grid answers both independently.
  * @property card the tile chrome of a grid of **cards** — or **null** for every grid that draws cells rather than
  *   tiles, which is all but one. [extentDp]'s convention again, and for its reason: it is what lets
  *   `SettingsRepository` refuse a slot that has no such setting instead of every caller checking first.
@@ -325,6 +338,7 @@ data class GridBlueprint(
     val rowHeightDp: Int? = null,
     val horizontalPaddingDp: Int = 0,
     val wraps: Boolean? = null,
+    val remembersPage: Boolean? = null,
     val card: CardChrome? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
@@ -534,6 +548,9 @@ val AppsPagerGrid = GridBlueprint(
     // cell*.
     icon = IconSizing(),
     wraps = false,
+    // Reopening the drawer on the page you left it is the expected behavior, so on by default — with a toggle,
+    // unlike home, because a drawer is a place you leave and return to. See `remembersPage`.
+    remembersPage = true,
 )
 
 /**
@@ -591,6 +608,9 @@ val AppsCategoryGrid = GridBlueprint(
     // pager. So `sizing` could never be what says a grid wraps — which is why [GridBlueprint.wraps] is declared
     // rather than derived from it.
     wraps = false,
+    // Reopening on the category you left is expected here as much as on the plain pager; on by default, its own
+    // toggle. See `remembersPage`.
+    remembersPage = true,
 )
 
 /**
