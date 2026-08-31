@@ -18,13 +18,22 @@ import kotlinx.serialization.Serializable
  *
  * Persisted inside the recipe; `encodeDefaults = false` on the store means an untouched design writes nothing.
  *
+ * **[colorMode] is the one knob every generator honors, and it does so without reading this field.** It is applied by
+ * reducing the palette before the generator runs (`PaletteColorMode` in `core:graphics`), so a design is bichromatic
+ * because it was handed two colors — not because it branched on the mode. That is why it defaults to the *restrained*
+ * [WallpaperColorMode.BICHROMATIC] rather than the loudest: the default look is calm, and "use the whole palette" is a
+ * deliberate opt-in. It is a new, defaulted field, so a recipe from before it existed still reads back.
+ *
  * @property density how much of the design there is, `0..1` — sparse to dense. A generator with no notion of density
  *   ignores it.
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
  *   generator with a single look ignores it, and one with several clamps an out-of-range index to what it has.
+ * @property colorMode how much of the palette to paint with — see [WallpaperColorMode]. Applied to the palette, not
+ *   read by the generator, so every design honors it.
  */
 @Serializable
 data class DesignParams(
     val density: Float = 0.5f,
     val variant: Int = 0,
+    val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )

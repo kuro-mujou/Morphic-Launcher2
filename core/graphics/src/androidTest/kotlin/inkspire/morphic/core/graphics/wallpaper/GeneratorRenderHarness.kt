@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
+import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,16 +57,21 @@ class GeneratorRenderHarness {
     fun renderEveryDesign() {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
 
-        for (design in WallpaperDesign.entries) {
-            val bitmap = Generators.forDesign(design).render(
-                width = 1080,
-                height = 2400,
-                palette = palette,
-                params = DesignParams(),
-                seed = 42L,
-            )
-            save(resolver, "gen_${design.name}.png", bitmap)
-            bitmap.recycle()
+        // Every design in every color mode — the palette is reduced by the mode exactly as the studio does it, so the
+        // restrained default (bichromatic) and the loud opt-in (colorful) can be judged side by side.
+        for (mode in WallpaperColorMode.entries) {
+            val moded = PaletteColorMode.resolve(palette, mode)
+            for (design in WallpaperDesign.entries) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(colorMode = mode),
+                    seed = 42L,
+                )
+                save(resolver, "gen_${mode.name}_${design.name}.png", bitmap)
+                bitmap.recycle()
+            }
         }
     }
 

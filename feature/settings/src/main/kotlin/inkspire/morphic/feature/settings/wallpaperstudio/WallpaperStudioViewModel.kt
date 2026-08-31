@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.graphics.wallpaper.FilterPipeline
 import inkspire.morphic.core.graphics.wallpaper.Generators
+import inkspire.morphic.core.graphics.wallpaper.PaletteColorMode
 import inkspire.morphic.core.model.wallpaper.Palette
+import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperFilter
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
@@ -86,6 +88,13 @@ class WallpaperStudioViewModel(
         rerender()
     }
 
+    /** Switch how much of the palette the design paints with — one hue, two colors, or all of them. */
+    fun setColorMode(mode: WallpaperColorMode) {
+        if (mode == mutableState.value.recipe.params.colorMode) return
+        mutableState.update { it.copy(recipe = it.recipe.copy(params = it.recipe.params.copy(colorMode = mode))) }
+        rerender()
+    }
+
     /**
      * Turn [filter] on at its default strength, or off if it is already on — the studio's filter chips.
      *
@@ -135,8 +144,10 @@ class WallpaperStudioViewModel(
         val recipe = mutableState.value.recipe
         renderJob?.cancel()
         renderJob = viewModelScope.launch(Dispatchers.Default) {
+            // The color mode is applied to the palette here, once, so the generator honors it without knowing it exists.
+            val palette = PaletteColorMode.resolve(recipe.palette, recipe.params.colorMode)
             val base = Generators.forDesign(recipe.design)
-                .render(width, height, recipe.palette, recipe.params, recipe.seed)
+                .render(width, height, palette, recipe.params, recipe.seed)
             ensureActive()
             val bitmap = FilterPipeline.apply(base, recipe.filters)
             ensureActive()

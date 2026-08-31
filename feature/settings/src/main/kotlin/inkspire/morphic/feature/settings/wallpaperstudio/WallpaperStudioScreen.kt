@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
+import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperFilter
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
@@ -141,6 +142,7 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
             recipe = state.recipe,
             onPickDesign = viewModel::pickDesign,
             onSetPalette = viewModel::setPalette,
+            onSetColorMode = viewModel::setColorMode,
             onToggleFilter = viewModel::toggleFilter,
             onShuffle = viewModel::shuffle,
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -166,6 +168,7 @@ private fun BottomChooser(
     recipe: WallpaperRecipe,
     onPickDesign: (WallpaperDesign) -> Unit,
     onSetPalette: (List<Int>) -> Unit,
+    onSetColorMode: (WallpaperColorMode) -> Unit,
     onToggleFilter: (WallpaperFilter) -> Unit,
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
@@ -194,7 +197,22 @@ private fun BottomChooser(
             when (mode) {
                 ChooserMode.COLORS ->
                     // Lazy, because the bank runs to a couple of hundred palettes — the picker ribbon's reason.
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // The color-mode chips lead the row: how *much* of a palette to use, before which palette.
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                WallpaperColorMode.entries.forEach { colorMode ->
+                                    ChooserChip(
+                                        label = colorMode.label,
+                                        selected = colorMode == recipe.params.colorMode,
+                                        onClick = { onSetColorMode(colorMode) },
+                                    )
+                                }
+                            }
+                        }
                         items(ColorPalettes.all, key = { it.name }) { palette ->
                             PalettePill(
                                 colors = palette.colors,
@@ -300,6 +318,14 @@ private val WallpaperDesign.label: String
         WallpaperDesign.RIBBONS -> "Ribbons"
         WallpaperDesign.RAYS -> "Rays"
         WallpaperDesign.DOT_GRID -> "Dots"
+    }
+
+/** A short, human name for the color-mode chip — the enum name is a code identifier, not a label. */
+private val WallpaperColorMode.label: String
+    get() = when (this) {
+        WallpaperColorMode.MONOCHROMATIC -> "Mono"
+        WallpaperColorMode.BICHROMATIC -> "Duo"
+        WallpaperColorMode.COLORFUL -> "Full"
     }
 
 /** A short, human name for the filter chip — the enum name is a code identifier, not a label. */

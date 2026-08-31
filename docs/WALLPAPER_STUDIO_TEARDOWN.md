@@ -149,9 +149,13 @@ rectangles.
 
 ## Revised plan (supersedes the W5 "done" framing — W5 was the *engine*, not the *studio*)
 
-- **W6 — grow `DesignParams` into the family model** (amount/spacing/irregularity/rotation/colorMode/variant + a typed
-  per-design extension) and add **`WallpaperColorMode`**. No new designs. Teach the existing 16 to read the new fields,
-  defaulting to restrained (Bichromatic, sparse). This is the structural fix everything else needs.
+- **W6 — the color-mode system. ✅ (2026-08-31)** Added **`WallpaperColorMode`** (Monochromatic / Bichromatic /
+  Colorful) + a `colorMode` field on `DesignParams`, defaulting to the restrained **Bichromatic**. It is applied by
+  `PaletteColorMode.resolve` reducing the palette *before* the generator runs, so **all sixteen honor it with zero
+  per-design code** — a mosaic drawn from a two-color palette is bichromatic by construction. Studio gained Mono/Duo/Full
+  chips; device-verified (the studio now opens on cream-on-navy Bichromatic Flow, and Full/Mono recolor live). The rest
+  of the family model (amount/spacing/**irregularity**/rotation as first-class fields) folds into W7 — the color mode was
+  the single biggest restraint lever and shipped on its own.
 - **W7 — the styling pass.** Per-design tasteful defaults; soften the loud ones (Metaballs, Confetti, Facets, Plasma/
   Rings/Rays); add the **organic-noise (irregularity/distortion) knob** every generator currently lacks. Device-verify
   against this teardown's "restraint" bar.
