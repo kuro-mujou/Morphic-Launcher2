@@ -146,4 +146,12 @@ enum class WallpaperDesign {
      */
     @SerialName("ribbonFlow")
     RIBBON_FLOW,
+
+    /**
+     * A rosette of rotating, shrinking polygon outlines cascading into the frame's center — the spirograph. Not a field
+     * like the rest: one shape drawn many times, each copy turned and scaled from the last, so the overlapping edges
+     * weave a moiré. [DesignParams.variant] picks the polygon's sides.
+     */
+    @SerialName("polygonCascade")
+    POLYGON_CASCADE,
 }

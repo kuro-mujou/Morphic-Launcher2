@@ -320,6 +320,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.DOT_GRID -> "Dots"
         WallpaperDesign.FLOW_LINES -> "Flow Lines"
         WallpaperDesign.RIBBON_FLOW -> "Ribbon Flow"
+        WallpaperDesign.POLYGON_CASCADE -> "Cascade"
     }
 
 /** A short, human name for the color-mode chip — the enum name is a code identifier, not a label. */

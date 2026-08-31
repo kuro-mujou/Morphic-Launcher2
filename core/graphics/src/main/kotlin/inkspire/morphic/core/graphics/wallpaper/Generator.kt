@@ -63,5 +63,6 @@ object Generators {
         WallpaperDesign.DOT_GRID -> DotGridGenerator
         WallpaperDesign.FLOW_LINES -> FlowLinesGenerator
         WallpaperDesign.RIBBON_FLOW -> RibbonFlowGenerator
+        WallpaperDesign.POLYGON_CASCADE -> PolygonCascadeGenerator
     }
 }

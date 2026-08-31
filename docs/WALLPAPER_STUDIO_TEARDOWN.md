@@ -181,8 +181,11 @@ rectangles.
     each sweeping the palette *along its length* (a gradient down the ribbon, seeded offset per ribbon) and drawn with no
     outline, so the bands melt past each other — the flat, outlined Neon Ribbons is the sibling it contrasts. Built on the
     shared `trace` + `colorLooping`, drawn per-segment.
-  - **Remaining:** Polygon Cascade (gart spirograph — rotating-polygon rosette), and re-do Ribbons (fine bundled lines +
-    glow — optional; the current Ribbons is not broken).
+  - **W8d ✅** — **Polygon Cascade** (new design; gart spirograph/harmongraph): a rosette of rotating, shrinking polygon
+    outlines weaving a moiré into the frame's center — the first design that is *not* a per-pixel field but one shape
+    drawn many times. density → iteration count, `variant` → the polygon's sides (0 = triangle), irregularity → vertex
+    wobble (crisp rosette → hand-drawn). A centered mandala, so it carries a lot of negative space by design.
+  - **Remaining:** re-do Ribbons (fine bundled lines + glow — optional; the current Ribbons is not broken).
 - **W9 — the calm staples.** Diagonal Bands, Gradient Columns, Ribbed Glass, Wave Dividers, Soft Overlaps.
 - **W10 — the Style panel UI.** The horizontal tab row (per-design params) + numeric ruler sliders + segmented
   variant/color-mode controls, mirroring theirs. Only after the model exists.
