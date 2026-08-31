@@ -54,10 +54,25 @@ object LinearGradientGenerator : Generator {
     }
 
     /**
+     * [fraction] of the way through the palette as a **loop** — the last stop rejoined to the first — so a value
+     * rolling past the end bands back to the start seamlessly instead of hitting a hard edge at the final stop. The
+     * looped sibling of [colorAt], which stops at the ends; shared by [PlasmaGenerator] and [RingsGenerator], whose
+     * fields both wrap.
+     */
+    internal fun colorLooping(fraction: Float, palette: Palette): Int {
+        if (palette.size <= 1) return palette.colorAt(0)
+        // Map 0..1 across size stops that wrap: the segment after the last stop returns to the first.
+        val scaled = fraction.coerceIn(0f, 1f) * palette.size
+        val lower = scaled.toInt() % palette.size
+        val upper = (lower + 1) % palette.size
+        return lerpArgb(palette.colorAt(lower), palette.colorAt(upper), scaled - scaled.toInt())
+    }
+
+    /**
      * [from] blended [t] of the way to [to], every ARGB channel — alpha included, since a palette stop may be
-     * translucent. Shared with [PlasmaGenerator], which loops the ramp rather than climbing it: interpolating packed
-     * ARGB is the arithmetic that tints a whole wallpaper when a channel is transposed, so both ramps blend through
-     * this one function rather than each risking it.
+     * translucent. Shared with [colorLooping] and the generators that loop the ramp: interpolating packed ARGB is the
+     * arithmetic that tints a whole wallpaper when a channel is transposed, so every ramp blends through this one
+     * function rather than each risking it.
      */
     internal fun lerpArgb(from: Int, to: Int, t: Float): Int {
         val a = lerpChannel(from ushr 24 and 0xFF, to ushr 24 and 0xFF, t)

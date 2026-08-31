@@ -41,7 +41,8 @@ object PlasmaGenerator : Generator {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                pixels[y * width + x] = colorLooping(sample(nx, ny, frequency, phases), palette)
+                pixels[y * width + x] =
+                    LinearGradientGenerator.colorLooping(sample(nx, ny, frequency, phases), palette)
             }
         }
 
@@ -75,19 +76,6 @@ object PlasmaGenerator : Generator {
         // Four terms span [-4, 4]; fold to [0, 1) and let the color wrap, so the banding is the plasma rather than a clip.
         val unit = (sum / 8f) + 0.5f
         return unit - floor(unit)
-    }
-
-    /**
-     * [fraction] of the way through the palette as a **loop** — the last stop rejoined to the first — so a plasma
-     * value rolling past the end bands back to the start seamlessly instead of hitting a hard edge at the final stop.
-     */
-    private fun colorLooping(fraction: Float, palette: Palette): Int {
-        if (palette.size <= 1) return palette.colorAt(0)
-        // Map 0..1 across size stops that wrap: the segment after the last stop returns to the first.
-        val scaled = fraction.coerceIn(0f, 1f) * palette.size
-        val lower = scaled.toInt() % palette.size
-        val upper = (lower + 1) % palette.size
-        return LinearGradientGenerator.lerpArgb(palette.colorAt(lower), palette.colorAt(upper), scaled - scaled.toInt())
     }
 
     private const val MinFrequency = 8f

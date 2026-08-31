@@ -236,6 +236,13 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     look from the field, not marching-squares polylines), **Waves** (sine-crest dune bands filled back-to-front, from
     `arts/layers` undula/strata + `arts/hills`). Voronoi/Contour reuse the boundary-detection trick on a scalar field;
     Plasma's ramp loop is shared with `LinearGradientGenerator.lerpArgb` (now `internal` — its second consumer).
+  - **W5b — tiling + scatter + radial batch. ✅ (2026-08-31)** Three more, covering three groups the first six did not,
+    device-verified: **Bauhaus** (recursive rect subdivision, from `arts/rects/mondrian` — but Mondrian's three
+    hard-coded primaries generalized onto the palette, since the palette is what carries color here), **Confetti**
+    (Poisson-disk dart-throwing, from `stipple/util/PoissonDisk` — evenly *strewn* discs, not a clumping uniform
+    scatter), **Rings** (concentric echoes off an off-center seeded point, from `arts/sun`/`arts/spiral`). The looped
+    ramp sampler `colorLooping` is now shared in `LinearGradientGenerator` — Plasma and Rings both wrap their field
+    through it. Nine generators total now (four gradient/field, two tessellation... — see the registry).
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

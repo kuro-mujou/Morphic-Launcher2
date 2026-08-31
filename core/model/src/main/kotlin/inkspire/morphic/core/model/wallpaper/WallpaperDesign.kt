@@ -74,4 +74,25 @@ enum class WallpaperDesign {
      */
     @SerialName("waves")
     WAVES,
+
+    /**
+     * The frame cut into blocks by recursive splitting, filled from the palette and ruled off in the darkest stop —
+     * the Bauhaus / Mondrian look. Mondrian's three primaries generalized onto whatever palette is chosen.
+     */
+    @SerialName("bauhaus")
+    BAUHAUS,
+
+    /**
+     * Evenly-strewn discs in palette colors on a dark ground — confetti. Poisson-disk sampling, so the discs are spaced
+     * rather than clumped like a uniform scatter.
+     */
+    @SerialName("confetti")
+    CONFETTI,
+
+    /**
+     * Concentric rings of palette color rippling out from an off-center point — the echo / sonar op-art. Distance
+     * banded through the looped palette, the radial sibling of [PLASMA].
+     */
+    @SerialName("rings")
+    RINGS,
 }

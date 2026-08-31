@@ -292,6 +292,9 @@ private val WallpaperDesign.label: String
         WallpaperDesign.PLASMA -> "Plasma"
         WallpaperDesign.CONTOUR -> "Contour"
         WallpaperDesign.WAVES -> "Waves"
+        WallpaperDesign.BAUHAUS -> "Bauhaus"
+        WallpaperDesign.CONFETTI -> "Confetti"
+        WallpaperDesign.RINGS -> "Rings"
     }
 
 /** A short, human name for the filter chip — the enum name is a code identifier, not a label. */

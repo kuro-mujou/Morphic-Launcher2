@@ -53,5 +53,8 @@ object Generators {
         WallpaperDesign.PLASMA -> PlasmaGenerator
         WallpaperDesign.CONTOUR -> ContourGenerator
         WallpaperDesign.WAVES -> WavesGenerator
+        WallpaperDesign.BAUHAUS -> BauhausGenerator
+        WallpaperDesign.CONFETTI -> ConfettiGenerator
+        WallpaperDesign.RINGS -> RingsGenerator
     }
 }
