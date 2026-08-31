@@ -168,7 +168,7 @@ rectangles.
   the render harness (which gained an `irr ∈ {0,1}` sweep); the knob is engine-only until **W10** surfaces it, exactly
   as `variant` is. The remaining W7 wish — a *per-design* default (each design opening on its own tasteful params) —
   needs the studio to carry per-design params and folds into W10.
-- **W8 — thin-line family. ⏳ (started 2026-08-31)** Biggest visual jump. Progress:
+- **W8 — thin-line family. ✅ (2026-08-31)** Biggest visual jump; four designs, catalog now 20. Progress:
   - **W8a ✅** — the shared stroke renderer (`Streamlines.pathOf`, extracted from the verbatim copies in Flow and
     Ribbons) + **Flow Lines** (new design; gart's flowforce/perl, cyanowaves): dense fine hairlines seeded on an even
     lattice and combed through the flow field — Flow woven, Flow Lines combed. density → line count, irregularity →
@@ -185,7 +185,10 @@ rectangles.
     outlines weaving a moiré into the frame's center — the first design that is *not* a per-pixel field but one shape
     drawn many times. density → iteration count, `variant` → the polygon's sides (0 = triangle), irregularity → vertex
     wobble (crisp rosette → hand-drawn). A centered mandala, so it carries a lot of negative space by design.
-  - **Remaining:** re-do Ribbons (fine bundled lines + glow — optional; the current Ribbons is not broken).
+  - **Re-do Ribbons — deliberately skipped (user's call, 2026-08-31).** The teardown asked to rework Neon Ribbons into
+    "fine bundled lines + glow", but that was written before Flow Lines existed; Flow Lines now *is* the fine bundled-line
+    look, so the current thick-outlined Ribbons is kept for the bold, poster-style variety the family would otherwise
+    lack. Not a gap — a decision.
 - **W9 — the calm staples.** Diagonal Bands, Gradient Columns, Ribbed Glass, Wave Dividers, Soft Overlaps.
 - **W10 — the Style panel UI.** The horizontal tab row (per-design params) + numeric ruler sliders + segmented
   variant/color-mode controls, mirroring theirs. Only after the model exists.

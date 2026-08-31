@@ -280,6 +280,11 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     `0.5` reproduces the shipped render, `0` is rigid, `1` chaotic. Voronoi and Mesh became grid+jitter via a shared
     `PointScatter`; the loud field designs (Plasma/Rings/Rays) were softened toward broader swells. Engine-only until
     W10 surfaces it. Device-verified via the harness (now with an irregularity sweep). Full record in the teardown doc.
+  - **W8 — the thin-line family. ✅ (2026-08-31)** Four designs, catalog now **20**: a shared `Streamlines.pathOf` +
+    **Flow Lines** (dense combed hairlines), **Contour-lines** (Contour's `variant`, now its default look), **Ribbon
+    Flow** (broad ribbons with the palette running along each), **Polygon Cascade** (a rotating-polygon spirograph
+    rosette, the first non-field design). Re-doing Ribbons was skipped by choice — Flow Lines covers the fine-line niche.
+    Full record in the teardown doc.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
