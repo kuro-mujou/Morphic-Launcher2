@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,6 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
+import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperFilter
@@ -75,91 +78,124 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
 
-    // Which chooser the bottom bar is showing — the designs, the palettes, or the filters. UI position, not recipe, so
-    // it is remembered across rotation but never stored.
+    // Which chooser the bottom bar is showing — the designs, the palettes, the filters, or the Style panel. UI
+    // position, not recipe, so it is remembered across rotation but never stored. The Style tab likewise.
     var mode by rememberSaveable { mutableStateOf(ChooserMode.DESIGNS) }
+    var styleTab by rememberSaveable { mutableStateOf(StyleTab.AMOUNT) }
 
     BackHandler(onBack = onBack)
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .pointerInput(Unit) {
-                var travelled = 0f
-                val threshold = with(density) { 110.dp.toPx() }
-                detectHorizontalDragGestures(
-                    onDragStart = { travelled = 0f },
-                    onDragEnd = { if (abs(travelled) > threshold) viewModel.shuffle() },
-                ) { _, amount -> travelled += amount }
-            },
-    ) {
-        // The preview measures itself and hands its pixel size to the model, so the render is exactly the resolution
-        // it is shown at. `onGloballyPositioned` would do, but the size is all that is wanted.
+    // **The studio is its own theme zone, and a fixed dark one** — the icon studio's call, for the same reason with a
+    // different canvas: the chrome here floats over the *wallpaper being designed*, which can be anything, so there is
+    // nothing to follow that would stay legible. It was missing until the Style panel put the first themed component
+    // on this screen (every control before it was hand-colored white), and a bare MaterialTheme drew M3's default
+    // purple over a monochrome studio.
+    LauncherTheme(darkTheme = true) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onSizeChanged { viewModel.setViewport(it.width, it.height) },
+                .background(Color.Black)
+                .pointerInput(Unit) {
+                    var travelled = 0f
+                    val threshold = with(density) { 110.dp.toPx() }
+                    detectHorizontalDragGestures(
+                        onDragStart = { travelled = 0f },
+                        onDragEnd = { if (abs(travelled) > threshold) viewModel.shuffle() },
+                    ) { _, amount -> travelled += amount }
+                },
         ) {
-            Crossfade(targetState = state.bitmap, label = "wallpaperPreview") { bitmap ->
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Wallpaper preview",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+            // The preview measures itself and hands its pixel size to the model, so the render is exactly the resolution
+            // it is shown at. `onGloballyPositioned` would do, but the size is all that is wanted.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onSizeChanged { viewModel.setViewport(it.width, it.height) },
+            ) {
+                Crossfade(targetState = state.bitmap, label = "wallpaperPreview") { bitmap ->
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Wallpaper preview",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
+
+            StudioIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(12.dp),
+            )
+
+            StudioIconButton(
+                icon = Icons.Default.Check,
+                contentDescription = "Set as wallpaper",
+                onClick = { viewModel.apply(onApplied = onBack) },
+                // Nothing to apply until the first render lands, and one write at a time — the model guards the second,
+                // this greys the button while it runs so the guard is visible rather than silent.
+                enabled = state.bitmap != null && !state.applying,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(12.dp),
+            )
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                // Above the bar rather than in it: the Style panel is two rows — its tabs and the control they choose —
+                // where every other chooser is one row of chips, and the bar stays one row of chips whatever is open.
+                if (mode == ChooserMode.STYLE) {
+                    WallpaperStylePanel(
+                        recipe = state.recipe,
+                        tab = styleTab,
+                        onSelectTab = { styleTab = it },
+                        onSetDensity = viewModel::setDensity,
+                        onSetIrregularity = viewModel::setIrregularity,
+                        onSetVariant = viewModel::setVariant,
+                        onSetColorMode = viewModel::setColorMode,
+                    )
+                }
+
+                BottomChooser(
+                    mode = mode,
+                    onModeToggle = { tapped -> mode = if (mode == tapped) ChooserMode.DESIGNS else tapped },
+                    recipe = state.recipe,
+                    onPickDesign = viewModel::pickDesign,
+                    onSetPalette = viewModel::setPalette,
+                    onToggleFilter = viewModel::toggleFilter,
+                    onShuffle = viewModel::shuffle,
+                )
+            }
         }
-
-        StudioIconButton(
-            icon = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "Back",
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(12.dp),
-        )
-
-        StudioIconButton(
-            icon = Icons.Default.Check,
-            contentDescription = "Set as wallpaper",
-            onClick = { viewModel.apply(onApplied = onBack) },
-            // Nothing to apply until the first render lands, and one write at a time — the model guards the second,
-            // this greys the button while it runs so the guard is visible rather than silent.
-            enabled = state.bitmap != null && !state.applying,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(12.dp),
-        )
-
-        BottomChooser(
-            mode = mode,
-            onModeToggle = { tapped -> mode = if (mode == tapped) ChooserMode.DESIGNS else tapped },
-            recipe = state.recipe,
-            onPickDesign = viewModel::pickDesign,
-            onSetPalette = viewModel::setPalette,
-            onSetColorMode = viewModel::setColorMode,
-            onToggleFilter = viewModel::toggleFilter,
-            onShuffle = viewModel::shuffle,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
     }
 }
 
-/** Which of the three choosers the bottom bar is showing. [DESIGNS] is home — the two toggles flip to and from it. */
-private enum class ChooserMode { DESIGNS, COLORS, FILTERS }
+/**
+ * Which of the four choosers the bottom bar is showing. [DESIGNS] is home — the three toggles flip to and from it.
+ *
+ * [STYLE] is the one that does not replace the bar's chips: it opens a panel *above* them and leaves the designs in
+ * the bar, so a knob can be tuned and a design tried without a trip back through the toggles.
+ */
+private enum class ChooserMode { DESIGNS, COLORS, FILTERS, STYLE }
 
 /**
- * The bottom bar: the two chooser toggles, the chooser they flip between (designs, palettes or filters), and the
+ * The bottom bar: the three chooser toggles, the chooser they flip between (designs, palettes or filters), and the
  * shuffle.
  *
  * **One chooser slot, three contents.** The palette and filter toggles swap the middle rather than stacking, so the
- * bar stays one row over the wallpaper; either toggle flips back to the designs when it is already on. The shuffle
- * re-seeds whichever design is showing — a new variation, the same whatever the chooser.
+ * bar stays one row over the wallpaper; either toggle flips back to the designs when it is already on. The style
+ * toggle is the exception and opens a panel above instead, leaving the designs here. The shuffle re-seeds whichever
+ * design is showing — a new variation, the same whatever the chooser.
  */
 @Composable
 private fun BottomChooser(
@@ -168,7 +204,6 @@ private fun BottomChooser(
     recipe: WallpaperRecipe,
     onPickDesign: (WallpaperDesign) -> Unit,
     onSetPalette: (List<Int>) -> Unit,
-    onSetColorMode: (WallpaperColorMode) -> Unit,
     onToggleFilter: (WallpaperFilter) -> Unit,
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
@@ -176,7 +211,6 @@ private fun BottomChooser(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -186,6 +220,12 @@ private fun BottomChooser(
             contentDescription = "Colors",
             onClick = { onModeToggle(ChooserMode.COLORS) },
             selected = mode == ChooserMode.COLORS,
+        )
+        StudioIconButton(
+            icon = Icons.Default.Straighten,
+            contentDescription = "Style",
+            onClick = { onModeToggle(ChooserMode.STYLE) },
+            selected = mode == ChooserMode.STYLE,
         )
         StudioIconButton(
             icon = Icons.Default.Tune,
@@ -201,18 +241,6 @@ private fun BottomChooser(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // The color-mode chips lead the row: how *much* of a palette to use, before which palette.
-                        item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                WallpaperColorMode.entries.forEach { colorMode ->
-                                    ChooserChip(
-                                        label = colorMode.label,
-                                        selected = colorMode == recipe.params.colorMode,
-                                        onClick = { onSetColorMode(colorMode) },
-                                    )
-                                }
-                            }
-                        }
                         items(ColorPalettes.all, key = { it.name }) { palette ->
                             PalettePill(
                                 colors = palette.colors,
@@ -236,7 +264,8 @@ private fun BottomChooser(
                         }
                     }
 
-                ChooserMode.DESIGNS ->
+                // Style keeps the designs here, its own panel being above the bar.
+                ChooserMode.DESIGNS, ChooserMode.STYLE ->
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -259,9 +288,9 @@ private fun BottomChooser(
     }
 }
 
-/** One labelled chip in the picker row — a design or a filter, lit when it is the one showing / turned on. */
+/** One labelled chip in the picker row — a design, a filter or a Style tab, lit when it is the one showing. */
 @Composable
-private fun ChooserChip(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChooserChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -328,8 +357,8 @@ private val WallpaperDesign.label: String
         WallpaperDesign.RIBBED_GLASS -> "Ribbed Glass"
     }
 
-/** A short, human name for the color-mode chip — the enum name is a code identifier, not a label. */
-private val WallpaperColorMode.label: String
+/** A short, human name for the color-mode segment — the enum name is a code identifier, not a label. */
+internal val WallpaperColorMode.label: String
     get() = when (this) {
         WallpaperColorMode.MONOCHROMATIC -> "Mono"
         WallpaperColorMode.BICHROMATIC -> "Duo"

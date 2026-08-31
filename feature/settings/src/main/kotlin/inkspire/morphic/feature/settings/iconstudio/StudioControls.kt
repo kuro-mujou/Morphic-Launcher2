@@ -152,17 +152,18 @@ internal fun SliderControl(
 }
 
 /**
- * The studio's dress for [MorphicSliderRow]: fixed white on glass, at the panel's own scale.
+ * A studio's dress for [MorphicSliderRow]: fixed white on glass, at the panel's own scale.
  *
- * **Fixed rather than themed, which is the one place the studio departs from the palette** — the thing behind its
- * panels is a canvas the *user* sets to black or white at will, so a theme-derived color would be unreadable half the
- * time. `StudioSurface` carries the whole argument.
+ * **Fixed rather than themed, which is the one place a studio departs from the palette** — the thing behind these
+ * panels is not a surface the app chose. Here it is a canvas the *user* sets to black or white at will; in the
+ * wallpaper studio, which takes this same dress, it is whatever picture is being designed. Either way a theme-derived
+ * color would be unreadable half the time. `StudioSurface` carries the whole argument.
  *
  * The type scale is a step down from a settings row's, because these labels sit in a rail a third of the screen wide
  * and there are six of them stacked.
  */
 @Composable
-private fun studioSliderRowStyle(): SliderRowStyle = SliderRowStyle(
+internal fun studioSliderRowStyle(): SliderRowStyle = SliderRowStyle(
     labelColor = StudioContentColor.copy(alpha = 0.75f),
     labelStyle = MaterialTheme.typography.labelMedium,
     valueColor = StudioContentColor,

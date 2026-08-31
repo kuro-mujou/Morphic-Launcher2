@@ -6,6 +6,7 @@ import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.graphics.wallpaper.FilterPipeline
 import inkspire.morphic.core.graphics.wallpaper.Generators
 import inkspire.morphic.core.graphics.wallpaper.PaletteColorMode
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
@@ -89,9 +90,29 @@ class WallpaperStudioViewModel(
     }
 
     /** Switch how much of the palette the design paints with — one hue, two colors, or all of them. */
-    fun setColorMode(mode: WallpaperColorMode) {
-        if (mode == mutableState.value.recipe.params.colorMode) return
-        mutableState.update { it.copy(recipe = it.recipe.copy(params = it.recipe.params.copy(colorMode = mode))) }
+    fun setColorMode(mode: WallpaperColorMode) = setParams { it.copy(colorMode = mode) }
+
+    /**
+     * How much of the design there is — the count the current design resolves [DesignParams.density] to.
+     *
+     * **Fired when a drag ends, not per frame, and the Style panel is written to commit rather than preview for that
+     * reason.** A generator paints every pixel of a full-screen bitmap; there is no cheap intermediate to show while a
+     * finger moves, and previewing would only queue renders for [rerender] to cancel. A draft-quality render during
+     * the gesture is the refinement that would change this.
+     */
+    fun setDensity(density: Float) = setParams { it.copy(density = density) }
+
+    /** How much organic noise disturbs the design — rigid at `0`, chaotic at `1`. Committed, as [setDensity] is. */
+    fun setIrregularity(irregularity: Float) = setParams { it.copy(irregularity = irregularity) }
+
+    /** Which of the design's sub-looks to draw — its lines-or-filled, its direction, its polygon. */
+    fun setVariant(variant: Int) = setParams { it.copy(variant = variant) }
+
+    /** One edit to the Style knobs: no-op when nothing moved, so a re-selected value costs no render. */
+    private fun setParams(edit: (DesignParams) -> DesignParams) {
+        val params = edit(mutableState.value.recipe.params)
+        if (params == mutableState.value.recipe.params) return
+        mutableState.update { it.copy(recipe = it.recipe.copy(params = params)) }
         rerender()
     }
 
