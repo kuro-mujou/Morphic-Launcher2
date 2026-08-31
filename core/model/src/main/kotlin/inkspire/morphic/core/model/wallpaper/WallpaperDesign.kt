@@ -182,4 +182,11 @@ enum class WallpaperDesign {
      */
     @SerialName("waveDividers")
     WAVE_DIVIDERS,
+
+    /**
+     * A palette gradient seen through fluted glass — vertical ribs that refract a diagonal background and carry a
+     * specular sheen. Depth from light, not from color; [DesignParams.irregularity] sets the refraction strength.
+     */
+    @SerialName("ribbedGlass")
+    RIBBED_GLASS,
 }

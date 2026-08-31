@@ -40,7 +40,7 @@ object GradientColumnsGenerator : Generator {
             val left = if (band == 0) 0f else boundaries[band - 1]
             val right = if (band < boundaries.size) boundaries[band] else 1f
             val localT = if (right > left) (nx - left) / (right - left) else 0f
-            val color = shade(columnColors[band], edgeShade(localT))
+            val color = Shades.scale(columnColors[band], edgeShade(localT))
             // A column is one color top to bottom, so the whole vertical run is filled from a single computed pixel.
             for (y in 0 until height) pixels[y * width + x] = color
         }
@@ -62,16 +62,6 @@ object GradientColumnsGenerator : Generator {
     private fun edgeShade(localT: Float): Float {
         val into = ((localT - (1f - ShadowFraction)) / ShadowFraction).coerceIn(0f, 1f)
         return 1f - ShadowDepth * into
-    }
-
-    /** [argb] with its color channels scaled by [factor] (`0..1`), alpha kept — a plain darken toward black. */
-    private fun shade(argb: Int, factor: Float): Int {
-        val a = argb ushr 24 and 0xFF
-        val r = ((argb shr 16 and 0xFF) * factor).roundToInt().coerceIn(0, 0xFF)
-        val g = ((argb shr 8 and 0xFF) * factor).roundToInt().coerceIn(0, 0xFF)
-        val b = ((argb and 0xFF) * factor).roundToInt().coerceIn(0, 0xFF)
-        val packed = (a shl 24) or (r shl 16) or (g shl 8) or b
-        return packed
     }
 
     private const val MinColumns = 4

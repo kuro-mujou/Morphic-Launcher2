@@ -68,5 +68,6 @@ object Generators {
         WallpaperDesign.GRADIENT_COLUMNS -> GradientColumnsGenerator
         WallpaperDesign.SOFT_OVERLAPS -> SoftOverlapsGenerator
         WallpaperDesign.WAVE_DIVIDERS -> WaveDividersGenerator
+        WallpaperDesign.RIBBED_GLASS -> RibbedGlassGenerator
     }
 }

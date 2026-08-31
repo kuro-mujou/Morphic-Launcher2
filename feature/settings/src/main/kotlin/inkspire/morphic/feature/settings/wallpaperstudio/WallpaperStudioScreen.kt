@@ -325,6 +325,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.GRADIENT_COLUMNS -> "Columns"
         WallpaperDesign.SOFT_OVERLAPS -> "Overlaps"
         WallpaperDesign.WAVE_DIVIDERS -> "Wave Dividers"
+        WallpaperDesign.RIBBED_GLASS -> "Ribbed Glass"
     }
 
 /** A short, human name for the color-mode chip — the enum name is a code identifier, not a label. */
