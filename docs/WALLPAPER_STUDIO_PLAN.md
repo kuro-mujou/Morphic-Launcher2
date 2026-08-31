@@ -285,6 +285,9 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     Flow** (broad ribbons with the palette running along each), **Polygon Cascade** (a rotating-polygon spirograph
     rosette, the first non-field design). Re-doing Ribbons was skipped by choice — Flow Lines covers the fine-line niche.
     Full record in the teardown doc.
+  - **W9 — the calm staples. ✅ (2026-08-31)** Five designs, catalog now **25**: Diagonal Bands, Gradient Columns, Soft
+    Overlaps, Wave Dividers, Ribbed Glass. Two shared helpers extracted on their second consumers — `Bands` (variable-
+    width banding) and `Shades` (channel darken). Full record in the teardown doc.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

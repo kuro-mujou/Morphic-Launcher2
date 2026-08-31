@@ -189,7 +189,13 @@ rectangles.
     "fine bundled lines + glow", but that was written before Flow Lines existed; Flow Lines now *is* the fine bundled-line
     look, so the current thick-outlined Ribbons is kept for the bold, poster-style variety the family would otherwise
     lack. Not a gap — a decision.
-- **W9 — the calm staples.** Diagonal Bands, Gradient Columns, Ribbed Glass, Wave Dividers, Soft Overlaps.
+- **W9 — the calm staples. ✅ (2026-08-31)** All five, catalog now **25**: **Diagonal Bands** (angled stripes, cycling
+  palette, `variant` = direction), **Gradient Columns** (palette stepped once across columns, soft seam shadow), **Soft
+  Overlaps** (translucent radial-gradient discs blending, `variant` = blend mode), **Wave Dividers** (banded stripes with
+  wavy seams undulating in unison), **Ribbed Glass** (a diagonal gradient refracted through fluted-glass ribs with a
+  specular lens — a standout). Two shared derivations fell out: `Bands` (variable-width banding, used by Diagonal Bands +
+  Wave Dividers) and `Shades` (channel darken, used by Gradient Columns + Ribbed Glass), each extracted on its second
+  consumer. `irregularity` maps per design (band-width variation / wave depth / position jitter / refraction).
 - **W10 — the Style panel UI.** The horizontal tab row (per-design params) + numeric ruler sliders + segmented
   variant/color-mode controls, mirroring theirs. Only after the model exists.
 - **Depth pass (fold in) —** Shadow / Blend mode / Refraction where cheap; it is a lot of their premium feel.
