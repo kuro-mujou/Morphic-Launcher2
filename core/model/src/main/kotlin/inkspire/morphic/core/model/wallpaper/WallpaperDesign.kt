@@ -154,4 +154,11 @@ enum class WallpaperDesign {
      */
     @SerialName("polygonCascade")
     POLYGON_CASCADE,
+
+    /**
+     * Parallel bands of flat palette color marching across the frame — the calmest staple, a stripe pattern.
+     * [DesignParams.variant] sets the direction (diagonal, vertical, horizontal); no noise, no geometry, just the bands.
+     */
+    @SerialName("diagonalBands")
+    DIAGONAL_BANDS,
 }
