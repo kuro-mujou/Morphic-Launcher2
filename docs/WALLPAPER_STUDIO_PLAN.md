@@ -308,7 +308,11 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     over a ground that brightens along the bundle, at ~3× its base. The teardown's verdict table is the running
     record. **W11d — Bauhaus, second pass ✅ (2026-08-31):** their vocabulary is **one quarter disc or nothing** (halves
     and circles are emergent, not drawn), and their plain-tile fraction is a knob of its own — ours moved it onto
-    `scale` as *Coverage*, freeing `irregularity` to mean the turns.
+    `scale` as *Coverage*, freeing `irregularity` to mean the turns. **W11e — Dot Grid ✅ (2026-09-01):** the
+    identity finding a third time — theirs is a *contained* lattice of uniform tiles where only the **color**
+    moves, ours was a full-bleed **halftone** where a noise field moves each dot's **size**. The halftone split
+    off as `HALFTONE` and `DOT_GRID` was rebuilt as theirs — catalog **26**. It also corrects the teardown's
+    parameter inventory: their tab row scrolls, and this design has **eight** knobs, not six.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

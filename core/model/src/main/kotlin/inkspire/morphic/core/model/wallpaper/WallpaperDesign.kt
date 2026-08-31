@@ -134,11 +134,20 @@ enum class WallpaperDesign {
     RAYS,
 
     /**
-     * A regular grid of dots whose size and color are driven by a noise field — the halftone screen. A lattice, the
-     * opposite of [CONFETTI]'s scatter; dots dwindle to bare paper where the field is weak.
+     * A contained block of evenly-spaced rounded tiles, stepping through the palette in bands down its rows — the dot
+     * grid. Every tile is the same size and only the color moves; [DesignParams.scale] is the margin around the block,
+     * which is what decides between a texture and a motif.
      */
     @SerialName("dotGrid")
     DOT_GRID,
+
+    /**
+     * A regular grid of dots whose *size* is driven by a noise field — the halftone screen. Shares [DOT_GRID]'s
+     * lattice and inverts what varies over it: one color, sizes swelling and dwindling to bare paper, filling the
+     * frame rather than sitting in it.
+     */
+    @SerialName("halftone")
+    HALFTONE,
 
     /**
      * A dense combing of fine, even-seeded hairlines through the flow field — the brushed thin-line texture. The same

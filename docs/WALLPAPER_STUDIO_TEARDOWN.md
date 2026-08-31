@@ -17,8 +17,10 @@ wallpaper slice.
 ## The parameter model — the big miss
 
 Their Style panel is a **horizontally-scrolling row of tabs**, each tab a named parameter with either a numeric ruler
-slider or a segmented variant control below it. **Almost every design exposes six.** Our `DesignParams` is
-`density: Float` + an unused `variant: Int`. That is the gap in one sentence.
+slider or a segmented variant control below it. **Almost every design exposes six** — and *at least* six: the row
+scrolls, and Dot Grid turned out to have **eight** once it was driven to the end (W11e). Treat every count below as a
+floor until the design has been opened and its tab row scrolled to the stop. Our `DesignParams` is `density: Float` +
+an unused `variant: Int`. That is the gap in one sentence.
 
 ### Full per-design parameter inventory (all 22, observed directly)
 
@@ -32,7 +34,7 @@ slider or a segmented variant control below it. **Almost every design exposes si
 | 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis, **4..20** (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **fraction** left undecorated, not a toggle and not a count; *Tile background* is Off/On. The tile vocabulary is **a quarter disc or nothing** — halves and circles are emergent |
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance |
 | 8 | Mesh Gradient | Columns · Jitter · **Color distribution** · Softness |
-| 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio |
+| 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio · **Spacing · Offset** — **eight**, not six (W11e; the last two are past the fold in the tab row and were missed on the first pass). *Spacing* is the margin around the whole block, not the gap between tiles; *Offset* is a four-arrow **nudge**, hold-to-repeat, that walks the block off center; *Aspect ratio* is a **segmented** 1/1 · Golden · 2/1 · 4/1 |
 | 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients |
 | 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
 | 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset |
@@ -56,7 +58,9 @@ Read down the table and the same handful of concepts recur under different names
   `density`, but named per design and often exposed as a raw integer). **Built (W6–W10).**
 - **Spacing / gaps** — *Spacing, Margin, Offset, Coverage, Size, Radius*. How much air between elements, and how much
   room each takes. **Built as `scale` (W11c)**, on Ribbons' spread; the designs whose element size is still fixed
-  (Confetti's radius, Dot Grid's square size, Soft Overlaps' radius, Rounded Tiles' margin) are where it pays off next.
+  (Confetti's radius, Soft Overlaps' radius, Rounded Tiles' margin) are where it pays off next. Dot Grid spends it on
+  the **margin** instead (W11e) — its own tile size rides on the `variant` look, because a contained block and a
+  full-bleed field is the bigger of the two questions by a distance.
 - **Orientation** — *Rotation, Direction, Delta rotation, Rotate delta*. Which way it points / turns.
 - **Organic noise** — *Irregularity, Distortion, Jitter, Randomness, Variation, Offset distortion*. The single most
   common family — the knob that takes a rigid generator to an organic one. **Ours have none of this**, which is part of
@@ -136,7 +140,8 @@ rectangles.
 | Confetti Dots | **Confetti** | Re-base on a **distorted grid** (Resolution + Offset distortion), tiny sparse dots, dark ground. Ours' Poisson is over-built and over-bold. |
 | Neon Ribbons | **Ribbons** | ✅ **W11b.** Rebuilt as one fanning bundle of fine curves. The W8 decision to skip this was wrong: Flow Lines combs the whole frame, theirs draws *one* gesture — not the same look. |
 | Bauhaus Blocks | **Bauhaus** | ✅ **W11a**, refined in **W11d**. Rebuilt as their arc lattice (what ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name), then narrowed to their real vocabulary: one quarter disc, everything else emergent, with coverage on its own knob. |
-| Dot Grid | **DotGrid** | Add Corner radius / Square size / Aspect ratio; contain it (negative space). |
+| Dot Grid | **DotGrid** | ✅ **W11e.** Same identity finding as Bauhaus: ours was a *halftone* (a field driving each dot's **size**, full-bleed) under their name, and theirs is a **contained** lattice of uniform tiles where only the **color** moves. The halftone split off as its own design; DotGrid was rebuilt as theirs. |
+| — | **Halftone** | Ours only, split out of DotGrid by W11e — the noise-sized dot screen, kept unchanged. |
 | Triangular Facets | **Facets** | Add Distortion + Tridimensionality (shading); soften color. |
 | Mesh Gradient | **Mesh** | Re-base on grid + jitter; add Color distribution + Softness. |
 | Layered Waves | **Waves** | Closest we have. Add Distortion + Palette-gradients toggle. |
@@ -224,6 +229,39 @@ rectangles.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11e — Dot Grid. ✅ (2026-09-01)** Bauhaus's finding, a third time: not quality, **identity**. Theirs is a
+    *contained* block of uniform rounded tiles whose **color** steps through the palette in flat bands down the rows;
+    ours was a **halftone** — a Perlin field driving each dot's **size**, filling the frame. Same lattice, opposite
+    variable, opposite composition. So the halftone split off as **`HALFTONE`**, kept as it was, and **`DOT_GRID`** was
+    rebuilt as theirs — catalog **26**.
+    - **Their layout, measured off thirty renders rather than guessed.** The block sits in a box that is the frame
+      inset by *Spacing* (`0` → full bleed, `50` → the middle half), and the cell is
+      `min(boxW / (cols - 1 + fill), boxH / (rows - 1 + fill))` where `fill` is *Square size* as a fraction. The
+      `- 1 + fill` is the whole trick and it is what a plausible fit gets wrong: it is the **painted extent** that is
+      fitted to the box, not the cell count, so the block's ink lands on its margin rather than half a tile short of
+      it. Their degenerate case is the proof — 2 rows put the two dots at exactly `H/3` and `2H/3`, which is
+      `1280 / (2 - 1 + 0.5)`, and no cell-count fit produces that number.
+    - **Rows and columns are independent there and derived here.** Theirs are two knobs, so the block's proportion is
+      the user's; ours takes *Columns* from `density` and fills the box with however many square cells reach the
+      bottom — Bauhaus's rule, and the same reason: five knobs to spend, and the block's proportion is worth less than
+      the margin. A consequence to know: a wide *Look* must keep the **square** cell's row count, or refilling the box
+      triples the rows, closes the vertical gaps and the bars read as columns.
+    - **Their Irregularity is a *color* dither, not a position jitter** — the geometry does not move by a pixel at
+      either extreme; the noise pushes tiles across a band seam. Ours does the same, with one addition: pushed off the
+      *light* end the tile is dropped instead of clamped, which erodes the block's top edge into a fade.
+    - **Their palette carries the ground as a separate first stop**, divided off in the strip; the bands walk the
+      stops above it. Ours reads the ramp above stop 0 at `n - 1` rungs but **never fewer than three**, and that floor
+      is the whole reason the design survives its own default: `BICHROMATIC` leaves two stops, one rung and no ramp at
+      all — a flat block with nothing for the dither to trade. Three rungs of a two-stop palette are three real tones,
+      and where the palette is long enough the rungs land on its own stops exactly (four rungs of five stops *are* its
+      four stops), which is what `DotGridGeneratorTest` pins.
+    - **Their eight knobs onto our five.** *Rows*+*Columns* → `density` as **Columns**; *Spacing* → `scale` as
+      **Margin**; *Irregularity* → `irregularity` as **Dither**; *Corner radius* + *Square size* + *Aspect ratio* →
+      `variant` as **Look** (Dots · Rounded · Squares · Bars · Tiles), because those three are not independently
+      useful — a circle filling half its cell and a square filling all of it are two looks, not four sliders.
+      **Not ported: *Offset***, their hold-to-repeat nudge that walks the block off center. It wants a two-axis
+      control neither `DesignParams` nor the panel has, and it is the one knob with real value left on the table here
+      — a launcher wallpaper's motif sitting dead center is a motif under the icons.
   - **W11a — Bauhaus. ✅ (2026-08-31)** The first, and it set the pattern for the rest: the gap was not quality but
     *identity*. Ours was a Mondrian (recursive rects, ruled in the darkest stop) under the Bauhaus name; theirs is an
     even lattice of square tiles each carrying one flat arc. So the Mondrian became its own **`MONDRIAN`** design,

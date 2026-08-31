@@ -72,6 +72,7 @@ object Generators {
         WallpaperDesign.RIBBONS -> RibbonsGenerator
         WallpaperDesign.RAYS -> RaysGenerator
         WallpaperDesign.DOT_GRID -> DotGridGenerator
+        WallpaperDesign.HALFTONE -> HalftoneGenerator
         WallpaperDesign.FLOW_LINES -> FlowLinesGenerator
         WallpaperDesign.RIBBON_FLOW -> RibbonFlowGenerator
         WallpaperDesign.POLYGON_CASCADE -> PolygonCascadeGenerator
