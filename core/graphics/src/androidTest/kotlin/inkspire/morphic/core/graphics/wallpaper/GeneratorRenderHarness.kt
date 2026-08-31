@@ -19,9 +19,17 @@ import org.junit.runner.RunWith
  *
  * **Writes through the MediaStore into `Pictures/`, not the app's own files dir.** An app's scoped external
  * directory (`Android/data/<pkg>/files`) is invisible to `adb shell` on modern Android, so a file dropped there
- * cannot be pulled; the shared media collection can. Run it, then pull and look:
+ * cannot be pulled; the shared media collection can.
+ *
+ * **Clear the folder first, every time — the harness cannot.** On the emulator these files land with a *null*
+ * `owner_package_name`, and MediaStore then silently refuses this instrumentation's `delete` on them (bulk selection
+ * *and* per-item URI alike — both return without removing the file). So a re-run cannot overwrite: `insert` finds the
+ * old file still on disk and appends " (1)", "(2)", … and a pull of the plain name reads a **stale** render. This
+ * actually masked a fixed generator as unchanged during W5 — the render was right, the pulled file was old. Only
+ * `adb shell` has the filesystem access to clear them, so the reliable loop is:
  *
  * ```
+ * adb shell rm -rf /sdcard/Pictures/genharness
  * gradle :core:graphics:connectedDebugAndroidTest
  * adb pull /sdcard/Pictures/genharness
  * ```
@@ -62,18 +70,17 @@ class GeneratorRenderHarness {
     }
 
     private fun save(resolver: android.content.ContentResolver, name: String, bitmap: Bitmap) {
-        // Replace any earlier render of the same design, so a re-run does not pile up `gen (1).png` duplicates.
-        resolver.delete(
+        // A plain insert. Overwriting an earlier render is *not attempted* — the class KDoc explains why it cannot work
+        // here (null-owner files this instrumentation may not delete); the folder is cleared with `adb shell rm`
+        // instead. An in-app delete would only be a no-op dressed up as a safeguard.
+        val uri = resolver.insert(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            "${MediaStore.Images.Media.DISPLAY_NAME} = ?",
-            arrayOf(name),
-        )
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/genharness")
-        }
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+            ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/genharness")
+            },
+        )!!
         resolver.openOutputStream(uri)!!.use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
