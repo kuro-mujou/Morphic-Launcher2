@@ -177,8 +177,12 @@ rectangles.
     look is now Contour's **default** (variant 0, thin ink on paper, the community favorite); the old filled relief is
     variant 1. Both fall out of the same banded field; the variant is reachable in code and by the harness now, in the
     Style panel at W10.
-  - **Remaining:** Ribbon Flow (gart flowforce/Eclectic — broad rounded ribbons), Polygon Cascade (gart spirograph —
-    rotating-polygon rosette), and re-do Ribbons (fine bundled lines + glow).
+  - **W8c ✅** — **Ribbon Flow** (new design; gart flowforce/Eclectic): broad rounded ribbons flowing through the field,
+    each sweeping the palette *along its length* (a gradient down the ribbon, seeded offset per ribbon) and drawn with no
+    outline, so the bands melt past each other — the flat, outlined Neon Ribbons is the sibling it contrasts. Built on the
+    shared `trace` + `colorLooping`, drawn per-segment.
+  - **Remaining:** Polygon Cascade (gart spirograph — rotating-polygon rosette), and re-do Ribbons (fine bundled lines +
+    glow — optional; the current Ribbons is not broken).
 - **W9 — the calm staples.** Diagonal Bands, Gradient Columns, Ribbed Glass, Wave Dividers, Soft Overlaps.
 - **W10 — the Style panel UI.** The horizontal tab row (per-design params) + numeric ruler sliders + segmented
   variant/color-mode controls, mirroring theirs. Only after the model exists.

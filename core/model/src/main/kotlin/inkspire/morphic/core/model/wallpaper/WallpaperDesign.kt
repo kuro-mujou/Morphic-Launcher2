@@ -138,4 +138,12 @@ enum class WallpaperDesign {
      */
     @SerialName("flowLines")
     FLOW_LINES,
+
+    /**
+     * Broad rounded ribbons flowing through the field, each sweeping through the palette down its length — the liquid
+     * band look. The same field as [RIBBONS], but the color runs *along* each ribbon rather than being flat, and there
+     * is no outline, so the bands melt past each other instead of reading as ruled strokes.
+     */
+    @SerialName("ribbonFlow")
+    RIBBON_FLOW,
 }
