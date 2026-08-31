@@ -243,6 +243,15 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     scatter), **Rings** (concentric echoes off an off-center seeded point, from `arts/sun`/`arts/spiral`). The looped
     ramp sampler `colorLooping` is now shared in `LinearGradientGenerator` — Plasma and Rings both wrap their field
     through it. Nine generators total now (four gradient/field, two tessellation... — see the registry).
+  - **W5c — tiling + field + flow batch. ✅ (2026-08-31)** Three more, taking the catalog to **fourteen**,
+    device-verified: **Truchet** (quarter-arc tiles turned at random that join into a maze, from `arts/ticktiletock`
+    — the connection is emergent because every arc meets an edge at its midpoint), **Metaballs / Blobs** (summed
+    `r²/d²` potential fields that *merge*, snapped to flat palette **stops** so they read as glowing onion rings, from
+    `arts/blob` — banded, unlike Mesh's smooth blend), **Ribbons** (thick outlined streamlines that reuse
+    `FlowFieldGenerator.trace` — the same field as Flow drawn as broad ribbons, from `arts/flowforce/glst`). Metaballs'
+    banding had to snap to *flat stops*, not an interpolated `colorAt` fraction, or the "onion rings" the KDoc promised
+    were a smooth wash — caught on device. The catalog now spans gradient, field, flow, tessellation, tiling, scatter
+    and radial; the text pieces and busy iso-scenes gart also has stay out by choice.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

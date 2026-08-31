@@ -95,4 +95,25 @@ enum class WallpaperDesign {
      */
     @SerialName("rings")
     RINGS,
+
+    /**
+     * A grid of quarter-arc tiles turned at random that join into a maze of flowing loops — the Truchet pattern.
+     * Emergent from the tiling: arcs meet every edge at its midpoint, so neighbours always connect.
+     */
+    @SerialName("truchet")
+    TRUCHET,
+
+    /**
+     * Seeded charges whose potential fields merge into gooey blobs, banded through the palette — the lava-lamp look.
+     * A potential field, not discs, which is why the blobs join; banded, unlike the smooth [MESH_GRADIENT].
+     */
+    @SerialName("metaballs")
+    METABALLS,
+
+    /**
+     * A few thick ribbons traced through a flow field, outlined against a dark ground — Neon Ribbons. The same field
+     * as [FLOW_FIELD], drawn as broad outlined strokes instead of fine streaks.
+     */
+    @SerialName("ribbons")
+    RIBBONS,
 }

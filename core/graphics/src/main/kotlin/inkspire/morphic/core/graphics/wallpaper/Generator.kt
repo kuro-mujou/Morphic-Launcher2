@@ -56,5 +56,8 @@ object Generators {
         WallpaperDesign.BAUHAUS -> BauhausGenerator
         WallpaperDesign.CONFETTI -> ConfettiGenerator
         WallpaperDesign.RINGS -> RingsGenerator
+        WallpaperDesign.TRUCHET -> TruchetGenerator
+        WallpaperDesign.METABALLS -> MetaballsGenerator
+        WallpaperDesign.RIBBONS -> RibbonsGenerator
     }
 }
