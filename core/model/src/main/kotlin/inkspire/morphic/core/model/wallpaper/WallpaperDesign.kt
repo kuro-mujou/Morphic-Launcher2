@@ -130,4 +130,12 @@ enum class WallpaperDesign {
      */
     @SerialName("dotGrid")
     DOT_GRID,
+
+    /**
+     * A dense combing of fine, even-seeded hairlines through the flow field — the brushed thin-line texture. The same
+     * field as [FLOW_FIELD], but seeded on a lattice and stroked uniformly fine, so it combs the whole frame rather than
+     * scattering loose streaks; the first of the thin-line family the studio was missing.
+     */
+    @SerialName("flowLines")
+    FLOW_LINES,
 }

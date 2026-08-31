@@ -318,6 +318,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.RIBBONS -> "Ribbons"
         WallpaperDesign.RAYS -> "Rays"
         WallpaperDesign.DOT_GRID -> "Dots"
+        WallpaperDesign.FLOW_LINES -> "Flow Lines"
     }
 
 /** A short, human name for the color-mode chip — the enum name is a code identifier, not a label. */

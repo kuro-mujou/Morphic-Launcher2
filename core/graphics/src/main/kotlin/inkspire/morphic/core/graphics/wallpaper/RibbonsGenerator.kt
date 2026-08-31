@@ -3,7 +3,6 @@ package inkspire.morphic.core.graphics.wallpaper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
@@ -59,7 +58,7 @@ object RibbonsGenerator : Generator {
             if (points.size < MinPointsToDraw) return@repeat
 
             val width0 = RibbonFraction * shortSide
-            val path = pathOf(points, width, height)
+            val path = Streamlines.pathOf(points, width, height)
             outline.strokeWidth = width0 + OutlineGap * shortSide
             fill.strokeWidth = width0
             fill.color = ribbonColors[i % ribbonColors.size]
@@ -72,16 +71,6 @@ object RibbonsGenerator : Generator {
     /** How many ribbons [density] asks for — [MinRibbons] sparse up to [MaxRibbons] a full weave. */
     internal fun ribbonCount(density: Float): Int =
         MinRibbons + (density.coerceIn(0f, 1f) * (MaxRibbons - MinRibbons)).roundToInt()
-
-    /** The interleaved unit-square points as a canvas [Path] scaled to `[width] × [height]`. */
-    private fun pathOf(points: FloatArray, width: Int, height: Int): Path = Path().apply {
-        moveTo(points[0] * width, points[1] * height)
-        var i = 2
-        while (i < points.size) {
-            lineTo(points[i] * width, points[i + 1] * height)
-            i += 2
-        }
-    }
 
     private const val MinRibbons = 8
     private const val MaxRibbons = 26

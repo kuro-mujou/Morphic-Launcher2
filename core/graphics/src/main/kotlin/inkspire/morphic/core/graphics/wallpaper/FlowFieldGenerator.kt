@@ -3,7 +3,6 @@ package inkspire.morphic.core.graphics.wallpaper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
@@ -61,7 +60,7 @@ object FlowFieldGenerator : Generator {
 
             paint.color = strokeColors[i % strokeColors.size]
             paint.strokeWidth = (MinStrokeFraction + random.nextFloat() * StrokeRange) * shortSide
-            canvas.drawPath(pathOf(points, width, height), paint)
+            canvas.drawPath(Streamlines.pathOf(points, width, height), paint)
         }
         return bitmap
     }
@@ -108,16 +107,6 @@ object FlowFieldGenerator : Generator {
             step++
         }
         return points.toFloatArray()
-    }
-
-    /** The interleaved unit-square points as a canvas [Path] scaled to `[width] × [height]`. */
-    private fun pathOf(points: FloatArray, width: Int, height: Int): Path = Path().apply {
-        moveTo(points[0] * width, points[1] * height)
-        var i = 2
-        while (i < points.size) {
-            lineTo(points[i] * width, points[i + 1] * height)
-            i += 2
-        }
     }
 
     private const val MinParticles = 300
