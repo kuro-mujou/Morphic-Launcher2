@@ -25,6 +25,16 @@ import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 interface Generator {
 
     /**
+     * Which of [DesignParams]' knobs this generator actually reads, and what it calls them — what the studio's Style
+     * panel offers for this design.
+     *
+     * **Abstract rather than defaulted**, for the reason [Generators]' `when` is total: a generator that forgot to
+     * declare its knobs would silently offer none, and "this design has no parameters" is a claim that should have to
+     * be typed. [DesignStyle] carries the argument for why it is declared here at all.
+     */
+    val style: DesignStyle
+
+    /**
      * A `[width] × [height]` bitmap of this design, painted from [palette], tuned by [params], varied by [seed].
      *
      * [width] and [height] are pixels and may be any positive size and aspect — the generator frames itself to fit

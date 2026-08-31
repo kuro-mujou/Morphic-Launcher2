@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
 
 /**
  * Vertical columns stepping once through the palette, each shaded on one edge for depth — *Gradient Columns*.
@@ -24,6 +23,14 @@ import kotlin.math.roundToInt
  * [LinearGradientGenerator], and the per-pixel shade is judged in the render harness.
  */
 object GradientColumnsGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Columns* slider's own range. */
+    private val Amount = AmountKnob.Count("Columns", 4..16)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Variation",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val count = columnCount(params.density)
@@ -50,9 +57,8 @@ object GradientColumnsGenerator : Generator {
         return bitmap
     }
 
-    /** How many columns [density] asks for — [MinColumns] a few broad panels up to [MaxColumns] a fine gradient. */
-    internal fun columnCount(density: Float): Int =
-        MinColumns + (density.coerceIn(0f, 1f) * (MaxColumns - MinColumns)).roundToInt()
+    /** How many columns [density] asks for — a few broad panels up to a fine gradient. */
+    internal fun columnCount(density: Float): Int = Amount.at(density)
 
     /**
      * The brightness a pixel at position [localT] within its column takes, `≤ 1` — flat across most of the column,
@@ -63,9 +69,6 @@ object GradientColumnsGenerator : Generator {
         val into = ((localT - (1f - ShadowFraction)) / ShadowFraction).coerceIn(0f, 1f)
         return 1f - ShadowDepth * into
     }
-
-    private const val MinColumns = 4
-    private const val MaxColumns = 16
 
     /** The fraction of each column, at its right edge, the shadow occupies. */
     private const val ShadowFraction = 0.35f

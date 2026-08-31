@@ -8,7 +8,6 @@ import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.floor
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -32,6 +31,14 @@ import kotlin.random.Random
  * their own homes.
  */
 object RibbonFlowGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Ribbons* slider's own range. */
+    private val Amount = AmountKnob.Count("Ribbons", 10..34)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Curl",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -74,9 +81,8 @@ object RibbonFlowGenerator : Generator {
         return bitmap
     }
 
-    /** How many ribbons [density] asks for — [MinRibbons] a few broad bands up to [MaxRibbons] a full flow. */
-    internal fun ribbonCount(density: Float): Int =
-        MinRibbons + (density.coerceIn(0f, 1f) * (MaxRibbons - MinRibbons)).roundToInt()
+    /** How many ribbons [density] asks for — a few broad bands up to a full flow. */
+    internal fun ribbonCount(density: Float): Int = Amount.at(density)
 
     /**
      * The angle range the field sweeps, in radians, for a given [irregularity] — a gentle drift when low, tight coils
@@ -84,9 +90,6 @@ object RibbonFlowGenerator : Generator {
      */
     internal fun angleSpan(irregularity: Float): Float =
         BaseAngleSpan * (MinSpanScale + irregularity.coerceIn(0f, 1f) * (MaxSpanScale - MinSpanScale))
-
-    private const val MinRibbons = 10
-    private const val MaxRibbons = 34
 
     /** Two interleaved values is one point; a ribbon needs at least two points to be a stroke rather than a dot. */
     private const val MinPointsToDraw = 4

@@ -7,7 +7,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -32,6 +31,14 @@ import kotlin.random.Random
  */
 object ConfettiGenerator : Generator {
 
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Dots* slider's own range. */
+    private val Amount = AmountKnob.Count("Dots", 40..220)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Distortion",
+    )
+
     /** One placed disc: where it sits in the unit square, and the min-distance radius it was placed at. */
     internal data class Sample(val x: Float, val y: Float, val radius: Float)
 
@@ -53,9 +60,8 @@ object ConfettiGenerator : Generator {
         return bitmap
     }
 
-    /** How many discs [density] asks for — [MinSamples] sparse up to [MaxSamples] a dense sprinkle. */
-    internal fun sampleCount(density: Float): Int =
-        MinSamples + (density.coerceIn(0f, 1f) * (MaxSamples - MinSamples)).roundToInt()
+    /** How many discs [density] asks for — sparse up to a dense sprinkle. */
+    internal fun sampleCount(density: Float): Int = Amount.at(density)
 
     /**
      * Up to [count] evenly-spaced points for [seed] by toroidal dart-throwing — throw a candidate, keep it only if it
@@ -122,9 +128,6 @@ object ConfettiGenerator : Generator {
         }
         return true
     }
-
-    private const val MinSamples = 40
-    private const val MaxSamples = 220
 
     /** The disc radius the first, widest-spaced darts are thrown at — the largest confetti. */
     private const val InitialRadius = 0.14f

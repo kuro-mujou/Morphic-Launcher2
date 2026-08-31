@@ -7,7 +7,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -27,6 +26,14 @@ import kotlin.random.Random
  * shared field curls them — long sweeping ribbons at `0`, coiling ones at `1`. Deterministic in [seed].
  */
 object RibbonsGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Ribbons* slider's own range. */
+    private val Amount = AmountKnob.Count("Ribbons", 8..26)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Curl",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -68,12 +75,8 @@ object RibbonsGenerator : Generator {
         return bitmap
     }
 
-    /** How many ribbons [density] asks for — [MinRibbons] sparse up to [MaxRibbons] a full weave. */
-    internal fun ribbonCount(density: Float): Int =
-        MinRibbons + (density.coerceIn(0f, 1f) * (MaxRibbons - MinRibbons)).roundToInt()
-
-    private const val MinRibbons = 8
-    private const val MaxRibbons = 26
+    /** How many ribbons [density] asks for — sparse up to a full weave. */
+    internal fun ribbonCount(density: Float): Int = Amount.at(density)
 
     /** Two interleaved values is one point; a ribbon needs at least two points to be a stroke rather than a dot. */
     private const val MinPointsToDraw = 4

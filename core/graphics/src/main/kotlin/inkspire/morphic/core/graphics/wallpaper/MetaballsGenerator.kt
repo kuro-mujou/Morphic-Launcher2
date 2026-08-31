@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -25,6 +24,11 @@ import kotlin.random.Random
  * that never merge, or a field that saturates flat) with no bitmap needed to see it.
  */
 object MetaballsGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Blobs* slider's own range. */
+    private val Amount = AmountKnob.Count("Blobs", 3..9)
+
+    override val style = DesignStyle(amount = Amount)
 
     /** One charge: where it sits in the unit square, and its radius (its pull). */
     internal data class Charge(val x: Float, val y: Float, val radius: Float)
@@ -47,9 +51,8 @@ object MetaballsGenerator : Generator {
         return bitmap
     }
 
-    /** How many charges [density] asks for — [MinCharges] a few fat blobs up to [MaxCharges] a busy lamp. */
-    internal fun chargeCount(density: Float): Int =
-        MinCharges + (density.coerceIn(0f, 1f) * (MaxCharges - MinCharges)).roundToInt()
+    /** How many charges [density] asks for — a few fat blobs up to a busy lamp. */
+    internal fun chargeCount(density: Float): Int = Amount.at(density)
 
     /** [count] charges for [seed] — positions in the unit square, radii spread over [MinRadius]..[MaxRadius]. */
     internal fun charges(count: Int, seed: Long): List<Charge> {
@@ -88,9 +91,6 @@ object MetaballsGenerator : Generator {
         val smooth = field / (field + 1f)
         return (smooth * stops).toInt().coerceIn(0, stops - 1)
     }
-
-    private const val MinCharges = 3
-    private const val MaxCharges = 9
 
     /** A charge's radius range, as a fraction of the frame — its pull, and so how far it reaches to merge with another. */
     private const val MinRadius = 0.12f

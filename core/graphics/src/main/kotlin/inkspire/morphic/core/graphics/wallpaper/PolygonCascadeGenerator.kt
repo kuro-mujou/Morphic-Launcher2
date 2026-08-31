@@ -10,7 +10,6 @@ import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -32,6 +31,17 @@ import kotlin.random.Random
  * scales past zero, is silently wrong geometry the bitmap only confirms.
  */
 object PolygonCascadeGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Iterations* slider's own range. */
+    private val Amount = AmountKnob.Count("Iterations", 16..60)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Wobble",
+        // Named by side count, off the same bounds [sides] clamps to — a hand-written list of six would be a second
+        // statement of the range, and a seventh segment silently drawing an octagon.
+        variant = VariantKnob("Sides", (MinSides..MaxSides).map { it.toString() }),
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -64,9 +74,8 @@ object PolygonCascadeGenerator : Generator {
         return bitmap
     }
 
-    /** How many polygons [density] asks for — [MinIterations] a sparse star up to [MaxIterations] a dense weave. */
-    internal fun iterationCount(density: Float): Int =
-        MinIterations + (density.coerceIn(0f, 1f) * (MaxIterations - MinIterations)).roundToInt()
+    /** How many polygons [density] asks for — a sparse star up to a dense weave. */
+    internal fun iterationCount(density: Float): Int = Amount.at(density)
 
     /** The polygon's side count for [variant] — `0` a triangle, each step adding a side, capped at [MaxSides]. */
     internal fun sides(variant: Int): Int = (MinSides + variant.coerceAtLeast(0)).coerceAtMost(MaxSides)
@@ -112,9 +121,6 @@ object PolygonCascadeGenerator : Generator {
             i += 2
         }
     }
-
-    private const val MinIterations = 16
-    private const val MaxIterations = 60
 
     private const val MinSides = 3
     private const val MaxSides = 8

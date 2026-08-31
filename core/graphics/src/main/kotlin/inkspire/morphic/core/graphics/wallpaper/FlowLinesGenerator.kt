@@ -7,7 +7,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * A dense combing of fine lines through a flow field, evenly seeded and drawn as uniform hairlines on a ground — the
@@ -29,6 +28,14 @@ import kotlin.math.roundToInt
  * [lineCount] and [angleSpan] are the pure mappings; the tracing and path they defer to are tested in their own homes.
  */
 object FlowLinesGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Lines* slider's own range. */
+    private val Amount = AmountKnob.Count("Lines", 500..2000)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Curl",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -60,9 +67,8 @@ object FlowLinesGenerator : Generator {
         return bitmap
     }
 
-    /** How many lines [density] asks for — [MinLines] a sparse comb up to [MaxLines] a dense grain. */
-    internal fun lineCount(density: Float): Int =
-        MinLines + (density.coerceIn(0f, 1f) * (MaxLines - MinLines)).roundToInt()
+    /** How many lines [density] asks for — a sparse comb up to a dense grain. */
+    internal fun lineCount(density: Float): Int = Amount.at(density)
 
     /**
      * The angle range the field sweeps, in radians, for a given [irregularity] — a gentle drift when low, tight swirls
@@ -70,9 +76,6 @@ object FlowLinesGenerator : Generator {
      */
     internal fun angleSpan(irregularity: Float): Float =
         BaseAngleSpan * (MinSpanScale + irregularity.coerceIn(0f, 1f) * (MaxSpanScale - MinSpanScale))
-
-    private const val MinLines = 500
-    private const val MaxLines = 2000
 
     /** Two interleaved values is one point; a line needs at least two points to be a stroke rather than a dot. */
     private const val MinPointsToDraw = 4

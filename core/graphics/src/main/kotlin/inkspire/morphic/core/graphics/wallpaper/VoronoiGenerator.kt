@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -32,6 +31,14 @@ import kotlin.random.Random
  * silently wrong (a wallpaper of one flat color) long before a bitmap could show it.
  */
 object VoronoiGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Cells* slider's own range. */
+    private val Amount = AmountKnob.Count("Cells", 8..40)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Irregularity",
+    )
 
     /** One seed: where it sits in the unit square, and the flat color its cell is filled with. */
     internal data class Site(val x: Float, val y: Float, val argb: Int)
@@ -63,9 +70,8 @@ object VoronoiGenerator : Generator {
         return bitmap
     }
 
-    /** How many cells [density] asks for — [MinSites] when sparse up to [MaxSites] when dense. */
-    internal fun siteCount(density: Float): Int =
-        MinSites + (density.coerceIn(0f, 1f) * (MaxSites - MinSites)).roundToInt()
+    /** How many cells [density] asks for — when sparse up to when dense. */
+    internal fun siteCount(density: Float): Int = Amount.at(density)
 
     /**
      * [count] seeds for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when even, a
@@ -121,9 +127,6 @@ object VoronoiGenerator : Generator {
         if (y < height - 1 && owner[(y + 1) * width + x] != here) return true
         return false
     }
-
-    private const val MinSites = 8
-    private const val MaxSites = 40
 
     /** How far a cell's color may sit from the gradient at its height, `±` — enough to separate equal-height cells. */
     private const val ColorJitter = 0.12f

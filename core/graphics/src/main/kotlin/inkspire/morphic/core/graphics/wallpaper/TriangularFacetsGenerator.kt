@@ -30,6 +30,14 @@ import kotlin.random.Random
  */
 object TriangularFacetsGenerator : Generator {
 
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Resolution* slider's own range. */
+    private val Amount = AmountKnob.Count("Resolution", 5..16)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Distortion",
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val cols = gridColumns(params.density)
         val rows = (cols * height) / width.coerceAtLeast(1) // keep facets roughly equilateral for the frame's shape
@@ -66,9 +74,8 @@ object TriangularFacetsGenerator : Generator {
         return bitmap
     }
 
-    /** How many columns of facets [density] asks for — [MinColumns] when sparse up to [MaxColumns] when dense. */
-    internal fun gridColumns(density: Float): Int =
-        MinColumns + (density.coerceIn(0f, 1f) * (MaxColumns - MinColumns)).roundToInt()
+    /** How many columns of facets [density] asks for — when sparse up to when dense. */
+    internal fun gridColumns(density: Float): Int = Amount.at(density)
 
     /**
      * How far a point may wander off its cell, as a fraction of the cell, for a given [irregularity] — `0` a rigid
@@ -145,8 +152,6 @@ object TriangularFacetsGenerator : Generator {
     }
 
     private const val ChannelMax = 255
-    private const val MinColumns = 5
-    private const val MaxColumns = 16
 
     /** Three point indices make a triangle — the stride the triangle list is walked in. */
     private const val IndicesPerTriangle = 3

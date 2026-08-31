@@ -8,7 +8,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -33,6 +32,14 @@ import kotlin.random.Random
  */
 object WavesGenerator : Generator {
 
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Layers* slider's own range. */
+    private val Amount = AmountKnob.Count("Layers", 3..9)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Swell",
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val layers = layerCount(params.density)
         val random = Random(seed)
@@ -53,9 +60,8 @@ object WavesGenerator : Generator {
         return bitmap
     }
 
-    /** How many bands [density] asks for — [MinLayers] bold ridges up to [MaxLayers] a finely stratified frame. */
-    internal fun layerCount(density: Float): Int =
-        MinLayers + (density.coerceIn(0f, 1f) * (MaxLayers - MinLayers)).roundToInt()
+    /** How many bands [density] asks for — bold ridges up to a finely stratified frame. */
+    internal fun layerCount(density: Float): Int = Amount.at(density)
 
     /**
      * How much to scale a crest's amplitude for a given [irregularity] — `0` flattens the dunes toward strata, `1`
@@ -113,9 +119,6 @@ object WavesGenerator : Generator {
             }
         }
     }
-
-    private const val MinLayers = 3
-    private const val MaxLayers = 9
 
     /** How many sine terms sum into one crest — one swell plus two ripples. */
     private const val Terms = 3

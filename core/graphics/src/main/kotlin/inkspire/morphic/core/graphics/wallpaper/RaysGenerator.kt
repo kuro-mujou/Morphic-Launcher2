@@ -6,7 +6,6 @@ import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
 import kotlin.math.atan2
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -24,6 +23,11 @@ import kotlin.random.Random
  * cleanly at the center or tear, and it needs no bitmap.
  */
 object RaysGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Rays* slider's own range. */
+    private val Amount = AmountKnob.Count("Rays", 4..16)
+
+    override val style = DesignStyle(amount = Amount)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val random = Random(seed)
@@ -46,9 +50,8 @@ object RaysGenerator : Generator {
         return bitmap
     }
 
-    /** How many wedges [density] asks for — [MinRays] a few broad fans up to [MaxRays] a fine starburst. */
-    internal fun rayCount(density: Float): Int =
-        MinRays + (density.coerceIn(0f, 1f) * (MaxRays - MinRays)).roundToInt()
+    /** How many wedges [density] asks for — a few broad fans up to a fine starburst. */
+    internal fun rayCount(density: Float): Int = Amount.at(density)
 
     /**
      * Which wedge the bearing from ([cx], [cy]) to ([nx], [ny]) falls in, `0 until [rays]`. The angle from `atan2`
@@ -61,8 +64,6 @@ object RaysGenerator : Generator {
     }
 
     // Softened toward broad fans: the default density now opens on a few wide wedges rather than a fine starburst (W7).
-    private const val MinRays = 4
-    private const val MaxRays = 16
 
     /** How far off the frame's center the fan's origin is kept, so the rays sweep asymmetrically across it. */
     private const val CenterInset = 0.2f

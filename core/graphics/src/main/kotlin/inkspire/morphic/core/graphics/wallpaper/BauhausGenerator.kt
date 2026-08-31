@@ -6,7 +6,6 @@ import android.graphics.Paint
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -25,6 +24,11 @@ import kotlin.random.Random
  * [seed].
  */
 object BauhausGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Divisions* slider's own range. */
+    private val Amount = AmountKnob.Count("Divisions", 3..7)
+
+    override val style = DesignStyle(amount = Amount)
 
     /** A block in the unit square — left/top/right/bottom, `0..1`. */
     internal data class Rect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
@@ -54,9 +58,8 @@ object BauhausGenerator : Generator {
         return bitmap
     }
 
-    /** How many subdivision passes [density] asks for — [MinPasses] a few bold blocks up to [MaxPasses] a fine grid. */
-    internal fun passes(density: Float): Int =
-        MinPasses + (density.coerceIn(0f, 1f) * (MaxPasses - MinPasses)).roundToInt()
+    /** How many subdivision passes [density] asks for — a few bold blocks up to a fine grid. */
+    internal fun passes(density: Float): Int = Amount.at(density)
 
     /**
      * The whole frame split [passes] times — each pass walks the current blocks and, per block, leaves it, halves it
@@ -105,9 +108,6 @@ object BauhausGenerator : Generator {
         if (palette.size <= 2 || random.nextFloat() > AccentChance) return palette.colorAt(0)
         return palette.colorAt(1 + random.nextInt(palette.size - 2)) // a middle stop, excluding ground and ink
     }
-
-    private const val MinPasses = 3
-    private const val MaxPasses = 7
 
     /** The smallest a block may be, a side, as a fraction of the frame — below this it stops splitting. */
     private const val MinCell = 0.12f

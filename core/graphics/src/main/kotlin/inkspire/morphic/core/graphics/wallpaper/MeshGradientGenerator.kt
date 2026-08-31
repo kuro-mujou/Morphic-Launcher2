@@ -26,6 +26,14 @@ import kotlin.math.roundToInt
  */
 object MeshGradientGenerator : Generator {
 
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Points* slider's own range. */
+    private val Amount = AmountKnob.Count("Points", 4..12)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Scatter",
+    )
+
     /** One control point: where it sits in the unit square, and the color it pulls toward. */
     internal data class Point(val x: Float, val y: Float, val argb: Int)
 
@@ -44,9 +52,8 @@ object MeshGradientGenerator : Generator {
         return bitmap
     }
 
-    /** How many control points [density] asks for — [MinPoints] when sparse up to [MaxPoints] when dense. */
-    internal fun pointCount(density: Float): Int =
-        (MinPoints + (density.coerceIn(0f, 1f) * (MaxPoints - MinPoints)).roundToInt())
+    /** How many control points [density] asks for — when sparse up to when dense. */
+    internal fun pointCount(density: Float): Int = Amount.at(density)
 
     /**
      * [count] control points for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when
@@ -104,8 +111,6 @@ object MeshGradientGenerator : Generator {
     }
 
     private const val ChannelMax = 255
-    private const val MinPoints = 4
-    private const val MaxPoints = 12
 
     /** How tightly a point holds its color before melting into its neighbours — the `ε` on the inverse-square weight. */
     private const val Softness = 0.0015

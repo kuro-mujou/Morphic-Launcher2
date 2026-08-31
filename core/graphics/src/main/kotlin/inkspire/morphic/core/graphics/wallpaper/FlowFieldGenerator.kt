@@ -8,7 +8,6 @@ import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -31,6 +30,14 @@ import kotlin.random.Random
  * in the way. Only the stroke drawing needs a canvas.
  */
 object FlowFieldGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Strokes* slider's own range. */
+    private val Amount = AmountKnob.Count("Strokes", 300..1200)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Curl",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -65,9 +72,8 @@ object FlowFieldGenerator : Generator {
         return bitmap
     }
 
-    /** How many particles [density] asks for — [MinParticles] when sparse up to [MaxParticles] when dense. */
-    internal fun particleCount(density: Float): Int =
-        MinParticles + (density.coerceIn(0f, 1f) * (MaxParticles - MinParticles)).roundToInt()
+    /** How many particles [density] asks for — when sparse up to when dense. */
+    internal fun particleCount(density: Float): Int = Amount.at(density)
 
     /**
      * The angle range the field sweeps, in radians, for a given [irregularity] — a gentle drift when low, a tight curl
@@ -108,9 +114,6 @@ object FlowFieldGenerator : Generator {
         }
         return points.toFloatArray()
     }
-
-    private const val MinParticles = 300
-    private const val MaxParticles = 1200
 
     /** Two interleaved values is one point; a streak needs at least two points to be a line rather than a dot. */
     private const val MinPointsToDraw = 4

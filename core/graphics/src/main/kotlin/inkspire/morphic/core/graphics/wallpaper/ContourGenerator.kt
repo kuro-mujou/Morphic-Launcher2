@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
 
 /**
  * A noise field read as a map — inked contour lines on bare paper by default, or filled height bands — the *Topography*
@@ -33,6 +32,15 @@ import kotlin.math.roundToInt
  * contour or drops one, and it needs no bitmap to check.
  */
 object ContourGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Levels* slider's own range. */
+    private val Amount = AmountKnob.Count("Levels", 5..18)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Variation",
+        variant = VariantKnob("Look", listOf("Lines", "Filled")),
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val noise = PerlinNoise2d(seed)
@@ -71,9 +79,8 @@ object ContourGenerator : Generator {
         return bitmap
     }
 
-    /** How many elevation bands [density] asks for — [MinBands] bold steps up to [MaxBands] a fine survey. */
-    internal fun bandCount(density: Float): Int =
-        MinBands + (density.coerceIn(0f, 1f) * (MaxBands - MinBands)).roundToInt()
+    /** How many elevation bands [density] asks for — bold steps up to a fine survey. */
+    internal fun bandCount(density: Float): Int = Amount.at(density)
 
     /**
      * Which band a height in `0..1` falls in, `0 until [bands]`. **Clamped at the top**, so a height of exactly `1`
@@ -108,9 +115,6 @@ object ContourGenerator : Generator {
 
     /** [DesignParams.variant] selecting the filled-bands look — the colored relief — over the default lines on paper. */
     private const val VariantFilled = 1
-
-    private const val MinBands = 5
-    private const val MaxBands = 18
 
     /** How many noise cycles span the frame at the broad octave — the size of the landmasses. */
     private const val BroadFrequency = 3f

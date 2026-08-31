@@ -5,7 +5,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -26,6 +25,14 @@ import kotlin.random.Random
  * over itself, and it needs no bitmap to bound.
  */
 object WaveDividersGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Bands* slider's own range. */
+    private val Amount = AmountKnob.Count("Bands", 4..16)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Wave depth",
+    )
 
     /** One sine term of the divider wave: how tall, how many cycles across the frame, and where it starts. */
     internal data class Term(val amplitude: Float, val frequency: Float, val phase: Float)
@@ -57,9 +64,8 @@ object WaveDividersGenerator : Generator {
         return bitmap
     }
 
-    /** How many bands [density] asks for — [MinBands] a few broad waves up to [MaxBands] a finely rippled stack. */
-    internal fun bandCount(density: Float): Int =
-        MinBands + (density.coerceIn(0f, 1f) * (MaxBands - MinBands)).roundToInt()
+    /** How many bands [density] asks for — a few broad waves up to a finely rippled stack. */
+    internal fun bandCount(density: Float): Int = Amount.at(density)
 
     /**
      * The divider wave's sine terms for [seed], their amplitude scaled by [irregularity] — [Terms] terms of shrinking
@@ -85,9 +91,6 @@ object WaveDividersGenerator : Generator {
         for (term in terms) offset += term.amplitude * sin(nx * term.frequency + term.phase)
         return offset
     }
-
-    private const val MinBands = 4
-    private const val MaxBands = 16
 
     /** How many sine terms sum into the divider wave — one swell plus one ripple. */
     private const val Terms = 2

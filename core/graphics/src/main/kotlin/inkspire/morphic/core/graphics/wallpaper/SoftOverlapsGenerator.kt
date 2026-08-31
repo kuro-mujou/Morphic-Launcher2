@@ -11,7 +11,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -32,6 +31,15 @@ import kotlin.random.Random
  * [discCount] is the pure mapping; the placement is [PointScatter]'s and the blending is judged in the render harness.
  */
 object SoftOverlapsGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Discs* slider's own range. */
+    private val Amount = AmountKnob.Count("Discs", 8..26)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Jitter",
+        variant = VariantKnob("Blend", listOf("Normal", "Additive")),
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -64,15 +72,11 @@ object SoftOverlapsGenerator : Generator {
         return bitmap
     }
 
-    /** How many discs [density] asks for — [MinDiscs] a sparse few up to [MaxDiscs] a dense wash. */
-    internal fun discCount(density: Float): Int =
-        MinDiscs + (density.coerceIn(0f, 1f) * (MaxDiscs - MinDiscs)).roundToInt()
+    /** How many discs [density] asks for — a sparse few up to a dense wash. */
+    internal fun discCount(density: Float): Int = Amount.at(density)
 
     /** [DesignParams.variant] selecting additive blending (overlaps brighten) over the default normal translucency. */
     private const val VariantAdditive = 1
-
-    private const val MinDiscs = 8
-    private const val MaxDiscs = 26
 
     /** A disc's radius range, as a fraction of the short side — large, so discs heavily overlap into one field. */
     private const val MinRadius = 0.18f

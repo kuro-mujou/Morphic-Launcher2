@@ -5,7 +5,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.hypot
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -25,6 +24,11 @@ import kotlin.random.Random
  * rings even close, and it needs no bitmap.
  */
 object RingsGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Rings* slider's own range. */
+    private val Amount = AmountKnob.Count("Rings", 4..18)
+
+    override val style = DesignStyle(amount = Amount)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val random = Random(seed)
@@ -48,9 +52,8 @@ object RingsGenerator : Generator {
         return bitmap
     }
 
-    /** How many rings [density] asks for across the frame — [MinRings] broad haloes up to [MaxRings] a tight ripple. */
-    internal fun ringCount(density: Float): Int =
-        MinRings + (density.coerceIn(0f, 1f) * (MaxRings - MinRings)).roundToInt()
+    /** How many rings [density] asks for across the frame — broad haloes up to a tight ripple. */
+    internal fun ringCount(density: Float): Int = Amount.at(density)
 
     /**
      * Where the pixel at ([nx], [ny]) falls in the ring cycle, `0..1` — its distance from ([cx], [cy]) scaled by [rings]
@@ -62,8 +65,6 @@ object RingsGenerator : Generator {
     }
 
     // Softened toward broad haloes: the default density now opens on a few calm rings rather than a tight ripple (W7).
-    private const val MinRings = 4
-    private const val MaxRings = 18
 
     /** How far off the edge the center is kept, so the rings sweep across the frame rather than sitting in a corner. */
     private const val CenterInset = 0.15f

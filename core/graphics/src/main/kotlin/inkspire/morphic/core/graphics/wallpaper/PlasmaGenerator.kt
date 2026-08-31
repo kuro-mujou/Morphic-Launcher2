@@ -29,6 +29,10 @@ import kotlin.random.Random
  */
 object PlasmaGenerator : Generator {
 
+    // A frequency rather than a count: the plasma draws no discrete things, so its amount is the one in the catalog
+    // with nothing to number, and the panel shows it as a plain scale.
+    override val style = DesignStyle(amount = AmountKnob.Fraction("Scale"))
+
     /** The phase offsets that make one plasma still distinct from another — drawn once from the seed. */
     internal data class Phases(val x: Float, val y: Float, val diagonal: Float, val radial: Float)
 

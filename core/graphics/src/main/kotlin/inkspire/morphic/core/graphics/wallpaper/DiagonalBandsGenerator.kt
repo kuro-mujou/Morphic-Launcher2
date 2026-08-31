@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
 
 /**
  * Parallel bands of flat palette color marching across the frame — *Diagonal Bands*, the calmest staple. gart's
@@ -25,6 +24,15 @@ import kotlin.math.roundToInt
  */
 object DiagonalBandsGenerator : Generator {
 
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Bands* slider's own range. */
+    private val Amount = AmountKnob.Count("Bands", 4..22)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Variation",
+        variant = VariantKnob("Direction", listOf("Diagonal", "Reverse", "Vertical", "Horizontal")),
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val count = bandCount(params.density)
         val boundaries = Bands.boundaries(count, params.irregularity, seed)
@@ -44,9 +52,8 @@ object DiagonalBandsGenerator : Generator {
         return bitmap
     }
 
-    /** How many bands [density] asks for — [MinBands] a few bold stripes up to [MaxBands] a fine set. */
-    internal fun bandCount(density: Float): Int =
-        MinBands + (density.coerceIn(0f, 1f) * (MaxBands - MinBands)).roundToInt()
+    /** How many bands [density] asks for — a few bold stripes up to a fine set. */
+    internal fun bandCount(density: Float): Int = Amount.at(density)
 
     /**
      * The pixel at ([nx], [ny]) projected onto the band axis for [variant], normalized to `0..1` — the position that
@@ -64,7 +71,4 @@ object DiagonalBandsGenerator : Generator {
     private const val VariantDiagonalUp = 1
     private const val VariantVertical = 2
     private const val VariantHorizontal = 3
-
-    private const val MinBands = 4
-    private const val MaxBands = 22
 }

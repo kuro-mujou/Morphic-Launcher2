@@ -22,6 +22,10 @@ import kotlin.math.roundToInt
  */
 object LinearGradientGenerator : Generator {
 
+    // Empty for the same reason the render ignores its params: a gradient through a fixed palette has nothing to
+    // count, nothing to disturb and one look. The Style panel is then the color mode alone, which is the truth.
+    override val style = DesignStyle()
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
         val row = IntArray(width)

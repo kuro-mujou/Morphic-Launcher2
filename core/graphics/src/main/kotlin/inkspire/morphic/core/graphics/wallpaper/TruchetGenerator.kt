@@ -7,7 +7,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -27,6 +26,11 @@ import kotlin.random.Random
  * determinism need no canvas.
  */
 object TruchetGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Resolution* slider's own range. */
+    private val Amount = AmountKnob.Count("Resolution", 4..14)
+
+    override val style = DesignStyle(amount = Amount)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val cols = gridSize(params.density)
@@ -63,9 +67,8 @@ object TruchetGenerator : Generator {
         return bitmap
     }
 
-    /** How many columns [density] asks for — [MinCols] bold loops up to [MaxCols] a fine weave. */
-    internal fun gridSize(density: Float): Int =
-        MinCols + (density.coerceIn(0f, 1f) * (MaxCols - MinCols)).roundToInt()
+    /** How many columns [density] asks for — bold loops up to a fine weave. */
+    internal fun gridSize(density: Float): Int = Amount.at(density)
 
     /**
      * A `[cols] × [rows]` grid of orientation flips for [seed], row-major — `true` where a cell turns its arcs the
@@ -86,9 +89,6 @@ object TruchetGenerator : Generator {
             startAngle, 90f, false, paint,
         )
     }
-
-    private const val MinCols = 4
-    private const val MaxCols = 14
 
     /** Arc stroke as a fraction of the cell — thick enough to read as ribbons of the maze, not hairlines. */
     private const val ArcWidthFraction = 0.34f

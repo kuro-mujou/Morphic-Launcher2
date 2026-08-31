@@ -29,6 +29,14 @@ import kotlin.random.Random
  */
 object DotGridGenerator : Generator {
 
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Columns* slider's own range. */
+    private val Amount = AmountKnob.Count("Columns", 8..26)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Jitter",
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val cols = gridColumns(params.density)
         val cellPx = width.toFloat() / cols
@@ -59,9 +67,8 @@ object DotGridGenerator : Generator {
         return bitmap
     }
 
-    /** How many columns of dots [density] asks for — [MinColumns] a coarse screen up to [MaxColumns] a fine one. */
-    internal fun gridColumns(density: Float): Int =
-        MinColumns + (density.coerceIn(0f, 1f) * (MaxColumns - MinColumns)).roundToInt()
+    /** How many columns of dots [density] asks for — a coarse screen up to a fine one. */
+    internal fun gridColumns(density: Float): Int = Amount.at(density)
 
     /**
      * A dot's radius as a fraction of its cell, `0..1`, from the field strength at its center. Below [DotFloor] the dot
@@ -76,9 +83,6 @@ object DotGridGenerator : Generator {
     /** The field at ([nx], [ny]) in `0..1` — one octave of noise mapped from `-1..1`. */
     private fun fieldAt(nx: Float, ny: Float, noise: PerlinNoise2d): Float =
         ((noise.at(nx * Frequency, ny * Frequency) + 1f) / 2f).coerceIn(0f, 1f)
-
-    private const val MinColumns = 8
-    private const val MaxColumns = 26
 
     /** Below this field strength a dot is not drawn at all, so weak regions are clean paper, not a speckle. */
     private const val DotFloor = 0.25f

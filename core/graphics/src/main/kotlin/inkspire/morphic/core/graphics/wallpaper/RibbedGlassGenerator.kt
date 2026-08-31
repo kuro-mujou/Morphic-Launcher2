@@ -5,7 +5,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.floor
-import kotlin.math.roundToInt
 
 /**
  * A palette gradient seen through fluted glass — vertical ribs that refract and shade the light behind them, *Ribbed
@@ -26,6 +25,14 @@ import kotlin.math.roundToInt
  * judged in the render harness.
  */
 object RibbedGlassGenerator : Generator {
+
+    /** What [DesignParams.density] resolves to for this design — the count, and the *Ribs* slider's own range. */
+    private val Amount = AmountKnob.Count("Ribs", 8..28)
+
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Refraction",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val ribs = ribCount(params.density)
@@ -54,9 +61,8 @@ object RibbedGlassGenerator : Generator {
         return bitmap
     }
 
-    /** How many ribs [density] asks for — [MinRibs] broad flutes up to [MaxRibs] a fine reeding. */
-    internal fun ribCount(density: Float): Int =
-        MinRibs + (density.coerceIn(0f, 1f) * (MaxRibs - MinRibs)).roundToInt()
+    /** How many ribs [density] asks for — broad flutes up to a fine reeding. */
+    internal fun ribCount(density: Float): Int = Amount.at(density)
 
     /**
      * How wide a slice of the background each rib fans across, for a given [irregularity] — [MinRefraction] a faint
@@ -65,9 +71,6 @@ object RibbedGlassGenerator : Generator {
      */
     internal fun refraction(irregularity: Float): Float =
         MinRefraction + irregularity.coerceIn(0f, 1f) * (MaxRefraction - MinRefraction)
-
-    private const val MinRibs = 8
-    private const val MaxRibs = 28
 
     /** The refraction window at the irregularity extremes, as a fraction of the background width. */
     private const val MinRefraction = 0.05f
