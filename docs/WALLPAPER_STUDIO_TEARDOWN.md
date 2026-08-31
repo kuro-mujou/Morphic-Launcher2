@@ -168,7 +168,7 @@ rectangles.
   the render harness (which gained an `irr ∈ {0,1}` sweep); the knob is engine-only until **W10** surfaces it, exactly
   as `variant` is. The remaining W7 wish — a *per-design* default (each design opening on its own tasteful params) —
   needs the studio to carry per-design params and folds into W10.
-- **W8 — thin-line family. ✅ (2026-08-31)** Biggest visual jump; four designs, catalog now 20. Progress:
+- **W8 — thin-line family. ✅ (2026-08-31)** Biggest visual jump; four looks but **three** designs (Contour-lines is a `variant`, not an enum value), catalog now 19. Progress:
   - **W8a ✅** — the shared stroke renderer (`Streamlines.pathOf`, extracted from the verbatim copies in Flow and
     Ribbons) + **Flow Lines** (new design; gart's flowforce/perl, cyanowaves): dense fine hairlines seeded on an even
     lattice and combed through the flow field — Flow woven, Flow Lines combed. density → line count, irregularity →
@@ -189,15 +189,33 @@ rectangles.
     "fine bundled lines + glow", but that was written before Flow Lines existed; Flow Lines now *is* the fine bundled-line
     look, so the current thick-outlined Ribbons is kept for the bold, poster-style variety the family would otherwise
     lack. Not a gap — a decision.
-- **W9 — the calm staples. ✅ (2026-08-31)** All five, catalog now **25**: **Diagonal Bands** (angled stripes, cycling
+- **W9 — the calm staples. ✅ (2026-08-31)** All five, catalog now **24**: **Diagonal Bands** (angled stripes, cycling
   palette, `variant` = direction), **Gradient Columns** (palette stepped once across columns, soft seam shadow), **Soft
   Overlaps** (translucent radial-gradient discs blending, `variant` = blend mode), **Wave Dividers** (banded stripes with
   wavy seams undulating in unison), **Ribbed Glass** (a diagonal gradient refracted through fluted-glass ribs with a
   specular lens — a standout). Two shared derivations fell out: `Bands` (variable-width banding, used by Diagonal Bands +
   Wave Dividers) and `Shades` (channel darken, used by Gradient Columns + Ribbed Glass), each extracted on its second
   consumer. `irregularity` maps per design (band-width variation / wave depth / position jitter / refraction).
-- **W10 — the Style panel UI.** The horizontal tab row (per-design params) + numeric ruler sliders + segmented
-  variant/color-mode controls, mirroring theirs. Only after the model exists.
+- **W10 — the Style panel UI. ✅ (2026-08-31)** The knobs finally reachable. A ruler toggle opens a panel above the
+  bottom bar: a **horizontal tab row** naming whatever knobs the current design declares, over a **ruler slider** or a
+  **segmented control** for the selected one — theirs, mirrored. Three decisions:
+  - **The generator declares its own knobs**, not a table in the UI (`DesignStyle` on the `Generator` interface,
+    `core:graphics`). Open question 1 above leaned to "a flat bag with per-design labels"; this is that bag, declared
+    beside the code that reads it. The reason is the silent failure: a knob the panel offers and the generator ignores
+    drags, re-renders, and moves nothing — seven designs read no `irregularity`, twenty have no `variant`. It also puts
+    the `Min`/`Max` bounds (which were `private const`) where the panel can ask for them.
+  - **Ruler sliders expose the real counts** — open question 2, settled their way. 750 strokes, 12 bands, 24 ribs, over
+    the generator's own range. The twenty-two copies of `Min + (d * (Max - Min)).roundToInt()` became
+    `AmountKnob.Count.at`, with `densityFor` — its inverse — beside it, so the count the slider writes is the count the
+    generator draws. Plasma is the one `AmountKnob.Fraction`: a frequency, nothing to count.
+  - **Color mode moved into the panel as a tab**, so Style is every knob in `DesignParams` and the color chooser is the
+    palette bank alone.
+
+  Left for a later pass, in rough order of value: a **draft-quality render during the drag** (the panel commits on
+  release, since a full-screen generate has no cheap intermediate — the plan's open question 1, now with a consumer);
+  the **frosted `studioSurface` material** under the whole bottom bar (the panel carries a flat scrim, set by the
+  lightest wallpaper a design produces); and the **per-design default params** W7 wanted — every design still opens on
+  the same `0.5`, where each should open on its own tasteful value now that there is a panel to show it.
 - **Depth pass (fold in) —** Shadow / Blend mode / Refraction where cheap; it is a lot of their premium feel.
 
 **Guiding rule: default to restraint.** Sparse, soft, two-tone. Loud is a variant the user opts into, never the default.

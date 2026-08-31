@@ -271,7 +271,7 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   (Count/Spacing/Rotation/Irregularity/Color mode/… from shared families) and defaults to *restraint* (Mono/Bichromatic,
   sparse, soft, with depth), where ours expose **one** (`density`), always full-palette and flat. So the next arc is
   **W6 (grow `DesignParams` + a `WallpaperColorMode`), W7 (styling pass + the organic-noise knob), W8 (thin-line family),
-  W9 (the calm staples we lack), W10 (the Style-panel UI)** — see the teardown's revised plan. The per-generator morphs
+  W9 (the calm staples we lack), W10 (the Style-panel UI)** — all done; see the teardown's revised plan. The per-generator morphs
   stay deferred.
   - **W6 — the color-mode system. ✅ (2026-08-31)** `WallpaperColorMode` (Mono/Bi/Colorful) on `DesignParams`, applied by
     reducing the palette before each generator, default Bichromatic. See the teardown doc.
@@ -285,9 +285,18 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     Flow** (broad ribbons with the palette running along each), **Polygon Cascade** (a rotating-polygon spirograph
     rosette, the first non-field design). Re-doing Ribbons was skipped by choice — Flow Lines covers the fine-line niche.
     Full record in the teardown doc.
-  - **W9 — the calm staples. ✅ (2026-08-31)** Five designs, catalog now **25**: Diagonal Bands, Gradient Columns, Soft
+  - **W9 — the calm staples. ✅ (2026-08-31)** Five designs, catalog now **24**: Diagonal Bands, Gradient Columns, Soft
     Overlaps, Wave Dividers, Ribbed Glass. Two shared helpers extracted on their second consumers — `Bands` (variable-
     width banding) and `Shades` (channel darken). Full record in the teardown doc.
+  - **W10 — the Style panel UI. ✅ (2026-08-31)** The knobs made reachable: a fourth chooser opens a panel above the
+    bottom bar carrying a **tab row of the current design's own parameters** (*Levels · Variation · Look · Color* on
+    Contour; *Color* alone on the plain gradient) over a ruler slider or a segmented control. Each **generator declares
+    its own knobs** (`DesignStyle` on the `Generator` interface) rather than the UI tabulating them, because a knob the
+    panel offers and the generator ignores fails silently; the amount slider offers the generator's **real counts**
+    through one shared mapping. Color mode moved out of the palette row into the panel, so Style is every knob in
+    `DesignParams`. Still deferred: a draft-quality render during the drag (the panel commits on release — open
+    question 1 below, now with a consumer), the frosted material under the bottom bar, and per-design defaults. Full
+    record in the teardown doc.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
