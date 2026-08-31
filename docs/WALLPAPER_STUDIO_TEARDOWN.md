@@ -29,7 +29,7 @@ slider or a segmented variant control below it. **Almost every design exposes si
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow |
 | 5 | Triangular Facets | Resolution · Distortion · Thickness · Distribution · Randomness · Tridimensionality |
-| 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background |
+| 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **count** of undecorated cells, not a toggle; *Tile background* is Off/On |
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance |
 | 8 | Mesh Gradient | Columns · Jitter · **Color distribution** · Softness |
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio |
@@ -131,7 +131,7 @@ rectangles.
 | Flowing Blobs | **Metaballs** | Ours hard onion rings. Theirs smooth + a Color mode (Mono/Bi) + Shadow. Soften, add color mode. |
 | Confetti Dots | **Confetti** | Re-base on a **distorted grid** (Resolution + Offset distortion), tiny sparse dots, dark ground. Ours' Poisson is over-built and over-bold. |
 | Neon Ribbons | **Ribbons** | Ours thick outlined. Theirs fine bundled lines + glow + Start/End area. Re-do. |
-| Bauhaus Blocks | **Bauhaus** | Add the shape vocabulary + a "Plain tiles" toggle. |
+| Bauhaus Blocks | **Bauhaus** | ✅ **W11a.** Rebuilt as their arc lattice. What ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name. |
 | Dot Grid | **DotGrid** | Add Corner radius / Square size / Aspect ratio; contain it (negative space). |
 | Triangular Facets | **Facets** | Add Distortion + Tridimensionality (shading); soften color. |
 | Mesh Gradient | **Mesh** | Re-base on grid + jitter; add Color distribution + Softness. |
@@ -216,6 +216,20 @@ rectangles.
   the **frosted `studioSurface` material** under the whole bottom bar (the panel carries a flat scrim, set by the
   lightest wallpaper a design produces); and the **per-design default params** W7 wanted — every design still opens on
   the same `0.5`, where each should open on its own tasteful value now that there is a panel to show it.
+- **W11 — the design-by-design quality pass. In progress.** With the engine and the panel both built, the remaining
+  gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
+  the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
+  slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11a — Bauhaus. ✅ (2026-08-31)** The first, and it set the pattern for the rest: the gap was not quality but
+    *identity*. Ours was a Mondrian (recursive rects, ruled in the darkest stop) under the Bauhaus name; theirs is an
+    even lattice of square tiles each carrying one flat arc. So the Mondrian became its own **`MONDRIAN`** design,
+    unchanged, and **`BAUHAUS`** was rebuilt as the lattice — catalog **25**. Shapes are drawn at *cell scale* (a
+    quarter disc has the cell's full width for a radius), which is what makes two neighbours read as one larger
+    circle; `irregularity` became *variety* (a strict repeat at `0`, a mixed field at `1`) and `variant` became the
+    ground treatment (per-tile grounds, or floating on one with plain tiles as bare negative space — their "Tile
+    background"). Two things only the render showed: a shape must sit **two** palette stops from its ground, not
+    merely a different one, or it is a tone away and has to be hunted for; and square cells cannot divide the height,
+    so the overhang is split across both edges rather than left as a sliver row.
 - **Depth pass (fold in) —** Shadow / Blend mode / Refraction where cheap; it is a lot of their premium feel.
 
 **Guiding rule: default to restraint.** Sparse, soft, two-tone. Loud is a variant the user opts into, never the default.
