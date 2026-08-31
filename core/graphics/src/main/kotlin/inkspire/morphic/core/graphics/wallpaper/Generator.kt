@@ -65,5 +65,6 @@ object Generators {
         WallpaperDesign.RIBBON_FLOW -> RibbonFlowGenerator
         WallpaperDesign.POLYGON_CASCADE -> PolygonCascadeGenerator
         WallpaperDesign.DIAGONAL_BANDS -> DiagonalBandsGenerator
+        WallpaperDesign.GRADIENT_COLUMNS -> GradientColumnsGenerator
     }
 }

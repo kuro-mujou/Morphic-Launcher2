@@ -161,4 +161,11 @@ enum class WallpaperDesign {
      */
     @SerialName("diagonalBands")
     DIAGONAL_BANDS,
+
+    /**
+     * Vertical columns stepping once through the palette, each shaded on its right edge for depth — one coarse gradient
+     * rendered in panels. Progresses through the palette where [DIAGONAL_BANDS] cycles it, and carries a soft seam shadow.
+     */
+    @SerialName("gradientColumns")
+    GRADIENT_COLUMNS,
 }

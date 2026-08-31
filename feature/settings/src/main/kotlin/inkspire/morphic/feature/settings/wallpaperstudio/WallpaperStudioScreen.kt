@@ -322,6 +322,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.RIBBON_FLOW -> "Ribbon Flow"
         WallpaperDesign.POLYGON_CASCADE -> "Cascade"
         WallpaperDesign.DIAGONAL_BANDS -> "Bands"
+        WallpaperDesign.GRADIENT_COLUMNS -> "Columns"
     }
 
 /** A short, human name for the color-mode chip — the enum name is a code identifier, not a label. */
