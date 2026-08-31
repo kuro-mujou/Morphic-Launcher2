@@ -101,19 +101,26 @@ class GeneratorRenderHarness {
     }
 
     /**
-     * The designs that expose a [DesignParams.variant] sub-look, rendered at each variant in bichromatic and
-     * monochromatic — so a variant that only exists in code (there is no Style panel to pick it until W10) can still be
-     * judged. Contour's lines look is the first such variant.
+     * Every design that exposes a [DesignParams.variant] sub-look, at each of its variants, in bichromatic and
+     * monochromatic — a design's second look is as much a look to judge as its first, and half the time it is the
+     * restrained one.
+     *
+     * **The list is asked of the generators, not typed here.** Each declares its own `style.variant`, so a design that
+     * grows a sub-look is swept the moment it does, and one whose options change is swept at the new count. A
+     * hand-kept list of four names would go stale silently — as this one did, still naming only Contour after three
+     * more designs grew variants.
      */
     @Test
     fun renderVariantSweep() {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
-        val designs = listOf(WallpaperDesign.CONTOUR)
+        val designs = WallpaperDesign.entries.mapNotNull { design ->
+            Generators.forDesign(design).style.variant?.let { design to it.options.indices }
+        }
 
         for (mode in listOf(WallpaperColorMode.BICHROMATIC, WallpaperColorMode.MONOCHROMATIC)) {
             val moded = PaletteColorMode.resolve(palette, mode)
-            for (design in designs) {
-                for (variant in 0..1) {
+            for ((design, variants) in designs) {
+                for (variant in variants) {
                     val bitmap = Generators.forDesign(design).render(
                         width = 1080,
                         height = 2400,
