@@ -6,7 +6,6 @@ import android.graphics.Paint
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.random.Random
 
@@ -131,7 +130,7 @@ object BauhausGenerator : Generator {
         // What a tile falls back to where variety does not reach: the quarter disc, unturned. It is the shape the
         // whole look is built on, so a rigid field is a wall of it rather than a wall of nothing.
         val stops = if (floating) (paletteSize - 1).coerceAtLeast(1) else paletteSize
-        val contrasts = contrastStops(stops)
+        val contrasts = List(stops) { StopContrast.readableAgainst(it, stops) }
 
         return List(cols * rows) {
             val shapeVaries = random.nextFloat() < mix
@@ -148,24 +147,6 @@ object BauhausGenerator : Generator {
                 shape = shape,
             )
         }
-    }
-
-    /**
-     * For each ground stop, the stops a shape drawn on it may take — those at least [MinStopGap] apart in the palette.
-     *
-     * **Merely *different* is not enough, and that is the part that fails quietly.** A palette runs light to dark by
-     * convention, so neighbouring stops are neighbouring tones: a shape one stop from its ground is a shape you have to
-     * hunt for, and a frame with several of them just looks like it has fewer shapes than it does. Two apart is the
-     * smallest gap that reads at a glance on every curated palette here.
-     *
-     * Falls back to any other stop where the palette is too short to offer a gap — a bichromatic one has exactly two
-     * tones and they are the two furthest apart it has — and to the ground itself for a single-color palette, which
-     * has no shape to draw either way.
-     */
-    private fun contrastStops(stops: Int): List<IntArray> = List(stops) { ground ->
-        val far = (0 until stops).filter { abs(it - ground) >= MinStopGap }
-        val usable = far.ifEmpty { (0 until stops).filter { it != ground } }
-        usable.ifEmpty { listOf(ground) }.toIntArray()
     }
 
     /**
@@ -217,6 +198,4 @@ object BauhausGenerator : Generator {
     /** Quarter-turns a shape can take — which corner it is anchored to, or which edge it sits on. */
     private const val Turns = 4
 
-    /** How far apart in the palette a shape and its ground must be to read as two colors. See [contrastStops]. */
-    private const val MinStopGap = 2
 }
