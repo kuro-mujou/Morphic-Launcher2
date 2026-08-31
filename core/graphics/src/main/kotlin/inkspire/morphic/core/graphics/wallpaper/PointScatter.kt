@@ -16,9 +16,12 @@ import kotlin.random.Random
  * the shattered, irregular look. This is also the correction the teardown forces — *Mesh is a grid + jitter*, not the
  * random control points the first cut used.
  *
- * **Two consumers, one placement.** [VoronoiGenerator] and [MeshGradientGenerator] both need exactly this and would
- * otherwise each re-derive the grid/jitter arithmetic — where an off-by-one in the cell math is silently wrong (points
- * bunched in a corner, a column missing). Pure `FloatArray` output, tested without a bitmap.
+ * **Several consumers, one placement.** [VoronoiGenerator]'s cells, [SoftOverlapsGenerator]'s discs and
+ * [FlowLinesGenerator]'s starts all need exactly this and would otherwise each re-derive the grid/jitter arithmetic —
+ * where an off-by-one in the cell math is silently wrong (points bunched in a corner, a column missing).
+ * [MeshGradientGenerator] used to be here too and no longer is: it needs the lattice's *corners* rather than its cell
+ * centres, and its edge nodes pinned, which is a different placement wearing the same word. Pure `FloatArray` output,
+ * tested without a bitmap.
  */
 object PointScatter {
 

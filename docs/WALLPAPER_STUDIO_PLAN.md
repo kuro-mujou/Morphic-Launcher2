@@ -312,7 +312,17 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     identity finding a third time — theirs is a *contained* lattice of uniform tiles where only the **color**
     moves, ours was a full-bleed **halftone** where a noise field moves each dot's **size**. The halftone split
     off as `HALFTONE` and `DOT_GRID` was rebuilt as theirs — catalog **26**. It also corrects the teardown's
-    parameter inventory: their tab row scrolls, and this design has **eight** knobs, not six. **W11f — Confetti Dots ✅ (2026-09-01):** same design as theirs, done four ways worse — re-based on their turned, jittered lattice (the Poisson sampler is gone), ground moved to the palette's first stop, the palette now spent with a geometric falloff so the last stops are rare accents, and a **depth of field** on `variant` (Flat / Near / Far) — the catalog's first real depth rather than lighting.
+    parameter inventory: their tab row scrolls, and this design has **eight** knobs, not six.
+    **W11f — Confetti Dots ✅ (2026-09-01):** same design as theirs, done four ways worse — re-based on their
+    turned, jittered lattice (the Poisson sampler is gone), the ground moved to the palette's first stop, the
+    palette now spent with a geometric falloff so the last stops are rare accents, and a **depth of field** on
+    `variant` (Flat / Near / Far) — the catalog's first real depth rather than lighting.
+    **W11g — Mesh Gradient ✅ (2026-09-01):** their *Color distribution* is a **layout** (Random / Corner
+    interpolation / Linear bottom) and its default is what makes theirs a progression down the frame where ours
+    was a quilt — ours takes all three on `variant`. Their blend also turns out to be a **bilinear mesh**, not
+    inverse-distance weighting: at Jitter 0 theirs is an exact gradient, which distance weighting cannot reach
+    without flattening the design, so the generator was rewritten as a color lattice sampled through a separate,
+    coarser field of node displacements.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

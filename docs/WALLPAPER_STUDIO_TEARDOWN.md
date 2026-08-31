@@ -33,7 +33,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 5 | Triangular Facets | Resolution · Distortion · Thickness · Distribution · Randomness · Tridimensionality |
 | 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis, **4..20** (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **fraction** left undecorated, not a toggle and not a count; *Tile background* is Off/On. The tile vocabulary is **a quarter disc or nothing** — halves and circles are emergent |
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance · **Focus range** — **seven** (W11f). The lattice is a square grid *turned ~12°* off the frame, pitch = long side / Resolution (**5..24**, default 15). *Color distribution* is a **segmented ratio preset** — `100/100/…`, `100/66/33`, **`100/50/25`** (default), `100/33/11` — i.e. how fast the pick weight falls off down the stops, not a hue choice. *Focus distance* + *Focus range* are a real **depth of field**: a disc's size is its distance, and everything outside the focal band is blurred |
-| 8 | Mesh Gradient | Columns · Jitter · **Color distribution** · Softness |
+| 8 | Mesh Gradient | **Rows** · Columns · Jitter · **Color distribution** · Softness — **five** (W11g). Rows and Columns are both **2..10**, default 4×4. *Color distribution* here is a **layout**, not a weighting: `Random` · `Corner interpolation` · **`Linear bottom`** (default) — and the default is why theirs reads as a soft progression down the frame where ours read as a quilt. At Jitter 0 the render is a **mathematically exact** gradient, which is what proves the blend is a bilinear mesh rather than distance-weighted points |
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio · **Spacing · Offset** — **eight**, not six (W11e; the last two are past the fold in the tab row and were missed on the first pass). *Spacing* is the margin around the whole block, not the gap between tiles; *Offset* is a four-arrow **nudge**, hold-to-repeat, that walks the block off center; *Aspect ratio* is a **segmented** 1/1 · Golden · 2/1 · 4/1 |
 | 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients |
 | 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
@@ -66,6 +66,9 @@ Read down the table and the same handful of concepts recur under different names
   common family — the knob that takes a rigid generator to an organic one. **Ours have none of this**, which is part of
   why ours read as mechanical.
 - **Color** — *Color mode, Color distribution, Shades, Palette gradients*. How the palette is applied (see below).
+  **Watch the name: *Color distribution* means two unrelated things.** On Confetti it is a *weighting* (a ratio
+  preset deciding how often each stop is picked); on Mesh it is a *layout* (Random / Corner interpolation /
+  Linear bottom, deciding where each stop goes). Reading one for the other loses the design.
 - **Stroke / shape** — *Thickness, Roundness, Corner radius, Curves, Wideness*. Line weight and corner softness.
 - **Rendering / depth** — *Blend mode, Contrast, Shadow, Refraction, Vibrancy, Tridimensionality, Real glass*, and
   Confetti's *Focus distance / Focus range*. The lighting/translucency that gives their output *depth*. Ours were all
@@ -108,7 +111,9 @@ data class DesignParams(
   does the most work — an axis-aligned lattice announces itself through any amount of jitter because the eye finds the
   horizontals, and turned a little the same lattice reads as an even sprinkle. Ours built the (harder) Poisson sampler,
   which also left its knob with no rigid end, since uniformly-random points cannot be made *more* even. Fixed in W11f.
-- **Mesh is a grid + jitter** (Columns + Jitter), not our random control points. Same look, simpler control.
+- **Mesh is a grid + jitter** (Rows + Columns + Jitter), not our random control points. Same look, simpler
+  control. And the *blend* is a **bilinear mesh**, not inverse-distance weighting: at Jitter 0 theirs is an exact
+  gradient, where any distance weighting leaves each node a core and beads into stripes. See W11g.
 - **Every design has an organic-noise knob.** Ours are deterministic-and-rigid with no way to loosen them.
 
 ---
@@ -147,7 +152,7 @@ rectangles.
 | Dot Grid | **DotGrid** | ✅ **W11e.** Same identity finding as Bauhaus: ours was a *halftone* (a field driving each dot's **size**, full-bleed) under their name, and theirs is a **contained** lattice of uniform tiles where only the **color** moves. The halftone split off as its own design; DotGrid was rebuilt as theirs. |
 | — | **Halftone** | Ours only, split out of DotGrid by W11e — the noise-sized dot screen, kept unchanged. |
 | Triangular Facets | **Facets** | Add Distortion + Tridimensionality (shading); soften color. |
-| Mesh Gradient | **Mesh** | Re-base on grid + jitter; add Color distribution + Softness. |
+| Mesh Gradient | **Mesh** | ✅ **W11g.** Grid + jitter landed in W7; W11g added the **Colors** layout (Vertical / Corners / Scattered) and **Softness**, and replaced inverse-distance weighting with a **warped bilinear mesh** — the only blend that is an exact gradient at the rigid end, as theirs is. |
 | Layered Waves | **Waves** | Closest we have. Add Distortion + Palette-gradients toggle. |
 | Modern Mosaic / Vitrall | **Voronoi** | Ours ≈ Modern Mosaic. Add **Vitrall** variant (curved slices, light leading) + Roundness/Irregularity. |
 | Flow Field | **Flow** | Add **Orbs** (the moons), Style variant, lower density default. |
@@ -233,6 +238,32 @@ rectangles.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11g — Mesh Gradient. ✅ (2026-09-01)** Two findings, and the second is about the *blend* rather than the knobs.
+    - **Their *Color distribution* is a layout, not a weighting** — `Random`, `Corner interpolation`, **`Linear
+      bottom`** (their default). That default is the whole difference in the design: the palette runs *down the frame*
+      as one progression, where ours cycled the stops through the control points and produced a quilt of blotches with
+      mud between them. Ours takes all three as `variant` — **Vertical / Corners / Scattered** — with the cycle kept as
+      the last, for a palette that is a set of accents rather than a ramp. Note the name collides with Confetti's
+      *Color distribution*, which is a weighting; they share nothing but the word.
+    - **Their blend is a bilinear mesh, not inverse-distance weighting, and the rigid end is the proof.** At Jitter 0
+      their render is a *mathematically exact* gradient. Distance weighting cannot do that at any setting: every node
+      keeps a core, and between two same-colored nodes a pixel sits fractionally further from both, so the neighbouring
+      row leaks in and the field **beads into vertical stripes**. Softening enough to hide the beading also flattens
+      the design into a plain gradient — confirmed by sweeping the parameter space offline rather than by build cycles.
+      So the generator was rewritten: a lattice of colored nodes, bilinearly blended, sampled through a *second* field
+      of node displacements. It is also `O(1)` per pixel instead of `O(nodes)`.
+    - **The warp lattice has to be coarser than the color lattice**, and is fixed at 3 patches. Tied to the colors, a
+      hard-pushed node makes a tongue one cell wide, and a tongue as tall as it is wide reads as a **drip** hanging off
+      a band rather than as a broad lobe. Fixing it also stops the density knob quietly changing what the warp knob
+      does.
+    - **A displacement field must be C1 where a color field need not be.** Sampled bilinearly, the warp's slope jumps
+      at every node line and those jumps land in the picture as hard creases along the lattice. Easing the cell
+      parameter (`3t² - 2t³`) fixes it; the color field is left bilinear, since a kink in a monotone ramp is invisible.
+    - Knobs: `density` → **Grid** (2..8 patches), `scale` → **Softness** (each node drawn toward its neighbours' mean,
+      twice — a low pass on the colors, since the blend has nothing left to soften), `irregularity` → **Warp**,
+      `variant` → **Colors**. Their separate Rows and Columns collapse to one square lattice, as Dot Grid's did.
+      `PointScatter` lost a consumer on the way: this needs the lattice's *corners* with the edges pinned, which is a
+      different placement wearing the same word.
   - **W11f — Confetti Dots. ✅ (2026-09-01)** Not an identity finding this time: theirs and ours are the same design,
     and ours was simply doing four things worse. All four are now theirs.
     - **A square lattice turned ~12°, jittered — not a Poisson-disk scatter.** The turn is the part that carries the

@@ -4,114 +4,266 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.roundToInt
+import kotlin.random.Random
 
 /**
- * A soft field of color where a handful of seeded points each pull the picture toward their palette color — the
- * lava-lamp blend the studio calls *Mesh Gradient*.
+ * A lattice of colored nodes, blended smoothly and pushed out of shape — the *Mesh Gradient*.
  *
- * **Inverse-distance weighting, not a real gradient mesh.** A true coons-patch mesh is a lot of machinery for a look
- * this reaches with none: every pixel is a blend of the control points weighted by `1/distance²`, so near a point its
- * color dominates and between points they melt together. That is `O(pixels × points)` with a handful of points, and
- * it is smooth everywhere by construction — no seams to hide.
+ * **A bilinear mesh sampled through a warp, not points weighted by distance.** The frame is a grid of nodes, each
+ * carrying a color; a pixel's color is the bilinear blend of the four nodes around it, read at a coordinate that a
+ * *second, much coarser* lattice of displacements has pushed off true. The two halves are separable and each says
+ * one thing: the colors say what the gradient is, the displacements say how it bulges.
  *
- * **Grid + jitter, not free scatter — the placement is [PointScatter].** The control points sit on a lattice that
- * [DesignParams.irregularity] loosens: even and quilt-like when regular, lava-lamp when scattered. (This is the
- * teardown's correction — Smart Launcher's Mesh is a grid with a Jitter knob, not the uniformly-random points the first
- * cut placed.) [DesignParams.density] sets how many points there are — more points, a busier field. Deterministic in
- * [seed], so the same recipe is the same field every time and a shuffle is a new seed.
+ * **The warp lattice is deliberately fixed at [WarpSide] patches rather than tied to the color lattice.** A
+ * displacement field as fine as the colors puts a tongue one cell wide wherever a node is pushed hard, and a tongue
+ * as tall as it is wide reads as a *drip* — a stalactite hanging off a band — rather than as the broad lobe this
+ * design wants. Two movable nodes per axis is about as much frequency as a bulge can carry, and holding it there
+ * also stops the density knob quietly changing the character of the warp knob.
  *
- * The blend is [colorAt], pulled out and tested: weighting colors by distance is `IntArray` arithmetic that is
- * silently wrong when a channel is transposed or the alpha is not premultiplied, and it needs no bitmap to check.
+ * **This replaced inverse-distance weighting, and the reason is visible at the rigid end.** Weighting every node by
+ * `1/(d² + ε)` leaves each one a core, and between two same-colored nodes a pixel sits fractionally further from both,
+ * so the neighbouring row leaks in and the field **beads** into columns — a stripe pattern nobody asked for, which
+ * survives any amount of softening short of flattening the design into a plain gradient. A bilinear patch has no cores
+ * at all: at `warp = 0` it *is* the exact gradient, which is what the reference shows and what the old blend could not
+ * reach at any setting. It is also `O(1)` per pixel rather than `O(nodes)`.
+ *
+ * **[DesignParams.variant] is how the palette is laid over the lattice, and it is what the design lives or dies by.**
+ * Cycling the stops through the nodes — the only thing this did at first — puts a different color beside every color,
+ * so the frame comes out a quilt of blotches with mud between them. *Vertical* instead reads a node's color off the
+ * ramp at its **row**, which turns the same machinery into a progression down the frame that the warp bulges
+ * organically; *Corners* interpolates four ramp samples across the lattice, for a calm two-way wash. The cycle
+ * survives as *Scattered*, for a palette that is a set of accents rather than a ramp.
+ *
+ * **[DesignParams.scale] is softness, and it works on the colors rather than on the blend** — each node is drawn
+ * toward the average of its neighbours, [SoftenPasses] times. That is what washing out actually is here: the ramp
+ * keeps its ends and loses its middle contrast. There is nothing left to soften in the blend, which is already exact.
+ *
+ * [mesh] is pure and tested: which node takes which color decides whether the bands run across the frame or diagonally
+ * across it, and the boundary displacements must stay pinned or the frame's own corners drift off the distribution —
+ * both silent when wrong, and neither needs a bitmap.
  */
 object MeshGradientGenerator : Generator {
 
-    /** What [DesignParams.density] resolves to for this design — the count, and the *Points* slider's own range. */
-    private val Amount = AmountKnob.Count("Points", 4..12)
+    /** What [DesignParams.density] resolves to for this design — patches per side, and the slider's own range. */
+    private val Amount = AmountKnob.Count("Grid", 2..8)
 
     override val style = DesignStyle(
         amount = Amount,
-        irregularity = "Scatter",
+        scale = "Softness",
+        irregularity = "Warp",
+        variant = VariantKnob("Colors", listOf("Vertical", "Corners", "Scattered")),
     )
 
-    /** One control point: where it sits in the unit square, and the color it pulls toward. */
-    internal data class Point(val x: Float, val y: Float, val argb: Int)
+    /**
+     * The lattice: `([side] + 1)²` nodes in row-major order, each with a color and a displacement.
+     *
+     * @property side patches per axis on the **color** lattice, so there are `side + 1` color nodes per axis.
+     * @property colors each color node's ARGB, `(side + 1)²`.
+     * @property dx horizontal displacement per **warp** node, in unit-square coordinates; **zero on the boundary**.
+     *   Its lattice is `([WarpSide] + 1)²`, a different and coarser grid — see the class note.
+     * @property dy vertical displacement per warp node.
+     */
+    internal class Mesh(val side: Int, val colors: IntArray, val dx: FloatArray, val dy: FloatArray) {
+
+        /** Color nodes per axis. */
+        val span: Int get() = side + 1
+    }
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val points = points(pointCount(params.density), params.irregularity, palette, seed)
+        val mesh = mesh(Amount.at(params.density), params.irregularity, params.scale, params.variant, palette, seed)
         val bitmap = createBitmap(width, height)
         val row = IntArray(width)
         for (y in 0 until height) {
-            val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
+            val v = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
-                val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                row[x] = colorAt(nx, ny, points)
+                val u = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
+                val wu = u + sample(mesh.dx, WarpSpan, u, v)
+                val wv = v + sample(mesh.dy, WarpSpan, u, v)
+                row[x] = sampleColor(mesh, wu, wv)
             }
             bitmap.setPixels(row, 0, width, 0, y, width, 1)
         }
         return bitmap
     }
 
-    /** How many control points [density] asks for — when sparse up to when dense. */
-    internal fun pointCount(density: Float): Int = Amount.at(density)
-
     /**
-     * [count] control points for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when
-     * even, a scatter when irregular), colors **cycled** through the palette so every stop is represented and the same
-     * color does not clump by chance.
-     */
-    internal fun points(count: Int, irregularity: Float, palette: Palette, seed: Long): List<Point> {
-        val positions = PointScatter.gridJitter(count, irregularity, seed)
-        return List(count) { i ->
-            Point(x = positions[i * 2], y = positions[i * 2 + 1], argb = palette.colorAt(i % palette.size))
-        }
-    }
-
-    /**
-     * The color at ([nx], [ny]) in the unit square — every point's color, weighted by `1/(distance² + ε)` and
-     * blended premultiplied so a translucent point contributes its coverage rather than dragging the blend to black.
+     * The lattice for [side] patches: colors from [variant] over [palette], softened by [softness], displaced by
+     * [warp], all drawn from [seed].
      *
-     * The `ε` ([Softness]) is what keeps a point's own pixel finite and sets how tightly its color clings before it
-     * melts into its neighbours: larger is softer.
+     * **Boundary nodes are never displaced.** The warp moves where the *inside* of the picture is read from; moving
+     * the edge nodes would drag the frame's own corners off whatever the distribution put there — a *Corners* wash
+     * whose corners are not the palette's ends reads as the design being slightly wrong rather than as anything
+     * having moved.
      */
-    internal fun colorAt(nx: Float, ny: Float, points: List<Point>): Int {
-        var weightSum = 0.0
-        var alphaSum = 0.0
-        var redSum = 0.0
-        var greenSum = 0.0
-        var blueSum = 0.0
-
-        for (point in points) {
-            val dx = nx - point.x
-            val dy = ny - point.y
-            val weight = 1.0 / (dx * dx + dy * dy + Softness)
-
-            val alpha = (point.argb ushr 24 and 0xFF).toDouble()
-            val red = point.argb shr 16 and 0xFF
-            val green = point.argb shr 8 and 0xFF
-            val blue = point.argb and 0xFF
-
-            val weightedAlpha = weight * alpha
-            weightSum += weight
-            alphaSum += weightedAlpha
-            // Premultiplied: each color weighted by its own alpha as well as its distance, so a transparent point
-            // adds no color rather than adding black.
-            redSum += weightedAlpha * red
-            greenSum += weightedAlpha * green
-            blueSum += weightedAlpha * blue
+    internal fun mesh(side: Int, warp: Float, softness: Float, variant: Int, palette: Palette, seed: Long): Mesh {
+        val n = side.coerceAtLeast(1)
+        val span = n + 1
+        val colors = IntArray(span * span)
+        for (r in 0 until span) {
+            for (c in 0 until span) {
+                val i = r * span + c
+                colors[i] = nodeColor(c.toFloat() / n, r.toFloat() / n, i, variant, palette)
+            }
         }
+        soften(colors, span, softness)
 
-        if (alphaSum <= 0.0) return 0
-        val a = (alphaSum / weightSum).roundToInt().coerceIn(0, ChannelMax)
-        val r = (redSum / alphaSum).roundToInt().coerceIn(0, ChannelMax)
-        val g = (greenSum / alphaSum).roundToInt().coerceIn(0, ChannelMax)
-        val b = (blueSum / alphaSum).roundToInt().coerceIn(0, ChannelMax)
-        val packed = (a shl 24) or (r shl 16) or (g shl 8) or b
-        return packed
+        val dx = FloatArray(WarpSpan * WarpSpan)
+        val dy = FloatArray(WarpSpan * WarpSpan)
+        val reach = warp.coerceIn(0f, 1f) * MaxWarp
+        val random = Random(seed)
+        for (r in 0 until WarpSpan) {
+            for (c in 0 until WarpSpan) {
+                // Both draws happen for every node, boundary included, so the warp slider re-shapes the same
+                // lattice instead of reshuffling it — the discipline every jittered design here keeps.
+                val jx = (random.nextFloat() * 2f - 1f) * reach
+                val jy = (random.nextFloat() * 2f - 1f) * reach
+                if (r in 1 until WarpSpan - 1 && c in 1 until WarpSpan - 1) {
+                    dx[r * WarpSpan + c] = jx
+                    dy[r * WarpSpan + c] = jy
+                }
+            }
+        }
+        return Mesh(n, colors, dx, dy)
     }
 
-    private const val ChannelMax = 255
+    /**
+     * The color for the node at ([u], [v]) in the lattice — both `0..1` — under [variant].
+     *
+     * *Vertical* ignores [u] entirely, which is the point: the color is a function of how far down the frame the node
+     * sits, so the palette reads as one progression rather than as a set of patches.
+     */
+    internal fun nodeColor(u: Float, v: Float, index: Int, variant: Int, palette: Palette): Int = when (variant) {
+        VariantCorners -> {
+            val top = LinearGradientGenerator.lerpArgb(rampAt(0, palette), rampAt(1, palette), u)
+            val bottom = LinearGradientGenerator.lerpArgb(rampAt(2, palette), rampAt(3, palette), u)
+            LinearGradientGenerator.lerpArgb(top, bottom, v)
+        }
 
-    /** How tightly a point holds its color before melting into its neighbours — the `ε` on the inverse-square weight. */
-    private const val Softness = 0.0015
+        VariantScattered -> palette.colorAt(index % palette.size)
+        else -> LinearGradientGenerator.colorAt(v, palette)
+    }
+
+    /** The [corner]-th of [CornerSamples] samples evenly spaced along the palette ramp. */
+    private fun rampAt(corner: Int, palette: Palette): Int {
+        val t = corner.toFloat() / (CornerSamples - 1)
+        return LinearGradientGenerator.colorAt(t, palette)
+    }
+
+    /**
+     * Draws every node [strength] of the way toward the average of its four lattice neighbours, [SoftenPasses] times —
+     * the softness knob. Each pass reads a copy, so a node's new value never feeds the one beside it in the same pass.
+     */
+    internal fun soften(colors: IntArray, span: Int, strength: Float) {
+        val t = strength.coerceIn(0f, 1f)
+        if (t <= 0f || span < 2) return
+        repeat(SoftenPasses) {
+            val source = colors.copyOf()
+            for (r in 0 until span) {
+                for (c in 0 until span) {
+                    val mean = neighbourMean(source, span, r, c) ?: continue
+                    colors[r * span + c] = LinearGradientGenerator.lerpArgb(source[r * span + c], mean, t)
+                }
+            }
+        }
+    }
+
+    /** The channel-wise average of the four lattice neighbours of `([r], [c])`, or `null` where there are none. */
+    private fun neighbourMean(source: IntArray, span: Int, r: Int, c: Int): Int? {
+        var alpha = 0
+        var red = 0
+        var green = 0
+        var blue = 0
+        var count = 0
+        for ((nr, nc) in listOf(r - 1 to c, r + 1 to c, r to c - 1, r to c + 1)) {
+            if (nr !in 0 until span || nc !in 0 until span) continue
+            val argb = source[nr * span + nc]
+            val a = argb ushr AlphaShift and ChannelMask
+            val rd = argb shr RedShift and ChannelMask
+            val gn = argb shr GreenShift and ChannelMask
+            val bl = argb and ChannelMask
+            alpha += a
+            red += rd
+            green += gn
+            blue += bl
+            count++
+        }
+        if (count == 0) return null
+        val mean = (alpha / count shl AlphaShift) or (red / count shl RedShift) or
+            (green / count shl GreenShift) or (blue / count)
+        return mean
+    }
+
+    /**
+     * The sample of the per-node scalar [field] on a `[span] × [span]` lattice at ([u], [v]) in `0..1`, **smoothstepped
+     * within each cell**.
+     *
+     * A plain bilinear field is only C0: its slope jumps at every node line, and because this field is used to
+     * *displace a coordinate*, those jumps land in the picture as hard creases running along the lattice — vertical
+     * drips down a gradient that is supposed to bulge. Easing the cell parameter is the cheapest fix that makes the
+     * field C1, and it is why this is not the same routine as [sampleColor]: a kink in a monotone color ramp is
+     * invisible, a kink in a warp is not.
+     */
+    private fun sample(field: FloatArray, span: Int, u: Float, v: Float): Float {
+        val fx = u.coerceIn(0f, 1f) * (span - 1)
+        val fy = v.coerceIn(0f, 1f) * (span - 1)
+        val x0 = fx.toInt().coerceIn(0, span - 1)
+        val y0 = fy.toInt().coerceIn(0, span - 1)
+        val x1 = (x0 + 1).coerceAtMost(span - 1)
+        val y1 = (y0 + 1).coerceAtMost(span - 1)
+        val tx = smoothstep(fx - x0)
+        val ty = smoothstep(fy - y0)
+        val top = field[y0 * span + x0] + (field[y0 * span + x1] - field[y0 * span + x0]) * tx
+        val bottom = field[y1 * span + x0] + (field[y1 * span + x1] - field[y1 * span + x0]) * tx
+        return top + (bottom - top) * ty
+    }
+
+    /** `3t² - 2t³` — zero slope at both ends, so cells join without a crease. */
+    private fun smoothstep(t: Float): Float {
+        val eased = t * t * (3f - 2f * t)
+        return eased
+    }
+
+    /** The bilinear sample of [mesh]'s colors at ([u], [v]) — clamped, so a warp off the edge reads the edge. */
+    internal fun sampleColor(mesh: Mesh, u: Float, v: Float): Int {
+        val span = mesh.span
+        val fx = u.coerceIn(0f, 1f) * (span - 1)
+        val fy = v.coerceIn(0f, 1f) * (span - 1)
+        val x0 = fx.toInt().coerceIn(0, span - 1)
+        val y0 = fy.toInt().coerceIn(0, span - 1)
+        val x1 = (x0 + 1).coerceAtMost(span - 1)
+        val y1 = (y0 + 1).coerceAtMost(span - 1)
+        val tx = fx - x0
+        val ty = fy - y0
+        val top = LinearGradientGenerator.lerpArgb(mesh.colors[y0 * span + x0], mesh.colors[y0 * span + x1], tx)
+        val bottom = LinearGradientGenerator.lerpArgb(mesh.colors[y1 * span + x0], mesh.colors[y1 * span + x1], tx)
+        return LinearGradientGenerator.lerpArgb(top, bottom, ty)
+    }
+
+    /** How many samples of the ramp *Corners* spreads across the lattice — one per corner. */
+    private const val CornerSamples = 4
+
+    /** Where each channel sits in a packed ARGB int, and the byte that reads it. */
+    private const val AlphaShift = 24
+    private const val RedShift = 16
+    private const val GreenShift = 8
+    private const val ChannelMask = 0xFF
+
+    /** [DesignParams.variant] values this design draws differently; anything else is *Vertical*, the default look. */
+    private const val VariantCorners = 1
+    private const val VariantScattered = 2
+
+    /**
+     * How far a warp node can be pushed at full warp, as a fraction of the frame. Past about this the field folds
+     * through itself and the bulge stops reading as one shape.
+     */
+    private const val MaxWarp = 0.22f
+
+    /** Patches per axis on the warp lattice — two movable nodes each way. See the class note on why it is fixed. */
+    private const val WarpSide = 3
+
+    /** Warp nodes per axis. */
+    private const val WarpSpan = WarpSide + 1
+
+    /** Smoothing passes the softness knob spends; two reaches a flat wash without a loop nobody can feel the end of. */
+    private const val SoftenPasses = 2
 }
