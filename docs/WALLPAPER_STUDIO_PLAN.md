@@ -12,7 +12,11 @@ user). One Kotlin/Skia codebase serving both studios is the differentiator. See 
 CLAUDE.md's cost note.
 
 **Companions:** [GART_HARVEST.md](GART_HARVEST.md) (the engine source), [ICON_ARCHITECTURE.md](ICON_ARCHITECTURE.md)
-(the effect pipeline this reuses), [STATUS.md](STATUS.md) (`data:wallpaper`'s existing state).
+(the effect pipeline this reuses), [STATUS.md](STATUS.md) (`data:wallpaper`'s existing state), and — **read this before
+the next wallpaper slice** — [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md), a live teardown of Smart
+Launcher's studio (every design's ~6 parameters, the color-mode system, the aesthetic gap). It reframes W5: the sixteen
+generators are the *engine*, but each of theirs carries ~6 tunable parameters where ours carry one, so the *studio* is
+still largely ahead of us.
 
 ---
 
@@ -261,8 +265,14 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     Plasma / Rings / Truchet are ours on top. **W5 is complete as a catalog** — remaining work on these is the *Style*
     panel (density/variant sliders; every generator already reads `DesignParams.density`) and per-generator morphs, both
     their own slices, not more designs.
-- **W5 — done as a catalog (2026-08-31).** Sixteen generators span every group in Smart Launcher's 22; the *Style*
-  panel and per-generator morphs are the remaining refinements, tracked as their own slices below.
+- **W5 — the generator *engine* is done (2026-08-31); the *studio* is not.** Sixteen generators span every group in
+  Smart Launcher's 22 and render correctly. But a live teardown (2026-08-31,
+  [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md)) found each of their designs exposes **~6 parameters**
+  (Count/Spacing/Rotation/Irregularity/Color mode/… from shared families) and defaults to *restraint* (Mono/Bichromatic,
+  sparse, soft, with depth), where ours expose **one** (`density`), always full-palette and flat. So the next arc is
+  **W6 (grow `DesignParams` + a `WallpaperColorMode`), W7 (styling pass + the organic-noise knob), W8 (thin-line family),
+  W9 (the calm staples we lack), W10 (the Style-panel UI)** — see the teardown's revised plan. The per-generator morphs
+  stay deferred.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
