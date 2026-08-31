@@ -66,5 +66,6 @@ object Generators {
         WallpaperDesign.POLYGON_CASCADE -> PolygonCascadeGenerator
         WallpaperDesign.DIAGONAL_BANDS -> DiagonalBandsGenerator
         WallpaperDesign.GRADIENT_COLUMNS -> GradientColumnsGenerator
+        WallpaperDesign.SOFT_OVERLAPS -> SoftOverlapsGenerator
     }
 }

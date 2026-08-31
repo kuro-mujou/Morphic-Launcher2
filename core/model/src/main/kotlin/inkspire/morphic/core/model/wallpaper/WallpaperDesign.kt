@@ -168,4 +168,11 @@ enum class WallpaperDesign {
      */
     @SerialName("gradientColumns")
     GRADIENT_COLUMNS,
+
+    /**
+     * Big translucent discs, soft-edged, overlapping into a cloudy painterly field — the misty blend. Leans on palette
+     * alpha: discs are laid at partial opacity so overlaps mix. [DesignParams.variant] picks the blend (normal / additive).
+     */
+    @SerialName("softOverlaps")
+    SOFT_OVERLAPS,
 }
