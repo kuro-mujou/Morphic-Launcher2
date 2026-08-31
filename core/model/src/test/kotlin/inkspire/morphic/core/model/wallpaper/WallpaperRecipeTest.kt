@@ -25,6 +25,7 @@ class WallpaperRecipeTest {
             params = DesignParams(density = 0.8f, variant = 2),
             palette = Palette(listOf(0xFF241B4E.toInt(), 0xFFB65A78.toInt(), 0xFFFFD9A0.toInt())),
             aspect = WallpaperAspect.SQUARED,
+            filters = mapOf(WallpaperFilter.BLUR to 0.4f, WallpaperFilter.GRAIN to 0.15f),
         )
 
         assertEquals(recipe, json.decodeFromString<WallpaperRecipe>(json.encodeToString(recipe)))
@@ -45,12 +46,25 @@ class WallpaperRecipeTest {
 
     @Test
     fun `an unknown key is dropped rather than throwing`() {
-        // A recipe from a newer build carrying a field this one does not know — a filter list, say — must degrade to
-        // the rest of the recipe, not fail the whole read.
+        // A recipe from a newer build carrying a whole field this one does not know — a texture, say — must degrade
+        // to the rest of the recipe, not fail the whole read. This is the case `ignoreUnknownKeys` covers.
         val recipe = json.decodeFromString<WallpaperRecipe>(
-            """{"design":"linearGradient","seed":1,"filters":[{"type":"someFutureFilter"}]}""",
+            """{"design":"linearGradient","seed":1,"texture":{"kind":"paper","scale":2}}""",
         )
 
         assertEquals(WallpaperDesign.LINEAR_GRADIENT, recipe.design)
+    }
+
+    @Test
+    fun `an unknown filter is dropped and the rest of the recipe survives`() {
+        // The case `ignoreUnknownKeys` does *not* cover, and the one a newer build actually writes: `filters` is a
+        // known field, so the flag never sees it, and its keys are an enum that throws on a name it lacks. Losing one
+        // post-process pass must not cost the whole wallpaper.
+        val recipe = json.decodeFromString<WallpaperRecipe>(
+            """{"design":"linearGradient","seed":1,"filters":{"blur":0.4,"someFutureFilter":0.9}}""",
+        )
+
+        assertEquals(WallpaperDesign.LINEAR_GRADIENT, recipe.design)
+        assertEquals(mapOf(WallpaperFilter.BLUR to 0.4f), recipe.filters)
     }
 }

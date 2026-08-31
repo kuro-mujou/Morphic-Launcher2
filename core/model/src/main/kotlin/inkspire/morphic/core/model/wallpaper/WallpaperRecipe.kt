@@ -13,7 +13,9 @@ import kotlinx.serialization.Serializable
  *
  * **[filters] are the post-process the generator's bitmap is put through** — a strength per [WallpaperFilter], absent
  * meaning off. Defaulted empty, so a recipe from before filters existed reads back unchanged, and
- * `encodeDefaults = false` writes nothing for an unfiltered wallpaper.
+ * `encodeDefaults = false` writes nothing for an unfiltered wallpaper. A filter this build has *not* heard of is
+ * dropped and the rest of the recipe still reads — that is [WallpaperFilterStrengths]' doing, not
+ * `ignoreUnknownKeys`', which does not reach inside a map.
  *
  * **Persisted per orientation.** A recipe is composed for a shape ([aspect]) and, like the home grid's coordinate
  * placements, a portrait and a landscape framing are stored separately — the render layer's business, not this
@@ -41,5 +43,6 @@ data class WallpaperRecipe(
     val params: DesignParams = DesignParams(),
     val palette: Palette = Palette.Fallback,
     val aspect: WallpaperAspect = WallpaperAspect.VERTICAL,
+    @Serializable(with = WallpaperFilterStrengths::class)
     val filters: Map<WallpaperFilter, Float> = emptyMap(),
 )
