@@ -11,7 +11,7 @@ import kotlin.math.abs
  */
 class RibbonsGeneratorTest {
 
-    private val spine = RibbonsGenerator.spine(42L)
+    private val spine = RibbonsGenerator.spine(42L, scale = 0.5f, variant = 0)
 
     @Test
     fun `density maps to the line count range`() {
@@ -85,9 +85,27 @@ class RibbonsGeneratorTest {
     }
 
     @Test
+    fun `the spread knob widens the bundle at both ends`() {
+        val tight = RibbonsGenerator.spine(3L, scale = 0f, variant = 0)
+        val wide = RibbonsGenerator.spine(3L, scale = 1f, variant = 0)
+        assertTrue("open end", wide.endSpread > tight.endSpread * 2f)
+        assertTrue("closed end scales with it", wide.startSpread > tight.startSpread)
+    }
+
+    @Test
+    fun `the fan closes one end where the weave keeps both open`() {
+        val fan = RibbonsGenerator.spine(3L, scale = 0.5f, variant = 0)
+        val weave = RibbonsGenerator.spine(3L, scale = 0.5f, variant = 1)
+        // Same open end either way — the shape is which end closes, not how wide the bundle is.
+        assertEquals(fan.endSpread, weave.endSpread, 1e-6f)
+        assertTrue("a fan converges", fan.startSpread < fan.endSpread * 0.2f)
+        assertTrue("a weave does not", weave.startSpread > weave.endSpread * 0.5f)
+    }
+
+    @Test
     fun `the same seed yields the same spine, so a recipe reproduces`() {
-        val a = RibbonsGenerator.spine(7L)
-        val b = RibbonsGenerator.spine(7L)
+        val a = RibbonsGenerator.spine(7L, scale = 0.5f, variant = 0)
+        val b = RibbonsGenerator.spine(7L, scale = 0.5f, variant = 0)
         assertTrue(a.xs.contentEquals(b.xs) && a.ys.contentEquals(b.ys))
     }
 }

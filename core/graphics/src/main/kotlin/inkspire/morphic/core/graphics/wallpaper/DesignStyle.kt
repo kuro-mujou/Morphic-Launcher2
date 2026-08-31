@@ -22,6 +22,9 @@ import kotlin.math.roundToInt
  *
  * @property amount the design's "how many" knob, driven by [DesignParams.density] — null where the design has no
  *   notion of amount at all (a plain gradient).
+ * @property scale the design's own word for its size knob (*Spread*, *Size*, *Margin*), driven by
+ *   [DesignParams.scale] — null where the design's elements have no size to set. A label rather than a knob, for
+ *   [irregularity]'s reason: the control is always the same `0..1` fraction and only the word changes.
  * @property irregularity the design's own word for its organic-noise knob (*Curl*, *Scatter*, *Refraction*), driven by
  *   [DesignParams.irregularity] — null where the design is rigid by nature and ignores it. **A label rather than a
  *   knob**, because unlike the amount this control is the same everywhere: a `0..1` fraction, rigid to chaotic. Only
@@ -31,6 +34,7 @@ import kotlin.math.roundToInt
  */
 data class DesignStyle(
     val amount: AmountKnob? = null,
+    val scale: String? = null,
     val irregularity: String? = null,
     val variant: VariantKnob? = null,
 )

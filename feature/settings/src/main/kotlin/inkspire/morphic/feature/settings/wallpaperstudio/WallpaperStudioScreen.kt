@@ -159,10 +159,7 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                         recipe = state.recipe,
                         tab = styleTab,
                         onSelectTab = { styleTab = it },
-                        onSetDensity = viewModel::setDensity,
-                        onSetIrregularity = viewModel::setIrregularity,
-                        onSetVariant = viewModel::setVariant,
-                        onSetColorMode = viewModel::setColorMode,
+                        onParams = viewModel::setParams,
                     )
                 }
 

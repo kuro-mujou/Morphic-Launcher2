@@ -29,9 +29,18 @@ import kotlin.random.Random
  * opposite directions, so the lines stop being parallel and the bundle twists through itself. The ends stay anchored
  * either way — a splay that moved them too would just be a different spread.
  *
- * **The ground is flat on purpose.** The reference draws a soft glow behind its bundle, and that depth is real, but the
- * studio already ships a Vignette filter; baking one in would double it for anyone who reaches for that and make the
- * design opinionated about something the filter stack owns.
+ * **[DesignParams.scale] and [DesignParams.variant] are the two spreads, re-cut.** The reference exposes them as a
+ * *Start area* and an *End area* percentage, one per end. The same square of possibilities is reached here by asking
+ * the two questions a person actually has: **how wide** is the bundle ([DesignParams.scale]), and **which end is
+ * tight** ([DesignParams.variant] — a fan that converges at one end, or a weave open at both). Two ends is the
+ * implementation; wide-and-fanned is the intent.
+ *
+ * **The glow is drawn on the ground, not around each stroke.** Measured off the reference, its lines are hard-edged —
+ * the pixels step straight from ground to line with no falloff — while the *ground* brightens along a wide ridge that
+ * follows the bundle, roughly tripling in luminance at its center. So this lays a few progressively wider, barely
+ * opaque copies of each path down first and draws the crisp lines over them: the copies accumulate where lines run
+ * close together, which is exactly where a real bundle of light would be brightest. It is deliberately **not** the
+ * studio's Vignette filter, which darkens the corners of any picture and knows nothing about where the bundle is.
  *
  * [lineControls] is pure and tested: the offsets have to stay *ordered* — line `i` inside line `i + 1` at every control
  * point — or the bundle self-intersects into a scribble, and it does that quietly, one seed in a handful.
@@ -43,7 +52,9 @@ object RibbonsGenerator : Generator {
 
     override val style = DesignStyle(
         amount = Amount,
+        scale = "Spread",
         irregularity = "Splay",
+        variant = VariantKnob("Shape", listOf("Fan", "Weave")),
     )
 
     /**
@@ -53,7 +64,8 @@ object RibbonsGenerator : Generator {
      *   rather than starting inside it.
      * @property ys their y — an S, with each end overshooting so the curve arcs before it settles.
      * @property startSpread how far apart the lines sit where they begin, as a fraction of the frame's height.
-     * @property endSpread the same where they end, and **much larger** — the fan.
+     * @property endSpread the same where they end. **Larger, and how much larger is the design's shape**: a fan closes
+     *   its start to almost nothing against this, a weave keeps it nearly as open.
      */
     internal class Spine(
         val xs: FloatArray,
@@ -68,7 +80,7 @@ object RibbonsGenerator : Generator {
         canvas.drawColor(palette.colorAt(palette.size - 1)) // darkest stop — the ground
 
         val count = lineCount(params.density)
-        val spine = spine(seed)
+        val spine = spine(seed, params.scale, params.variant)
         val splay = params.irregularity.coerceIn(0f, 1f)
         // The stops the lines are drawn from, swept across the bundle so a full palette reads as one gradient of
         // light rather than as a set of differently-colored lines. Asked of `StopContrast` rather than taken as
@@ -76,22 +88,39 @@ object RibbonsGenerator : Generator {
         // fade out instead of reading as the dark end of the sweep.
         val ramp = Palette(StopContrast.readableAgainst(palette.size - 1, palette.size).map { palette.colorAt(it) })
 
+        val shortSide = min(width, height)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
-            strokeWidth = StrokeFraction * min(width, height)
         }
-        val path = Path()
 
-        for (i in 0 until count) {
+        // Every line's path, built once: the glow lays all of them down before any crisp line is drawn, so a later
+        // line's halo cannot wash out an earlier line's stroke.
+        val paths = List(count) { i ->
             val c = lineControls(i, count, spine, splay)
             val px = FloatArray(Controls) { c[it * 2] * width }
             val py = FloatArray(Controls) { c[it * 2 + 1] * height }
-            path.reset()
-            path.moveTo(px[0], py[0])
-            path.cubicTo(px[1], py[1], px[2], py[2], px[LastControl], py[LastControl])
-            paint.color = LinearGradientGenerator.colorAt(if (count <= 1) 0f else i.toFloat() / (count - 1), ramp)
-            canvas.drawPath(path, paint)
+            Path().apply {
+                moveTo(px[0], py[0])
+                cubicTo(px[1], py[1], px[2], py[2], px[LastControl], py[LastControl])
+            }
+        }
+        val colors = IntArray(count) {
+            LinearGradientGenerator.colorAt(if (count <= 1) 0f else it.toFloat() / (count - 1), ramp)
+        }
+
+        for ((widthFraction, alpha) in Halos) {
+            paint.strokeWidth = widthFraction * shortSide
+            for (i in 0 until count) {
+                paint.color = colors[i] and RgbMask or (alpha shl AlphaShift)
+                canvas.drawPath(paths[i], paint)
+            }
+        }
+
+        paint.strokeWidth = StrokeFraction * shortSide
+        for (i in 0 until count) {
+            paint.color = colors[i]
+            canvas.drawPath(paths[i], paint)
         }
         return bitmap
     }
@@ -136,7 +165,7 @@ object RibbonsGenerator : Generator {
      * design, so re-rolling it into an unrecognizably different curve would make the shuffle read as a different
      * wallpaper rather than another take on this one.
      */
-    internal fun spine(seed: Long): Spine {
+    internal fun spine(seed: Long, scale: Float, variant: Int): Spine {
         val random = Random(seed)
         val start = StartBand.first + random.nextFloat() * (StartBand.second - StartBand.first)
         val end = EndBand.first + random.nextFloat() * (EndBand.second - EndBand.first)
@@ -147,7 +176,11 @@ object RibbonsGenerator : Generator {
         if (random.nextBoolean()) for (k in xs.indices) xs[k] = 1f - xs[k] // sweep the other way across
         if (random.nextBoolean()) for (k in ys.indices) ys[k] = 1f - ys[k] // and rise instead of fall
 
-        return Spine(xs, ys, StartSpread, EndSpread)
+        // How wide the bundle is at its open end, and how far the other end closes: a fan pinches to almost nothing,
+        // a weave stays open and fills the frame.
+        val open = MinSpread + scale.coerceIn(0f, 1f) * (MaxSpread - MinSpread)
+        val closed = open * if (variant == VariantWeave) WeaveEndRatio else FanEndRatio
+        return Spine(xs, ys, closed, open)
     }
 
     /** Which way each control point is pushed by the splay: the two interior ones, oppositely; the ends, not at all. */
@@ -170,9 +203,36 @@ object RibbonsGenerator : Generator {
     private val EndBand = 0.62f to 0.84f
     private val OvershootBand = 0.16f to 0.30f
 
-    /** The fan: how far apart the lines sit at each end, as a fraction of the height. The ratio is the whole look. */
-    private const val StartSpread = 0.05f
-    private const val EndSpread = 0.62f
+    /** [DesignParams.variant] selecting the weave — open at both ends — over the default converging fan. */
+    private const val VariantWeave = 1
+
+    /** How far apart the lines sit at the bundle's open end, as a fraction of the height, across the spread knob. */
+    private const val MinSpread = 0.24f
+    private const val MaxSpread = 0.95f
+
+    /** What the *other* end measures against the open one: nearly closed for a fan, nearly as open for a weave. */
+    private const val FanEndRatio = 0.08f
+    private const val WeaveEndRatio = 0.72f
+
+    /**
+     * The halo: stroke width as a fraction of the short side, against the alpha it is laid down at.
+     *
+     * Widening and fading, so the falloff is smooth rather than a visible band, and each is faint enough that one line
+     * barely lifts the ground — the brightness comes from *many* of them overlapping, which is what puts the light
+     * where the bundle is densest instead of spreading it evenly.
+     *
+     * **The alphas are this low because fifteen lines times three passes is forty-five overlapping strokes**, and alpha
+     * compounds: values that look plausible for a single stroke lifted the ground to three quarters of the line's own
+     * brightness and turned the bundle into a milky smear. They are set against the reference measured directly — its
+     * ground peaks at roughly three times its own base, and around a third of its line brightness.
+     */
+    private val Halos = listOf(0.09f to 0x06, 0.19f to 0x04, 0.38f to 0x02)
+
+    /** The low 24 bits of an ARGB color — its RGB, alpha masked off, so a halo can restate the alpha. */
+    private const val RgbMask = 0x00FFFFFF
+
+    /** Where the alpha byte sits in a packed ARGB color. */
+    private const val AlphaShift = 24
 
     /**
      * How much the splay opens one interior control point and closes the other, as a fraction of the height.

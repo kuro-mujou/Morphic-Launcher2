@@ -34,11 +34,19 @@ import kotlinx.serialization.Serializable
  * from there, so the knob reads the same direction everywhere. A design that shipped with fixed jitter is scaled so its
  * default `0.5` reproduces that shipped look; a design that shipped rigid takes `0.5` as a tasteful organic default.
  *
+ * **[scale] is how much room the design's elements take, which is a different question from how many there are.** A
+ * count and a size are independent everywhere they both apply — twenty small dots and twenty large ones are different
+ * pictures — and squeezing both onto [density] is what forces a generator to guess. It is the *spacing / gaps* family
+ * the reference studio exposes as *Spacing, Margin, Coverage, Size, Radius*, and the same rules as [irregularity]
+ * apply: a design with no notion of size ignores it, and one that reads it maps `0.5` to its shipped look.
+ *
  * @property density how much of the design there is, `0..1` — sparse to dense. A generator with no notion of density
  *   ignores it.
  * @property irregularity how much organic noise disturbs the design, `0..1` — `0` is rigid and geometric (a clean
  *   lattice, a straight crest, a perfect circle), `1` is chaotic. A generator with no organic axis ignores it, and one
  *   that reads it maps `0.5` to its shipped look. See the class note.
+ * @property scale how much room the design's elements take, `0..1` — tight to sprawling. See the class note; a
+ *   generator with no notion of size ignores it, exactly as a density-less one ignores [density].
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
  *   generator with a single look ignores it, and one with several clamps an out-of-range index to what it has.
  * @property colorMode how much of the palette to paint with — see [WallpaperColorMode]. Applied to the palette, not
@@ -48,6 +56,7 @@ import kotlinx.serialization.Serializable
 data class DesignParams(
     val density: Float = 0.5f,
     val irregularity: Float = 0.5f,
+    val scale: Float = 0.5f,
     val variant: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )
