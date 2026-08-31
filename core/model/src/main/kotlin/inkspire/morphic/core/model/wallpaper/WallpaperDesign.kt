@@ -116,4 +116,18 @@ enum class WallpaperDesign {
      */
     @SerialName("ribbons")
     RIBBONS,
+
+    /**
+     * Hard-edged wedges of palette color fanning from an off-center point — the sunburst. The angular sibling of
+     * [RINGS], which bands distance; this bands bearing.
+     */
+    @SerialName("rays")
+    RAYS,
+
+    /**
+     * A regular grid of dots whose size and color are driven by a noise field — the halftone screen. A lattice, the
+     * opposite of [CONFETTI]'s scatter; dots dwindle to bare paper where the field is weak.
+     */
+    @SerialName("dotGrid")
+    DOT_GRID,
 }

@@ -298,6 +298,8 @@ private val WallpaperDesign.label: String
         WallpaperDesign.TRUCHET -> "Truchet"
         WallpaperDesign.METABALLS -> "Blobs"
         WallpaperDesign.RIBBONS -> "Ribbons"
+        WallpaperDesign.RAYS -> "Rays"
+        WallpaperDesign.DOT_GRID -> "Dots"
     }
 
 /** A short, human name for the filter chip — the enum name is a code identifier, not a label. */

@@ -59,5 +59,7 @@ object Generators {
         WallpaperDesign.TRUCHET -> TruchetGenerator
         WallpaperDesign.METABALLS -> MetaballsGenerator
         WallpaperDesign.RIBBONS -> RibbonsGenerator
+        WallpaperDesign.RAYS -> RaysGenerator
+        WallpaperDesign.DOT_GRID -> DotGridGenerator
     }
 }

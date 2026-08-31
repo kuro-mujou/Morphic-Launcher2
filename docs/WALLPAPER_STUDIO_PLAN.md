@@ -252,6 +252,17 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     banding had to snap to *flat stops*, not an interpolated `colorAt` fraction, or the "onion rings" the KDoc promised
     were a smooth wash — caught on device. The catalog now spans gradient, field, flow, tessellation, tiling, scatter
     and radial; the text pieces and busy iso-scenes gart also has stay out by choice.
+  - **W5d — Rays + Dot Grid, closing the list. ✅ (2026-08-31)** Two more to **sixteen**, device-verified: **Rays**
+    (hard-edged angular wedges from an off-center point — the angular sibling of Rings, `atan2` where Rings uses
+    distance, from `arts/rayz`/`arts/sf`) and **Dot Grid** (a *regular* lattice of noise-sized dots fading to bare
+    paper — the halftone opposite of Confetti's scatter, from `arts/palecircles`). **Dot Grid was the one item named in
+    Smart Launcher's 22 that no earlier generator covered**, so the sixteen now span the whole reference list: its five
+    flow entries, three gradient/column entries, and Mosaic+Vitrall each collapse into one parameterized generator, and
+    Plasma / Rings / Truchet are ours on top. **W5 is complete as a catalog** — remaining work on these is the *Style*
+    panel (density/variant sliders; every generator already reads `DesignParams.density`) and per-generator morphs, both
+    their own slices, not more designs.
+- **W5 — done as a catalog (2026-08-31).** Sixteen generators span every group in Smart Launcher's 22; the *Style*
+  panel and per-generator morphs are the remaining refinements, tracked as their own slices below.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
