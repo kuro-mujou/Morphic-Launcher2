@@ -29,7 +29,7 @@ slider or a segmented variant control below it. **Almost every design exposes si
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow |
 | 5 | Triangular Facets | Resolution · Distortion · Thickness · Distribution · Randomness · Tridimensionality |
-| 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **count** of undecorated cells, not a toggle; *Tile background* is Off/On |
+| 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis, **4..20** (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **fraction** left undecorated, not a toggle and not a count; *Tile background* is Off/On. The tile vocabulary is **a quarter disc or nothing** — halves and circles are emergent |
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance |
 | 8 | Mesh Gradient | Columns · Jitter · **Color distribution** · Softness |
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio |
@@ -135,7 +135,7 @@ rectangles.
 | Flowing Blobs | **Metaballs** | Ours hard onion rings. Theirs smooth + a Color mode (Mono/Bi) + Shadow. Soften, add color mode. |
 | Confetti Dots | **Confetti** | Re-base on a **distorted grid** (Resolution + Offset distortion), tiny sparse dots, dark ground. Ours' Poisson is over-built and over-bold. |
 | Neon Ribbons | **Ribbons** | ✅ **W11b.** Rebuilt as one fanning bundle of fine curves. The W8 decision to skip this was wrong: Flow Lines combs the whole frame, theirs draws *one* gesture — not the same look. |
-| Bauhaus Blocks | **Bauhaus** | ✅ **W11a.** Rebuilt as their arc lattice. What ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name. |
+| Bauhaus Blocks | **Bauhaus** | ✅ **W11a**, refined in **W11d**. Rebuilt as their arc lattice (what ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name), then narrowed to their real vocabulary: one quarter disc, everything else emergent, with coverage on its own knob. |
 | Dot Grid | **DotGrid** | Add Corner radius / Square size / Aspect ratio; contain it (negative space). |
 | Triangular Facets | **Facets** | Add Distortion + Tridimensionality (shading); soften color. |
 | Mesh Gradient | **Mesh** | Re-base on grid + jitter; add Color distribution + Softness. |
@@ -234,6 +234,16 @@ rectangles.
     background"). Two things only the render showed: a shape must sit **two** palette stops from its ground, not
     merely a different one, or it is a tone away and has to be hunted for; and square cells cannot divide the height,
     so the overhang is split across both edges rather than left as a sliver row.
+  - **W11d — Bauhaus, second pass. ✅ (2026-08-31)** The same treatment W11c gave Ribbons, and it corrected two things.
+    **The vocabulary is a quarter disc or nothing** — pushing their *Plain tiles* to maximum isolates the survivors and
+    every one is a quarter; the halves and whole circles are **emergent**, formed where neighbours anchor at a shared
+    corner. Ours drew them as tiles of their own, which produces shapes sitting *inside* a cell relating to nothing
+    beside them: busier to look at and actually less varied. **Coverage is its own knob** — theirs is a *fraction* of
+    tiles left plain (it still applies at Resolution 20, so it is not a count), where ours had it pinned inside the
+    shape vocabulary at a quarter when variety was full and at *nothing* when variety was zero, putting "a strict
+    repeat with a few tiles blank" out of reach. It moved to `scale`, the field W11c added — *Coverage* is a member of
+    that same spacing/gaps family. `irregularity` narrows to the turns, a knob theirs does not have. Their Resolution
+    runs **4..20** on the long axis (≈1.8–9 columns here); ours widened to 2..9.
   - **W11c — Ribbons, second pass. ✅ (2026-08-31)** Prompted by the obvious question after W11b: *did you try every
     knob theirs has, and what about the glow?* Both were gaps. **Knobs:** theirs exposes four and we exposed two; the
     two missing (*Start area* / *End area*) are the pair that takes the bundle from a tight fan to a full-frame weave.
@@ -259,6 +269,14 @@ rectangles.
 - **Depth pass (fold in) —** Shadow / Blend mode / Refraction where cheap; it is a lot of their premium feel.
 
 **Guiding rule: default to restraint.** Sparse, soft, two-tone. Loud is a variant the user opts into, never the default.
+
+**Method rule, learned the hard way in W11c/W11d: drive every one of their knobs to *both* extremes before concluding.**
+Confirming a design's model and stopping is what hid Ribbons' two missing knobs and its glow, and what hid the fact
+that Bauhaus draws exactly one shape. The extremes are also the cheapest probe there is — their *Plain tiles* at
+maximum isolates the vocabulary, their *Resolution* at both ends gives the range, and a knob that changes nothing at
+either end is a knob you have misread. Where a look is in question, **measure pixels** rather than trusting the eye: a
+scanline across their Ribbons showed hard-edged strokes where it looked like a per-line glow, and a brightness grid
+found the lit ground that actually causes it.
 
 ---
 

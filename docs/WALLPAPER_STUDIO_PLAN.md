@@ -306,7 +306,9 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     area* / *End area*) re-cut as **Spread** + **Shape**, which needed `DesignParams`' fifth field **`scale`** (the
     *spacing / gaps* family); plus the **ground glow**, whose mechanism was measured off theirs — hard-edged lines
     over a ground that brightens along the bundle, at ~3× its base. The teardown's verdict table is the running
-    record.
+    record. **W11d — Bauhaus, second pass ✅ (2026-08-31):** their vocabulary is **one quarter disc or nothing** (halves
+    and circles are emergent, not drawn), and their plain-tile fraction is a knob of its own — ours moved it onto
+    `scale` as *Coverage*, freeing `irregularity` to mean the turns.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
