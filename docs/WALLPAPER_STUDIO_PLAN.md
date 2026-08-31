@@ -302,7 +302,11 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     under the Bauhaus name, so the Mondrian became its own design and Bauhaus was rebuilt as their arc lattice —
     catalog **25**. **W11b — Neon Ribbons ✅ (2026-08-31):** rebuilt as one fanning bundle of fine curves, reversing
     W8's decision to skip it — Flow Lines combs the whole frame where this draws a single gesture, so they were never
-    the same look. The teardown's verdict table is the running record.
+    the same look. **W11c — Ribbons, second pass ✅ (2026-08-31):** the two knobs theirs had and we lacked (*Start
+    area* / *End area*) re-cut as **Spread** + **Shape**, which needed `DesignParams`' fifth field **`scale`** (the
+    *spacing / gaps* family); plus the **ground glow**, whose mechanism was measured off theirs — hard-edged lines
+    over a ground that brightens along the bundle, at ~3× its base. The teardown's verdict table is the running
+    record.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

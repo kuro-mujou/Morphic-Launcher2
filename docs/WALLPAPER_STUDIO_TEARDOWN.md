@@ -53,8 +53,10 @@ Read down the table and the same handful of concepts recur under different names
 `DesignParams` should grow into** — a set of optional, defaulted fields, each generator reading the ones it means:
 
 - **Amount / coverage** — *Count, Resolution, Columns, Rows, Iterations, Density, Slices*. The "how many" knob (our
-  `density`, but named per design and often exposed as a raw integer).
-- **Spacing / gaps** — *Spacing, Margin, Offset, Coverage*. How much air between elements.
+  `density`, but named per design and often exposed as a raw integer). **Built (W6–W10).**
+- **Spacing / gaps** — *Spacing, Margin, Offset, Coverage, Size, Radius*. How much air between elements, and how much
+  room each takes. **Built as `scale` (W11c)**, on Ribbons' spread; the designs whose element size is still fixed
+  (Confetti's radius, Dot Grid's square size, Soft Overlaps' radius, Rounded Tiles' margin) are where it pays off next.
 - **Orientation** — *Rotation, Direction, Delta rotation, Rotate delta*. Which way it points / turns.
 - **Organic noise** — *Irregularity, Distortion, Jitter, Randomness, Variation, Offset distortion*. The single most
   common family — the knob that takes a rigid generator to an organic one. **Ours have none of this**, which is part of
@@ -116,7 +118,9 @@ Styling defaults, not algorithms — this is why "some of ours are bad."
 4. **Color mode, not "cycle everything."** Their harmony comes from defaulting to Mono/Bichromatic. Ours always
    Colorful.
 5. **Tuned, sparse defaults + depth.** Every design opens tasteful, and most carry a Shadow/Blend/Refraction depth
-   knob. Ours open at `density = 0.5`, full-palette, flat.
+   knob. Ours open at `density = 0.5` and were flat; the color mode fixed the palette half (W6) and the depth half is
+   being built per design as the quality pass reaches it — Ribbed Glass's lens, Gradient Columns' seam shadow, and
+   Ribbons' ground glow (W11c) are the ones that exist.
 
 Plus: **Bauhaus uses real shapes** (quarter-circles, triangles — "Plain tiles" toggles the decoration); ours draws only
 rectangles.
@@ -230,6 +234,19 @@ rectangles.
     background"). Two things only the render showed: a shape must sit **two** palette stops from its ground, not
     merely a different one, or it is a tone away and has to be hunted for; and square cells cannot divide the height,
     so the overhang is split across both edges rather than left as a sliver row.
+  - **W11c — Ribbons, second pass. ✅ (2026-08-31)** Prompted by the obvious question after W11b: *did you try every
+    knob theirs has, and what about the glow?* Both were gaps. **Knobs:** theirs exposes four and we exposed two; the
+    two missing (*Start area* / *End area*) are the pair that takes the bundle from a tight fan to a full-frame weave.
+    They are re-cut here as **Spread** (how wide) and **Shape** (Fan / Weave — which end is tight), which reaches the
+    same square of possibilities while asking the questions a person actually has. Spread needed a home, so
+    `DesignParams` grew its fifth field, **`scale`** — the *spacing / gaps* family this doc planned from the start,
+    and a count's independent partner (twenty small dots and twenty large ones are different pictures). **Glow:** the
+    W11b note claiming the Vignette filter covers it was wrong — a vignette darkens corners uniformly and knows
+    nothing about where the bundle is. Measuring theirs pixel by pixel settles the mechanism: the **lines are
+    hard-edged** (no falloff at all) and the **ground** brightens along a wide ridge following the curve. Ours now
+    lays progressively wider, barely opaque copies of each path under the crisp ones, calibrated against the
+    reference's own measurements rather than by eye — its ground peaks at **3.1×** its base, the first
+    plausible-looking alphas gave **5.8×** and read as a milky smear, and ours now measures **3.05×**.
   - **W11b — Neon Ribbons. ✅ (2026-08-31)** The second, and it **reverses W8's decision to skip this design**. That
     call rested on Flow Lines already covering the fine-line niche; driving theirs shows the two are different looks —
     Flow Lines combs the *whole frame*, Neon Ribbons draws **one** gesture and leaves the rest empty. Ours was a few
