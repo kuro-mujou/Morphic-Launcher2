@@ -224,6 +224,18 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   is not a prerequisite for shipping filters. A strength **slider** per filter is the obvious next refinement (the
   recipe already stores a `Float`, so no model change); chips commit a fixed default for now.
 - **W5 — the rest of the generators.** Fill out toward the 22, group by group, each with its Style parameters.
+  Sourced by *looking* at gart's own rendered gallery (`D:\Android\gart\README.md` maps each `arts/*` folder to its
+  PNGs), picking the ones that hold up full-bleed on a phone, and re-implementing the algorithm — never the Skija code
+  — in the `PerlinNoise2d` / `colorAt` idiom the first four established. The **catalog is ours to shape**: Smart
+  Launcher's 22 is the seed list, not a spec. Text pieces (`alien`, `lettero`) and busy iso-scenes (`skyscraper`) are
+  out; strong generative fields gart has and Smart Launcher does not (plasma, topography, truchet) are in.
+  - **W5a — mosaic + field batch. ✅ (2026-08-31)** Four generators, device-verified via `GeneratorRenderHarness`:
+    **Voronoi** (nearest-seed mosaic with dark seams — *not* gart's Delaunay-dual polygon Voronoi, which is the fragile
+    geometry Facets already rejected), **Plasma** (summed-sine interference read through a *looped* palette, from
+    `arts/plasma`), **Contour** (a two-octave noise field quantized into inked height bands — the `arts/layers` relief
+    look from the field, not marching-squares polylines), **Waves** (sine-crest dune bands filled back-to-front, from
+    `arts/layers` undula/strata + `arts/hills`). Voronoi/Contour reuse the boundary-detection trick on a scalar field;
+    Plasma's ramp loop is shared with `LinearGradientGenerator.lerpArgb` (now `internal` — its second consumer).
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

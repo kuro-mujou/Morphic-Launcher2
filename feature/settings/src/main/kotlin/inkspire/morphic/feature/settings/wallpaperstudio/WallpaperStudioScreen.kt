@@ -288,6 +288,10 @@ private val WallpaperDesign.label: String
         WallpaperDesign.MESH_GRADIENT -> "Mesh"
         WallpaperDesign.FLOW_FIELD -> "Flow"
         WallpaperDesign.TRIANGULAR_FACETS -> "Facets"
+        WallpaperDesign.VORONOI -> "Mosaic"
+        WallpaperDesign.PLASMA -> "Plasma"
+        WallpaperDesign.CONTOUR -> "Contour"
+        WallpaperDesign.WAVES -> "Waves"
     }
 
 /** A short, human name for the filter chip — the enum name is a code identifier, not a label. */

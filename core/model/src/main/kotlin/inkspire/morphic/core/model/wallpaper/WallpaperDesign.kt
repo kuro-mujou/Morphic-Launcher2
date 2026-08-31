@@ -45,4 +45,33 @@ enum class WallpaperDesign {
      */
     @SerialName("triangularFacets")
     TRIANGULAR_FACETS,
+
+    /**
+     * The frame broken into flat cells around scattered seeds, each edged in the palette's darkest tone — the
+     * stained-glass mosaic. A nearest-seed diagram rather than a polygon Voronoi, so there is no fragile geometry;
+     * the irregular cells are what set it apart from the even triangles of [TRIANGULAR_FACETS].
+     */
+    @SerialName("voronoi")
+    VORONOI,
+
+    /**
+     * Overlapping sine waves summed into a rippling interference field, read through the palette — the demoscene
+     * plasma. A still frame of gart's animated plasma, its phases fixed by the seed.
+     */
+    @SerialName("plasma")
+    PLASMA,
+
+    /**
+     * A noise field read as a contour map — quantized into height bands, each a palette color, inked along every band
+     * boundary. The topographic look, from the field rather than from traced polylines.
+     */
+    @SerialName("contour")
+    CONTOUR,
+
+    /**
+     * Overlapping wave bands rising up the frame, each a flat palette color lapping over the one behind it — the
+     * layered-dune / ridgeline look. Sine crests rather than noise, for a rolling, near-periodic swell.
+     */
+    @SerialName("waves")
+    WAVES,
 }

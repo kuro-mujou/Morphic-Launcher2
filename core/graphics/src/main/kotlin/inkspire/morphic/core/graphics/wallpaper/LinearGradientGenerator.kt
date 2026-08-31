@@ -53,8 +53,13 @@ object LinearGradientGenerator : Generator {
         return lerpArgb(palette.colorAt(lower), palette.colorAt(upper), scaled - lower)
     }
 
-    /** [from] blended [t] of the way to [to], every ARGB channel — alpha included, since a palette stop may be translucent. */
-    private fun lerpArgb(from: Int, to: Int, t: Float): Int {
+    /**
+     * [from] blended [t] of the way to [to], every ARGB channel — alpha included, since a palette stop may be
+     * translucent. Shared with [PlasmaGenerator], which loops the ramp rather than climbing it: interpolating packed
+     * ARGB is the arithmetic that tints a whole wallpaper when a channel is transposed, so both ramps blend through
+     * this one function rather than each risking it.
+     */
+    internal fun lerpArgb(from: Int, to: Int, t: Float): Int {
         val a = lerpChannel(from ushr 24 and 0xFF, to ushr 24 and 0xFF, t)
         val r = lerpChannel(from shr 16 and 0xFF, to shr 16 and 0xFF, t)
         val g = lerpChannel(from shr 8 and 0xFF, to shr 8 and 0xFF, t)

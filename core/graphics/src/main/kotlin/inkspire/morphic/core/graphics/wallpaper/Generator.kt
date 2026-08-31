@@ -49,5 +49,9 @@ object Generators {
         WallpaperDesign.MESH_GRADIENT -> MeshGradientGenerator
         WallpaperDesign.FLOW_FIELD -> FlowFieldGenerator
         WallpaperDesign.TRIANGULAR_FACETS -> TriangularFacetsGenerator
+        WallpaperDesign.VORONOI -> VoronoiGenerator
+        WallpaperDesign.PLASMA -> PlasmaGenerator
+        WallpaperDesign.CONTOUR -> ContourGenerator
+        WallpaperDesign.WAVES -> WavesGenerator
     }
 }
