@@ -340,6 +340,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.CONTOUR -> "Contour"
         WallpaperDesign.WAVES -> "Waves"
         WallpaperDesign.BAUHAUS -> "Bauhaus"
+        WallpaperDesign.MONDRIAN -> "Mondrian"
         WallpaperDesign.CONFETTI -> "Confetti"
         WallpaperDesign.RINGS -> "Rings"
         WallpaperDesign.TRUCHET -> "Truchet"

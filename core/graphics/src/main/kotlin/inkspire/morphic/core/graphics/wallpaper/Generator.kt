@@ -64,6 +64,7 @@ object Generators {
         WallpaperDesign.CONTOUR -> ContourGenerator
         WallpaperDesign.WAVES -> WavesGenerator
         WallpaperDesign.BAUHAUS -> BauhausGenerator
+        WallpaperDesign.MONDRIAN -> MondrianGenerator
         WallpaperDesign.CONFETTI -> ConfettiGenerator
         WallpaperDesign.RINGS -> RingsGenerator
         WallpaperDesign.TRUCHET -> TruchetGenerator

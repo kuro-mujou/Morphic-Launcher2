@@ -76,11 +76,20 @@ enum class WallpaperDesign {
     WAVES,
 
     /**
-     * The frame cut into blocks by recursive splitting, filled from the palette and ruled off in the darkest stop —
-     * the Bauhaus / Mondrian look. Mondrian's three primaries generalized onto whatever palette is chosen.
+     * An even lattice of square tiles, each carrying one flat arc — quarter disc, half disc, whole disc or nothing —
+     * the Bauhaus poster. Shapes are drawn at cell scale, so neighbours facing each other join into larger circles;
+     * [DesignParams.variant] chooses whether each tile keeps its own colored ground or the shapes float on one.
      */
     @SerialName("bauhaus")
     BAUHAUS,
+
+    /**
+     * The frame cut into blocks by recursive splitting, filled from the palette and ruled off in the darkest stop —
+     * the Mondrian. The orthogonal, ruled counterpart to [BAUHAUS]'s arcs; Mondrian's three primaries generalized
+     * onto whatever palette is chosen.
+     */
+    @SerialName("mondrian")
+    MONDRIAN,
 
     /**
      * Evenly-strewn discs in palette colors on a dark ground — confetti. Poisson-disk sampling, so the discs are spaced

@@ -10,7 +10,12 @@ import kotlin.random.Random
 
 /**
  * The frame cut into blocks by recursive splitting and filled from the palette, each ruled off in the darkest stop —
- * the *Bauhaus / Mondrian* look (gart's `arts/rects/mondrian`).
+ * the *Mondrian* look (gart's `arts/rects/mondrian`).
+ *
+ * **The orthogonal, ruled sibling of [BauhausGenerator]'s arc tiles.** Both cut the frame into flat colored pieces;
+ * this one splits it unevenly and draws the ink line between the pieces, where the other lays an even lattice and
+ * curves inside each cell. They are told apart at a glance by the ruling — it is the whole of this look and absent
+ * from that one.
  *
  * **Recursive subdivision, generalized off Mondrian's three primaries onto the palette.** gart's Mondrian hard-codes
  * white/red/blue/yellow; a launcher whose whole point is that the palette carries the color cannot. So the blocks are
@@ -23,7 +28,7 @@ import kotlin.random.Random
  * is a silently-wrong tiling. [DesignParams.density] sets how many passes, so how fine the blocks get. Deterministic in
  * [seed].
  */
-object BauhausGenerator : Generator {
+object MondrianGenerator : Generator {
 
     /** What [DesignParams.density] resolves to for this design — the count, and the *Divisions* slider's own range. */
     private val Amount = AmountKnob.Count("Divisions", 3..7)
