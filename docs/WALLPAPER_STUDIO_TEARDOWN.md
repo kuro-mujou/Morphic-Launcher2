@@ -34,7 +34,7 @@ slider or a segmented variant control below it. **Almost every design exposes si
 | 8 | Mesh Gradient | Columns · Jitter · **Color distribution** · Softness |
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio |
 | 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients |
-| 11 | Neon Ribbons | Count · Variation · Start area · End area |
+| 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
 | 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset |
 | 13 | Vitrall | Density · Spacing · Curves · Slices · **Color distribution** · Randomness |
 | 14 | Flow Field | **Style** · Density · Irregularity · Thickness · Orbs · Orb size |
@@ -110,7 +110,7 @@ Styling defaults, not algorithms — this is why "some of ours are bad."
 1. **Restraint & negative space.** Dark/white grounds, motif as accent, air around it (Confetti, Dot Grid, Neon
    Ribbons, Flow Lines, Topography-contour). Ours fill every pixel with saturated color.
 2. **Thin-line rendering is a first-class family.** Topography (Contour-lines variant), Ribbon Flow, Flow Lines, Neon
-   Ribbons, Polygon Cascade — fine strokes on a ground. **We have no thin-line renderer.** Highest-value visual add.
+   Ribbons, Polygon Cascade — fine strokes on a ground. Built out over W8 and W11b; the family is now ours too.
 3. **Soft edges & smooth gradients.** Flowing Blobs, Mesh, Soft Overlaps, Layered Waves are liquid. Ours favor hard
    flat bands everywhere (Metaballs onion-rings, flat cells).
 4. **Color mode, not "cycle everything."** Their harmony comes from defaulting to Mono/Bichromatic. Ours always
@@ -130,7 +130,7 @@ rectangles.
 | Topography | **Contour** | Biggest gap. Add **Contour-lines variant** (thin lines, their default + community favorite) alongside our filled "Embossed". |
 | Flowing Blobs | **Metaballs** | Ours hard onion rings. Theirs smooth + a Color mode (Mono/Bi) + Shadow. Soften, add color mode. |
 | Confetti Dots | **Confetti** | Re-base on a **distorted grid** (Resolution + Offset distortion), tiny sparse dots, dark ground. Ours' Poisson is over-built and over-bold. |
-| Neon Ribbons | **Ribbons** | Ours thick outlined. Theirs fine bundled lines + glow + Start/End area. Re-do. |
+| Neon Ribbons | **Ribbons** | ✅ **W11b.** Rebuilt as one fanning bundle of fine curves. The W8 decision to skip this was wrong: Flow Lines combs the whole frame, theirs draws *one* gesture — not the same look. |
 | Bauhaus Blocks | **Bauhaus** | ✅ **W11a.** Rebuilt as their arc lattice. What ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name. |
 | Dot Grid | **DotGrid** | Add Corner radius / Square size / Aspect ratio; contain it (negative space). |
 | Triangular Facets | **Facets** | Add Distortion + Tridimensionality (shading); soften color. |
@@ -230,6 +230,15 @@ rectangles.
     background"). Two things only the render showed: a shape must sit **two** palette stops from its ground, not
     merely a different one, or it is a tone away and has to be hunted for; and square cells cannot divide the height,
     so the overhang is split across both edges rather than left as a sliver row.
+  - **W11b — Neon Ribbons. ✅ (2026-08-31)** The second, and it **reverses W8's decision to skip this design**. That
+    call rested on Flow Lines already covering the fine-line niche; driving theirs shows the two are different looks —
+    Flow Lines combs the *whole frame*, Neon Ribbons draws **one** gesture and leaves the rest empty. Ours was a few
+    thick outlined streamlines through the flow field, scattered and clipped, and was the catalog's weakest design.
+    Now: one cubic spine, its lines offset perpendicular by a spread that *grows* along it, so they nest into a fan
+    that converges at one end and opens at the other. `irregularity` is the splay (a ruled sheaf at `0`, a twisted
+    bundle at `1`). Two findings: a splay applied *along* the sweep only re-parameterizes the curve and looks like a
+    dead knob — it has to act across it; and the ramp the bundle is colored along must stop short of the ground, which
+    is the same legibility rule the tile grid needed, now extracted as **`StopContrast`** on its second consumer.
 - **Depth pass (fold in) —** Shadow / Blend mode / Refraction where cheap; it is a lot of their premium feel.
 
 **Guiding rule: default to restraint.** Sparse, soft, two-tone. Loud is a variant the user opts into, never the default.

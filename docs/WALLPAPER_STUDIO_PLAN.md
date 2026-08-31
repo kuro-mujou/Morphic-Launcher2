@@ -300,7 +300,9 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   - **W11 — the design-by-design quality pass. In progress.** The engine and the panel are built, so what is left is
     per design: open theirs, render ours, compare, fix one. **W11a — Bauhaus ✅ (2026-08-31):** ours was a *Mondrian*
     under the Bauhaus name, so the Mondrian became its own design and Bauhaus was rebuilt as their arc lattice —
-    catalog **25**. The teardown's verdict table is the running record.
+    catalog **25**. **W11b — Neon Ribbons ✅ (2026-08-31):** rebuilt as one fanning bundle of fine curves, reversing
+    W8's decision to skip it — Flow Lines combs the whole frame where this draws a single gesture, so they were never
+    the same look. The teardown's verdict table is the running record.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
