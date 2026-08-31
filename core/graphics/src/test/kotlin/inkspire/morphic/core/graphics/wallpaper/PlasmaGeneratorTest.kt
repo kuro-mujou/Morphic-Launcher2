@@ -12,9 +12,9 @@ class PlasmaGeneratorTest {
 
     @Test
     fun `density maps to the frequency range`() {
-        assertEquals(8f, PlasmaGenerator.frequency(0f), 0f)
-        assertEquals(34f, PlasmaGenerator.frequency(1f), 0f)
-        assertEquals(8f, PlasmaGenerator.frequency(-1f), 0f) // clamped
+        assertEquals(6f, PlasmaGenerator.frequency(0f), 0f)
+        assertEquals(26f, PlasmaGenerator.frequency(1f), 0f)
+        assertEquals(6f, PlasmaGenerator.frequency(-1f), 0f) // clamped
     }
 
     @Test

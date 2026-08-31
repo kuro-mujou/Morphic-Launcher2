@@ -26,17 +26,26 @@ class VoronoiGeneratorTest {
     @Test
     fun `the same seed yields the same sites, so a recipe reproduces`() {
         assertEquals(
-            VoronoiGenerator.sites(count = 12, palette = palette, seed = 99L),
-            VoronoiGenerator.sites(count = 12, palette = palette, seed = 99L),
+            VoronoiGenerator.sites(count = 12, irregularity = 0.5f, palette = palette, seed = 99L),
+            VoronoiGenerator.sites(count = 12, irregularity = 0.5f, palette = palette, seed = 99L),
         )
     }
 
     @Test
     fun `a different seed yields different sites`() {
         assertTrue(
-            VoronoiGenerator.sites(12, palette, seed = 1L) !=
-                VoronoiGenerator.sites(12, palette, seed = 2L),
+            VoronoiGenerator.sites(12, 0.5f, palette, seed = 1L) !=
+                VoronoiGenerator.sites(12, 0.5f, palette, seed = 2L),
         )
+    }
+
+    @Test
+    fun `irregularity scatters the cells off their lattice`() {
+        val even = VoronoiGenerator.sites(count = 16, irregularity = 0f, palette = palette, seed = 3L)
+        val loose = VoronoiGenerator.sites(count = 16, irregularity = 1f, palette = palette, seed = 3L)
+
+        // At irregularity 0 the seeds sit on a clean lattice; at 1 they scatter — so the two are not the same cells.
+        assertTrue("irregularity did not move the cells", even.map { it.x to it.y } != loose.map { it.x to it.y })
     }
 
     @Test
@@ -64,7 +73,7 @@ class VoronoiGeneratorTest {
     fun `a cell's color is the gradient near its seed's height`() {
         // With no color jitter a cell would be exactly the gradient at its height; the jitter is bounded, so the
         // cell's red stays within a stop's reach of the un-jittered ramp rather than jumping the palette.
-        val sites = VoronoiGenerator.sites(count = 20, palette = palette, seed = 7L)
+        val sites = VoronoiGenerator.sites(count = 20, irregularity = 0.5f, palette = palette, seed = 7L)
 
         for (site in sites) {
             val here = LinearGradientGenerator.colorAt(site.y, palette) shr 16 and 0xFF

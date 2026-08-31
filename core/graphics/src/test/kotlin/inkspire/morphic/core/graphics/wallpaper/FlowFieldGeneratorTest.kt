@@ -17,6 +17,14 @@ class FlowFieldGeneratorTest {
     }
 
     @Test
+    fun `irregularity scales the angle span, with the default landing on the shipped sweep`() {
+        assertEquals(3.5f, FlowFieldGenerator.angleSpan(0f), 1e-6f)
+        assertEquals(7f, FlowFieldGenerator.angleSpan(0.5f), 1e-6f) // the sweep the design shipped with
+        assertEquals(10.5f, FlowFieldGenerator.angleSpan(1f), 1e-6f)
+        assertEquals(10.5f, FlowFieldGenerator.angleSpan(2f), 1e-6f) // clamped
+    }
+
+    @Test
     fun `a flat field to the right steps straight across at the step length`() {
         // angle 0 is due east: x climbs by the step length, y never moves.
         val line = FlowFieldGenerator.trace(startX = 0.1f, startY = 0.5f, steps = 5, stepLength = 0.2f) { _, _ -> 0f }

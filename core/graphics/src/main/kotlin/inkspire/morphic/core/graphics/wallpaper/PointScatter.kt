@@ -1,0 +1,56 @@
+package inkspire.morphic.core.graphics.wallpaper
+
+import kotlin.math.ceil
+import kotlin.math.sqrt
+import kotlin.random.Random
+
+/**
+ * Scatters `count` points across the unit square on a **jittered lattice** — the shared derivation behind every design
+ * whose organic-noise knob is *how irregularly its points are placed* (Modern Mosaic / Vitrall's cells, Mesh Gradient's
+ * control points).
+ *
+ * **A lattice nudged by irregularity, not a lerp toward uniform-random — because "regular" needs a target to be
+ * regular against.** A set of uniformly-random points cannot be made *more even*; there is no grid to snap back to. So
+ * the points start on a grid and each is pushed off its cell by up to half a cell at `irregularity = 1`. At `0` the
+ * result is a clean lattice (square mosaic cells, an even mesh); at `1` a point can reach its neighbour's edge, which is
+ * the shattered, irregular look. This is also the correction the teardown forces — *Mesh is a grid + jitter*, not the
+ * random control points the first cut used.
+ *
+ * **Two consumers, one placement.** [VoronoiGenerator] and [MeshGradientGenerator] both need exactly this and would
+ * otherwise each re-derive the grid/jitter arithmetic — where an off-by-one in the cell math is silently wrong (points
+ * bunched in a corner, a column missing). Pure `FloatArray` output, tested without a bitmap.
+ */
+object PointScatter {
+
+    /**
+     * [count] points in the unit square, interleaved `x, y`, drawn from [seed]. They sit on a near-square grid, each
+     * nudged off its cell centre by up to half a cell scaled by [irregularity] (`0..1`): `0` is a clean lattice, `1` is
+     * fully scattered. The grid is sized `⌈√count⌉` columns so the cells stay roughly square in the unit square before
+     * the frame stretches them.
+     *
+     * The random stream is consumed two draws per point regardless of [irregularity], so tuning the knob does not
+     * reshuffle *which* points move — only how far — keeping a shuffle stable as the slider slides.
+     */
+    fun gridJitter(count: Int, irregularity: Float, seed: Long): FloatArray {
+        val n = count.coerceAtLeast(1)
+        val cols = ceil(sqrt(n.toDouble())).toInt().coerceAtLeast(1)
+        val rows = ceil(n.toDouble() / cols).toInt().coerceAtLeast(1)
+        val jitter = irregularity.coerceIn(0f, 1f)
+        val random = Random(seed)
+
+        val points = FloatArray(n * 2)
+        var i = 0
+        for (idx in 0 until n) {
+            val c = idx % cols
+            val r = idx / cols
+            val cx = (c + 0.5f) / cols
+            val cy = (r + 0.5f) / rows
+            // Half a cell of travel at full irregularity, so a point can just reach its neighbour's edge but not cross it.
+            val jx = (random.nextFloat() * 2f - 1f) * jitter * 0.5f / cols
+            val jy = (random.nextFloat() * 2f - 1f) * jitter * 0.5f / rows
+            points[i++] = (cx + jx).coerceIn(0f, 1f)
+            points[i++] = (cy + jy).coerceIn(0f, 1f)
+        }
+        return points
+    }
+}

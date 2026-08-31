@@ -22,7 +22,9 @@ import kotlin.random.Random
  *
  * **Each facet is one flat color: the palette gradient at the facet's height, jittered a shade per triangle** — which
  * is what makes a smooth gradient read as *faceted* rather than as a blur. Both the point jitter and the shade jitter
- * are seeded, so the recipe reproduces. [DesignParams.density] sets how fine the grid is.
+ * are seeded, so the recipe reproduces. [DesignParams.density] sets how fine the grid is, and
+ * [DesignParams.irregularity] how far each point wanders off its lattice cell — `0` is near-regular triangles, `1` a
+ * shattered field (Smart Launcher's *Distortion*).
  *
  * The point grid and the triangle list are pure and tested; only the fill needs a canvas.
  */
@@ -31,7 +33,7 @@ object TriangularFacetsGenerator : Generator {
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val cols = gridColumns(params.density)
         val rows = (cols * height) / width.coerceAtLeast(1) // keep facets roughly equilateral for the frame's shape
-        val points = grid(cols, rows.coerceAtLeast(1), Jitter, seed)
+        val points = grid(cols, rows.coerceAtLeast(1), jitter(params.irregularity), seed)
         val triangles = triangles(cols, rows.coerceAtLeast(1))
 
         val bitmap = createBitmap(width, height)
@@ -67,6 +69,13 @@ object TriangularFacetsGenerator : Generator {
     /** How many columns of facets [density] asks for — [MinColumns] when sparse up to [MaxColumns] when dense. */
     internal fun gridColumns(density: Float): Int =
         MinColumns + (density.coerceIn(0f, 1f) * (MaxColumns - MinColumns)).roundToInt()
+
+    /**
+     * How far a point may wander off its cell, as a fraction of the cell, for a given [irregularity] — `0` a rigid
+     * grid, `1` the tangling limit. Scaled so the default `0.5` lands on [MaxJitter]`/2`, the value the design shipped
+     * with, so an untouched Facets renders exactly as it did before the knob existed.
+     */
+    internal fun jitter(irregularity: Float): Float = irregularity.coerceIn(0f, 1f) * MaxJitter
 
     /**
      * A `([cols]+1) × ([rows]+1)` grid of points in the unit square, each interior point nudged up to [jitter] of a
@@ -143,10 +152,10 @@ object TriangularFacetsGenerator : Generator {
     private const val IndicesPerTriangle = 3
 
     /**
-     * How far a point may wander off its lattice cell, as a fraction of the cell — enough to break the grid, not so
-     * far it tangles.
+     * The most a point may wander off its lattice cell, at full irregularity — enough to shatter the grid without
+     * tangling. The default irregularity (`0.5`) uses half of this, `0.55`, the value the design shipped with.
      */
-    private const val Jitter = 0.55f
+    private const val MaxJitter = 1.1f
 
     /** How far a facet's shade may sit from the gradient, `±` — small, so the field reads as one ramp made of facets. */
     private const val ShadeJitter = 0.12f

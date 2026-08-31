@@ -60,8 +60,9 @@ object RaysGenerator : Generator {
         return (normalized * rays).toInt().coerceIn(0, rays - 1)
     }
 
-    private const val MinRays = 6
-    private const val MaxRays = 24
+    // Softened toward broad fans: the default density now opens on a few wide wedges rather than a fine starburst (W7).
+    private const val MinRays = 4
+    private const val MaxRays = 16
 
     /** How far off the frame's center the fan's origin is kept, so the rays sweep asymmetrically across it. */
     private const val CenterInset = 0.2f

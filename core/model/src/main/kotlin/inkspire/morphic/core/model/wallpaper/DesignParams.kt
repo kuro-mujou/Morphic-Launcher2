@@ -24,8 +24,21 @@ import kotlinx.serialization.Serializable
  * [WallpaperColorMode.BICHROMATIC] rather than the loudest: the default look is calm, and "use the whole palette" is a
  * deliberate opt-in. It is a new, defaulted field, so a recipe from before it existed still reads back.
  *
+ * **[irregularity] is the organic-noise knob — the family Smart Launcher exposes on almost every design (as
+ * *Irregularity / Distortion / Jitter / Randomness / Variation*) and the one ours were missing.** It is the single knob
+ * that takes a rigid generator to an organic one: a facet field's point jitter, a mosaic's cell scatter, a wave's
+ * jaggedness, a flow's turbulence. Unlike [colorMode] there is no one place to apply it — "organic" means something
+ * geometrically different per design — so each generator reads it and maps it onto its own noise. Two rules keep that
+ * honest: a generator with no organic axis (a plain gradient, concentric rings) ignores it exactly as a density-less
+ * one ignores [density]; and `0` always means *rigid* — a clean lattice, a straight crest — with disturbance climbing
+ * from there, so the knob reads the same direction everywhere. A design that shipped with fixed jitter is scaled so its
+ * default `0.5` reproduces that shipped look; a design that shipped rigid takes `0.5` as a tasteful organic default.
+ *
  * @property density how much of the design there is, `0..1` — sparse to dense. A generator with no notion of density
  *   ignores it.
+ * @property irregularity how much organic noise disturbs the design, `0..1` — `0` is rigid and geometric (a clean
+ *   lattice, a straight crest, a perfect circle), `1` is chaotic. A generator with no organic axis ignores it, and one
+ *   that reads it maps `0.5` to its shipped look. See the class note.
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
  *   generator with a single look ignores it, and one with several clamps an out-of-range index to what it has.
  * @property colorMode how much of the palette to paint with — see [WallpaperColorMode]. Applied to the palette, not
@@ -34,6 +47,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class DesignParams(
     val density: Float = 0.5f,
+    val irregularity: Float = 0.5f,
     val variant: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )

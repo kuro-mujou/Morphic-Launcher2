@@ -24,8 +24,9 @@ import kotlin.random.Random
  *
  * **The wave is sines, not noise — a deliberate difference from [FlowFieldGenerator] and [ContourGenerator].** Those
  * want the organic wander of Perlin; a dune wants a *rolling*, near-periodic crest, which a sum of two or three sines
- * gives directly and controllably. [DesignParams.density] sets how many bands stack up. Deterministic in [seed]: every
- * layer's amplitudes and phases are drawn from it.
+ * gives directly and controllably. [DesignParams.density] sets how many bands stack up, and
+ * [DesignParams.irregularity] how tall the crests swell — from near-flat strata at `0` to steep, jagged dunes at `1`
+ * (Smart Launcher's *Distortion*). Deterministic in [seed]: every layer's amplitudes and phases are drawn from it.
  *
  * [crestY] is pure and tested — the wave height is the arithmetic that decides whether a band even appears on screen
  * (a crest off the top or bottom of the frame is an invisible or full band), and it needs no canvas to check.
@@ -36,7 +37,7 @@ object WavesGenerator : Generator {
         val layers = layerCount(params.density)
         val random = Random(seed)
         // Each layer's wave: three (amplitude, frequency, phase) sine terms, and the baseline it rises from.
-        val waves = List(layers) { Wave.random(random) }
+        val waves = List(layers) { Wave.random(random, amplitudeScale(params.irregularity)) }
 
         val bitmap = createBitmap(width, height)
         val canvas = Canvas(bitmap)
@@ -55,6 +56,13 @@ object WavesGenerator : Generator {
     /** How many bands [density] asks for — [MinLayers] bold ridges up to [MaxLayers] a finely stratified frame. */
     internal fun layerCount(density: Float): Int =
         MinLayers + (density.coerceIn(0f, 1f) * (MaxLayers - MinLayers)).roundToInt()
+
+    /**
+     * How much to scale a crest's amplitude for a given [irregularity] — `0` flattens the dunes toward strata, `1`
+     * steepens them. Scaled so the default `0.5` returns `1.0`, leaving the shipped swell untouched.
+     */
+    internal fun amplitudeScale(irregularity: Float): Float =
+        MinAmplitudeScale + irregularity.coerceIn(0f, 1f) * (MaxAmplitudeScale - MinAmplitudeScale)
 
     /**
      * The crest height of [wave] at horizontal position [nx] (`0..1`), returned as a fraction of the frame where `0`
@@ -90,13 +98,13 @@ object WavesGenerator : Generator {
     /** A layer's crest, summed from [Terms] sine terms. */
     internal data class Wave(val terms: List<Term>) {
         companion object {
-            fun random(random: Random): Wave {
+            fun random(random: Random, amplitudeScale: Float = 1f): Wave {
                 val twoPi = (2.0 * PI).toFloat()
                 return Wave(
                     List(Terms) {
                         Term(
                             // Amplitudes shrink per term so the first sine is the swell and the rest are ripples on it.
-                            amplitude = (MaxAmplitude / (it + 1)) * (0.5f + random.nextFloat() * 0.5f),
+                            amplitude = (MaxAmplitude / (it + 1)) * (0.5f + random.nextFloat() * 0.5f) * amplitudeScale,
                             frequency = MinCycles + random.nextFloat() * (MaxCycles - MinCycles),
                             phase = random.nextFloat() * twoPi,
                         )
@@ -114,6 +122,10 @@ object WavesGenerator : Generator {
 
     /** The tallest a term's crest may rise or fall, as a fraction of the frame — the first term's swell. */
     private const val MaxAmplitude = 0.06f
+
+    /** The crest amplitude scale at the irregularity extremes — `0.5` lands between them at `1.0`, the shipped swell. */
+    private const val MinAmplitudeScale = 0.4f
+    private const val MaxAmplitudeScale = 1.6f
 
     /** How many cycles a term spans across the frame — a wide roll up to a few dunes. */
     private const val MinCycles = 1.2f

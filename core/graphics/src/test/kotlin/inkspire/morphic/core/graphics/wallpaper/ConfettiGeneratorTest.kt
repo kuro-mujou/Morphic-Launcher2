@@ -46,4 +46,21 @@ class ConfettiGeneratorTest {
             }
         }
     }
+
+    @Test
+    fun `zero irregularity leaves the even spread untouched`() {
+        val samples = ConfettiGenerator.samples(count = 60, seed = 3L)
+        assertEquals(samples, ConfettiGenerator.distort(samples, irregularity = 0f, seed = 3L))
+    }
+
+    @Test
+    fun `irregularity nudges the discs but keeps them in the unit square`() {
+        val samples = ConfettiGenerator.samples(count = 60, seed = 3L)
+        val distorted = ConfettiGenerator.distort(samples, irregularity = 1f, seed = 3L)
+
+        assertTrue("distortion moved nothing", samples.map { it.x to it.y } != distorted.map { it.x to it.y })
+        assertTrue("a disc left the frame", distorted.all { it.x in 0f..1f && it.y in 0f..1f })
+        // Radii are unchanged — only positions move.
+        assertEquals(samples.map { it.radius }, distorted.map { it.radius })
+    }
 }

@@ -24,7 +24,8 @@ import kotlin.random.Random
  *
  * **Each ribbon is outlined then filled**: a wider dark stroke laid first, the color stroke over it, so abutting or
  * crossing ribbons stay separate rather than merging into a blob. Colors cycle the palette's lighter stops over its
- * darkest as the ground. [DesignParams.density] sets how many ribbons. Deterministic in [seed].
+ * darkest as the ground. [DesignParams.density] sets how many ribbons, and [DesignParams.irregularity] how much the
+ * shared field curls them — long sweeping ribbons at `0`, coiling ones at `1`. Deterministic in [seed].
  */
 object RibbonsGenerator : Generator {
 
@@ -35,7 +36,8 @@ object RibbonsGenerator : Generator {
         val ribbonColors = if (palette.size > 1) palette.colors.dropLast(1) else palette.colors
 
         val noise = PerlinNoise2d(seed)
-        val angleAt = { nx: Float, ny: Float -> noise.at(nx * Frequency, ny * Frequency) * AngleSpan }
+        val span = BaseAngleSpan * (0.5f + params.irregularity.coerceIn(0f, 1f)) // 0.5 → the shipped sweep
+        val angleAt = { nx: Float, ny: Float -> noise.at(nx * Frequency, ny * Frequency) * span }
         val shortSide = min(width, height)
         val random = Random(seed)
 
@@ -94,8 +96,8 @@ object RibbonsGenerator : Generator {
     /** How many noise cycles span the frame — broader than Flow's, so a ribbon sweeps rather than swirls tightly. */
     private const val Frequency = 1.8f
 
-    /** The angle range the field sweeps, in radians. */
-    private const val AngleSpan = 6f
+    /** The angle range the field sweeps at the default irregularity, in radians. */
+    private const val BaseAngleSpan = 6f
 
     /** Ribbon thickness and its dark outline, each a fraction of the short side. */
     private const val RibbonFraction = 0.05f

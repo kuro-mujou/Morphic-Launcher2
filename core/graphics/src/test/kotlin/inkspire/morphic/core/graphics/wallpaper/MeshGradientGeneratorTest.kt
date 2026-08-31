@@ -25,24 +25,34 @@ class MeshGradientGeneratorTest {
     @Test
     fun `the same seed yields the same points, so a recipe reproduces`() {
         assertEquals(
-            MeshGradientGenerator.points(count = 6, palette = palette, seed = 99L),
-            MeshGradientGenerator.points(count = 6, palette = palette, seed = 99L),
+            MeshGradientGenerator.points(count = 6, irregularity = 0.5f, palette = palette, seed = 99L),
+            MeshGradientGenerator.points(count = 6, irregularity = 0.5f, palette = palette, seed = 99L),
         )
     }
 
     @Test
     fun `a different seed yields different points`() {
         assertTrue(
-            MeshGradientGenerator.points(6, palette, seed = 1L) !=
-                MeshGradientGenerator.points(6, palette, seed = 2L),
+            MeshGradientGenerator.points(6, 0.5f, palette, seed = 1L) !=
+                MeshGradientGenerator.points(6, 0.5f, palette, seed = 2L),
         )
     }
 
     @Test
     fun `points cycle through the palette, so every stop appears`() {
-        val colors = MeshGradientGenerator.points(count = 6, palette = palette, seed = 0L).map { it.argb }.toSet()
+        val colors = MeshGradientGenerator.points(count = 6, irregularity = 0.5f, palette = palette, seed = 0L)
+            .map { it.argb }.toSet()
 
         assertEquals(palette.colors.toSet(), colors)
+    }
+
+    @Test
+    fun `at zero irregularity the points sit on a clean lattice, unmoved by the seed`() {
+        // Grid placement with no jitter ignores the random stream, so any two seeds land the same lattice.
+        assertEquals(
+            MeshGradientGenerator.points(9, 0f, palette, seed = 1L).map { it.x to it.y },
+            MeshGradientGenerator.points(9, 0f, palette, seed = 2L).map { it.x to it.y },
+        )
     }
 
     @Test

@@ -5,7 +5,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.roundToInt
-import kotlin.random.Random
 
 /**
  * A soft field of color where a handful of seeded points each pull the picture toward their palette color — the
@@ -16,9 +15,11 @@ import kotlin.random.Random
  * color dominates and between points they melt together. That is `O(pixels × points)` with a handful of points, and
  * it is smooth everywhere by construction — no seams to hide.
  *
- * **Deterministic in [seed]:** the point positions and which palette color each takes are drawn from a seeded
- * `Random`, so the same recipe is the same field every time and a shuffle is a new seed. [DesignParams.density] sets
- * how many points there are — more points, a busier field.
+ * **Grid + jitter, not free scatter — the placement is [PointScatter].** The control points sit on a lattice that
+ * [DesignParams.irregularity] loosens: even and quilt-like when regular, lava-lamp when scattered. (This is the
+ * teardown's correction — Smart Launcher's Mesh is a grid with a Jitter knob, not the uniformly-random points the first
+ * cut placed.) [DesignParams.density] sets how many points there are — more points, a busier field. Deterministic in
+ * [seed], so the same recipe is the same field every time and a shuffle is a new seed.
  *
  * The blend is [colorAt], pulled out and tested: weighting colors by distance is `IntArray` arithmetic that is
  * silently wrong when a channel is transposed or the alpha is not premultiplied, and it needs no bitmap to check.
@@ -29,7 +30,7 @@ object MeshGradientGenerator : Generator {
     internal data class Point(val x: Float, val y: Float, val argb: Int)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val points = points(pointCount(params.density), palette, seed)
+        val points = points(pointCount(params.density), params.irregularity, palette, seed)
         val bitmap = createBitmap(width, height)
         val row = IntArray(width)
         for (y in 0 until height) {
@@ -48,13 +49,14 @@ object MeshGradientGenerator : Generator {
         (MinPoints + (density.coerceIn(0f, 1f) * (MaxPoints - MinPoints)).roundToInt())
 
     /**
-     * [count] control points for [seed] — positions drawn uniformly in the unit square, colors **cycled** through the
-     * palette so every stop is represented and the same color does not clump by chance.
+     * [count] control points for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when
+     * even, a scatter when irregular), colors **cycled** through the palette so every stop is represented and the same
+     * color does not clump by chance.
      */
-    internal fun points(count: Int, palette: Palette, seed: Long): List<Point> {
-        val random = Random(seed)
+    internal fun points(count: Int, irregularity: Float, palette: Palette, seed: Long): List<Point> {
+        val positions = PointScatter.gridJitter(count, irregularity, seed)
         return List(count) { i ->
-            Point(x = random.nextFloat(), y = random.nextFloat(), argb = palette.colorAt(i % palette.size))
+            Point(x = positions[i * 2], y = positions[i * 2 + 1], argb = palette.colorAt(i % palette.size))
         }
     }
 

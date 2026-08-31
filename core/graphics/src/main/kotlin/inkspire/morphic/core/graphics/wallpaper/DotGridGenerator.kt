@@ -8,6 +8,7 @@ import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 /**
  * A regular grid of dots whose size and color are driven by a noise field — the halftone *Dot Grid* (gart's
@@ -20,7 +21,8 @@ import kotlin.math.roundToInt
  * off the palette ramp, so size and hue move together.
  *
  * **Dots on the lightest stop as paper** — the classic newsprint read. [DesignParams.density] sets the grid
- * resolution. Deterministic in [seed] (the field is).
+ * resolution, and [DesignParams.irregularity] loosens the lattice — a crisp halftone screen at `0`, dots wandering off
+ * their cells at `1` (Smart Launcher's *Irregularity*). Deterministic in [seed] (the field and the position jitter are).
  *
  * [radiusAt] is pure and tested — a dot's radius as a function of the field is the arithmetic that decides whether the
  * screen fades to paper or floods solid, and it needs no canvas.
@@ -32,6 +34,8 @@ object DotGridGenerator : Generator {
         val cellPx = width.toFloat() / cols
         val rows = (height / cellPx).roundToInt().coerceAtLeast(1)
         val noise = PerlinNoise2d(seed)
+        val jitter = params.irregularity.coerceIn(0f, 1f) * MaxJitter
+        val random = Random(seed xor JitterSalt)
 
         val bitmap = createBitmap(width, height)
         val canvas = Canvas(bitmap)
@@ -41,8 +45,9 @@ object DotGridGenerator : Generator {
 
         for (r in 0 until rows) {
             for (c in 0 until cols) {
-                val nx = (c + 0.5f) / cols
-                val ny = (r + 0.5f) / rows
+                // Each dot nudged off its cell centre by up to half a cell at full irregularity — a loosened screen.
+                val nx = ((c + 0.5f) / cols + (random.nextFloat() * 2f - 1f) * jitter / cols).coerceIn(0f, 1f)
+                val ny = ((r + 0.5f) / rows + (random.nextFloat() * 2f - 1f) * jitter / rows).coerceIn(0f, 1f)
                 val field = fieldAt(nx, ny, noise) // 0..1
                 val radius = radiusAt(field) * maxRadius
                 if (radius <= 0f) continue
@@ -83,4 +88,10 @@ object DotGridGenerator : Generator {
 
     /** How many noise cycles span the frame — the size of the clusters of large dots. */
     private const val Frequency = 3f
+
+    /** Half a cell of travel at full irregularity, so a loosened dot reaches its neighbour's cell but the screen holds. */
+    private const val MaxJitter = 0.5f
+
+    /** Keeps the position-jitter stream independent of the noise field, so irregularity moves dots without resizing them. */
+    private const val JitterSalt = 0x27D4EB2FL
 }

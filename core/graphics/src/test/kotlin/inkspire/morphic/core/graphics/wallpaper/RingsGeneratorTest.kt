@@ -12,9 +12,9 @@ class RingsGeneratorTest {
 
     @Test
     fun `density maps to the ring count range`() {
-        assertEquals(6, RingsGenerator.ringCount(0f))
-        assertEquals(26, RingsGenerator.ringCount(1f))
-        assertEquals(6, RingsGenerator.ringCount(-1f)) // clamped
+        assertEquals(4, RingsGenerator.ringCount(0f))
+        assertEquals(18, RingsGenerator.ringCount(1f))
+        assertEquals(4, RingsGenerator.ringCount(-1f)) // clamped
     }
 
     @Test

@@ -75,6 +75,31 @@ class GeneratorRenderHarness {
         }
     }
 
+    /**
+     * Every design at the two ends of the *irregularity* knob (W7), in bichromatic — so the rigid `0` (a clean lattice,
+     * straight crests, concentric rings) and the chaotic `1` can be judged against the default the other test renders.
+     * A design that ignores irregularity renders the same at both ends, which is itself the thing to confirm.
+     */
+    @Test
+    fun renderIrregularitySweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+
+        for (irregularity in floatArrayOf(0f, 1f)) {
+            for (design in WallpaperDesign.entries) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(irregularity = irregularity, colorMode = WallpaperColorMode.BICHROMATIC),
+                    seed = 42L,
+                )
+                save(resolver, "irr_${(irregularity * 100).toInt()}_${design.name}.png", bitmap)
+                bitmap.recycle()
+            }
+        }
+    }
+
     private fun save(resolver: android.content.ContentResolver, name: String, bitmap: Bitmap) {
         // A plain insert. Overwriting an earlier render is *not attempted* — the class KDoc explains why it cannot work
         // here (null-owner files this instrumentation may not delete); the folder is cleared with `adb shell rm`

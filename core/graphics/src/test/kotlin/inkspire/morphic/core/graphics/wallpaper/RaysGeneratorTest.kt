@@ -12,9 +12,9 @@ class RaysGeneratorTest {
 
     @Test
     fun `density maps to the ray count range`() {
-        assertEquals(6, RaysGenerator.rayCount(0f))
-        assertEquals(24, RaysGenerator.rayCount(1f))
-        assertEquals(6, RaysGenerator.rayCount(-1f)) // clamped
+        assertEquals(4, RaysGenerator.rayCount(0f))
+        assertEquals(16, RaysGenerator.rayCount(1f))
+        assertEquals(4, RaysGenerator.rayCount(-1f)) // clamped
     }
 
     @Test

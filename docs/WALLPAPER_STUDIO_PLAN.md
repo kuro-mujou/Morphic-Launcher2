@@ -273,6 +273,13 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   **W6 (grow `DesignParams` + a `WallpaperColorMode`), W7 (styling pass + the organic-noise knob), W8 (thin-line family),
   W9 (the calm staples we lack), W10 (the Style-panel UI)** — see the teardown's revised plan. The per-generator morphs
   stay deferred.
+  - **W6 — the color-mode system. ✅ (2026-08-31)** `WallpaperColorMode` (Mono/Bi/Colorful) on `DesignParams`, applied by
+    reducing the palette before each generator, default Bichromatic. See the teardown doc.
+  - **W7 — the styling pass. ✅ (2026-08-31)** An `irregularity: Float` on `DesignParams` (default `0.5`, restrained),
+    read by the nine generators with an organic-noise axis — each mapping it onto its own jitter/warp and scaled so
+    `0.5` reproduces the shipped render, `0` is rigid, `1` chaotic. Voronoi and Mesh became grid+jitter via a shared
+    `PointScatter`; the loud field designs (Plasma/Rings/Rays) were softened toward broader swells. Engine-only until
+    W10 surfaces it. Device-verified via the harness (now with an irregularity sweep). Full record in the teardown doc.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

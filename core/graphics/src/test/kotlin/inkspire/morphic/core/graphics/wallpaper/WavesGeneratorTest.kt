@@ -18,6 +18,14 @@ class WavesGeneratorTest {
     }
 
     @Test
+    fun `irregularity scales the amplitude, with the default landing on the shipped swell`() {
+        assertEquals(0.4f, WavesGenerator.amplitudeScale(0f), 1e-6f)
+        assertEquals(1f, WavesGenerator.amplitudeScale(0.5f), 1e-6f) // the swell the design shipped with
+        assertEquals(1.6f, WavesGenerator.amplitudeScale(1f), 1e-6f)
+        assertEquals(1.6f, WavesGenerator.amplitudeScale(2f), 1e-6f) // clamped
+    }
+
+    @Test
     fun `a flat wave sits exactly on its baseline`() {
         val flat = WavesGenerator.Wave(
             listOf(WavesGenerator.Term(amplitude = 0f, frequency = 3f, phase = 0f)),

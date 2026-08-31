@@ -17,9 +17,10 @@ import kotlin.math.roundToInt
  * field instead of a nearest-seed one — no geometry to get wrong.
  *
  * **Two octaves of noise, so the map has both broad landmasses and finer coastline.** One octave is a smooth blob;
- * adding a half-scale, half-weight octave gives the ridged detail that reads as terrain. [DesignParams.density] sets
- * how many bands there are — a few bold elevations or a densely-lined survey map. Deterministic in [seed] (the noise
- * is).
+ * adding a half-scale octave gives the ridged detail that reads as terrain, and [DesignParams.irregularity] sets *how
+ * much* of that octave is mixed in — broad smooth elevations at `0`, a crinkled ridged survey at `1` (Smart Launcher's
+ * *Variation*). [DesignParams.density] sets how many bands there are — a few bold elevations or a densely-lined survey
+ * map. Deterministic in [seed] (the noise is).
  *
  * [bandCount] and [band] are pure and tested: which band a height falls in is the off-by-one that either doubles a
  * contour or drops one, and it needs no bitmap to check.
@@ -29,6 +30,7 @@ object ContourGenerator : Generator {
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val noise = PerlinNoise2d(seed)
         val bands = bandCount(params.density)
+        val detailWeight = params.irregularity.coerceIn(0f, 1f) // 0.5 → the shipped half-weight detail octave
         val line = palette.colorAt(palette.size - 1) // darkest stop by convention — the inked contour
 
         // The band each pixel's height falls in, one pass, so the next can find a boundary by comparing neighbours.
@@ -37,7 +39,7 @@ object ContourGenerator : Generator {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                bandOf[y * width + x] = band(heightAt(nx, ny, noise), bands)
+                bandOf[y * width + x] = band(heightAt(nx, ny, noise, detailWeight), bands)
             }
         }
 
@@ -71,14 +73,17 @@ object ContourGenerator : Generator {
         (height.coerceIn(0f, 1f) * bands).toInt().coerceIn(0, bands - 1)
 
     /**
-     * The terrain height at ([nx], [ny]) in `0..1` — two octaves of noise (broad + half-scale detail) mapped from the
-     * noise's `-1..1` into `0..1`.
+     * The terrain height at ([nx], [ny]) in `0..1` — a broad octave plus a half-scale detail octave weighted by
+     * [detailWeight], mapped from the noise's `-1..1` into `0..1`. The combined field spans `±(1 + detailWeight)`, so it
+     * is normalized by that half-range, keeping the result in `0..1` for any weight rather than only the shipped `0.5`.
      */
-    private fun heightAt(nx: Float, ny: Float, noise: PerlinNoise2d): Float {
+    private fun heightAt(nx: Float, ny: Float, noise: PerlinNoise2d, detailWeight: Float): Float {
         val broad = noise.at(nx * BroadFrequency, ny * BroadFrequency)
-        val detail = noise.at(nx * BroadFrequency * 2f, ny * BroadFrequency * 2f)
-        val combined = broad + detail * 0.5f // in roughly -1.5..1.5
-        return ((combined / 3f) + 0.5f).coerceIn(0f, 1f)
+        val detail = noise.at(nx * BroadFrequency * DetailOctave, ny * BroadFrequency * DetailOctave)
+        val combined = broad + detail * detailWeight
+        val halfRange = 1f + detailWeight
+        val normalized = combined / halfRange * 0.5f + 0.5f
+        return normalized.coerceIn(0f, 1f)
     }
 
     /** Whether the pixel at ([x], [y]) sits on a band boundary — its band differs from a four-neighbour's. */
@@ -96,4 +101,7 @@ object ContourGenerator : Generator {
 
     /** How many noise cycles span the frame at the broad octave — the size of the landmasses. */
     private const val BroadFrequency = 3f
+
+    /** The detail octave's frequency relative to the broad one — half-scale, so twice the cycles. */
+    private const val DetailOctave = 2f
 }

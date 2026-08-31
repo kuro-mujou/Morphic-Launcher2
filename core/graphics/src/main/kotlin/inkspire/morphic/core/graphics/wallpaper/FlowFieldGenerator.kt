@@ -23,7 +23,9 @@ import kotlin.random.Random
  * deterministic in [seed] (the field *and* the particle starts are seeded) and cheap.
  *
  * **The strokes are the lighter palette colors on the darkest as a ground**, so the streaks read against their
- * background. [DesignParams.density] sets how many particles there are — sparse streaks or a dense weave.
+ * background. [DesignParams.density] sets how many particles there are — sparse streaks or a dense weave — and
+ * [DesignParams.irregularity] how hard the field curls: a near-parallel drift at `0`, tight swirls at `1` (Smart
+ * Launcher's *Irregularity*).
  *
  * **[trace] is pure and takes the field as a function**, so the stepping — the part that is silently wrong when a
  * sign is flipped or the bounds check runs a step late — is tested against a known field with no noise and no bitmap
@@ -40,9 +42,10 @@ object FlowFieldGenerator : Generator {
         val strokeColors = if (palette.size > 1) palette.colors.dropLast(1) else palette.colors
 
         val noise = PerlinNoise2d(seed)
-        // Position in the unit square scaled to the noise's feature size, mapped to an angle with a few turns of range
-        // so the field curls rather than merely leaning one way.
-        val angleAt = { nx: Float, ny: Float -> noise.at(nx * Frequency, ny * Frequency) * AngleSpan }
+        // Position in the unit square scaled to the noise's feature size, mapped to an angle whose range irregularity
+        // sets — a few turns so the field curls rather than merely leaning one way.
+        val span = angleSpan(params.irregularity)
+        val angleAt = { nx: Float, ny: Float -> noise.at(nx * Frequency, ny * Frequency) * span }
 
         val shortSide = min(width, height)
         val random = Random(seed)
@@ -66,6 +69,14 @@ object FlowFieldGenerator : Generator {
     /** How many particles [density] asks for — [MinParticles] when sparse up to [MaxParticles] when dense. */
     internal fun particleCount(density: Float): Int =
         MinParticles + (density.coerceIn(0f, 1f) * (MaxParticles - MinParticles)).roundToInt()
+
+    /**
+     * The angle range the field sweeps, in radians, for a given [irregularity] — a gentle drift when low, a tight curl
+     * when high. [BaseAngleSpan] scaled over [MinSpanScale]..[MaxSpanScale], so the default `0.5` lands on `1.0×` — the
+     * sweep the design shipped with.
+     */
+    internal fun angleSpan(irregularity: Float): Float =
+        BaseAngleSpan * (MinSpanScale + irregularity.coerceIn(0f, 1f) * (MaxSpanScale - MinSpanScale))
 
     /**
      * A streamline through [angleAt], from ([startX], [startY]) in the unit square — up to [steps] points, each a
@@ -122,8 +133,12 @@ object FlowFieldGenerator : Generator {
     /** How many noise cycles span the frame — the size of the swirls. */
     private const val Frequency = 2.5f
 
-    /** The angle range the field sweeps, in radians — a few turns, so it curls rather than leaning one way. */
-    private const val AngleSpan = 7f
+    /** The angle range the field sweeps at the default irregularity, in radians — a few turns, so it curls not leans. */
+    private const val BaseAngleSpan = 7f
+
+    /** The angle-span scale at the irregularity extremes — `0.5` lands between them at `1.0`, the shipped sweep. */
+    private const val MinSpanScale = 0.5f
+    private const val MaxSpanScale = 1.5f
 
     /** Stroke width as a fraction of the short side: a floor plus a seeded spread, so the streaks vary in weight. */
     private const val MinStrokeFraction = 0.002f

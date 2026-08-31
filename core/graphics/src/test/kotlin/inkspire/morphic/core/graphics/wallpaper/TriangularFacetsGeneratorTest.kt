@@ -18,6 +18,14 @@ class TriangularFacetsGeneratorTest {
     }
 
     @Test
+    fun `irregularity maps to the jitter range, with the default landing on the shipped value`() {
+        assertEquals(0f, TriangularFacetsGenerator.jitter(0f), 0f)
+        assertEquals(0.55f, TriangularFacetsGenerator.jitter(0.5f), 1e-6f) // the value the design shipped with
+        assertEquals(1.1f, TriangularFacetsGenerator.jitter(1f), 1e-6f)
+        assertEquals(1.1f, TriangularFacetsGenerator.jitter(2f), 1e-6f) // clamped
+    }
+
+    @Test
     fun `the grid has a point per lattice node`() {
         val grid = TriangularFacetsGenerator.grid(cols = 4, rows = 3, jitter = 0.5f, seed = 1L)
         assertEquals((4 + 1) * (3 + 1) * 2, grid.size)

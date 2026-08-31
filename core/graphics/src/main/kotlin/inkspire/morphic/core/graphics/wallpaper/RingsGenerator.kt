@@ -61,8 +61,9 @@ object RingsGenerator : Generator {
         return distance - distance.toInt()
     }
 
-    private const val MinRings = 6
-    private const val MaxRings = 26
+    // Softened toward broad haloes: the default density now opens on a few calm rings rather than a tight ripple (W7).
+    private const val MinRings = 4
+    private const val MaxRings = 18
 
     /** How far off the edge the center is kept, so the rings sweep across the frame rather than sitting in a corner. */
     private const val CenterInset = 0.15f

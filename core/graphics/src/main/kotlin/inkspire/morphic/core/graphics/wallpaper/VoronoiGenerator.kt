@@ -23,8 +23,10 @@ import kotlin.random.Random
  *
  * **Each cell is the palette gradient at its seed's height, jittered a shade** (via [LinearGradientGenerator.colorAt],
  * so a mosaic and a plain gradient of the same palette agree about the ramp — the shared derivation Facets keeps too).
- * [DesignParams.density] sets how many cells there are. Deterministic in [seed]: sites and their color jitter are drawn
- * from a seeded `Random`, so a recipe reproduces and a shuffle is a new seed.
+ * [DesignParams.density] sets how many cells there are, and [DesignParams.irregularity] how *evenly* they are placed:
+ * the seeds come from [PointScatter], a lattice at low irregularity (even *Modern Mosaic* cells) scattering to the
+ * shard-like *Vitrall* at high. Deterministic in [seed]: seed positions and their color jitter are drawn from seeded
+ * `Random`s, so a recipe reproduces and a shuffle is a new seed.
  *
  * [siteCount], [sites] and [nearestSite] are pure and tested — which seed owns a pixel is index arithmetic that is
  * silently wrong (a wallpaper of one flat color) long before a bitmap could show it.
@@ -35,7 +37,7 @@ object VoronoiGenerator : Generator {
     internal data class Site(val x: Float, val y: Float, val argb: Int)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val sites = sites(siteCount(params.density), palette, seed)
+        val sites = sites(siteCount(params.density), params.irregularity, palette, seed)
         val seam = palette.colorAt(palette.size - 1) // the darkest stop by convention — the leading between cells
 
         // Which seed owns each pixel, one pass, so the next pass can find a boundary by comparing neighbours.
@@ -66,17 +68,22 @@ object VoronoiGenerator : Generator {
         MinSites + (density.coerceIn(0f, 1f) * (MaxSites - MinSites)).roundToInt()
 
     /**
-     * [count] seeds for [seed] — positions drawn uniformly in the unit square, each cell colored by the palette
-     * gradient at the seed's height nudged by up to [ColorJitter], so cells at the same height still separate.
+     * [count] seeds for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when even, a
+     * scatter when irregular), each cell colored by the palette gradient at the seed's height nudged by up to
+     * [ColorJitter] so cells at the same height still separate.
      *
-     * The color is taken from the same seeded stream as the position, so one recipe is one fixed mosaic.
+     * The shade jitter runs on a **salted stream of its own**, independent of the position stream, so it stays fixed as
+     * the position knob slides. (A cell's *base* color still tracks its height, by design — a cell that moves down the
+     * frame is colored for where it lands — so the salt keeps the shade stable, not the whole color.) One recipe is one
+     * fixed mosaic.
      */
-    internal fun sites(count: Int, palette: Palette, seed: Long): List<Site> {
-        val random = Random(seed)
-        return List(count) {
-            val x = random.nextFloat()
-            val y = random.nextFloat()
-            val shade = (random.nextFloat() * 2f - 1f) * ColorJitter
+    internal fun sites(count: Int, irregularity: Float, palette: Palette, seed: Long): List<Site> {
+        val positions = PointScatter.gridJitter(count, irregularity, seed)
+        val shadeRandom = Random(seed xor ColorSalt)
+        return List(count) { i ->
+            val x = positions[i * 2]
+            val y = positions[i * 2 + 1]
+            val shade = (shadeRandom.nextFloat() * 2f - 1f) * ColorJitter
             Site(x, y, LinearGradientGenerator.colorAt((y + shade).coerceIn(0f, 1f), palette))
         }
     }
@@ -120,4 +127,7 @@ object VoronoiGenerator : Generator {
 
     /** How far a cell's color may sit from the gradient at its height, `±` — enough to separate equal-height cells. */
     private const val ColorJitter = 0.12f
+
+    /** Salts the shade-jitter stream apart from position generation, so it stays fixed as the irregularity knob slides. */
+    private const val ColorSalt = 0x9E3779B9L
 }

@@ -156,9 +156,18 @@ rectangles.
   chips; device-verified (the studio now opens on cream-on-navy Bichromatic Flow, and Full/Mono recolor live). The rest
   of the family model (amount/spacing/**irregularity**/rotation as first-class fields) folds into W7 — the color mode was
   the single biggest restraint lever and shipped on its own.
-- **W7 — the styling pass.** Per-design tasteful defaults; soften the loud ones (Metaballs, Confetti, Facets, Plasma/
-  Rings/Rays); add the **organic-noise (irregularity/distortion) knob** every generator currently lacks. Device-verify
-  against this teardown's "restraint" bar.
+- **W7 — the styling pass. ✅ (2026-08-31)** Added the **organic-noise knob** — an `irregularity: Float` on
+  `DesignParams`, defaulting to a restrained `0.5`. Nine generators read it, each mapping it onto its own noise and
+  scaled so **`0.5` reproduces the shipped look** (the renders already verified on device) while `0` is rigid and `1`
+  chaotic: **Voronoi** (lattice → shards, i.e. Modern-Mosaic → Vitrall), **Mesh** (now grid+jitter, the teardown's
+  correction), **Facets** (point jitter), **Confetti** (offset distortion), **Dot Grid** (loosened lattice), **Waves**
+  (crest steepness), **Flow** + **Ribbons** (field curl), **Contour** (detail-octave variation). The lattice placement
+  Voronoi and Mesh share is one helper (`PointScatter.gridJitter`). The seven with no organic axis (gradient, Plasma,
+  Rings, Rays, Metaballs, Truchet, Bauhaus) ignore it, as density-less designs ignore density. Separately, the loud
+  field designs were **softened** — Plasma/Rings/Rays open on broader swells at the default density. Device-verified via
+  the render harness (which gained an `irr ∈ {0,1}` sweep); the knob is engine-only until **W10** surfaces it, exactly
+  as `variant` is. The remaining W7 wish — a *per-design* default (each design opening on its own tasteful params) —
+  needs the studio to carry per-design params and folds into W10.
 - **W8 — thin-line family.** A shared stroke renderer, then Contour-lines variant, Ribbon Flow, Flow Lines, re-do
   Ribbons. Biggest visual jump.
 - **W9 — the calm staples.** Diagonal Bands, Gradient Columns, Ribbed Glass, Wave Dividers, Soft Overlaps.

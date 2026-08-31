@@ -78,6 +78,7 @@ object PlasmaGenerator : Generator {
         return unit - floor(unit)
     }
 
-    private const val MinFrequency = 8f
-    private const val MaxFrequency = 34f
+    // Softened toward broad swells: the default density now opens on calm marbling rather than a busy ripple (W7).
+    private const val MinFrequency = 6f
+    private const val MaxFrequency = 26f
 }

@@ -22,10 +22,13 @@ import kotlin.random.Random
  * is small.
  *
  * **The ground is the palette's darkest stop; the discs cycle the rest.** So every dot pops against the back, and no
- * dot is the same color as the ground. [DesignParams.density] sets how many discs. Deterministic in [seed].
+ * dot is the same color as the ground. [DesignParams.density] sets how many discs, and [DesignParams.irregularity] the
+ * *offset distortion* — how far each disc is nudged off its even Poisson position, from a pristine grid-like spread at
+ * `0` to a loose sprinkle at `1`. Deterministic in [seed].
  *
- * [samples] is pure and tested — the min-distance dart-throwing is where a wrong wrap or comparison silently collapses
- * the even spread back into clumps, and it needs no bitmap to check.
+ * [samples] and [distort] are pure and tested — the min-distance dart-throwing is where a wrong wrap or comparison
+ * silently collapses the even spread back into clumps, and the offset is where a runaway nudge piles the discs up; both
+ * need no bitmap to check.
  */
 object ConfettiGenerator : Generator {
 
@@ -33,7 +36,7 @@ object ConfettiGenerator : Generator {
     internal data class Sample(val x: Float, val y: Float, val radius: Float)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val samples = samples(sampleCount(params.density), seed)
+        val samples = distort(samples(sampleCount(params.density), seed), params.irregularity, seed)
         val shortSide = min(width, height)
         val dotColors = if (palette.size > 1) palette.colors.dropLast(1) else palette.colors
 
@@ -83,6 +86,28 @@ object ConfettiGenerator : Generator {
         return placed
     }
 
+    /**
+     * [samples] with each disc nudged off its Poisson position by up to its own placement radius times [OffsetMax] and
+     * [irregularity] — the *offset distortion* knob. At `irregularity = 0` the samples are returned untouched (the even
+     * spread); climbing it loosens them toward a sprinkle. Scaling the nudge by each disc's radius keeps a large,
+     * widely-spaced disc free to move while a small infill one barely does, so the discs stay clear of each other.
+     *
+     * A **salted** stream, independent of the dart-throwing in [samples], so sliding irregularity moves the discs
+     * without re-rolling which points were placed. Positions are clamped to the unit square rather than wrapped, since a
+     * disc pushed off an edge should sit at the edge, not reappear opposite.
+     */
+    internal fun distort(samples: List<Sample>, irregularity: Float, seed: Long): List<Sample> {
+        val amount = irregularity.coerceIn(0f, 1f)
+        if (amount <= 0f) return samples
+        val random = Random(seed xor OffsetSalt)
+        return samples.map { sample ->
+            val reach = sample.radius * OffsetMax * amount
+            val dx = (random.nextFloat() * 2f - 1f) * reach
+            val dy = (random.nextFloat() * 2f - 1f) * reach
+            sample.copy(x = (sample.x + dx).coerceIn(0f, 1f), y = (sample.y + dy).coerceIn(0f, 1f))
+        }
+    }
+
     /** Whether ([cx], [cy]) is at least [radius] from every placed sample, counting the toroidal wraps across each edge. */
     private fun clears(cx: Float, cy: Float, radius: Float, placed: List<Sample>): Boolean {
         val min2 = radius * radius
@@ -112,6 +137,12 @@ object ConfettiGenerator : Generator {
 
     /** A disc fills this fraction of its placement radius, so neighbours stay just clear of each other. */
     private const val DiscFraction = 0.5f
+
+    /** The most a disc is nudged off its Poisson position at full irregularity, as a fraction of its placement radius. */
+    private const val OffsetMax = 0.9f
+
+    /** Keeps the offset stream independent of the dart-throwing, so irregularity moves discs without re-rolling them. */
+    private const val OffsetSalt = 0x632BE5ABL
 
     /** The three toroidal offsets per axis — the tile itself and its two edge wraps. */
     private val Wraps = floatArrayOf(-1f, 0f, 1f)
