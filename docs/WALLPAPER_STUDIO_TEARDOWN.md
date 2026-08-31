@@ -168,8 +168,17 @@ rectangles.
   the render harness (which gained an `irr ∈ {0,1}` sweep); the knob is engine-only until **W10** surfaces it, exactly
   as `variant` is. The remaining W7 wish — a *per-design* default (each design opening on its own tasteful params) —
   needs the studio to carry per-design params and folds into W10.
-- **W8 — thin-line family.** A shared stroke renderer, then Contour-lines variant, Ribbon Flow, Flow Lines, re-do
-  Ribbons. Biggest visual jump.
+- **W8 — thin-line family. ⏳ (started 2026-08-31)** Biggest visual jump. Progress:
+  - **W8a ✅** — the shared stroke renderer (`Streamlines.pathOf`, extracted from the verbatim copies in Flow and
+    Ribbons) + **Flow Lines** (new design; gart's flowforce/perl, cyanowaves): dense fine hairlines seeded on an even
+    lattice and combed through the flow field — Flow woven, Flow Lines combed. density → line count, irregularity →
+    field curl.
+  - **W8b ✅** — **Contour-lines**: a `variant` on Contour (its first real use), and — by the user's call — the lines
+    look is now Contour's **default** (variant 0, thin ink on paper, the community favorite); the old filled relief is
+    variant 1. Both fall out of the same banded field; the variant is reachable in code and by the harness now, in the
+    Style panel at W10.
+  - **Remaining:** Ribbon Flow (gart flowforce/Eclectic — broad rounded ribbons), Polygon Cascade (gart spirograph —
+    rotating-polygon rosette), and re-do Ribbons (fine bundled lines + glow).
 - **W9 — the calm staples.** Diagonal Bands, Gradient Columns, Ribbed Glass, Wave Dividers, Soft Overlaps.
 - **W10 — the Style panel UI.** The horizontal tab row (per-design params) + numeric ruler sliders + segmented
   variant/color-mode controls, mirroring theirs. Only after the model exists.

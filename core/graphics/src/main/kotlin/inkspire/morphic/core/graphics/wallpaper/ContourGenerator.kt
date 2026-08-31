@@ -7,20 +7,27 @@ import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.roundToInt
 
 /**
- * A noise field read as a map — quantized into height bands, each a palette color, with a darker line drawn along every
- * band boundary — the *Topography* look (gart's `arts/layers` relief / `plasmeander` contour tracing).
+ * A noise field read as a map — inked contour lines on bare paper by default, or filled height bands — the *Topography*
+ * look (gart's `arts/layers` relief / `plasmeander` contour tracing).
  *
- * **Iso-bands, not traced polylines.** A textbook topographic map runs marching squares to extract each contour as a
+ * **Iso-lines, not traced polylines.** A textbook topographic map runs marching squares to extract each contour as a
  * path; a wallpaper needs only the *look* of one, which falls out of the field for free. Sample [PerlinNoise2d] at each
- * pixel, snap the value to one of N bands, and fill the band's color; a pixel whose band differs from a neighbour's is
- * a contour line and takes the palette's darkest stop. Same trick [VoronoiGenerator] uses for its seams, on a scalar
- * field instead of a nearest-seed one — no geometry to get wrong.
+ * pixel and snap the value to one of N bands; a pixel whose band differs from a neighbour's is a contour line and takes
+ * the palette's darkest stop, and every other pixel is the bare paper (the default) or its band's fill color (the
+ * variant). Same trick [VoronoiGenerator] uses for its seams, on a scalar field instead of a nearest-seed one — no
+ * geometry to get wrong.
  *
  * **Two octaves of noise, so the map has both broad landmasses and finer coastline.** One octave is a smooth blob;
  * adding a half-scale octave gives the ridged detail that reads as terrain, and [DesignParams.irregularity] sets *how
  * much* of that octave is mixed in — broad smooth elevations at `0`, a crinkled ridged survey at `1` (Smart Launcher's
  * *Variation*). [DesignParams.density] sets how many bands there are — a few bold elevations or a densely-lined survey
  * map. Deterministic in [seed] (the noise is).
+ *
+ * **[DesignParams.variant] chooses the look: lines on paper (`0`, the default) or filled bands (`1`).** The default is
+ * the thin-line *Contour-lines* Topography — Smart Launcher's own default here, the community favorite, and the reason
+ * this design leads the thin-line family; the variant is the older filled relief, its bands colored up the palette ramp.
+ * Both fall out of the same banded field for free: the same boundary detection, over the lightest stop or over a filled
+ * ramp.
  *
  * [bandCount] and [band] are pure and tested: which band a height falls in is the off-by-one that either doubles a
  * contour or drops one, and it needs no bitmap to check.
@@ -31,7 +38,9 @@ object ContourGenerator : Generator {
         val noise = PerlinNoise2d(seed)
         val bands = bandCount(params.density)
         val detailWeight = params.irregularity.coerceIn(0f, 1f) // 0.5 → the shipped half-weight detail octave
+        val filled = params.variant == VariantFilled
         val line = palette.colorAt(palette.size - 1) // darkest stop by convention — the inked contour
+        val paper = palette.colorAt(0) // lightest stop — the ground the lines are drawn on in the default lines look
 
         // The band each pixel's height falls in, one pass, so the next can find a boundary by comparing neighbours.
         val bandOf = IntArray(width * height)
@@ -47,11 +56,12 @@ object ContourGenerator : Generator {
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val i = y * width + x
-                pixels[i] = if (onContour(bandOf, x, y, width, height)) {
-                    line
-                } else {
-                    // The band's color: its index as a fraction of the ramp, so low ground is the first stop and high the last.
-                    LinearGradientGenerator.colorAt(bandOf[i].toFloat() / (bands - 1).coerceAtLeast(1), palette)
+                pixels[i] = when {
+                    onContour(bandOf, x, y, width, height) -> line
+                    // Filled variant: the band's color, its index as a fraction of the ramp (low ground first, high last).
+                    filled -> LinearGradientGenerator.colorAt(bandOf[i].toFloat() / (bands - 1).coerceAtLeast(1), palette)
+                    // Default lines look: bare paper between the inked contours — a survey map, no fill.
+                    else -> paper
                 }
             }
         }
@@ -95,6 +105,9 @@ object ContourGenerator : Generator {
         if (y < height - 1 && bandOf[(y + 1) * width + x] != here) return true
         return false
     }
+
+    /** [DesignParams.variant] selecting the filled-bands look — the colored relief — over the default lines on paper. */
+    private const val VariantFilled = 1
 
     private const val MinBands = 5
     private const val MaxBands = 18

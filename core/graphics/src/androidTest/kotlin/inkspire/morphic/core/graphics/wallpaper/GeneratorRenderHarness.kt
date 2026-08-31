@@ -100,6 +100,34 @@ class GeneratorRenderHarness {
         }
     }
 
+    /**
+     * The designs that expose a [DesignParams.variant] sub-look, rendered at each variant in bichromatic and
+     * monochromatic — so a variant that only exists in code (there is no Style panel to pick it until W10) can still be
+     * judged. Contour's lines look is the first such variant.
+     */
+    @Test
+    fun renderVariantSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val designs = listOf(WallpaperDesign.CONTOUR)
+
+        for (mode in listOf(WallpaperColorMode.BICHROMATIC, WallpaperColorMode.MONOCHROMATIC)) {
+            val moded = PaletteColorMode.resolve(palette, mode)
+            for (design in designs) {
+                for (variant in 0..1) {
+                    val bitmap = Generators.forDesign(design).render(
+                        width = 1080,
+                        height = 2400,
+                        palette = moded,
+                        params = DesignParams(variant = variant, colorMode = mode),
+                        seed = 42L,
+                    )
+                    save(resolver, "var_${design.name}_${variant}_${mode.name}.png", bitmap)
+                    bitmap.recycle()
+                }
+            }
+        }
+    }
+
     private fun save(resolver: android.content.ContentResolver, name: String, bitmap: Bitmap) {
         // A plain insert. Overwriting an earlier render is *not attempted* — the class KDoc explains why it cannot work
         // here (null-owner files this instrumentation may not delete); the folder is cleared with `adb shell rm`

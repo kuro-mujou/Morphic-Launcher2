@@ -62,8 +62,8 @@ enum class WallpaperDesign {
     PLASMA,
 
     /**
-     * A noise field read as a contour map — quantized into height bands, each a palette color, inked along every band
-     * boundary. The topographic look, from the field rather than from traced polylines.
+     * A noise field read as a contour map — inked iso-lines on bare paper by default, or filled height bands as a
+     * variant. The topographic look, from the field rather than from traced polylines.
      */
     @SerialName("contour")
     CONTOUR,
