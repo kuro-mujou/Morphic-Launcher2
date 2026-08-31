@@ -14,8 +14,8 @@ import kotlin.math.roundToInt
  * with no per-design code — the shared-derivation rule, applied to color instead of geometry.
  *
  * **The light-to-dark ordering is preserved on purpose.** Generators lean on it — the last stop is a dark ground for
- * flow/blobs/confetti, the first a light sky for waves — so every mode returns its colors in that same order and those
- * roles keep working whatever the mode.
+ * flow and blobs, the first a light one for confetti and the dot grid, and a light sky for waves — so every mode
+ * returns its colors in that same order and those roles keep working whatever the mode.
  *
  * Pure `IntArray` color math, checkable without a bitmap: a shade ramp that drifts hue, or a two-color pick that lands
  * on the same color twice, is silently wrong and needs no emulator to catch.

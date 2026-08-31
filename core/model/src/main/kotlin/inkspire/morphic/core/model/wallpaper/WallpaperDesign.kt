@@ -92,8 +92,9 @@ enum class WallpaperDesign {
     MONDRIAN,
 
     /**
-     * Evenly-strewn discs in palette colors on a dark ground — confetti. Poisson-disk sampling, so the discs are spaced
-     * rather than clumped like a uniform scatter.
+     * Discs strewn across the frame in palette colors — confetti. A square lattice turned off the frame and pushed
+     * around, so it reads as an even sprinkle rather than a grid; the palette is spent unevenly, so the last stops are
+     * rare accents. [DesignParams.variant] is a depth of field over the discs' own sizes.
      */
     @SerialName("confetti")
     CONFETTI,

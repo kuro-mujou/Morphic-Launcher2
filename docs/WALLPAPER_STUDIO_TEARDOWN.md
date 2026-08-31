@@ -32,7 +32,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow |
 | 5 | Triangular Facets | Resolution · Distortion · Thickness · Distribution · Randomness · Tridimensionality |
 | 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis, **4..20** (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **fraction** left undecorated, not a toggle and not a count; *Tile background* is Off/On. The tile vocabulary is **a quarter disc or nothing** — halves and circles are emergent |
-| 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance |
+| 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance · **Focus range** — **seven** (W11f). The lattice is a square grid *turned ~12°* off the frame, pitch = long side / Resolution (**5..24**, default 15). *Color distribution* is a **segmented ratio preset** — `100/100/…`, `100/66/33`, **`100/50/25`** (default), `100/33/11` — i.e. how fast the pick weight falls off down the stops, not a hue choice. *Focus distance* + *Focus range* are a real **depth of field**: a disc's size is its distance, and everything outside the focal band is blurred |
 | 8 | Mesh Gradient | Columns · Jitter · **Color distribution** · Softness |
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio · **Spacing · Offset** — **eight**, not six (W11e; the last two are past the fold in the tab row and were missed on the first pass). *Spacing* is the margin around the whole block, not the gap between tiles; *Offset* is a four-arrow **nudge**, hold-to-repeat, that walks the block off center; *Aspect ratio* is a **segmented** 1/1 · Golden · 2/1 · 4/1 |
 | 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients |
@@ -67,8 +67,10 @@ Read down the table and the same handful of concepts recur under different names
   why ours read as mechanical.
 - **Color** — *Color mode, Color distribution, Shades, Palette gradients*. How the palette is applied (see below).
 - **Stroke / shape** — *Thickness, Roundness, Corner radius, Curves, Wideness*. Line weight and corner softness.
-- **Rendering / depth** — *Blend mode, Contrast, Shadow, Refraction, Vibrancy, Tridimensionality, Real glass*. The
-  lighting/translucency that gives their output *depth*. **Ours are all flat.**
+- **Rendering / depth** — *Blend mode, Contrast, Shadow, Refraction, Vibrancy, Tridimensionality, Real glass*, and
+  Confetti's *Focus distance / Focus range*. The lighting/translucency that gives their output *depth*. Ours were all
+  flat; built so far are Ribbed Glass's lens, Gradient Columns' seam shadow, Ribbons' ground glow (W11c) and
+  **Confetti's depth of field (W11f)** — the first that is depth rather than lighting.
 - **Design-specific** — *Orbs / Orb size* (Flow Field's moons), *Frame / Ratio* (Mosaic), *Path style / Depth* (Shape
   Trail), *Start area / End area* (Neon Ribbons), *Start column / Progression smoothness* (Gradient Columns). A couple of
   bespoke knobs per design on top of the shared families.
@@ -101,9 +103,11 @@ data class DesignParams(
 
 ### Corrections to earlier assumptions this teardown forces
 
-- **Confetti is a *distorted grid*, not Poisson-disk.** Their tabs are Resolution + Offset distortion — a lattice
-  pushed around, not dart-throwing. Ours built the (harder) Poisson sampler; theirs is simpler and just as even. Not
-  wrong, but not what they do.
+- **Confetti is a *distorted grid*, not Poisson-disk — and the grid is *turned*.** Their tabs are Resolution + Offset
+  distortion: a lattice pushed around, not dart-throwing. The turn (~12°, measured) is the part that is easy to miss and
+  does the most work — an axis-aligned lattice announces itself through any amount of jitter because the eye finds the
+  horizontals, and turned a little the same lattice reads as an even sprinkle. Ours built the (harder) Poisson sampler,
+  which also left its knob with no rigid end, since uniformly-random points cannot be made *more* even. Fixed in W11f.
 - **Mesh is a grid + jitter** (Columns + Jitter), not our random control points. Same look, simpler control.
 - **Every design has an organic-noise knob.** Ours are deterministic-and-rigid with no way to loosen them.
 
@@ -137,7 +141,7 @@ rectangles.
 |---|---|---|
 | Topography | **Contour** | Biggest gap. Add **Contour-lines variant** (thin lines, their default + community favorite) alongside our filled "Embossed". |
 | Flowing Blobs | **Metaballs** | Ours hard onion rings. Theirs smooth + a Color mode (Mono/Bi) + Shadow. Soften, add color mode. |
-| Confetti Dots | **Confetti** | Re-base on a **distorted grid** (Resolution + Offset distortion), tiny sparse dots, dark ground. Ours' Poisson is over-built and over-bold. |
+| Confetti Dots | **Confetti** | ✅ **W11f.** Re-based on their turned, jittered lattice; the ground moved to the palette's **light** end (theirs is stop 0, whatever that is), the palette is now spent with a geometric falloff so the last stops are rare accents, and it gained a **depth of field**. The Poisson sampler is gone. |
 | Neon Ribbons | **Ribbons** | ✅ **W11b.** Rebuilt as one fanning bundle of fine curves. The W8 decision to skip this was wrong: Flow Lines combs the whole frame, theirs draws *one* gesture — not the same look. |
 | Bauhaus Blocks | **Bauhaus** | ✅ **W11a**, refined in **W11d**. Rebuilt as their arc lattice (what ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name), then narrowed to their real vocabulary: one quarter disc, everything else emergent, with coverage on its own knob. |
 | Dot Grid | **DotGrid** | ✅ **W11e.** Same identity finding as Bauhaus: ours was a *halftone* (a field driving each dot's **size**, full-bleed) under their name, and theirs is a **contained** lattice of uniform tiles where only the **color** moves. The halftone split off as its own design; DotGrid was rebuilt as theirs. |
@@ -229,6 +233,34 @@ rectangles.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11f — Confetti Dots. ✅ (2026-09-01)** Not an identity finding this time: theirs and ours are the same design,
+    and ours was simply doing four things worse. All four are now theirs.
+    - **A square lattice turned ~12°, jittered — not a Poisson-disk scatter.** The turn is the part that carries the
+      look and the easiest to overlook: axis-aligned, a lattice announces itself through any amount of jitter, because
+      the eye finds the horizontals. Turned a little, the same lattice reads as an even sprinkle. Ours had built the
+      *harder* thing (dart-throwing with a shrinking minimum distance) to arrive somewhere worse, and it had no rigid
+      end for its knob either — uniformly-random points cannot be made *more* even, so there was no lattice to snap
+      back to. Pitch = long side / Resolution, which is **5..24** there, default 15; ours matches.
+    - **The palette is spent unevenly, and this is where the restraint lives.** Their *Color distribution* is a
+      segmented ratio preset — `100/100/…`, `100/66/33`, `100/50/25` (default), `100/33/11` — the rate at which the
+      pick weight falls off down the stops. At `100/50/25` the first ink is the field and the last is a rare accent; at
+      `100/100/…` it is our old even cycle, and it looks exactly as loud as ours did. **Ours takes the falloff as a
+      fixed property rather than a knob**, because the color modes already reduce the palette and a weighting over the
+      single ink a two-stop palette leaves would be a control that does nothing.
+    - **The ground is stop 0, whatever stop 0 is.** A shuffle to a dark-first palette turned their ground near-black
+      with bright dots, so it is not "light ground" as a rule — it is the *first* stop. Ours had been using the
+      **darkest**, which is why it read as a dark bold confetti against everything else in the catalog.
+    - **Focus distance + Focus range are a depth of field, and it is the first real depth in our catalog.** A disc's
+      size *is* its distance, and discs outside the focal band blur. Ours folds their two continuous knobs into
+      `variant` as **Flat / Near / Far**. Two findings, both of which rendered as a dead knob first:
+      the blur must be measured against the frame's **largest** disc and not the disc's own radius (a lens's circle of
+      confusion does not care how big the object is, so scaling by the object makes the small discs — the exact ones
+      *Near* exists to soften — blur by a fraction of a pixel); and the depth must be **ranked** over the spread that
+      actually exists rather than read off the radii, or a mild scatter leaves the knob a fraction of its range.
+    - **Their two organic knobs became one.** *Offset distortion* and *Radius variation* are the same question twice, so
+      ours joins them as **Scatter**, which is what gives it a genuine rigid end: `0` is an even lattice of identical
+      discs — a polka-dot pattern — and `1` a sprinkle of specks and boulders. A consequence, and it is the honest one:
+      with no size spread there is no depth, so *Focus* renders sharp at `Scatter = 0`.
   - **W11e — Dot Grid. ✅ (2026-09-01)** Bauhaus's finding, a third time: not quality, **identity**. Theirs is a
     *contained* block of uniform rounded tiles whose **color** steps through the palette in flat bands down the rows;
     ours was a **halftone** — a Perlin field driving each dot's **size**, filling the frame. Same lattice, opposite
