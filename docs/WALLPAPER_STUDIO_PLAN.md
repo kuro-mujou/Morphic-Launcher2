@@ -299,8 +299,10 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     `DesignParams`. Still deferred: a draft-quality render during the drag (the panel commits on release — open
     question 1 below, now with a consumer), the frosted material under the bottom bar, and per-design defaults. Full
     record in the teardown doc.
-  - **W11 — the design-by-design quality pass. In progress.** The engine and the panel are built, so what is left is
-    per design: open theirs, render ours, compare, fix one. **W11a — Bauhaus ✅ (2026-08-31):** ours was a *Mondrian*
+  - **W11 — the design-by-design quality pass. In progress — 6 of their 22 driven.** The engine and the panel are
+    built, so what is left is per design: open theirs, render ours, compare, fix one. The **checklist of which
+    designs have actually been driven** (and which were built from a one-line note instead) is in
+    [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → "W11 checklist"; keep it ticked as slices land. **W11a — Bauhaus ✅ (2026-08-31):** ours was a *Mondrian*
     under the Bauhaus name, so the Mondrian became its own design and Bauhaus was rebuilt as their arc lattice —
     catalog **25**. **W11b — Neon Ribbons ✅ (2026-08-31):** rebuilt as one fanning bundle of fine curves, reversing
     W8's decision to skip it — Flow Lines combs the whole frame where this draws a single gesture, so they were never

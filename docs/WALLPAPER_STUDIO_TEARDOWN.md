@@ -145,6 +145,48 @@ rectangles.
 
 ## Design-by-design: their 22, our 16, the verdict
 
+### W11 checklist — which designs have actually been driven
+
+**"Driven" means the reference design was opened on the emulator and *every one of its knobs pushed to both ends*,**
+against a render of ours. That is a much stronger claim than the verdict table below, which was written from one pass
+through their studio and has been wrong about a design's *identity* four times out of six. A design is only ticked
+when its slice landed and was device-verified; a design built from the verdict table alone (most of W8 and all of W9)
+counts as **not driven**, because what built it was a one-line note rather than the reference in front of it.
+
+| # | Theirs | Ours | Driven | Slice / note |
+|---|---|---|---|---|
+| 1 | Diagonal Bands | `DIAGONAL_BANDS` | ☐ | built in W9 from the note, never compared |
+| 2 | Modern Mosaic | `VORONOI` | ☐ | **two of theirs map to one of ours** — see Vitrall (13) |
+| 3 | Gradient Columns | `GRADIENT_COLUMNS` | ☐ | built in W9 from the note |
+| 4 | Flowing Blobs | `METABALLS` | ☐ | verdict says ours is hard onion rings — the loudest untested claim |
+| 5 | Triangular Facets | `TRIANGULAR_FACETS` | ✅ | **W11h** — color is a 2-D field of areas; `depth` added |
+| 6 | Bauhaus Blocks | `BAUHAUS` | ✅ | **W11a** rebuild (ours was a Mondrian), **W11d** second pass |
+| 7 | Confetti Dots | `CONFETTI` | ✅ | **W11f** — turned lattice, ground, falloff, depth of field |
+| 8 | Mesh Gradient | `MESH_GRADIENT` | ✅ | **W11g** — color *layout*, and a bilinear mesh not IDW |
+| 9 | Dot Grid | `DOT_GRID` | ✅ | **W11e** — theirs is contained + color-stepped; ours was a halftone |
+| 10 | Layered Waves | `WAVES` | ☐ | verdict: "closest we have" — untested |
+| 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
+| 12 | Wave Dividers | `WAVE_DIVIDERS` | ☐ | built in W9 from the note |
+| 13 | Vitrall | `VORONOI` (variant) | ☐ | **missing** — theirs is the curved-slice, light-leaded sibling of Modern Mosaic |
+| 14 | Flow Field | `FLOW_FIELD` | ☐ | verdict wants Orbs + a Style variant |
+| 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
+| 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
+| 17 | Polygon Cascade | `POLYGON_CASCADE` | ☐ | built in W8d from the note |
+| 18 | Soft Overlaps | `SOFT_OVERLAPS` | ☐ | built in W9 from the note |
+| 19 | Rounded Tiles | `TRUCHET` | ☐ | verdict calls ours "a reasonable analog", which is not the same design |
+| 20 | Ribbon Flow | `RIBBON_FLOW` | ☐ | built in W8c from the note |
+| 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
+| 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
+
+**Six of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+`LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a), `HALFTONE` (split out of Dot
+Grid by W11e). Catalog is **26**.
+
+**What the six taught, in one line each, because it is what predicts the next find:** check whether ours *is the same
+design* before judging its quality (4 of 6 were not); drive *every* knob to *both* ends before concluding; measure
+pixels rather than trusting the eye; and the rigid end of a knob is the strongest evidence about the machinery
+underneath.
+
 | Theirs | Ours | Verdict & fix |
 |---|---|---|
 | Topography | **Contour** | Biggest gap. Add **Contour-lines variant** (thin lines, their default + community favorite) alongside our filled "Embossed". |
