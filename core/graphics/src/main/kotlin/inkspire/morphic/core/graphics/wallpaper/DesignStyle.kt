@@ -29,6 +29,9 @@ import kotlin.math.roundToInt
  *   [DesignParams.irregularity] — null where the design is rigid by nature and ignores it. **A label rather than a
  *   knob**, because unlike the amount this control is the same everywhere: a `0..1` fraction, rigid to chaotic. Only
  *   the word changes.
+ * @property depth the design's own word for its out-of-plane knob (*Relief*, *Shadow*, *Refraction*), driven by
+ *   [DesignParams.depth] — null for the flat designs, which is nearly all of them. A label, for [irregularity]'s
+ *   reason.
  * @property variant the design's sub-look chooser, driven by [DesignParams.variant] — null for the twenty designs
  *   that have a single look.
  */
@@ -36,6 +39,7 @@ data class DesignStyle(
     val amount: AmountKnob? = null,
     val scale: String? = null,
     val irregularity: String? = null,
+    val depth: String? = null,
     val variant: VariantKnob? = null,
 )
 

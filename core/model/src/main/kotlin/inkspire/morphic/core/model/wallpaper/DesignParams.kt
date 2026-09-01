@@ -34,6 +34,14 @@ import kotlinx.serialization.Serializable
  * from there, so the knob reads the same direction everywhere. A design that shipped with fixed jitter is scaled so its
  * default `0.5` reproduces that shipped look; a design that shipped rigid takes `0.5` as a tasteful organic default.
  *
+ * **[depth] is the *depth* family — how much the design pretends to a third dimension.** It is the last of the seven
+ * families the reference studio exposes (*Shadow, Blend mode, Refraction, Tridimensionality*) and the one nothing here
+ * had a home for; a facet field's lighting is its first consumer. It is separate from [irregularity] because the two
+ * disturb different axes — irregularity moves an element *within* the picture plane, depth moves it *out of* one — and
+ * a design routinely wants a lot of one and none of the other, which the reference's own defaults do (its facets open
+ * at half distortion and a sixth of the relief). The same rules apply: a flat design ignores it, `0` always means
+ * *flat*, and a design that reads it maps `0.5` to a restrained default rather than to its maximum.
+ *
  * **[scale] is how much room the design's elements take, which is a different question from how many there are.** A
  * count and a size are independent everywhere they both apply — twenty small dots and twenty large ones are different
  * pictures — and squeezing both onto [density] is what forces a generator to guess. It is the *spacing / gaps* family
@@ -47,6 +55,8 @@ import kotlinx.serialization.Serializable
  *   that reads it maps `0.5` to its shipped look. See the class note.
  * @property scale how much room the design's elements take, `0..1` — tight to sprawling. See the class note; a
  *   generator with no notion of size ignores it, exactly as a density-less one ignores [density].
+ * @property depth how far the design steps out of the picture plane, `0..1` — `0` is flat, `1` fully dimensional
+ *   (a lit relief, a hard shadow). A flat design ignores it. See the class note.
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
  *   generator with a single look ignores it, and one with several clamps an out-of-range index to what it has.
  * @property colorMode how much of the palette to paint with — see [WallpaperColorMode]. Applied to the palette, not
@@ -57,6 +67,7 @@ data class DesignParams(
     val density: Float = 0.5f,
     val irregularity: Float = 0.5f,
     val scale: Float = 0.5f,
+    val depth: Float = 0.5f,
     val variant: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )

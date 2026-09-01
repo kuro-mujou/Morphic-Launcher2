@@ -105,6 +105,13 @@ internal fun WallpaperStylePanel(
                 onCommit = { onParams(params.copy(irregularity = it)) },
             )
 
+            StyleTab.DEPTH -> FractionControl(
+                what = style.depth.orEmpty(),
+                value = params.depth,
+                default = DesignParams().depth,
+                onCommit = { onParams(params.copy(depth = it)) },
+            )
+
             StyleTab.VARIANT -> MorphicSegmentedButtons(
                 options = style.variant?.options.orEmpty(),
                 // Clamped the way a generator clamps it, so the pill sits on the look actually being drawn rather
@@ -175,10 +182,11 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
 /**
  * Which knob the Style panel is showing.
  *
- * Only [COLOR] is offered for every design; the other three appear when the current generator declares them. The
- * order is the panel's, and it runs from what a design *is* toward how it is painted.
+ * Only [COLOR] is offered for every design; the others appear when the current generator declares them. The order is
+ * the panel's, and it runs from what a design *is* toward how it is painted — [DEPTH] sits past [VARIANT] because a
+ * relief is lighting rather than shape.
  */
-internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, VARIANT, COLOR }
+internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, VARIANT, DEPTH, COLOR }
 
 /**
  * The tabs this design offers, in panel order — never empty, since [StyleTab.COLOR] applies to every design (the color
@@ -189,6 +197,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (scale != null) add(StyleTab.SCALE)
     if (irregularity != null) add(StyleTab.IRREGULARITY)
     if (variant != null) add(StyleTab.VARIANT)
+    if (depth != null) add(StyleTab.DEPTH)
     add(StyleTab.COLOR)
 }
 
@@ -198,5 +207,6 @@ private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.SCALE -> scale.orEmpty()
     StyleTab.IRREGULARITY -> irregularity.orEmpty()
     StyleTab.VARIANT -> variant?.label.orEmpty()
+    StyleTab.DEPTH -> depth.orEmpty()
     StyleTab.COLOR -> "Color"
 }

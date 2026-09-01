@@ -30,7 +30,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 2 | Modern Mosaic | Count · Spacing · Frame · Ratio · Roundness · Irregularity |
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow |
-| 5 | Triangular Facets | Resolution · Distortion · Thickness · Distribution · Randomness · Tridimensionality |
+| 5 | Triangular Facets | Resolution · Distortion · **Thickness** · **Distribution** · Randomness · Tridimensionality — **six** (W11h). *Resolution* counts cells along the **long** axis, **3..20** (default 10), cells square. *Distortion* **0..100** (default 50) jitters the lattice; at `0` every cell takes the *same* diagonal. *Thickness* **0..100** (default **0**) is not a stroke — it **insets every facet**, so the ground shows between them as leading; at 100 the facets are specks. *Distribution* is a two-option segmented control, **Random** / **Area** (default), and it is a **color** distribution, not a point one: *Area* paints a smooth two-dimensional field, *Random* gives each facet a flat random stop. *Randomness* **0..100** (default 25) is how far a facet departs from that field — **and the tab disappears entirely under *Random***, which is the app saying the two are one axis. *Tridimensionality* **0..30** (default 5) is a per-facet brightness, the relief. The ground is **stop 0**, which the field never paints with |
 | 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis, **4..20** (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **fraction** left undecorated, not a toggle and not a count; *Tile background* is Off/On. The tile vocabulary is **a quarter disc or nothing** — halves and circles are emergent |
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance · **Focus range** — **seven** (W11f). The lattice is a square grid *turned ~12°* off the frame, pitch = long side / Resolution (**5..24**, default 15). *Color distribution* is a **segmented ratio preset** — `100/100/…`, `100/66/33`, **`100/50/25`** (default), `100/33/11` — i.e. how fast the pick weight falls off down the stops, not a hue choice. *Focus distance* + *Focus range* are a real **depth of field**: a disc's size is its distance, and everything outside the focal band is blurred |
 | 8 | Mesh Gradient | **Rows** · Columns · Jitter · **Color distribution** · Softness — **five** (W11g). Rows and Columns are both **2..10**, default 4×4. *Color distribution* here is a **layout**, not a weighting: `Random` · `Corner interpolation` · **`Linear bottom`** (default) — and the default is why theirs reads as a soft progression down the frame where ours read as a quilt. At Jitter 0 the render is a **mathematically exact** gradient, which is what proves the blend is a bilinear mesh rather than distance-weighted points |
@@ -73,7 +73,10 @@ Read down the table and the same handful of concepts recur under different names
 - **Rendering / depth** — *Blend mode, Contrast, Shadow, Refraction, Vibrancy, Tridimensionality, Real glass*, and
   Confetti's *Focus distance / Focus range*. The lighting/translucency that gives their output *depth*. Ours were all
   flat; built so far are Ribbed Glass's lens, Gradient Columns' seam shadow, Ribbons' ground glow (W11c) and
-  **Confetti's depth of field (W11f)** — the first that is depth rather than lighting.
+  **Confetti's depth of field (W11f)** — the first that is depth rather than lighting. **Built as `depth` (W11h)**, on
+  Facets' relief: the last family to get a field of its own, and the one that decided it was Facets, where a flat
+  render of the right geometry and the right colors is still not the design. Confetti's focus is the obvious next
+  consumer — it rides `variant` today, which is why that design has no sub-look left for anything else.
 - **Design-specific** — *Orbs / Orb size* (Flow Field's moons), *Frame / Ratio* (Mosaic), *Path style / Depth* (Shape
   Trail), *Start area / End area* (Neon Ribbons), *Start column / Progression smoothness* (Gradient Columns). A couple of
   bespoke knobs per design on top of the shared families.
@@ -151,7 +154,7 @@ rectangles.
 | Bauhaus Blocks | **Bauhaus** | ✅ **W11a**, refined in **W11d**. Rebuilt as their arc lattice (what ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name), then narrowed to their real vocabulary: one quarter disc, everything else emergent, with coverage on its own knob. |
 | Dot Grid | **DotGrid** | ✅ **W11e.** Same identity finding as Bauhaus: ours was a *halftone* (a field driving each dot's **size**, full-bleed) under their name, and theirs is a **contained** lattice of uniform tiles where only the **color** moves. The halftone split off as its own design; DotGrid was rebuilt as theirs. |
 | — | **Halftone** | Ours only, split out of DotGrid by W11e — the noise-sized dot screen, kept unchanged. |
-| Triangular Facets | **Facets** | Add Distortion + Tridimensionality (shading); soften color. |
+| Triangular Facets | **Facets** | ✅ **W11h.** The identity finding again: ours read the palette at a facet's *height*, theirs paints a **two-dimensional field of areas** — proved by measuring a path between two regions and finding a straight RGB line that skips the stops in between. Rebuilt on a coarse color lattice (`ColorLattice`, shared with the mesh gradient), plus the **relief** (which is what `DesignParams.depth` arrived for), the **leading**, and a shorter-diagonal split that kills the slivers. |
 | Mesh Gradient | **Mesh** | ✅ **W11g.** Grid + jitter landed in W7; W11g added the **Colors** layout (Vertical / Corners / Scattered) and **Softness**, and replaced inverse-distance weighting with a **warped bilinear mesh** — the only blend that is an exact gradient at the rigid end, as theirs is. |
 | Layered Waves | **Waves** | Closest we have. Add Distortion + Palette-gradients toggle. |
 | Modern Mosaic / Vitrall | **Voronoi** | Ours ≈ Modern Mosaic. Add **Vitrall** variant (curved slices, light leading) + Roundness/Irregularity. |
@@ -238,6 +241,50 @@ rectangles.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11h — Triangular Facets. ✅ (2026-09-01)** The identity finding a fourth time, and this one is about *color*
+    rather than geometry: the mesh was close, the picture was not the same picture.
+    - **Their color is a two-dimensional field of areas; ours was the palette read at a facet's height.** A ramp down
+      the frame with corners cut into it is a striped gradient, not a low-poly field, and no amount of tuning gets
+      from one to the other. **What settles it is measuring a path, not looking at one:** sampling the render along a
+      line from the middle of one region to the middle of another gives a *straight line in RGB between those two
+      stops* — it never visits the stops that sit between them in the palette, which is exactly what a scalar field
+      read through a ramp would have to do. So the stops are laid over the frame as **areas** and blended, which is
+      also what their *Distribution: **Area*** is named for. Ours is now a coarse lattice of nodes each holding one
+      stop, blended bilinearly and sampled at each facet's centroid — the same construction as the mesh gradient,
+      which is in a real sense this design unfaceted, so the sampler was extracted as `ColorLattice` on its second
+      consumer. The lattice is **fixed and coarse**, independent of the resolution knob, for W11g's reason.
+    - **Their *Tridimensionality* is what makes a facet field faceted, and it needed a field of its own.** With the
+      relief at `0` their render is a plain quantized gradient — the right geometry and the right colors and still not
+      the design. It is the *depth* family, the last one in the inventory above with nowhere to live, so
+      `DesignParams` gained a sixth field **`depth`** exactly as Ribbons' spread gave it `scale`. Ours gives every
+      lattice point a height from a noise sampled in **lattice** coordinates (one unit per cell, so a swell spans a
+      couple of facets however fine the mesh) and scales each facet's channels by how far its plane tilts toward a
+      fixed light. Heights in **cell units** rather than pixels is what keeps the same depth lighting a coarse mesh
+      and a fine one equally.
+    - **Their *Thickness* is not a stroke — it insets every facet.** Wound up, the facets shrink to specks on the
+      ground; at a sixth of its travel it is leaded glass with an even line between every pair. Ours takes it on
+      `scale` (it is plainly the spacing family) as **Leading**, a true uniform inset — the triangle scaled about its
+      **incenter** by `(r - inset) / r`, since scaling about the centroid moves each edge in by a different amount and
+      the line would visibly thicken around the wider facets.
+    - **Their *Distribution* and *Randomness* are one axis, and the app says so by hiding one under the other.**
+      Switching *Distribution* to **Random** makes the *Randomness* tab **disappear** — absent, not disabled, the same
+      rule this codebase keeps. So ours is a single `variant`, **Colors: Field · Speckled · Scattered**, where
+      *Speckled* pulls each facet part of the way toward a random stop and *Scattered* goes all the way, which is
+      their *Random*. (Their *Randomness* is a departure along the palette, not a brightness — an orange facet appears
+      in a teal region — which is a different thing from the relief and is why both exist.)
+    - **At Distortion 0 their diagonal is uniform, not alternating**, which is what gives the rigid end a clean quilt
+      where ours drew pinwheels. Ours now splits each cell along its **shorter** diagonal — the cheap local form of a
+      Delaunay flip, equal on a rigid lattice so every cell agrees, and the thing that stops a badly stretched quad
+      being cut the long way into two slivers. It is also why the jitter can be halved to `0.55` of a cell and still
+      shatter properly.
+    - **Their border points slide *along* the frame's edge.** Ours pinned both coordinates, which left a ruled frame
+      around an otherwise organic field — only the edge cells kept their exact lattice width. Zeroing just the
+      component that would leave the frame keeps the tiling exact and lets the edge break up with everything else.
+    - Knobs: `density` → **Resolution** (3..20 on the **long** axis, cells square, theirs exactly), `irregularity` →
+      **Distortion**, `scale` → **Leading**, `depth` → **Relief**, `variant` → **Colors**. One departure worth
+      knowing: **theirs opens with no leading and ours cannot**, because the panel has a single `0.5` default for
+      every knob of every design. The response is cubed so that `0.5` is a hairline rather than a cream web, but the
+      real fix is the **per-design defaults** W7 and W10 both deferred, and this is the clearest consumer yet.
   - **W11g — Mesh Gradient. ✅ (2026-09-01)** Two findings, and the second is about the *blend* rather than the knobs.
     - **Their *Color distribution* is a layout, not a weighting** — `Random`, `Corner interpolation`, **`Linear
       bottom`** (their default). That default is the whole difference in the design: the palette runs *down the frame*

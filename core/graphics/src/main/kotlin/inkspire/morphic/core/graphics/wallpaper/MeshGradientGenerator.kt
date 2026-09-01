@@ -200,7 +200,7 @@ object MeshGradientGenerator : Generator {
      * A plain bilinear field is only C0: its slope jumps at every node line, and because this field is used to
      * *displace a coordinate*, those jumps land in the picture as hard creases running along the lattice — vertical
      * drips down a gradient that is supposed to bulge. Easing the cell parameter is the cheapest fix that makes the
-     * field C1, and it is why this is not the same routine as [sampleColor]: a kink in a monotone color ramp is
+     * field C1, and it is why this is not the same routine as [ColorLattice.sample]: a kink in a monotone color ramp is
      * invisible, a kink in a warp is not.
      */
     private fun sample(field: FloatArray, span: Int, u: Float, v: Float): Float {
@@ -224,20 +224,8 @@ object MeshGradientGenerator : Generator {
     }
 
     /** The bilinear sample of [mesh]'s colors at ([u], [v]) — clamped, so a warp off the edge reads the edge. */
-    internal fun sampleColor(mesh: Mesh, u: Float, v: Float): Int {
-        val span = mesh.span
-        val fx = u.coerceIn(0f, 1f) * (span - 1)
-        val fy = v.coerceIn(0f, 1f) * (span - 1)
-        val x0 = fx.toInt().coerceIn(0, span - 1)
-        val y0 = fy.toInt().coerceIn(0, span - 1)
-        val x1 = (x0 + 1).coerceAtMost(span - 1)
-        val y1 = (y0 + 1).coerceAtMost(span - 1)
-        val tx = fx - x0
-        val ty = fy - y0
-        val top = LinearGradientGenerator.lerpArgb(mesh.colors[y0 * span + x0], mesh.colors[y0 * span + x1], tx)
-        val bottom = LinearGradientGenerator.lerpArgb(mesh.colors[y1 * span + x0], mesh.colors[y1 * span + x1], tx)
-        return LinearGradientGenerator.lerpArgb(top, bottom, ty)
-    }
+    internal fun sampleColor(mesh: Mesh, u: Float, v: Float): Int =
+        ColorLattice.sample(mesh.colors, mesh.span, mesh.span, u, v)
 
     /** How many samples of the ramp *Corners* spreads across the lattice — one per corner. */
     private const val CornerSamples = 4

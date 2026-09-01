@@ -199,7 +199,9 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
 - **W1 — first three generators, end to end. ✅ (2026-08-30)** **Mesh Gradient** (inverse-distance blend), **Flow
   Field** (`PerlinNoise2d` + streamline tracing), **Triangular Facets** (jittered-grid low-poly) — each rendering a
   full 1080×2400 wallpaper, device-verified. Two decisions worth carrying forward: **Facets uses a jittered grid, not
-  Delaunay** (even facets, no slivers; the irregular-shard look is Voronoi/*Vitrall*'s job), and generator *looks* are
+  Delaunay** (even facets, no slivers; the irregular-shard look is Voronoi/*Vitrall*'s job) — half right, and W11h
+  says which half: the grid stays, but the *fixed* diagonal it came with is what makes the slivers, so each cell now
+  takes its shorter one — and generator *looks* are
   verified by **`GeneratorRenderHarness`** — an instrumentation test that paints every `WallpaperDesign` to a PNG in
   `/sdcard/Pictures/genharness` for a human to judge (the one thing an `IntArray` test cannot). *Not* yet set as
   wallpaper — that seam is W2.
@@ -323,6 +325,19 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     inverse-distance weighting: at Jitter 0 theirs is an exact gradient, which distance weighting cannot reach
     without flattening the design, so the generator was rewritten as a color lattice sampled through a separate,
     coarser field of node displacements.
+    **W11h — Triangular Facets ✅ (2026-09-01):** the identity finding a fourth time, about **color** this time —
+    ours read the palette at a facet's *height* (a striped gradient with corners cut into it) where theirs paints a
+    two-dimensional **field of areas**. What proved it was measuring a path between two regions and finding a
+    straight RGB line that skips the stops in between, which a scalar field read through a ramp cannot do. Rebuilt on
+    a coarse lattice of stops blended bilinearly (`ColorLattice`, extracted on its second consumer — the mesh
+    gradient builds its picture the same way), plus their **Tridimensionality** as a lit relief, which is what
+    `DesignParams` gained its sixth field **`depth`** for: the *depth* family, the last in the teardown's inventory
+    with nowhere to live, and the knob without which the right geometry and the right colors are still a blurred
+    gradient. Their *Thickness* turns out to inset every facet rather than stroke it, so it lands on `scale` as
+    **Leading**; their *Distribution* and *Randomness* are one axis (the app hides the second under the first) and
+    land together on `variant` as **Colors: Field · Speckled · Scattered**. Also: at Distortion 0 their diagonal is
+    uniform, so ours splits on the **shorter** diagonal — a clean quilt at the rigid end and no slivers at the loose
+    one.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

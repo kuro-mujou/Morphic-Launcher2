@@ -135,6 +135,33 @@ class GeneratorRenderHarness {
         }
     }
 
+    /**
+     * Every design that reads [DesignParams.depth], flat and fully dimensional — the knob whose whole job is to stop a
+     * faceted field reading as a blurred one, and which therefore cannot be judged from the default alone.
+     *
+     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     */
+    @Test
+    fun renderDepthSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val designs = WallpaperDesign.entries.filter { Generators.forDesign(it).style.depth != null }
+
+        for (depth in floatArrayOf(0f, 1f)) {
+            for (design in designs) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(depth = depth, colorMode = WallpaperColorMode.BICHROMATIC),
+                    seed = 42L,
+                )
+                save(resolver, "depth_${(depth * 100).toInt()}_${design.name}.png", bitmap)
+                bitmap.recycle()
+            }
+        }
+    }
+
     private fun save(resolver: android.content.ContentResolver, name: String, bitmap: Bitmap) {
         // A plain insert. Overwriting an earlier render is *not attempted* — the class KDoc explains why it cannot work
         // here (null-owner files this instrumentation may not delete); the folder is cleared with `adb shell rm`
