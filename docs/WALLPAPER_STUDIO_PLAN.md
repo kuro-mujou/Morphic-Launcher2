@@ -349,6 +349,15 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     mode drawing two, which is the design dead at its own default — and their **paper-cut shadow**, measured off
     theirs: each band darkens to `0.57` of itself at its boundary with the band above, easing as `f^2.5`, on every
     side of a blob rather than in a light's direction. `depth`'s second consumer, one slice after it arrived.
+    **W11k — Modern Mosaic ✅ (2026-09-01):** the design W11j handed off, and **catalog 28**. Not a packing but a
+    recursive **subdivision** — at their *Count* `1` the frame is one rounded tile — so it is `MONDRIAN`'s construction
+    with the opposite finish: tiles pulled back onto a light ground, corners rounded, shared corners skewed through one
+    displacement field. Their *Ratio* is the **least share a cut may leave** (`1/2` halves exactly; the default is the
+    golden minor), which is what makes the tile sizes a related set. `DesignParams` gained its seventh field,
+    **`roundness`** — the *shape* family's first home, and here the design's identity rather than a refinement.
+    `GlassCut.inset` (gart's) and `RampTones` were both extracted on their second consumer. Their *Frame* is not
+    ported. Full record: [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → W11k.
+
     **W11j — Vitrall ✅ (2026-09-01):** the verdict table mapped *two* of their designs onto our Voronoi and was wrong
     about both. Their **Modern Mosaic** is a packing of rounded rectangles with a wide grout — nearer our Mondrian,
     and left for its own slice. Their **Vitrall** cuts the frame with **edge-to-edge chords**, so its panes are long

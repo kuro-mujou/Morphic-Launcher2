@@ -162,6 +162,33 @@ class GeneratorRenderHarness {
         }
     }
 
+    /**
+     * Every design that reads [DesignParams.roundness], sharp and fully round — the knob whose two ends are two
+     * different designs (a Mondrian in a light grout, and a field of pills), so neither can be judged from the middle.
+     *
+     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     */
+    @Test
+    fun renderRoundnessSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val designs = WallpaperDesign.entries.filter { Generators.forDesign(it).style.roundness != null }
+
+        for (roundness in floatArrayOf(0f, 1f)) {
+            for (design in designs) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(roundness = roundness, colorMode = WallpaperColorMode.BICHROMATIC),
+                    seed = 42L,
+                )
+                save(resolver, "round_${(roundness * 100).toInt()}_${design.name}.png", bitmap)
+                bitmap.recycle()
+            }
+        }
+    }
+
     private fun save(resolver: android.content.ContentResolver, name: String, bitmap: Bitmap) {
         // A plain insert. Overwriting an earlier render is *not attempted* — the class KDoc explains why it cannot work
         // here (null-owner files this instrumentation may not delete); the folder is cleared with `adb shell rm`

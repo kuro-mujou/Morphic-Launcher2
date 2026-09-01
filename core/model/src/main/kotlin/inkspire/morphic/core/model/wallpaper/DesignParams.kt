@@ -42,6 +42,16 @@ import kotlinx.serialization.Serializable
  * at half distortion and a sixth of the relief). The same rules apply: a flat design ignores it, `0` always means
  * *flat*, and a design that reads it maps `0.5` to a restrained default rather than to its maximum.
  *
+ * **[roundness] is the *shape* family — how soft the design's corners are.** It is the last of the reference
+ * studio's seven families to get a field of its own (*Roundness, Corner radius, Thickness, Curves, Wideness*), and the
+ * one that had been riding whatever field was spare: a mosaic's rounding was folded into [variant] as a *look*, a
+ * facet's leading onto [scale], a pane's bowing onto [irregularity]. Its first consumer is the Modern Mosaic, where it
+ * is not a refinement but the identity of the design — the same tiling with square corners *is* a Mondrian, and with
+ * the corners fully round the narrow tiles are pills. It is separate from [irregularity] for that field's own reason:
+ * irregularity is disorder and this is not — a fully rounded tile is exactly as regular as a square one. The usual
+ * rules hold: a design with no corners to soften ignores it, `0` always means *sharp*, and a design that reads it maps
+ * `0.5` to a restrained default.
+ *
  * **[scale] is how much room the design's elements take, which is a different question from how many there are.** A
  * count and a size are independent everywhere they both apply — twenty small dots and twenty large ones are different
  * pictures — and squeezing both onto [density] is what forces a generator to guess. It is the *spacing / gaps* family
@@ -57,6 +67,8 @@ import kotlinx.serialization.Serializable
  *   generator with no notion of size ignores it, exactly as a density-less one ignores [density].
  * @property depth how far the design steps out of the picture plane, `0..1` — `0` is flat, `1` fully dimensional
  *   (a lit relief, a hard shadow). A flat design ignores it. See the class note.
+ * @property roundness how soft the design's corners are, `0..1` — `0` is sharp, `1` as round as the shape allows (a
+ *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
  *   generator with a single look ignores it, and one with several clamps an out-of-range index to what it has.
  * @property colorMode how much of the palette to paint with — see [WallpaperColorMode]. Applied to the palette, not
@@ -68,6 +80,7 @@ data class DesignParams(
     val irregularity: Float = 0.5f,
     val scale: Float = 0.5f,
     val depth: Float = 0.5f,
+    val roundness: Float = 0.5f,
     val variant: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )

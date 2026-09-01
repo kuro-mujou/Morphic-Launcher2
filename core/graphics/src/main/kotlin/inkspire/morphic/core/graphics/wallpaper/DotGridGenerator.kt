@@ -8,7 +8,6 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.floor
-import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -42,12 +41,10 @@ import kotlin.math.min
  * from [StopContrast]'s rule, and it holds only because this is a whole band of marks rather than a lone shape: a
  * hundred near-ground tiles read as a soft edge, where one would read as a missing shape.
  *
- * **There are `n - 1` rungs, but never fewer than [MinBands], and that floor is what keeps the design intact under the
- * color modes.** With one rung per stop above the ground, the bands land on the palette's own colors exactly — but the
- * *default* mode reduces the palette to two stops, which leaves a single rung and no ramp at all: a flat block, with
- * the dither having nothing to trade between. Reading the palette as a continuous ramp instead and taking [MinBands]
- * rungs of it costs nothing where there are stops to land on (four rungs of a five-stop palette *are* its four stops)
- * and gives a two-stop palette a real ramp of its own tones.
+ * **The rungs come from [RampTones], floor and all.** One rung per stop above the ground lands on the palette's own
+ * colors exactly, but the *default* color mode reduces the palette to two stops, which leaves a single rung and no
+ * ramp: a flat block, with the dither having nothing to trade between. That failure is not this design's alone — it
+ * killed Flowing Blobs the same way — so the arithmetic and its floor live in one place.
  *
  * [gridOf] is pure and tested — the fit is arithmetic that fails silently when it is wrong (a block that overflows the
  * frame, or one that leaves a sliver of unused box), and it needs no canvas to check.
@@ -114,7 +111,8 @@ object DotGridGenerator : Generator {
         val grid = gridOf(width, height, Amount.at(params.density), params.scale, look)
         // The ground takes stop 0 and the bands are the rungs above it. A one-stop palette has no ramp and draws
         // nothing but its ground, which is the honest answer rather than a field of invisible tiles.
-        val bands = bandsFor(palette.size)
+        val tones = RampTones.aboveGround(palette)
+        val bands = tones.size
         val noise = PerlinNoise2d(seed)
         // A fraction of the *whole ramp*, not of one band — so the knob means the same thing however many stops the
         // color mode left behind. In band units it would erode a one-band palette's entire block at the setting that
@@ -143,7 +141,7 @@ object DotGridGenerator : Generator {
                 // live knob on a palette with a single band, where there is no neighbouring tone to trade with. It
                 // erodes the block's top edge, the end the ramp starts from, so the motif fades in rather than ruling.
                 if (band < 0) continue
-                paint.color = LinearGradientGenerator.colorAt((band + 1f) / bands, palette)
+                paint.color = tones[band.coerceAtMost(bands - 1)]
                 tile.set(
                     grid.left + col * grid.cellWidth,
                     grid.top + row * grid.cellHeight,
@@ -155,15 +153,6 @@ object DotGridGenerator : Generator {
         }
         return bitmap
     }
-
-    /**
-     * How many rungs the ramp above the ground is read at, for a palette of [stops].
-     *
-     * Pure and tested because the claim it rests on is invisible in a render: that a palette long enough to supply its
-     * own rungs lands on its **own stops**, unblended. A rung count one off would show as a set of colors slightly
-     * beside the ones the user picked — a wallpaper nobody can point at as wrong.
-     */
-    internal fun bandsFor(stops: Int): Int = if (stops <= 1) 0 else max(stops - 1, MinBands)
 
     /**
      * The lattice for a `[width] × [height]` frame at [columns] across, inside the box [margin] leaves.
@@ -208,9 +197,6 @@ object DotGridGenerator : Generator {
 
     /** How far along the ramp a tile can be pushed at full dither, as a fraction of the ramp's whole length. */
     private const val MaxDither = 0.32f
-
-    /** The fewest rungs the ramp is read at, so a palette reduced to two stops still steps rather than going flat. */
-    private const val MinBands = 3
 
     /** How many noise cycles span the frame — the size of the drifts that break the seams up. */
     private const val Frequency = 2.5f

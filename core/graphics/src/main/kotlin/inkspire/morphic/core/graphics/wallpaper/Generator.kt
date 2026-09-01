@@ -53,7 +53,14 @@ interface Generator {
  */
 object Generators {
 
-    /** The generator for [design]. */
+    /**
+     * The generator for [design].
+     *
+     * Its complexity *is* the catalog's length — one arm per design, and adding a design is meant to add an arm —
+     * so the branch-count check is suppressed rather than worked around. Splitting the table into helpers to score
+     * better would break the one property it exists for: that the compiler refuses a design with no generator.
+     */
+    @Suppress("CyclomaticComplexMethod")
     fun forDesign(design: WallpaperDesign): Generator = when (design) {
         WallpaperDesign.LINEAR_GRADIENT -> LinearGradientGenerator
         WallpaperDesign.MESH_GRADIENT -> MeshGradientGenerator
@@ -82,5 +89,6 @@ object Generators {
         WallpaperDesign.WAVE_DIVIDERS -> WaveDividersGenerator
         WallpaperDesign.RIBBED_GLASS -> RibbedGlassGenerator
         WallpaperDesign.VITRALL -> VitrallGenerator
+        WallpaperDesign.MODERN_MOSAIC -> ModernMosaicGenerator
     }
 }

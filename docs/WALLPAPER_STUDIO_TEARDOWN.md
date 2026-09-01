@@ -28,7 +28,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | # | Design | Parameters (tabs, in order) |
 |---|---|---|
 | 1 | Diagonal Bands | Count · Rotation · Coverage · Spacing · Offset · Variation |
-| 2 | Modern Mosaic | Count · Spacing · Frame · Ratio · Roundness · Irregularity — **not a Voronoi** (W11j): it is a packing of **rounded rectangles** with a wide grout, whose corners *Irregularity* pushes off square. Count 16, Spacing 40, Frame 0, **Ratio a segmented `1/4`**, Roundness 60, Irregularity 40. Our nearest design is the **Mondrian**, not the Voronoi |
+| 2 | Modern Mosaic | Count · Spacing · Frame · **Ratio** · Roundness · Irregularity — **six** (W11k). Not a Voronoi (W11j) and **not a packing either**: it is a recursive **subdivision** — at *Count* `1` the whole frame is one tile — so our nearest design is the **Mondrian**. *Count* **1..100** (default 16), *Spacing* **0..100** (default 40) is the grout as a *fraction of the cell*, not pixels; *Frame* **0..100** (default 0) is the margin around the whole block, and at 100 the block is gone. **Ratio is a segmented `1/2 · Golden Ratio · 1/3 · 1/4 · 1/5`, defaulting to Golden — the earlier note reading it as "a segmented `1/4`" had simply caught the option at the right edge of the strip.** It is the **least share a cut may leave** (the fraction falls in `r .. 1-r`), which is why `1/2` halves exactly and why the app lists them in that order. *Roundness* **0..100** (default 60) runs to half the tile's short side, so narrow tiles become pills. *Irregularity* **0..100** (default 40) pushes the **shared** corners off square — the grout stays a uniform band, so it is one lattice moving, not each tile distorting |
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow — **five** (W11i), and *Color mode* is the global one (Monochromatic · Bichromatic · **Colorful**, its default here · **Stroke**, a fourth we do not have). *Shades* **1..10** (default 8) is the band count, and the bands are **rungs on the interpolated ramp**, not the palette's own stops. **There is no count of blobs**: *Complexity* **4..40** (default **40**, the top) leaves the same two or three systems in the same corners and only makes their contours more convoluted — it is a domain warp's frequency, not a population. *Contrast* **0..100** (default 20) is how far down the field the bands are spread: `0` broad soft layers, `100` thin filaments on bare ground. *Shadow* **0..100** (default **0**) is a **paper-cut** shadow — each band darkens to `0.57` of itself at its boundary with the band *above*, easing out as `f^2.5`, on **every** side of a blob rather than in a light's direction. The ground is stop 0 |
 | 5 | Triangular Facets | Resolution · Distortion · **Thickness** · **Distribution** · Randomness · Tridimensionality — **six** (W11h). *Resolution* counts cells along the **long** axis, **3..20** (default 10), cells square. *Distortion* **0..100** (default 50) jitters the lattice; at `0` every cell takes the *same* diagonal. *Thickness* **0..100** (default **0**) is not a stroke — it **insets every facet**, so the ground shows between them as leading; at 100 the facets are specks. *Distribution* is a two-option segmented control, **Random** / **Area** (default), and it is a **color** distribution, not a point one: *Area* paints a smooth two-dimensional field, *Random* gives each facet a flat random stop. *Randomness* **0..100** (default 25) is how far a facet departs from that field — **and the tab disappears entirely under *Random***, which is the app saying the two are one axis. *Tridimensionality* **0..30** (default 5) is a per-facet brightness, the relief. The ground is **stop 0**, which the field never paints with |
@@ -71,6 +71,10 @@ Read down the table and the same handful of concepts recur under different names
   preset deciding how often each stop is picked); on Mesh it is a *layout* (Random / Corner interpolation /
   Linear bottom, deciding where each stop goes). Reading one for the other loses the design.
 - **Stroke / shape** — *Thickness, Roundness, Corner radius, Curves, Wideness*. Line weight and corner softness.
+  **Built as `roundness` (W11k)**, on the Modern Mosaic's corners — the last family to get a field of its own, and it
+  took the design where the knob is not a refinement but the identity: the same tiling with square corners *is* a
+  Mondrian. The family had been riding whatever field was spare (Facets' *Thickness* on `scale`, Vitrall's *Curves* on
+  `irregularity`, Dot Grid's corner radius folded into `variant`), which is exactly how `depth` lived before W11h.
 - **Rendering / depth** — *Blend mode, Contrast, Shadow, Refraction, Vibrancy, Tridimensionality, Real glass*, and
   Confetti's *Focus distance / Focus range*. The lighting/translucency that gives their output *depth*. Ours were all
   flat; built so far are Ribbed Glass's lens, Gradient Columns' seam shadow, Ribbons' ground glow (W11c) and
@@ -157,7 +161,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | # | Theirs | Ours | Driven | Slice / note |
 |---|---|---|---|---|
 | 1 | Diagonal Bands | `DIAGONAL_BANDS` | ☐ | built in W9 from the note, never compared |
-| 2 | Modern Mosaic | `MONDRIAN`? | ☐ | rounded-rect packing with grout (W11j) — the mapping to `VORONOI` was wrong |
+| 2 | Modern Mosaic | `MODERN_MOSAIC` | ✅ | **W11k** — a subdivision, not a packing; *Ratio* is the least share a cut may leave. Catalog **28** |
 | 3 | Gradient Columns | `GRADIENT_COLUMNS` | ☐ | built in W9 from the note |
 | 4 | Flowing Blobs | `METABALLS` | ✅ | **W11i** — Complexity is a warp, not a count; the paper-cut shadow |
 | 5 | Triangular Facets | `TRIANGULAR_FACETS` | ✅ | **W11h** — color is a 2-D field of areas; `depth` added |
@@ -179,10 +183,10 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
 | 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
 
-**Eight of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
-`LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a), `HALFTONE` (split out of Dot
-Grid by W11e), and `VORONOI`, which turns out to be neither of the two designs it was named for (W11j). Catalog is
-**27**.
+**Nine of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+`LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a, and *still* ours-only — W11k
+built theirs beside it rather than reworking it), `HALFTONE` (split out of Dot Grid by W11e), and `VORONOI`, which
+turns out to be neither of the two designs it was named for (W11j). Catalog is **28**.
 
 **What the six taught, in one line each, because it is what predicts the next find:** check whether ours *is the same
 design* before judging its quality (4 of 6 were not); drive *every* knob to *both* ends before concluding; measure
@@ -202,8 +206,9 @@ underneath.
 | Mesh Gradient | **Mesh** | ✅ **W11g.** Grid + jitter landed in W7; W11g added the **Colors** layout (Vertical / Corners / Scattered) and **Softness**, and replaced inverse-distance weighting with a **warped bilinear mesh** — the only blend that is an exact gradient at the rigid end, as theirs is. |
 | Layered Waves | **Waves** | Closest we have. Add Distortion + Palette-gradients toggle. |
 | Vitrall | **Vitrall** | ✅ **W11j.** Built as its own design: the frame cut by **edge-to-edge chords** into leaded panes, each filled with a gradient. The old plan — a *variant* of our Voronoi — was based on a mapping that turned out to be wrong twice over. |
-| Modern Mosaic | — | Still missing, and it is **not** our Voronoi (W11j): theirs is a packing of rounded rectangles with a wide grout and jittered corners. The nearest thing we have is the **Mondrian**, which is the design to measure it against. |
+| Modern Mosaic | **Mosaic** | ✅ **W11k.** Built as its own design. Not a packing — a recursive subdivision, which its *Count* `1` gives away by drawing one tile over the whole frame — so it is the **Mondrian**'s construction with the opposite finish: every tile pulled back from its own edges onto a light ground, corners rounded, shared corners skewed. *Ratio* turned out to be the **least share a cut may leave**, not a split position, and that is what makes the tile sizes a harmonious set. |
 | — | **Voronoi** | Ours only, and honestly named at last (W11j). Cells built *around points* are neither their mosaic's rectangles nor their vitrall's shards. |
+| — | **Mondrian** | Ours only. Their Modern Mosaic is the same subdivision, so W11k measured the two against each other and left this one alone: it *rules an ink line between blocks that touch*, where theirs floats tiles on a ground. Same skeleton, opposite finish, two designs. |
 | Flow Field | **Flow** | Add **Orbs** (the moons), Style variant, lower density default. |
 | Rounded Tiles | **Truchet** | Reasonable analog; theirs is diagonal rounded bars w/ Blend mode. |
 | — | **Plasma, Rings, Rays** | Ours only (SL lacks). Keep, but give MONO/BICHROMATIC defaults — they are our loudest. |
@@ -287,6 +292,52 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11k — Modern Mosaic. ✅ (2026-09-01)** The design W11j handed off, and the first slice run under the
+    "Read gart first" rule above — gart's `arts/rects/mondrian` and `rects/divide` carry the subdivision, and reading
+    them first is what kept this from being re-derived.
+    - **It is a subdivision, not a packing, and *Count* `1` is the whole proof** — the frame becomes a single rounded
+      rectangle. Everything else follows: the boundaries are cuts that run the full width of whatever they cut, so
+      this is [MondrianGenerator]'s construction and the Mondrian is the design of ours to measure it against, exactly
+      as the checklist was corrected to say.
+    - **Their *Ratio* is the least share a cut may leave, not the split position — and that is the design's harmony
+      in one knob.** The cut falls anywhere in `r .. 1 - r`, so `1/2` is a *point* and every tile is an exact half of
+      its parent, where `1/5` admits a tile four times its sibling. Three things settle it: the exact-halves render at
+      `1/2`; the app listing the options `1/2 · Golden · 1/3 · 1/4 · 1/5`, which is monotone in `r` and so a single
+      axis from rigid to lopsided; and a measurement — three strips at `0.382 / 0.236 / 0.382` of the frame, which is
+      one golden cut and then a golden cut of the larger part, to the pixel. The default is the **golden minor**, and
+      a fixed band of fractions is what makes the tile sizes a small set of related numbers instead of a spread.
+      Ours takes it on `variant` as **Ratio: Even · Golden · Third · Quarter · Fifth**.
+    - **Their *Irregularity* moves one shared lattice, not each tile.** The grout's narrowest crossing stays at
+      36–43px from `0` to `100` — if tiles distorted independently some pair would drift together and close their gap.
+      So ours maps every corner through **one smooth displacement field**, which is the *same technique W11j rejected
+      for the window*, and the reason it is right here is worth keeping: a T-junction corner lands slightly off its
+      neighbour's straightened edge, and in the window that residue is a hairline of ground and a bug, while here
+      **there is already a wide band of ground between every pair of tiles**, so anything under the grout is invisible
+      by construction. The deciding property is whether the design puts ground between its pieces. Confirmed on the
+      render at full skew: no collisions, no gaps, and the amplitude can exceed the grout because what shows is the
+      field's *curvature over one edge*, not its size.
+    - **Their *Roundness* is the design's identity, so it arrived with a field of its own** — `DesignParams.roundness`,
+      the *shape* family's first home, added exactly as `scale` arrived in W11c and `depth` in W11h. At `0` this is a
+      Mondrian in a light grout and at `1` every narrow tile is a pill; folding that onto `variant` beside Ratio would
+      have been fifteen combinations of two independent things, and onto `depth` a lie (`depth`'s contract is that `0`
+      means *flat*). Ours rounds with **one quadratic through each corner** rather than a circular arc — an arc's
+      tangent length `r / tan(θ/2)` blows up on the near-straight corners a skewed tile produces.
+    - **Their *Frame* is the margin around the whole block** (at `100` the block is gone), and it is **not ported** —
+      the one knob left on the table here, as Dot Grid's *Offset* was. Five fields, six knobs of theirs, and the margin
+      is worth the least on a wallpaper whose block is the whole picture.
+    - **Their *Spacing* is a fraction of the cell, not pixels** — measured at 84px for 6 tiles and 44px for 16, same
+      setting. Ours reads it off `sqrt(area / count)`, so the grout means the same thing at any count and any frame.
+    - **The count range is a departure, and it is the panel's fault.** Theirs is `1..100` opening at **16**; every knob
+      in our panel opens at `0.5`, which on that range is 51 tiles — a texture, where the design's appeal is a composed
+      handful. Ours is `2..40` so the midpoint lands near theirs. That is the third design to want **per-design
+      defaults**, after Facets' leading and Dot Grid's margin, and it is now the clearest thing left in the studio.
+    - **Two extractions fell out, both on their second consumer.** `GlassCut.inset` is gart's own `inset` — its
+      `glasscut.kt` header lists "grout insets" beside the clipping this file was ported for, so the consumer simply
+      arrived; note its everted-sliver guard has a **hole gart shares**, since a shape inset past half its width flips
+      across *both* axes and the two winding reversals cancel, which no area test can see (ours adds the size
+      precondition). And `RampTones` is the "tones on the ramp above stop 0, never fewer than three" arithmetic that
+      Dot Grid and Flowing Blobs each arrived at after the default color mode drew them flat — this design would have
+      been the third, so it now lives in one place.
   - **W11j — Vitrall. ✅ (2026-09-01)** Two designs were driven here, because the verdict table mapped *both* of
     them onto our Voronoi, and it was wrong about both.
     - **Their *Modern Mosaic* is a packing of rounded rectangles**, with a wide grout and corners that

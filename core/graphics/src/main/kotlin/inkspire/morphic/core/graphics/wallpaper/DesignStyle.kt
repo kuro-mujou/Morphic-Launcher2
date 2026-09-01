@@ -32,6 +32,9 @@ import kotlin.math.roundToInt
  * @property depth the design's own word for its out-of-plane knob (*Relief*, *Shadow*, *Refraction*), driven by
  *   [DesignParams.depth] — null for the flat designs, which is nearly all of them. A label, for [irregularity]'s
  *   reason.
+ * @property roundness the design's own word for its corner-softness knob (*Roundness*, *Corner radius*), driven by
+ *   [DesignParams.roundness] — null wherever the design has no corners to soften, which is nearly everywhere. A label,
+ *   for [irregularity]'s reason.
  * @property variant the design's sub-look chooser, driven by [DesignParams.variant] — null for the twenty designs
  *   that have a single look.
  */
@@ -40,6 +43,7 @@ data class DesignStyle(
     val scale: String? = null,
     val irregularity: String? = null,
     val depth: String? = null,
+    val roundness: String? = null,
     val variant: VariantKnob? = null,
 )
 

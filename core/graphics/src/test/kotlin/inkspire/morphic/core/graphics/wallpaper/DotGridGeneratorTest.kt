@@ -88,7 +88,7 @@ class DotGridGeneratorTest {
                 0xFF2C6E6B.toInt(), 0xFF1F3A4D.toInt(), 0xFF121E2B.toInt(),
             ),
         )
-        val bands = DotGridGenerator.bandsFor(palette.size)
+        val bands = RampTones.countFor(palette.size)
         assertEquals("one rung per stop above the ground", 5, bands)
         for (band in 0 until bands) {
             assertEquals(
@@ -101,7 +101,7 @@ class DotGridGeneratorTest {
 
     @Test
     fun `a two-stop palette still gets a ramp rather than one flat band`() {
-        assertEquals(3, DotGridGenerator.bandsFor(2))
+        assertEquals(3, RampTones.countFor(2))
         val duo = Palette(listOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt()))
         val tones = (0 until 3).map { LinearGradientGenerator.colorAt((it + 1f) / 3f, duo) }
         assertEquals("the rungs must be three different tones", 3, tones.toSet().size)
@@ -110,6 +110,6 @@ class DotGridGeneratorTest {
 
     @Test
     fun `a one-stop palette has no ramp at all`() {
-        assertEquals(0, DotGridGenerator.bandsFor(1))
+        assertEquals(0, RampTones.countFor(1))
     }
 }

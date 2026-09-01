@@ -1,6 +1,7 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -101,4 +102,25 @@ class GlassCutTest {
         assertEquals(kotlin.math.atan2(1f, 4f), GlassCut.longestDiagonal(wide), 1e-5f)
     }
 
+    @Test
+    fun `an inset pulls every edge in by the same distance`() {
+        val inset = GlassCut.inset(frame, 0.1f)!!
+        // A uniform inset of the unit square by 0.1 is the 0.8 square — the check that separates a true edge offset
+        // from a scaling about the centroid, which would give 0.8 only by luck of the square's symmetry, so the
+        // rectangle below is the case that actually discriminates.
+        assertEquals(0.64f, GlassCut.area(inset), 1e-4f)
+
+        val wide = floatArrayOf(0f, 0f, 4f, 0f, 4f, 1f, 0f, 1f)
+        val thin = GlassCut.inset(wide, 0.2f)!!
+        // Scaling about the centroid by the factor that fixes the short side would leave the long side 3.2, not 3.6.
+        assertEquals("a true inset moves every edge 0.2, whatever the side's length", 3.6f * 0.6f, GlassCut.area(thin), 1e-4f)
+    }
+
+    @Test
+    fun `an inset that would evert the shape is refused, not returned inside out`() {
+        // Offset the edges far enough and they cross past each other and re-intersect into a small polygon wound the
+        // other way — which draws as a real shape of about the right color in about the right place.
+        assertNull(GlassCut.inset(frame, 0.6f))
+        assertNull(GlassCut.inset(floatArrayOf(0f, 0f, 4f, 0f, 4f, 1f, 0f, 1f), 0.9f))
+    }
 }

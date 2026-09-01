@@ -13,10 +13,11 @@ import kotlin.math.sqrt
 /**
  * Cutting flat polygons: a pane in, two panes out — by a straight line or by an arc.
  *
- * The arithmetic behind [VitrallGenerator], kept beside it rather than inside it because it is a different concern
- * from the window's *design*. Where that file decides which way a cut runs and what color the glass is, this one only
- * answers "cut this shape in two", and it is gart's own split — its `arts/lines/vitrali` puts the same toolkit in a
- * `glasscut.kt` next to the art.
+ * The flat-polygon arithmetic behind [VitrallGenerator] and [ModernMosaicGenerator], kept beside them rather than
+ * inside either because it is a different concern from a design. Where those files decide which way a cut runs and
+ * what color a piece is, this one only answers "cut this shape in two" and "pull it back from its own edges" — and it
+ * is gart's own split: its `arts/lines/vitrali` puts the same toolkit in a `glasscut.kt` next to the art, and its
+ * header names exactly these three jobs ("half-plane clipping, chord splits, grout insets").
  *
  * A polygon is interleaved `x, y` floats in whatever frame the caller is working in; nothing here knows about pixels.
  *
@@ -257,6 +258,90 @@ internal object GlassCut {
         val piece = out.toFloatArray()
         if (area(piece) < Tiny) return null to null
         return piece to chain.toFloatArray().takeIf { chain.isNotEmpty() }
+    }
+
+    /**
+     * [pane] pulled back from every one of its edges by [by] — the grout inset. Null where the inset consumes it.
+     *
+     * **A true uniform inset: every edge is shifted inward along its own normal and the edges re-intersected**, so the
+     * band left around the piece is the same width all the way round. Scaling the polygon about its centroid instead
+     * is the cheap version and it is visibly wrong on anything but a regular shape — each edge moves in by a distance
+     * proportional to how far it started from the centroid, so the grout thickens around a piece's long side. (The
+     * triangle case has a shortcut, scaling about the *incenter*, which [TriangularFacetsGenerator] uses; it does not
+     * generalize past three edges, which is why this exists.)
+     *
+     * **The everted-sliver guards are the part that is not obvious, and there are two because there are two ways to
+     * evert.** Inset far enough and a convex polygon does not shrink to nothing tidily: the offset edges cross past
+     * each other and re-intersect into a small polygon that draws as a real shape of about the right color in about
+     * the right place. Where it flips across *one* axis its winding reverses, which the signed area catches. Where it
+     * flips across *both* — inset a square by more than half its side and every edge crosses its opposite — the two
+     * reversals cancel and the winding is **unchanged**, so no area test can see it. (gart's `inset` keeps only the
+     * winding check and has this hole.) That case is caught before any work, by the plain precondition that nothing
+     * can be pulled back from its own edges by more than half its own extent.
+     */
+    fun inset(pane: FloatArray, by: Float): FloatArray? {
+        val count = pane.size / 2
+        if (count < MinCorners || by <= 0f) return pane.takeIf { count >= MinCorners }
+        val box = bounds(pane)
+        val narrowest = min(box[2] - box[0], box[3] - box[1])
+        val source = signedArea(pane)
+        // The both-axes eversion, refused up front — see the note above; and a zero-area pane has no inside to keep.
+        if (by + by >= narrowest || source == 0f) return null
+        // Wind consistently first: the inward normal is the edge turned one way or the other depending on the winding,
+        // and a piece that arrived reversed would be inset *outward* — which is the everted sliver, arriving early.
+        val poly = if (source < 0f) reversed(pane) else pane
+
+        val ax = FloatArray(count)
+        val ay = FloatArray(count)
+        val ex = FloatArray(count)
+        val ey = FloatArray(count)
+        for (i in 0 until count) {
+            val j = (i + 1) % count
+            val dx = poly[j * 2] - poly[i * 2]
+            val dy = poly[j * 2 + 1] - poly[i * 2 + 1]
+            val len = hypot(dx, dy)
+            if (len < Tiny) return null
+            // A point on the shifted edge, and the edge's own direction — the line is all that is needed to re-intersect.
+            ax[i] = poly[i * 2] - dy / len * by
+            ay[i] = poly[i * 2 + 1] + dx / len * by
+            ex[i] = dx
+            ey[i] = dy
+        }
+        val out = ArrayList<Float>(pane.size)
+        for (i in 0 until count) {
+            val h = (i + count - 1) % count
+            val cross = ex[h] * ey[i] - ey[h] * ex[i]
+            if (abs(cross) < Tiny) continue // this edge is parallel to the last — no corner between them
+            val t = ((ax[i] - ax[h]) * ey[i] - (ay[i] - ay[h]) * ex[i]) / cross
+            out.add(ax[h] + ex[h] * t)
+            out.add(ay[h] + ey[h] * t)
+        }
+        val result = out.toFloatArray()
+        // The **signed** area, which is the one-axis guard: an everted result still has a perfectly respectable
+        // unsigned area, and only its reversed winding says it is inside out. The pane was wound positive above, so a
+        // negative answer here is exactly that flip.
+        val shrunk = if (out.size >= MinVertices) signedArea(result) else 0f
+        return result.takeIf { shrunk >= Tiny && shrunk <= abs(source) }
+    }
+
+    /** The signed area of [pane] — positive or negative by winding, which [inset] needs and [area] throws away. */
+    private fun signedArea(pane: FloatArray): Float {
+        var sum = 0f
+        val count = pane.size / 2
+        for (i in 0 until count) {
+            val j = (i + 1) % count
+            sum += pane[i * 2] * pane[j * 2 + 1] - pane[j * 2] * pane[i * 2 + 1]
+        }
+        return sum / 2f
+    }
+
+    /** [pane]'s vertices in the opposite order, so its winding flips. */
+    private fun reversed(pane: FloatArray): FloatArray {
+        val count = pane.size / 2
+        return FloatArray(pane.size) { i ->
+            val v = count - 1 - i / 2
+            if (i % 2 == 0) pane[v * 2] else pane[v * 2 + 1]
+        }
     }
 
     /**

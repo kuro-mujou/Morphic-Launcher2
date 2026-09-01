@@ -105,6 +105,13 @@ internal fun WallpaperStylePanel(
                 onCommit = { onParams(params.copy(irregularity = it)) },
             )
 
+            StyleTab.ROUNDNESS -> FractionControl(
+                what = style.roundness.orEmpty(),
+                value = params.roundness,
+                default = DesignParams().roundness,
+                onCommit = { onParams(params.copy(roundness = it)) },
+            )
+
             StyleTab.DEPTH -> FractionControl(
                 what = style.depth.orEmpty(),
                 value = params.depth,
@@ -183,10 +190,10 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
  * Which knob the Style panel is showing.
  *
  * Only [COLOR] is offered for every design; the others appear when the current generator declares them. The order is
- * the panel's, and it runs from what a design *is* toward how it is painted — [DEPTH] sits past [VARIANT] because a
- * relief is lighting rather than shape.
+ * the panel's, and it runs from what a design *is* toward how it is painted — [ROUNDNESS] sits with the shape knobs
+ * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape.
  */
-internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, VARIANT, DEPTH, COLOR }
+internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, ROUNDNESS, VARIANT, DEPTH, COLOR }
 
 /**
  * The tabs this design offers, in panel order — never empty, since [StyleTab.COLOR] applies to every design (the color
@@ -196,6 +203,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (amount != null) add(StyleTab.AMOUNT)
     if (scale != null) add(StyleTab.SCALE)
     if (irregularity != null) add(StyleTab.IRREGULARITY)
+    if (roundness != null) add(StyleTab.ROUNDNESS)
     if (variant != null) add(StyleTab.VARIANT)
     if (depth != null) add(StyleTab.DEPTH)
     add(StyleTab.COLOR)
@@ -206,6 +214,7 @@ private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.AMOUNT -> amount?.label.orEmpty()
     StyleTab.SCALE -> scale.orEmpty()
     StyleTab.IRREGULARITY -> irregularity.orEmpty()
+    StyleTab.ROUNDNESS -> roundness.orEmpty()
     StyleTab.VARIANT -> variant?.label.orEmpty()
     StyleTab.DEPTH -> depth.orEmpty()
     StyleTab.COLOR -> "Color"

@@ -218,4 +218,14 @@ enum class WallpaperDesign {
      */
     @SerialName("ribbedGlass")
     RIBBED_GLASS,
+
+    /**
+     * The frame subdivided into rounded tiles floating on a wide grout — the modern mosaic. [MONDRIAN]'s construction
+     * and the opposite of its finish: where that rules an ink line between blocks that touch, this pulls every tile
+     * back from its own edges so the ground shows between them, rounds the corners, and pushes the shared ones off
+     * square. [DesignParams.variant] is how lopsided a cut may be, which is what makes the tile sizes a set rather
+     * than a spread.
+     */
+    @SerialName("modernMosaic")
+    MODERN_MOSAIC,
 }
