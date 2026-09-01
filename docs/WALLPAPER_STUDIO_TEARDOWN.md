@@ -10,7 +10,8 @@ W5 built sixteen generators and they render correctly, but two things are wrong 
 2. **The styling defaults are loud where theirs are restrained.** Aesthetic principles in the second half.
 
 Companion to the plan (the *what/when*) and [GART_HARVEST.md](GART_HARVEST.md) (engine source). Read before the next
-wallpaper slice.
+wallpaper slice — **and read `../gart` before writing a line of the fix.** That rule has a section of its own below
+("Read gart first"); it is the one that has cost the most rework, so it is flagged here too.
 
 ---
 
@@ -167,7 +168,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 10 | Layered Waves | `WAVES` | ☐ | verdict: "closest we have" — untested |
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ☐ | built in W9 from the note |
-| 13 | Vitrall | `VITRALL` | ✅ | **W11j** — built; chord subdivision, not a Voronoi. Catalog **27** |
+| 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
 | 14 | Flow Field | `FLOW_FIELD` | ☐ | verdict wants Orbs + a Style variant |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
 | 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
@@ -302,15 +303,33 @@ underneath.
       of its area. Splitting the largest every time gives an even honeycomb; splitting a uniformly-chosen one leaves
       one huge pane untouched. A cut is sometimes taken **parallel to the pane's longest edge**, which is where their
       runs of parallel strips come from.
-    - **Curves are done by warping the plane, not by clipping against curves.** Each pane's outline is subdivided and
-      pushed through one smooth displacement field, so a straight chord bows into an arc and the two panes either
-      side of it stay welded along it. Clipping against a curve means solving for the crossings, and a crossing that
-      is a rounding-error apart in the two panes is a hairline of ground between them. The field is pinned at the
-      frame's border so the outer edges stay straight.
+    - **Curves are a cut against a circle, and the hairline is answered by symmetry.** *(Corrected 2026-09-01 —
+      this bullet previously claimed a plane warp, which was invented rather than observed and was never written;
+      what shipped under the name "Curves" was angle jitter. See "Read gart first" above.)* `GlassCut.bowAbout`
+      clips the pane against the circle twice, once keeping each side; both calls sample the arc from the *same*
+      crossings over the *same* sweep magnitude in opposite directions, so the two panes carry the same arc vertices
+      reversed and weld along it. Two consequences only the render and the tests showed: a bowed pane is **not
+      convex**, so a later straight cut can cross it four times, and a half-plane clip then welds two of three pieces
+      into a self-intersecting loop whose area is *plausible and wrong* — the subdivision stops terminating on area
+      and returns thousands of panes of thousands of vertices. Both cut operations now **refuse** a cut that would
+      not leave exactly two pieces, and the caller retries. And the arc's sampling needs a **cap** (48 segments),
+      because every bow's samples stay on a pane that may be cut again and a repeatedly-shaved pane accumulates them
+      until the heap goes.
     - **Every pane is filled with a gradient, at every setting of every knob of theirs**, and that is most of why the
       glass reads as material rather than as flat cells. Ours puts the strength on `depth` as *Glass*; the gradient
-      spans the **pane's own** extent, so a small pane gets the whole sweep instead of looking flat beside a large one.
-    - Knobs: `density` → **Panes** (8..140), `scale` → **Leading**, `irregularity` → **Curves**, `depth` → **Glass**,
+      spans the **pane's own** extent, so a small pane gets the whole sweep instead of looking flat beside a large
+      one, and its angle and strength are the pane's own — gart draws each piece catching the light its own way.
+    - **The came rim is a translucent black wash, and getting that wrong is what made *Glass* read as *Blur*.**
+      gart's is black at alpha **74/255**, a blurred stroke `2.6 × lead` wide clipped to the pane, so the glass
+      thickens toward the lead. Ours had it at the palette's darkest stop, **fully opaque**: a 34px opaque blurred
+      band inside every pane on a 1080-wide frame, which on an average pane eats about 40% of it and reads as a dark
+      smudge over the whole window. It was also binary on `glass > 0`, so the bottom of the knob already got the full
+      rim. Now black and alpha-scaled by the knob — black is also what makes it darken a *bright* pane, where a wash
+      of the darkest stop lightens one.
+    - **A tone that runs off the ramp is reflected, not clamped** (gart's `uAt`, at `0.7` of the overshoot). Clamping
+      piles every overshooting pane onto the *same* end stop, which shows up as large flat runs of one color exactly
+      where the field is most interesting.
+    - Knobs: `density` → **Panes** (12..160), `scale` → **Leading**, `irregularity` → **Curves**, `depth` → **Glass**,
       `variant` → **Colors** (Vertical / Scattered, their *Color distribution*). Their *Slices* and *Randomness* fold
       into the subdivision as fixed properties — driven to both ends, *Slices* moved the picture barely at all.
       Their **Color mode** tab is our global one, and its count in the inventory above was one short.
@@ -519,6 +538,35 @@ underneath.
 - **Depth pass (fold in) —** Shadow / Blend mode / Refraction where cheap; it is a lot of their premium feel.
 
 **Guiding rule: default to restraint.** Sparse, soft, two-tone. Loud is a variant the user opts into, never the default.
+
+## Read gart first — before designing anything
+
+**`../gart` is a working implementation of most of these designs, by someone who solved these problems already. Open
+it before deciding how ours should work.** It is a sibling of this repo (`gart` beside `Morphic-Launcher-2`); `arts/`
+is organized by family, so `find . -ipath '*<design>*'` lands on the file. This is not an optional cross-check —
+more than once now a mechanism has been *invented* here, written up in this doc as though observed, and shipped,
+while gart's own source sat one directory away with the real answer in it.
+
+**W11j is the worked example, and it is worth being concrete about the cost.** Its note in this doc claimed *"curves
+are done by warping the plane, not by clipping against curves"*, and gave a reason: clipping against a curve means
+solving for the crossings, and a crossing a rounding apart in the two panes is a hairline of ground between them.
+The reason is real; the conclusion drawn from it was not. gart's `arts/lines/vitrali/glasscut.kt` **does** clip
+against the circle, and answers the hairline **by symmetry** — it clips the same circle twice, once keeping each
+side, so both panes sample the same arc from the same crossings over the same sweep, in opposite directions. No
+tolerance, no warp. What shipped instead was a knob labeled *Curves* that produced no curves at all, only angle
+jitter; this doc described a plane warp that was never written; and the render had a straight edge everywhere.
+
+So, per design, in this order:
+
+1. **Find it in gart** and read the whole art file plus whatever toolkit it pulls in.
+2. **Drive the reference** (the rule below) to learn what the *knobs* mean — gart has its own parameters, not theirs.
+3. **Write ours from gart's mechanism, with the reference's knob semantics.** Where the two disagree, gart is usually
+   right about *how* and the reference about *what the user is choosing*.
+4. **Where you depart from gart, say so in the code and say why.** Both of W11j's departures are named there: the
+   arc's step count is capped (gart samples an arc into thousands of segments and has a desktop heap, where here
+   every bow's samples land on a pane that may be cut again), and *Curves* gates the curved glazing courses that gart
+   leaves unconditional (the reference's knob has to leave every cut straight at `0`). A departure nobody wrote down
+   is the thing that gets silently reinvented next time.
 
 **Method rule, learned the hard way in W11c/W11d: drive every one of their knobs to *both* extremes before concluding.**
 Confirming a design's model and stopping is what hid Ribbons' two missing knobs and its glow, and what hid the fact

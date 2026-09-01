@@ -354,9 +354,12 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     and left for its own slice. Their **Vitrall** cuts the frame with **edge-to-edge chords**, so its panes are long
     shards and slender wedges where a Voronoi's are compact blobs; drive their Density to `1` and a single chord
     crosses the whole frame, which no point-based diagram can do. Built as a design of its own — **catalog 27** — by
-    recursive area-weighted splitting, with curves done by **warping the plane** rather than clipping against curves
-    (so the two panes either side of a bowed cut stay welded to it), and a gradient fill per pane on `depth`, which
-    is most of why glass reads as material. Our Voronoi keeps its name and stops claiming to be either of theirs.
+    recursive area-weighted splitting, with curves done by **clipping against a circle twice, once keeping each side**
+    — both calls sample the same arc from the same crossings, so the two panes weld along it; that is gart's own
+    answer, and an earlier note here claimed a plane warp instead, which was invented and never written — plus a
+    gradient fill and a translucent came rim per pane on `depth`, which is most of why glass reads as material. Our
+    Voronoi keeps its name and stops claiming to be either of theirs. **The lasting lesson is the process, not the
+    design:** see [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → "Read gart first".
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

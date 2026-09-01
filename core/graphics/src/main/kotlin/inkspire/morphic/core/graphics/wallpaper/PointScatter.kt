@@ -6,8 +6,9 @@ import kotlin.random.Random
 
 /**
  * Scatters `count` points across the unit square on a **jittered lattice** — the shared derivation behind every design
- * whose organic-noise knob is *how irregularly its points are placed* (Modern Mosaic / Vitrall's cells, Mesh Gradient's
- * control points).
+ * whose organic-noise knob is *how irregularly its points are placed* — the Voronoi's cells, [SoftOverlapsGenerator]'s
+ * discs, [FlowLinesGenerator]'s starts. (It named "Modern Mosaic / Vitrall's cells" until W11j established that the
+ * Voronoi is neither of those designs, and Vitrall cuts chords rather than placing points at all.)
  *
  * **A lattice nudged by irregularity, not a lerp toward uniform-random — because "regular" needs a target to be
  * regular against.** A set of uniformly-random points cannot be made *more even*; there is no grid to snap back to. So
