@@ -27,7 +27,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 
 | # | Design | Parameters (tabs, in order) |
 |---|---|---|
-| 1 | Diagonal Bands | Count · Rotation · Coverage · Spacing · Offset · Variation |
+| 1 | Diagonal Bands | Count · **Rotation** · **Coverage** · Spacing · **Offset** · Variation — **six** (W11l). **The bands do not fill the frame**: *Coverage* **10..100** (default 50) is the extent of the whole band *slab* across the band axis, centred, and the rest is ground — measured at 50, the slab spans `0.49` of the frame's own extent along that axis. *Count* **2..30** (default **5**) is bands in the slab. *Rotation* is **continuous, −180..180°**, opening on a shallow **20°**. *Spacing* **0..100** (default **0**) is a gap of ground within each band's pitch — a hairline at `7`, no bands at all at `100`. *Offset* is the four-arrow **nudge** Dot Grid has, walking the slab off centre. *Variation* is the band-width jitter; `0` is exactly equal. **The ground is one end stop and the bands cycle the rest** — scanned: five bands over a ground that is a *sixth* colour none of them takes |
 | 2 | Modern Mosaic | Count · Spacing · Frame · **Ratio** · Roundness · Irregularity — **six** (W11k). Not a Voronoi (W11j) and **not a packing either**: it is a recursive **subdivision** — at *Count* `1` the whole frame is one tile — so our nearest design is the **Mondrian**. *Count* **1..100** (default 16), *Spacing* **0..100** (default 40) is the grout as a *fraction of the cell*, not pixels; *Frame* **0..100** (default 0) is the margin around the whole block, and at 100 the block is gone. **Ratio is a segmented `1/2 · Golden Ratio · 1/3 · 1/4 · 1/5`, defaulting to Golden — the earlier note reading it as "a segmented `1/4`" had simply caught the option at the right edge of the strip.** It is the **least share a cut may leave** (the fraction falls in `r .. 1-r`), which is why `1/2` halves exactly and why the app lists them in that order. *Roundness* **0..100** (default 60) runs to half the tile's short side, so narrow tiles become pills. *Irregularity* **0..100** (default 40) pushes the **shared** corners off square — the grout stays a uniform band, so it is one lattice moving, not each tile distorting |
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow — **five** (W11i), and *Color mode* is the global one (Monochromatic · Bichromatic · **Colorful**, its default here · **Stroke**, a fourth we do not have). *Shades* **1..10** (default 8) is the band count, and the bands are **rungs on the interpolated ramp**, not the palette's own stops. **There is no count of blobs**: *Complexity* **4..40** (default **40**, the top) leaves the same two or three systems in the same corners and only makes their contours more convoluted — it is a domain warp's frequency, not a population. *Contrast* **0..100** (default 20) is how far down the field the bands are spread: `0` broad soft layers, `100` thin filaments on bare ground. *Shadow* **0..100** (default **0**) is a **paper-cut** shadow — each band darkens to `0.57` of itself at its boundary with the band *above*, easing out as `f^2.5`, on **every** side of a blob rather than in a light's direction. The ground is stop 0 |
@@ -58,11 +58,19 @@ Read down the table and the same handful of concepts recur under different names
 - **Amount / coverage** — *Count, Resolution, Columns, Rows, Iterations, Density, Slices*. The "how many" knob (our
   `density`, but named per design and often exposed as a raw integer). **Built (W6–W10).**
 - **Spacing / gaps** — *Spacing, Margin, Offset, Coverage, Size, Radius*. How much air between elements, and how much
-  room each takes. **Built as `scale` (W11c)**, on Ribbons' spread; the designs whose element size is still fixed
+  room each takes. **Built as `scale` (W11c)**, on Ribbons' spread; it is now the field the *Coverage* knob lands on
+  wherever one appears (Bauhaus in W11d, Diagonal Bands in W11l), which is also where the family's one real squeeze
+  shows: a design exposing **both** a Coverage and a Spacing has two members of one family and one field, and the
+  coverage wins; the designs whose element size is still fixed
   (Confetti's radius, Soft Overlaps' radius, Rounded Tiles' margin) are where it pays off next. Dot Grid spends it on
   the **margin** instead (W11e) — its own tile size rides on the `variant` look, because a contained block and a
   full-bleed field is the bigger of the two questions by a distance.
-- **Orientation** — *Rotation, Direction, Delta rotation, Rotate delta*. Which way it points / turns.
+- **Orientation** — *Rotation, Direction, Delta rotation, Rotate delta*. Which way it points / turns. **Still no field
+  of its own, and it is now the last family without one** (shape got `roundness` in W11k). Six of their designs expose
+  it and three of ours spend `variant` on a discrete direction as a stand-in, which is what Diagonal Bands does with
+  five sampled angles (W11l). Deliberately **not** added for one design: a field shaped by one consumer is the thing
+  `roundness` only just got away with, and here there are three to move at once. That is a slice of its own, and the
+  clearest model work left.
 - **Organic noise** — *Irregularity, Distortion, Jitter, Randomness, Variation, Offset distortion*. The single most
   common family — the knob that takes a rigid generator to an organic one. **Ours have none of this**, which is part of
   why ours read as mechanical.
@@ -160,7 +168,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 
 | # | Theirs | Ours | Driven | Slice / note |
 |---|---|---|---|---|
-| 1 | Diagonal Bands | `DIAGONAL_BANDS` | ☐ | built in W9 from the note, never compared |
+| 1 | Diagonal Bands | `DIAGONAL_BANDS` | ✅ | **W11l** — a slab on a ground, not a full-bleed stripe pattern; *Coverage* is the finding |
 | 2 | Modern Mosaic | `MODERN_MOSAIC` | ✅ | **W11k** — a subdivision, not a packing; *Ratio* is the least share a cut may leave. Catalog **28** |
 | 3 | Gradient Columns | `GRADIENT_COLUMNS` | ☐ | built in W9 from the note |
 | 4 | Flowing Blobs | `METABALLS` | ✅ | **W11i** — Complexity is a warp, not a count; the paper-cut shadow |
@@ -183,7 +191,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
 | 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
 
-**Nine of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+**Ten of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
 `LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a, and *still* ours-only — W11k
 built theirs beside it rather than reworking it), `HALFTONE` (split out of Dot Grid by W11e), and `VORONOI`, which
 turns out to be neither of the two designs it was named for (W11j). Catalog is **28**.
@@ -212,7 +220,8 @@ underneath.
 | Flow Field | **Flow** | Add **Orbs** (the moons), Style variant, lower density default. |
 | Rounded Tiles | **Truchet** | Reasonable analog; theirs is diagonal rounded bars w/ Blend mode. |
 | — | **Plasma, Rings, Rays** | Ours only (SL lacks). Keep, but give MONO/BICHROMATIC defaults — they are our loudest. |
-| Diagonal Bands / Gradient Columns / Wave Dividers / Ribbed Glass | — | **Missing, all easy + restrained.** Calm staples. Diagonal Bands is trivial (Count/Rotation/Coverage/Spacing/Offset). |
+| Diagonal Bands | **DiagonalBands** | ✅ **W11l.** Ours filled the frame with saturated stripes; theirs lays a *slab* of bands across a large calm ground, and its *Coverage* is how much of the frame that slab takes. Also: the ground is stop 0 and the bands cycle the tones **above** it, where ours cycled the whole palette and so had no ground to show. |
+| Gradient Columns / Wave Dividers / Ribbed Glass | — | Built in W9 from one-line notes, never compared. Calm staples. |
 | Polygon Cascade / Ribbon Flow / Flow Lines | — | Missing, all **thin-line** family. High visual value. |
 | Soft Overlaps | — | Missing. Translucent overlapping shapes (Blend mode + palette alpha — our `Palette` already keeps alpha). |
 | Shape Trail | — | Missing. 3D tube/knot (Path style + Depth). Real dimensional rendering — lower priority. |
@@ -292,6 +301,44 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11l — Diagonal Bands. ✅ (2026-09-01)** The first of the four W9 staples to be driven, and the identity
+    finding lands on the *composition* rather than the geometry: the bands were right and there were simply far too
+    many of them, everywhere.
+    - **Their bands do not fill the frame, and that is the design.** *Coverage* is the extent of the whole band
+      **slab** across the band axis — wound down, a slender ribbon of colour on bare ground; only at the top of its
+      travel is it the full-bleed stripe pattern ours was permanently stuck at. Measured rather than guessed: at
+      Coverage 50 the slab spans `0.49` of the frame's own extent along that axis, so the knob is a fraction of the
+      *projected* extent and nothing else. Ours takes it on `scale`, the field Bauhaus's *Coverage* already uses.
+      This is the teardown's own first aesthetic principle — restraint and negative space — as a single knob, and
+      ours had no way to reach it.
+    - **The ground is one end stop and the bands cycle the rest.** Scanning theirs down the middle gives five bands
+      over a ground that is a *sixth* colour, which none of the bands ever takes. Ours cycled the whole palette
+      including stop 0, so there was no ground to be had even where the coverage had allowed one. It is
+      [RampTones]'s **third** consumer, one slice after it was extracted, and in bichromatic its floor is again what
+      keeps the design alive: three real tones on the ground instead of one.
+    - **Their *Rotation* is continuous over `−180..180°` and opens on a shallow `20°`** — ours had four fixed
+      directions and none of them was shallow, so the design's own default look was unreachable. Ours now offers
+      five sampled angles (`20 · 45 · 90 · 135 · 160`), ascending so the segmented control reads as one axis, and
+      starting at the shallow one so that index `0` is also the design's default — the two constraints agree only at
+      that ordering, which is why a flat `0°` is not on the list. **The continuous version is deliberately deferred**
+      to a slice that gives the *orientation* family a field with its three consumers together; see the family note
+      above.
+    - **Projected in pixels, not in the unit square** — a `20°` band has to draw at `20°` on the screen, and in the
+      unit square the frame's aspect turns it into something near-flat on a phone. Verified by measuring the render:
+      `20.01°`. Same lesson as Vitrall's grain and the Mosaic's cuts, third time.
+    - **Not ported: their *Spacing* and their *Offset*.** Spacing (a gap of ground inside each band's pitch — a
+      hairline at `7`, no bands at `100`) is a real look with nowhere to sit while `scale` carries the coverage, which
+      is worth more; it is fixed at their own default of `0`. Offset is Dot Grid's four-arrow nudge again, wanting a
+      two-axis control neither the model nor the panel has — **second design to want one**, and now a named gap.
+    - **The count range is theirs exactly (`2..30`), and the default is left wrong on purpose.** Theirs opens at 5
+      and our panel's uniform `0.5` puts us at 16. Modern Mosaic bent its range to compensate one slice ago; that was
+      justified there because 51 tiles is a different *character*, and it is not justified here because 16 shallow
+      bands on a ground is the same picture as 5, finer. Bending a second range would make the workaround the pattern.
+      **Third consumer for per-design defaults**, after Facets' leading and the Mosaic's count.
+    - **gart has nothing for this design, and that is worth recording.** `arts/stripes`, `arts/lines/stripes1`,
+      `stripes2` are all vertical or wavy sine lines; none is a flat rotated band set. So the reference was the only
+      source here — which is the "read gart first" rule working as intended rather than failing: it is cheap to check
+      and the answer is sometimes no.
   - **W11k — Modern Mosaic. ✅ (2026-09-01)** The design W11j handed off, and the first slice run under the
     "Read gart first" rule above — gart's `arts/rects/mondrian` and `rects/divide` carry the subdivision, and reading
     them first is what kept this from being re-derived.

@@ -349,6 +349,16 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     mode drawing two, which is the design dead at its own default — and their **paper-cut shadow**, measured off
     theirs: each band darkens to `0.57` of itself at its boundary with the band above, easing as `f^2.5`, on every
     side of a blob rather than in a light's direction. `depth`'s second consumer, one slice after it arrived.
+    **W11l — Diagonal Bands ✅ (2026-09-01):** the first W9 staple driven, and the finding is composition rather than
+    geometry — **their bands do not fill the frame.** *Coverage* is the extent of the band **slab** across the band
+    axis (measured: `0.49` of the frame's projected extent at Coverage 50), and the rest is ground; ours was stuck at
+    full bleed, which is the teardown's first aesthetic principle in one knob. The ground is stop 0 and the bands
+    cycle the tones above it — `RampTones`' third consumer — where ours cycled the whole palette and so had no ground.
+    Their *Rotation* is continuous `−180..180°` opening on a shallow `20°`; ours samples five angles on `variant`, and
+    the **orientation field the family wants is deferred** to a slice that moves its three consumers together. Their
+    *Spacing* and *Offset* are not ported, with reasons. gart has nothing for this design. Full record:
+    [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → W11l.
+
     **W11k — Modern Mosaic ✅ (2026-09-01):** the design W11j handed off, and **catalog 28**. Not a packing but a
     recursive **subdivision** — at their *Count* `1` the frame is one rounded tile — so it is `MONDRIAN`'s construction
     with the opposite finish: tiles pulled back onto a light ground, corners rounded, shared corners skewed through one
