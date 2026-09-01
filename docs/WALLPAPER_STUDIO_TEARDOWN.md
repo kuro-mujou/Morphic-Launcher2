@@ -674,6 +674,16 @@ either end is a knob you have misread. Where a look is in question, **measure pi
 scanline across their Ribbons showed hard-edged strokes where it looked like a per-line glow, and a brightness grid
 found the lit ground that actually causes it.
 
+**The mechanics of both rules live in [tools/refdrive/](../tools/refdrive/) — read its README before driving anything.**
+The rules above are the *what*; that is the *how*, and it is there because it was rediscovered from scratch in three
+consecutive slices. Two of its traps produce a **wrong reading** rather than a visible failure: `adb` from Git Bash
+silently mangles device paths (so the folder you thought you cleared is untouched and every render you pull is the
+previous run's), and **not every knob is a ruler** — *Offset* is a four-arrow nudge pad, and swiping one changes
+nothing in a way that reads exactly like "this knob does nothing". `measure.py` is the measuring half: `scan`, `tiles`,
+`grout` and `slope`, each noting which finding it settled, and all four sharing the one part that is genuinely hard —
+that the ground is **not** the most common color (a wide band beats it) but the one touching nearly every row *and*
+column.
+
 ---
 
 ## Open questions
