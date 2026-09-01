@@ -299,7 +299,7 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     `DesignParams`. Still deferred: a draft-quality render during the drag (the panel commits on release — open
     question 1 below, now with a consumer), the frosted material under the bottom bar, and per-design defaults. Full
     record in the teardown doc.
-  - **W11 — the design-by-design quality pass. In progress — 7 of their 22 driven.** The engine and the panel are
+  - **W11 — the design-by-design quality pass. In progress — 8 of their 22 driven.** The engine and the panel are
     built, so what is left is per design: open theirs, render ours, compare, fix one. The **checklist of which
     designs have actually been driven** (and which were built from a one-line note instead) is in
     [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → "W11 checklist"; keep it ticked as slices land. **W11a — Bauhaus ✅ (2026-08-31):** ours was a *Mondrian*
@@ -349,6 +349,14 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     mode drawing two, which is the design dead at its own default — and their **paper-cut shadow**, measured off
     theirs: each band darkens to `0.57` of itself at its boundary with the band above, easing as `f^2.5`, on every
     side of a blob rather than in a light's direction. `depth`'s second consumer, one slice after it arrived.
+    **W11j — Vitrall ✅ (2026-09-01):** the verdict table mapped *two* of their designs onto our Voronoi and was wrong
+    about both. Their **Modern Mosaic** is a packing of rounded rectangles with a wide grout — nearer our Mondrian,
+    and left for its own slice. Their **Vitrall** cuts the frame with **edge-to-edge chords**, so its panes are long
+    shards and slender wedges where a Voronoi's are compact blobs; drive their Density to `1` and a single chord
+    crosses the whole frame, which no point-based diagram can do. Built as a design of its own — **catalog 27** — by
+    recursive area-weighted splitting, with curves done by **warping the plane** rather than clipping against curves
+    (so the two panes either side of a bowed cut stay welded to it), and a gradient fill per pane on `depth`, which
+    is most of why glass reads as material. Our Voronoi keeps its name and stops claiming to be either of theirs.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 

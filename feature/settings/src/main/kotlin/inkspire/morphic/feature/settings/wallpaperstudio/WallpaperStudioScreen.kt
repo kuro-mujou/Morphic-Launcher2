@@ -332,7 +332,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.MESH_GRADIENT -> "Mesh"
         WallpaperDesign.FLOW_FIELD -> "Flow"
         WallpaperDesign.TRIANGULAR_FACETS -> "Facets"
-        WallpaperDesign.VORONOI -> "Mosaic"
+        WallpaperDesign.VORONOI -> "Voronoi"
         WallpaperDesign.PLASMA -> "Plasma"
         WallpaperDesign.CONTOUR -> "Contour"
         WallpaperDesign.WAVES -> "Waves"
@@ -354,6 +354,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.SOFT_OVERLAPS -> "Overlaps"
         WallpaperDesign.WAVE_DIVIDERS -> "Wave Dividers"
         WallpaperDesign.RIBBED_GLASS -> "Ribbed Glass"
+        WallpaperDesign.VITRALL -> "Vitrall"
     }
 
 /** A short, human name for the color-mode segment — the enum name is a code identifier, not a label. */

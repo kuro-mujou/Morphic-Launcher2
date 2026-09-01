@@ -205,6 +205,14 @@ enum class WallpaperDesign {
     WAVE_DIVIDERS,
 
     /**
+     * The frame cut and re-cut by edge-to-edge chords into leaded panes of tinted glass — the stained-glass window.
+     * Cutting with *lines* rather than around points is what makes its panes long shards and slender wedges where
+     * [VORONOI]'s are compact blobs; [DesignParams.depth] fills each with a gradient, which is what makes it glass.
+     */
+    @SerialName("vitrall")
+    VITRALL,
+
+    /**
      * A palette gradient seen through fluted glass — vertical ribs that refract a diagonal background and carry a
      * specular sheen. Depth from light, not from color; [DesignParams.irregularity] sets the refraction strength.
      */

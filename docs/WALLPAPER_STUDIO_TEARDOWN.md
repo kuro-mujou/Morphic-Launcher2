@@ -27,7 +27,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | # | Design | Parameters (tabs, in order) |
 |---|---|---|
 | 1 | Diagonal Bands | Count · Rotation · Coverage · Spacing · Offset · Variation |
-| 2 | Modern Mosaic | Count · Spacing · Frame · Ratio · Roundness · Irregularity |
+| 2 | Modern Mosaic | Count · Spacing · Frame · Ratio · Roundness · Irregularity — **not a Voronoi** (W11j): it is a packing of **rounded rectangles** with a wide grout, whose corners *Irregularity* pushes off square. Count 16, Spacing 40, Frame 0, **Ratio a segmented `1/4`**, Roundness 60, Irregularity 40. Our nearest design is the **Mondrian**, not the Voronoi |
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
 | 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow — **five** (W11i), and *Color mode* is the global one (Monochromatic · Bichromatic · **Colorful**, its default here · **Stroke**, a fourth we do not have). *Shades* **1..10** (default 8) is the band count, and the bands are **rungs on the interpolated ramp**, not the palette's own stops. **There is no count of blobs**: *Complexity* **4..40** (default **40**, the top) leaves the same two or three systems in the same corners and only makes their contours more convoluted — it is a domain warp's frequency, not a population. *Contrast* **0..100** (default 20) is how far down the field the bands are spread: `0` broad soft layers, `100` thin filaments on bare ground. *Shadow* **0..100** (default **0**) is a **paper-cut** shadow — each band darkens to `0.57` of itself at its boundary with the band *above*, easing out as `f^2.5`, on **every** side of a blob rather than in a light's direction. The ground is stop 0 |
 | 5 | Triangular Facets | Resolution · Distortion · **Thickness** · **Distribution** · Randomness · Tridimensionality — **six** (W11h). *Resolution* counts cells along the **long** axis, **3..20** (default 10), cells square. *Distortion* **0..100** (default 50) jitters the lattice; at `0` every cell takes the *same* diagonal. *Thickness* **0..100** (default **0**) is not a stroke — it **insets every facet**, so the ground shows between them as leading; at 100 the facets are specks. *Distribution* is a two-option segmented control, **Random** / **Area** (default), and it is a **color** distribution, not a point one: *Area* paints a smooth two-dimensional field, *Random* gives each facet a flat random stop. *Randomness* **0..100** (default 25) is how far a facet departs from that field — **and the tab disappears entirely under *Random***, which is the app saying the two are one axis. *Tridimensionality* **0..30** (default 5) is a per-facet brightness, the relief. The ground is **stop 0**, which the field never paints with |
@@ -38,7 +38,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients |
 | 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
 | 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset |
-| 13 | Vitrall | Density · Spacing · Curves · Slices · **Color distribution** · Randomness |
+| 13 | Vitrall | Density · Spacing · Curves · Slices · **Color distribution** · Randomness · **Color mode** — **seven** (W11j; the last was past the fold). **Not a Voronoi either**: the frame is cut by **edge-to-edge chords**, so the panes are long shards and slender wedges rather than compact cells. *Density* **1..140** (default 68) is the number of cuts — at `1` a single chord crosses the frame. *Curves* **0..100** (default 35) bows them into arcs; at `0` every cut is straight. *Spacing* **0..100** (default 40) is the leading, and `0` removes it entirely. Every pane is filled with a **gradient**, always, which is most of why it reads as glass. *Color distribution* is a layout — **`Linear bottom to top`** (default) / `Random` |
 | 14 | Flow Field | **Style** · Density · Irregularity · Thickness · Orbs · Orb size |
 | 15 | Topography | **Style** · **Color mode** · Coverage · Levels · Zoom · Variation |
 | 16 | Ribbed Glass | Real glass · Count · Complexity · Refraction · Vibrancy |
@@ -156,7 +156,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | # | Theirs | Ours | Driven | Slice / note |
 |---|---|---|---|---|
 | 1 | Diagonal Bands | `DIAGONAL_BANDS` | ☐ | built in W9 from the note, never compared |
-| 2 | Modern Mosaic | `VORONOI` | ☐ | **two of theirs map to one of ours** — see Vitrall (13) |
+| 2 | Modern Mosaic | `MONDRIAN`? | ☐ | rounded-rect packing with grout (W11j) — the mapping to `VORONOI` was wrong |
 | 3 | Gradient Columns | `GRADIENT_COLUMNS` | ☐ | built in W9 from the note |
 | 4 | Flowing Blobs | `METABALLS` | ✅ | **W11i** — Complexity is a warp, not a count; the paper-cut shadow |
 | 5 | Triangular Facets | `TRIANGULAR_FACETS` | ✅ | **W11h** — color is a 2-D field of areas; `depth` added |
@@ -167,7 +167,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 10 | Layered Waves | `WAVES` | ☐ | verdict: "closest we have" — untested |
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ☐ | built in W9 from the note |
-| 13 | Vitrall | `VORONOI` (variant) | ☐ | **missing** — theirs is the curved-slice, light-leaded sibling of Modern Mosaic |
+| 13 | Vitrall | `VITRALL` | ✅ | **W11j** — built; chord subdivision, not a Voronoi. Catalog **27** |
 | 14 | Flow Field | `FLOW_FIELD` | ☐ | verdict wants Orbs + a Style variant |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
 | 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
@@ -178,9 +178,10 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
 | 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
 
-**Seven of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+**Eight of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
 `LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a), `HALFTONE` (split out of Dot
-Grid by W11e). Catalog is **26**.
+Grid by W11e), and `VORONOI`, which turns out to be neither of the two designs it was named for (W11j). Catalog is
+**27**.
 
 **What the six taught, in one line each, because it is what predicts the next find:** check whether ours *is the same
 design* before judging its quality (4 of 6 were not); drive *every* knob to *both* ends before concluding; measure
@@ -199,7 +200,9 @@ underneath.
 | Triangular Facets | **Facets** | ✅ **W11h.** The identity finding again: ours read the palette at a facet's *height*, theirs paints a **two-dimensional field of areas** — proved by measuring a path between two regions and finding a straight RGB line that skips the stops in between. Rebuilt on a coarse color lattice (`ColorLattice`, shared with the mesh gradient), plus the **relief** (which is what `DesignParams.depth` arrived for), the **leading**, and a shorter-diagonal split that kills the slivers. |
 | Mesh Gradient | **Mesh** | ✅ **W11g.** Grid + jitter landed in W7; W11g added the **Colors** layout (Vertical / Corners / Scattered) and **Softness**, and replaced inverse-distance weighting with a **warped bilinear mesh** — the only blend that is an exact gradient at the rigid end, as theirs is. |
 | Layered Waves | **Waves** | Closest we have. Add Distortion + Palette-gradients toggle. |
-| Modern Mosaic / Vitrall | **Voronoi** | Ours ≈ Modern Mosaic. Add **Vitrall** variant (curved slices, light leading) + Roundness/Irregularity. |
+| Vitrall | **Vitrall** | ✅ **W11j.** Built as its own design: the frame cut by **edge-to-edge chords** into leaded panes, each filled with a gradient. The old plan — a *variant* of our Voronoi — was based on a mapping that turned out to be wrong twice over. |
+| Modern Mosaic | — | Still missing, and it is **not** our Voronoi (W11j): theirs is a packing of rounded rectangles with a wide grout and jittered corners. The nearest thing we have is the **Mondrian**, which is the design to measure it against. |
+| — | **Voronoi** | Ours only, and honestly named at last (W11j). Cells built *around points* are neither their mosaic's rectangles nor their vitrall's shards. |
 | Flow Field | **Flow** | Add **Orbs** (the moons), Style variant, lower density default. |
 | Rounded Tiles | **Truchet** | Reasonable analog; theirs is diagonal rounded bars w/ Blend mode. |
 | — | **Plasma, Rings, Rays** | Ours only (SL lacks). Keep, but give MONO/BICHROMATIC defaults — they are our loudest. |
@@ -283,6 +286,34 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11j — Vitrall. ✅ (2026-09-01)** Two designs were driven here, because the verdict table mapped *both* of
+    them onto our Voronoi, and it was wrong about both.
+    - **Their *Modern Mosaic* is a packing of rounded rectangles**, with a wide grout and corners that
+      *Irregularity* pushes off square — nothing like a Voronoi, and much nearer our **Mondrian**. Left for a slice
+      of its own; the checklist now points it at the right design of ours.
+    - **Their *Vitrall* cuts the frame with edge-to-edge chords**, so its panes are long shards and slender wedges
+      beside squat quadrilaterals. That is the difference from a Voronoi in one sentence: a Voronoi builds cells
+      *around points* and every cell comes out a compact blob of roughly its neighbours' size. Drive their *Density*
+      to `1` and a **single chord crosses the whole frame**, which no point-based diagram can do.
+    - So it is a design of its own — **`VITRALL`, catalog 27** — and our Voronoi keeps its own name, which it now
+      actually deserves. It is the third of these splits (Bauhaus→Mondrian, DotGrid→Halftone), and the rule holds:
+      when ours turns out to be a *different* design, keep it and build theirs beside it.
+    - **The subdivision is recursive and area-weighted**, one pane cut at a time with probability rising as a power
+      of its area. Splitting the largest every time gives an even honeycomb; splitting a uniformly-chosen one leaves
+      one huge pane untouched. A cut is sometimes taken **parallel to the pane's longest edge**, which is where their
+      runs of parallel strips come from.
+    - **Curves are done by warping the plane, not by clipping against curves.** Each pane's outline is subdivided and
+      pushed through one smooth displacement field, so a straight chord bows into an arc and the two panes either
+      side of it stay welded along it. Clipping against a curve means solving for the crossings, and a crossing that
+      is a rounding-error apart in the two panes is a hairline of ground between them. The field is pinned at the
+      frame's border so the outer edges stay straight.
+    - **Every pane is filled with a gradient, at every setting of every knob of theirs**, and that is most of why the
+      glass reads as material rather than as flat cells. Ours puts the strength on `depth` as *Glass*; the gradient
+      spans the **pane's own** extent, so a small pane gets the whole sweep instead of looking flat beside a large one.
+    - Knobs: `density` → **Panes** (8..140), `scale` → **Leading**, `irregularity` → **Curves**, `depth` → **Glass**,
+      `variant` → **Colors** (Vertical / Scattered, their *Color distribution*). Their *Slices* and *Randomness* fold
+      into the subdivision as fixed properties — driven to both ends, *Slices* moved the picture barely at all.
+      Their **Color mode** tab is our global one, and its count in the inventory above was one short.
   - **W11i — Flowing Blobs. ✅ (2026-09-01)** The verdict table's own line — *"ours hard onion rings, theirs
     smooth"* — was right about the symptom and wrong about everything behind it, which is the argument for driving a
     design rather than reading a note about it.

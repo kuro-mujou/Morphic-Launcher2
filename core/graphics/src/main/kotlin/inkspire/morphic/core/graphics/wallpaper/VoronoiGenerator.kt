@@ -8,7 +8,13 @@ import kotlin.random.Random
 
 /**
  * The frame broken into flat cells around scattered seed points, each cell edged in the palette's darkest tone — the
- * stained-glass *Modern Mosaic / Vitrall*.
+ * pebble mosaic.
+ *
+ * **It is ours, and it is neither of the reference designs it used to claim.** Their *Modern Mosaic* is a packing of
+ * **rounded rectangles** with a wide grout, and their *Vitrall* cuts the frame with **edge-to-edge chords** into long
+ * shards — see [VitrallGenerator], which is that one. A Voronoi is the third thing: cells built *around points*, so
+ * each is a compact blob of roughly its neighbours' size, with no rectangles and no shards. Worth keeping for exactly
+ * that reason, and worth not naming after something else.
  *
  * **A nearest-seed diagram, not a polygon Voronoi — the same choice [TriangularFacetsGenerator] makes.** The textbook
  * Voronoi is the dual of a Delaunay triangulation: real polygon geometry, circumcenters, edge-walking — machinery with
@@ -23,8 +29,8 @@ import kotlin.random.Random
  * **Each cell is the palette gradient at its seed's height, jittered a shade** (via [LinearGradientGenerator.colorAt],
  * so a mosaic and a plain gradient of the same palette agree about the ramp — the shared derivation Facets keeps too).
  * [DesignParams.density] sets how many cells there are, and [DesignParams.irregularity] how *evenly* they are placed:
- * the seeds come from [PointScatter], a lattice at low irregularity (even *Modern Mosaic* cells) scattering to the
- * shard-like *Vitrall* at high. Deterministic in [seed]: seed positions and their color jitter are drawn from seeded
+ * the seeds come from [PointScatter], a lattice at low irregularity (an even honeycomb) scattering to a crazed one at
+ * high. Deterministic in [seed]: seed positions and their color jitter are drawn from seeded
  * `Random`s, so a recipe reproduces and a shuffle is a new seed.
  *
  * [siteCount], [sites] and [nearestSite] are pure and tested — which seed owns a pixel is index arithmetic that is
