@@ -114,8 +114,10 @@ enum class WallpaperDesign {
     TRUCHET,
 
     /**
-     * Seeded charges whose potential fields merge into gooey blobs, banded through the palette — the lava-lamp look.
-     * A potential field, not discs, which is why the blobs join; banded, unlike the smooth [MESH_GRADIENT].
+     * Seeded charges whose potential fields merge, cut into stacked layers of flat color — the paper-cut relief. A
+     * potential field, not discs, which is why the blobs join; banded, unlike the smooth [MESH_GRADIENT]. Push the
+     * charge count up and the cores stop being findable, so the layers read as long organic ridges rather than as
+     * rings; [DesignParams.depth] casts the shadow of each layer onto the one below it.
      */
     @SerialName("metaballs")
     METABALLS,

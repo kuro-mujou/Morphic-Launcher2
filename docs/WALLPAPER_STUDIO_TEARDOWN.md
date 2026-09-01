@@ -29,7 +29,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 1 | Diagonal Bands | Count · Rotation · Coverage · Spacing · Offset · Variation |
 | 2 | Modern Mosaic | Count · Spacing · Frame · Ratio · Roundness · Irregularity |
 | 3 | Gradient Columns | Rotation · Columns · Irregularity · Start column · Shadow · Progression smoothness |
-| 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow |
+| 4 | Flowing Blobs | **Color mode** · Shades · Complexity · Contrast · Shadow — **five** (W11i), and *Color mode* is the global one (Monochromatic · Bichromatic · **Colorful**, its default here · **Stroke**, a fourth we do not have). *Shades* **1..10** (default 8) is the band count, and the bands are **rungs on the interpolated ramp**, not the palette's own stops. **There is no count of blobs**: *Complexity* **4..40** (default **40**, the top) leaves the same two or three systems in the same corners and only makes their contours more convoluted — it is a domain warp's frequency, not a population. *Contrast* **0..100** (default 20) is how far down the field the bands are spread: `0` broad soft layers, `100` thin filaments on bare ground. *Shadow* **0..100** (default **0**) is a **paper-cut** shadow — each band darkens to `0.57` of itself at its boundary with the band *above*, easing out as `f^2.5`, on **every** side of a blob rather than in a light's direction. The ground is stop 0 |
 | 5 | Triangular Facets | Resolution · Distortion · **Thickness** · **Distribution** · Randomness · Tridimensionality — **six** (W11h). *Resolution* counts cells along the **long** axis, **3..20** (default 10), cells square. *Distortion* **0..100** (default 50) jitters the lattice; at `0` every cell takes the *same* diagonal. *Thickness* **0..100** (default **0**) is not a stroke — it **insets every facet**, so the ground shows between them as leading; at 100 the facets are specks. *Distribution* is a two-option segmented control, **Random** / **Area** (default), and it is a **color** distribution, not a point one: *Area* paints a smooth two-dimensional field, *Random* gives each facet a flat random stop. *Randomness* **0..100** (default 25) is how far a facet departs from that field — **and the tab disappears entirely under *Random***, which is the app saying the two are one axis. *Tridimensionality* **0..30** (default 5) is a per-facet brightness, the relief. The ground is **stop 0**, which the field never paints with |
 | 6 | Bauhaus Blocks | Resolution · Plain tiles · Tile background — *Resolution* counts cells along the **long** axis, **4..20** (cells are square, so the columns fall out and the grid bleeds sideways); *Plain tiles* is a **fraction** left undecorated, not a toggle and not a count; *Tile background* is Off/On. The tile vocabulary is **a quarter disc or nothing** — halves and circles are emergent |
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance · **Focus range** — **seven** (W11f). The lattice is a square grid *turned ~12°* off the frame, pitch = long side / Resolution (**5..24**, default 15). *Color distribution* is a **segmented ratio preset** — `100/100/…`, `100/66/33`, **`100/50/25`** (default), `100/33/11` — i.e. how fast the pick weight falls off down the stops, not a hue choice. *Focus distance* + *Focus range* are a real **depth of field**: a disc's size is its distance, and everything outside the focal band is blurred |
@@ -158,7 +158,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 1 | Diagonal Bands | `DIAGONAL_BANDS` | ☐ | built in W9 from the note, never compared |
 | 2 | Modern Mosaic | `VORONOI` | ☐ | **two of theirs map to one of ours** — see Vitrall (13) |
 | 3 | Gradient Columns | `GRADIENT_COLUMNS` | ☐ | built in W9 from the note |
-| 4 | Flowing Blobs | `METABALLS` | ☐ | verdict says ours is hard onion rings — the loudest untested claim |
+| 4 | Flowing Blobs | `METABALLS` | ✅ | **W11i** — Complexity is a warp, not a count; the paper-cut shadow |
 | 5 | Triangular Facets | `TRIANGULAR_FACETS` | ✅ | **W11h** — color is a 2-D field of areas; `depth` added |
 | 6 | Bauhaus Blocks | `BAUHAUS` | ✅ | **W11a** rebuild (ours was a Mondrian), **W11d** second pass |
 | 7 | Confetti Dots | `CONFETTI` | ✅ | **W11f** — turned lattice, ground, falloff, depth of field |
@@ -178,7 +178,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
 | 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
 
-**Six of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+**Seven of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
 `LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a), `HALFTONE` (split out of Dot
 Grid by W11e). Catalog is **26**.
 
@@ -190,7 +190,7 @@ underneath.
 | Theirs | Ours | Verdict & fix |
 |---|---|---|
 | Topography | **Contour** | Biggest gap. Add **Contour-lines variant** (thin lines, their default + community favorite) alongside our filled "Embossed". |
-| Flowing Blobs | **Metaballs** | Ours hard onion rings. Theirs smooth + a Color mode (Mono/Bi) + Shadow. Soften, add color mode. |
+| Flowing Blobs | **Metaballs** | ✅ **W11i.** "Ours hard onion rings" was right about the symptom and wrong about the cause: their *Complexity* is a **domain warp's frequency**, not a charge count, which is why no setting of ours could reach it. Rebuilt as three fixed charges read through a warp, with the band count off the palette's length (it was killing the design in the default color mode) and their **paper-cut shadow**, measured. |
 | Confetti Dots | **Confetti** | ✅ **W11f.** Re-based on their turned, jittered lattice; the ground moved to the palette's **light** end (theirs is stop 0, whatever that is), the palette is now spent with a geometric falloff so the last stops are rare accents, and it gained a **depth of field**. The Poisson sampler is gone. |
 | Neon Ribbons | **Ribbons** | ✅ **W11b.** Rebuilt as one fanning bundle of fine curves. The W8 decision to skip this was wrong: Flow Lines combs the whole frame, theirs draws *one* gesture — not the same look. |
 | Bauhaus Blocks | **Bauhaus** | ✅ **W11a**, refined in **W11d**. Rebuilt as their arc lattice (what ours had been — recursive rects, ruled — was a *Mondrian*, and is now a design of that name), then narrowed to their real vocabulary: one quarter disc, everything else emergent, with coverage on its own knob. |
@@ -283,6 +283,35 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11i — Flowing Blobs. ✅ (2026-09-01)** The verdict table's own line — *"ours hard onion rings, theirs
+    smooth"* — was right about the symptom and wrong about everything behind it, which is the argument for driving a
+    design rather than reading a note about it.
+    - **Their *Complexity* is a domain warp's frequency, not a count of blobs**, and the render is what proves it:
+      drive it from `4` to `40` and the *same two or three systems stay in the same corners of the frame*, growing
+      from smooth concentric rings into convoluted sinuous ridges. Nothing is added; the shapes are distorted. Ours
+      had read it as the charge count — a count that topped out at **nine** — so no setting of ours could reach their
+      default, which sits at the **top** of their range. Rebuilt as three fixed charges read through a warp; the
+      frequency is `density` and the amplitude is `irregularity`, which is a split theirs does not have and which
+      buys a genuine rigid end (at `0` the design is smooth nested ovals, exactly what the charges say).
+    - **Their *Shades* is a band count, and ours was the palette's length.** One band per stop means the *default*
+      color mode — which reduces the palette to two — draws two bands: a ground with lumps on it. That is the design
+      dead at its own default, the same failure Dot Grid had in W11e, and the same fix: the count is its own knob and
+      the bands are rungs on the **interpolated ramp**.
+    - **Their *Shadow* is a paper-cut, and it is not directional.** Each band darkens along its boundary with the band
+      *above* it and recovers across itself, so the layers read as stacked sheets. Measured rather than guessed: the
+      multiply is `0.57` at that boundary and the recovery fits `f^2.5` (a square is visibly too wide, a cube too
+      narrow). The dark rim hugs the upper layer's edge on **every** side of a blob — scan across one and the shadow
+      is on the high-field side whichever way the field is running — which is what a stack does and a light source
+      does not. It is `depth`'s second consumer, one slice after that field arrived.
+    - **The offline renderer earned its place again.** Four candidate mappings were rendered in Python and compared
+      side by side before a line of Kotlin changed; the first two — a soft roll and a hard clip over a scattered
+      count of charges — both matched the reference's *histogram* while getting the morphology plainly wrong, which a
+      histogram cannot tell you and a 90-second emulator round trip would have taken all afternoon to.
+    - Knobs: `density` → **Complexity** (a [AmountKnob.Fraction], for the plasma's reason — three charges are drawn
+      whatever it says), `irregularity` → **Distortion**, `scale` → **Thickness** (bands, running the other way),
+      `depth` → **Shadow**, `variant` → **Spread** (their *Contrast*, at three points). Their fourth color mode,
+      **Stroke** (outline only), is still missing from `WallpaperColorMode` and is a studio-wide gap rather than this
+      design's.
   - **W11h — Triangular Facets. ✅ (2026-09-01)** The identity finding a fourth time, and this one is about *color*
     rather than geometry: the mesh was close, the picture was not the same picture.
     - **Their color is a two-dimensional field of areas; ours was the palette read at a facet's height.** A ramp down

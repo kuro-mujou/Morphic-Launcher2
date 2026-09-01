@@ -299,7 +299,7 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     `DesignParams`. Still deferred: a draft-quality render during the drag (the panel commits on release — open
     question 1 below, now with a consumer), the frosted material under the bottom bar, and per-design defaults. Full
     record in the teardown doc.
-  - **W11 — the design-by-design quality pass. In progress — 6 of their 22 driven.** The engine and the panel are
+  - **W11 — the design-by-design quality pass. In progress — 7 of their 22 driven.** The engine and the panel are
     built, so what is left is per design: open theirs, render ours, compare, fix one. The **checklist of which
     designs have actually been driven** (and which were built from a one-line note instead) is in
     [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → "W11 checklist"; keep it ticked as slices land. **W11a — Bauhaus ✅ (2026-08-31):** ours was a *Mondrian*
@@ -340,6 +340,15 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     land together on `variant` as **Colors: Field · Speckled · Scattered**. Also: at Distortion 0 their diagonal is
     uniform, so ours splits on the **shorter** diagonal — a clean quilt at the rigid end and no slivers at the loose
     one.
+    **W11i — Flowing Blobs ✅ (2026-09-01):** the verdict table's own note ("ours hard onion rings, theirs smooth")
+    named the symptom and missed the cause. Their *Complexity* is a **domain warp's frequency**, not a count of
+    blobs — driven end to end it leaves the same two or three systems in the same corners and only convolutes their
+    contours — so ours, which read it as a charge count topping out at nine, could never reach their default. Rebuilt
+    as three fixed charges read through a warp (frequency on `density`, amplitude on `irregularity`, which gives it a
+    true rigid end), with the band count taken off the palette's length — one band per stop left the *default* color
+    mode drawing two, which is the design dead at its own default — and their **paper-cut shadow**, measured off
+    theirs: each band darkens to `0.57` of itself at its boundary with the band above, easing as `f^2.5`, on every
+    side of a blob rather than in a light's direction. `depth`'s second consumer, one slice after it arrived.
 - **W6+ — community/sharing.** Its own arc: a feed, upload/download of recipes (recipes are small blobs, so sharing a
   *recipe* is far cheaper than sharing a bitmap), attribution, likes. Needs a backend — out of this plan.
 
