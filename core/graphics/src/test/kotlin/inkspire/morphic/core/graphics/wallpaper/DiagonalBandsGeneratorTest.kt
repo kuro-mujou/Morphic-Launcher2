@@ -8,12 +8,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * The band axis and the coverage — this design's own arithmetic. The variable-width banding it shares with the columns
- * is tested in [BandsTest], and the tones it lays over the ground in [RampTonesTest].
+ * The angles and the coverage — this design's own arithmetic. The variable-width banding it shares with the columns
+ * is tested in [BandsTest], the tones it lays over the ground in [RampTonesTest], and the projection underneath its
+ * axis in [FrameAxisTest].
  *
- * **The axis has to span exactly `0..1` corner to corner, at every angle and every aspect**, because that is what the
- * coverage knob is a fraction *of*. Short of it, the slab drifts off the frame at some angles and not others — which
- * reads as the design being uneven rather than as arithmetic being wrong, and is invisible in any single render.
+ * **What is left here about the axis is the half that belongs to this design: which perpendicular its angle names.**
+ * [DiagonalBandsGenerator.Angle.degrees] is the direction the band boundaries *run*, so a `20°` band must give a
+ * near-flat axis rather than a near-upright one — a quarter turn out is a wallpaper that looks plausible and answers
+ * the wrong knob.
  */
 class DiagonalBandsGeneratorTest {
 

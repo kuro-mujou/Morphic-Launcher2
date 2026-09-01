@@ -351,6 +351,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.POLYGON_CASCADE -> "Cascade"
         WallpaperDesign.DIAGONAL_BANDS -> "Bands"
         WallpaperDesign.GRADIENT_COLUMNS -> "Columns"
+        WallpaperDesign.LOUVERS -> "Louvers"
         WallpaperDesign.SOFT_OVERLAPS -> "Overlaps"
         WallpaperDesign.WAVE_DIVIDERS -> "Wave Dividers"
         WallpaperDesign.RIBBED_GLASS -> "Ribbed Glass"

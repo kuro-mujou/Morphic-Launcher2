@@ -85,6 +85,7 @@ object Generators {
         WallpaperDesign.POLYGON_CASCADE -> PolygonCascadeGenerator
         WallpaperDesign.DIAGONAL_BANDS -> DiagonalBandsGenerator
         WallpaperDesign.GRADIENT_COLUMNS -> GradientColumnsGenerator
+        WallpaperDesign.LOUVERS -> LouversGenerator
         WallpaperDesign.SOFT_OVERLAPS -> SoftOverlapsGenerator
         WallpaperDesign.WAVE_DIVIDERS -> WaveDividersGenerator
         WallpaperDesign.RIBBED_GLASS -> RibbedGlassGenerator

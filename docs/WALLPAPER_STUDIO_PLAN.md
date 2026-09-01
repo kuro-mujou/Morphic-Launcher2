@@ -359,6 +359,15 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     *Spacing* and *Offset* are not ported, with reasons. gart has nothing for this design. Full record:
     [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → W11l.
 
+    **W11m — Gradient Columns → Louvers ✅ (2026-09-01):** the identity finding a fifth time, and about the *axis*.
+    Theirs runs the palette ramp **along** each strip and slides it a little from strip to strip; ours steps the
+    palette *sideways* and fills each column flat. Their *Columns* `1` is a plain gradient with no seams, a rigid end
+    sideways stepping cannot reach — so theirs is **built beside ours as `LOUVERS`, catalog 29**, and ours keeps
+    `GRADIENT_COLUMNS` rather than re-pointing a stored key at a different picture. Ten knobs there, not the six the
+    teardown recorded (four past the fold); their four *Start/End center/spread* knobs re-cut as **Spread** + **Drift**,
+    their *Shadow* onto `depth`, their *Rotation* sampled onto `variant` as three directions. `FrameAxis` extracted on
+    its second consumer. Full record: [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → W11m.
+
     **W11k — Modern Mosaic ✅ (2026-09-01):** the design W11j handed off, and **catalog 28**. Not a packing but a
     recursive **subdivision** — at their *Count* `1` the frame is one rounded tile — so it is `MONDRIAN`'s construction
     with the opposite finish: tiles pulled back onto a light ground, corners rounded, shared corners skewed through one

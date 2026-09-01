@@ -4,10 +4,6 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
 
 /**
  * A slab of parallel bands lying across a calm ground — *Diagonal Bands*, the most restrained design in the catalog.
@@ -85,37 +81,14 @@ object DiagonalBandsGenerator : Generator {
     }
 
     /**
-     * The band axis for one frame and one angle: where a pixel falls across the bands, `0..1` corner to corner.
+     * The band axis for one frame and one angle: where a pixel falls *across* the bands, `0..1` corner to corner.
      *
-     * **One derivation, built once and read per pixel, rather than the render and the test each computing it.** That
-     * spanning-exactly-`0..1` property is what the coverage knob rests on, and it is the kind of thing a test can
-     * confirm about its own copy of the arithmetic while the render quietly uses another.
-     *
-     * Projected in **pixels**, not in the unit square: a `20°` band has to draw at `20°` on the screen, and in the
-     * unit square it would draw at whatever the frame's aspect turns `20°` into — near-flat on a phone.
+     * [Angle.degrees] is the angle the band boundaries **run** at, so the axis that measures across them is its
+     * normal — a quarter turn on. The projection itself is [frameAxis], shared with the strips of
+     * [LouversGenerator]; what belongs to this design is only which of the two perpendiculars its angle names.
      */
-    internal class Axis(private val nx: Float, private val ny: Float, private val lowest: Float, private val span: Float) {
-
-        /**
-         * Where ([x], [y]) falls across the bands, `0` at the first corner the axis meets and `1` at the last.
-         *
-         * A frame with no extent along this axis — a one-pixel strip — answers [Centre], so a degenerate size draws
-         * the middle band rather than dividing by nothing.
-         */
-        fun at(x: Float, y: Float): Float =
-            if (span <= 0f) Centre else ((nx * x + ny * y - lowest) / span).coerceIn(0f, 1f)
-    }
-
-    /** The [Axis] for [angle] over a `[width] × [height]` frame. */
-    internal fun axisOf(angle: Angle, width: Int, height: Int): Axis {
-        val radians = Math.toRadians(angle.degrees.toDouble())
-        val nx = -sin(radians).toFloat()
-        val ny = cos(radians).toFloat()
-        val right = (width - 1).toFloat()
-        val bottom = (height - 1).toFloat()
-        // The axis runs corner to corner: its lowest reading is whichever corner the normal points away from.
-        return Axis(nx, ny, min(0f, nx * right) + min(0f, ny * bottom), abs(nx) * right + abs(ny) * bottom)
-    }
+    internal fun axisOf(angle: Angle, width: Int, height: Int): FrameAxis =
+        frameAxis(angle.degrees + QuarterTurn, width, height)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val angle = Angle.entries[params.variant.coerceIn(0, Angle.entries.lastIndex)]
@@ -166,6 +139,6 @@ object DiagonalBandsGenerator : Generator {
     /** The least of the frame the slab may cover, so the knob's bottom end is a ribbon rather than an empty frame. */
     private const val MinCoverage = 0.1f
 
-    /** The middle of the band axis — what a frame with no extent along it reads as. */
-    private const val Centre = 0.5f
+    /** From a band's own direction to the axis across it, in degrees. */
+    private const val QuarterTurn = 90f
 }

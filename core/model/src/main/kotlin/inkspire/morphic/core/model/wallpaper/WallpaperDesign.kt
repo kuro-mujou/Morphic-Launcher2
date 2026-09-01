@@ -191,6 +191,17 @@ enum class WallpaperDesign {
     GRADIENT_COLUMNS,
 
     /**
+     * One palette gradient seen through parallel strips, each showing it from a slightly different place — the
+     * louvered blind. Shares [GRADIENT_COLUMNS]' columns and inverts what runs through them: the ramp goes *along*
+     * each strip rather than stepping across the set, so one strip is a gradient rather than a flat panel and the
+     * frame reads as a single soft wash that staircases as it crosses them. [DesignParams.scale] spreads the
+     * palette's inner stops from one hard edge out to an even ramp, and [DesignParams.irregularity] is how far the
+     * ramp slides from strip to strip — at `0` every strip is identical and the design is a plain gradient.
+     */
+    @SerialName("louvers")
+    LOUVERS,
+
+    /**
      * Big translucent discs, soft-edged, overlapping into a cloudy painterly field — the misty blend. Leans on palette
      * alpha: discs are laid at partial opacity so overlaps mix. [DesignParams.variant] picks the blend (normal / additive).
      */
