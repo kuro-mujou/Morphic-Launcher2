@@ -110,6 +110,32 @@ class FlowFieldGeneratorTest {
     }
 
     @Test
+    fun `the hop shortens as irregularity turns the field faster`() {
+        // The claim the whole knob rests on: a trail is a polyline through its hops, so the hop has to resolve the
+        // field. Winding irregularity up without shortening it is what drew faceted lines with bulging joins.
+        val smooth = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 0f, longSide = 2400f)
+        val serpentine = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 1.1f, longSide = 2400f)
+        assertTrue("a faster-turning field must take shorter hops", serpentine < smooth)
+
+        // Five degrees of turn per hop at either end, which is where the smooth end already sat.
+        for (detail in floatArrayOf(0f, 0.55f, 1.1f)) {
+            val look = FlowFieldGenerator.Look.ECLECTIC
+            val step = FlowFieldGenerator.smoothStep(look, detail, 2400f)
+            val base = 2400f / look.frequency
+            val turn = 2f * (look.span / base + detail / (base / 7f)) * step
+            assertEquals("turn per hop at detail $detail", 0.09f, turn, 1e-4f)
+        }
+    }
+
+    @Test
+    fun `a frame's long side sets the swirl size, so a tall frame is not twice as turbulent`() {
+        // Counted over the short side, a phone frame got two and a half times as many turns down it as across it.
+        val tall = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 0.55f, longSide = 2400f)
+        val square = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 0.55f, longSide = 1080f)
+        assertTrue("a smaller frame turns faster per pixel, so its hops are shorter", square < tall)
+    }
+
+    @Test
     fun `only Pearls sweeps a whole turn, and its span is not zero`() {
         // The span is read while the enum loads, which is before this object's own `val`s are assigned — a computed
         // one would be zero here, and a zero span draws straight parallel lines rather than failing.

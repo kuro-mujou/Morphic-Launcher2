@@ -175,9 +175,11 @@ object FlowFieldGenerator : Generator {
         if (tones.isEmpty()) return bitmap
 
         val shortSide = min(width, height).toFloat()
+        val longSide = max(width, height).toFloat()
         val separation = spacing(params.density) * shortSide
-        val angleAt = fieldOf(look, max(width, height).toFloat(), detailSpan(params.irregularity), seed)
-        val walk = Walk(look, separation, width, height, angleAt)
+        val detail = detailSpan(params.irregularity)
+        val angleAt = fieldOf(look, longSide, detail, seed)
+        val walk = Walk(look, separation, detail, longSide, width, height, angleAt)
 
         val random = Random(seed)
         val trails = growTrails(walk, thicknessScale(params.scale), random)
@@ -376,7 +378,8 @@ object FlowFieldGenerator : Generator {
      * lets two of them be computed from different separations without anything saying so.
      *
      * @property separation how far off each flank a fresh seed candidate is dropped — the design's unit.
-     * @property step how far one hop carries, in pixels.
+     * @property step how far one hop carries, in pixels — the *shorter* of what the separation implies and what the
+     *   field's turning allows, since a trail is drawn as a polyline through the points it hops between.
      * @property stop how close the head may come to another trail before this one is finished — **not**
      *   [separation]; see [StopShare].
      * @property sow how often, in hops, candidates are dropped off the flanks.
@@ -385,14 +388,45 @@ object FlowFieldGenerator : Generator {
     private class Walk(
         look: Look,
         val separation: Float,
+        detail: Float,
+        longSide: Float,
         val width: Int,
         val height: Int,
         val angleAt: (Float, Float) -> Float,
     ) {
-        val step = separation * look.stepShare
+        val step = (separation * look.stepShare)
+            .coerceAtMost(smoothStep(look, detail, longSide))
+            // A floor, so the tightest field cannot make a frame unaffordable. It is a share of the separation
+            // because that is what bounds the work: the points laid down are about one every step along every lane.
+            .coerceAtLeast(separation * MinStepShare)
         val stop = separation * StopShare
-        val sow = (SeedSpan / look.stepShare).roundToInt().coerceAtLeast(1)
-        val steps = (TrailSpan / look.stepShare).toInt()
+        // Both are lengths -- a sowing interval and a trail's reach -- so they are counted off the *actual* step
+        // rather than off `stepShare`. Counting them off the share would silently sow four times as densely and run
+        // trails four times as far the moment the step was shortened for smoothness.
+        val sow = (SeedSpan * separation / step).roundToInt().coerceAtLeast(1)
+        val steps = (TrailSpan * separation / step).toInt()
+    }
+
+    /**
+     * The longest hop that still draws a smooth line, in pixels — what the *field* allows, against what the
+     * separation implies.
+     *
+     * **A trail is a polyline through the points it hops between, so the step has to resolve the field and not just
+     * the spacing.** The step was a share of the separation alone, which is a number that knows nothing about how
+     * fast the direction turns: at *Irregularity* `0` that came to five degrees of turn per hop and drew smoothly,
+     * and at `1` to nineteen degrees over nine hops per wiggle — visible corners, with the round joins bulging at
+     * each one. It read as a low-quality line rather than as a wrong one, which is why it survived the ink
+     * measurements and the knob guard alike.
+     *
+     * Both octaves sweep their span over about half a wavelength, so each contributes `2 x span / wavelength`
+     * radians of turn per pixel; the hop is then the turn budget divided by their sum. The detail octave dominates,
+     * being [DetailRatio] times the finer of the two — which is the whole reason this only ever showed with
+     * *Irregularity* wound up.
+     */
+    internal fun smoothStep(look: Look, detail: Float, longSide: Float): Float {
+        val base = longSide / look.frequency
+        val fine = base / DetailRatio
+        return MaxTurnPerStep / (2f * (look.span / base + detail / fine))
     }
 
     /**
@@ -727,6 +761,18 @@ object FlowFieldGenerator : Generator {
 
     /** How many marks a frame may hold, so the tightest spacing stays affordable. A safety valve, not a knob. */
     private const val MaxTrails = 5000
+
+    /**
+     * The most the field may turn between two traced points, in radians — the smoothness budget [smoothStep] spends.
+     *
+     * About five degrees. It is set where *Irregularity* `0` already sat, since that end was never the one that
+     * looked wrong: the knob's job is to make the marks serpentine, not to make them faceted, and holding the turn
+     * per hop where the smooth end already had it is what keeps the whole range drawing the same quality of line.
+     */
+    private const val MaxTurnPerStep = 0.09f
+
+    /** The shortest hop, as a share of the separation, so the tightest field stays affordable. */
+    private const val MinStepShare = 0.03f
 
     /** The bounds on the derived separation-grid budget — see [gridCapacity]. */
     private const val MinGridPoints = 4096
