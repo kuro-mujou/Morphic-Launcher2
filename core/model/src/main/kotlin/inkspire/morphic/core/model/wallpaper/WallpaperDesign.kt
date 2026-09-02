@@ -210,8 +210,9 @@ enum class WallpaperDesign {
     SOFT_OVERLAPS,
 
     /**
-     * Horizontal bands of flat palette color separated by wavy seams that undulate in unison — [DIAGONAL_BANDS] with a
-     * wave under it. Clean adjacent bands, unlike [WAVES]' overlapping dunes; [DesignParams.irregularity] sets the wave depth.
+     * Equal bands of flat palette color divided by one wave drawn again and again down the frame, every divider the
+     * same shape at the same phase. Clean adjacent bands, unlike [WAVES]' crests, which each have their own shape and
+     * lap over one another.
      */
     @SerialName("waveDividers")
     WAVE_DIVIDERS,

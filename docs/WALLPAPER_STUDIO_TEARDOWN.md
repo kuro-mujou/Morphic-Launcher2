@@ -38,7 +38,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio · **Spacing · Offset** — **eight**, not six (W11e; the last two are past the fold in the tab row and were missed on the first pass). *Spacing* is the margin around the whole block, not the gap between tiles; *Offset* is a four-arrow **nudge**, hold-to-repeat, that walks the block off center; *Aspect ratio* is a **segmented** 1/1 · Golden · 2/1 · 4/1 |
 | 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients — **four**, and the row really does stop there (W11n); it is the one design with no *Color mode* tab. *Count* **1..10** (default 5) is the bands. *Spacing* **0..100** (default 40) is how **even** the band heights are — at `100` they are exactly equal **and dead flat**, which is the tell. *Distortion* **0..100** (default 60): at `0` every boundary is the *same* curve at its own signed amplitude, at `100` they are multi-lobed and swallow each other. *Palette gradients* Off/On (default **Off**) fills each band with a horizontal ramp to its own color rotated **±20° hue, ±20pp lightness, saturation unchanged** |
 | 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
-| 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset |
+| 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset — **six**, and the row does stop there (W11o). *Rotation* **−179..180°**, continuous, opening on **2°**. *Count* **2..20** (default 5) bands, and they are **always exactly equal** — nothing here varies a band's height. *Wideness* **0..200** (default 57) is the wave's **amplitude**, and `0` is dead-straight dividers. *Waves* **1..20** (default 9) is the cycle count, and the wavelength is measured against the frame's **height**: at `9` the period is `267px` on a 2400px frame. *Offset* **−50..50** (default 11) is the **phase** — one whole period across its travel, which is why `−49` and `50` draw the same picture. *Irregularity* **0..10**, default **0**, roughens the shared waveform into a jagged silhouette; it does **not** touch band widths |
 | 13 | Vitrall | Density · Spacing · Curves · Slices · **Color distribution** · Randomness · **Color mode** — **seven** (W11j; the last was past the fold). **Not a Voronoi either**: the frame is cut by **edge-to-edge chords**, so the panes are long shards and slender wedges rather than compact cells. *Density* **1..140** (default 68) is the number of cuts — at `1` a single chord crosses the frame. *Curves* **0..100** (default 35) bows them into arcs; at `0` every cut is straight. *Spacing* **0..100** (default 40) is the leading, and `0` removes it entirely. Every pane is filled with a **gradient**, always, which is most of why it reads as glass. *Color distribution* is a layout — **`Linear bottom to top`** (default) / `Random` |
 | 14 | Flow Field | **Style** · Density · Irregularity · Thickness · Orbs · Orb size |
 | 15 | Topography | **Style** · **Color mode** · Coverage · Levels · Zoom · Variation |
@@ -180,7 +180,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 9 | Dot Grid | `DOT_GRID` | ✅ | **W11e** — theirs is contained + color-stepped; ours was a halftone |
 | 10 | Layered Waves | `WAVES` | ✅ | **W11n** — a crest is two edge heights joined by a smoothstep; *Spacing* is band evenness and its rigid end is flat. The first quality find rather than an identity one |
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
-| 12 | Wave Dividers | `WAVE_DIVIDERS` | ☐ | built in W9 from the note |
+| 12 | Wave Dividers | `WAVE_DIVIDERS` | ✅ | **W11o** — one wave, drawn again at the same phase over exactly equal bands; ours had jittered the bands and given each divider its own random sines |
 | 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
 | 14 | Flow Field | `FLOW_FIELD` | ☐ | verdict wants Orbs + a Style variant |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
@@ -192,7 +192,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
 | 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
 
-**Twelve of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+**Thirteen of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
 `LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a, and *still* ours-only — W11k
 built theirs beside it rather than reworking it), `HALFTONE` (split out of Dot Grid by W11e), `GRADIENT_COLUMNS` (split
 from theirs by W11m the same way), and `VORONOI`, which turns out to be neither of the two designs it was named for
@@ -224,7 +224,8 @@ underneath.
 | — | **Plasma, Rings, Rays** | Ours only (SL lacks). Keep, but give MONO/BICHROMATIC defaults — they are our loudest. |
 | Diagonal Bands | **DiagonalBands** | ✅ **W11l.** Ours filled the frame with saturated stripes; theirs lays a *slab* of bands across a large calm ground, and its *Coverage* is how much of the frame that slab takes. Also: the ground is stop 0 and the bands cycle the tones **above** it, where ours cycled the whole palette and so had no ground to show. |
 | Gradient Columns | **Louvers** | ✅ **W11m.** The identity finding a fifth time, and about the *axis*: theirs runs the ramp **along** each strip and slides it from strip to strip, where ours steps the palette sideways and fills each column flat. Their *Columns* `1` is a plain gradient with no seams — a rigid end no sideways stepping reaches. Built beside ours as `LOUVERS`; ours keeps `GRADIENT_COLUMNS` rather than re-pointing a stored key at a different picture. |
-| Wave Dividers / Ribbed Glass | — | Built in W9 from one-line notes, never compared. Calm staples. |
+| Wave Dividers | **WaveDividers** | ✅ **W11o.** Same design, wrong machinery. Theirs draws **one** wave and repeats it at the same phase over **exactly equal** bands; ours jittered the band widths and gave every divider its own sum of two sines at random frequencies and phases, so it could never draw the rank of identical waves theirs draws at every setting. Their wavelength is set against the frame **height** (measured: `267px` at *Waves* 9 on 2400), which is what keeps a turned stack at the same scale. Rebuilt on that, with the amplitude on `irregularity` because `0` there is the design's real rigid end, and the phase taken from the seed rather than a knob. |
+| Ribbed Glass | **RibbedGlass** | Built in W9 from a one-line note, never compared. A calm staple. |
 | Polygon Cascade / Ribbon Flow / Flow Lines | — | Missing, all **thin-line** family. High visual value. |
 | Soft Overlaps | — | Missing. Translucent overlapping shapes (Blend mode + palette alpha — our `Palette` already keeps alpha). |
 | Shape Trail | — | Missing. 3D tube/knot (Path style + Depth). Real dimensional rendering — lower priority. |
@@ -304,6 +305,48 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11o — Wave Dividers. ✅ (2026-09-02)** The second quality finding in a row, and the same shape as the last:
+    ours is their design, drawn by machinery that could not reach it.
+    - **Theirs draws *one* wave and repeats it at the same phase, over bands that are always exactly equal.** Every
+      divider in every capture, at every setting of all six knobs, sits parallel to its neighbours at the same
+      amplitude; no knob of theirs varies a band's height. Ours jittered the band widths off
+      [DesignParams.irregularity] and gave each divider its **own** sum of two sines at random frequencies and random
+      phases — a rank of unrelated ripples, which is a different picture at every setting rather than a worse one.
+    - **The wavelength is measured against the frame's *height*, not the axis the wave runs along.** Measured: at
+      *Waves* `9` the period is `267px` on a 2400px frame, which is `height / 9` to within a pixel; at `20` it is
+      `120px`. It matters because of the rotation — an axis-relative wavelength redraws the same setting at a
+      different scale as soon as the stack is turned, since that axis is the frame's width at one angle and its
+      diagonal at another. `FrameAxis` gained a `lengthPx` for it, its first reason to expose the span it already had.
+    - **Their *Irregularity* is not band-width jitter — it roughens the shared waveform**, and it defaults to `0`.
+      That was the doc's assumption for this design and ours had built on it. **Not ported:** the field that would
+      carry it is spent on the amplitude, whose zero is the design's actual rigid end, and a second noise field for
+      one design is a model in a vacuum. Their own default has it off.
+    - **Their *Offset* is a phase, one whole period across its `−50..50` travel** — which is how it reads as a dead
+      knob if you only sample the ends: `−49` and `50` draw the identical picture, and it took a middling value to
+      see it move. **Not ported either:** a phase is what the seed is for, and the studio's shuffle should choose it.
+    - **The four that landed:** Bands (`density`, **2..20**, theirs exactly) · Wavelength (`scale`, read the other
+      way so `0` is a tight ripple and `1` one broad sweep) · Wave depth (`irregularity`, **squared**) · Direction
+      (`variant`, their Rotation sampled at `0° 20° 45° 90° 135°`, **flat first** because theirs opens at `2°` — which
+      is also what Diagonal Bands' KDoc had already promised this design would be at rest).
+    - **The palette cycles every stop, and this design reserves no ground** — checked at *Count* `20`, where all four
+      of theirs paint bands. So the [RampTones] treatment Diagonal Bands needed is wrong here, and ours was already
+      right.
+    - **The waveform is a sine, and the first measurement said otherwise because of the rotation.** Averaging periods
+      of a stack tilted by even a fraction of a degree flattens the peaks and deepens the troughs, which fitted a
+      `cos^1.2` convincingly at every sample point. Detrending first put it back on a plain cosine to within `0.01`,
+      indistinguishable from a smoothstep at this amplitude. **Detrend before averaging periods** — a tilt is a
+      *systematic* bias, so it survives averaging and looks like a finding.
+    - **The default is loud and is left that way on purpose.** Our uniform `0.5` gives **11** bands where theirs opens
+      at 5, and because the amplitude is absolute rather than a share of the band, eleven bands turns the design from
+      bands-with-a-wavy-seam into a chevron weave. Drop it to 6 in the panel and it is theirs. That is a *character*
+      change, which is the criterion Modern Mosaic bent its range under — but bending a second range would make the
+      workaround the pattern, which is what Diagonal Bands refused. **Sixth consumer for per-design defaults, and the
+      first where the missing default does not merely make ours finer than theirs but a different design.** It is the
+      slice to do next.
+    - Detekt on `core:graphics` stayed at **14** unbaselined issues, none of them here. Device-verified in the live
+      studio: four tabs (Bands 11 · Wavelength · Wave depth · Direction), Bands dropped to 6 landing on theirs, and
+      *Wave depth* `0%` giving dead-straight equal bands.
+
   - **W11n — Layered Waves. ✅ (2026-09-02)** The first of the pass that is a *quality* finding rather than an
     identity one — ours is genuinely their design — and the whole gap comes out of one sentence about how a
     boundary is built.

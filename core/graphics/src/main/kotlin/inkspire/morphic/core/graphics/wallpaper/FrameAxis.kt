@@ -26,6 +26,16 @@ internal class FrameAxis(
 ) {
 
     /**
+     * How long this axis is, **in pixels**, corner to corner.
+     *
+     * For the designs that set a dimension in pixels rather than as a share of the axis —
+     * [WaveDividersGenerator]'s wavelength, which is measured against the frame's *height* so that turning the stack
+     * does not rescale the wave. Without it a turned design silently redraws at a different scale, since the axis a
+     * `0..1` reading spans is the frame's width at one angle and its diagonal at another.
+     */
+    val lengthPx: Float get() = span
+
+    /**
      * Where ([x], [y]) falls along this axis, `0..1`.
      *
      * A frame with no extent along the axis — a one-pixel strip — answers the middle, so a degenerate size draws the
