@@ -83,6 +83,21 @@ class FlowFieldGeneratorTest {
     }
 
     @Test
+    fun `an orb is never small beside its neighbours, which is what stops an overlap reading as a lump`() {
+        // The reference places its orbs with nothing keeping them apart -- driven to Orbs 10 it puts three and four
+        // into overlapping clusters, down to 0.72 of the sum of their radii -- so what makes an overlap read as one
+        // disc in front of another is the ring plus a floor high enough that no disc is small beside the rest.
+        // Fitted by erosion off two captures on a 1080-wide frame: 112, 168, 228, 232 on Pearls and 120, 128, 208
+        // on Eclectic, which is 0.10..0.215 of the short side. Ours had 0.05..0.15, whose floor is half theirs.
+        assertEquals(0.10f, FlowFieldGenerator.MinOrb, 1e-6f)
+        assertEquals(0.215f, FlowFieldGenerator.MaxOrb, 1e-6f)
+        assertTrue(
+            "a frame's largest orb must not be more than about twice its smallest",
+            FlowFieldGenerator.MaxOrb / FlowFieldGenerator.MinOrb <= 2.2f,
+        )
+    }
+
+    @Test
     fun `orb size zero draws no orb at all, and the default is the shipped radius`() {
         // The knob has to reach the same picture Orbs `0` reaches, which is the one claim a radius scale can get
         // wrong without looking wrong — a floor of some small disc reads as a design choice rather than a bug.

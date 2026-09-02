@@ -672,6 +672,13 @@ object FlowFieldGenerator : Generator {
      * The ring is why *Pearls*' orbs read as holes punched through the picture rather than as discs laid on it: gart
      * strokes the circle in the background color after filling it, and the reference keeps the same dark band on its
      * *Pearls* and none at all on its *Eclectic*.
+     *
+     * **Orbs are placed by two independent draws and are *not* kept apart, which was checked rather than assumed.**
+     * Driving theirs to *Orbs* `10` puts three and four discs into overlapping clusters on both looks, at centre
+     * distances down to `0.72` of the sum of their radii — so a rejection rule against the orbs already placed
+     * would be a rule the reference does not have, and it would thin the clusters that are half of what the knob
+     * draws. What makes an overlap read as one disc in front of another rather than as a lump is the ring, plus
+     * [MinOrb] being high enough that no disc is small beside its neighbours. That is where the fix went.
      */
     /** Where the orbs may fall and how big they are drawn — the frame, plus what *Orb size* multiplies a radius by. */
     private class Frame(val width: Int, val height: Int, val shortSide: Float, val orbScale: Float)
@@ -921,9 +928,22 @@ object FlowFieldGenerator : Generator {
     /** The most orbs the sky may hold — the reference's own ten, so `depth` `0.5` is five. */
     private const val MaxOrbs = 10
 
-    /** An orb's radius at the middle of *Orb size*, as a share of the short side. */
-    private const val MinOrb = 0.05f
-    private const val MaxOrb = 0.15f
+    /**
+     * An orb's radius at the middle of *Orb size*, as a share of the short side — **measured off theirs, and the
+     * floor is the number that matters.**
+     *
+     * Read off two captures driven to the same place (*Orbs* `10`, *Orb size* at its own default, *Density* and
+     * *Thickness* wound down so the discs sit almost alone) and fitted by erosion rather than by area, so a disc
+     * that a mark crosses still measures as the circle it is: `112, 168, 228, 232` on *Pearls* and `120, 128, 208`
+     * on *Eclectic*, all on a 1080-wide frame. That is `0.10..0.215` of the short side, a spread of about two.
+     *
+     * Ours was `0.05..0.15` — a spread of **three**, whose small end is half of the smallest disc theirs will
+     * draw. That is the whole of why our orbs read as lumps: a `54px` moon overlapping a `162px` one is not two
+     * discs, it is a bite taken out of one, and the ground-colored ring that would have said "in front" instead
+     * traces the bite. Theirs overlaps just as freely and never produces it, because it never draws the small one.
+     */
+    internal const val MinOrb = 0.10f
+    internal const val MaxOrb = 0.215f
 
     /** The most of its own radius an orb's ring may take, so a small orb is not swallowed by it. */
     private const val MaxRingShare = 0.25f

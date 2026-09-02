@@ -182,7 +182,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ✅ | **W11o** — one wave, drawn again at the same phase over exactly equal bands; ours had jittered the bands and given each divider its own random sines |
 | 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
-| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark |
+| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark. **W11r** — theirs lets orbs overlap freely; ours read as lumps because its radius range was three times wide with a floor half theirs |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
 | 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
 | 17 | Polygon Cascade | `POLYGON_CASCADE` | ☐ | built in W8d from the note |
@@ -219,7 +219,7 @@ underneath.
 | Modern Mosaic | **Mosaic** | ✅ **W11k.** Built as its own design. Not a packing — a recursive subdivision, which its *Count* `1` gives away by drawing one tile over the whole frame — so it is the **Mondrian**'s construction with the opposite finish: every tile pulled back from its own edges onto a light ground, corners rounded, shared corners skewed. *Ratio* turned out to be the **least share a cut may leave**, not a split position, and that is what makes the tile sizes a harmonious set. |
 | — | **Voronoi** | Ours only, and honestly named at last (W11j). Cells built *around points* are neither their mosaic's rectangles nor their vitrall's shards. |
 | — | **Mondrian** | Ours only. Their Modern Mosaic is the same subdivision, so W11k measured the two against each other and left this one alone: it *rules an ink line between blocks that touch*, where theirs floats tiles on a ground. Same skeleton, opposite finish, two designs. |
-| Flow Field | **Flow** | ✅ **W11p.** The verdict asked for orbs and a Style variant and missed the mechanism under both. A trail of theirs **stops growing the moment it comes near another** — gart's `TrailPath.collide` — which is what makes the marks short, of wildly varying length, evenly spaced and never crossing. Ours traced a fixed number of steps and drew every one, so they ran over each other into a weave. Rebuilt on that rule, with one full set of trails **per palette tone** (the collision is within a pass, so same-colored marks keep their distance and different colors overlap freely), the moons drawn **between** those passes, and *Pearls* as the second look from gart's `flowforce/perl`. **W11q** then found that second look was built as the first: theirs reads a mark's color *and* width off one cosine across the frame (bold and dark at the edges, hairline at the centre), dashes like *Eclectic*, beads at `0.70` alpha, packs tighter and reads a coarser field. Ours drew both at random per mark, whole and undashed — which is the difference between a composed picture and a noisy one. |
+| Flow Field | **Flow** | ✅ **W11p.** The verdict asked for orbs and a Style variant and missed the mechanism under both. A trail of theirs **stops growing the moment it comes near another** — gart's `TrailPath.collide` — which is what makes the marks short, of wildly varying length, evenly spaced and never crossing. Ours traced a fixed number of steps and drew every one, so they ran over each other into a weave. Rebuilt on that rule, with one full set of trails **per palette tone** (the collision is within a pass, so same-colored marks keep their distance and different colors overlap freely), the moons drawn **between** those passes, and *Pearls* as the second look from gart's `flowforce/perl`. **W11q** then found that second look was built as the first: theirs reads a mark's color *and* width off one cosine across the frame (bold and dark at the edges, hairline at the centre), dashes like *Eclectic*, beads at `0.70` alpha, packs tighter and reads a coarser field. Ours drew both at random per mark, whole and undashed — which is the difference between a composed picture and a noisy one. **W11r** then took the orbs: theirs overlap freely (clusters of three and four at *Orbs* `10`, down to `0.72` of the sum of their radii), and ours read as lumps only because its radius range was `0.05..0.15` against theirs' `0.10..0.215` — a floor half theirs. |
 | Rounded Tiles | **Truchet** | Reasonable analog; theirs is diagonal rounded bars w/ Blend mode. |
 | — | **Plasma, Rings, Rays** | Ours only (SL lacks). Keep, but give MONO/BICHROMATIC defaults — they are our loudest. |
 | Diagonal Bands | **DiagonalBands** | ✅ **W11l.** Ours filled the frame with saturated stripes; theirs lays a *slab* of bands across a large calm ground, and its *Coverage* is how much of the frame that slab takes. Also: the ground is stop 0 and the bands cycle the tones **above** it, where ours cycled the whole palette and so had no ground to show. |
@@ -305,6 +305,34 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11r — Flow Field, the orbs. ✅ (2026-09-02)** The slice W11q handed off, and it is worth recording mostly
+    for the fix that was **not** built: the obvious reading of the symptom was wrong, and driving the reference is
+    the only thing that said so.
+    - **Their orbs are not kept apart, so ours must not be either.** The suspicion was that ours overlap because
+      nothing rejects a placement, and that theirs must reject one. Driven to *Orbs* `10` on both looks, theirs puts
+      three and four discs into overlapping clusters in every capture, at centre distances down to **`0.72`** of the
+      sum of their radii — and the clusters are half of what the knob draws. Rejection sampling would have been a
+      rule the reference does not have, thinning the very thing it makes.
+    - **The lump is a *size* problem.** Ours drew an orb anywhere from `0.05` to `0.15` of the short side — a spread
+      of **three** — and a `54px` moon overlapping a `162px` one is not two discs, it is a bite out of one, with the
+      ground-colored ring tracing the bite instead of saying "in front". Theirs measures `0.10..0.215`, a spread of
+      about two whose floor is **twice** ours, so its smallest disc is never small beside its neighbours and every
+      overlap reads as layering. Same rule, different numbers.
+    - **How the radii were measured, because the obvious way does not work.** A Flow Field orb takes a palette tone,
+      and so do the marks — a color mask alone cannot tell a disc from a clump of same-colored strokes, and the
+      first pass "found" 26 discs, most of them marks. Two things fixed it: wind *Density* and *Thickness* down to
+      their minimums first, so the discs sit nearly alone, and fit each component by **erosion** (count the passes
+      to empty) rather than by area, so a disc a mark crosses still measures as the circle it is. The
+      `area / (PI * r^2)` of the fit is then the check on itself — `≈1.0` is one disc, anything above is two merged
+      or a clump of strokes. Clean fits: `112, 168, 228, 232` on *Pearls*, `120, 128, 208` on *Eclectic*, all at
+      *Orb size* `13`, its own default, on a 1080-wide frame.
+    - **Their *Orb size* default `13` is near the bottom of its knob and still draws discs twice ours**, which is
+      what makes `0.5 -> orbScale 1` land on `0.10..0.215` rather than on something smaller. At `100` it draws one
+      disc of roughly `0.46` of the short side, which is the same mapping read at the other end.
+    - The no-rejection finding is written on `drawOrb` itself rather than only here, since the fix it argues against
+      is the one anybody reading that function will reach for. Detekt on `core:graphics` stayed at **14**; ktlint
+      clean; one new unit test pinning the floor and the spread.
+
   - **W11q — Flow Field, *Pearls*. ✅ (2026-09-02)** The first slice aimed at **one look of one design**, and the
     finding is the one the whole catalog keeps circling: *theirs is organized where ours is random*. W11p had built
     *Pearls* as *Eclectic* with a different field, whole undashed paths and a bead share; every one of those is
@@ -344,9 +372,9 @@ underneath.
       not what was emptying the frame: instrumented, the trails already laid down `45,850px` of arc on a frame whose
       ideal packing is `46,700px`. The pitch was wrong because the *separation* was, which is what `packing` fixes.
       Kept out of the commit rather than kept — it is a second idea, and an unproven one.
-    - **Still open, and visible in every render:** the orbs are placed by two independent uniform draws with nothing
-      keeping them apart, so a small one lands inside a large one and the pair reads as an eye. It shows far worse
-      on *Pearls* now that the marks beneath are hairlines, but it is *Eclectic*'s bug too, so it is its own slice.
+    - **Left for its own slice, and visible in every render:** the orbs land on top of one another and the pair
+      reads as a lump. Taken up as **W11r**, where the diagnosis turned out to be the radius range rather than the
+      placement.
     - Detekt on `core:graphics` stayed at **14** unbaselined issues, none of them here; ktlint clean; unit tests
       green with three new ones pinning the grade, the width band and the packing.
 
