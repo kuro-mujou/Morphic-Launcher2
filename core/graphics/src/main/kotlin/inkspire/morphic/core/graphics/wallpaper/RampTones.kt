@@ -41,4 +41,18 @@ internal object RampTones {
         val count = countFor(palette.size)
         return IntArray(count) { LinearGradientGenerator.colorAt((it + 1f) / count, palette) }
     }
+
+    /**
+     * The mirror, for a design whose ground is the palette's **last** stop rather than its first — the dark end,
+     * since a palette is ordered light-to-dark. [FlowFieldGenerator]'s streaks are the case: they are lit marks on a
+     * near-black ground, where a mosaic's tiles sit on a pale one.
+     *
+     * Tone `i` of `n` sits at `i / n` along the ramp, so the first tone is the palette's opening stop and none is the
+     * ground — [aboveGround]'s off-by-one, run from the other end. Empty for a single-stop palette, for
+     * [countFor]'s reason.
+     */
+    fun belowGround(palette: Palette): IntArray {
+        val count = countFor(palette.size)
+        return IntArray(count) { LinearGradientGenerator.colorAt(it.toFloat() / count, palette) }
+    }
 }

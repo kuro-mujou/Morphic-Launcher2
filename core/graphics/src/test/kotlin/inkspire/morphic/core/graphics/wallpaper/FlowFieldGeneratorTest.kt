@@ -1,57 +1,44 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The streamline stepper — the part that is silently wrong when a sign is flipped or the bounds check runs a step
- * late. Tested against a known field with no noise in the way, `BitmapBlur`'s reason for the module.
+ * The four knob mappings, and the two of them whose `0.5` has to land on a number taken from somewhere else — gart's
+ * three-radian sweep, and the reference's four moons.
+ *
+ * The trail growth itself is not tested here: its rule is a *spatial* one over hundreds of interacting trails, and
+ * what it produces is a picture rather than a number. The render harness is where it is judged.
  */
 class FlowFieldGeneratorTest {
 
     @Test
-    fun `density maps to the particle count range`() {
-        assertEquals(300, FlowFieldGenerator.particleCount(0f))
-        assertEquals(1200, FlowFieldGenerator.particleCount(1f))
+    fun `density maps to the trails grown per tone`() {
+        assertEquals(30, FlowFieldGenerator.strokeCount(0f))
+        assertEquals(300, FlowFieldGenerator.strokeCount(1f))
+        assertEquals(300, FlowFieldGenerator.strokeCount(2f)) // clamped
     }
 
     @Test
-    fun `irregularity scales the angle span, with the default landing on the shipped sweep`() {
-        assertEquals(3.5f, FlowFieldGenerator.angleSpan(0f), 1e-6f)
-        assertEquals(7f, FlowFieldGenerator.angleSpan(0.5f), 1e-6f) // the sweep the design shipped with
-        assertEquals(10.5f, FlowFieldGenerator.angleSpan(1f), 1e-6f)
-        assertEquals(10.5f, FlowFieldGenerator.angleSpan(2f), 1e-6f) // clamped
+    fun `curl sweeps from a drift to a whole turn, and the default is gart's`() {
+        assertEquals(0.6f, FlowFieldGenerator.angleSpan(0f), 1e-6f)
+        assertEquals(3f, FlowFieldGenerator.angleSpan(0.5f), 1e-6f) // gart's eclectic, exactly
+        assertEquals(5.4f, FlowFieldGenerator.angleSpan(1f), 1e-6f)
+        assertEquals(5.4f, FlowFieldGenerator.angleSpan(2f), 1e-6f) // clamped
     }
 
     @Test
-    fun `a flat field to the right steps straight across at the step length`() {
-        // angle 0 is due east: x climbs by the step length, y never moves.
-        val line = FlowFieldGenerator.trace(startX = 0.1f, startY = 0.5f, steps = 5, stepLength = 0.2f) { _, _ -> 0f }
-
-        val xs = line.filterIndexed { i, _ -> i % 2 == 0 }
-        val ys = line.filterIndexed { i, _ -> i % 2 == 1 }
-        assertEquals(listOf(0.1f, 0.3f, 0.5f, 0.7f, 0.9f), xs)
-        assertTrue("y should never move, was $ys", ys.all { kotlin.math.abs(it - 0.5f) < 0.0001f })
+    fun `thickness leaves gart's own widths alone at the default`() {
+        assertEquals(0.25f, FlowFieldGenerator.thicknessScale(0f), 1e-6f)
+        assertEquals(1f, FlowFieldGenerator.thicknessScale(0.5f), 1e-6f)
+        assertEquals(1.75f, FlowFieldGenerator.thicknessScale(1f), 1e-6f)
     }
 
     @Test
-    fun `a streamline ends the step after it leaves the frame`() {
-        // Starts near the right edge and is pushed east: it records the point that lands outside, then stops — so the
-        // last mark sits just past the edge rather than the line smearing along it.
-        val line = FlowFieldGenerator.trace(startX = 0.9f, startY = 0.5f, steps = 10, stepLength = 0.2f) { _, _ -> 0f }
-
-        // (0.9), then (1.1) which is out of bounds, then break — two points, four values.
-        assertEquals(4, line.size)
-        assertTrue("last x should be just past the edge, was ${line[2]}", line[2] > 1f)
-    }
-
-    @Test
-    fun `the same start and field trace the same line`() {
-        val field = { x: Float, _: Float -> x * 3f }
-        assertTrue(
-            FlowFieldGenerator.trace(0.2f, 0.3f, 8, 0.05f, field)
-                .contentEquals(FlowFieldGenerator.trace(0.2f, 0.3f, 8, 0.05f, field)),
-        )
+    fun `depth zero is a sky with no moons, and the default is the reference's four`() {
+        assertEquals(0, FlowFieldGenerator.moonCount(0f))
+        assertEquals(4, FlowFieldGenerator.moonCount(0.5f))
+        assertEquals(8, FlowFieldGenerator.moonCount(1f))
+        assertEquals(8, FlowFieldGenerator.moonCount(2f)) // clamped
     }
 }

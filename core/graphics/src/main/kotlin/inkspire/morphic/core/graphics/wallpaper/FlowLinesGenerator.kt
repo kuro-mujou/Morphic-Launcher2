@@ -16,7 +16,7 @@ import kotlin.math.min
  * are laid.** Flow drops particles at *random* starts and strokes them at *varied* widths for a loose, woven texture;
  * Flow Lines seeds its particles on an even lattice and strokes them all at one *fine, uniform* width, so the frame
  * fills edge to edge with a coherent, brushed grain — a topographic combing rather than scattered streaks. The stepping
- * is [FlowFieldGenerator.trace] and the drawing [Streamlines.pathOf], both shared, so a Flow Line bends through the field
+ * is [Streamlines.trace] and the drawing [Streamlines.pathOf], both shared, so a Flow Line bends through the field
  * exactly as a Flow streak does; only the seeding and the stroke differ.
  *
  * **Even starts come from [PointScatter], not the random stream — that is what keeps the comb uniform.** A lattice of
@@ -59,7 +59,7 @@ object FlowLinesGenerator : Generator {
         }
 
         for (i in 0 until count) {
-            val points = FlowFieldGenerator.trace(starts[i * 2], starts[i * 2 + 1], Steps, StepLength, angleAt)
+            val points = Streamlines.trace(starts[i * 2], starts[i * 2 + 1], Steps, StepLength, angleAt)
             if (points.size < MinPointsToDraw) continue
             paint.color = strokeColors[i % strokeColors.size]
             canvas.drawPath(Streamlines.pathOf(points, width, height), paint)

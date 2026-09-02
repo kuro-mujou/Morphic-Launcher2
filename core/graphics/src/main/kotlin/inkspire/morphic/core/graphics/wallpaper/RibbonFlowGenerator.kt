@@ -60,7 +60,7 @@ object RibbonFlowGenerator : Generator {
         }
 
         repeat(ribbonCount(params.density)) {
-            val points = FlowFieldGenerator.trace(random.nextFloat(), random.nextFloat(), Steps, StepLength, angleAt)
+            val points = Streamlines.trace(random.nextFloat(), random.nextFloat(), Steps, StepLength, angleAt)
             val offset = random.nextFloat() // this ribbon's start on the ramp — the gradient offset
             if (points.size < MinPointsToDraw) return@repeat
 

@@ -3,7 +3,6 @@ package inkspire.morphic.core.graphics.wallpaper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
@@ -69,7 +68,7 @@ object PolygonCascadeGenerator : Generator {
             val radius = maxRadius * (MinScale + (1f - MinScale) * (1f - t)) // cascade inward: large first, small last
             val rotation = i * RotateDelta
             paint.color = LinearGradientGenerator.colorAt(t, ramp) // climb the ramp as the cascade tightens
-            canvas.drawPath(closedPath(polygon(sides, cx, cy, radius, rotation, jitterPx, random)), paint)
+            canvas.drawPath(Streamlines.pathOfPixels(polygon(sides, cx, cy, radius, rotation, jitterPx, random)), paint)
         }
         return bitmap
     }
@@ -107,19 +106,6 @@ object PolygonCascadeGenerator : Generator {
             out[k * 2 + 1] = cy + sin(angle) * radius + jy
         }
         return out
-    }
-
-    /**
-     * The interleaved *pixel* vertices as a [Path]. Unlike [Streamlines.pathOf] these need no frame scaling — the
-     * cascade works in pixels so its polygons stay circular on a non-square frame — which is why this is its own builder.
-     */
-    private fun closedPath(points: FloatArray): Path = Path().apply {
-        moveTo(points[0], points[1])
-        var i = 2
-        while (i < points.size) {
-            lineTo(points[i], points[i + 1])
-            i += 2
-        }
     }
 
     private const val MinSides = 3
