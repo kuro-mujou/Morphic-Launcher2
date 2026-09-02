@@ -389,19 +389,19 @@ object FlowFieldGenerator : Generator {
     /**
      * Where a trail sits on its look's own scale, `0..1` — the one number [widthShare] and [toneIndex] both read.
      *
-     * **[Weave.GRADED] takes it from the trail's midpoint, which is the reference's rule and gart's.** `perl` reads
-     * `cos(midpoint.x * 0.01)`, and theirs is the same cosine fitted to the frame: one period across the short side,
-     * peaking at both edges and troughing at the center, which is exactly the `48% → 7% → 40%` ink profile measured
-     * off it. The midpoint rather than the seed, so a long mark is graded by where it *is* rather than by where it
-     * happened to start.
+     * **[Weave.GRADED] takes it from where the mark starts, which is the reference's rule and gart's.** `perl`
+     * reads `cos(midpoint.x * 0.01)`, and theirs is the same cosine fitted to the frame: one period across the
+     * short side, peaking at both edges and troughing at the center, which is exactly the `48% → 7% → 40%` ink
+     * profile measured off it. The mark's own start rather than its middle, because the grade now decides how long
+     * the mark will be and so has to be known before it exists; over a mark of two lanes on a cosine spanning the
+     * frame the two points differ by less than a percent of a period.
      *
      * [Weave.SCATTERED] draws it, which is where *Eclectic*'s independence of color and width comes from — and it
      * draws it here, at the same point in the stream the width used to, so the look is unchanged.
      */
-    private fun gradeOf(ink: Ink, points: FloatArray, random: Random): Float {
+    private fun gradeOf(ink: Ink, points: FloatArray, at: Int, random: Random): Float {
         if (ink.look.weave == Weave.SCATTERED) return random.nextFloat()
-        val midX = points[points.size / 4 * 2]
-        return (cos(midX * TwoPi / ink.shortSide) + 1f) / 2f
+        return (cos(points[at * 2] * TwoPi / ink.shortSide) + 1f) / 2f
     }
 
     /**
@@ -572,10 +572,11 @@ object FlowFieldGenerator : Generator {
     /**
      * Draws one trail in [paint]'s color, at [width] pixels — cut into dashes, or beaded whole.
      *
-     * **Both looks dash, and beading replaces the dashing rather than the stroking.** *Pearls* had been drawing
-     * whole paths here; the reference's *Pearls* is as plainly dashed as its *Eclectic*, at every setting of all six
-     * of its knobs — round-capped segments of two to six lanes with ground between them. What its beaded minority
-     * replaces is the whole lane, which is why a bead chain runs unbroken where the strokes beside it do not.
+     * **Both looks dash, and a mark is beaded rather than stroked — not a whole lane.** *Pearls* had been drawing
+     * whole undashed paths here, and then whole beaded ones; the reference's *Pearls* is as plainly dashed as its
+     * *Eclectic*, at every setting of all six of its knobs. Its bead chains run a median of six beads over `155px`
+     * against a stroke median of `77px`, which is a mark or two — not a lane, and nothing like the `1500px` a whole
+     * trail is. A beaded lane was the last thing in this design still drawing worms once the marks were cut short.
      *
      * **The share is only consulted when there is one**, so a look with no beads draws nothing from [random] here
      * and its stream stays where it was.
@@ -596,18 +597,16 @@ object FlowFieldGenerator : Generator {
         random: Random,
     ) {
         if (points.size < MinDrawnValues) return
-        if (beaded > 0f && random.nextFloat() < beaded) {
-            // A beaded lane is beaded whole, so it is the one mark that takes its ink from the trail.
-            val grade = gradeOf(ink, points, random)
-            paint.color = ink.tones[toneIndex(ink.look, grade, ink.tones.size, random)]
-            drawBeads(canvas, points, widthOf(ink, walk, grade), walk.step, paint)
-            return
-        }
-        paint.style = Paint.Style.STROKE
         for (dash in dashes(ink, points, walk, random)) {
+            val width = widthOf(ink, walk, dash.grade)
             paint.color = ink.tones[toneIndex(ink.look, dash.grade, ink.tones.size, random)]
-            paint.strokeWidth = widthOf(ink, walk, dash.grade)
-            canvas.drawPath(Streamlines.pathOfPixels(dash.points), paint)
+            if (beaded > 0f && random.nextFloat() < beaded) {
+                drawBeads(canvas, dash.points, width, walk.step, paint)
+            } else {
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = width
+                canvas.drawPath(Streamlines.pathOfPixels(dash.points), paint)
+            }
         }
     }
 
@@ -631,15 +630,15 @@ object FlowFieldGenerator : Generator {
     private fun dashes(ink: Ink, points: FloatArray, walk: Walk, random: Random): List<Dash> {
         val out = ArrayList<Dash>()
         val perSeparation = walk.separation / walk.step
-        val shortest = (MinDashSpan * perSeparation).toInt().coerceAtLeast(2)
-        val longest = (MaxDashSpan * perSeparation).toInt().coerceAtLeast(shortest + 1)
-        var at = random.nextInt(shortest)
+        var at = random.nextInt((MinDashSpan * perSeparation).toInt().coerceAtLeast(2))
         while (at * 2 < points.size) {
-            val end = minOf(at + shortest + random.nextInt(longest - shortest), points.size / 2)
+            // Drawn once, at the mark's own start, and then spent on all three of its length, its width and its
+            // tone — the grade has to come *before* the cut, because in the graded look it is what sizes it.
+            val grade = gradeOf(ink, points, at, random)
+            val span = (dashSpan(ink.look, grade, random) * perSeparation).toInt().coerceAtLeast(2)
+            val end = minOf(at + span, points.size / 2)
             if (end - at < 2) break
-            val cut = points.copyOfRange(at * 2, end * 2)
-            val grade = gradeOf(ink, cut, random)
-            out.add(Dash(cut, grade))
+            out.add(Dash(points.copyOfRange(at * 2, end * 2), grade))
             // The round caps stand a full width proud of the two points a gap runs between, so a gap measured only
             // in lanes is *closed* by any mark wider than it — which is most of them, and it is why an earlier
             // build's fat marks ran on as unbroken ribbons while its hairlines broke correctly. The cap clearance is
@@ -653,6 +652,31 @@ object FlowFieldGenerator : Generator {
 
     /** One mark: the stretch of streamline it covers, and where it sits on its look's scale — see [Ink]. */
     private class Dash(val points: FloatArray, val grade: Float)
+
+    /**
+     * How far one mark runs, in separations — **drawn per look, like the width, and for the same reason.**
+     *
+     * Measured with one tool over one crop of both references at their own defaults, in lanes: their *Eclectic*
+     * runs `2.7 / 4.0 / 5.9` at the quarter, half and three quarters, and their *Pearls* `1.1 / 2.0 / 3.5` with a
+     * tail to `6.4`. So the busy look is drawn in marks **half** the length of the bold one's, mostly stubs of one
+     * or two lanes, and it has to be a skewed draw rather than a narrower uniform one — a uniform band cannot put
+     * its median at a third of its top.
+     *
+     * Ours drew both from *Eclectic*'s band, which is what made *Pearls* read as worms once *Irregularity* bent the
+     * marks: a stroke long enough to carry two full wiggles is a worm, and one carrying half of one is a comma.
+     * The knob was not the thing that was wrong there; the mark was already too long to bend.
+     *
+     * **And in the graded look the cosine sets the length as well.** Binned by width, their *Pearls* runs medians of
+     * `45px` at `4-9px` wide, `64px` at `10-15`, `81px` at `16-22` and `119px` past that — a mark's length rising
+     * with its own weight, where ours was flat at about `70px` throughout. So [Weave.GRADED] reads *three* things
+     * off one number, and the leftover randomness is a spread around what the grade already decided.
+     */
+    internal fun dashSpan(look: Look, grade: Float, random: Random): Float = when (look.weave) {
+        Weave.SCATTERED -> MinDashSpan + (MaxDashSpan - MinDashSpan) * random.nextFloat()
+        Weave.GRADED ->
+            (MinGradedDash + (MaxGradedDash - MinGradedDash) * grade) *
+                (MinDashSpread + (MaxDashSpread - MinDashSpread) * random.nextFloat().pow(DashSpreadBias))
+    }
 
     /**
      * Draws a streamline as the chain of dots *Pearls* beads a few of its lines into — gart's one-in-six.
@@ -870,8 +894,8 @@ object FlowFieldGenerator : Generator {
      * that look airy (its ink runs `7..48%` of a column against *Eclectic*'s `63%` over the frame), and it is what
      * stops a fat mark from swallowing the ground its neighbours are read against.
      */
-    private const val MinGradedWidth = 0.13f
-    private const val MaxGradedWidth = 0.60f
+    private const val MinGradedWidth = 0.15f
+    private const val MaxGradedWidth = 0.68f
 
     /**
      * What a *whole* angle span is worth as a noise amplitude — a half, because [PerlinNoise2d] runs `-1..1`.
@@ -948,6 +972,20 @@ object FlowFieldGenerator : Generator {
     private const val MaxDashSpan = 6.4f
     private const val DashGapSpan = 0.5f
     private const val GapPerWidth = 1.15f
+
+    /**
+     * The same, for [Weave.GRADED] — the *typical* mark length in lanes at the thin and fat ends of the grade,
+     * fitted to their medians of `45px` and `119px` on a `38px` lane.
+     *
+     * [MinDashSpread] and its two companions are the draw around that: a skewed spread with a median of one, since
+     * their *Pearls* runs `1.1 / 2.0 / 3.5` lanes at the quarter, half and three quarters with a tail to `6.4` and
+     * no uniform band reproduces a median under a third of its top.
+     */
+    private const val MinGradedDash = 1.2f
+    private const val MaxGradedDash = 3.2f
+    private const val MinDashSpread = 0.35f
+    private const val MaxDashSpread = 3f
+    private const val DashSpreadBias = 2f
 
     /**
      * The curve on *Dots* that puts its middle on gart's one-in-six — `0.5.pow(2.6)` is `0.165`.

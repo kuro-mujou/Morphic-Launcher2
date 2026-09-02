@@ -168,6 +168,26 @@ class FlowFieldGeneratorTest {
     }
 
     @Test
+    fun `the graded look reads its mark's length off the same grade as its width`() {
+        // Binned by width, their Pearls runs medians of 45px at 4-9px wide, 64px at 10-15, 81px at 16-22 and 119px
+        // past that: a mark's length rises with its own weight. Ours was flat at about 70px throughout, which is
+        // what left long thin strokes running through the frame's pale centre where theirs has short ones.
+        val pearls = FlowFieldGenerator.Look.PEARLS
+        // Seeded alike, so what differs between the two calls is the grade and not the spread drawn around it.
+        val thin = FlowFieldGenerator.dashSpan(pearls, 0f, kotlin.random.Random(1))
+        val fat = FlowFieldGenerator.dashSpan(pearls, 1f, kotlin.random.Random(1))
+        assertEquals("the fat end of the grade must run about two and a half times the thin end", 2.67f, fat / thin, 0.05f)
+        // The scattered look has no grade to read -- its width is drawn per mark and its length independently, which
+        // is what their Eclectic measures as: length flat at 127..183px across every width bucket.
+        val eclectic = FlowFieldGenerator.Look.ECLECTIC
+        assertEquals(
+            FlowFieldGenerator.dashSpan(eclectic, 0f, kotlin.random.Random(1)),
+            FlowFieldGenerator.dashSpan(eclectic, 1f, kotlin.random.Random(1)),
+            1e-6f,
+        )
+    }
+
+    @Test
     fun `the graded look is drawn far finer than the scattered one`() {
         // Measured off theirs on a 1080-wide frame: Pearls runs 5-10px marks at the frame's centre and 22-23px at
         // its edges, where Eclectic runs from 3px to 71px -- past two lanes -- on the same 38px lane. Ours drew
