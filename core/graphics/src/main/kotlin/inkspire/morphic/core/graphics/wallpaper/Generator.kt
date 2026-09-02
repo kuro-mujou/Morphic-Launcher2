@@ -35,6 +35,20 @@ interface Generator {
     val style: DesignStyle
 
     /**
+     * The knobs this generator reads *at [variant]* — the same declaration as [style] for a design whose sub-looks
+     * all answer to the same set, which is every design but one.
+     *
+     * **Overridden only where a sub-look genuinely has a knob the others do not**, because "absent, not disabled" is
+     * a standing rule and a knob that changes nothing is the silent failure [DesignStyle] exists to prevent — worse
+     * here than usual, since the panel would offer it beside knobs that do work. Flow Field is the case: its *Pearls*
+     * beads a share of its lines and its *Eclectic* has no beads to control.
+     *
+     * Defaulted rather than replacing [style] so the twenty-eight designs whose knobs do not vary say nothing, and
+     * so the sweeps that enumerate a design's variants still have one declaration to ask for the variant list itself.
+     */
+    fun styleFor(variant: Int): DesignStyle = style
+
+    /**
      * A `[width] × [height]` bitmap of this design, painted from [palette], tuned by [params], varied by [seed].
      *
      * [width] and [height] are pixels and may be any positive size and aspect — the generator frames itself to fit

@@ -166,24 +166,61 @@ class GeneratorRenderHarness {
      * Every design that reads [DesignParams.roundness], sharp and fully round — the knob whose two ends are two
      * different designs (a Mondrian in a light grout, and a field of pills), so neither can be judged from the middle.
      *
-     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     * **Asked per variant, not per design**, since a sub-look can declare a knob its siblings do not: Flow Field's
+     * *Dots* belongs to *Pearls* alone, and a design-level question would have rendered *Eclectic* twice and the knob
+     * that actually moves not at all.
      */
     @Test
     fun renderRoundnessSweep() {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
         val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
-        val designs = WallpaperDesign.entries.filter { Generators.forDesign(it).style.roundness != null }
+        val cases = WallpaperDesign.entries.flatMap { design ->
+            val generator = Generators.forDesign(design)
+            val variants = generator.style.variant?.options?.indices ?: 0..0
+            variants.filter { generator.styleFor(it).roundness != null }.map { design to it }
+        }
 
-        for (roundness in floatArrayOf(0f, 1f)) {
+        for (roundness in floatArrayOf(0f, 0.5f, 1f)) {
+            for ((design, variant) in cases) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(
+                        roundness = roundness,
+                        variant = variant,
+                        colorMode = WallpaperColorMode.BICHROMATIC,
+                    ),
+                    seed = 42L,
+                )
+                save(resolver, "round_${(roundness * 100).toInt()}_${design.name}_$variant.png", bitmap)
+                bitmap.recycle()
+            }
+        }
+    }
+
+    /**
+     * Every design that reads [DesignParams.depthScale], at nothing / shipped / large — the size beside the count,
+     * and the knob whose `0` has to render exactly what [DesignParams.depth] `0` renders.
+     *
+     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     */
+    @Test
+    fun renderDepthScaleSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val designs = WallpaperDesign.entries.filter { Generators.forDesign(it).style.depthScale != null }
+
+        for (size in floatArrayOf(0f, 0.5f, 1f)) {
             for (design in designs) {
                 val bitmap = Generators.forDesign(design).render(
                     width = 1080,
                     height = 2400,
                     palette = moded,
-                    params = DesignParams(roundness = roundness, colorMode = WallpaperColorMode.BICHROMATIC),
+                    params = DesignParams(depthScale = size, colorMode = WallpaperColorMode.BICHROMATIC),
                     seed = 42L,
                 )
-                save(resolver, "round_${(roundness * 100).toInt()}_${design.name}.png", bitmap)
+                save(resolver, "orbsize_${(size * 100).toInt()}_${design.name}.png", bitmap)
                 bitmap.recycle()
             }
         }
@@ -215,6 +252,50 @@ class GeneratorRenderHarness {
                 )
                 save(resolver, "scale_${(scale * 100).toInt()}_${design.name}.png", bitmap)
                 bitmap.recycle()
+            }
+        }
+    }
+
+    /**
+     * Every design that reads [DesignParams.density], at both ends *and at each of its sub-looks* — the last of the
+     * knob families to get a sweep, and the one whose ends are hardest to picture from the middle.
+     *
+     * It earned one on the Flow Field rebuild, where the separation became the design's *unit*: a mark's width, its
+     * length and the step that traced it are all multiples of it, so winding density down does not merely spread the
+     * marks out — it draws a different picture, of long fat lozenges, and winding it up draws a third one of short
+     * hairlines. Nothing in the other sweeps renders either.
+     *
+     * **Swept across the variants too**, unlike the other knobs, because a design whose sub-looks differ in how they
+     * *trace* rather than only in how they are colored answers this knob differently in each — and the variant sweep
+     * renders only the default density.
+     *
+     * **The lists are asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     */
+    @Test
+    fun renderDensitySweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val designs = WallpaperDesign.entries
+            .filter { Generators.forDesign(it).style.amount != null }
+            .map { it to (Generators.forDesign(it).style.variant?.options?.indices ?: 0..0) }
+
+        for (density in floatArrayOf(0f, 0.5f, 1f)) {
+            for ((design, variants) in designs) {
+                for (variant in variants) {
+                    val bitmap = Generators.forDesign(design).render(
+                        width = 1080,
+                        height = 2400,
+                        palette = moded,
+                        params = DesignParams(
+                            density = density,
+                            variant = variant,
+                            colorMode = WallpaperColorMode.BICHROMATIC,
+                        ),
+                        seed = 42L,
+                    )
+                    save(resolver, "dens_${(density * 100).toInt()}_${design.name}_$variant.png", bitmap)
+                    bitmap.recycle()
+                }
             }
         }
     }

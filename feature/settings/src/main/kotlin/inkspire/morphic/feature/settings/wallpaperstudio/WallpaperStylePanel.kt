@@ -56,9 +56,10 @@ internal fun WallpaperStylePanel(
     onParams: (DesignParams) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // The design's knobs, asked of the generator that reads them rather than tabulated here.
-    val style = Generators.forDesign(recipe.design).style
     val params = recipe.params
+    // The design's knobs, asked of the generator that reads them rather than tabulated here — and asked *at the
+    // current variant*, since one design's two looks answer to different sets.
+    val style = Generators.forDesign(recipe.design).styleFor(params.variant)
     val tabs = style.tabs()
     // A design switch can take away the knob that was selected — Contour has a Look, the Mosaic it flips to has none.
     // Color is in every list, so there is always something to fall back to.
@@ -117,6 +118,13 @@ internal fun WallpaperStylePanel(
                 value = params.depth,
                 default = DesignParams().depth,
                 onCommit = { onParams(params.copy(depth = it)) },
+            )
+
+            StyleTab.DEPTH_SCALE -> FractionControl(
+                what = style.depthScale.orEmpty(),
+                value = params.depthScale,
+                default = DesignParams().depthScale,
+                onCommit = { onParams(params.copy(depthScale = it)) },
             )
 
             StyleTab.VARIANT -> MorphicSegmentedButtons(
@@ -191,9 +199,10 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
  *
  * Only [COLOR] is offered for every design; the others appear when the current generator declares them. The order is
  * the panel's, and it runs from what a design *is* toward how it is painted — [ROUNDNESS] sits with the shape knobs
- * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape.
+ * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape. [DEPTH_SCALE] follows
+ * [DEPTH] directly, being the size of the very thing that one counts.
  */
-internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, ROUNDNESS, VARIANT, DEPTH, COLOR }
+internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, ROUNDNESS, VARIANT, DEPTH, DEPTH_SCALE, COLOR }
 
 /**
  * The tabs this design offers, in panel order — never empty, since [StyleTab.COLOR] applies to every design (the color
@@ -206,6 +215,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (roundness != null) add(StyleTab.ROUNDNESS)
     if (variant != null) add(StyleTab.VARIANT)
     if (depth != null) add(StyleTab.DEPTH)
+    if (depthScale != null) add(StyleTab.DEPTH_SCALE)
     add(StyleTab.COLOR)
 }
 
@@ -217,5 +227,6 @@ private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.ROUNDNESS -> roundness.orEmpty()
     StyleTab.VARIANT -> variant?.label.orEmpty()
     StyleTab.DEPTH -> depth.orEmpty()
+    StyleTab.DEPTH_SCALE -> depthScale.orEmpty()
     StyleTab.COLOR -> "Color"
 }

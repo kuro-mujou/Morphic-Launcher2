@@ -52,6 +52,14 @@ import kotlinx.serialization.Serializable
  * rules hold: a design with no corners to soften ignores it, `0` always means *sharp*, and a design that reads it maps
  * `0.5` to a restrained default.
  *
+ * **[depthScale] is to [depth] what [scale] is to [density] — a size beside a count, because the two are
+ * independent.** The reference splits its own depth family exactly here: Flow Field's orbs are an *Orbs* count and an
+ * *Orb size*, and four large orbs and four small ones are different pictures. Squeezing both onto [depth] is what
+ * forces a generator to guess a size from a count, which is the same mistake [scale] exists to undo one field up. It
+ * is a separate field rather than a reuse of [scale] because a design routinely reads both: Flow Field's [scale] is
+ * the thickness of its *marks*, which has nothing to do with how big its orbs are. `0` collapses the element to
+ * nothing, so it reads as [depth] `0` — the same "`0` means absent" rule the rest of the family keeps.
+ *
  * **[scale] is how much room the design's elements take, which is a different question from how many there are.** A
  * count and a size are independent everywhere they both apply — twenty small dots and twenty large ones are different
  * pictures — and squeezing both onto [density] is what forces a generator to guess. It is the *spacing / gaps* family
@@ -67,6 +75,9 @@ import kotlinx.serialization.Serializable
  *   generator with no notion of size ignores it, exactly as a density-less one ignores [density].
  * @property depth how far the design steps out of the picture plane, `0..1` — `0` is flat, `1` fully dimensional
  *   (a lit relief, a hard shadow). A flat design ignores it. See the class note.
+ * @property depthScale how large the things [depth] counts are drawn, `0..1` — `0` collapses them to nothing, so a
+ *   design reads exactly as it does at `depth` `0`. A design whose depth knob is a continuous amount rather than a
+ *   count of somethings ignores it. See the class note.
  * @property roundness how soft the design's corners are, `0..1` — `0` is sharp, `1` as round as the shape allows (a
  *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
@@ -80,6 +91,7 @@ data class DesignParams(
     val irregularity: Float = 0.5f,
     val scale: Float = 0.5f,
     val depth: Float = 0.5f,
+    val depthScale: Float = 0.5f,
     val roundness: Float = 0.5f,
     val variant: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
