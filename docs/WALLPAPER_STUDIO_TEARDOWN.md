@@ -40,7 +40,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
 | 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset — **six**, and the row does stop there (W11o). *Rotation* **−179..180°**, continuous, opening on **2°**. *Count* **2..20** (default 5) bands, and they are **always exactly equal** — nothing here varies a band's height. *Wideness* **0..200** (default 57) is the wave's **amplitude**, and `0` is dead-straight dividers. *Waves* **1..20** (default 9) is the cycle count, and the wavelength is measured against the frame's **height**: at `9` the period is `267px` on a 2400px frame. *Offset* **−50..50** (default 11) is the **phase** — one whole period across its travel, which is why `−49` and `50` draw the same picture. *Irregularity* **0..10**, default **0**, roughens the shared waveform into a jagged silhouette; it does **not** touch band widths |
 | 13 | Vitrall | Density · Spacing · Curves · Slices · **Color distribution** · Randomness · **Color mode** — **seven** (W11j; the last was past the fold). **Not a Voronoi either**: the frame is cut by **edge-to-edge chords**, so the panes are long shards and slender wedges rather than compact cells. *Density* **1..140** (default 68) is the number of cuts — at `1` a single chord crosses the frame. *Curves* **0..100** (default 35) bows them into arcs; at `0` every cut is straight. *Spacing* **0..100** (default 40) is the leading, and `0` removes it entirely. Every pane is filled with a **gradient**, always, which is most of why it reads as glass. *Color distribution* is a layout — **`Linear bottom to top`** (default) / `Random` |
-| 14 | Flow Field | **Style** · Density · Irregularity · Thickness · Orbs · Orb size — **six**, row stops there (W11p). *Style* is segmented **Eclectic / Pearls** — gart's `flowforce/eclectic` and `flowforce/perl`, both of them. *Density* **1..100** (50). *Irregularity* **0..100**, default **0**, is the field's curl; at `100` the marks meander into worms. *Thickness* **1..100** (50) is the stroke width, hairline to fat lozenge. *Orbs* **0..10** (4) and *Orb size* **1..100** (13) are the moons — drawn **between the color passes**, so marks pass both in front of and behind them |
+| 14 | Flow Field | **Style** · Density · Irregularity · Thickness · Orbs · Orb size — **six**, row stops there (W11p). *Style* is segmented **Eclectic / Pearls** — gart's `flowforce/eclectic` and `flowforce/perl`, both of them. *Density* **1..100** (50). *Irregularity* **0..100**, default **0**, is the field's curl; at `100` the marks meander into worms. *Thickness* **1..100** (50) is the stroke width, hairline to fat lozenge. *Orbs* **0..10** (4) and *Orb size* **1..100** (13) are the moons — drawn **between the color passes**, so marks pass both in front of and behind them. **W11q corrects two of these off *Pearls*:** its sixth knob is **Dots** (`17`) rather than *Orb size*, which appears only once *Orbs* leaves `0` — and its *Orbs* default **is** `0`, against *Eclectic*'s four. Its *Irregularity* opens at **50**, not `0` |
 | 15 | Topography | **Style** · **Color mode** · Coverage · Levels · Zoom · Variation |
 | 16 | Ribbed Glass | Real glass · Count · Complexity · Refraction · Vibrancy |
 | 17 | Polygon Cascade | Shape · Mode · Thickness · Iterations · Rotate delta · Size |
@@ -182,7 +182,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ✅ | **W11o** — one wave, drawn again at the same phase over exactly equal bands; ours had jittered the bands and given each divider its own random sines |
 | 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
-| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all |
+| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
 | 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
 | 17 | Polygon Cascade | `POLYGON_CASCADE` | ☐ | built in W8d from the note |
@@ -219,7 +219,7 @@ underneath.
 | Modern Mosaic | **Mosaic** | ✅ **W11k.** Built as its own design. Not a packing — a recursive subdivision, which its *Count* `1` gives away by drawing one tile over the whole frame — so it is the **Mondrian**'s construction with the opposite finish: every tile pulled back from its own edges onto a light ground, corners rounded, shared corners skewed. *Ratio* turned out to be the **least share a cut may leave**, not a split position, and that is what makes the tile sizes a harmonious set. |
 | — | **Voronoi** | Ours only, and honestly named at last (W11j). Cells built *around points* are neither their mosaic's rectangles nor their vitrall's shards. |
 | — | **Mondrian** | Ours only. Their Modern Mosaic is the same subdivision, so W11k measured the two against each other and left this one alone: it *rules an ink line between blocks that touch*, where theirs floats tiles on a ground. Same skeleton, opposite finish, two designs. |
-| Flow Field | **Flow** | ✅ **W11p.** The verdict asked for orbs and a Style variant and missed the mechanism under both. A trail of theirs **stops growing the moment it comes near another** — gart's `TrailPath.collide` — which is what makes the marks short, of wildly varying length, evenly spaced and never crossing. Ours traced a fixed number of steps and drew every one, so they ran over each other into a weave. Rebuilt on that rule, with one full set of trails **per palette tone** (the collision is within a pass, so same-colored marks keep their distance and different colors overlap freely), the moons drawn **between** those passes, and *Pearls* as the second look from gart's `flowforce/perl`. |
+| Flow Field | **Flow** | ✅ **W11p.** The verdict asked for orbs and a Style variant and missed the mechanism under both. A trail of theirs **stops growing the moment it comes near another** — gart's `TrailPath.collide` — which is what makes the marks short, of wildly varying length, evenly spaced and never crossing. Ours traced a fixed number of steps and drew every one, so they ran over each other into a weave. Rebuilt on that rule, with one full set of trails **per palette tone** (the collision is within a pass, so same-colored marks keep their distance and different colors overlap freely), the moons drawn **between** those passes, and *Pearls* as the second look from gart's `flowforce/perl`. **W11q** then found that second look was built as the first: theirs reads a mark's color *and* width off one cosine across the frame (bold and dark at the edges, hairline at the centre), dashes like *Eclectic*, beads at `0.70` alpha, packs tighter and reads a coarser field. Ours drew both at random per mark, whole and undashed — which is the difference between a composed picture and a noisy one. |
 | Rounded Tiles | **Truchet** | Reasonable analog; theirs is diagonal rounded bars w/ Blend mode. |
 | — | **Plasma, Rings, Rays** | Ours only (SL lacks). Keep, but give MONO/BICHROMATIC defaults — they are our loudest. |
 | Diagonal Bands | **DiagonalBands** | ✅ **W11l.** Ours filled the frame with saturated stripes; theirs lays a *slab* of bands across a large calm ground, and its *Coverage* is how much of the frame that slab takes. Also: the ground is stop 0 and the bands cycle the tones **above** it, where ours cycled the whole palette and so had no ground to show. |
@@ -305,6 +305,51 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11q — Flow Field, *Pearls*. ✅ (2026-09-02)** The first slice aimed at **one look of one design**, and the
+    finding is the one the whole catalog keeps circling: *theirs is organized where ours is random*. W11p had built
+    *Pearls* as *Eclectic* with a different field, whole undashed paths and a bead share; every one of those is
+    wrong, and the important one is not on the list.
+    - **Their *Pearls* reads a mark's color *and* its width off one cosine across the frame — ours drew both at
+      random per mark.** Averaged down the frame at *Irregularity* `0`, their ink runs `48% → 7% → 40%` from edge to
+      center to edge with the dominant tone stepping in lockstep — bold navy at both edges, teal, yellow, hairline
+      pink at the middle — and the top and bottom halves give the *same* profile, which a 2D field cannot do and a
+      function of `x` alone must. The same measurement on their *Eclectic* finds all four tones at `10..25%` of
+      every column. So one look is composed and the other is not, and the composed one is the one that reads as
+      premium. It is gart's `perl` exactly: `width = cos(point.x * 0.01) * 6 + 8`, `color = map(width, …)`.
+    - **The width band is far narrower than *Eclectic*'s, and that is what keeps the look airy.** Measured: `22-23px`
+      marks at the edges and `5-10px` at the center on a `41px` pitch — an eighth to a half of a lane, where
+      *Eclectic* runs to a whole one. Ours drew *Pearls* on *Eclectic*'s fat-biased draw, two to ten times too wide.
+    - **Both looks dash.** *Pearls* had been drawing whole paths, on the reading that gart's `perl` strokes whole
+      streamlines. Theirs is as plainly dashed as its *Eclectic* at every setting of all six knobs; what its beaded
+      minority replaces is the whole lane, which is why a bead chain runs unbroken past the gaps beside it.
+    - **The beads are translucent, at a measurable `0.70`.** Every bead color in the reference is its stroke color
+      over the ground at that alpha in all three channels — `073B4C` reads `507176`, `06D6A0` reads `4FDEB1`,
+      `EF476F` reads `F4798E`. Opaque beads read as a second, louder mark; at `0.70` the chain sits behind the
+      strokes. Their *Dots* default is `17`, which our existing `roundness.pow(2.6)` already lands on — the one knob
+      that needed nothing.
+    - **Their *Pearls* packs tighter than their *Eclectic* at the same *Density*, and its field is coarser.** Both
+      measured, both against the same capture: scanned identically it crosses a lane every `70px` against
+      *Eclectic*'s `99px`, and an orientation-decorrelation (mean angle between two points `320px` apart along a row)
+      gives `27.6°` against *Eclectic*'s `20.5°` — a ratio of `1.35` where the `2*PI` and `3`-radian sweeps alone
+      would predict `2.09`. So the sweep is bought back with a coarser field, and the look turns at nearly the rate
+      its neighbour does. Ours had `frequency = 1`, which overshot that correction into a lazier, emptier design;
+      the same measurement on `6` came back at `46.6°`, nearly twice theirs.
+    - **Eclectic is byte-identical, and that was checked rather than assumed.** Every change is behind
+      `Look.weave`, `Look.packing` or a *Pearls* constant; the `grade` a mark's color and width now share is drawn
+      from the same point in the random stream the width alone used to be, so the scattered look's sequence never
+      moves. Three renders diffed at zero pixels.
+    - **One fix was built, measured, and then reverted for buying nothing.** A seed candidate is dropped one
+      separation off its parent's flank and then tested against *every* trail including that parent, so where a flow
+      curls tighter than a lane the parent's own next points refuse the candidate it just placed. Real, and it is
+      not what was emptying the frame: instrumented, the trails already laid down `45,850px` of arc on a frame whose
+      ideal packing is `46,700px`. The pitch was wrong because the *separation* was, which is what `packing` fixes.
+      Kept out of the commit rather than kept — it is a second idea, and an unproven one.
+    - **Still open, and visible in every render:** the orbs are placed by two independent uniform draws with nothing
+      keeping them apart, so a small one lands inside a large one and the pair reads as an eye. It shows far worse
+      on *Pearls* now that the marks beneath are hairlines, but it is *Eclectic*'s bug too, so it is its own slice.
+    - Detekt on `core:graphics` stayed at **14** unbaselined issues, none of them here; ktlint clean; unit tests
+      green with three new ones pinning the grade, the width band and the packing.
+
   - **W11p — Flow Field. ✅ (2026-09-02)** The slice where the *gart-first* rule paid its own way: the reference
     shows what the marks look like and gart says why, and no amount of driving would have produced the rule.
     - **A trail stops growing the moment it comes near another, and that is the design.** gart's

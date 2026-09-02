@@ -49,11 +49,14 @@ import kotlin.random.Random
  * wavelength far shorter than the swirls; a knob on the sweep instead re-draws the whole picture, which is visibly
  * not what theirs does. `0` is a perfectly smooth field in both looks.
  *
- * **[DesignParams.variant] is their *Style*, and the two looks differ in their field and in how a trail is drawn.**
- * *Eclectic* sweeps a fraction of a turn, so the marks drift; *Pearls* sweeps a whole one at a much lower frequency,
- * which puts vortices in the field and is where its concentric rings come from. *Eclectic* cuts its streamlines into
- * dashes; *Pearls* draws them whole, and beads a minority of them into chains of dots — gart's one-in-six. Beading
- * *every* line is what made an earlier build of this look read as a field of dots and nothing else.
+ * **[DesignParams.variant] is their *Style*, and what separates the two looks is [Weave] — where a mark's color and
+ * its width come from.** *Eclectic* draws both at random per mark; *Pearls* reads both off **one** cosine across the
+ * frame, so its picture resolves into broad bands, bold and dark at the edges and thinning down the ramp to
+ * hairlines at the center. That is the whole of why theirs reads as composed and ours read as noise, and it is
+ * measurable: averaged down their *Pearls* the ink runs `48% -> 7% -> 40%` across the frame with the dominant tone
+ * following it, where their *Eclectic* has every tone at `10..25%` of every column. Both looks dash, and the field
+ * is the same field swept differently. An earlier build gave *Pearls* whole undashed paths, *Eclectic*'s fat random
+ * colors and widths, and a field a third as fine — four ways of drawing it as the other look.
  *
  * **[DesignParams.depth] is their *Orbs*, and in *Pearls* an orb carries a ring of the ground color.** gart's `perl`
  * strokes its circle in the background color after filling it, which reads as a hole cut through the picture rather
@@ -103,65 +106,95 @@ object FlowFieldGenerator : Generator {
      * Which of the design's two looks is drawn — the reference's *Style*, and gart's two arts.
      *
      * @property label the option's name in the Style panel, positionally the [DesignParams.variant] index.
-     * @property frequency how many noise cycles span the frame's short side — the size of the swirls.
+     * @property frequency how many noise cycles span the frame's **long** side — the size of the swirls, and the
+     *   number [span] trades against. What the eye reads is the two multiplied: how far the flow turns per pixel.
+     *   Measured as an orientation-decorrelation on both references — the mean angle between two points `320px`
+     *   apart along a row — theirs turns `20.5°` on *Eclectic* and `27.6°` on *Pearls*, a ratio of `1.35`, where the
+     *   spans alone would predict `2.09`. So the reference's *Pearls* reads a **coarser** field, by about the amount
+     *   that keeps the two looks turning at a similar rate under very different sweeps, and `2.4` is `3.4` divided by
+     *   what is left. Ours had `1`, which overshot the correction into a different, emptier design; the same
+     *   measurement on `6` came back at `46.6°`, nearly twice theirs.
      * @property span the **whole** angle range the field sweeps, in radians. *Pearls* sweeps a full turn, which is
-     *   what puts vortices in the field and gives it concentric rings; *Eclectic* sweeps gart's three radians, which
+     *   what puts vortices in the field and gives it concentric whorls; *Eclectic* sweeps gart's three radians, which
      *   only tilts a drift.
      * @property bias the angle the field sweeps *around*, in radians. gart offsets both of its arts the same way
      *   (`n - 0.5`, `n + 0.5`); a field centred on zero points due east on average, which on a portrait frame draws
      *   stripes across the picture rather than the drift down it that theirs has. Meaningless for a look that sweeps
      *   a whole turn, since a bias only rotates the same field — hence *Pearls* leaves it at zero.
+     * @property packing what this look multiplies the separation by, so one *Density* means a different pitch in
+     *   each — measured, not chosen. Scanned the same way on the same knob setting, the reference's *Pearls* crosses
+     *   a lane every `70px` where its *Eclectic* crosses one every `99px`; ours drew both at the *Eclectic* pitch and
+     *   so drew *Pearls* half again too loose. It is the pitch a look in hairlines needs to fill a frame that a look
+     *   in lozenges does not.
      * @property stepShare how far one hop carries a trail, as a share of the separation. *Pearls* steps far finer
      *   because its field turns much faster, and a hop long enough for a drift visibly polygonizes a tight vortex.
-     * @property marks how a streamline becomes ink — one question with two answers, which is why they are one field
-     *   rather than a pair of flags that could both be set or neither.
+     * @property weave where a mark's color and width come from — the one thing that separates the two looks, and the
+     *   reason they read as different designs rather than as one design at two settings.
      * @property ringedOrbs whether an orb is stroked in the ground color after being filled, so it reads as a hole
      *   rather than a disc. gart's `perl` does this and its `eclectic` does not.
      */
+    // Eight facts about a look, each named at its two use sites; folding any two together to score under the limit
+    // would put two unrelated numbers behind one name.
+    @Suppress("LongParameterList")
     internal enum class Look(
         val label: String,
         val frequency: Float,
         val span: Float,
         val bias: Float,
+        val packing: Float,
         val stepShare: Float,
-        val marks: Marks,
+        val weave: Weave,
         val ringedOrbs: Boolean,
     ) {
-        /** Drifting dashes — gart's `eclectic`, and the reference's own default. */
+        /** Scattered dashes drifting across the frame — gart's `eclectic`, and the reference's own default. */
         ECLECTIC(
             "Eclectic",
             frequency = 3.4f,
             span = 3f,
             bias = QuarterTurn,
+            packing = 1f,
             stepShare = 0.2f,
-            marks = Marks.DASHES,
+            weave = Weave.SCATTERED,
             ringedOrbs = false,
         ),
 
-        /** Whole arcs through a field of vortices, a few of them beaded — gart's `perl`. */
+        /** Fine dashes through a field of vortices, graded across the frame — gart's `perl`. */
         PEARLS(
             "Pearls",
-            frequency = 1f,
+            frequency = 2.4f,
             span = TwoPi,
             bias = 0f,
+            packing = 0.74f,
             stepShare = 0.08f,
-            marks = Marks.WHOLE,
+            weave = Weave.GRADED,
             ringedOrbs = true,
         ),
         ;
 
-        /** Whether this look offers the *Dots* knob at all — only the look that draws whole paths has beads to set. */
-        val beadable get() = marks == Marks.WHOLE
+        /** Whether this look offers the *Dots* knob at all — the reference beads only its graded look. */
+        val beadable get() = weave == Weave.GRADED
     }
 
     /**
-     * How a streamline becomes ink.
+     * Where a mark's color and its width come from — **the difference between the two looks, and the finding this
+     * design was rebuilt on twice.**
      *
-     * The two looks differ here and nowhere else in the drawing: *Eclectic* cuts every trail into dashes, and
-     * *Pearls* draws each whole, beading a share of them into chains of dots instead. gart's two arts do exactly
-     * this, and it is why a *Dots* share is meaningless on the dashed look.
+     * [SCATTERED] draws both at random per mark: any tone, any width from a hairline to a full lane. [GRADED] reads
+     * both off **one** cosine across the frame's short side, so the picture resolves into broad vertical bands —
+     * bold marks in the palette's first tone at the edges, thinning and stepping down the ramp to hairlines at the
+     * center. Nothing else in the drawing differs: both looks dash, and both take their field from the same
+     * frequency.
+     *
+     * **Measured, not inferred.** Averaged down the reference's *Pearls* the ink runs `48% → 7% → 40%` across the
+     * frame and the dominant tone with it, and both halves of the frame give the same profile — a 2D field would
+     * wash out under that average, a function of `x` cannot. The same measurement on its *Eclectic* finds all four
+     * tones at `10..25%` in every column. So one look is organized and the other is not, and ours had built both as
+     * the second.
+     *
+     * **This is why theirs reads as composed and ours read as noise.** Random color per mark is what a flow field
+     * looks like when nobody has decided anything; the grade is the decision.
      */
-    internal enum class Marks { DASHES, WHOLE }
+    internal enum class Weave { SCATTERED, GRADED }
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val look = lookAt(params.variant)
@@ -176,13 +209,14 @@ object FlowFieldGenerator : Generator {
 
         val shortSide = min(width, height).toFloat()
         val longSide = max(width, height).toFloat()
-        val separation = spacing(params.density) * shortSide
+        val separation = spacing(params.density) * shortSide * look.packing
         val detail = detailSpan(params.irregularity)
         val angleAt = fieldOf(look, longSide, detail, seed)
         val walk = Walk(look, separation, detail, longSide, width, height, angleAt)
 
         val random = Random(seed)
-        val trails = growTrails(walk, thicknessScale(params.scale), random)
+        val trails = growTrails(walk, look, shortSide, random)
+        val thickness = thicknessScale(params.scale)
 
         // The orbs draw from a seed of their own, so moving their slider adds and removes orbs instead of re-rolling
         // every trail behind them.
@@ -201,8 +235,9 @@ object FlowFieldGenerator : Generator {
                 drawOrb(canvas, look, tones, ground, Frame(width, height, shortSide, orbSize), paint, orbRandom)
                 placed++
             }
-            paint.color = tones[random.nextInt(tones.size)]
-            drawTrail(canvas, look, trail, walk, beaded, paint, random)
+            paint.color = tones[toneIndex(look, trail.grade, tones.size, random)]
+            val width = separation * thickness * widthShare(look, trail.grade)
+            drawTrail(canvas, trail.points, width, walk, beaded, paint, random)
         }
         while (placed < orbs) {
             drawOrb(canvas, look, tones, ground, Frame(width, height, shortSide, orbSize), paint, orbRandom)
@@ -295,8 +330,14 @@ object FlowFieldGenerator : Generator {
      */
     internal fun beadedShare(roundness: Float): Float = roundness.coerceIn(0f, 1f).pow(BeadBias)
 
-    /** One grown trail: its points in **pixels**, interleaved `x, y`, and the width it was drawn to be. */
-    private class Trail(val points: FloatArray, val width: Float)
+    /**
+     * One grown trail: its points in **pixels**, interleaved `x, y`, and where it sits on its look's own scale.
+     *
+     * @property grade `0..1`, the one number a mark's color *and* its width are both read from — see [Weave]. Kept
+     *   as the shared source rather than as two resolved values, because the whole point of the graded look is that
+     *   the two agree; resolving them apart is how they would silently stop agreeing.
+     */
+    private class Trail(val points: FloatArray, val grade: Float)
 
     /**
      * Grows trails through [angleAt] until the frame is packed, and returns them in the order they were grown.
@@ -306,7 +347,7 @@ object FlowFieldGenerator : Generator {
      * sweeping across the frame — which is what lets the orbs be spread through it and land at every depth rather
      * than stacking up in one corner.
      */
-    private fun growTrails(walk: Walk, thickness: Float, random: Random): List<Trail> {
+    private fun growTrails(walk: Walk, look: Look, shortSide: Float, random: Random): List<Trail> {
         val width = walk.width
         val height = walk.height
         val separation = walk.separation
@@ -340,24 +381,66 @@ object FlowFieldGenerator : Generator {
                 points[at++] = behind[i * 2 + 1]
             }
             for (v in ahead) points[at++] = v
-            trails.add(Trail(points, separation * thickness * widthShare(random)))
+            trails.add(Trail(points, gradeOf(look, points, shortSide, random)))
         }
         return trails
     }
 
     /**
-     * A mark's width as a share of its lane, before *Thickness* — **an uneven draw, biased toward the fat end**.
+     * Where a trail sits on its look's own scale, `0..1` — the one number [widthShare] and [toneIndex] both read.
      *
-     * gart draws a mark anywhere from a fifth of the lane to two thirds of it, uniformly. The reference's marks span
-     * a wider range and are not uniform over it: mostly full-bodied lozenges, with a hairline threading between them
-     * every few lanes, and those hairlines are much of what makes the design read as *eclectic* rather than as
-     * corduroy. An exponent under one is the cheapest thing that reproduces that while still paying for the coverage
-     * the one-lane ceiling gives up.
+     * **[Weave.GRADED] takes it from the trail's midpoint, which is the reference's rule and gart's.** `perl` reads
+     * `cos(midpoint.x * 0.01)`, and theirs is the same cosine fitted to the frame: one period across the short side,
+     * peaking at both edges and troughing at the center, which is exactly the `48% → 7% → 40%` ink profile measured
+     * off it. The midpoint rather than the seed, so a long mark is graded by where it *is* rather than by where it
+     * happened to start.
      *
-     * Its caller multiplies by *Thickness*, so that knob moves the whole distribution rather than only its top.
+     * [Weave.SCATTERED] draws it, which is where *Eclectic*'s independence of color and width comes from — and it
+     * draws it here, at the same point in the stream the width used to, so the look is unchanged.
      */
-    private fun widthShare(random: Random): Float =
-        MinWidthShare + (MaxWidthShare - MinWidthShare) * random.nextFloat().pow(WidthBias)
+    private fun gradeOf(look: Look, points: FloatArray, shortSide: Float, random: Random): Float {
+        if (look.weave == Weave.SCATTERED) return random.nextFloat()
+        val midX = points[points.size / 4 * 2]
+        return (cos(midX * TwoPi / shortSide) + 1f) / 2f
+    }
+
+    /**
+     * A mark's width as a share of its lane at [grade], before *Thickness*.
+     *
+     * **[Weave.SCATTERED] is an uneven draw biased toward the fat end.** gart draws a mark anywhere from a fifth of
+     * the lane to two thirds of it, uniformly. The reference's marks span a wider range and are not uniform over it:
+     * mostly full-bodied lozenges, with a hairline threading between them every few lanes, and those hairlines are
+     * much of what makes the design read as *eclectic* rather than as corduroy. An exponent under one is the
+     * cheapest thing that reproduces that while still paying for the coverage the one-lane ceiling gives up.
+     *
+     * **[Weave.GRADED] is a plain ramp over a far narrower band, and the narrowness is the finding.** Measured off
+     * the reference's *Pearls* on a 1080-wide frame: a `41px` pitch carrying marks of `22-23px` at the frame's edges
+     * and `5-10px` at its center — an eighth to a half of a lane, where *Eclectic* runs to a whole one. Ours drew
+     * *Pearls* on *Eclectic*'s distribution and so drew it two to ten times too fat, which is most of why the two
+     * looks read as the same heavy design rather than as a bold one and an airy one.
+     *
+     * Its caller multiplies by *Thickness*, so that knob moves the whole range rather than only its top.
+     */
+    internal fun widthShare(look: Look, grade: Float): Float = when (look.weave) {
+        Weave.SCATTERED -> MinWidthShare + (MaxWidthShare - MinWidthShare) * grade.pow(WidthBias)
+        Weave.GRADED -> MinGradedWidth + (MaxGradedWidth - MinGradedWidth) * grade
+    }
+
+    /**
+     * Which tone a mark at [grade] takes, of [count] on the ramp above the ground.
+     *
+     * **[Weave.GRADED] runs the ramp against the width — the thickest marks on the palette's opening stop.** That is
+     * the reference's own order (its boldest marks take its palette's first color and its hairlines its last) and it
+     * is the reading that survives a palette which is a luminance ramp rather than a color set: the bold marks land
+     * furthest from the ground and carry the picture, and the hairlines land nearest it and read as texture.
+     *
+     * [Weave.SCATTERED] draws independently of the width, which is what the reference's *Eclectic* measures as —
+     * every tone present at `10..25%` of every column, against a profile that sweeps the whole ramp on *Pearls*.
+     */
+    internal fun toneIndex(look: Look, grade: Float, count: Int, random: Random): Int = when (look.weave) {
+        Weave.SCATTERED -> random.nextInt(count)
+        Weave.GRADED -> ((1f - grade) * (count - 1)).roundToInt().coerceIn(0, count - 1)
+    }
 
     /**
      * How many points the separation grid must hold: about one every [step] along every lane of [separation] over the
@@ -487,7 +570,15 @@ object FlowFieldGenerator : Generator {
         x < 0f || y < 0f || x >= width || y >= height
 
     /**
-     * Draws one trail in [paint]'s color, in whichever of the two ways [look] draws them.
+     * Draws one trail in [paint]'s color, at [width] pixels — cut into dashes, or beaded whole.
+     *
+     * **Both looks dash, and beading replaces the dashing rather than the stroking.** *Pearls* had been drawing
+     * whole paths here; the reference's *Pearls* is as plainly dashed as its *Eclectic*, at every setting of all six
+     * of its knobs — round-capped segments of two to six lanes with ground between them. What its beaded minority
+     * replaces is the whole lane, which is why a bead chain runs unbroken where the strokes beside it do not.
+     *
+     * **The share is only consulted when there is one**, so a look with no beads draws nothing from [random] here
+     * and its stream stays where it was.
      *
      * **A trail that only managed a step or two is still drawn**, rather than dropped the way gart drops the ones
      * that missed a third of its step budget: a discarded streamline has already laid its points into the separation
@@ -497,26 +588,22 @@ object FlowFieldGenerator : Generator {
     @Suppress("LongParameterList")
     private fun drawTrail(
         canvas: Canvas,
-        look: Look,
-        trail: Trail,
+        points: FloatArray,
+        width: Float,
         walk: Walk,
         beaded: Float,
         paint: Paint,
         random: Random,
     ) {
-        if (trail.points.size < MinDrawnValues) return
-        if (look.marks == Marks.DASHES) {
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = trail.width
-            for (dash in dashes(trail.points, walk, trail.width, random)) {
-                canvas.drawPath(Streamlines.pathOfPixels(dash), paint)
-            }
-        } else if (random.nextFloat() < beaded) {
-            drawBeads(canvas, trail.points, trail.width, walk.step, paint)
-        } else {
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = trail.width
-            canvas.drawPath(Streamlines.pathOfPixels(trail.points), paint)
+        if (points.size < MinDrawnValues) return
+        if (beaded > 0f && random.nextFloat() < beaded) {
+            drawBeads(canvas, points, width, walk.step, paint)
+            return
+        }
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = width
+        for (dash in dashes(points, walk, width, random)) {
+            canvas.drawPath(Streamlines.pathOfPixels(dash), paint)
         }
     }
 
@@ -556,16 +643,27 @@ object FlowFieldGenerator : Generator {
      *
      * The dots are spaced by their own width rather than by a step count, so a fat line beads coarsely and a hairline
      * finely; gart walks the path taking every n-th point until two consecutive ones fall close enough together,
-     * which is the same rule reached from the other side.
+     * which is the same rule reached from the other side. Measured off the reference: `21px` beads at a `31px`
+     * pitch, in a band whose strokes are `22-23px` — a bead is the stroke's own width, at about one and a half of
+     * them apart.
+     *
+     * **They are drawn translucent, and that is measurable rather than a taste.** Every bead color in the reference
+     * is its stroke color composited on the ground at `0.70` to three decimal places in all three channels —
+     * `073B4C` beads read `507176`, `06D6A0` read `4FDEB1`, `EF476F` read `F4798E`. gart does the same at a much
+     * lower alpha. Opaque beads read as a second, louder mark competing with the strokes; at `0.70` the chain sits
+     * behind them, which is the depth the look is named for.
      */
     private fun drawBeads(canvas: Canvas, points: FloatArray, width: Float, step: Float, paint: Paint) {
         paint.style = Paint.Style.FILL
+        val opaque = paint.color
+        paint.alpha = BeadAlpha
         val stride = (width * BeadSpacing / step).toInt().coerceAtLeast(1)
         var i = 0
         while (i * 2 + 1 < points.size) {
             canvas.drawCircle(points[i * 2], points[i * 2 + 1], width / 2f, paint)
             i += stride
         }
+        paint.color = opaque
     }
 
     /**
@@ -722,6 +820,17 @@ object FlowFieldGenerator : Generator {
     private const val WidthBias = 0.7f
 
     /**
+     * The same, for [Weave.GRADED] — an eighth of a lane to a half of one, and it is a *much* narrower band.
+     *
+     * Measured off the reference's *Pearls*: `5-10px` marks at the frame's center and `22-23px` at its edges, on a
+     * `41px` pitch. The ceiling matters more than the floor — half a lane is what keeps that look airy (its ink runs
+     * `7..48%` of a column against *Eclectic*'s `50..70%`), and it is what stops a fat mark from swallowing the
+     * ground its neighbours are read against.
+     */
+    private const val MinGradedWidth = 0.12f
+    private const val MaxGradedWidth = 0.56f
+
+    /**
      * What a *whole* angle span is worth as a noise amplitude — a half, because [PerlinNoise2d] runs `-1..1`.
      *
      * gart's Perlin answers `0..1`, so its `noise * 3` is three radians end to end. Read the other way here it would
@@ -803,8 +912,11 @@ object FlowFieldGenerator : Generator {
      */
     private const val BeadBias = 2.6f
 
-    /** How far apart beads sit, as a multiple of their diameter — enough to read as a chain rather than a stroke. */
+    /** How far apart beads sit, as a multiple of their diameter — the reference's `31px` pitch on `21px` beads. */
     private const val BeadSpacing = 1.6f
+
+    /** What a bead is drawn at, of 255 — the reference's measured `0.70` over the ground. */
+    private const val BeadAlpha = 179
 
     /** The most orbs the sky may hold — the reference's own ten, so `depth` `0.5` is five. */
     private const val MaxOrbs = 10

@@ -136,6 +136,60 @@ class FlowFieldGeneratorTest {
     }
 
     @Test
+    fun `the graded look runs its tone against its width, and the scattered one does not`() {
+        // The finding the look was rebuilt on: theirs puts its boldest marks on the palette's first tone and its
+        // hairlines on the last, and averaging its frame down a column finds one tone per band. A scattered look
+        // averages to every tone everywhere, which is what our Pearls had been doing.
+        val pearls = FlowFieldGenerator.Look.PEARLS
+        val random = kotlin.random.Random(1)
+        assertEquals("the thickest mark takes the opening tone", 0, FlowFieldGenerator.toneIndex(pearls, 1f, 4, random))
+        assertEquals("the thinnest takes the last", 3, FlowFieldGenerator.toneIndex(pearls, 0f, 4, random))
+        // A grade out of range must not index off the end — the cosine cannot leave 0..1, but nothing here says so.
+        assertEquals(0, FlowFieldGenerator.toneIndex(pearls, 1.4f, 4, random))
+        assertEquals(3, FlowFieldGenerator.toneIndex(pearls, -0.4f, 4, random))
+    }
+
+    @Test
+    fun `the graded look is drawn far finer than the scattered one, at every grade`() {
+        // Measured off theirs on a 1080-wide frame: Pearls runs 5-10px marks at the frame's centre and 22-23px at
+        // its edges on a 41px pitch, where Eclectic runs to a whole lane. Ours drew Pearls on Eclectic's own
+        // distribution, which is most of why the two looks read as one heavy design.
+        val pearls = FlowFieldGenerator.Look.PEARLS
+        val eclectic = FlowFieldGenerator.Look.ECLECTIC
+        assertTrue(
+            "the graded ceiling must stay well under a lane",
+            FlowFieldGenerator.widthShare(pearls, 1f) < 0.6f,
+        )
+        assertEquals("a whole lane is the scattered ceiling", 1f, FlowFieldGenerator.widthShare(eclectic, 1f), 1e-6f)
+        // The two floors land on the same share by coincidence — a hairline is a hairline — and it is only the
+        // *lane* that differs there, Pearls' being the narrower. Everywhere above it the graded look is finer.
+        assertEquals(
+            FlowFieldGenerator.widthShare(eclectic, 0f),
+            FlowFieldGenerator.widthShare(pearls, 0f),
+            1e-6f,
+        )
+        var grade = 0.1f
+        while (grade <= 1f) {
+            assertTrue(
+                "the graded look must be the finer of the two at grade $grade",
+                FlowFieldGenerator.widthShare(pearls, grade) < FlowFieldGenerator.widthShare(eclectic, grade),
+            )
+            grade += 0.1f
+        }
+    }
+
+    @Test
+    fun `the graded look packs tighter than the scattered one at the same Density`() {
+        // Scanned the same way on the same knob setting, theirs crosses a lane every 70px on Pearls and every 99px
+        // on Eclectic. Drawing both at one pitch left Pearls half again too loose.
+        assertEquals(1f, FlowFieldGenerator.Look.ECLECTIC.packing, 1e-6f)
+        assertTrue(
+            "the hairline look needs more lanes to fill a frame",
+            FlowFieldGenerator.Look.PEARLS.packing < FlowFieldGenerator.Look.ECLECTIC.packing,
+        )
+    }
+
+    @Test
     fun `only Pearls sweeps a whole turn, and its span is not zero`() {
         // The span is read while the enum loads, which is before this object's own `val`s are assigned — a computed
         // one would be zero here, and a zero span draws straight parallel lines rather than failing.
