@@ -180,7 +180,7 @@ object FlowFieldGenerator : Generator {
         val walk = Walk(look, separation, width, height, angleAt)
 
         val random = Random(seed)
-        val trails = growTrails(walk, random)
+        val trails = growTrails(walk, thicknessScale(params.scale), random)
 
         // The orbs draw from a seed of their own, so moving their slider adds and removes orbs instead of re-rolling
         // every trail behind them.
@@ -304,7 +304,7 @@ object FlowFieldGenerator : Generator {
      * sweeping across the frame — which is what lets the orbs be spread through it and land at every depth rather
      * than stacking up in one corner.
      */
-    private fun growTrails(walk: Walk, random: Random): List<Trail> {
+    private fun growTrails(walk: Walk, thickness: Float, random: Random): List<Trail> {
         val width = walk.width
         val height = walk.height
         val separation = walk.separation
@@ -338,19 +338,21 @@ object FlowFieldGenerator : Generator {
                 points[at++] = behind[i * 2 + 1]
             }
             for (v in ahead) points[at++] = v
-            trails.add(Trail(points, separation * widthShare(random)))
+            trails.add(Trail(points, separation * thickness * widthShare(random)))
         }
         return trails
     }
 
     /**
-     * A mark's width as a share of its lane, before *Thickness* — **squared toward the thin end**.
+     * A mark's width as a share of its lane, before *Thickness* — **an uneven draw, biased toward the fat end**.
      *
      * gart draws a mark anywhere from a fifth of the lane to two thirds of it, uniformly. The reference's marks span
-     * the same range but plainly not uniformly: it is mostly hairlines with a fat lozenge every few lanes, and the
-     * hairlines threading between the fat marks are most of what makes the design read as *eclectic* rather than as
-     * corduroy. Squaring the draw is the cheapest thing that reproduces that, and the panel's multiplier is applied
-     * separately so *Thickness* still moves the whole distribution rather than only its top.
+     * a wider range and are not uniform over it: mostly full-bodied lozenges, with a hairline threading between them
+     * every few lanes, and those hairlines are much of what makes the design read as *eclectic* rather than as
+     * corduroy. An exponent under one is the cheapest thing that reproduces that while still paying for the coverage
+     * the one-lane ceiling gives up.
+     *
+     * Its caller multiplies by *Thickness*, so that knob moves the whole distribution rather than only its top.
      */
     private fun widthShare(random: Random): Float =
         MinWidthShare + (MaxWidthShare - MinWidthShare) * random.nextFloat().pow(WidthBias)
