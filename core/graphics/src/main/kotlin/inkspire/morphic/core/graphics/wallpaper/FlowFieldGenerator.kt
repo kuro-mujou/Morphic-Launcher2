@@ -207,7 +207,7 @@ object FlowFieldGenerator : Generator {
         val walk = Walk(look, separation, detail, longSide, width, height, angleAt)
 
         val random = Random(seed)
-        val trails = growTrails(walk, look, shortSide, random)
+        val trails = growTrails(walk, random)
         val thickness = thicknessScale(params.scale)
 
         // The orbs draw from a seed of their own, so moving their slider adds and removes orbs instead of re-rolling
@@ -227,9 +227,7 @@ object FlowFieldGenerator : Generator {
                 drawOrb(canvas, look, tones, ground, Frame(width, height, shortSide, orbSize), paint, orbRandom)
                 placed++
             }
-            paint.color = tones[toneIndex(look, trail.grade, tones.size, random)]
-            val width = separation * thickness * widthShare(look, trail.grade)
-            drawTrail(canvas, trail.points, width, walk, beaded, paint, random)
+            drawTrail(canvas, Ink(look, tones, shortSide, thickness), trail, walk, beaded, paint, random)
         }
         while (placed < orbs) {
             drawOrb(canvas, look, tones, ground, Frame(width, height, shortSide, orbSize), paint, orbRandom)
@@ -323,13 +321,23 @@ object FlowFieldGenerator : Generator {
     internal fun beadedShare(roundness: Float): Float = roundness.coerceIn(0f, 1f).pow(BeadBias)
 
     /**
-     * One grown trail: its points in **pixels**, interleaved `x, y`, and where it sits on its look's own scale.
+     * Everything one mark needs to become ink, and it is asked **per mark rather than per trail** — the difference
+     * between a picture of scattered strokes and a picture of dashed lanes.
      *
-     * @property grade `0..1`, the one number a mark's color *and* its width are both read from — see [Weave]. Kept
-     *   as the shared source rather than as two resolved values, because the whole point of the graded look is that
-     *   the two agree; resolving them apart is how they would silently stop agreeing.
+     * **A streamline is traced whole and then cut, but nothing about a mark should remember that.** Giving a trail
+     * one color and one width makes every dash along it a repeat of its neighbour, so a lane reads as a single long
+     * dashed line and the frame reads as corduroy — which is what ours drew and what the reference plainly does not:
+     * rotate its *Eclectic* so the flow runs across the page and a hairline, a fat lozenge and a medium stroke sit
+     * end to end on the same line, in three colors. Drawn per mark, the lane stops being visible at all.
+     *
+     * **The graded look needs no exception**, which is what says the rule belongs here rather than on [Weave]:
+     * [gradeOf] reads a cosine of the mark's own midpoint, so two dashes a lane apart resolve to nearly the same
+     * width and tone anyway and *Pearls* keeps the continuity it is built on.
+     *
+     * @property shortSide the frame's short side in pixels — what the graded look's cosine spans.
+     * @property thickness what *Thickness* multiplies every width by.
      */
-    private class Trail(val points: FloatArray, val grade: Float)
+    private class Ink(val look: Look, val tones: IntArray, val shortSide: Float, val thickness: Float)
 
     /**
      * Grows trails through [angleAt] until the frame is packed, and returns them in the order they were grown.
@@ -339,7 +347,7 @@ object FlowFieldGenerator : Generator {
      * sweeping across the frame — which is what lets the orbs be spread through it and land at every depth rather
      * than stacking up in one corner.
      */
-    private fun growTrails(walk: Walk, look: Look, shortSide: Float, random: Random): List<Trail> {
+    private fun growTrails(walk: Walk, random: Random): List<FloatArray> {
         val width = walk.width
         val height = walk.height
         val separation = walk.separation
@@ -348,7 +356,7 @@ object FlowFieldGenerator : Generator {
         val seeds = ArrayList<Float>()
         seeds.add(random.nextFloat() * width)
         seeds.add(random.nextFloat() * height)
-        val trails = ArrayList<Trail>()
+        val trails = ArrayList<FloatArray>()
 
         while (seeds.size >= 2 && trails.size < MaxTrails) {
             // Popped at random rather than in order, so the field fills outward from everywhere at once instead of
@@ -373,7 +381,7 @@ object FlowFieldGenerator : Generator {
                 points[at++] = behind[i * 2 + 1]
             }
             for (v in ahead) points[at++] = v
-            trails.add(Trail(points, gradeOf(look, points, shortSide, random)))
+            trails.add(points)
         }
         return trails
     }
@@ -390,10 +398,10 @@ object FlowFieldGenerator : Generator {
      * [Weave.SCATTERED] draws it, which is where *Eclectic*'s independence of color and width comes from — and it
      * draws it here, at the same point in the stream the width used to, so the look is unchanged.
      */
-    private fun gradeOf(look: Look, points: FloatArray, shortSide: Float, random: Random): Float {
-        if (look.weave == Weave.SCATTERED) return random.nextFloat()
+    private fun gradeOf(ink: Ink, points: FloatArray, random: Random): Float {
+        if (ink.look.weave == Weave.SCATTERED) return random.nextFloat()
         val midX = points[points.size / 4 * 2]
-        return (cos(midX * TwoPi / shortSide) + 1f) / 2f
+        return (cos(midX * TwoPi / ink.shortSide) + 1f) / 2f
     }
 
     /**
@@ -580,8 +588,8 @@ object FlowFieldGenerator : Generator {
     @Suppress("LongParameterList")
     private fun drawTrail(
         canvas: Canvas,
+        ink: Ink,
         points: FloatArray,
-        width: Float,
         walk: Walk,
         beaded: Float,
         paint: Paint,
@@ -589,15 +597,23 @@ object FlowFieldGenerator : Generator {
     ) {
         if (points.size < MinDrawnValues) return
         if (beaded > 0f && random.nextFloat() < beaded) {
-            drawBeads(canvas, points, width, walk.step, paint)
+            // A beaded lane is beaded whole, so it is the one mark that takes its ink from the trail.
+            val grade = gradeOf(ink, points, random)
+            paint.color = ink.tones[toneIndex(ink.look, grade, ink.tones.size, random)]
+            drawBeads(canvas, points, widthOf(ink, walk, grade), walk.step, paint)
             return
         }
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = width
-        for (dash in dashes(points, walk, width, random)) {
-            canvas.drawPath(Streamlines.pathOfPixels(dash), paint)
+        for (dash in dashes(ink, points, walk, random)) {
+            paint.color = ink.tones[toneIndex(ink.look, dash.grade, ink.tones.size, random)]
+            paint.strokeWidth = widthOf(ink, walk, dash.grade)
+            canvas.drawPath(Streamlines.pathOfPixels(dash.points), paint)
         }
     }
+
+    /** What a mark at [grade] is stroked at, in pixels — its share of a lane, times *Thickness*. */
+    private fun widthOf(ink: Ink, walk: Walk, grade: Float): Float =
+        walk.separation * ink.thickness * widthShare(ink.look, grade)
 
     /**
      * Cuts one streamline into the dashes *Eclectic* is drawn as, at seeded lengths and from a seeded phase.
@@ -612,23 +628,31 @@ object FlowFieldGenerator : Generator {
      * The lengths are in **separations**, not steps, because that is what theirs holds fixed: wind their *Density*
      * down and the marks lengthen in step with the lanes widening, rather than staying the length they were.
      */
-    private fun dashes(points: FloatArray, walk: Walk, width: Float, random: Random): List<FloatArray> {
-        val out = ArrayList<FloatArray>()
+    private fun dashes(ink: Ink, points: FloatArray, walk: Walk, random: Random): List<Dash> {
+        val out = ArrayList<Dash>()
         val perSeparation = walk.separation / walk.step
         val shortest = (MinDashSpan * perSeparation).toInt().coerceAtLeast(2)
         val longest = (MaxDashSpan * perSeparation).toInt().coerceAtLeast(shortest + 1)
-        // The round caps stand a full width proud of the two points a gap runs between, so a gap measured only in
-        // lanes is *closed* by any mark wider than it — which is most of them, and it is why an earlier build's
-        // fat marks ran on as unbroken ribbons while its hairlines broke correctly. The cap clearance is the floor.
-        val gap = (max(DashGapSpan * walk.separation, width * GapPerWidth) / walk.step).toInt().coerceAtLeast(1)
         var at = random.nextInt(shortest)
         while (at * 2 < points.size) {
             val end = minOf(at + shortest + random.nextInt(longest - shortest), points.size / 2)
-            if (end - at >= 2) out.add(points.copyOfRange(at * 2, end * 2))
-            at = end + gap
+            if (end - at < 2) break
+            val cut = points.copyOfRange(at * 2, end * 2)
+            val grade = gradeOf(ink, cut, random)
+            out.add(Dash(cut, grade))
+            // The round caps stand a full width proud of the two points a gap runs between, so a gap measured only
+            // in lanes is *closed* by any mark wider than it — which is most of them, and it is why an earlier
+            // build's fat marks ran on as unbroken ribbons while its hairlines broke correctly. The cap clearance is
+            // the floor, and it is read off **this** mark's own width, which is why the grade is drawn before the
+            // gap it pays for rather than after the whole trail is cut.
+            val gap = max(DashGapSpan * walk.separation, widthOf(ink, walk, grade) * GapPerWidth)
+            at = end + (gap / walk.step).toInt().coerceAtLeast(1)
         }
         return out
     }
+
+    /** One mark: the stretch of streamline it covers, and where it sits on its look's scale — see [Ink]. */
+    private class Dash(val points: FloatArray, val grade: Float)
 
     /**
      * Draws a streamline as the chain of dots *Pearls* beads a few of its lines into — gart's one-in-six.
