@@ -182,7 +182,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ✅ | **W11o** — one wave, drawn again at the same phase over exactly equal bands; ours had jittered the bands and given each divider its own random sines |
 | 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
-| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark. **W11r** — theirs lets orbs overlap freely; ours read as lumps because its radius range was three times wide with a floor half theirs. **W11s** — the lane was a third too wide (fitted through ink, not a scan line), the width draw was biased fat where theirs is biased thin, a mark takes its own ink rather than its trail's, and the *Irregularity* knob moved the field a quarter as far as theirs |
+| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark. **W11r** — theirs lets orbs overlap freely; ours read as lumps because its radius range was three times wide with a floor half theirs. **W11s** — the lane was a third too wide (fitted through ink, not a scan line), the width draw was biased fat where theirs is biased thin, a mark takes its own ink rather than its trail's, and the *Irregularity* knob moved the field a quarter as far as theirs. **W11t** — *Pearls* drew worms at the top of that knob because its marks were *Eclectic*-length; theirs are half as long and their length is graded by the same cosine as their width |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
 | 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
 | 17 | Polygon Cascade | `POLYGON_CASCADE` | ☐ | built in W8d from the note |
@@ -305,6 +305,33 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11t — Flow Field, *Pearls* at the top of the knob. ✅ (2026-09-03)** W11s made the knob move the field;
+    at `100` the look then drew **worms**. The knob was not what was wrong.
+    - **The mark was already too long to bend.** A stroke long enough to carry two full wiggles is a worm; one
+      carrying half of one is a comma. Measured with one tool over one crop of both references at their own
+      defaults, in lanes: their *Eclectic* runs `2.7 / 4.0 / 5.9` at the quarter, half and three quarters, their
+      *Pearls* `1.1 / 2.0 / 3.5` with a tail to `6.4`. The busy look is drawn in marks **half** the length of the
+      bold one's, and it needs a *skewed* draw — no uniform band puts its median at under a third of its top. Ours
+      drew both from *Eclectic*'s band.
+    - **In the graded look the cosine sets the length as well as the colour and the width.** Binned by width, their
+      *Pearls* runs medians of `45px` at `4-9px` wide, `64px` at `10-15`, `81px` at `16-22` and `119px` past that;
+      ours was flat at about `70px` throughout, which is what left long thin strokes running through the frame's
+      pale centre where theirs has short ones. So `Weave.GRADED` reads **three** things off one number.
+    - **Beading is a property of the mark, not of the lane.** W11q had it beading whole trails, and once the strokes
+      were cut short the bead chains were the only thing still drawing `1500px` snakes. Theirs runs a median of six
+      beads over `155px` against a stroke median of `77px` — a mark or two.
+    - **The wiggle's wavelength belongs to the knob, not to the look.** Expressed as a multiple of [Look.frequency]
+      it inherited *Pearls*' coarser sweep, so one *Irregularity* setting meant a `59px` wiggle in one look and an
+      `83px` one in the other and *Pearls* came out a third smoother at the same number. Theirs turns faster on
+      *Pearls* than on *Eclectic* at every setting — that is the sweep doing it, not the wiggle.
+    - **A note on the measuring, since three slices have now leaned on it:** the orientation-decorrelation is the
+      right tool for *how fast the flow turns* and the wrong one for *what the marks look like*. It saturates near
+      `45°` and it counts mark ends and beads as turning, so past a certain point it stops discriminating; the
+      mark-length histogram binned by width is what actually found this. Fit the field with one and the marks with
+      the other.
+    - Detekt on `core:graphics` stayed at **14**; ktlint clean; one new unit test pinning that the graded span rises
+      with the grade and the scattered one ignores it.
+
   - **W11s — Flow Field, the marks and the Irregularity knob. ✅ (2026-09-03)** Three findings, from a reader who
     put ours beside theirs and said ours draws *long lines with dashes* where theirs draws *separate short lines
     combining thin and thick*. Every part of that turned out to be literally true and separately caused.

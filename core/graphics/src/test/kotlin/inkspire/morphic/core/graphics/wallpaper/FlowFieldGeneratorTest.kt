@@ -140,7 +140,7 @@ class FlowFieldGeneratorTest {
             val look = FlowFieldGenerator.Look.ECLECTIC
             val step = FlowFieldGenerator.smoothStep(look, detail, 2400f)
             val base = 2400f / look.frequency
-            val turn = 2f * (look.span / base + detail / (base / 12f)) * step
+            val turn = 2f * (look.span / base + detail / (2400f / 41f)) * step
             assertEquals("turn per hop at detail $detail", 0.09f, turn, 1e-4f)
         }
     }

@@ -254,7 +254,7 @@ object FlowFieldGenerator : Generator {
         val sweep = PerlinNoise2d(seed)
         val grain = PerlinNoise2d(seed xor DetailSeed)
         val broad = look.frequency / longSide
-        val fine = broad * DetailRatio
+        val fine = DetailFrequency / longSide
         return { x, y ->
             look.bias + sweep.at(x * broad, y * broad) * look.span * NoiseAmplitude +
                 grain.at(x * fine, y * fine) * detail * NoiseAmplitude
@@ -503,12 +503,12 @@ object FlowFieldGenerator : Generator {
      *
      * Both octaves sweep their span over about half a wavelength, so each contributes `2 x span / wavelength`
      * radians of turn per pixel; the hop is then the turn budget divided by their sum. The detail octave dominates,
-     * being [DetailRatio] times the finer of the two — which is the whole reason this only ever showed with
+     * being much the finer of the two — which is the whole reason this only ever showed with
      * *Irregularity* wound up.
      */
     internal fun smoothStep(look: Look, detail: Float, longSide: Float): Float {
         val base = longSide / look.frequency
-        val fine = base / DetailRatio
+        val fine = longSide / DetailFrequency
         return MaxTurnPerStep / (2f * (look.span / base + detail / fine))
     }
 
@@ -837,25 +837,30 @@ object FlowFieldGenerator : Generator {
     private const val MinSpacing = 0.019f
 
     /**
-     * How far apart the two octaves sit — the wiggle's wavelength against the sweep's.
+     * How many wiggles the fine octave fits across the frame's long side — an **absolute** wavelength, about `59px`
+     * on a 2400px frame, and deliberately not a multiple of the look's own [Look.frequency].
+     *
+     * **The wiggle belongs to the knob, not to the look.** Expressed as a ratio it inherited *Pearls*' coarser
+     * sweep, so one *Irregularity* setting meant a `59px` wiggle in one look and an `83px` one in the other, and
+     * *Pearls* came out a third smoother than *Eclectic* at the same number. Theirs does not: it turns faster on
+     * *Pearls* than on *Eclectic* at every setting, which is the sweep doing that and not the wiggle.
      *
      * **Fitted with [MaxDetailSpan] against a measurement of the knob's *travel*, not of its ends.** What the eye
      * reads as irregularity is how fast the flow turns, so both were set by an orientation-decorrelation — the mean
      * angle between two points `80px` apart along a row — swept from `0` to `100`. Theirs travels `15.1° -> 28.3°`
      * on *Eclectic* and `24.9° -> 41.7°` on *Pearls*. Ours travelled `+3.9°` and `+4.3°`: a knob that redraws the
      * number and barely the picture, which is what made *Pearls* above zero look like *Pearls* at zero drawn worse.
-     * At `12` and `2.6` ours travels `+12.8°` and `+18.3°`, which is theirs to within the measurement.
      *
-     * Below about four the wiggle stops reading as a disturbance and merely loosens the flow. The old ceiling on
-     * this — that far above it there are too few steps per wave to draw one — is gone: the hop is now the shorter of
-     * what the separation implies and what the field allows, so a finer octave buys itself the steps to draw it.
+     * Far below this the wiggle stops reading as a disturbance and merely loosens the flow. The old ceiling — that
+     * far above it there are too few steps per wave to draw one — is gone: the hop is now the shorter of what the
+     * separation implies and what the field allows, so a finer octave buys itself the steps to draw it.
      */
-    private const val DetailRatio = 12f
+    private const val DetailFrequency = 41f
 
     /**
      * The most fine wiggle *Irregularity* adds, in radians end to end — enough for a mark to double back on itself.
      *
-     * Fitted with [DetailRatio] against the same decorrelation sweep; see there for why the ends of the knob are the
+     * Fitted with [DetailFrequency] against the same decorrelation sweep; see there for why the ends of the knob are the
      * wrong thing to fit against and its travel is the right one. `1.1` was the earlier value, fitted by eye to
      * their `50`, and the eye had nothing to compare against: at `1.1` the whole knob moves the field by about as
      * much as their first ten points of it do.
