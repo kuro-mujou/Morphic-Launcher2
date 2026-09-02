@@ -72,8 +72,8 @@ class FlowFieldGeneratorTest {
         // `0` means rigid on this knob everywhere in the studio, which is the one thing a geometric scale could not
         // express — hence the linear one here, unlike its two neighbours.
         assertEquals(0f, FlowFieldGenerator.detailSpan(0f), 1e-6f)
-        assertEquals(0.55f, FlowFieldGenerator.detailSpan(0.5f), 1e-6f)
-        assertEquals(1.1f, FlowFieldGenerator.detailSpan(1f), 1e-6f)
+        assertEquals(1.3f, FlowFieldGenerator.detailSpan(0.5f), 1e-6f)
+        assertEquals(2.6f, FlowFieldGenerator.detailSpan(1f), 1e-6f)
         assertEquals(0f, FlowFieldGenerator.detailSpan(-1f), 1e-6f) // clamped
     }
 
@@ -132,15 +132,15 @@ class FlowFieldGeneratorTest {
         // The claim the whole knob rests on: a trail is a polyline through its hops, so the hop has to resolve the
         // field. Winding irregularity up without shortening it is what drew faceted lines with bulging joins.
         val smooth = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 0f, longSide = 2400f)
-        val serpentine = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 1.1f, longSide = 2400f)
+        val serpentine = FlowFieldGenerator.smoothStep(FlowFieldGenerator.Look.ECLECTIC, detail = 2.6f, longSide = 2400f)
         assertTrue("a faster-turning field must take shorter hops", serpentine < smooth)
 
         // Five degrees of turn per hop at either end, which is where the smooth end already sat.
-        for (detail in floatArrayOf(0f, 0.55f, 1.1f)) {
+        for (detail in floatArrayOf(0f, 1.3f, 2.6f)) {
             val look = FlowFieldGenerator.Look.ECLECTIC
             val step = FlowFieldGenerator.smoothStep(look, detail, 2400f)
             val base = 2400f / look.frequency
-            val turn = 2f * (look.span / base + detail / (base / 7f)) * step
+            val turn = 2f * (look.span / base + detail / (base / 12f)) * step
             assertEquals("turn per hop at detail $detail", 0.09f, turn, 1e-4f)
         }
     }
@@ -196,6 +196,10 @@ class FlowFieldGeneratorTest {
             eclecticMean += FlowFieldGenerator.widthShare(eclectic, grade) / 100f
             grade += 0.01f
         }
+        assertTrue(
+            "the graded look's average mark must be about half the scattered one's, not the same draw",
+            pearlsMean < 0.6f * eclecticMean,
+        )
     }
 
     @Test

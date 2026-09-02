@@ -182,7 +182,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ✅ | **W11o** — one wave, drawn again at the same phase over exactly equal bands; ours had jittered the bands and given each divider its own random sines |
 | 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
-| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark. **W11r** — theirs lets orbs overlap freely; ours read as lumps because its radius range was three times wide with a floor half theirs |
+| 14 | Flow Field | `FLOW_FIELD` | ✅ | **W11p** — a trail stops when it nears another, which is what makes the marks short, packed and never crossing; gart's rule, and ours had traced a fixed length and drawn them all. **W11q** — *Pearls* is the **graded** look: color and width off one cosine across the frame, not drawn at random per mark. **W11r** — theirs lets orbs overlap freely; ours read as lumps because its radius range was three times wide with a floor half theirs. **W11s** — the lane was a third too wide (fitted through ink, not a scan line), the width draw was biased fat where theirs is biased thin, a mark takes its own ink rather than its trail's, and the *Irregularity* knob moved the field a quarter as far as theirs |
 | 15 | Topography | `CONTOUR` | ☐ | W8b added the lines look from the note; theirs never driven |
 | 16 | Ribbed Glass | `RIBBED_GLASS` | ☐ | built in W9 from the note |
 | 17 | Polygon Cascade | `POLYGON_CASCADE` | ☐ | built in W8d from the note |
@@ -305,6 +305,45 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11s — Flow Field, the marks and the Irregularity knob. ✅ (2026-09-03)** Three findings, from a reader who
+    put ours beside theirs and said ours draws *long lines with dashes* where theirs draws *separate short lines
+    combining thin and thick*. Every part of that turned out to be literally true and separately caused.
+    - **The lane was a third too wide, and it is why the marks were both too long and too fat.** A pitch is the one
+      thing this design will not show you directly — marks overlap and curve, so no scan line crosses lanes cleanly,
+      and the `55px` we had came from trying. **Ink shows it, because coverage does not depend on the pitch at all:**
+      a width is a share of a lane, so shrinking the lane shrinks the mark with it, and ink is exactly
+      `mean width share x duty`. Their *Eclectic* covers `63%` with marks whose mean is `28px` at a duty near `0.85`,
+      which is a mean share of `0.74` and a lane of **`38px`**. A dash is measured in lanes, so the same error made
+      our median mark `236px` against their `154px`. The knob's whole travel is a factor of `3.5`, not the `5` ours
+      had — fitted at *Density* `0` and `75` off the length distribution, which scales with the lane.
+    - **The width draw was biased the wrong way, and the overlap it was protecting against is what the design is made
+      of.** Ours ran `0.12..1` of a lane biased **fat**, on the reasoning that a ceiling of one lane keeps marks from
+      merging into blobs. Fitted against the `38px` lane, theirs runs `0.08..1.87` with an exponent near `2`: a
+      quarter of its marks are hairlines under a fifth of a lane, where ours had `4%`. Those hairlines threading
+      between the lozenges are most of what the reader meant by *thin and thick*, and the marks past a lane are what
+      cross each other.
+    - **A mark takes its own colour and width; ours took its trail's.** The structural one, and the one that decides
+      whether the frame reads as scattered strokes or as ruled lanes. Rotate their *Eclectic* so the flow runs across
+      the page and a hairline, a fat lozenge and a medium stroke sit end to end on one line in three colours — no
+      lane is visible anywhere. Ours gave every dash along a streamline the same colour and width, so each lane read
+      as one long dashed line. **Pearls needs no exception**, which is what says the rule belongs to the mark rather
+      than to `Weave`: its grade is a cosine of the mark's own midpoint, so neighbours still agree.
+    - **The *Irregularity* knob barely moved the field, and the ends were the wrong thing to fit against.** Measured
+      as an orientation-decorrelation — the mean angle between two points `80px` apart along a row — swept across the
+      knob: theirs travels `15.1° -> 28.3°` on *Eclectic* and `24.9° -> 41.7°` on *Pearls*, where ours travelled
+      `+3.9°` and `+4.3°`. A knob that redraws the number and not the picture, which is why *Pearls* above zero read
+      as *Pearls* at zero drawn worse. The octave is now `12x` the sweep at `2.6` radians rather than `7x` at `1.1`,
+      and ours travels `+12.8°` and `+18.3°`. **The travel is the fittable thing**: both ends of an irregularity
+      knob look "smooth" and "chaotic" under any scaling, so fitting to either — which is what the earlier `1.1`
+      did, by eye, against their `50` — constrains almost nothing.
+    - **`Look.packing` is gone, and its existence was the tell.** It was a `0.74` on *Pearls* alone, added in W11q
+      because that look measured tighter than *Eclectic*; with the shared spacing fitted properly both looks land on
+      their reference (*Pearls* `31%` ink against their `28%`, *Eclectic* `62%` against `63%`). A per-look correction
+      to a shared constant is usually the shared constant being wrong.
+    - Their *Eclectic* opens at *Irregularity* `0` and their *Pearls* at `50` — another consumer for the per-design
+      defaults still outstanding, since ours opens both at `0.5`. Detekt on `core:graphics` stayed at **14**; ktlint
+      clean; the four unit tests that pinned the old measurements were re-pinned to the new ones.
+
   - **W11r — Flow Field, the orbs. ✅ (2026-09-02)** The slice W11q handed off, and it is worth recording mostly
     for the fix that was **not** built: the obvious reading of the symptom was wrong, and driving the reference is
     the only thing that said so.
