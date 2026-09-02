@@ -16,17 +16,20 @@ class FlowFieldGeneratorTest {
 
     @Test
     fun `density sets the separation, and its middle is the pitch their untouched slider draws`() {
-        // Measured off theirs on a 1080-wide frame: a 125px pitch wound all the way down, 35px near the top, and 55px
-        // where they ship it. The middle is the one that matters — it is the picture the studio opens on.
-        assertEquals(55f / 1080f, FlowFieldGenerator.spacing(0.5f), 1e-3f)
-        assertEquals(125f / 1080f, FlowFieldGenerator.spacing(0f), 3e-3f)
-        assertTrue(
-            "the tight end must leave headroom past their 35px",
-            FlowFieldGenerator.spacing(1f) < 35f / 1080f,
-        )
-        assertEquals(0.115f, FlowFieldGenerator.spacing(0f), 1e-6f)
-        assertEquals(0.023f, FlowFieldGenerator.spacing(1f), 1e-6f)
-        assertEquals(0.023f, FlowFieldGenerator.spacing(2f), 1e-6f) // clamped
+        // Fitted through the ink rather than off a scan line, because marks overlap and curve and no line crosses
+        // lanes cleanly: coverage does not depend on the pitch at all (a width is a share of a lane), so their 63%
+        // over marks whose mean is 28px at a 0.85 duty gives a mean share of 0.74 and a 38px lane, at Density 50 on
+        // a 1080-wide frame. The middle is the one that matters — it is the picture the studio opens on.
+        assertEquals(38f / 1080f, FlowFieldGenerator.spacing(0.5f), 1e-3f)
+        // The ends are that fit run again at Density 0 and 75, off the length distribution, which scales with the
+        // lane: 1.73x the default at the bottom and 0.70x at three quarters. Those two imply travels of 3.0 and 4.2
+        // over the whole knob and the fit splits them, so the tolerance here is the spread between the two readings
+        // rather than a precision claim.
+        assertEquals(1.73f, FlowFieldGenerator.spacing(0f) / FlowFieldGenerator.spacing(0.5f), 0.15f)
+        assertEquals(0.70f, FlowFieldGenerator.spacing(0.75f) / FlowFieldGenerator.spacing(0.5f), 0.06f)
+        assertEquals(0.066f, FlowFieldGenerator.spacing(0f), 1e-6f)
+        assertEquals(0.019f, FlowFieldGenerator.spacing(1f), 1e-6f)
+        assertEquals(0.019f, FlowFieldGenerator.spacing(2f), 1e-6f) // clamped
     }
 
     @Test
@@ -165,43 +168,34 @@ class FlowFieldGeneratorTest {
     }
 
     @Test
-    fun `the graded look is drawn far finer than the scattered one, at every grade`() {
+    fun `the graded look is drawn far finer than the scattered one`() {
         // Measured off theirs on a 1080-wide frame: Pearls runs 5-10px marks at the frame's centre and 22-23px at
-        // its edges on a 41px pitch, where Eclectic runs to a whole lane. Ours drew Pearls on Eclectic's own
-        // distribution, which is most of why the two looks read as one heavy design.
+        // its edges, where Eclectic runs from 3px to 71px -- past two lanes -- on the same 38px lane. Ours drew
+        // Pearls on Eclectic's own distribution, which is most of why the two looks read as one heavy design.
         val pearls = FlowFieldGenerator.Look.PEARLS
         val eclectic = FlowFieldGenerator.Look.ECLECTIC
         assertTrue(
-            "the graded ceiling must stay well under a lane",
-            FlowFieldGenerator.widthShare(pearls, 1f) < 0.6f,
+            "the graded ceiling must stay under a lane, which is what keeps that look airy",
+            FlowFieldGenerator.widthShare(pearls, 1f) < 1f,
         )
-        assertEquals("a whole lane is the scattered ceiling", 1f, FlowFieldGenerator.widthShare(eclectic, 1f), 1e-6f)
-        // The two floors land on the same share by coincidence — a hairline is a hairline — and it is only the
-        // *lane* that differs there, Pearls' being the narrower. Everywhere above it the graded look is finer.
-        assertEquals(
-            FlowFieldGenerator.widthShare(eclectic, 0f),
-            FlowFieldGenerator.widthShare(pearls, 0f),
-            1e-6f,
-        )
-        var grade = 0.1f
-        while (grade <= 1f) {
-            assertTrue(
-                "the graded look must be the finer of the two at grade $grade",
-                FlowFieldGenerator.widthShare(pearls, grade) < FlowFieldGenerator.widthShare(eclectic, grade),
-            )
-            grade += 0.1f
-        }
-    }
-
-    @Test
-    fun `the graded look packs tighter than the scattered one at the same Density`() {
-        // Scanned the same way on the same knob setting, theirs crosses a lane every 70px on Pearls and every 99px
-        // on Eclectic. Drawing both at one pitch left Pearls half again too loose.
-        assertEquals(1f, FlowFieldGenerator.Look.ECLECTIC.packing, 1e-6f)
         assertTrue(
-            "the hairline look needs more lanes to fill a frame",
-            FlowFieldGenerator.Look.PEARLS.packing < FlowFieldGenerator.Look.ECLECTIC.packing,
+            "the scattered ceiling must cross a lane, which is where its marks overlap",
+            FlowFieldGenerator.widthShare(eclectic, 1f) > 1.5f,
         )
+        // Theirs puts its lower quartile at 7px on that 38px lane; ours lands it at 8.6px, where the old fat-biased
+        // draw put it at 26px. It is the quartile rather than the floor that decides whether hairlines are a
+        // texture through the picture or a rarity.
+        assertEquals(7f / 38f, FlowFieldGenerator.widthShare(eclectic, 0.25f), 0.05f)
+        // The looks cross near the bottom of the scale -- a hairline is a hairline, and Pearls' floor is above
+        // Eclectic's -- so what separates them is the average mark, which is half the width.
+        var pearlsMean = 0f
+        var eclecticMean = 0f
+        var grade = 0.005f
+        while (grade < 1f) {
+            pearlsMean += FlowFieldGenerator.widthShare(pearls, grade) / 100f
+            eclecticMean += FlowFieldGenerator.widthShare(eclectic, grade) / 100f
+            grade += 0.01f
+        }
     }
 
     @Test

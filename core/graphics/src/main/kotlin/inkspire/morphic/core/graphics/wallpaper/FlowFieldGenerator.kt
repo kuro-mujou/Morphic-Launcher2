@@ -121,11 +121,6 @@ object FlowFieldGenerator : Generator {
      *   (`n - 0.5`, `n + 0.5`); a field centred on zero points due east on average, which on a portrait frame draws
      *   stripes across the picture rather than the drift down it that theirs has. Meaningless for a look that sweeps
      *   a whole turn, since a bias only rotates the same field — hence *Pearls* leaves it at zero.
-     * @property packing what this look multiplies the separation by, so one *Density* means a different pitch in
-     *   each — measured, not chosen. Scanned the same way on the same knob setting, the reference's *Pearls* crosses
-     *   a lane every `70px` where its *Eclectic* crosses one every `99px`; ours drew both at the *Eclectic* pitch and
-     *   so drew *Pearls* half again too loose. It is the pitch a look in hairlines needs to fill a frame that a look
-     *   in lozenges does not.
      * @property stepShare how far one hop carries a trail, as a share of the separation. *Pearls* steps far finer
      *   because its field turns much faster, and a hop long enough for a drift visibly polygonizes a tight vortex.
      * @property weave where a mark's color and width come from — the one thing that separates the two looks, and the
@@ -141,7 +136,6 @@ object FlowFieldGenerator : Generator {
         val frequency: Float,
         val span: Float,
         val bias: Float,
-        val packing: Float,
         val stepShare: Float,
         val weave: Weave,
         val ringedOrbs: Boolean,
@@ -152,7 +146,6 @@ object FlowFieldGenerator : Generator {
             frequency = 3.4f,
             span = 3f,
             bias = QuarterTurn,
-            packing = 1f,
             stepShare = 0.2f,
             weave = Weave.SCATTERED,
             ringedOrbs = false,
@@ -164,7 +157,6 @@ object FlowFieldGenerator : Generator {
             frequency = 2.4f,
             span = TwoPi,
             bias = 0f,
-            packing = 0.74f,
             stepShare = 0.08f,
             weave = Weave.GRADED,
             ringedOrbs = true,
@@ -209,7 +201,7 @@ object FlowFieldGenerator : Generator {
 
         val shortSide = min(width, height).toFloat()
         val longSide = max(width, height).toFloat()
-        val separation = spacing(params.density) * shortSide * look.packing
+        val separation = spacing(params.density) * shortSide
         val detail = detailSpan(params.irregularity)
         val angleAt = fieldOf(look, longSide, detail, seed)
         val walk = Walk(look, separation, detail, longSide, width, height, angleAt)
@@ -414,10 +406,10 @@ object FlowFieldGenerator : Generator {
      * cheapest thing that reproduces that while still paying for the coverage the one-lane ceiling gives up.
      *
      * **[Weave.GRADED] is a plain ramp over a far narrower band, and the narrowness is the finding.** Measured off
-     * the reference's *Pearls* on a 1080-wide frame: a `41px` pitch carrying marks of `22-23px` at the frame's edges
-     * and `5-10px` at its center — an eighth to a half of a lane, where *Eclectic* runs to a whole one. Ours drew
-     * *Pearls* on *Eclectic*'s distribution and so drew it two to ten times too fat, which is most of why the two
-     * looks read as the same heavy design rather than as a bold one and an airy one.
+     * the reference's *Pearls* on a 1080-wide frame: marks of `22-23px` at the frame's edges and `5-10px` at its
+     * center, on the same `38px` lane — an eighth to three fifths of a lane, where *Eclectic* runs past two. Ours
+     * drew *Pearls* on *Eclectic*'s distribution and so drew it two to ten times too fat, which is most of why the
+     * two looks read as the same heavy design rather than as a bold one and an airy one.
      *
      * Its caller multiplies by *Thickness*, so that knob moves the whole range rather than only its top.
      */
@@ -777,13 +769,24 @@ object FlowFieldGenerator : Generator {
     /**
      * The separation at the ends of *Density*, as a share of the short side — **measured off theirs**, not chosen.
      *
-     * Their marks pack at about a `125px` pitch with the knob at the bottom and `35px` near the top, on a 1080-wide
-     * frame, with the default sitting on `55px`. The two ends are set so the geometric middle *is* that `55px`, which
-     * is what makes the shipped picture the one their untouched slider draws; the floor then sits a little under
-     * their `35px` so the last stretch of the knob still tightens.
+     * **The middle is fitted through the ink rather than by eye, because a pitch is the one thing in this design a
+     * capture will not show you directly.** Marks overlap and curve, so no scan line crosses lanes cleanly; but ink
+     * coverage does not depend on the pitch at all (a width is a share of a lane, so shrinking the lane shrinks the
+     * mark with it) — it is `mean width share x duty`, and *that* pins the share, which with the measured widths in
+     * pixels pins the lane. Their *Eclectic* covers `63%` of the frame with marks whose median is `25px` and whose
+     * mean is about `28px`, at a dash duty near `0.85`; that is a mean share of `0.74` and so a lane of **`38px`**,
+     * on a 1080-wide frame at *Density* `50`.
+     *
+     * Ours had `55px`, from an earlier attempt to read the pitch off a scan line, and being half again too loose is
+     * what made the marks too long (a dash is measured in lanes) at the same time as it made them too fat. Both
+     * halves of "ours looks like long dashed lines and theirs like short varied strokes" came from this one number.
+     *
+     * The ends are the same fit run at *Density* `0` and `75`, off the length distribution, which scales with the
+     * lane: `1.73x` the default at the bottom and `0.70x` at three quarters, so the knob's whole travel is a factor
+     * of about `3.5`, not the `5` ours had.
      */
-    private const val MaxSpacing = 0.115f
-    private const val MinSpacing = 0.023f
+    private const val MaxSpacing = 0.066f
+    private const val MinSpacing = 0.019f
 
     /**
      * How far apart the two octaves sit — the wiggle's wavelength against the sweep's.
@@ -811,31 +814,33 @@ object FlowFieldGenerator : Generator {
     /**
      * How wide a mark may be as a share of its lane, before *Thickness*, and how the draw is biased within that.
      *
-     * **The ceiling is a whole lane and must not go past it.** Ink alone does not pin these down — the reference
-     * covers about `62%` of its frame at the bottom of *Density* and `72%* near the top, and a draw reaching `1.6`
-     * lanes hits the same number by a completely different picture: marks wider than the gaps they were sown in,
-     * merging into amorphous blobs where theirs stay separate lozenges with ground between them. So the ink is
-     * matched at a *ceiling of one lane*, by biasing the draw fat rather than by letting it overflow. Overlap is
-     * then something only *Thickness* past its middle produces, which is exactly when theirs starts overlapping too.
+     * **The ceiling is nearly two lanes, and the draw is biased thin.** Both were the other way round, on the
+     * reasoning that a ceiling of one lane keeps marks from merging into blobs; the reference simply does not obey
+     * it. Fitted to its measured widths against the `38px` lane above: `3px` at the tenth percentile, `7` at the
+     * quarter, `25` at the half, `37` at three quarters, `55` at the ninetieth and `71` at the top — that is
+     * `0.08..1.87` lanes with an exponent near `2`, and a quarter of its marks are hairlines under a fifth of a lane.
+     * Ours drew `0.12..1` biased *fat*, which put `4%` of its marks under `8px` where theirs has `25%`, and left it
+     * with no hairlines to thread between the lozenges.
      *
-     * The floor and the bias together are what put the hairlines in — the threading between fat marks that makes the
-     * design read as *eclectic* rather than as corduroy — and biasing *fat* (an exponent under one) is what pays for
-     * the coverage the ceiling no longer gives away.
+     * **The overlap the old ceiling was protecting against is what the design is made of.** A mark wider than its
+     * lane crosses its neighbours, and that crossing is most of why theirs reads as scattered strokes rather than as
+     * ruled lanes. It is also where the last of the ink comes from: the fitted mean share is `0.72`, which at a
+     * `0.85` duty is `61%` against their measured `63%`.
      */
-    private const val MinWidthShare = 0.12f
-    private const val MaxWidthShare = 1f
-    private const val WidthBias = 0.7f
+    private const val MinWidthShare = 0.08f
+    private const val MaxWidthShare = 1.87f
+    private const val WidthBias = 1.8f
 
     /**
-     * The same, for [Weave.GRADED] — an eighth of a lane to a half of one, and it is a *much* narrower band.
+     * The same, for [Weave.GRADED] — an eighth of a lane to three fifths of one, a *much* narrower band.
      *
-     * Measured off the reference's *Pearls*: `5-10px` marks at the frame's center and `22-23px` at its edges, on a
-     * `41px` pitch. The ceiling matters more than the floor — half a lane is what keeps that look airy (its ink runs
-     * `7..48%` of a column against *Eclectic*'s `50..70%`), and it is what stops a fat mark from swallowing the
-     * ground its neighbours are read against.
+     * Measured off the reference's *Pearls*: `5-10px` marks at the frame's center and `22-23px` at its edges, on the
+     * `38px` lane [MaxSpacing] fits. The ceiling matters more than the floor — staying under a lane is what keeps
+     * that look airy (its ink runs `7..48%` of a column against *Eclectic*'s `63%` over the frame), and it is what
+     * stops a fat mark from swallowing the ground its neighbours are read against.
      */
-    private const val MinGradedWidth = 0.12f
-    private const val MaxGradedWidth = 0.56f
+    private const val MinGradedWidth = 0.13f
+    private const val MaxGradedWidth = 0.60f
 
     /**
      * What a *whole* angle span is worth as a noise amplitude — a half, because [PerlinNoise2d] runs `-1..1`.
@@ -900,14 +905,16 @@ object FlowFieldGenerator : Generator {
     /**
      * How long a dash runs and how much flow is left bare after it, **in separations**.
      *
-     * Measured off theirs at both ends of *Density*: a mark runs two and a half to six lanes and the gap after it
-     * about half a lane, and both hold as the lanes widen — which is why they are counted in lanes here rather than
-     * in steps, and it is the reason winding their *Density* down lengthens the marks instead of only spreading them.
+     * Measured off theirs at both ends of *Density*: a mark runs about three to six and a half lanes and the gap
+     * after it about half a lane, and both hold as the lanes widen — which is why they are counted in lanes here
+     * rather than in steps, and it is the reason winding their *Density* down lengthens the marks instead of only
+     * spreading them. In pixels that is a median near `154px` at *Density* `50`, which the old spans reproduced as
+     * `236px` purely because the lane they were counted in was too wide.
      *
      * [GapPerWidth] is the floor the round caps impose, in multiples of the mark's own width — see [dashes].
      */
-    private const val MinDashSpan = 2.5f
-    private const val MaxDashSpan = 6f
+    private const val MinDashSpan = 2.6f
+    private const val MaxDashSpan = 6.4f
     private const val DashGapSpan = 0.5f
     private const val GapPerWidth = 1.15f
 
