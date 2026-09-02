@@ -210,17 +210,11 @@ object MeshGradientGenerator : Generator {
         val y0 = fy.toInt().coerceIn(0, span - 1)
         val x1 = (x0 + 1).coerceAtMost(span - 1)
         val y1 = (y0 + 1).coerceAtMost(span - 1)
-        val tx = smoothstep(fx - x0)
-        val ty = smoothstep(fy - y0)
+        val tx = Easing.smoothstep(fx - x0)
+        val ty = Easing.smoothstep(fy - y0)
         val top = field[y0 * span + x0] + (field[y0 * span + x1] - field[y0 * span + x0]) * tx
         val bottom = field[y1 * span + x0] + (field[y1 * span + x1] - field[y1 * span + x0]) * tx
         return top + (bottom - top) * ty
-    }
-
-    /** `3t² - 2t³` — zero slope at both ends, so cells join without a crease. */
-    private fun smoothstep(t: Float): Float {
-        val eased = t * t * (3f - 2f * t)
-        return eased
     }
 
     /** The bilinear sample of [mesh]'s colors at ([u], [v]) — clamped, so a warp off the edge reads the edge. */

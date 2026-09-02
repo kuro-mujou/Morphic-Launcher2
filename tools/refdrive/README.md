@@ -34,6 +34,17 @@ recognised for what it is.
 is not linear near the ends and a fling overshoots. W11k left *Frame* pinned at 100 for several captures by dragging
 the wrong way, and every render taken meanwhile was of a collapsed block.
 
+**A burst of drags can leave the preview showing the *previous* picture.** After `knob down 8` on Layered Waves'
+*Count* the ruler read `1` while ten bands stayed on screen — through three screenshots and a close-and-reopen of
+the panel. One further small drag repainted it. So the number and the picture are two separate claims: **nudge the
+knob once more and re-shoot** before reading a render as that value's, or a stale frame gets written up as "this knob
+does nothing to the picture", which is the misreading the method rule keeps warning about.
+
+**Swiping the tab row can also change the selection.** `input swipe 250 2120 950 2120` scrolls the row back toward the
+first tab, but the gesture sometimes lands as a tap on whatever tab it starts over — which is how the *Count* drag
+above happened while *Distortion* was supposedly selected. Read the selected tab off the panel crop after every scroll;
+tapping a specific tab at `<x> 2120` is the reliable move.
+
 **Scroll the tab row to its stop before claiming a knob count.** The row scrolls and the last tabs sit past the fold —
 Dot Grid turned out to have eight knobs rather than six that way (W11e), and *Vitrall* seven rather than six (W11j).
 

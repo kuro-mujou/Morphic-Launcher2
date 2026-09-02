@@ -36,7 +36,7 @@ an unused `variant: Int`. That is the gap in one sentence.
 | 7 | Confetti Dots | Resolution · Offset distortion · Max radius · Radius variation · **Color distribution** · Focus distance · **Focus range** — **seven** (W11f). The lattice is a square grid *turned ~12°* off the frame, pitch = long side / Resolution (**5..24**, default 15). *Color distribution* is a **segmented ratio preset** — `100/100/…`, `100/66/33`, **`100/50/25`** (default), `100/33/11` — i.e. how fast the pick weight falls off down the stops, not a hue choice. *Focus distance* + *Focus range* are a real **depth of field**: a disc's size is its distance, and everything outside the focal band is blurred |
 | 8 | Mesh Gradient | **Rows** · Columns · Jitter · **Color distribution** · Softness — **five** (W11g). Rows and Columns are both **2..10**, default 4×4. *Color distribution* here is a **layout**, not a weighting: `Random` · `Corner interpolation` · **`Linear bottom`** (default) — and the default is why theirs reads as a soft progression down the frame where ours read as a quilt. At Jitter 0 the render is a **mathematically exact** gradient, which is what proves the blend is a bilinear mesh rather than distance-weighted points |
 | 9 | Dot Grid | Rows · Columns · Irregularity · Corner radius · Square size · Aspect ratio · **Spacing · Offset** — **eight**, not six (W11e; the last two are past the fold in the tab row and were missed on the first pass). *Spacing* is the margin around the whole block, not the gap between tiles; *Offset* is a four-arrow **nudge**, hold-to-repeat, that walks the block off center; *Aspect ratio* is a **segmented** 1/1 · Golden · 2/1 · 4/1 |
-| 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients |
+| 10 | Layered Waves | Count · Spacing · Distortion · Palette gradients — **four**, and the row really does stop there (W11n); it is the one design with no *Color mode* tab. *Count* **1..10** (default 5) is the bands. *Spacing* **0..100** (default 40) is how **even** the band heights are — at `100` they are exactly equal **and dead flat**, which is the tell. *Distortion* **0..100** (default 60): at `0` every boundary is the *same* curve at its own signed amplitude, at `100` they are multi-lobed and swallow each other. *Palette gradients* Off/On (default **Off**) fills each band with a horizontal ramp to its own color rotated **±20° hue, ±20pp lightness, saturation unchanged** |
 | 11 | Neon Ribbons | Count · Variation · Start area · End area — one bundle of curves sharing a spine; *Start/End area* are **percentages** (1.3% against 5% by default) and that asymmetry is the fan; *Variation* splays the bundle rather than reshaping the gesture |
 | 12 | Wave Dividers | Rotation · Count · Irregularity · Wideness · Waves · Offset |
 | 13 | Vitrall | Density · Spacing · Curves · Slices · **Color distribution** · Randomness · **Color mode** — **seven** (W11j; the last was past the fold). **Not a Voronoi either**: the frame is cut by **edge-to-edge chords**, so the panes are long shards and slender wedges rather than compact cells. *Density* **1..140** (default 68) is the number of cuts — at `1` a single chord crosses the frame. *Curves* **0..100** (default 35) bows them into arcs; at `0` every cut is straight. *Spacing* **0..100** (default 40) is the leading, and `0` removes it entirely. Every pane is filled with a **gradient**, always, which is most of why it reads as glass. *Color distribution* is a layout — **`Linear bottom to top`** (default) / `Random` |
@@ -178,7 +178,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 7 | Confetti Dots | `CONFETTI` | ✅ | **W11f** — turned lattice, ground, falloff, depth of field |
 | 8 | Mesh Gradient | `MESH_GRADIENT` | ✅ | **W11g** — color *layout*, and a bilinear mesh not IDW |
 | 9 | Dot Grid | `DOT_GRID` | ✅ | **W11e** — theirs is contained + color-stepped; ours was a halftone |
-| 10 | Layered Waves | `WAVES` | ☐ | verdict: "closest we have" — untested |
+| 10 | Layered Waves | `WAVES` | ✅ | **W11n** — a crest is two edge heights joined by a smoothstep; *Spacing* is band evenness and its rigid end is flat. The first quality find rather than an identity one |
 | 11 | Neon Ribbons | `RIBBONS` | ✅ | **W11b** rebuild, **W11c** second pass (knobs + ground glow) |
 | 12 | Wave Dividers | `WAVE_DIVIDERS` | ☐ | built in W9 from the note |
 | 13 | Vitrall | `VITRALL` | ✅ | **W11j** — chord subdivision, not a Voronoi; circle-clipped curves, translucent came rim. Catalog **27** |
@@ -192,7 +192,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 | 21 | Flow Lines | `FLOW_LINES` | ☐ | built in W8a from the note |
 | 22 | Shape Trail | — | ☐ | **missing** — a 3-D tube/knot; the only one with nothing of ours at all |
 
-**Eleven of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
+**Twelve of twenty-two driven.** Ours-only designs have no reference to drive and are not in the count:
 `LINEAR_GRADIENT`, `PLASMA`, `RINGS`, `RAYS`, `MONDRIAN` (split out of Bauhaus by W11a, and *still* ours-only — W11k
 built theirs beside it rather than reworking it), `HALFTONE` (split out of Dot Grid by W11e), `GRADIENT_COLUMNS` (split
 from theirs by W11m the same way), and `VORONOI`, which turns out to be neither of the two designs it was named for
@@ -214,7 +214,7 @@ underneath.
 | — | **Halftone** | Ours only, split out of DotGrid by W11e — the noise-sized dot screen, kept unchanged. |
 | Triangular Facets | **Facets** | ✅ **W11h.** The identity finding again: ours read the palette at a facet's *height*, theirs paints a **two-dimensional field of areas** — proved by measuring a path between two regions and finding a straight RGB line that skips the stops in between. Rebuilt on a coarse color lattice (`ColorLattice`, shared with the mesh gradient), plus the **relief** (which is what `DesignParams.depth` arrived for), the **leading**, and a shorter-diagonal split that kills the slivers. |
 | Mesh Gradient | **Mesh** | ✅ **W11g.** Grid + jitter landed in W7; W11g added the **Colors** layout (Vertical / Corners / Scattered) and **Softness**, and replaced inverse-distance weighting with a **warped bilinear mesh** — the only blend that is an exact gradient at the rigid end, as theirs is. |
-| Layered Waves | **Waves** | Closest we have. Add Distortion + Palette-gradients toggle. |
+| Layered Waves | **Waves** | ✅ **W11n.** The verdict was right that it is the same design and wrong about the size of the gap. A crest of theirs is a **left height and a right height joined by a smoothstep**, so *Spacing* (band evenness) and *Distortion* (interior lobes) are two knobs over one construction — where ours summed an independent sine crest per layer at even baselines and could reach neither end. Rebuilt on that, plus the measured **shadow**, the **cycling** palette (ours had ramped it) and their *Palette gradients* turn. |
 | Vitrall | **Vitrall** | ✅ **W11j.** Built as its own design: the frame cut by **edge-to-edge chords** into leaded panes, each filled with a gradient. The old plan — a *variant* of our Voronoi — was based on a mapping that turned out to be wrong twice over. |
 | Modern Mosaic | **Mosaic** | ✅ **W11k.** Built as its own design. Not a packing — a recursive subdivision, which its *Count* `1` gives away by drawing one tile over the whole frame — so it is the **Mondrian**'s construction with the opposite finish: every tile pulled back from its own edges onto a light ground, corners rounded, shared corners skewed. *Ratio* turned out to be the **least share a cut may leave**, not a split position, and that is what makes the tile sizes a harmonious set. |
 | — | **Voronoi** | Ours only, and honestly named at last (W11j). Cells built *around points* are neither their mosaic's rectangles nor their vitrall's shards. |
@@ -304,6 +304,64 @@ underneath.
   gap is *per design*, and the only way to find it is one at a time: open theirs on the emulator, render ours through
   the harness, and put the two side by side. The verdict table above is the running record; each entry is its own
   slice, and the ones that turn out to be a different design rather than a worse one are the valuable finds.
+  - **W11n — Layered Waves. ✅ (2026-09-02)** The first of the pass that is a *quality* finding rather than an
+    identity one — ours is genuinely their design — and the whole gap comes out of one sentence about how a
+    boundary is built.
+    - **A boundary is a left-edge height and a right-edge height joined by `3t² − 2t³`.** Measured, not guessed:
+      at *Distortion* `0` and *Count* `10`, all seven boundaries normalize to the **same** curve to within `0.002`,
+      and that curve is smoothstep (a half-cosine is out by up to `0.015` and consistently the wrong way). What
+      differs between them is a single **signed amplitude** — `−59, −43, −64, +195, +152, +212, +141` px on a
+      2400px frame — which is exactly the difference between the two columns' partitions. Ours instead sums three
+      seeded sines per layer, independently, so no setting of ours produces a frame where every crest is the same
+      shape.
+    - **So *Spacing* is not a gap — it is how *even* the two partitions are, and at `100` the design goes dead
+      flat.** That is the rigid end and it settles the model: equal heights in both columns means equal heights at
+      both edges means zero amplitude everywhere, so a knob named for spacing turns off the waves. At `0` the
+      partition is free and bands run from slivers to half the frame. Ours has no such knob at all — its baselines
+      are `(layer + 1) / (layers + 1)`, always.
+    - **And *Distortion* is interior control points, not amplitude.** At `0` the boundary is that single edge-to-edge
+      smoothstep; wind it up and boundaries gain lobes, cross each other and swallow their neighbors whole. Ours
+      reads `irregularity` as a **crest amplitude scale** (`0.4..1.6×`), which is a different idea in the same
+      slot — it makes the same dunes taller, where theirs makes each dune its own shape.
+    - **Their palette *cycles*; ours ramps.** At *Count* `10` over a four-stop palette theirs paints
+      `g b p y g b p y g` — each stop at full strength, twice — where ours interpolates the ramp across the layer
+      index, so the middle layers are colors the palette does not contain. Same finding as Diagonal Bands (W11l),
+      opposite direction: there the correction was that ours cycled where theirs kept a ground.
+    - **Every band carries a downward shadow, and it is not a knob — it is always on.** Measured down a column:
+      **×0.815 at the boundary, recovering linearly to ×1 over ~150px** on a 2400px frame (~6% of the height),
+      uniform across the channels and the same length regardless of the band's own thickness — so the band *above*
+      is the nearer one. Ours has no shading at all. `depth`'s third consumer, and this one wants the field's `0`
+      to mean flat.
+    - **The fourth knob is *Palette gradients* Off/On, and the transform is exact**: each band fills with a
+      horizontal ramp from its palette color to that color at **±20.0° hue and ±20.0pp lightness, saturation
+      unchanged** — four measured pairs, all four within a tenth. The palette itself is a bank of flat swatches, so
+      this is derived rather than stored, which means ours can have it. Direction alternated band to band over the
+      five sampled; whether that is the index's parity or a seeded draw is not settled.
+    - **Four knobs, and this time the row genuinely stops** — scrolled to its end twice. It is also the only design
+      seen so far with **no *Color mode* tab**, which is worth knowing before the count is treated as universal.
+    - **It fitted the fields that already existed, and none of them had to grow.** Count → `density` (range widened
+      to `1..10` from `3..9`), Spacing → `scale` as **Variation**, Distortion → `irregularity`, the shadow →
+      `depth`, Palette gradients → `variant` as **Fill**. `Bands.boundaries` took its **third** consumer as the
+      frame's two edge layouts — and its `irregularity = 0` answering *even* is exactly what makes Variation's rigid
+      end flat, so the design got its most surprising property for free. `Shades.scale` took its third as the shadow.
+    - **Ours names the two knobs for what they do rather than for what theirs are called.** *Variation* runs the way
+      every field in `DesignParams` runs (`0` is rigid), where their *Spacing* is rigid at `100`; and *Fill*
+      Flat/Gradient says what the toggle changes where *Palette gradients* names the mechanism. Their words are kept
+      only where they already point the right way — *Distortion*.
+    - **Two knobs had to be given an exponent for the shared `0.5` default, in opposite directions.** *Distortion* is
+      **squared** because theirs opens on a restrained `60` whose crests are still long sweeps, and the *shadow* is
+      **linear** because theirs has no knob at all and shades everything `×0.815` — so `0.5` has to land *on* the
+      measurement rather than below it. Third design to buy one with an exponent, after Facets' cube and Louvers'
+      square — and the fifth to want a real per-design default instead.
+    - **`Easing.smoothstep` was extracted on its second consumer**, out of the mesh gradient's cell easing. Its KDoc
+      records the thing that would otherwise go wrong quietly: the two want the same curve for *different* reasons, so
+      a warp that later wants a quintic must add a function rather than change this one.
+    - **The harness grew a `scale` sweep**, the last of the knob families without one — Variation's `0` is a claim
+      about the picture (a stack of straight stripes) that nothing could render.
+    - Device-verified in the live studio: five tabs (Layers 6 · Variation · Distortion · Fill · Shadow), *Distortion*
+      `0%` showing every crest as one shape translated, *Variation* `0%` on top of it flattening the stack, and *Fill*
+      `Gradient` ramping each band. Detekt on `core:graphics` stayed at **14** unbaselined issues, none of them here.
+
   - **W11m — Gradient Columns → Louvers. ✅ (2026-09-01)** The identity finding a **fifth** time, and this one is
     about the *axis* the ramp runs on.
     - **Their gradient runs *along* each strip; ours steps the palette sideways and fills each column flat.** Same

@@ -69,8 +69,9 @@ enum class WallpaperDesign {
     CONTOUR,
 
     /**
-     * Overlapping wave bands rising up the frame, each a flat palette color lapping over the one behind it — the
-     * layered-dune / ridgeline look. Sine crests rather than noise, for a rolling, near-periodic swell.
+     * The frame cut into flat bands by long smooth crests, each band a palette color with the next one's shadow
+     * falling across it. A crest is a height at the frame's left edge and a height at its right, joined by a
+     * smoothstep, so the whole stack shares one sweep until *Distortion* gives each crest lobes of its own.
      */
     @SerialName("waves")
     WAVES,
