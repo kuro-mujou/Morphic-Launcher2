@@ -463,6 +463,46 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
   dragged app near the top or bottom edge, which scrolls it — `DragAutoScrollEffect` (`core:designsystem/drag`), the
   vertical counterpart of `EdgeFlipEffect`, with speed ramping by how deep into the band the finger is so the
   boundary doesn't feel like a trapdoor.
+- **The category pager's tab strip** (`CategoryTabStrip`) — one tab per category across the width, on the edge
+  `AppsChrome.categoryTabEdge` names, absent below two categories. **A page's content hugs the same edge**: with the
+  strip on the bottom the header and grid sit against it (`Arrangement.Bottom` plus `weight(fill = false)` on the
+  scroller, which is what leaves an arrangement any slack to distribute) rather than leaving a band of nothing there —
+  L1 said this as `Arrangement.Bottom` on its grid. The drop planner follows: a finger off the grid answers with the
+  **nearer** end of the list rather than always the last, since which side the slack is on is now the alignment's
+  answer, and only on arrival — once a cell has answered, the slack holds it instead of strobing as the finger crosses
+  the block's edge on its way to the eject band. Three gestures, two of which are the reason it
+  exists: **tap** a tab, **slide** across it to page through live (equal-width tabs are the premise, since the page
+  comes straight out of the finger's x — `tabIndexAt`, shared with the drop planner so the tab that lights and the
+  tab that files cannot differ by one), and **drop an app on a tab** to file it there, which is a second zone on this
+  surface (`apps-category-tabs`, disjoint from the pager's viewport) committing the same `Move`. A tab shows the
+  category's **first app icon** — a category has no icon in the model — over a mark for the selected page, and the
+  mark follows the *finger* mid-slide rather than the spring. **Hold** a tab for its menu and **keep moving** to
+  carry it along the strip, which is one press with two outcomes decided by whether the finger moves (L1's own
+  chain): a release without movement leaves the menu up, and a move takes the menu down and lifts the tab, with the
+  tabs between origin and target stepping aside by one width. The **page keeps its own name header**, so a swipe
+  still says what it landed on while the strip stays put. This closes the gap where
+  `categoryTabEdge` was settable and previewed in the APPS section but read by nothing — the "settings preview vs the
+  surface it configures" divergence the shared-derivation rule is about.
+- **The two category-*definition* writes, and why there are only two.** `setCategoryOrder` (a dropped tab) and
+  `renameCategory` (its menu's one verb) are plain methods on `AppsOrderRepository` rather than more
+  `AppsCategoryChange` arms: every op in that set writes *membership*, and nothing here has to resolve against the
+  same read as a move, so batching them would buy a wider read and no atomicity. The order write reconciles the
+  reported ids against what is stored (`reconcileReportedOrder`, now generic in its element for exactly this — the
+  strip can only report the categories it drew), writes only the rows whose index moved, and a rename is a targeted
+  `UPDATE` so a concurrent reorder cannot be undone by a row copy. **Creating and deleting are absent, not
+  disabled**: the classifier re-creates a built-in category's row on the next launch, so a delete would silently come
+  back, and a user-created one needs the id space `isBuiltInCategoryId` describes and does not have yet. Choosing a
+  tab icon is absent for a plainer reason — there is nothing to store it in, the tab borrows its first app's.
+- **A reorder has to hold the page you were looking at**, since a page is identified by its *index*: re-sequencing
+  leaves the pager showing whatever moved into the index it was resting on. `AppsCategoryPager` records the dropped
+  order plus the category to keep, and snaps only on the emission whose order *equals the one it asked for* —
+  checking merely that the category is present fires on the frame of the drop, when it is still at its old index in
+  the old list, snaps to where it already was, and is spent before the write lands.
+- **The rename dialog is an M3 `AlertDialog`** (`CategoryRenameDialog`), like the settings pickers, because the
+  launcher's own frosted chrome is deferred and a text field over the wallpaper needs it. Known rough edge: an
+  unfocused `MorphicTextField` draws no container — its emphasis *is* the focus ring — so in a dialog it reads as
+  plain text until tapped. That is the settings field being used outside settings, and the fix belongs with the
+  frosted launcher field rather than in a per-caller flag.
 - **The rule the category store lives by: a filed app keeps its category even when the classifier disagrees.**
   Classification runs on every launch, so treating it as authoritative would silently undo every drag at startup —
   an assignment is only ever a *first* answer, for apps with no answer yet. That also makes a user override free: it

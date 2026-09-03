@@ -63,9 +63,10 @@ interface SettingsRepository {
     /**
      * The APPS surface's chrome — the search field's placement, and which edge the category tabs sit on.
      *
-     * Neither search nor the tab bar is built in `feature:apps` yet, so this setting's only current consumer is the
-     * settings preview. A deliberate exception to "no model in a vacuum": a preview is a real consumer with a real
-     * question, and the alternative is drawing it from invented constants.
+     * The **tab edge** is read by `feature:apps`' category pager, which draws its strip on it; **search** is not built
+     * on the surface yet, so that half's only consumer is the settings preview. A deliberate exception to "no model in
+     * a vacuum" for the half that has no surface: a preview is a real consumer with a real question, and the
+     * alternative is drawing it from invented constants.
      */
     val appsChrome: Flow<AppsChrome>
 

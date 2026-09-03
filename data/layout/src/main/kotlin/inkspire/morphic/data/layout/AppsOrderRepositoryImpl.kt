@@ -205,6 +205,29 @@ internal class AppsOrderRepositoryImpl(
         }
     }
 
+    override suspend fun setCategoryOrder(reported: List<String>) {
+        withContext(dispatchers.io) {
+            val rows = daos.category.getAll()
+            val ordered = reconcileReportedOrder(rows.map { it.id }, reported)
+            val byId = rows.associateBy { it.id }
+            // Only the rows whose position actually moved are written. The read is ordered by `sortOrder`, so
+            // persisting an unchanged sequence would re-emit `categoryContents()` and re-render the surface for
+            // nothing — the same care `syncCategories` takes about its own no-op write.
+            val moved = ordered.mapIndexedNotNull { index, id ->
+                byId[id]?.takeIf { it.sortOrder != index }?.copy(sortOrder = index)
+            }
+            if (moved.isNotEmpty()) daos.category.upsert(moved)
+        }
+    }
+
+    override suspend fun renameCategory(id: String, name: String) {
+        val trimmed = name.trim()
+        // Guarded here as well as in the UI, because it is the half that fails *silently*: a blank name reaches the
+        // strip as a tab with no label and a page with an empty header, which reads as a rendering bug.
+        if (trimmed.isEmpty()) return
+        withContext(dispatchers.io) { daos.category.rename(id, trimmed) }
+    }
+
     /**
      * Creates a definition row for any of [referenced] that has none, so no app can end up filed under a category
      * the read cannot resolve — which would make it vanish from the UI while still sitting in the table.
