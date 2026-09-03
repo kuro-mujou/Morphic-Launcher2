@@ -185,8 +185,7 @@ the *ratios* `0.911 … 0.759` trend clearly downward — so it is a constant su
 `741` to `186`, i.e. the last shape is a quarter of the first.
 
 **Caveat on the knob mapping:** *Scale delta* is `4` at this default, and `4%` per step over nine steps cannot produce
-a 75% loss — so the knob is **not** a straight percentage of the first size, and the mapping is not established. A
-Scale-delta sweep is what settles it.
+a 75% loss — so the knob is **not** a straight percentage of the first size. Partly settled in §7 below.
 
 **The palette is spent over the cascade's length, read continuously.** The ten tones run cream `(230,213,184)` through
 browns and greys to a blue `(173,196,206)` — more distinct tones than a curated palette has stops, so it is a
@@ -216,3 +215,43 @@ top because their toolbar overlays it, which does not affect the step measuremen
 - Their design picker: Polygon Cascade is the first tile of row 5, about `140 1780`.
 - Ours renders through `GeneratorRenderHarness`; mind the stale-render rule in its KDoc, and note it can exit `255`
   with every test passed and every PNG written.
+
+### 7. Scale delta — driven, and it is not a shrink rate
+
+Three points, widths measured the same way:
+
+| Scale delta | widths, first → last | per-step |
+|---|---|---|
+| `1` | `741 662 579 496 418 352 282 207 131 55` | `−76.2`, linear |
+| `4` (default) | `741 675 604 533 488 435 375 311 245 186` | `−61.7`, linear |
+| `100` | shapes **overflow the frame** (bounding boxes clip at 1079) | — |
+
+So **the knob does not set how fast the cascade shrinks — it sets the size *change* per step, and that change goes
+positive.** Low values shrink hard (at `1` the last shape is 7% of the first), the default shrinks to a quarter, and at
+`100` the cascade *grows* and runs off the frame. There is a neutral value somewhere in between where every copy is the
+same size, which is a rigid end ours cannot express — ours runs a fixed linear shrink from `1.0` to `MinScale = 0.12`
+and can only ever get smaller.
+
+**The shrink is linear at both driven settings** (constant subtraction per step, no trend in the differences), which
+agrees with §6 and rules out a geometric factor.
+
+**Not established:** where the neutral point sits, and the formula from knob to per-step delta. Two successive
+down-drags from `100` both landed straight back on the floor — the widths came back byte-identical to the `1` capture
+across all ten clusters — which is the drag overshoot the refdrive README warns about. Pinning the neutral needs a
+*short* drag or a tap on the ruler rather than a fling.
+
+---
+
+## Where this stopped
+
+Analysis is far enough along to build from. What is genuinely still open, in priority order:
+
+1. **The neutral point of Scale delta** (above) — needs fine ruler control.
+2. **The two nudge pads' travel** — the *linearity* between the endpoints is established (§6); how far a single tap
+   moves an endpoint, and what the endpoints' defaults are in frame coordinates, is not.
+3. **The *Shadow* knob under Mode = Fill** — confirm it replaces *Thickness*, and measure it.
+4. **What Thickness / Iterations / Rotate delta / Size do to the picture** at their ends. Ranges are known (§5); only
+   the renders were not judged. These are the least surprising of the four.
+
+**Nothing has been built.** `PolygonCascadeGenerator` is untouched; the checklist row for Topography's neighbour
+(#17) is still unticked.
