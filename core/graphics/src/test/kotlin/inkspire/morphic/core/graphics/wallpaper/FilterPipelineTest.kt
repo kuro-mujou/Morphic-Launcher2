@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -86,4 +87,41 @@ class FilterPipelineTest {
     }
 
     private fun channel(argb: Int, shift: Int): Int = (argb shr shift) and 0xFF
+
+    @Test
+    fun `vibrance leaves a grey alone and pushes a color further out`() {
+        val grey = 0xFF808080.toInt()
+        val orange = 0xFFE6A15C.toInt()
+        val pixels = intArrayOf(grey, orange)
+        FilterPipeline.vibrance(pixels, strength = 1f)
+        // A grey has nothing to push away from itself, so only the lift applies — equally to all three channels.
+        val r = pixels[0] shr 16 and 0xFF
+        val g = pixels[0] shr 8 and 0xFF
+        val b = pixels[0] and 0xFF
+        assertEquals(r, g)
+        assertEquals(g, b)
+        assertTrue("a grey is lifted", r > 0x80)
+        // The orange's spread between its channels widens, which is what saturation means.
+        val before = (orange shr 16 and 0xFF) - (orange and 0xFF)
+        val after = (pixels[1] shr 16 and 0xFF) - (pixels[1] and 0xFF)
+        assertTrue("saturation rose ($before -> $after)", after > before)
+    }
+
+    @Test
+    fun `vibrance at no strength changes nothing`() {
+        val pixels = intArrayOf(0xFF2C6E6B.toInt(), 0xFFF2E2C4.toInt())
+        val before = pixels.copyOf()
+        FilterPipeline.vibrance(pixels, strength = 0f)
+        assertArrayEquals(before, pixels)
+    }
+
+    @Test
+    fun `vibrance keeps alpha and stays in range`() {
+        val pixels = IntArray(256) { 0xFF000000.toInt() or (it shl 16) or (it shl 8) or (255 - it) }
+        FilterPipeline.vibrance(pixels, strength = 1f)
+        pixels.forEach {
+            assertEquals(0xFF, it ushr 24)
+            for (shift in intArrayOf(16, 8, 0)) assertTrue("in range", (it shr shift and 0xFF) in 0..255)
+        }
+    }
 }

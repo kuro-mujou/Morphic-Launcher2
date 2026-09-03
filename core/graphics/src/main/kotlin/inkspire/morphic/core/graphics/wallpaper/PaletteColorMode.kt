@@ -22,7 +22,10 @@ import kotlin.math.roundToInt
  */
 object PaletteColorMode {
 
-    /** [palette] reduced to what [mode] permits, colors kept light-to-dark. A palette too short to reduce is returned as is. */
+    /**
+     * [palette] reduced to what [mode] permits, colors kept light-to-dark. A palette too short to reduce is returned
+     * as is.
+     */
     fun resolve(palette: Palette, mode: WallpaperColorMode): Palette = when (mode) {
         WallpaperColorMode.COLORFUL -> palette
         WallpaperColorMode.BICHROMATIC -> bichromatic(palette)
@@ -61,17 +64,31 @@ object PaletteColorMode {
 
     /** [from] blended [t] of the way to [to], per ARGB channel, alpha carried through. */
     private fun mix(from: Int, to: Int, t: Float): Int {
-        val a = channel(from ushr 24, to ushr 24, t)
-        val r = channel(from shr 16, to shr 16, t)
-        val g = channel(from shr 8, to shr 8, t)
+        val a = channel(from ushr AlphaShift, to ushr AlphaShift, t)
+        val r = channel(from shr RedShift, to shr RedShift, t)
+        val g = channel(from shr GreenShift, to shr GreenShift, t)
         val b = channel(from, to, t)
-        return (a shl 24) or (r shl 16) or (g shl 8) or b
+        return (a shl AlphaShift) or (r shl RedShift) or (g shl GreenShift) or b
     }
 
     private fun channel(from: Int, to: Int, t: Float): Int {
-        val f = from and 0xFF
-        return (f + ((to and 0xFF) - f) * t).roundToInt().coerceIn(0, 255)
+        val f = from and ChannelMax
+        return (f + ((to and ChannelMax) - f) * t).roundToInt().coerceIn(0, ChannelMax)
     }
+
+    /**
+     * Where each channel sits in a packed ARGB int, in bits — blue needs none, being the low byte.
+     *
+     * **Alpha is read with `ushr` and the rest with `shr`**, which is the one thing here that is wrong silently: the
+     * top bit of an opaque color is set, so an arithmetic shift carries the sign down and alpha comes back as `-1`.
+     * The mask in [channel] hides it for red and green, which is why they may use either.
+     */
+    private const val AlphaShift = 24
+    private const val RedShift = 16
+    private const val GreenShift = 8
+
+    /** A channel is one byte, so its mask and its greatest value are the same number. */
+    private const val ChannelMax = 0xFF
 
     private const val White = 0xFFFFFFFF.toInt()
     private const val Black = 0xFF000000.toInt()

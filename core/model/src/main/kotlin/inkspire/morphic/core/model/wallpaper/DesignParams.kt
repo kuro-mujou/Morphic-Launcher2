@@ -60,6 +60,20 @@ import kotlinx.serialization.Serializable
  * the thickness of its *marks*, which has nothing to do with how big its orbs are. `0` collapses the element to
  * nothing, so it reads as [depth] `0` — the same "`0` means absent" rule the rest of the family keeps.
  *
+ * **[rotation] is the *orientation* family — which way the design points, or how far it turns.** It is the last of the
+ * seven families the reference studio exposes to get a field, and it was held back on purpose: six of their designs
+ * expose it and four of ours were spending [variant] on a discrete stand-in (five sampled angles on the diagonal
+ * bands, three on the louvers), so a field shaped by one consumer risked being the wrong shape for the four that
+ * would move onto it later. What settled it is that the *Polygon Cascade*'s turn is **continuous and signed** where
+ * every stand-in is a handful of sampled angles — a discrete chooser cannot express it at all, so the field has to be
+ * a fraction and this is the consumer that proves it. **The four that already spend [variant] on a direction stay
+ * where they are**, for [colorLayout]'s reason: a stored recipe's `variant` would keep its old number and be read as
+ * a look it never meant.
+ *
+ * **It is a plain `0..1` fraction with no unit, like [irregularity] and [scale]** — a design maps it onto its own span,
+ * because "a full turn" means different things to a design that *points* somewhere and one that turns each of its
+ * copies a little further. `0` is always *untouched*: square-on, or every copy aligned.
+ *
  * **[colorLayout] is *where* each palette stop goes, which is a different question from [colorMode]'s *how many*.**
  * The reference exposes both on one design and the pair is genuinely independent: its Topography chooses a *Style*
  * (contour lines or an embossed relief) and, beside it, a *Color mode* that is not the global one at all but a
@@ -90,6 +104,8 @@ import kotlinx.serialization.Serializable
  *   count of somethings ignores it. See the class note.
  * @property roundness how soft the design's corners are, `0..1` — `0` is sharp, `1` as round as the shape allows (a
  *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
+ * @property rotation which way the design points or how far it turns, `0..1` — `0` is untouched (square-on, every
+ *   copy aligned) and `1` is as far as this design turns. A design with no orientation ignores it. See the class note.
  * @property colorLayout which of a design's color *layouts* is chosen, by index — where the stops go, as against
  *   [colorMode]'s how many of them there are. `0` is the design's own default layout; a design that spends its palette
  *   one way ignores it. See the class note.
@@ -106,6 +122,7 @@ data class DesignParams(
     val depth: Float = 0.5f,
     val depthScale: Float = 0.5f,
     val roundness: Float = 0.5f,
+    val rotation: Float = 0.5f,
     val variant: Int = 0,
     val colorLayout: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,

@@ -63,7 +63,12 @@ object PlasmaGenerator : Generator {
     internal fun phases(seed: Long): Phases {
         val random = Random(seed)
         val twoPi = (2.0 * PI).toFloat()
-        return Phases(random.nextFloat() * twoPi, random.nextFloat() * twoPi, random.nextFloat() * twoPi, random.nextFloat() * twoPi)
+        return Phases(
+            random.nextFloat() * twoPi,
+            random.nextFloat() * twoPi,
+            random.nextFloat() * twoPi,
+            random.nextFloat() * twoPi,
+        )
     }
 
     /**

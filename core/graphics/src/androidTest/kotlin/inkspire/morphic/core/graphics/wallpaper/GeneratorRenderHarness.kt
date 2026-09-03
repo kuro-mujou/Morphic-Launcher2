@@ -35,6 +35,11 @@ import org.junit.runner.RunWith
  * adb pull /sdcard/Pictures/genharness
  * ```
  *
+ * **A run can exit non-zero with every test passed and every PNG written.** Gradle has reported `255` here twice with
+ * the results XML showing `tests="10" failures="0" errors="0"` and the full set of files on the device — the failure is
+ * in the task's own teardown, not in the instrumentation. So check the results before re-running: the renders are
+ * already there, and a re-run costs three and a half minutes to produce the same ones.
+ *
  * It walks `WallpaperDesign.entries`, so a new generator is rendered the moment its enum value lands — no edit here.
  */
 @RunWith(AndroidJUnit4::class)
@@ -194,6 +199,43 @@ class GeneratorRenderHarness {
                     seed = 42L,
                 )
                 save(resolver, "round_${(roundness * 100).toInt()}_${design.name}_$variant.png", bitmap)
+                bitmap.recycle()
+            }
+        }
+    }
+
+    /**
+     * Every design that reads [DesignParams.rotation], square-on and turned as far as the design turns — the
+     * orientation family's first sweep, added with the field itself.
+     *
+     * **Asked per variant**, for the roundness sweep's reason and with a live case: the cascade's circle declares no
+     * orientation at all where its other five shapes do, so a design-level question would render the one shape the
+     * knob cannot move.
+     */
+    @Test
+    fun renderRotationSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val cases = WallpaperDesign.entries.flatMap { design ->
+            val generator = Generators.forDesign(design)
+            val variants = generator.style.variant?.options?.indices ?: 0..0
+            variants.filter { generator.styleFor(it).rotation != null }.map { design to it }
+        }
+
+        for (rotation in floatArrayOf(0f, 0.5f, 1f)) {
+            for ((design, variant) in cases) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(
+                        rotation = rotation,
+                        variant = variant,
+                        colorMode = WallpaperColorMode.BICHROMATIC,
+                    ),
+                    seed = 42L,
+                )
+                save(resolver, "turn_${(rotation * 100).toInt()}_${design.name}_$variant.png", bitmap)
                 bitmap.recycle()
             }
         }

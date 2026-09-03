@@ -22,27 +22,49 @@ import kotlinx.serialization.encoding.Encoder
  * grains rather than a mirror of `LayerEffect`. Sharing the icon studio's pure per-pixel math is a later refactor —
  * `core:graphics` cannot yet reach `core:icon` — so these are drawn fresh for now.
  *
+ * **Each carries the strength it turns on at, because a table of that kept elsewhere goes stale silently.** It was
+ * kept in the studio's ViewModel, read with `getValue` — so adding a filter here and forgetting that map crashed the
+ * chip the moment it was tapped, which a build cannot show and only driving the app finds. Declared beside the value
+ * it belongs to, a new filter cannot exist without one. Same argument as `AmountKnob` carrying its own range.
+ *
  * Persisted inside the recipe, so the names are an on-disk contract. An unknown one is dropped, but *not* by
  * `ignoreUnknownKeys` — see [WallpaperFilterStrengths], which is what actually drops it.
+ *
+ * @property defaultStrength what this filter turns on at when its chip is tapped — visible, not overwhelming.
  */
+// MagicNumber: a filter's default strength *is* a number, and the point of moving it here was to put it beside the
+// KDoc that explains what the filter does. A named constant per value would restate five names for five literals.
+@Suppress("MagicNumber")
 @Serializable
-enum class WallpaperFilter {
+enum class WallpaperFilter(val defaultStrength: Float) {
 
     /** A real gaussian-ish softening of the whole image. */
     @SerialName("blur")
-    BLUR,
+    BLUR(0.4f),
 
     /** The corners weighted down, so the picture reads as lit from its middle. */
     @SerialName("vignette")
-    VIGNETTE,
+    VIGNETTE(0.6f),
 
     /** Fine per-pixel noise, the film grain that keeps a flat gradient from banding. */
     @SerialName("grain")
-    GRAIN,
+    GRAIN(0.5f),
 
     /** Faint horizontal lines — the CRT / retro-screen texture. */
     @SerialName("scanlines")
-    SCANLINES,
+    SCANLINES(0.6f),
+
+    /**
+     * The colors pushed further from grey and lifted a little — the grade that makes a soft field read as glowing
+     * rather than as a wash.
+     *
+     * **Here rather than on the one design it was found on.** The reference exposes it as a *Vibrancy* knob inside
+     * Ribbed Glass's own panel, but nothing about it is that design's: it is a whole-image pass with one intensity,
+     * which is exactly what this list is for, and every design with a soft palette wants it. Its strengths are
+     * measured off that design's sweep — see `FilterPipeline.vibrance`.
+     */
+    @SerialName("vibrance")
+    VIBRANCE(0.5f),
 }
 
 /**

@@ -82,9 +82,9 @@ object MondrianGenerator : Generator {
                     next.add(block)
                     continue
                 }
-                when (random.nextInt(6)) {
-                    0, 1 -> next.add(block) // leave it whole this pass
-                    2, 3 -> if (block.width >= MinCell * 2) splitVertical(block, next) else next.add(block)
+                when (random.nextInt(MoveFaces) / 2) {
+                    0 -> next.add(block) // leave it whole this pass
+                    1 -> if (block.width >= MinCell * 2) splitVertical(block, next) else next.add(block)
                     else -> if (block.height >= MinCell * 2) splitHorizontal(block, next) else next.add(block)
                 }
             }
@@ -113,6 +113,15 @@ object MondrianGenerator : Generator {
         if (palette.size <= 2 || random.nextFloat() > AccentChance) return palette.colorAt(0)
         return palette.colorAt(1 + random.nextInt(palette.size - 2)) // a middle stop, excluding ground and ink
     }
+
+    /**
+     * The faces of the die a block's move is drawn from — **two per move**, which is why it is six rather than three.
+     *
+     * The three moves are equally likely either way, so the pairing is not what the six buys: a `nextInt` of a
+     * different bound takes a different number out of the seeded stream, and every stored recipe's wallpaper would
+     * re-roll into a different picture. That is the silent part.
+     */
+    private const val MoveFaces = 6
 
     /** The smallest a block may be, a side, as a fraction of the frame — below this it stops splitting. */
     private const val MinCell = 0.12f

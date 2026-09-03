@@ -374,4 +374,5 @@ private val WallpaperFilter.label: String
         WallpaperFilter.VIGNETTE -> "Vignette"
         WallpaperFilter.GRAIN -> "Grain"
         WallpaperFilter.SCANLINES -> "Scanlines"
+        WallpaperFilter.VIBRANCE -> "Vibrance"
     }
