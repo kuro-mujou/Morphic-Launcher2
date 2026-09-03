@@ -35,6 +35,11 @@ import org.junit.runner.RunWith
  * adb pull /sdcard/Pictures/genharness
  * ```
  *
+ * **A run can exit non-zero with every test passed and every PNG written.** Gradle has reported `255` here twice with
+ * the results XML showing `tests="10" failures="0" errors="0"` and the full set of files on the device — the failure is
+ * in the task's own teardown, not in the instrumentation. So check the results before re-running: the renders are
+ * already there, and a re-run costs three and a half minutes to produce the same ones.
+ *
  * It walks `WallpaperDesign.entries`, so a new generator is rendered the moment its enum value lands — no edit here.
  */
 @RunWith(AndroidJUnit4::class)

@@ -114,7 +114,7 @@ class WallpaperStudioViewModel(
     fun toggleFilter(filter: WallpaperFilter) {
         mutableState.update {
             val filters = it.recipe.filters.toMutableMap()
-            if (filters.remove(filter) == null) filters[filter] = DefaultStrengths.getValue(filter)
+            if (filters.remove(filter) == null) filters[filter] = filter.defaultStrength
             it.copy(recipe = it.recipe.copy(filters = filters))
         }
         rerender()
@@ -169,13 +169,5 @@ class WallpaperStudioViewModel(
 
         /** What the studio opens on — one of the curated sets, warm-and-cool so any design has somewhere to go. */
         val DefaultPalette = Palette(ColorPalettes.all.first { it.name == "Dusk" }.colors)
-
-        /** The strength a filter turns on at when its chip is tapped — a visible-but-not-overwhelming default each. */
-        val DefaultStrengths = mapOf(
-            WallpaperFilter.BLUR to 0.4f,
-            WallpaperFilter.VIGNETTE to 0.6f,
-            WallpaperFilter.GRAIN to 0.5f,
-            WallpaperFilter.SCANLINES to 0.6f,
-        )
     }
 }

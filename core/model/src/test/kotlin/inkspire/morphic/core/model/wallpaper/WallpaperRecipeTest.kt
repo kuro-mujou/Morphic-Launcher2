@@ -2,6 +2,7 @@ package inkspire.morphic.core.model.wallpaper
 
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -66,5 +67,15 @@ class WallpaperRecipeTest {
 
         assertEquals(WallpaperDesign.LINEAR_GRADIENT, recipe.design)
         assertEquals(mapOf(WallpaperFilter.BLUR to 0.4f), recipe.filters)
+    }
+
+    @Test
+    fun `every filter carries a usable default strength`() {
+        // The guard on the thing that crashed: a filter added without one used to blow up the moment its chip was
+        // tapped, which no build and no unit test of the pipeline could see.
+        WallpaperFilter.entries.forEach {
+            assertTrue("${it.name} turns on at nothing", it.defaultStrength > 0f)
+            assertTrue("${it.name} turns on past full", it.defaultStrength <= 1f)
+        }
     }
 }
