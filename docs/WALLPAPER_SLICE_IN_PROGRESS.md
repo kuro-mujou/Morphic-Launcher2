@@ -157,9 +157,53 @@ all, which is a rigid end ours cannot express. And **their defaults are small**:
 shrinking by Scale delta 4, where ours opens at 38 iterations of a shape filling 92% of the frame. Ours is not a
 tuning away from theirs; it is a different composition.
 
+### 6. The cascade's geometry, measured off their default render
+
+Their default draws **ten shapes and gives each its own colour**, so the whole cascade can be measured from one
+screenshot by clustering ink on colour. Every shape's visible centroid and bounding box, first to last:
+
+| i | cx | cy | width |
+|---|---|---|---|
+| 0 | 619.3 | 597.4 | 741 |
+| 1 | 600.9 | 729.8 | 675 |
+| 2 | 584.2 | 863.7 | 604 |
+| 3 | 566.4 | 994.4 | 533 |
+| 4 | 545.4 | 1113.9 | 488 |
+| 5 | 532.9 | 1255.2 | 435 |
+| 6 | 515.8 | 1389.1 | 375 |
+| 7 | 498.6 | 1516.9 | 311 |
+| 8 | 485.5 | 1643.2 | 245 |
+| 9 | 467.4 | 1775.5 | 186 |
+
+**The centre is interpolated linearly.** Steps in `x` are `−18.4 −16.7 −17.8 −21.0 −12.5 −17.1 −17.2 −13.1 −18.1`
+(mean `−16.9`) and in `y` `+132.4 … +132.3` (mean `+130.9`) — constant, no trend. So *First shape center* and *Last
+shape center* are two points and the copies are spaced evenly along the segment between them. At the default that
+segment runs `(619, 597) → (467, 1776)` on a 1080×2400 frame: mostly straight down, drifting `152px` left.
+
+**The size shrinks linearly, not geometrically.** Widths fall by `−61.7px` per step on average with no trend, while
+the *ratios* `0.911 … 0.759` trend clearly downward — so it is a constant subtraction, not a constant factor. From
+`741` to `186`, i.e. the last shape is a quarter of the first.
+
+**Caveat on the knob mapping:** *Scale delta* is `4` at this default, and `4%` per step over nine steps cannot produce
+a 75% loss — so the knob is **not** a straight percentage of the first size, and the mapping is not established. A
+Scale-delta sweep is what settles it.
+
+**The palette is spent over the cascade's length, read continuously.** The ten tones run cream `(230,213,184)` through
+browns and greys to a blue `(173,196,206)` — more distinct tones than a curated palette has stops, so it is a
+continuous ramp with the first shape at position `0` and the last at `1`.
+
+**And the ground is the palette's *first* stop, with the shapes on the ramp above it.** The ground measures
+`(251,248,239)`, lighter than the first shape's `(230,213,184)` — which is `RampTones.aboveGround`'s exact semantics,
+the helper this codebase already has. **Ours grounds on the palette's *darkest* stop and ramps the rest**, so its
+whole tonal arrangement is inverted against theirs.
+
+Measured from `pc_default.png` by clustering ink pixels on colour; the first shape's box is slightly truncated at the
+top because their toolbar overlays it, which does not affect the step measurements.
+
 ### Still to do on the drive
 
-- What each ruler does to the *picture* at its ends (only the numbers were read, not the renders).
+- What each ruler does to the *picture* at its ends (only the numbers were read, not the renders). **Scale delta is
+  the one that matters**, per the caveat above.
 - The *Shadow* knob under Fill: confirm it replaces Thickness, and measure it.
 - The two nudge pads — how far the centre travels, and whether the interpolation between first and last is linear.
 - Whether the colour ramp is spent over the cascade's length (first shape → last) or over something else. The default
