@@ -124,3 +124,36 @@ Everything else follows from that:
 - Ranges and both ends for Thickness · Iterations · Rotate delta · Size · Scale delta.
 - The two nudge pads: how far they travel, and whether the interpolation is linear between them.
 - Whether the colour ramp is spent over the *cascade* (first shape to last) or over something else.
+
+### 4. The drive, continued
+
+**Shape is a named vocabulary of six, not a side count:** `Circle · Star · Triangle · Hexagon · Square · Rectangle`,
+and the strip stops at Rectangle. Ours is regular `3..8`-gons, so it can draw Triangle / Square / Hexagon, **cannot**
+draw Circle, Star or Rectangle, and offers a pentagon, heptagon and octagon theirs does not.
+
+**Mode `Fill` is a second look, and it swaps a knob.** Filled, the cascade is a stack of opaque overlapping shapes
+running light-to-dark down the frame — much bolder than the stroked default, and the palette really shows. The tab row
+under Fill reads `Shape · Mode · Shadow · …`, so **there is a *Shadow* tab that does not exist under Stroke** (and
+*Thickness*, which a fill has no use for, is presumably what it replaces — not yet confirmed). That is a
+`styleFor(variant)` case, the same shape as Flow Field's *Dots*.
+
+**Uncertain, flag for whoever picks this up:** the Fill capture was taken with *Shape* left on **Rectangle**, because
+swiping the Shape strip to read its options also *changed the selection* — the refdrive README's documented trap,
+confirmed again here. The corners in that render are visibly rounded; whether that is the Rectangle shape's own
+rounding or a global corner radius is **not established**.
+
+### Still to do on the drive
+
+- Ranges and both ends for **Thickness · Iterations · Rotate delta · Size · Scale delta** (five rulers, none driven).
+- The *Shadow* knob under Fill: confirm it replaces Thickness, and measure it.
+- The two nudge pads — how far the centre travels, and whether the interpolation between first and last is linear.
+- Whether the colour ramp is spent over the cascade's length (first shape → last) or over something else. The default
+  render strongly suggests the former: cream at the first shape through to blue at the last.
+
+### Working notes for the resume
+
+- Re-picking a design in their studio **resets its knobs and keeps the field/seed**, so it is a clean way to isolate
+  one knob: drive one, shoot both ends, re-pick, drive the next.
+- Their design picker: Polygon Cascade is the first tile of row 5, about `140 1780`.
+- Ours renders through `GeneratorRenderHarness`; mind the stale-render rule in its KDoc, and note it can exit `255`
+  with every test passed and every PNG written.
