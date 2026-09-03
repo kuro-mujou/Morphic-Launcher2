@@ -47,7 +47,7 @@ Ours: the design chip is labelled **Cascade** in our studio's chip row.
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
 - [x] 3. Drive theirs: full tab inventory with ranges and defaults
-- [~] 4. Drive every knob to both ends — **ranges done, pictures and pads not**
+- [x] 4. Drive every knob to both ends — ranges, pictures and both pads; the mechanism is in §15
 - [ ] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
 - [ ] 7. Verify: unit tests, dead-knob guard, harness render, live studio
@@ -265,21 +265,110 @@ their studio re-randomizes something on each pick (W11m found the same on Gradie
 off the panel every capture and keep a sweep inside one pick**, or a knob's own effect and the pick's randomization
 get attributed to each other.
 
+### 11. *Shadow* confirmed, and it is a halo with no throw
+
+Under Mode = **Fill** the third tab really is **Shadow** where Stroke has *Thickness* — the two swap, confirming §4's
+guess. **Shadow `0..100`, default `0`**, and it is the design's one dark knob.
+
+**It is a blurred silhouette of each shape drawn *behind* it with no offset at all** — an outer glow in black, not a
+thrown shadow. Three measurements, all from one pick at Shadow `100` against the same picture at `0`:
+
+- Scanning **across** a shape's left edge and its right edge gives the *same* profile mirrored — darkest at the edge,
+  gone by about `70 px` on a 1080-wide frame, on **both** sides. A directional throw cannot do that.
+- Scanning **down** the cascade, each shape's visible sliver is brightest at its top and darkest where the next shape
+  in front of it begins. Nothing darkens it from above, because the shape above is *behind* it — so the halo is cast
+  only forward-to-back, exactly as a per-shape shadow drawn under each shape would be.
+- The cast-shadow bounding box (`x 282..934, y 573..1603`) sits **inside** the shapes' own (`x 269..953, y 552..1620`).
+  With a throw the shadow would clear the silhouette on the throw side; with a halo it never can, because every shape
+  that could cast outward is the outermost one and its own halo lies under the shapes in front.
+
+**The knob is opacity, not radius.** At `54` the reach is still ~75px while the depth at an edge goes `0.29 → 0.56`
+of the underlying color. So: radius ≈ **6.5% of the frame width**, fixed; the knob scales how dark it gets.
+
+### 12. The four remaining rulers, and what each does to the picture
+
+Driven on one pick (Star, Stroke), reading the number back off the panel every capture.
+
+- **Thickness `1..100`, default 5.** The stroke measures `13px` at `5` and `35px` at `13` on a 1080-wide frame, so it
+  is linear at about **`0.0025 × T` of the frame width** — `0.0125` at the default, against ours' fixed
+  `StrokeFraction = 0.0016`. Theirs opens **eight times heavier than ours**, and its joins are **round** (the star
+  tips are visibly capped at `26`).
+- **Iterations `1..100`, default 10 — a pure subdivision, and this is the finding.** Driven `10 → 17` the ink's
+  bounding box is **identical to the pixel** (`x 256..966, y 538..1633`). So the endpoints *and both end sizes* are
+  fixed and the knob only decides how many copies are spread between them. Ours multiplies a per-copy rotation and a
+  per-copy scale by the index, so its count moves the whole composition.
+- **Rotate delta `−180..180`, default ~57–59.** It is **degrees per copy**, `i × R`, and the reason a 5-pointed star
+  at `59` still looks nearly upright is the star's own **72° symmetry** — `59°` reads as `−13°` per step. That is why
+  the default looks like a gentle fan rather than a jumble, and it means the knob's *useful* range depends on the
+  shape's symmetry.
+- **Size `1..100`, default ~15–16.** The first shape's bounding width is `710px` at `15` and `848px` at `18` on a
+  1080-wide frame — **`0.0435 × S` of the frame width**, and the same constant falls out of §6's independent pick
+  (`741px` at Size 16 → `0.0429`). It scales the shapes only: the centers do not move.
+
+### 13. Scale delta re-derived — it is the *total* change, which is why §7 and §8 disagreed with §6
+
+§8 pinned the per-step size change and its neutral; putting it beside §12's *Iterations* finding gives the unit.
+Because **Iterations does not change the end sizes**, what the knob sets cannot be a per-step amount — it is the
+**whole cascade's** size change, divided by however many copies are in it:
+
+| pick | Iterations | Scale delta | first width | change per step | as a fraction of the first, over the whole cascade |
+|---|---|---|---|---|---|
+| §6's | 10 | 4 | 741 | `−61.7` | `0.749` |
+| this one | 17 | 7 | 848 | `−31.7` | `0.598` |
+
+Two equations, one model: **total fractional change ≈ `0.050 × (18.9 − D)`**, spread linearly over the copies. It
+reproduces §8's independently-measured slope (`−4.9 px` per knob unit at 10 iterations is `0.053` fractional per unit)
+and its neutral at ≈17–19. Below the neutral the cascade shrinks, at it every copy is the same size, above it grows.
+
+**And it is a fraction of the *frame*, not of the segment.** `first width / (Size × frame width)` is `0.0438` here
+and `0.0429` on §6's pick, where `first width / (Size × segment length)` is `0.065` against `0.039` — the frame reading
+is consistent across two picks and the segment reading is not.
+
+### 14. Correction to §10 — the endpoints do **not** resize the shapes
+
+§10 read a graded `dw` while holding *Last shape center* and concluded a shape's size is tied to the two endpoints.
+It is not. Driven again on a pick that stays **inside the frame** — one 700ms hold on `→`, which moved the last
+center `+86px` in `x` — every one of the seventeen widths is unchanged (`848 816 785 753 721 689 658 626 594 563 530
+499 467 436 404 373 341`, against `848 816 785 753 721 689 658 626 594 563 530 499 467 435 405 373 341` before).
+The centers stay linearly spaced along the new segment and nothing else moves.
+
+§10's own hold pushed half the cascade off the left edge, and a bounding box measured on clipped ink is short by
+however much was clipped — most for the shapes nearest the endpoint being moved, which is exactly the gradient it
+reported. **So the shape sizes are a function of *Size*, *Scale delta*, the count and the frame — and of nothing
+else.** The trap generalizes: this measurement reads *visible ink*, so anything that clips or occludes a shape reads
+as that shape changing size.
+
+### 15. The mechanism, in one place
+
+Everything above, as the thing to build against:
+
+- Two centers `P0`, `P1`, **randomized per pick** and nudgeable four ways. `n` copies at `lerp(P0, P1, i/(n−1))`.
+- Copy `i` is one shape from a **named vocabulary of six** (Circle · Star · Triangle · Hexagon · Square · Rectangle),
+  turned `i × R` degrees, at a size interpolated linearly from the first to the last.
+- First size `≈ 0.0435 × Size` of the frame width; the cascade's total size change `≈ 0.050 × (18.9 − ScaleDelta)`
+  of that, so the knob's neutral is a cascade of identical copies and either side of it shrinks or grows.
+- Drawn **first (largest) to last**, so later copies sit in front.
+- **Stroke** (round joins, `0.0025 × Thickness` of the frame width) or **Fill** (with *Shadow*, a black halo of fixed
+  ~6.5%-of-width radius and knob-controlled opacity, drawn behind each copy).
+- Ground is the palette's **first** stop; the copies are the ramp above it, read continuously over the cascade.
+
 ---
 
 ## Where this stopped
 
-Analysis is far enough along to build from. What is genuinely still open, in priority order:
-
-1. ~~The neutral point of Scale delta~~ — **done, §8.** Zero at ≈17, slope `−4.9 px` per unit.
-2. ~~The two nudge pads~~ — **resolved in §10** by driving *Last shape center* instead of *First*. What is left is
-   only the ramp's exact shape at the first two or three shapes.
-3. **The *Shadow* knob under Mode = Fill** — confirm it replaces *Thickness*, and measure it.
-4. **What Thickness / Iterations / Rotate delta / Size do to the picture** at their ends. Ranges are known (§5); only
-   the renders were not judged. These are the least surprising of the four.
+**The drive is finished — §15 is the mechanism, and nothing on it is still open.** Every knob has been pushed to
+both ends, every ruler's effect on the picture measured rather than judged, and the one claim §10 got wrong is
+corrected in §14. What follows is a build decision, not more measurement.
 
 **Nothing has been built.** `PolygonCascadeGenerator` is untouched; the checklist row for Topography's neighbour
 (#17) is still unticked.
+
+**The one thing the build has to answer, and it is a model question.** Theirs has nine knobs and ours has nine
+`DesignParams` fields, but they do not line up: *Iterations* → `density`, *Size* → `scale`, *Shape* → `variant` and
+the taper → `depth` are all straightforward, while **Rotate delta has no field at all** — it is the *orientation*
+family, the last one the teardown says has none, and unlike the four designs that spend `variant` on a discrete
+direction this one is a **continuous signed angle**. And *Mode* wants `variant` too, which *Shape* has already taken.
+Both are open for the author; see the summary of this session.
 
 ### 9. The nudge pads — partly driven, and one thing it settled by accident
 
