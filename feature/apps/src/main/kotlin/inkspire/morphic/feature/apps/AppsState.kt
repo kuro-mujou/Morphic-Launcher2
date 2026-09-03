@@ -8,6 +8,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**
@@ -75,6 +76,10 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  *   capacity: the surface fits it to the measured window and reports the result back
  *   ([AppsViewModel.setPagerFit]), and that fit is what the store paginates against. Both are needed, and this is the
  *   input half — a screen cannot fit a size it was never told.
+ * @property categoryTabEdge which edge the category pager's tab strip sits on. The one piece of `AppsChrome` this
+ *   surface reads — search is not built here yet — and the only setting in this state with a real default rather than
+ *   a null: a strip has to be somewhere, and `VerticalEdge.TOP` is the stored default, so the frame before the first
+ *   emission puts it where it will settle.
  * @property cardChrome the category card's resolved tile chrome — its corner, title scale and the two paddings
  *   around and between its preview slots. Null until the device is reported, with `CardChrome()`'s own all-zero
  *   defaults standing in meanwhile — which are the blueprint's too, so that frame draws what a fresh install draws.
@@ -94,6 +99,7 @@ data class AppsState(
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
     val pagerRemembersPage: Map<GridSlot, Boolean> = emptyMap(),
     val cardChrome: CardChrome? = null,
+    val categoryTabEdge: VerticalEdge = VerticalEdge.TOP,
 )
 
 /**

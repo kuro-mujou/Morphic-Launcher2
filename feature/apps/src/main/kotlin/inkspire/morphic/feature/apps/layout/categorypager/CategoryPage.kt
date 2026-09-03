@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.apps.layout.categorypager
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,10 @@ import inkspire.morphic.feature.apps.AppsCategory
  * @param metrics this page's icon sizing, which is also what decides how tall its cells come out — passed rather than
  *   read from [inkspire.morphic.core.designsystem.cell.LocalIconMetrics] because a height is arithmetic on it, and
  *   arithmetic on an ambient value is where a surface stops being able to say what it drew.
+ * @param alignBottom whether this page's content hugs its **bottom** edge instead of its top — true when the tab
+ *   strip is on the bottom, so the grid sits against the strip rather than leaving the gap there. The name is the
+ *   page's own fact rather than "bottom tabs": what a page owes the strip is which way it grows, and nothing here has
+ *   any business knowing where the tabs are. L1 said the same thing as `Arrangement.Bottom` on its grid.
  * @param onGeometry reports where this page's cells currently are, republished on every scroll frame because the
  *   content moves under the finger while the finger itself may not move at all.
  * @param onScrollState hands this page's scroller up to the surface, which reports the *current* page's vertical
@@ -86,6 +91,7 @@ internal fun CategoryPage(
     gap: Int,
     fingerInRoot: Offset?,
     metrics: IconMetrics,
+    alignBottom: Boolean,
     onLaunch: (ComponentKey) -> Unit,
     showItemMenu: (AppInfo, Rect) -> Unit,
     onRelease: () -> Unit,
@@ -172,7 +178,14 @@ internal fun CategoryPage(
         fingerInRoot?.let(coordinator::moveTo)
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // **Which end of the page the content hugs**, and the header rides with it — see [alignBottom]. `fill = false`
+    // on the scroller below is the other half: a box that fills its weight leaves no slack for an arrangement to
+    // distribute, so it would stay at the top however this is set. Unfilled, the scroller takes its content's height
+    // (clamped to what is left), and a short category's block moves as one.
+    Column(
+        Modifier.fillMaxSize(),
+        verticalArrangement = if (alignBottom) Arrangement.Bottom else Arrangement.Top,
+    ) {
         Text(
             text = category.category.name,
             style = MaterialTheme.typography.titleMedium,
@@ -188,7 +201,7 @@ internal fun CategoryPage(
         Box(
             Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .weight(1f, fill = !alignBottom)
                 .onGloballyPositioned { scrollViewport = it.boundsInRoot() }
                 .verticalScroll(scrollState, enabled = !coordinator.isDragging),
         ) {

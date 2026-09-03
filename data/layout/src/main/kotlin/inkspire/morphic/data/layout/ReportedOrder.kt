@@ -1,7 +1,5 @@
 package inkspire.morphic.data.layout
 
-import inkspire.morphic.core.model.ComponentKey
-
 /**
  * Folds an order **reported by the UI** back onto the collection's real membership.
  *
@@ -19,15 +17,19 @@ import inkspire.morphic.core.model.ComponentKey
  * the same way a folder overlay does, and for the same reason. *Where* the guard is applied does differ between the
  * two, deliberately — see [AppsCategoryChange.Reorder].
  *
+ * **Generic in the element**, because a fourth consumer reports something that is not an app: the tab strip reports
+ * the order of the **categories themselves**, as ids. The reason is the same shape one step up — the strip can only
+ * report the categories it drew — so it is the same fold rather than a second one that would drift.
+ *
  * @param known the collection's full membership, in its stored order (the source of truth for *what* is in it).
  * @param reported the order the UI dropped, over the subset it could render (the source of truth for *sequence*).
  * @return [reported] restricted to actual members, then the members the UI couldn't render, in their stored order.
  *   Unrenderable members land at the end because the drop said nothing about where they belong.
  */
-fun reconcileReportedOrder(
-    known: List<ComponentKey>,
-    reported: List<ComponentKey>,
-): List<ComponentKey> {
+fun <T> reconcileReportedOrder(
+    known: List<T>,
+    reported: List<T>,
+): List<T> {
     val knownSet = known.toSet()
     val reportedSet = reported.toSet()
     return reported.filter { it in knownSet } + known.filterNot { it in reportedSet }

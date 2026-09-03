@@ -80,4 +80,27 @@ interface AppsOrderRepository {
 
     /** Applies [changes] in order, as one read-modify-write over the whole arrangement. */
     suspend fun applyCategory(changes: List<AppsCategoryChange>)
+
+    /**
+     * Re-sequences the **categories themselves** to [reported] — what dragging a tab along the strip commits.
+     *
+     * Plain methods rather than two more [AppsCategoryChange] arms, because these write the category *definitions*
+     * where every op in that set writes membership: nothing here needs to resolve against the same read as a move,
+     * so batching them together would only mean a wider read for no atomicity anyone asked for.
+     *
+     * @param reported the order the UI drew, by category id. Reconciled against what is stored
+     *   ([reconcileReportedOrder]), so a category the caller never saw keeps its place at the end rather than
+     *   vanishing from the sequence — the guard lives here for [AppsCategoryChange.Reorder]'s reason: the caller has
+     *   no honest list of *all* categories, only the ones it rendered.
+     */
+    suspend fun setCategoryOrder(reported: List<String>)
+
+    /**
+     * Renames one category. Blank names are ignored rather than stored — a category with no name draws an empty page
+     * header and an unlabelled tab, which is a state nothing else in the UI could explain.
+     *
+     * Built-in categories are renameable and this is how; creating and deleting are not, and there is deliberately
+     * no op for either (see `isBuiltInCategoryId`).
+     */
+    suspend fun renameCategory(id: String, name: String)
 }

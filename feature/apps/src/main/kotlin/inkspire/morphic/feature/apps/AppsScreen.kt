@@ -222,6 +222,13 @@ fun AppsScreen(
                     horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
                     wraps = state.wraps(GridSlot.APPS_CATEGORY),
                     rememberPage = state.remembersPage(GridSlot.APPS_CATEGORY),
+                    // The two writes a **tab** can make, beside the one a page can: its order in the strip, and its
+                    // name. Both are the categories themselves rather than what is filed under them, which is why
+                    // they are their own commits and not more `onMove`.
+                    onReorderCategories = viewModel::reorderCategories,
+                    onRenameCategory = viewModel::renameCategory,
+                    // The one piece of chrome any of these five layouts reads: which edge its tab strip sits on.
+                    tabEdge = state.categoryTabEdge,
                 )
                 // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
                 // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it

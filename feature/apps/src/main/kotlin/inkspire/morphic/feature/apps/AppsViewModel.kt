@@ -12,6 +12,7 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
@@ -40,8 +41,8 @@ import java.text.Collator
 /**
  * The settings-resolved half of [AppsState], assembled before it joins the content half.
  *
- * Exists because `combine` stops at five flows; it is not a second state object. Every field is "not yet" until the
- * surface reports its device, since all of it is resolved per device configuration.
+ * Exists because `combine` stops at five flows; it is not a second state object. The fields resolved **per device**
+ * are "not yet" until the surface reports one; the rest ([PerSurface]'s) arrive from the store immediately.
  */
 private data class AppsSizing(
     val icon: Map<GridSlot, IconSizing>,
@@ -52,6 +53,7 @@ private data class AppsSizing(
     val wraps: Map<GridSlot, Boolean>,
     val remembersPage: Map<GridSlot, Boolean>,
     val card: CardChrome?,
+    val categoryTabEdge: VerticalEdge,
 )
 
 /**
@@ -66,6 +68,20 @@ private data class PerDevice(
     val cols: Map<GridSlot, Int>,
     val padding: Map<GridSlot, Int>,
     val card: CardChrome?,
+)
+
+/**
+ * The settings [AppsSizing] holds that have **no device dimension at all**, grouped for the same reason [PerDevice]
+ * is — `combine` stops at five flows.
+ *
+ * What they share is the negative: none is re-resolved when the window configuration changes, so unlike their
+ * neighbors they need no `flatMapLatest` over the reported device. Which arrangement reads which is still a per-slot
+ * question for the two maps, and a single answer for the tab edge — one layout draws tabs.
+ */
+private data class PerSurface(
+    val wraps: Map<GridSlot, Boolean>,
+    val remembersPage: Map<GridSlot, Boolean>,
+    val categoryTabEdge: VerticalEdge,
 )
 
 /**
@@ -276,25 +292,31 @@ class AppsViewModel(
      * It also groups honestly — these change together when a settings section is edited, and none of them is content.
      */
     private val sizing: Flow<AppsSizing> =
-    // Seven sources against `combine`'s five, so the four **per-device maps** are grouped first. They are the
-    // honest ones to fold: each is `posture`-gated and each resolves the same way, where the three below are a
-        // single value and two settings with no device dimension at all.
+        // Eight sources against `combine`'s five, grouped by the one thing that tells them apart: the four
+        // **per-device** resolutions fold into `PerDevice`, the three that have no device dimension into
+        // `PerSurface`, and what is left at the top are the two that are neither — a single fitted grid and a single
+        // row height.
         combine(
             combine(iconSizings, gridCols, paddings, cardChrome, ::PerDevice),
+            combine(
+                settingsRepository.pagerWraps,
+                settingsRepository.pagerRemembersPage,
+                settingsRepository.appsChrome.map { it.categoryTabEdge },
+                ::PerSurface,
+            ),
             pagerConfig,
             listRowHeight,
-            settingsRepository.pagerWraps,
-            settingsRepository.pagerRemembersPage,
-        ) { perDevice, pager, rowHeight, wraps, remembersPage ->
+        ) { perDevice, perSurface, pager, rowHeight ->
             AppsSizing(
                 icon = perDevice.icon,
                 cols = perDevice.cols,
                 pager = pager,
                 listRowHeightDp = rowHeight,
                 padding = perDevice.padding,
-                wraps = wraps,
-                remembersPage = remembersPage,
+                wraps = perSurface.wraps,
+                remembersPage = perSurface.remembersPage,
                 card = perDevice.card,
+                categoryTabEdge = perSurface.categoryTabEdge,
             )
         }
 
@@ -335,6 +357,7 @@ class AppsViewModel(
                 pagerWraps = configured.wraps,
                 pagerRemembersPage = configured.remembersPage,
                 cardChrome = configured.card,
+                categoryTabEdge = configured.categoryTabEdge,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 
@@ -616,6 +639,22 @@ class AppsViewModel(
         viewModelScope.launch {
             appsOrderRepository.applyCategory(listOf(AppsCategoryChange.Reorder(categoryId, reported)))
         }
+    }
+
+    /**
+     * Commits the **category order** the tab strip dropped — the categories themselves, not their contents.
+     *
+     * Unreconciled here for [reorderCategory]'s reason, one level up: this holder only ever sees the categories the
+     * store emitted, so the fold onto the full set belongs in the store. Reordering is the one thing a tab drag can
+     * do — it cannot add, remove or re-file anything.
+     */
+    fun reorderCategories(reported: List<String>) {
+        viewModelScope.launch { appsOrderRepository.setCategoryOrder(reported) }
+    }
+
+    /** Renames a category, from its tab's menu. Blank is the store's to refuse, and it does. */
+    fun renameCategory(id: String, name: String) {
+        viewModelScope.launch { appsOrderRepository.renameCategory(id, name) }
     }
 
     private fun applyPager(changes: List<AppsPagerChange>) {
