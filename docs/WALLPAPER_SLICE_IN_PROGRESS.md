@@ -47,7 +47,7 @@ Ours: the design chip is labelled **Cascade** in our studio's chip row.
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
 - [x] 3. Drive theirs: full tab inventory with ranges and defaults
-- [ ] 4. Drive every knob to both ends, with the pixel measurements
+- [~] 4. Drive every knob to both ends — **ranges done, pictures and pads not**
 - [ ] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
 - [ ] 7. Verify: unit tests, dead-knob guard, harness render, live studio
@@ -142,9 +142,24 @@ swiping the Shape strip to read its options also *changed the selection* — the
 confirmed again here. The corners in that render are visibly rounded; whether that is the Rectangle shape's own
 rounding or a global corner radius is **not established**.
 
+### 5. The five ruler ranges — driven, numbers read back
+
+| Knob | Range | Default | Against ours |
+|---|---|---|---|
+| Thickness | `1..100` | **5** | ours fixed at `StrokeFraction = 0.0016` of the short side |
+| Iterations | `1..100` | **10** | ours `16..60` — cannot reach either of their ends, and opens at 38 against their 10 |
+| Rotate delta | **`−180..180`** | **57** | ours fixed at `0.22 rad ≈ 12.6°` — **4.5× less turn per step, and one direction only** |
+| Size | `1..100` | **16** | ours fixed at `RadiusFraction = 0.92` of half the short side — theirs opens *small* |
+| Scale delta | `1..100` | **4** | ours fixed: a linear run from `1.0` down to `MinScale = 0.12` over the whole cascade |
+
+Two of these are worth pulling out. **Rotate delta is signed** — the cascade can turn either way and `0` is no turn at
+all, which is a rigid end ours cannot express. And **their defaults are small**: 10 iterations of a shape at Size 16
+shrinking by Scale delta 4, where ours opens at 38 iterations of a shape filling 92% of the frame. Ours is not a
+tuning away from theirs; it is a different composition.
+
 ### Still to do on the drive
 
-- Ranges and both ends for **Thickness · Iterations · Rotate delta · Size · Scale delta** (five rulers, none driven).
+- What each ruler does to the *picture* at its ends (only the numbers were read, not the renders).
 - The *Shadow* knob under Fill: confirm it replaces Thickness, and measure it.
 - The two nudge pads — how far the centre travels, and whether the interpolation between first and last is linear.
 - Whether the colour ramp is spent over the cascade's length (first shape → last) or over something else. The default
