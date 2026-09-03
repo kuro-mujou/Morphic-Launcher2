@@ -272,8 +272,8 @@ get attributed to each other.
 Analysis is far enough along to build from. What is genuinely still open, in priority order:
 
 1. ~~The neutral point of Scale delta~~ — **done, §8.** Zero at ≈17, slope `−4.9 px` per unit.
-2. **The two nudge pads' travel** — partly driven, §9. Per-tap increment is small and the x measurement did not
-   resolve; see the caveat there.
+2. ~~The two nudge pads~~ — **resolved in §10** by driving *Last shape center* instead of *First*. What is left is
+   only the ramp's exact shape at the first two or three shapes.
 3. **The *Shadow* knob under Mode = Fill** — confirm it replaces *Thickness*, and measure it.
 4. **What Thickness / Iterations / Rotate delta / Size do to the picture** at their ends. Ranges are known (§5); only
    the renders were not judged. These are the least surprising of the four.
@@ -305,3 +305,32 @@ endpoint of a linear interpolation should shift every shape the same way, taperi
 Either the first tap did something other than nudge (focus? a snap?), or the colour-matching mis-pairs shapes when the
 cascade is horizontal and several tones sit close together. **Re-drive this on a pick whose cascade is diagonal**, so
 `x` and `y` separate, and hold the arrow rather than tapping it.
+
+### 10. *Last shape center* — the decisive one, and it resolves §9
+
+§9 drove *First shape center* and got both signs of `dx`, which settled nothing. Driving **Last shape center** instead
+gives the clean signature immediately. One pick, arrow **held** rather than tapped, shapes ordered along the cascade by
+descending size:
+
+| shape | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `dx` after one hold | −1.3 | −1.9 | −5.5 | −94 | −144 | −280 | −373 | −466 | −559 | −646 |
+
+**Monotone and single-signed, from ~0 at the first shape to −646 px at the last.** That is exactly one endpoint of a
+linear interpolation being moved, and it confirms §6's model from the strongest possible direction. The consecutive
+differences settle at about `−92 px` from the middle of the cascade onward. **So §9's both-signs result was a
+measurement artefact of that horizontal pick, not the design** — the mechanism is what §6 said.
+
+**A second finding that was not being looked for: moving the last centre also *resizes* the shapes.** `dw` runs
+`0 0 0 −105 −121 −140 −157 −174 −192 −209` — monotone, in step with `dx`. So a shape's size is **not** independent of
+the two endpoints; it is tied to them (most likely to the distance between them, with *Size* and *Scale delta* read
+against that). That is worth pinning before building, because it decides whether our version stores a size in pixels
+or as a fraction of the cascade's own span.
+
+**Still open on this:** shapes `0..2` barely move while `3..9` ramp, which a pure linear interpolation from the first
+endpoint would not do. It may be an ordering artefact — two shapes in this pick have near-equal widths (`723` and
+`715`) and their `cy` values are out of order, so the size ordering is unreliable at the top. Re-check by ordering on
+`cy` on a cleanly diagonal pick.
+
+Holding the arrow for `1.5 s` moves the endpoint far enough to push half the cascade off the frame on the second hold,
+so **hold in short bursts** and re-measure between them.
