@@ -60,6 +60,16 @@ import kotlinx.serialization.Serializable
  * the thickness of its *marks*, which has nothing to do with how big its orbs are. `0` collapses the element to
  * nothing, so it reads as [depth] `0` — the same "`0` means absent" rule the rest of the family keeps.
  *
+ * **[colorLayout] is *where* each palette stop goes, which is a different question from [colorMode]'s *how many*.**
+ * The reference exposes both on one design and the pair is genuinely independent: its Topography chooses a *Style*
+ * (contour lines or an embossed relief) and, beside it, a *Color mode* that is not the global one at all but a
+ * layout — by hill, by altitude, or at random. That is the **color-distribution** family the teardown named, and it
+ * had been riding [variant] for want of a field of its own: the mesh gradient's *Vertical / Corners / Scattered*, the
+ * facets' *Field / Speckled / Scattered* and Vitrall's are all this knob wearing the sub-look's field, which was fine
+ * only while no design wanted both at once. **The three that already spent [variant] on it stay where they are** — a
+ * stored recipe's `variant` would keep its old number and be read as a look it never meant, and a key whose meaning
+ * changes has to change its name.
+ *
  * **[scale] is how much room the design's elements take, which is a different question from how many there are.** A
  * count and a size are independent everywhere they both apply — twenty small dots and twenty large ones are different
  * pictures — and squeezing both onto [density] is what forces a generator to guess. It is the *spacing / gaps* family
@@ -80,6 +90,9 @@ import kotlinx.serialization.Serializable
  *   count of somethings ignores it. See the class note.
  * @property roundness how soft the design's corners are, `0..1` — `0` is sharp, `1` as round as the shape allows (a
  *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
+ * @property colorLayout which of a design's color *layouts* is chosen, by index — where the stops go, as against
+ *   [colorMode]'s how many of them there are. `0` is the design's own default layout; a design that spends its palette
+ *   one way ignores it. See the class note.
  * @property variant which of a design's sub-looks is chosen, by index. `0` is the design's own default look; a
  *   generator with a single look ignores it, and one with several clamps an out-of-range index to what it has.
  * @property colorMode how much of the palette to paint with — see [WallpaperColorMode]. Applied to the palette, not
@@ -94,5 +107,6 @@ data class DesignParams(
     val depthScale: Float = 0.5f,
     val roundness: Float = 0.5f,
     val variant: Int = 0,
+    val colorLayout: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )

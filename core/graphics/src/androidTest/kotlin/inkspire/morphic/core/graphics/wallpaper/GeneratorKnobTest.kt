@@ -77,6 +77,17 @@ class GeneratorKnobTest {
                         dead.add("${design.name}[$variant] declares ${knob.name} and ignores it")
                     }
                 }
+
+                // The color layouts are the sub-look check on the panel's *other* segmented control, and they are
+                // asked per variant because a design's two looks can spend a layout differently — a filled band and
+                // a stroked path take their color from the same knob and could easily agree in one and not the other.
+                val layouts = style.colorLayout?.options?.indices ?: IntRange.EMPTY
+                for (layout in layouts.drop(1)) {
+                    val previous = base.copy(colorLayout = layout - 1)
+                    if (drawsTheSame(design, previous, base.copy(colorLayout = layout))) {
+                        dead.add("${design.name}[$variant] color layout $layout draws what layout ${layout - 1} draws")
+                    }
+                }
             }
 
             // A sub-look that draws what the look before it draws is the same failure wearing the variant's clothes.

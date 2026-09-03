@@ -136,6 +136,13 @@ internal fun WallpaperStylePanel(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            StyleTab.COLOR_LAYOUT -> MorphicSegmentedButtons(
+                options = style.colorLayout?.options.orEmpty(),
+                selectedIndex = params.colorLayout.coerceIn(0, (style.colorLayout?.options?.size ?: 1) - 1),
+                onSelect = { onParams(params.copy(colorLayout = it)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             StyleTab.COLOR -> MorphicSegmentedButtons(
                 options = WallpaperColorMode.entries.map { it.label },
                 selectedIndex = params.colorMode.ordinal,
@@ -200,9 +207,10 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
  * Only [COLOR] is offered for every design; the others appear when the current generator declares them. The order is
  * the panel's, and it runs from what a design *is* toward how it is painted — [ROUNDNESS] sits with the shape knobs
  * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape. [DEPTH_SCALE] follows
- * [DEPTH] directly, being the size of the very thing that one counts.
+ * [DEPTH] directly, being the size of the very thing that one counts. [COLOR_LAYOUT] sits beside [COLOR] at the end,
+ * the two being where the palette goes and how much of it there is.
  */
-internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, ROUNDNESS, VARIANT, DEPTH, DEPTH_SCALE, COLOR }
+internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, ROUNDNESS, VARIANT, DEPTH, DEPTH_SCALE, COLOR_LAYOUT, COLOR }
 
 /**
  * The tabs this design offers, in panel order — never empty, since [StyleTab.COLOR] applies to every design (the color
@@ -216,6 +224,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (variant != null) add(StyleTab.VARIANT)
     if (depth != null) add(StyleTab.DEPTH)
     if (depthScale != null) add(StyleTab.DEPTH_SCALE)
+    if (colorLayout != null) add(StyleTab.COLOR_LAYOUT)
     add(StyleTab.COLOR)
 }
 
@@ -228,5 +237,6 @@ private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.VARIANT -> variant?.label.orEmpty()
     StyleTab.DEPTH -> depth.orEmpty()
     StyleTab.DEPTH_SCALE -> depthScale.orEmpty()
+    StyleTab.COLOR_LAYOUT -> colorLayout?.label.orEmpty()
     StyleTab.COLOR -> "Color"
 }

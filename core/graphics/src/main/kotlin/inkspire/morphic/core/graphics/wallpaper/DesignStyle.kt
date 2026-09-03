@@ -38,6 +38,9 @@ import kotlin.math.roundToInt
  * @property roundness the design's own word for its corner-softness knob (*Roundness*, *Corner radius*), driven by
  *   [DesignParams.roundness] — null wherever the design has no corners to soften, which is nearly everywhere. A label,
  *   for [irregularity]'s reason.
+ * @property colorLayout the design's chooser for *where* its palette's stops go (*Colors*, *Distribution*), driven by
+ *   [DesignParams.colorLayout] — null for the designs that spend their palette one way. Separate from [variant]
+ *   because a design can want both at once, which is what brought the field into being; see [DesignParams].
  * @property variant the design's sub-look chooser, driven by [DesignParams.variant] — null for the twenty designs
  *   that have a single look.
  */
@@ -49,6 +52,7 @@ data class DesignStyle(
     val depthScale: String? = null,
     val roundness: String? = null,
     val variant: VariantKnob? = null,
+    val colorLayout: VariantKnob? = null,
 )
 
 /**

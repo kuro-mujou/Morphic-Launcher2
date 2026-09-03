@@ -257,6 +257,46 @@ class GeneratorRenderHarness {
     }
 
     /**
+     * Every design that offers a [DesignParams.colorLayout], at each of its layouts *and at each of its sub-looks* —
+     * the newest of the knob families, and one whose whole subject is color, so a layout that reads as a heap of
+     * unrelated stops rather than as regions is the only way it can fail.
+     *
+     * **Swept across the variants too**, for the density sweep's reason: Topography's relief and its lines spend the
+     * same layout on a filled band and on a stroked path, and a layout that composes one can be noise in the other.
+     *
+     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     */
+    @Test
+    fun renderColorLayoutSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val cases = WallpaperDesign.entries.flatMap { design ->
+            val generator = Generators.forDesign(design)
+            val variants = generator.style.variant?.options?.indices ?: 0..0
+            variants.flatMap { variant ->
+                val layouts = generator.styleFor(variant).colorLayout?.options?.indices ?: IntRange.EMPTY
+                layouts.map { Triple(design, variant, it) }
+            }
+        }
+
+        for ((design, variant, layout) in cases) {
+            val bitmap = Generators.forDesign(design).render(
+                width = 1080,
+                height = 2400,
+                palette = moded,
+                params = DesignParams(
+                    variant = variant,
+                    colorLayout = layout,
+                    colorMode = WallpaperColorMode.BICHROMATIC,
+                ),
+                seed = 42L,
+            )
+            save(resolver, "layout_${design.name}_${variant}_$layout.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
+    /**
      * Every design that reads [DesignParams.density], at both ends *and at each of its sub-looks* — the last of the
      * knob families to get a sweep, and the one whose ends are hardest to picture from the middle.
      *
