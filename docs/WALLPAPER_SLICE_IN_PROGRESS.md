@@ -352,6 +352,48 @@ Everything above, as the thing to build against:
   ~6.5%-of-width radius and knob-controlled opacity, drawn behind each copy).
 - Ground is the palette's **first** stop; the copies are the ramp above it, read continuously over the cascade.
 
+### 16. Correction to §12 — *Rotate delta* is the **total** turn, and that makes the design one idea
+
+§12 read *Rotate delta* as degrees per copy and explained the star's near-upright look by its 72° symmetry. That was
+a rationalization, not a measurement, and it is wrong. Measured on **Rectangle**, whose top edge is a line and whose
+tilt can therefore be fitted per copy:
+
+| Rotate delta (read off the panel) | tilt of copy 0 → copy 16 | per step |
+|---|---|---|
+| `9` | `0.00° → 9.01°` | `+0.565°`, constant |
+| `12` | `0.00° → 12.02°` | `+0.75°`, constant |
+
+**The last copy lands on the knob's number, whatever the count.** So *Rotate delta* is the **whole cascade's** turn in
+degrees, `−180..180`, divided evenly — exactly what §13 concluded about *Scale delta*, arrived at independently.
+
+**Which is the design, stated properly.** Every knob but *Iterations* and the stroke describes **one of the two ends**:
+*First shape center* and *Last shape center* are the two positions, *Size* is the first copy's size, *Scale delta* is
+the last copy's size as a share of it (neutral — every copy equal — at ≈18), *Rotate delta* is the last copy's angle.
+**`Iterations` then simply subdivides**, which is why §12 found its bounding box identical to the pixel across
+`10 → 17`. It is a tween between two fully-specified shapes, and reading either "delta" as a per-copy rate makes the
+count change the composition, which theirs demonstrably does not.
+
+*(The reading came free from a trap: a swipe meant for the Shape strip landed on the ruler and moved the knob to `9`,
+which is small enough to fit a tilt cleanly. Read the number back after every gesture — the README says so for a
+different reason and it paid here.)*
+
+### 17. The two shape constants, measured rather than assumed
+
+Building the shape vocabulary needs numbers for the two shapes that are not regular polygons.
+
+- **Star: inner radius `0.451` of the outer**, from two independent captures of the same unoccluded filled star
+  (`area = 5·R·r·sin36°`, `R` the greatest distance from its centroid). Notably **not** the canonical pentagram's
+  `0.382` — theirs is a fatter star. That it is a five-pointer is confirmed separately: the unrotated first copy
+  measures `w/h = 1.0508` against the exact `1.0515`.
+- **Rectangle: `2:1`, with corners rounded to about `0.3` of its short side.** Measured off the *last* copy, which is
+  the only unoccluded one — `333 × 208` at a fitted `9.01°` tilt inverts to `312 × 161`, and taking the stroke off both
+  gives `2.015`. The corner radius is where the top edge stops being flat: `119px` in from a `787px` edge on a copy
+  whose short side is `393`.
+
+**The occlusion trap again, and it is the same one as §14:** the *first* copy's bounding box gives an aspect of `2.20`
+because the copy in front of it eats its bottom edge. Only the last copy in a cascade is whole, and every ratio here
+was taken from it.
+
 ---
 
 ## Where this stopped
