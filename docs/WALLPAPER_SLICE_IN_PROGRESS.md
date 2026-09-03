@@ -44,8 +44,8 @@ Ours: the design chip is labelled **Cascade** in our studio's chip row.
 
 ## Progress
 
-- [ ] 1. Read our generator, and record what it actually does
-- [ ] 2. Read gart for the mechanism
+- [x] 1. Read our generator, and record what it actually does
+- [x] 2. Read gart for the mechanism
 - [ ] 3. Drive theirs: full tab inventory with ranges and defaults
 - [ ] 4. Drive every knob to both ends, with the pixel measurements
 - [ ] 5. Decide the knob mapping onto `DesignParams`
@@ -57,4 +57,28 @@ Ours: the design chip is labelled **Cascade** in our studio's chip row.
 
 ## Findings
 
-_Nothing yet._
+### 1. What ours does (`PolygonCascadeGenerator`)
+
+**One regular polygon drawn `iterations` times**, each copy turned a fixed `RotateDelta = 0.22 rad` further and scaled
+linearly inward from `1.0` to `MinScale = 0.12` of `maxRadius`. It is not a spirograph — it is a rotating, shrinking
+stack. Concretely:
+
+- ground = the palette's **darkest** stop; the polygons climb the remaining ramp (`colorAt(t, ramp)`) as they shrink.
+- centre at `(width/2, height * 0.42)`, outer radius `0.92 * shortSide / 2`.
+- stroke `0.0016 * shortSide` — one hairline weight for every copy.
+- knobs: `density` → *Iterations* `16..60`; `variant` → *Sides* `3..8`; `irregularity` → *Wobble*, a per-vertex jitter
+  up to `0.03 * shortSide`.
+- **`RotateDelta`, `MinScale`, `RadiusFraction`, `CenterHeightFraction` and `StrokeFraction` are all fixed constants.**
+  Their recorded knob list has *Rotate delta*, *Size* and *Thickness*, which are three of those five — so on the face
+  of it ours has three dead constants where theirs has three knobs. Confirm by driving before believing it.
+
+### 2. gart
+
+`arts/spirograph` (`Sg1.kt`, `Sg2.kt`) is a **real spirograph**: `createSpirograph(d, path, radius, degrees, samples,
+repetitions)` rolls a circle of points along a closed path and strokes the trace, with the path itself built by
+union-ing circles. `arts/harmongraph` is the harmonograph. **Neither is what ours draws**, so our KDoc's citation of
+`arts/spirograph` is loose — ours has no rolling and no path. Whether *theirs* is a rolling spirograph or a rotating
+stack is the first thing the drive has to settle, because it decides whether this is an identity finding.
+
+`arts/rotoro` is unrelated (grid-of-circles compositions), despite the name.
+
