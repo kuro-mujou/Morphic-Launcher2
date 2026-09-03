@@ -74,6 +74,19 @@ import kotlinx.serialization.Serializable
  * because "a full turn" means different things to a design that *points* somewhere and one that turns each of its
  * copies a little further. `0` is always *untouched*: square-on, or every copy aligned.
  *
+ * **[finish] is *how* a design's marks are painted, which is a third question again — not what shape they are
+ * ([variant]) and not where their colors go ([colorLayout]).** The reference exposes it as a segmented control beside
+ * both: the Polygon Cascade's *Mode* is **Stroke / Fill**, and Soft Overlaps and Rounded Tiles each carry a *Blend
+ * mode*. Its first consumer is that cascade, where the two are genuinely different pictures of the same geometry —
+ * an outline shows the ground and every copy behind it, a fill hides both and turns the cascade into overlapping
+ * paper.
+ *
+ * **It is a field of its own rather than more values on [variant] because a design wants both at once.** That is the
+ * argument [colorLayout] was added on, and here it is not close: the cascade has six shapes and two modes, and one
+ * chooser would have to offer their twelve combinations — a segmented control divides its width evenly among its
+ * options, so twelve of them is a strip of eighty-pixel segments nobody can read or hit. Two controls of six and two
+ * is the same information at a usable size, and it is how the reference presents it.
+ *
  * **[colorLayout] is *where* each palette stop goes, which is a different question from [colorMode]'s *how many*.**
  * The reference exposes both on one design and the pair is genuinely independent: its Topography chooses a *Style*
  * (contour lines or an embossed relief) and, beside it, a *Color mode* that is not the global one at all but a
@@ -106,6 +119,9 @@ import kotlinx.serialization.Serializable
  *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
  * @property rotation which way the design points or how far it turns, `0..1` — `0` is untouched (square-on, every
  *   copy aligned) and `1` is as far as this design turns. A design with no orientation ignores it. See the class note.
+ * @property finish which of a design's *finishes* is chosen, by index — how its marks are painted (outlined or
+ *   filled, and how they blend), as against [variant]'s what-shape and [colorLayout]'s where-the-colors-go. `0` is
+ *   the design's own default finish; a design that paints one way ignores it. See the class note.
  * @property colorLayout which of a design's color *layouts* is chosen, by index — where the stops go, as against
  *   [colorMode]'s how many of them there are. `0` is the design's own default layout; a design that spends its palette
  *   one way ignores it. See the class note.
@@ -124,6 +140,7 @@ data class DesignParams(
     val roundness: Float = 0.5f,
     val rotation: Float = 0.5f,
     val variant: Int = 0,
+    val finish: Int = 0,
     val colorLayout: Int = 0,
     val colorMode: WallpaperColorMode = WallpaperColorMode.BICHROMATIC,
 )

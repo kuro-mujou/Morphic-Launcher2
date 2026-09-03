@@ -44,6 +44,9 @@ import kotlin.math.roundToInt
  * @property colorLayout the design's chooser for *where* its palette's stops go (*Colors*, *Distribution*), driven by
  *   [DesignParams.colorLayout] — null for the designs that spend their palette one way. Separate from [variant]
  *   because a design can want both at once, which is what brought the field into being; see [DesignParams].
+ * @property finish the design's chooser for *how* its marks are painted (*Mode*, *Blend mode*), driven by
+ *   [DesignParams.finish] — null for the designs that paint one way. Separate from [variant] because a design can
+ *   want both at once, which is the argument [colorLayout] arrived on; see [DesignParams].
  * @property variant the design's sub-look chooser, driven by [DesignParams.variant] — null for the twenty designs
  *   that have a single look.
  */
@@ -56,6 +59,7 @@ data class DesignStyle(
     val roundness: String? = null,
     val rotation: String? = null,
     val variant: VariantKnob? = null,
+    val finish: VariantKnob? = null,
     val colorLayout: VariantKnob? = null,
 )
 

@@ -81,14 +81,25 @@ class GeneratorKnobTest {
                     }
                 }
 
-                // The color layouts are the sub-look check on the panel's *other* segmented control, and they are
-                // asked per variant because a design's two looks can spend a layout differently — a filled band and
-                // a stroked path take their color from the same knob and could easily agree in one and not the other.
+                // The color layouts are the sub-look check on one of the panel's *other* segmented controls, and
+                // they are asked per variant because a design's two looks can spend a layout differently — a filled
+                // band and a stroked path take their color from the same knob and could easily agree in one and not
+                // the other.
                 val layouts = style.colorLayout?.options?.indices ?: IntRange.EMPTY
                 for (layout in layouts.drop(1)) {
                     val previous = base.copy(colorLayout = layout - 1)
                     if (drawsTheSame(design, previous, base.copy(colorLayout = layout))) {
                         dead.add("${design.name}[$variant] color layout $layout draws what layout ${layout - 1} draws")
+                    }
+                }
+
+                // And the finishes are the same check on the last of them, asked per variant for the same reason:
+                // a finish is how a shape is inked, so a design whose shapes differ could ink one of them alike.
+                val finishes = style.finish?.options?.indices ?: IntRange.EMPTY
+                for (finish in finishes.drop(1)) {
+                    val previous = base.copy(finish = finish - 1)
+                    if (drawsTheSame(design, previous, base.copy(finish = finish))) {
+                        dead.add("${design.name}[$variant] finish $finish draws what finish ${finish - 1} draws")
                     }
                 }
             }

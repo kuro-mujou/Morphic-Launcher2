@@ -299,6 +299,46 @@ class GeneratorRenderHarness {
     }
 
     /**
+     * Every finish of every design that offers more than one — the panel's third segmented control, and the sweep the
+     * *Mode* knob arrived with.
+     *
+     * **Swept across the variants too**, for the color layout sweep's reason and with the same live case: a finish is
+     * how a shape is inked, so the shape decides how much the choice shows. An outlined star and a filled one are two
+     * pictures; an outlined circle and a filled one are nearly one silhouette.
+     *
+     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     */
+    @Test
+    fun renderFinishSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val cases = WallpaperDesign.entries.flatMap { design ->
+            val generator = Generators.forDesign(design)
+            val variants = generator.style.variant?.options?.indices ?: 0..0
+            variants.flatMap { variant ->
+                val finishes = generator.styleFor(variant).finish?.options?.indices ?: IntRange.EMPTY
+                finishes.map { Triple(design, variant, it) }
+            }
+        }
+
+        for ((design, variant, finish) in cases) {
+            val bitmap = Generators.forDesign(design).render(
+                width = 1080,
+                height = 2400,
+                palette = moded,
+                params = DesignParams(
+                    variant = variant,
+                    finish = finish,
+                    colorMode = WallpaperColorMode.BICHROMATIC,
+                ),
+                seed = 42L,
+            )
+            save(resolver, "finish_${design.name}_${variant}_$finish.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
+    /**
      * Every design that offers a [DesignParams.colorLayout], at each of its layouts *and at each of its sub-looks* —
      * the newest of the knob families, and one whose whole subject is color, so a layout that reads as a heap of
      * unrelated stops rather than as regions is the only way it can fail.

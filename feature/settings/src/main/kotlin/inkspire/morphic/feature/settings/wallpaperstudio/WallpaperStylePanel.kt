@@ -19,6 +19,7 @@ import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.graphics.wallpaper.AmountKnob
 import inkspire.morphic.core.graphics.wallpaper.DesignStyle
 import inkspire.morphic.core.graphics.wallpaper.Generators
+import inkspire.morphic.core.graphics.wallpaper.VariantKnob
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
@@ -90,6 +91,7 @@ internal fun WallpaperStylePanel(
         }
 
         val fraction = selected.fraction
+        val chooser = selected.chooser
         when {
             fraction != null -> FractionControl(
                 what = style.labelOf(selected),
@@ -98,24 +100,20 @@ internal fun WallpaperStylePanel(
                 onCommit = { onParams(fraction.set(params, it)) },
             )
 
+            chooser != null -> {
+                val options = chooser.knob(style)?.options.orEmpty()
+                MorphicSegmentedButtons(
+                    options = options,
+                    // Clamped the way a generator clamps it, so the pill sits on the look actually being drawn
+                    // rather than vanishing on a recipe whose stored index this design does not have.
+                    selectedIndex = chooser.of(params).coerceIn(0, options.size - 1),
+                    onSelect = { onParams(chooser.set(params, it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             selected == StyleTab.AMOUNT ->
                 AmountControl(style.amount, params.density) { onParams(params.copy(density = it)) }
-
-            selected == StyleTab.VARIANT -> MorphicSegmentedButtons(
-                options = style.variant?.options.orEmpty(),
-                // Clamped the way a generator clamps it, so the pill sits on the look actually being drawn rather
-                // than vanishing on a recipe whose stored index this design does not have.
-                selectedIndex = params.variant.coerceIn(0, (style.variant?.options?.size ?: 1) - 1),
-                onSelect = { onParams(params.copy(variant = it)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            selected == StyleTab.COLOR_LAYOUT -> MorphicSegmentedButtons(
-                options = style.colorLayout?.options.orEmpty(),
-                selectedIndex = params.colorLayout.coerceIn(0, (style.colorLayout?.options?.size ?: 1) - 1),
-                onSelect = { onParams(params.copy(colorLayout = it)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             else -> MorphicSegmentedButtons(
                 options = WallpaperColorMode.entries.map { it.label },
@@ -182,19 +180,26 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
  * the panel's, and it runs from what a design *is* toward how it is painted — [ROUNDNESS] sits with the shape knobs
  * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape. [DEPTH_SCALE] follows
  * [DEPTH] directly, being the size of the very thing that one counts. [ROTATION] closes the shape group, being how the
- * shape is placed rather than what it is. [COLOR_LAYOUT] sits beside [COLOR] at the end,
+ * shape is placed rather than what it is. [FINISH] follows [VARIANT], being how the shape it chose is painted.
+ * [COLOR_LAYOUT] sits beside [COLOR] at the end,
  * the two being where the palette goes and how much of it there is.
  */
-internal enum class StyleTab(val fraction: FractionField? = null) {
+internal enum class StyleTab(
+    val fraction: FractionField? = null,
+    val chooser: ChooserField? = null,
+) {
     AMOUNT,
-    SCALE(FractionField({ it.scale }, { params, v -> params.copy(scale = v) })),
-    IRREGULARITY(FractionField({ it.irregularity }, { params, v -> params.copy(irregularity = v) })),
-    ROUNDNESS(FractionField({ it.roundness }, { params, v -> params.copy(roundness = v) })),
-    ROTATION(FractionField({ it.rotation }, { params, v -> params.copy(rotation = v) })),
-    VARIANT,
-    DEPTH(FractionField({ it.depth }, { params, v -> params.copy(depth = v) })),
-    DEPTH_SCALE(FractionField({ it.depthScale }, { params, v -> params.copy(depthScale = v) })),
-    COLOR_LAYOUT,
+    SCALE(fraction = FractionField({ it.scale }, { params, v -> params.copy(scale = v) })),
+    IRREGULARITY(fraction = FractionField({ it.irregularity }, { params, v -> params.copy(irregularity = v) })),
+    ROUNDNESS(fraction = FractionField({ it.roundness }, { params, v -> params.copy(roundness = v) })),
+    ROTATION(fraction = FractionField({ it.rotation }, { params, v -> params.copy(rotation = v) })),
+    VARIANT(chooser = ChooserField({ it.variant }, { it.variant }, { params, i -> params.copy(variant = i) })),
+    FINISH(chooser = ChooserField({ it.finish }, { it.finish }, { params, i -> params.copy(finish = i) })),
+    DEPTH(fraction = FractionField({ it.depth }, { params, v -> params.copy(depth = v) })),
+    DEPTH_SCALE(fraction = FractionField({ it.depthScale }, { params, v -> params.copy(depthScale = v) })),
+    COLOR_LAYOUT(
+        chooser = ChooserField({ it.colorLayout }, { it.colorLayout }, { params, i -> params.copy(colorLayout = i) }),
+    ),
     COLOR,
 }
 
@@ -213,6 +218,21 @@ internal class FractionField(
 )
 
 /**
+ * One index field of [DesignParams] and the [VariantKnob] that names its options — what the three segmented knobs
+ * differ by and nothing else.
+ *
+ * [FractionField]'s argument, one control down: three tabs asking the same "which of these" question over a different
+ * field had already produced three copies of one block, and the *finish* knob would have made it four. The color mode
+ * stays out of it — its options come from an enum rather than from the generator, and it writes that enum rather than
+ * an index, so folding it in would need both halves parameterized to save nothing.
+ */
+internal class ChooserField(
+    val knob: (DesignStyle) -> VariantKnob?,
+    val of: (DesignParams) -> Int,
+    val set: (DesignParams, Int) -> DesignParams,
+)
+
+/**
  * The tabs this design offers, in panel order — never empty, since [StyleTab.COLOR] applies to every design (the color
  * mode is honored by reducing the palette, not by the generator reading it).
  */
@@ -223,6 +243,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (roundness != null) add(StyleTab.ROUNDNESS)
     if (rotation != null) add(StyleTab.ROTATION)
     if (variant != null) add(StyleTab.VARIANT)
+    if (finish != null) add(StyleTab.FINISH)
     if (depth != null) add(StyleTab.DEPTH)
     if (depthScale != null) add(StyleTab.DEPTH_SCALE)
     if (colorLayout != null) add(StyleTab.COLOR_LAYOUT)
@@ -237,6 +258,7 @@ private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.ROUNDNESS -> roundness.orEmpty()
     StyleTab.ROTATION -> rotation.orEmpty()
     StyleTab.VARIANT -> variant?.label.orEmpty()
+    StyleTab.FINISH -> finish?.label.orEmpty()
     StyleTab.DEPTH -> depth.orEmpty()
     StyleTab.DEPTH_SCALE -> depthScale.orEmpty()
     StyleTab.COLOR_LAYOUT -> colorLayout?.label.orEmpty()

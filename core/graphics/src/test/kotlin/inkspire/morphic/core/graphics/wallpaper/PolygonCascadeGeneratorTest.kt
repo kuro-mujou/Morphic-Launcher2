@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.graphics.wallpaper.PolygonCascadeGenerator.CascadeFinish
 import inkspire.morphic.core.graphics.wallpaper.PolygonCascadeGenerator.CascadeShape
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,6 +34,15 @@ class PolygonCascadeGeneratorTest {
         assertEquals(CascadeShape.CIRCLE, PolygonCascadeGenerator.shapeOf(1))
         assertEquals(CascadeShape.RECTANGLE, PolygonCascadeGenerator.shapeOf(20)) // clamped at the end
         assertEquals(CascadeShape.STAR, PolygonCascadeGenerator.shapeOf(-5)) // and at the start
+    }
+
+    @Test
+    fun `finish picks a way of inking, clamped to the two`() {
+        // Index 0 is the design's default finish, and theirs opens stroked.
+        assertEquals(CascadeFinish.STROKE, PolygonCascadeGenerator.finishOf(0))
+        assertEquals(CascadeFinish.FILL, PolygonCascadeGenerator.finishOf(1))
+        assertEquals(CascadeFinish.FILL, PolygonCascadeGenerator.finishOf(9)) // clamped at the end
+        assertEquals(CascadeFinish.STROKE, PolygonCascadeGenerator.finishOf(-1)) // and at the start
     }
 
     @Test

@@ -41,12 +41,18 @@ import kotlin.random.Random
  * (which is where the reference's own rectangle sits), and [DesignParams.irregularity] is *Wobble*, ours rather than
  * theirs. Deterministic in [render]'s seed.
  *
- * **Two of theirs are not knobs here, and both are deliberate.** Their *Thickness* has no field left —
- * [DesignParams.scale] is spent on *Size*, which is the composition where a stroke weight is a finish, and the
- * teardown's note on the spacing family says the bigger of two members wins the field. Their *Mode* (Stroke / Fill,
- * with a *Shadow* of its own) is not built, by the author's call and for the reason Ribbed Glass's *Real glass* is
- * not: this is one design here, the stroked one. Their two nudge pads are seeded rather than exposed — theirs
- * re-randomizes the pair on every pick, so a shuffle is already the same gesture.
+ * **[DesignParams.finish] is their *Mode*, and the two are different pictures of the same geometry.** Stroked, every
+ * copy is an outline and the whole cascade shows through itself — the ground, and every copy behind the one in
+ * front. Filled, each copy is opaque and hides what it covers, so the picture becomes overlapping paper and only the
+ * leading sliver of each copy survives. Nothing about the cascade moves between them: it is one geometry and two
+ * ways of inking it, which is why it is a *finish* rather than a second set of shapes.
+ *
+ * **Two of theirs are still not knobs here.** Their *Thickness* has no field left — [DesignParams.scale] is spent on
+ * *Size*, which is the composition where a stroke weight is a finish, and the teardown's note on the spacing family
+ * says the bigger of two members wins the field. Their *Shadow*, which appears under *Fill* in place of *Thickness*,
+ * has none either; it is measured (a blurred silhouette behind each copy, no offset) but their own default for it is
+ * `0`, so a fill without it is exactly the filled picture theirs opens on. Their two nudge pads are seeded rather
+ * than exposed — theirs re-randomizes the pair on every pick, so a shuffle is already the same gesture.
  *
  * [copyCount], [shapeOf] and [ring] are pure and tested: a ring whose vertices sit off their radius, or a shape whose
  * proportions are wrong, is silently wrong geometry the bitmap only confirms afterwards.
@@ -75,6 +81,18 @@ object PolygonCascadeGenerator : Generator {
         RECTANGLE("Rectangle"),
     }
 
+    /**
+     * How a copy is inked — the reference's *Mode*, and the whole of what [DesignParams.finish] chooses here.
+     *
+     * **Stroke leads because it is theirs' default and the design's**: an outline is what lets a cascade read as a
+     * cascade, since every copy stays visible through the ones in front of it. A fill is the bolder picture and shows
+     * the palette properly, but it is a stack rather than a trail.
+     */
+    internal enum class CascadeFinish(val label: String) {
+        STROKE("Stroke"),
+        FILL("Fill"),
+    }
+
     /** What [DesignParams.density] resolves to — the copies between the two ends, and the *Iterations* slider's range. */
     private val Amount = AmountKnob.Count("Iterations", 2..24)
 
@@ -85,8 +103,10 @@ object PolygonCascadeGenerator : Generator {
         roundness = "Roundness",
         rotation = "Turn",
         depth = "Taper",
-        // Named off the vocabulary itself, so a seventh shape cannot arrive without the panel offering it.
+        // Named off the vocabularies themselves, so a seventh shape or a third finish cannot arrive without the
+        // panel offering it.
         variant = VariantKnob("Shape", CascadeShape.entries.map { it.label }),
+        finish = VariantKnob("Mode", CascadeFinish.entries.map { it.label }),
     )
 
     /**
@@ -143,7 +163,10 @@ object PolygonCascadeGenerator : Generator {
         val roundness = params.roundness.coerceIn(0f, 1f)
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
+            style = when (finishOf(params.finish)) {
+                CascadeFinish.STROKE -> Paint.Style.STROKE
+                CascadeFinish.FILL -> Paint.Style.FILL
+            }
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
             strokeWidth = StrokeFraction * shortSide
@@ -179,6 +202,10 @@ object PolygonCascadeGenerator : Generator {
     /** The shape [variant] picks, clamped to the vocabulary rather than wrapping, as every variant knob here is. */
     internal fun shapeOf(variant: Int): CascadeShape =
         CascadeShape.entries[variant.coerceIn(CascadeShape.entries.indices)]
+
+    /** How [finish] says to ink a copy, clamped the same way. */
+    internal fun finishOf(finish: Int): CascadeFinish =
+        CascadeFinish.entries[finish.coerceIn(CascadeFinish.entries.indices)]
 
     /**
      * One copy of [shape] as a closed ring of vertices in unit space — interleaved **angle in radians, radius**, the
@@ -314,11 +341,12 @@ object PolygonCascadeGenerator : Generator {
     private val WobbleWeights = floatArrayOf(0.5f, 0.3f, 0.2f)
 
     /**
-     * Stroke width as a share of the short side.
+     * Stroke width as a share of the short side, for the stroked finish — a fill ignores it.
      *
      * **The one knob of theirs with no field here**, fixed at what their *Thickness* opens on — `5` of `1..100`,
      * which measured `13px` on a 1080-wide frame. Their slider runs from a hairline to a weight that all but fills
-     * the shape, so this is a real axis given up rather than a rounding.
+     * the shape, so this is a real axis given up rather than a rounding. Theirs hides it under *Fill* for the same
+     * reason it is inert here.
      */
     private const val StrokeFraction = 0.0125f
 }
