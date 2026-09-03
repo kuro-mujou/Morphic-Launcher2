@@ -1,4 +1,4 @@
-package inkspire.morphic.core.designsystem.picker
+package inkspire.morphic.core.model
 
 import java.text.Collator
 
@@ -8,6 +8,10 @@ import java.text.Collator
  * Shared because every list a user searches must agree: `lowercase()` compares raw UTF-16, so an accented
  * label matches as if it were a different alphabet, and a picker that used one rule while the surface beside
  * it used another would find "Éditeur" for "e" on one screen and not the other.
+ *
+ * **In `core:model` rather than beside the pickers**, now that the second consumer is not a picker at all: the APPS
+ * surface filters its own collection in a ViewModel, off the main thread, and a state holder reaching into
+ * `core:designsystem` for the rule would be the layering inverted. Nothing here touches Compose.
  */
 fun labelCollator(): Collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
 

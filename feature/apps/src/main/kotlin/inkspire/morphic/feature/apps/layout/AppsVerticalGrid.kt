@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.apps.layout
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -38,7 +39,8 @@ import inkspire.morphic.core.model.ComponentKey
  * nothing, because a derived layout is never dragged *within* itself, so it needs no shared cell lattice or
  * published geometry. (A drag *out* to home is `EjectToHome`, which reads the finger, not the grid.)
  *
- * Not built here, the same list as the vertical list's: the alphabet filter strip, search, and drag-out-to-home.
+ * Not built here, the same list as the vertical list's: the alphabet filter strip and drag-out-to-home. Search is
+ * the surface's rather than absent — it draws the field and hands this the matches (see `AppsVerticalList`).
  *
  * **The row height is derived from the column width, not stored.** A scrolling grid fixes its cell *width* (the
  * usable width over the column count) and has no fixed height to divide, so what remains is what the icon and its
@@ -50,6 +52,8 @@ import inkspire.morphic.core.model.ComponentKey
  * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
  *   Its `iconPercent` is spent on the cell **height** here, so the cell itself is drawn with the metrics `derivedCell`
  *   hands back rather than with these.
+ * @param insetSides which bars this layout reserves room for. Everything but the edge a pinned search field took —
+ *   the field pads itself there, and content that reserved it too would leave a phantom band under it.
  * @param cols how many columns across — resolved from the same slot's blueprint and overrides, and passed rather than
  *   read here for the reason [metrics] is: this surface resolves every grid's configuration in one place, so a layout
  *   cannot end up drawing a size nobody configured. It is the count the user *chose*, so it is clamped below to what
@@ -63,12 +67,13 @@ fun AppsVerticalGrid(
     metrics: IconMetrics,
     cols: Int,
     horizontalPadding: Dp,
+    insetSides: WindowInsetsSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
     // Content padding, not layout padding, so rows scroll under the bars rather than stopping short of them — the
     // same inset the list applies, and now carrying the grid's own margin alongside the system's.
-    val contentPadding = appsContentPadding(horizontalPadding)
+    val contentPadding = appsContentPadding(horizontalPadding, insetSides)
 
     // The list's report, one layout over: a swipe back to HOME across a TOP or BOTTOM binding hands off to the pan
     // only once this grid is against the end it is being pulled toward.

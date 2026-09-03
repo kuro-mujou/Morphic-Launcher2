@@ -41,6 +41,8 @@ import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.labelCollator
+import inkspire.morphic.core.model.matchesLabel
 
 /**
  * Choose an installed app from a searchable list.

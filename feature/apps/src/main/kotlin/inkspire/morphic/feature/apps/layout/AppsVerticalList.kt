@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.apps.layout
 
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,7 +50,12 @@ import inkspire.morphic.core.model.ComponentKey
  *
  * Deliberately **not** here yet, all of it L1 behavior worth rebuilding rather than porting: the alphabet filter
  * strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing helpers into the same file as
- * the list — three concerns in one composable), search, and drag-out-to-home.
+ * the list — three concerns in one composable) and drag-out-to-home. **Search is not missing but is not this
+ * layout's**: the field belongs to the surface, which draws it where `SearchPlacement` says and hands this the
+ * matches to render — so a query narrows the rows without the list knowing a query exists.
+ *
+ * @param insetSides which bars this layout reserves room for. Everything but the edge a pinned search field took —
+ *   the field pads itself there, and content that reserved it too would leave a phantom band under it.
  */
 @Composable
 fun AppsVerticalList(
@@ -58,6 +64,7 @@ fun AppsVerticalList(
     metrics: IconMetrics,
     rowHeight: Dp,
     horizontalPadding: Dp,
+    insetSides: WindowInsetsSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
@@ -65,7 +72,7 @@ fun AppsVerticalList(
     // instead of stopping short of them. A row's touch target is its icon and label (`AppRowCell` hangs the gestures
     // on a wrap-content group), so it narrows with the margin for free — the visible extent *is* the target, and
     // there is nothing to keep in step by hand.
-    val contentPadding = appsContentPadding(horizontalPadding)
+    val contentPadding = appsContentPadding(horizontalPadding, insetSides)
     // **The stored height, clamped to what this row can honor** — the list's counterpart of the vertical grid's column
     // fit, and the read half of the coupling the settings section's slider is bounded by. With icons on that means the
     // guardrails, which can move after a height was chosen: a row shorter than the smallest allowed icon would draw it

@@ -1,11 +1,24 @@
 package inkspire.morphic.feature.apps
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -28,13 +41,17 @@ import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
 import inkspire.morphic.core.designsystem.surface.AxisScroll
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
 import inkspire.morphic.core.model.AppsPagerGrid
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
+import inkspire.morphic.core.model.SearchPlacement
+import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.core.model.toGridConfig
@@ -157,6 +174,20 @@ fun AppsScreen(
     // it), and to take its content color from the *film* rather than from the wallpaper the film is made of. `OnFilm`
     // is both. Declared once at the root rather than per layout, for the surface menu's reason — five arrangements,
     // and a new one must not be able to forget.
+    // **The field's text is owned here**, which is `MorphicTextField`'s one deliberate exception to hiding state: what
+    // it survives a configuration change for is that the caller holds it. The query is reported to the ViewModel,
+    // which does the matching off the main thread.
+    val searchState = rememberTextFieldState()
+    LaunchedEffect(searchState) {
+        snapshotFlow { searchState.text.toString() }.collect(viewModel::setQuery)
+    }
+    // A query is about *this* visit to the surface. Left behind, it would make the next open show a filtered surface
+    // with the field emptied by nothing the user did — and the field is not always on screen to explain itself.
+    LaunchedEffect(presented) { if (!presented) searchState.clearText() }
+
+    val placement = state.searchOn(layout)
+    val search = searchChrome(placement)
+
     OnFilm {
         Box(
             modifier
@@ -174,87 +205,249 @@ fun AppsScreen(
                     )
                 },
         ) {
-            when (layout) {
-                AppsLayout.VERTICAL_LIST -> AppsVerticalList(
-                    apps = state.apps,
-                    onLaunch = viewModel::launch,
-                    metrics = state.metricsFor(GridSlot.APPS_LIST),
-                    rowHeight = state.rowHeight,
-                    horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
-                )
+            // The results view a query replaces the arrangement with: this surface's **derived** shape, filtered.
+            // A list layout narrows its rows; the four that arrange something show the A–Z grid instead of their
+            // arrangement, because a filtered arrangement is neither — L1 narrowed its pages in place and left the
+            // matches scattered across pages the user then had to swipe through to find them.
+            val results: @Composable () -> Unit = {
+                when {
+                    state.results.isEmpty() -> NoMatches()
+                    layout == AppsLayout.VERTICAL_LIST -> AppsVerticalList(
+                        apps = state.results,
+                        onLaunch = viewModel::launch,
+                        metrics = state.metricsFor(GridSlot.APPS_LIST),
+                        rowHeight = state.rowHeight,
+                        horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
+                        insetSides = search.contentSides,
+                    )
 
-                AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
-                    apps = state.apps,
-                    onLaunch = viewModel::launch,
-                    metrics = state.metricsFor(GridSlot.APPS_SCROLL),
-                    cols = state.colsFor(GridSlot.APPS_SCROLL, device),
-                    horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
-                )
+                    else -> AppsVerticalGrid(
+                        apps = state.results,
+                        onLaunch = viewModel::launch,
+                        metrics = state.metricsFor(GridSlot.APPS_SCROLL),
+                        cols = state.colsFor(GridSlot.APPS_SCROLL, device),
+                        horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
+                        insetSides = search.contentSides,
+                    )
+                }
+            }
+            // The field itself, wherever it goes: pinned to an edge here, or handed to the category pager to sit
+            // beside its tabs. One call site either way, so the two placements cannot drift into two fields.
+            val field: @Composable () -> Unit = {
+                AppsSearchField(state = searchState, modifier = Modifier.windowInsetsPadding(search.fieldInsets))
+            }
 
-                AppsLayout.PAGER -> AppsPager(
-                    pages = state.pagerPages,
-                    onLaunch = viewModel::launch,
-                    onMove = viewModel::movePagerItem,
-                    onMerge = viewModel::mergePagerItem,
-                    onReorderFolder = viewModel::reorderFolder,
-                    onAddToFolder = viewModel::addToFolder,
-                    onDropExtracted = viewModel::dropExtractedApp,
-                    onMergeExtracted = viewModel::mergeExtractedApp,
-                    metrics = state.metricsFor(GridSlot.APPS_PAGER),
-                    // A folder opened over the pager is a different grid, so it takes its own sizing rather than
-                    // inheriting the page's.
-                    folderMetrics = state.metricsFor(GridSlot.FOLDER),
-                    // The same grid the ViewModel paginates the store against — the fitted one computed above, passed down
-                    // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
-                    config = pagerFit,
-                    horizontalPadding = pagerPadding,
-                    wraps = state.wraps(GridSlot.APPS_PAGER),
-                    rememberPage = state.remembersPage(GridSlot.APPS_PAGER),
-                    folderAdditions = additions.forFolder,
-                )
-
-                AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
-                    categories = state.categories,
-                    onLaunch = viewModel::launch,
-                    onMove = viewModel::moveCategoryItem,
-                    metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
-                    cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
-                    horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
-                    wraps = state.wraps(GridSlot.APPS_CATEGORY),
-                    rememberPage = state.remembersPage(GridSlot.APPS_CATEGORY),
-                    // The two writes a **tab** can make, beside the one a page can: its order in the strip, and its
-                    // name. Both are the categories themselves rather than what is filed under them, which is why
-                    // they are their own commits and not more `onMove`.
-                    onReorderCategories = viewModel::reorderCategories,
-                    onRenameCategory = viewModel::renameCategory,
-                    // The one piece of chrome any of these five layouts reads: which edge its tab strip sits on.
-                    tabEdge = state.categoryTabEdge,
-                )
-                // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
-                // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
-                // is rendered.
-                AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
-                    categories = state.categories,
-                    onLaunch = viewModel::launch,
-                    // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
-                    // op, because the destination id carries the difference.
-                    onMove = viewModel::moveCategoryItem,
-                    onReorder = viewModel::reorderCategory,
-                    // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing; a card's
-                    // preview slots take their own, which is `APPS_CARD`'s.
-                    metrics = state.metricsFor(GridSlot.FOLDER),
-                    slotMetrics = card.metrics,
-                    chrome = card.chrome,
-                    // **Clamped where it is drawn**, as every other scrolling grid here is, and against the same width
-                    // the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will
-                    // not draw. The floor is a *card's*: two of its preview icons at their own guardrail, plus the
-                    // paddings around and between them, which is `CellFit`'s ordinary inversion applied to a tile.
-                    cardColumns = card.columns,
-                    horizontalPadding = card.padding,
-                    categoryAdditions = additions.forCategory,
-                )
+            Column(Modifier.fillMaxSize()) {
+                if (search.pinnedEdge == VerticalEdge.TOP) field()
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        // What the field took, taken off what the content sees — for the layouts that pad
+                        // themselves. `appsContentPadding` reads the insets raw, which is why the two scrolling
+                        // layouts are told the same thing through `insetSides` instead.
+                        .consumeWindowInsets(search.consumed),
+                ) {
+                    if (state.searching) {
+                        results()
+                    } else {
+                        AppsArrangement(
+                            layout = layout,
+                            state = state,
+                            viewModel = viewModel,
+                            device = device,
+                            geometry = AppsGeometry(card, pagerFit, pagerPadding, search.contentSides),
+                            additions = additions,
+                            searchHeader = field.takeIf { placement is SearchPlacement.InHeader },
+                        )
+                    }
+                }
+                if (search.pinnedEdge == VerticalEdge.BOTTOM) field()
             }
         }
+    }
+}
+
+/**
+ * Everything a pinned search field decides about insets, resolved once.
+ *
+ * @property pinnedEdge the edge the field took, or null when it is in the tab header or absent.
+ * @property fieldInsets what the field pads itself by: its edge's bar inset, plus the horizontal one in every case,
+ *   since a landscape cutout crosses a field on any edge.
+ * @property contentSides which bars the **scrolling** layouts still owe their content — everything but the edge the
+ *   field took. They read the insets raw (as *content* padding, so rows scroll under the bars), which is precisely
+ *   what consumption cannot reach, so they are told instead.
+ * @property consumed the same fact for every other layout, which pads *itself* with `windowInsetsPadding` and so
+ *   respects consumption. Written out rather than derived from [contentSides] because "no sides at all" is not a
+ *   `WindowInsetsSides` value.
+ */
+private class SearchChrome(
+    val pinnedEdge: VerticalEdge?,
+    val fieldInsets: WindowInsets,
+    val contentSides: WindowInsetsSides,
+    val consumed: WindowInsets,
+)
+
+/** Resolves [placement] into the inset bookkeeping a field on an edge forces on everything below it. */
+@Composable
+private fun searchChrome(placement: SearchPlacement): SearchChrome {
+    val edge = (placement as? SearchPlacement.Pinned)?.edge
+    return SearchChrome(
+        pinnedEdge = edge,
+        fieldInsets = uiInsets.only(
+            when (edge) {
+                VerticalEdge.TOP -> WindowInsetsSides.Horizontal + WindowInsetsSides.Top
+                VerticalEdge.BOTTOM -> WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+                null -> WindowInsetsSides.Horizontal
+            },
+        ),
+        contentSides = when (edge) {
+            VerticalEdge.TOP -> WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+            VerticalEdge.BOTTOM -> WindowInsetsSides.Horizontal + WindowInsetsSides.Top
+            null -> WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
+        },
+        consumed = when (edge) {
+            VerticalEdge.TOP -> uiInsets.only(WindowInsetsSides.Top)
+            VerticalEdge.BOTTOM -> uiInsets.only(WindowInsetsSides.Bottom)
+            null -> WindowInsets(0)
+        },
+    )
+}
+
+/**
+ * The measurements [AppsScreen] resolves once and hands to whichever arrangement draws.
+ *
+ * Grouped rather than passed one by one because they arrive together and are read apart: each arrangement takes the
+ * one or two that describe *it*, and a screen with five of them would otherwise pass nine parameters to say four
+ * things.
+ */
+private class AppsGeometry(
+    val card: CardGeometry,
+    val pagerFit: GridConfig,
+    val pagerPadding: Dp,
+    val contentSides: WindowInsetsSides,
+)
+
+/**
+ * What the surface draws when nothing is being searched for: the chosen [layout], and **the one place a layout is
+ * chosen**.
+ *
+ * Split from [AppsScreen] when search arrived rather than for length: the screen now has two things to draw and only
+ * one of them is an arrangement, so the `when` that was its body became one branch of it. Everything above is still
+ * shared by construction — the ViewModel, the ordering, the device configuration, the film and the surface menu —
+ * which is the property that makes "no layout can quietly disagree with another" hold.
+ */
+@Composable
+private fun AppsArrangement(
+    layout: AppsLayout,
+    state: AppsState,
+    viewModel: AppsViewModel,
+    device: DeviceConfiguration,
+    geometry: AppsGeometry,
+    additions: CollectionAdditions,
+    searchHeader: (@Composable () -> Unit)?,
+) {
+    when (layout) {
+        AppsLayout.VERTICAL_LIST -> AppsVerticalList(
+            apps = state.apps,
+            onLaunch = viewModel::launch,
+            metrics = state.metricsFor(GridSlot.APPS_LIST),
+            rowHeight = state.rowHeight,
+            horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
+            insetSides = geometry.contentSides,
+        )
+
+        AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
+            apps = state.apps,
+            onLaunch = viewModel::launch,
+            metrics = state.metricsFor(GridSlot.APPS_SCROLL),
+            cols = state.colsFor(GridSlot.APPS_SCROLL, device),
+            horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
+            insetSides = geometry.contentSides,
+        )
+
+        AppsLayout.PAGER -> AppsPager(
+            pages = state.pagerPages,
+            onLaunch = viewModel::launch,
+            onMove = viewModel::movePagerItem,
+            onMerge = viewModel::mergePagerItem,
+            onReorderFolder = viewModel::reorderFolder,
+            onAddToFolder = viewModel::addToFolder,
+            onDropExtracted = viewModel::dropExtractedApp,
+            onMergeExtracted = viewModel::mergeExtractedApp,
+            metrics = state.metricsFor(GridSlot.APPS_PAGER),
+            // A folder opened over the pager is a different grid, so it takes its own sizing rather than
+            // inheriting the page's.
+            folderMetrics = state.metricsFor(GridSlot.FOLDER),
+            // The same grid the ViewModel paginates the store against — the fitted one computed above, passed down
+            // rather than re-resolved, so the page drawn and the page stored cannot be different sizes.
+            config = geometry.pagerFit,
+            horizontalPadding = geometry.pagerPadding,
+            wraps = state.wraps(GridSlot.APPS_PAGER),
+            rememberPage = state.remembersPage(GridSlot.APPS_PAGER),
+            folderAdditions = additions.forFolder,
+        )
+
+        AppsLayout.PAGER_WITH_CATEGORY -> AppsCategoryPager(
+            categories = state.categories,
+            onLaunch = viewModel::launch,
+            onMove = viewModel::moveCategoryItem,
+            metrics = state.metricsFor(GridSlot.APPS_CATEGORY),
+            cols = state.colsFor(GridSlot.APPS_CATEGORY, device),
+            horizontalPadding = state.paddingFor(GridSlot.APPS_CATEGORY).dp,
+            wraps = state.wraps(GridSlot.APPS_CATEGORY),
+            rememberPage = state.remembersPage(GridSlot.APPS_CATEGORY),
+            // The two writes a **tab** can make, beside the one a page can: its order in the strip, and its
+            // name. Both are the categories themselves rather than what is filed under them, which is why
+            // they are their own commits and not more `onMove`.
+            onReorderCategories = viewModel::reorderCategories,
+            onRenameCategory = viewModel::renameCategory,
+            // The one piece of chrome any of these five layouts reads: which edge its tab strip sits on.
+            tabEdge = state.categoryTabEdge,
+            // The one layout whose field is not pinned to an edge of its own: it sits with the tabs, on whichever
+            // edge they are on. Null for every other placement.
+            header = searchHeader,
+        )
+        // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
+        // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
+        // is rendered.
+        AppsLayout.CATEGORY_CARD -> AppsCategoryCard(
+            categories = state.categories,
+            onLaunch = viewModel::launch,
+            // The same `Move` the category pager commits: on both layouts a re-file and a reposition are one
+            // op, because the destination id carries the difference.
+            onMove = viewModel::moveCategoryItem,
+            onReorder = viewModel::reorderCategory,
+            // An expansion *is* a folder overlay on the folder grid, so it takes that slot's sizing; a card's
+            // preview slots take their own, which is `APPS_CARD`'s.
+            metrics = state.metricsFor(GridSlot.FOLDER),
+            slotMetrics = geometry.card.metrics,
+            chrome = geometry.card.chrome,
+            // **Clamped where it is drawn**, as every other scrolling grid here is, and against the same width
+            // the settings editor bounds its lane buttons by — so the editor cannot offer a lane the surface will
+            // not draw. The floor is a *card's*: two of its preview icons at their own guardrail, plus the
+            // paddings around and between them, which is `CellFit`'s ordinary inversion applied to a tile.
+            cardColumns = geometry.card.columns,
+            horizontalPadding = geometry.card.padding,
+            categoryAdditions = additions.forCategory,
+        )
+    }
+}
+
+/**
+ * What the results view draws when a query matches nothing.
+ *
+ * A line rather than an empty surface: the arrangement is gone while searching, so nothing on screen would otherwise
+ * distinguish "no app is called that" from a surface that failed to draw.
+ */
+@Composable
+private fun NoMatches() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = "No matches",
+            style = MaterialTheme.typography.bodyLarge,
+            color = LocalMorphicColors.current.contentMuted,
+        )
     }
 }
 

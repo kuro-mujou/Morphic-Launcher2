@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.apps
 
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.Category
 import inkspire.morphic.core.model.GridConfig
@@ -8,6 +9,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
+import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.Folder as FolderModel
 
@@ -76,6 +78,13 @@ data class AppsCategory(val category: Category, val apps: List<AppInfo>)
  *   capacity: the surface fits it to the measured window and reports the result back
  *   ([AppsViewModel.setPagerFit]), and that fit is what the store paginates against. Both are needed, and this is the
  *   input half — a screen cannot fit a size it was never told.
+ * @property query what is typed in the search field, trimmed — **and the one thing that decides whether search is
+ *   showing at all**, since a blank query is indistinguishable from no search.
+ * @property results [apps] filtered to [query], A–Z. The whole list while the query is blank, so nothing has to ask
+ *   which state it is in.
+ * @property searchByLayout where the search field sits, **per layout and already resolved** — every layout has an
+ *   entry, so a missing one cannot be mistaken for `Hidden` here (`AppsChrome.searchOn` is the one place that
+ *   decides what an unchosen layout gets).
  * @property categoryTabEdge which edge the category pager's tab strip sits on. The one piece of `AppsChrome` this
  *   surface reads — search is not built here yet — and the only setting in this state with a real default rather than
  *   a null: a strip has to be somewhere, and `VerticalEdge.TOP` is the stored default, so the frame before the first
@@ -100,7 +109,24 @@ data class AppsState(
     val pagerRemembersPage: Map<GridSlot, Boolean> = emptyMap(),
     val cardChrome: CardChrome? = null,
     val categoryTabEdge: VerticalEdge = VerticalEdge.TOP,
+    val searchByLayout: Map<AppsLayout, SearchPlacement> = emptyMap(),
+    val query: String = "",
+    val results: List<AppInfo> = emptyList(),
 )
+
+/**
+ * Where [layout]'s search field sits — [SearchPlacement.Hidden] until the store answers, which is also the default an
+ * unchosen layout resolves to, so no frame shows a field that is about to disappear.
+ *
+ * Layout-keyed rather than one value for the surface, because that is `SearchPlacement`'s own shape: the same
+ * collection reached in two arrangements can put its field in two different places, and one of the five has no edge
+ * to pin it to at all.
+ */
+fun AppsState.searchOn(layout: AppsLayout): SearchPlacement =
+    searchByLayout[layout] ?: SearchPlacement.Hidden
+
+/** True when a query is narrowing the surface — the arrangement is replaced by [AppsState.results] while it is. */
+val AppsState.searching: Boolean get() = query.isNotEmpty()
 
 /**
  * Whether [slot]'s pages wrap around at the ends — false until the store answers, which is also the blueprint's

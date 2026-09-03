@@ -576,10 +576,22 @@ arrangement — the model had already collapsed that into `Surface.APPS` + `Apps
     would reset every per-folder icon and grid override.
   - Still to come: an optimistic layer (a drop waits for the write, so a re-file lands a frame or two late — the
     `Injected` phase is what stops the app blinking out meanwhile).
+- **Search is built, on all five layouts, from `AppsChrome.searchByLayout`.** The field goes where the setting says —
+  pinned to an edge on the four standalone layouts, beside the tabs on the category pager (its `header` slot, drawn
+  outside the strip on whichever edge the strip is on) — and a query **replaces the arrangement with the surface's
+  derived view, filtered**: the list layout narrows its rows, the four that arrange something show the A–Z grid.
+  Deliberately not L1's filter-in-place, which thinned each page and left the matches scattered across pages the user
+  then swiped through to find, and which forced every reorder op to bail out while a query was live — here there is no
+  arrangement on screen to misarrange. Matching is `matchesLabel` (accent- and case-insensitive), **which moved to
+  `core:model`** now that its second consumer is a ViewModel rather than a picker; filtering runs in `AppsViewModel`
+  off the main thread, for the same reason the A–Z sort does. Empty means a "No matches" line, since a surface whose
+  arrangement is gone would otherwise read as one that failed to draw. **The field's edge costs the content that
+  edge's bar inset**, taken off two ways because the layouts split two ways: consumption for the ones that pad
+  themselves, and a new `insetSides` for the list and grid, whose insets are *content* padding where consumption
+  cannot reach.
 - Not built: the alphabet filter strip (L1 bundled the strip, its hover-dim animation, and four letter-indexing
-  helpers into the list file — three concerns in one composable), search, drag-out-to-home (`EjectToHome`), and
-  category **management** (create/rename/delete/reorder — a `feature:settings` concern, which is also why a card
-  carries no menu and cannot be dragged).
+  helpers into the list file — three concerns in one composable), drag-out-to-home (`EjectToHome`), and category
+  **creation and deletion** (see the tab menu's note; rename and reorder now exist).
 
 **The icon effects expansion is complete — every slice of
 [docs/ICON_EFFECTS_PLAN.md](ICON_EFFECTS_PLAN.md), all thirteen effects — and phase 2 has started.** That
@@ -813,9 +825,9 @@ missing is verbs, each waiting on its own feature (an **app picker**, **widgets*
 list's **"Add apps" picker** is the same gap seen from its own surface — without one, its contents are whatever the
 grid seeded. Home **orientation**, or
 widgets/containers on the grid. On APPS, **all five layouts render, all the
-arrangement-owning ones drag, and every one of them can drag an app out onto HOME**; what is left is the surrounding
-behavior: the alphabet filter strip, search, an optimistic layer for both the pager and the card (a drop waits for
-the write) + the pager's page indicator. The queued **mechanical** job is done: `core:designsystem/folder/` is now
+arrangement-owning ones drag, every one of them can drag an app out onto HOME, and every one of them searches**;
+what is left is the surrounding behavior: the alphabet filter strip, an optimistic layer for both the pager and the
+card (a drop waits for the write) + the pager's page indicator. The queued **mechanical** job is done: `core:designsystem/folder/` is now
 `collection/` and its types are `AppCollection*` (see the card's notes). Folder
 follow-ups: rename, add-via-picker, cross-page reorder, onto-an-app open-then-create.
 
@@ -1221,11 +1233,11 @@ becomes the *label's* own height (a row cannot be shorter than its text — `row
 up** to `IconSizingRanges.IconDp`'s own ceiling. Both ends then stop following the guardrails, which is the point: they
 describe an icon that isn't there, and bounding a pure-text row by one forbade a compact list to anyone who had set
 chunky icons before switching them off. **Chrome is a third slice, `AppsChrome`** — `SearchPlacement` (which `core:model` had built and nothing consumed) plus
-the tab bar's `VerticalEdge`, whose KDoc had named this consumer since B0. It is the one setting whose **only current
-consumer is the editor preview**: search is unbuilt on the APPS surface and neither pager draws a tab bar, so this is a
-deliberate exception to "no model in a vacuum" — a preview is a real consumer with a real question, and L1's editor
-draws both from its own stored pair. Its search default is `Hidden` where L1's is `TOP`, because a default that drew a
-search bar the launcher has not got is the one thing a preview must not do. **Which options are offered is
+the tab bar's `VerticalEdge`, whose KDoc had named this consumer since B0. **Both halves are read by the surface now**
+— the strip sits on the stored edge and the field sits where the stored placement says — so the slice is no longer the
+"only consumer is the preview" exception it was written as; what the preview keeps is the job of showing the choice
+before it is made. Its search default is `Hidden` where L1's is `TOP`, which now reads as a plain choice rather than a
+guard: a fresh install shows no field until one is asked for. **Which options are offered is
 layout-dependent**, which is `SearchPlacement`'s whole shape: a standalone layout pins to an edge, the category pager
 embeds in its header. L1's flat `SearchPosition` let a user pick a state their layout could not draw.
 **The category card has a chip now, and it closed the one gap this section had.** It was held back because a card is a

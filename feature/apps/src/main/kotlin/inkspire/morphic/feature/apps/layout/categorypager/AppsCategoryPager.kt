@@ -150,6 +150,10 @@ private class PendingReorder(val ids: List<String>, val keep: String?)
  *   reason [metrics] is: the surface resolves every grid's configuration in one place.
  * @param onReorderCategories commits a dropped tab: the category ids in the order the strip now shows them.
  * @param onRenameCategory commits a rename from a tab's menu.
+ * @param header drawn **outside the strip, on the strip's own edge** — the search field, when
+ *   `SearchPlacement.InHeader` puts it here. Null draws nothing. A slot rather than a `SearchPlacement` parameter
+ *   because this surface has no business knowing what the thing is: it knows only that the tabs share their edge
+ *   with it, and that the order is field-then-tabs reading inward from the screen edge.
  * @param tabEdge which edge the tab strip sits on, from `AppsChrome.categoryTabEdge`. **Honored here and previewed in
  *   the APPS settings section**, which is the pair the shared-derivation rule is about: the editor's mockup draws a
  *   row on the edge this reads, so a surface ignoring it would make that control a lie.
@@ -168,6 +172,7 @@ fun AppsCategoryPager(
     rememberPage: Boolean,
     tabEdge: VerticalEdge,
     modifier: Modifier = Modifier,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -460,7 +465,10 @@ fun AppsCategoryPager(
                     .fillMaxSize()
                     .windowInsetsPadding(uiInsets),
             ) {
-                if (tabEdge == VerticalEdge.TOP) strip()
+                if (tabEdge == VerticalEdge.TOP) {
+                    header?.invoke()
+                    strip()
+                }
                 LauncherPager(
                     state = pagerState,
                     modifier = Modifier
@@ -502,7 +510,10 @@ fun AppsCategoryPager(
                         )
                     }
                 }
-                if (tabEdge == VerticalEdge.BOTTOM) strip()
+                if (tabEdge == VerticalEdge.BOTTOM) {
+                    strip()
+                    header?.invoke()
+                }
             }
 
             // The floating proxy — the only thing the user sees moving, since `LauncherDragCell` draws the lifted cell

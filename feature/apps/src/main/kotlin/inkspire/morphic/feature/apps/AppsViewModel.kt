@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -12,7 +13,10 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.labelCollator
+import inkspire.morphic.core.model.matchesLabel
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
@@ -54,6 +58,7 @@ private data class AppsSizing(
     val remembersPage: Map<GridSlot, Boolean>,
     val card: CardChrome?,
     val categoryTabEdge: VerticalEdge,
+    val searchByLayout: Map<AppsLayout, SearchPlacement>,
 )
 
 /**
@@ -81,7 +86,33 @@ private data class PerDevice(
 private data class PerSurface(
     val wraps: Map<GridSlot, Boolean>,
     val remembersPage: Map<GridSlot, Boolean>,
+    val chrome: ResolvedChrome,
+)
+
+/**
+ * `AppsChrome` with every layout's search placement already resolved.
+ *
+ * **Resolved here rather than in the UI**, because an absent entry has a meaning and `AppsChrome.searchOn` is the one
+ * place that says what it is. Handing the sparse map down would put that rule in a second place, and a layout the
+ * user has never chosen for would then be one caller's guess.
+ */
+private data class ResolvedChrome(
     val categoryTabEdge: VerticalEdge,
+    val searchByLayout: Map<AppsLayout, SearchPlacement>,
+)
+
+/**
+ * The app collection and what the current query makes of it — the two halves of "what is on screen" that move
+ * together, grouped so the state's outer `combine` stays within its five flows.
+ *
+ * @property results [apps] filtered to the query, in the same A–Z order. **The whole list when the query is blank**
+ *   rather than empty, so a reader that draws results never has to ask which state it is in; whether search is
+ *   *showing* is [query]'s answer alone.
+ */
+private data class Searched(
+    val apps: List<AppInfo>,
+    val query: String,
+    val results: List<AppInfo>,
 )
 
 /**
@@ -144,6 +175,36 @@ class AppsViewModel(
             .map { apps -> apps.sortedWith(LabelOrder) }
             .flowOn(dispatchers.default)
             .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), replay = 1)
+
+    /**
+     * What the user has typed into the search field, or empty when they have not — the one piece of this surface's
+     * state that is neither settings nor store.
+     */
+    private val query = MutableStateFlow("")
+
+    /**
+     * The collection and what the query makes of it.
+     *
+     * **Filtered here rather than in the composable, and off the main thread**, for the same reason the A–Z sort is:
+     * accent-insensitive matching is a `Collator` comparison per window of every label, which is nothing once and is
+     * jank on the frame each keystroke lands. Blank means no filtering *and* no work — the collator is not even
+     * built.
+     *
+     * Matching is `matchesLabel`, which is the rule the app pickers already search by. Sharing it is the point: a
+     * surface that found "Éditeur" for "e" where a picker beside it did not would be two search behaviors in one
+     * launcher.
+     */
+    private val searched: Flow<Searched> =
+        combine(sortedApps, query) { apps, text ->
+            val trimmed = text.trim()
+            val results = if (trimmed.isEmpty()) {
+                apps
+            } else {
+                val collator = labelCollator()
+                apps.filter { it.label.matchesLabel(trimmed, collator) }
+            }
+            Searched(apps = apps, query = trimmed, results = results)
+        }.flowOn(dispatchers.default)
 
     /**
      * The APPS pager's **stored** grid for the reported device — the user's size, resolved from its blueprint with any
@@ -301,7 +362,12 @@ class AppsViewModel(
             combine(
                 settingsRepository.pagerWraps,
                 settingsRepository.pagerRemembersPage,
-                settingsRepository.appsChrome.map { it.categoryTabEdge },
+                settingsRepository.appsChrome.map { chrome ->
+                    ResolvedChrome(
+                        categoryTabEdge = chrome.categoryTabEdge,
+                        searchByLayout = AppsLayout.entries.associateWith(chrome::searchOn),
+                    )
+                },
                 ::PerSurface,
             ),
             pagerConfig,
@@ -316,18 +382,20 @@ class AppsViewModel(
                 wraps = perSurface.wraps,
                 remembersPage = perSurface.remembersPage,
                 card = perDevice.card,
-                categoryTabEdge = perSurface.categoryTabEdge,
+                categoryTabEdge = perSurface.chrome.categoryTabEdge,
+                searchByLayout = perSurface.chrome.searchByLayout,
             )
         }
 
     val state: StateFlow<AppsState> =
         combine(
-            sortedApps,
+            searched,
             pagerItems,
             layoutRepository.folders(),
             appsOrderRepository.categoryContents(),
             sizing,
-        ) { apps, pages, folders, categories, configured ->
+        ) { searched, pages, folders, categories, configured ->
+            val apps = searched.apps
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = folders.associateBy { it.id }
             AppsState(
@@ -358,6 +426,9 @@ class AppsViewModel(
                 pagerRemembersPage = configured.remembersPage,
                 cardChrome = configured.card,
                 categoryTabEdge = configured.categoryTabEdge,
+                searchByLayout = configured.searchByLayout,
+                query = searched.query,
+                results = searched.results,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 
@@ -412,6 +483,16 @@ class AppsViewModel(
      */
     fun setDevice(configuration: DeviceConfiguration) {
         device.value = configuration
+    }
+
+    /**
+     * Reports what is typed in the search field. Trimming and matching are [searched]'s, so this is the raw text.
+     *
+     * Idempotent, as [setDevice] is: an equal value on a `MutableStateFlow` emits nothing, which matters here because
+     * the field reports on every keystroke and an unchanged query would re-run the filter.
+     */
+    fun setQuery(text: String) {
+        query.value = text
     }
 
     /**
