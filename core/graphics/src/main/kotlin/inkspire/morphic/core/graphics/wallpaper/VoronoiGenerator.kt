@@ -24,7 +24,8 @@ import kotlin.random.Random
  *
  * **The seams are what make it read as mosaic rather than as flat blobs.** A pixel whose nearest seed differs from a
  * four-neighbour's sits on a cell boundary and is painted the palette's darkest stop — the leading between panes of
- * glass. Without them the cells, colored by height off one gradient, would melt together like a coarse [MESH][MeshGradientGenerator].
+ * glass. Without them the cells, colored by height off one gradient, would melt together like a coarse
+ * [MESH][MeshGradientGenerator].
  *
  * **Each cell is the palette gradient at its seed's height, jittered a shade** (via [LinearGradientGenerator.colorAt],
  * so a mosaic and a plain gradient of the same palette agree about the ramp — the shared derivation Facets keeps too).
@@ -127,11 +128,10 @@ object VoronoiGenerator : Generator {
      */
     private fun onBoundary(owner: IntArray, x: Int, y: Int, width: Int, height: Int): Boolean {
         val here = owner[y * width + x]
-        if (x > 0 && owner[y * width + (x - 1)] != here) return true
-        if (x < width - 1 && owner[y * width + (x + 1)] != here) return true
-        if (y > 0 && owner[(y - 1) * width + x] != here) return true
-        if (y < height - 1 && owner[(y + 1) * width + x] != here) return true
-        return false
+        return x > 0 && owner[y * width + (x - 1)] != here ||
+            x < width - 1 && owner[y * width + (x + 1)] != here ||
+            y > 0 && owner[(y - 1) * width + x] != here ||
+            y < height - 1 && owner[(y + 1) * width + x] != here
     }
 
     /** How far a cell's color may sit from the gradient at its height, `±` — enough to separate equal-height cells. */

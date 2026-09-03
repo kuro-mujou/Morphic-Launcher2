@@ -54,7 +54,8 @@ object TruchetGenerator : Generator {
                 val x0 = c * cellW
                 val y0 = r * cellH
                 // Arcs shift toward the palette's darker half going down the frame, so they stay legible on the ground.
-                paint.color = LinearGradientGenerator.colorAt(ArcRampFloor + (1f - ArcRampFloor) * (r.toFloat() / rows), palette)
+                val down = ArcRampFloor + (1f - ArcRampFloor) * (r.toFloat() / rows)
+                paint.color = LinearGradientGenerator.colorAt(down, palette)
                 if (flipped[r * cols + c]) {
                     arc(canvas, x0 + cellW, y0, radius, startAngle = 90f, paint) // top-right corner
                     arc(canvas, x0, y0 + cellH, radius, startAngle = 270f, paint) // bottom-left corner
@@ -86,9 +87,12 @@ object TruchetGenerator : Generator {
     private fun arc(canvas: Canvas, cornerX: Float, cornerY: Float, radius: Float, startAngle: Float, paint: Paint) {
         canvas.drawArc(
             cornerX - radius, cornerY - radius, cornerX + radius, cornerY + radius,
-            startAngle, 90f, false, paint,
+            startAngle, QuarterTurn, false, paint,
         )
     }
+
+    /** Every arc is a quarter circle, in degrees — a Truchet tile's arc runs corner to corner of one cell. */
+    private const val QuarterTurn = 90f
 
     /** Arc stroke as a fraction of the cell — thick enough to read as ribbons of the maze, not hairlines. */
     private const val ArcWidthFraction = 0.34f

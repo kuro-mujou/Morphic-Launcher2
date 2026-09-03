@@ -24,7 +24,10 @@ interface WidgetContainerDao {
     @Update
     suspend fun update(container: WidgetContainerEntity)
 
-    @Query("UPDATE widget_container SET axis = :axis, autoRotate = :autoRotate, resetOnReturn = :resetOnReturn " + "WHERE id = :id")
+    @Query(
+        "UPDATE widget_container SET axis = :axis, autoRotate = :autoRotate, resetOnReturn = :resetOnReturn " +
+            "WHERE id = :id",
+    )
     suspend fun setOptions(id: Long, axis: WidgetContainerAxis, autoRotate: Boolean, resetOnReturn: Boolean)
 
     @Query("DELETE FROM widget_container WHERE id = :id")
