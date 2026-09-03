@@ -272,11 +272,36 @@ get attributed to each other.
 Analysis is far enough along to build from. What is genuinely still open, in priority order:
 
 1. ~~The neutral point of Scale delta~~ — **done, §8.** Zero at ≈17, slope `−4.9 px` per unit.
-2. **The two nudge pads' travel** — the *linearity* between the endpoints is established (§6); how far a single tap
-   moves an endpoint, and what the endpoints' defaults are in frame coordinates, is not.
+2. **The two nudge pads' travel** — partly driven, §9. Per-tap increment is small and the x measurement did not
+   resolve; see the caveat there.
 3. **The *Shadow* knob under Mode = Fill** — confirm it replaces *Thickness*, and measure it.
 4. **What Thickness / Iterations / Rotate delta / Size do to the picture** at their ends. Ranges are known (§5); only
    the renders were not judged. These are the least surprising of the four.
 
 **Nothing has been built.** `PolygonCascadeGenerator` is untouched; the checklist row for Topography's neighbour
 (#17) is still unticked.
+
+### 9. The nudge pads — partly driven, and one thing it settled by accident
+
+Driven inside one pick: baseline capture with *First shape center* selected, then three ← taps, then three ↑ taps,
+matching shapes across captures **by colour** (each shape has its own tone, §6).
+
+**What it settled, and it was not what I was aiming at: this pick laid the cascade out *horizontally*** — all ten
+shapes at `cy ≈ 1199`, spread across `x`. Their default render (§3) is a diagonal falling top-right to bottom-left.
+So the first/last centres really are **re-randomized per pick and can point any direction**; the diagonal is not
+intrinsic to the design. That is a second, independent confirmation of the randomization noted in §8, and it matters
+for the build: our version needs the two endpoints as real state, not a hardcoded diagonal.
+
+**The ↑ taps give the cleanest signal.** Three of them moved every shape up, by `−6.0` to `−11.8 px` depending on the
+shape — **graded, not uniform**. A graded shift across the cascade is exactly what moving *one* endpoint of an
+interpolation does, so this is the §6 linearity confirmed from the other direction.
+
+**Per tap the travel is small** — roughly `2–4 px` per tap at this scale. The README's "hold to repeat" is not a
+convenience, it is how the control is meant to be used.
+
+**Caveat — the x measurement did not resolve, do not build on it.** After the first ← tap the shapes' `dx` spread from
+`−295` to `+122 px`, i.e. *both signs*, and the second and third taps then changed almost nothing (`~2 px`). Moving one
+endpoint of a linear interpolation should shift every shape the same way, tapering to zero — both signs is not that.
+Either the first tap did something other than nudge (focus? a snap?), or the colour-matching mis-pairs shapes when the
+cascade is horizontal and several tones sit close together. **Re-drive this on a pick whose cascade is diagonal**, so
+`x` and `y` separate, and hold the arrow rather than tapping it.
