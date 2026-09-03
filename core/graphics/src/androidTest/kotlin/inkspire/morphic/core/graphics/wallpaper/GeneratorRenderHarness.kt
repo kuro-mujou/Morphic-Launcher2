@@ -205,6 +205,43 @@ class GeneratorRenderHarness {
     }
 
     /**
+     * Every design that reads [DesignParams.rotation], square-on and turned as far as the design turns — the
+     * orientation family's first sweep, added with the field itself.
+     *
+     * **Asked per variant**, for the roundness sweep's reason and with a live case: the cascade's circle declares no
+     * orientation at all where its other five shapes do, so a design-level question would render the one shape the
+     * knob cannot move.
+     */
+    @Test
+    fun renderRotationSweep() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
+        val cases = WallpaperDesign.entries.flatMap { design ->
+            val generator = Generators.forDesign(design)
+            val variants = generator.style.variant?.options?.indices ?: 0..0
+            variants.filter { generator.styleFor(it).rotation != null }.map { design to it }
+        }
+
+        for (rotation in floatArrayOf(0f, 0.5f, 1f)) {
+            for ((design, variant) in cases) {
+                val bitmap = Generators.forDesign(design).render(
+                    width = 1080,
+                    height = 2400,
+                    palette = moded,
+                    params = DesignParams(
+                        rotation = rotation,
+                        variant = variant,
+                        colorMode = WallpaperColorMode.BICHROMATIC,
+                    ),
+                    seed = 42L,
+                )
+                save(resolver, "turn_${(rotation * 100).toInt()}_${design.name}_$variant.png", bitmap)
+                bitmap.recycle()
+            }
+        }
+    }
+
+    /**
      * Every design that reads [DesignParams.depthScale], at nothing / shipped / large — the size beside the count,
      * and the knob whose `0` has to render exactly what [DesignParams.depth] `0` renders.
      *

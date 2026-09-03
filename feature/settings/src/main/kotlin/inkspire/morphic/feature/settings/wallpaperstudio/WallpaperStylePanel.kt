@@ -89,45 +89,19 @@ internal fun WallpaperStylePanel(
             }
         }
 
-        when (selected) {
-            StyleTab.AMOUNT -> AmountControl(style.amount, params.density) { onParams(params.copy(density = it)) }
-
-            StyleTab.SCALE -> FractionControl(
-                what = style.scale.orEmpty(),
-                value = params.scale,
-                default = DesignParams().scale,
-                onCommit = { onParams(params.copy(scale = it)) },
+        val fraction = selected.fraction
+        when {
+            fraction != null -> FractionControl(
+                what = style.labelOf(selected),
+                value = fraction.of(params),
+                default = fraction.of(DesignParams()),
+                onCommit = { onParams(fraction.set(params, it)) },
             )
 
-            StyleTab.IRREGULARITY -> FractionControl(
-                what = style.irregularity.orEmpty(),
-                value = params.irregularity,
-                default = DesignParams().irregularity,
-                onCommit = { onParams(params.copy(irregularity = it)) },
-            )
+            selected == StyleTab.AMOUNT ->
+                AmountControl(style.amount, params.density) { onParams(params.copy(density = it)) }
 
-            StyleTab.ROUNDNESS -> FractionControl(
-                what = style.roundness.orEmpty(),
-                value = params.roundness,
-                default = DesignParams().roundness,
-                onCommit = { onParams(params.copy(roundness = it)) },
-            )
-
-            StyleTab.DEPTH -> FractionControl(
-                what = style.depth.orEmpty(),
-                value = params.depth,
-                default = DesignParams().depth,
-                onCommit = { onParams(params.copy(depth = it)) },
-            )
-
-            StyleTab.DEPTH_SCALE -> FractionControl(
-                what = style.depthScale.orEmpty(),
-                value = params.depthScale,
-                default = DesignParams().depthScale,
-                onCommit = { onParams(params.copy(depthScale = it)) },
-            )
-
-            StyleTab.VARIANT -> MorphicSegmentedButtons(
+            selected == StyleTab.VARIANT -> MorphicSegmentedButtons(
                 options = style.variant?.options.orEmpty(),
                 // Clamped the way a generator clamps it, so the pill sits on the look actually being drawn rather
                 // than vanishing on a recipe whose stored index this design does not have.
@@ -136,14 +110,14 @@ internal fun WallpaperStylePanel(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            StyleTab.COLOR_LAYOUT -> MorphicSegmentedButtons(
+            selected == StyleTab.COLOR_LAYOUT -> MorphicSegmentedButtons(
                 options = style.colorLayout?.options.orEmpty(),
                 selectedIndex = params.colorLayout.coerceIn(0, (style.colorLayout?.options?.size ?: 1) - 1),
                 onSelect = { onParams(params.copy(colorLayout = it)) },
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            StyleTab.COLOR -> MorphicSegmentedButtons(
+            else -> MorphicSegmentedButtons(
                 options = WallpaperColorMode.entries.map { it.label },
                 selectedIndex = params.colorMode.ordinal,
                 onSelect = { onParams(params.copy(colorMode = WallpaperColorMode.entries[it])) },
@@ -207,10 +181,36 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
  * Only [COLOR] is offered for every design; the others appear when the current generator declares them. The order is
  * the panel's, and it runs from what a design *is* toward how it is painted — [ROUNDNESS] sits with the shape knobs
  * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape. [DEPTH_SCALE] follows
- * [DEPTH] directly, being the size of the very thing that one counts. [COLOR_LAYOUT] sits beside [COLOR] at the end,
+ * [DEPTH] directly, being the size of the very thing that one counts. [ROTATION] closes the shape group, being how the
+ * shape is placed rather than what it is. [COLOR_LAYOUT] sits beside [COLOR] at the end,
  * the two being where the palette goes and how much of it there is.
  */
-internal enum class StyleTab { AMOUNT, SCALE, IRREGULARITY, ROUNDNESS, VARIANT, DEPTH, DEPTH_SCALE, COLOR_LAYOUT, COLOR }
+internal enum class StyleTab(val fraction: FractionField? = null) {
+    AMOUNT,
+    SCALE(FractionField({ it.scale }, { params, v -> params.copy(scale = v) })),
+    IRREGULARITY(FractionField({ it.irregularity }, { params, v -> params.copy(irregularity = v) })),
+    ROUNDNESS(FractionField({ it.roundness }, { params, v -> params.copy(roundness = v) })),
+    ROTATION(FractionField({ it.rotation }, { params, v -> params.copy(rotation = v) })),
+    VARIANT,
+    DEPTH(FractionField({ it.depth }, { params, v -> params.copy(depth = v) })),
+    DEPTH_SCALE(FractionField({ it.depthScale }, { params, v -> params.copy(depthScale = v) })),
+    COLOR_LAYOUT,
+    COLOR,
+}
+
+/**
+ * One `0..1` field of [DesignParams], read and written — the only thing the six fraction knobs differ by.
+ *
+ * **It is on the tab because that is what keeps them one control.** Six of these knobs are the same slider over the
+ * same range with the same reset, and writing that out per tab had already produced six near-copies of one block, in
+ * which the only thing worth reading is which field is named. Adding a seventh — the orientation family's, which is
+ * what brought this out — would have made it seven. The panel then holds one *fraction* arm, and a new knob of that
+ * shape is a line here rather than a block there.
+ */
+internal class FractionField(
+    val of: (DesignParams) -> Float,
+    val set: (DesignParams, Float) -> DesignParams,
+)
 
 /**
  * The tabs this design offers, in panel order — never empty, since [StyleTab.COLOR] applies to every design (the color
@@ -221,6 +221,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (scale != null) add(StyleTab.SCALE)
     if (irregularity != null) add(StyleTab.IRREGULARITY)
     if (roundness != null) add(StyleTab.ROUNDNESS)
+    if (rotation != null) add(StyleTab.ROTATION)
     if (variant != null) add(StyleTab.VARIANT)
     if (depth != null) add(StyleTab.DEPTH)
     if (depthScale != null) add(StyleTab.DEPTH_SCALE)
@@ -234,6 +235,7 @@ private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.SCALE -> scale.orEmpty()
     StyleTab.IRREGULARITY -> irregularity.orEmpty()
     StyleTab.ROUNDNESS -> roundness.orEmpty()
+    StyleTab.ROTATION -> rotation.orEmpty()
     StyleTab.VARIANT -> variant?.label.orEmpty()
     StyleTab.DEPTH -> depth.orEmpty()
     StyleTab.DEPTH_SCALE -> depthScale.orEmpty()

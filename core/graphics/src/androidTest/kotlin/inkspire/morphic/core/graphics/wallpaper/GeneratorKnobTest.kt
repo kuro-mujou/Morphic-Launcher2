@@ -70,6 +70,9 @@ class GeneratorKnobTest {
                     if (style.roundness != null) {
                         add(Knob("roundness", base.copy(roundness = 0f), base.copy(roundness = 1f)))
                     }
+                    if (style.rotation != null) {
+                        add(Knob("rotation", base.copy(rotation = 0f), base.copy(rotation = 1f)))
+                    }
                 }
 
                 for (knob in knobs) {

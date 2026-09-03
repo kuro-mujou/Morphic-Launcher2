@@ -2,130 +2,323 @@ package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.CornerPathEffect
 import android.graphics.Paint
+import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * A rosette of rotating, shrinking polygon outlines cascading into the frame's center — *Polygon Cascade* (gart's
- * `arts/spirograph`, `arts/harmongraph`).
+ * One shape drawn many times along a line, each copy a little smaller and a little more turned than the last —
+ * *Polygon Cascade*.
  *
- * **Not a field like the others — a single shape drawn many times.** Every other design samples a field per pixel; this
- * one draws one regular polygon over and over, each copy turned a little further and scaled a little smaller than the
- * last, so the overlapping edges weave the moiré rosette a spirograph makes. There is no noise in the base look at all:
- * the cascade is pure rotation and scale, which is what gives it the crisp, geometric register the flow designs cannot.
+ * **A tween between two fully-specified shapes, which is what "cascade" means literally.** The design is two
+ * positions, a first size, a last size and a last angle; every copy is a step along that interpolation and
+ * [DesignParams.density] only decides how many steps there are. That was measured rather than assumed: driving the
+ * reference's *Iterations* from 10 to 17 leaves the ink's bounding box identical to the pixel, and both of its
+ * "delta" knobs land the **last** copy on the number shown whatever the count — so neither is a per-copy rate.
+ * Reading them as rates is what the previous build of this file did, and it makes the count re-compose the picture.
  *
- * **The knobs, mapped to a rosette:** [DesignParams.density] sets how many polygons stack up (a sparse star to a dense
- * weave); [DesignParams.variant] picks the *shape* — `0` a triangle, each step up adding a side; and
- * [DesignParams.irregularity] wobbles each vertex off true, from a crisp rosette at `0` to a hand-drawn one at `1`. The
- * polygons climb the palette's lighter stops as they shrink, over the darkest as a ground. Deterministic in [seed].
+ * **The identity finding this was rebuilt for: the copies march across the frame.** The previous version stacked every
+ * copy on one fixed centre, which draws a concentric rosette — the same ingredients arranged into a different picture
+ * entirely. The two endpoints are the design.
  *
- * [iterationCount], [sides] and [polygon] are pure and tested — a polygon whose vertices do not close, or a cascade that
- * scales past zero, is silently wrong geometry the bitmap only confirms.
+ * **The knobs.** [DesignParams.variant] picks the shape from a named vocabulary of six ([CascadeShape]) rather than a
+ * side count, because the reference's own list has a circle and a star in it and neither is a regular polygon.
+ * [DesignParams.scale] is the first copy's size and [DesignParams.depth] the taper — how much smaller the last copy
+ * is, with `0` a cascade of identical copies, which is the rigid end the old fixed shrink could not reach.
+ * [DesignParams.rotation] is the turn spent over the whole cascade, [DesignParams.roundness] softens the corners
+ * (which is where the reference's own rectangle sits), and [DesignParams.irregularity] is *Wobble*, ours rather than
+ * theirs. Deterministic in [render]'s seed.
+ *
+ * **Two of theirs are not knobs here, and both are deliberate.** Their *Thickness* has no field left —
+ * [DesignParams.scale] is spent on *Size*, which is the composition where a stroke weight is a finish, and the
+ * teardown's note on the spacing family says the bigger of two members wins the field. Their *Mode* (Stroke / Fill,
+ * with a *Shadow* of its own) is not built, by the author's call and for the reason Ribbed Glass's *Real glass* is
+ * not: this is one design here, the stroked one. Their two nudge pads are seeded rather than exposed — theirs
+ * re-randomizes the pair on every pick, so a shuffle is already the same gesture.
+ *
+ * [copyCount], [shapeOf] and [ring] are pure and tested: a ring whose vertices sit off their radius, or a shape whose
+ * proportions are wrong, is silently wrong geometry the bitmap only confirms afterwards.
  */
 object PolygonCascadeGenerator : Generator {
 
-    /** What [DesignParams.density] resolves to for this design — the count, and the *Iterations* slider's own range. */
-    private val Amount = AmountKnob.Count("Iterations", 16..60)
+    /**
+     * The shapes a cascade can be built from — the reference's own vocabulary, which is a list of **names** rather
+     * than a side count.
+     *
+     * That distinction is why this type exists. The previous build offered "sides, `3..8`", which draws three of
+     * these six, cannot draw a circle, a star or a rectangle at all, and offers a pentagon, heptagon and octagon the
+     * reference does not have. A count is not a vocabulary.
+     *
+     * **Positional, like every [VariantKnob] here**: index `n` is `variant = n`, so a stored recipe depends on the
+     * order and the labels stay free to be reworded.
+     */
+    internal enum class CascadeShape(val label: String) {
+        // The star leads because index `0` is a design's *default* look, and theirs opens on a star — a circle first
+        // would be following the reference's strip order at the cost of the picture it actually shows.
+        STAR("Star"),
+        CIRCLE("Circle"),
+        TRIANGLE("Triangle"),
+        HEXAGON("Hexagon"),
+        SQUARE("Square"),
+        RECTANGLE("Rectangle"),
+    }
+
+    /** What [DesignParams.density] resolves to — the copies between the two ends, and the *Iterations* slider's range. */
+    private val Amount = AmountKnob.Count("Iterations", 2..24)
 
     override val style = DesignStyle(
         amount = Amount,
+        scale = "Size",
         irregularity = "Wobble",
-        // Named by side count, off the same bounds [sides] clamps to — a hand-written list of six would be a second
-        // statement of the range, and a seventh segment silently drawing an octagon.
-        variant = VariantKnob("Sides", (MinSides..MaxSides).map { it.toString() }),
+        roundness = "Roundness",
+        rotation = "Turn",
+        depth = "Taper",
+        // Named off the vocabulary itself, so a seventh shape cannot arrive without the panel offering it.
+        variant = VariantKnob("Shape", CascadeShape.entries.map { it.label }),
     )
+
+    /**
+     * A circle has no corners to soften and no orientation to turn, so it offers neither knob — and [render] skips
+     * both rather than letting a stored value move pixels behind an absent control.
+     */
+    override fun styleFor(variant: Int): DesignStyle =
+        if (shapeOf(variant) == CascadeShape.CIRCLE) style.copy(roundness = null, rotation = null) else style
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.colorAt(palette.size - 1)) // darkest stop — the ground the rosette sits on
-        val ramp = Palette(if (palette.size > 1) palette.colors.dropLast(1) else palette.colors)
+        canvas.drawColor(palette.colorAt(0)) // the ground is stop 0, and the copies are the ramp above it
+        val copies = copyCount(params.density)
+        val tones = RampTones.aboveGround(palette)
+        if (tones.isEmpty()) return bitmap // a single-stop palette is all ground, with nothing to draw on it
+        // Spent **continuously between those tones** rather than at one rung per copy. Asking [RampTones] for a rung
+        // per copy is the obvious thing and it washes the design out: a rung is a share of the ramp measured *from
+        // the ground*, so thirteen of them put the first copy a thirteenth of the way up and it disappears into the
+        // ground it is drawn on. Theirs spends the ramp over the cascade's length — the first copy on the first tone
+        // above the ground and the last on the palette's final stop, with more distinct tones in between than the
+        // palette has stops.
+        val ramp = Palette(tones.toList())
 
         val shortSide = min(width, height)
-        val cx = width / 2f
-        val cy = height * CenterHeightFraction // a touch above center, so the rosette does not sit under the clock
-        val maxRadius = shortSide / 2f * RadiusFraction
-        val sides = sides(params.variant)
-        val iterations = iterationCount(params.density)
-        val jitterPx = params.irregularity.coerceIn(0f, 1f) * MaxJitterFraction * shortSide
         val random = Random(seed)
+        val shape = shapeOf(params.variant)
+        val ring = ring(shape)
+        val wobble = Wobble(params.irregularity.coerceIn(0f, 1f) * MaxWobble, random)
+
+        // Their two nudge pads, seeded — a heading and a run, the segment centred on the frame.
+        //
+        // **The heading is drawn uniformly in the frame's own space, not in the plane.** A uniform angle sends a
+        // cascade across a phone-shaped wallpaper as often as down it, and a run across leaves two thirds of the
+        // frame empty; stretching the draw by the frame's own proportions makes a tall frame mostly draw tall
+        // cascades without ever forbidding the others. The run is then a share of the frame's extent along whichever
+        // heading came up, so the long way round gets the long travel.
+        val bearing = random.nextFloat() * TwoPi
+        val across = cos(bearing) * width
+        val down = sin(bearing) * height
+        val span = hypot(across, down)
+        val headingX = across / span
+        val headingY = down / span
+        val run = (abs(headingX) * width + abs(headingY) * height) *
+            (MinRun + random.nextFloat() * (MaxRun - MinRun))
+        val firstX = width / 2f - headingX * run / 2f
+        val firstY = height / 2f - headingY * run / 2f
+
+        val firstRadius = shortSide * (MinSize + (MaxSize - MinSize) * params.scale.coerceIn(0f, 1f))
+        val lastRadius = firstRadius * (1f - MaxTaper * params.depth.coerceIn(0f, 1f))
+        // Half a turn covers every one of these shapes' symmetry periods — a rectangle's is the longest, at 180° — so
+        // nothing is unreachable and the knob's top is not a repeat of its bottom. Which way is the seed's.
+        val turn = (if (random.nextBoolean()) 1f else -1f) * PI.toFloat() * params.rotation.coerceIn(0f, 1f)
+        val roundness = params.roundness.coerceIn(0f, 1f)
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
             strokeWidth = StrokeFraction * shortSide
         }
 
-        for (i in 0 until iterations) {
-            val t = i.toFloat() / iterations
-            val radius = maxRadius * (MinScale + (1f - MinScale) * (1f - t)) // cascade inward: large first, small last
-            val rotation = i * RotateDelta
-            paint.color = LinearGradientGenerator.colorAt(t, ramp) // climb the ramp as the cascade tightens
-            canvas.drawPath(Streamlines.pathOfPixels(polygon(sides, cx, cy, radius, rotation, jitterPx, random)), paint)
+        // The first copy first, so the later and smaller ones sit in front — the order theirs draws in.
+        for (i in 0 until copies) {
+            val t = i.toFloat() / (copies - 1)
+            val radius = firstRadius + (lastRadius - firstRadius) * t
+            paint.color = LinearGradientGenerator.colorAt(t, ramp)
+            paint.pathEffect = when {
+                shape == CascadeShape.CIRCLE || roundness == 0f -> null
+                else -> CornerPathEffect(MaxCorner * roundness * radius)
+            }
+            canvas.drawPath(
+                ringPath(
+                    ring = ring,
+                    cx = firstX + headingX * run * t,
+                    cy = firstY + headingY * run * t,
+                    radius = radius,
+                    turn = if (shape == CascadeShape.CIRCLE) 0f else turn * t,
+                    wobble = wobble,
+                ),
+                paint,
+            )
         }
         return bitmap
     }
 
-    /** How many polygons [density] asks for — a sparse star up to a dense weave. */
-    internal fun iterationCount(density: Float): Int = Amount.at(density)
+    /** How many copies [density] asks for — two ends and nothing between, up to a dense fan. */
+    internal fun copyCount(density: Float): Int = Amount.at(density)
 
-    /** The polygon's side count for [variant] — `0` a triangle, each step adding a side, capped at [MaxSides]. */
-    internal fun sides(variant: Int): Int = (MinSides + variant.coerceAtLeast(0)).coerceAtMost(MaxSides)
+    /** The shape [variant] picks, clamped to the vocabulary rather than wrapping, as every variant knob here is. */
+    internal fun shapeOf(variant: Int): CascadeShape =
+        CascadeShape.entries[variant.coerceIn(CascadeShape.entries.indices)]
 
     /**
-     * The vertices of a regular [sides]-gon centered at ([cx], [cy]) in pixels, radius [radius], turned by [rotation]
-     * radians, each vertex nudged up to [jitterPx] off true — interleaved `x, y`, the ring **closed** (the first vertex
-     * repeated last) so the stroked path has no gap at the seam.
+     * One copy of [shape] as a closed ring of vertices in unit space — interleaved **angle in radians, radius**, the
+     * radius a share `0..1` of the circumradius.
      *
-     * The jitter draws two values per vertex from [random] whether or not [jitterPx] is zero, so the seeded stream does
-     * not shift as the irregularity knob moves — only the amplitude does.
+     * **Angle-and-radius rather than `x, y`**, because both things done to a ring are angular: the wobble displaces a
+     * vertex along its own radius, and a shape's identity *is* how its vertices are spaced around the circle — a
+     * rectangle's four sit at unequal angles at one radius, a star's ten at equal angles alternating radius. Every
+     * shape is one list of those pairs, so nothing below this function branches on which shape it is drawing.
+     *
+     * The first vertex is straight up, which is where the reference's star and triangle carry their point.
      */
-    internal fun polygon(
-        sides: Int,
-        cx: Float,
-        cy: Float,
-        radius: Float,
-        rotation: Float,
-        jitterPx: Float,
-        random: Random,
-    ): FloatArray {
-        val out = FloatArray((sides + 1) * 2)
-        val step = (2.0 * PI / sides).toFloat()
-        for (k in 0..sides) {
-            val angle = rotation + k % sides * step // k == sides reuses vertex 0, closing the ring
-            val jx = (random.nextFloat() * 2f - 1f) * jitterPx
-            val jy = (random.nextFloat() * 2f - 1f) * jitterPx
-            out[k * 2] = cx + cos(angle) * radius + jx
-            out[k * 2 + 1] = cy + sin(angle) * radius + jy
+    internal fun ring(shape: CascadeShape): FloatArray = when (shape) {
+        // Fine enough that a stroked ring reads as a circle, and fine enough that the corner effect could not round a
+        // segment shorter than itself — which is what makes *Roundness* honestly absent here rather than merely small.
+        CascadeShape.CIRCLE -> regular(CircleSides)
+        CascadeShape.STAR -> FloatArray(StarPoints * 2 * 2) { k ->
+            val vertex = k / 2
+            when {
+                k % 2 == 0 -> Top + vertex * (PI.toFloat() / StarPoints)
+                vertex % 2 == 0 -> 1f
+                else -> StarInner
+            }
         }
-        return out
+
+        CascadeShape.TRIANGLE -> regular(TriangleSides)
+        CascadeShape.HEXAGON -> regular(HexagonSides)
+        // Turned a half-step, so the square sits square-on rather than balanced on a corner.
+        CascadeShape.SQUARE -> regular(SquareSides, first = Top + PI.toFloat() / SquareSides)
+        CascadeShape.RECTANGLE -> {
+            val diagonal = sqrt(RectangleAspect * RectangleAspect + 1f)
+            val corner = atan2(1f / diagonal, RectangleAspect / diagonal)
+            floatArrayOf(-corner, 1f, corner, 1f, PI.toFloat() - corner, 1f, PI.toFloat() + corner, 1f)
+        }
     }
 
-    private const val MinSides = 3
-    private const val MaxSides = 8
+    /** A regular [sides]-gon's ring, every vertex on the circumradius, the first of them at [first]. */
+    private fun regular(sides: Int, first: Float = Top): FloatArray =
+        FloatArray(sides * 2) { k -> if (k % 2 == 0) first + k / 2 * (TwoPi / sides) else 1f }
 
-    /** The angle each successive polygon is turned, in radians — small, so consecutive copies weave rather than align. */
-    private const val RotateDelta = 0.22f
+    /**
+     * [ring] placed at ([cx], [cy]) in pixels at [radius], turned by [turn] radians and deformed by [wobble] — a
+     * **closed** path, so the corner effect rounds the seam like every other vertex.
+     */
+    private fun ringPath(ring: FloatArray, cx: Float, cy: Float, radius: Float, turn: Float, wobble: Wobble): Path =
+        Path().apply {
+            var k = 0
+            while (k < ring.size) {
+                val angle = ring[k] + turn
+                val r = radius * ring[k + 1] * wobble.at(ring[k])
+                val x = cx + cos(angle) * r
+                val y = cy + sin(angle) * r
+                if (k == 0) moveTo(x, y) else lineTo(x, y)
+                k += 2
+            }
+            close()
+        }
 
-    /** The innermost polygon's radius as a fraction of the outermost — the cascade shrinks to this, never to nothing. */
-    private const val MinScale = 0.12f
+    /**
+     * The *Wobble* knob: a smooth radial deformation of the ring, shared by every copy so the cascade still reads as
+     * one shape repeated rather than a pile of unrelated ones.
+     *
+     * **A few low harmonics rather than a nudge per vertex**, which is what the previous build did. A per-vertex
+     * nudge reads as a hand-drawn triangle and as *noise* on a sixty-four-sided circle, because its frequency is the
+     * vertex spacing rather than anything about the shape; a low harmonic bends a circle into a lumpy blob and a
+     * triangle into a bowed one, which is the same gesture whatever the vertex count.
+     *
+     * The phases are drawn whether or not [amplitude] is zero, so moving the knob changes how far the shape bends and
+     * never which way — the seeded stream does not shift underneath it.
+     */
+    private class Wobble(private val amplitude: Float, random: Random) {
+        private val phases = FloatArray(WobbleHarmonics.size) { random.nextFloat() * TwoPi }
 
-    /** The outermost polygon's radius as a fraction of half the short side — how much of the frame the rosette fills. */
-    private const val RadiusFraction = 0.92f
+        /** The factor the radius at [angle] is multiplied by — exactly `1` everywhere at amplitude zero. */
+        fun at(angle: Float): Float {
+            var sum = 0f
+            for (h in WobbleHarmonics.indices) {
+                sum += WobbleWeights[h] * sin(phases[h] + WobbleHarmonics[h] * angle)
+            }
+            return 1f + amplitude * sum
+        }
+    }
 
-    /** Where the rosette's center sits down the frame — a touch above the middle. */
-    private const val CenterHeightFraction = 0.42f
+    private const val TwoPi = 2f * PI.toFloat()
 
-    /** Stroke width as a fraction of the short side — a fine line, so the overlapping edges read as a weave. */
-    private const val StrokeFraction = 0.0016f
+    /** Where a ring's first vertex sits — straight up, so the shapes with a point carry it at the top. */
+    private const val Top = -PI.toFloat() / 2f
 
-    /** The most a vertex may wander at full irregularity, as a fraction of the short side. */
-    private const val MaxJitterFraction = 0.03f
+    private const val CircleSides = 64
+    private const val StarPoints = 5
+    private const val TriangleSides = 3
+    private const val HexagonSides = 6
+    private const val SquareSides = 4
+
+    /**
+     * The reference star's inner radius as a share of its outer, measured off the one copy in a cascade that is never
+     * occluded — and deliberately not the canonical pentagram's `0.382`. Theirs is a fatter star, and at a glance
+     * that is the difference between their star and a geometer's.
+     */
+    private const val StarInner = 0.451f
+
+    /** The reference rectangle's width over its height, measured the same way. */
+    private const val RectangleAspect = 2f
+
+    /** The first copy's circumradius as a share of the short side, at [DesignParams.scale] `0` and `1`. */
+    private const val MinSize = 0.16f
+    private const val MaxSize = 0.46f
+
+    /** How much of the first copy's size the taper may take at [DesignParams.depth] `1` — never all of it. */
+    private const val MaxTaper = 0.92f
+
+    /** The cascade's run as a share of the frame's extent along its heading, at the two ends of the seed's draw. */
+    private const val MinRun = 0.55f
+    private const val MaxRun = 0.80f
+
+    /**
+     * The corner radius at full [DesignParams.roundness], as a share of a copy's own circumradius — the reference's
+     * rectangle, whose corners measure `0.3` of its short side, lands almost exactly here.
+     */
+    private const val MaxCorner = 0.3f
+
+    /**
+     * How far a vertex may leave its radius at full *Wobble*, as a share of that radius.
+     *
+     * Kept small because the reference has **no** organic knob on this design at all — its shapes are exact — so
+     * every bit of this is a departure from theirs rather than a setting of theirs being reproduced. The default
+     * half of it bends the outline visibly and still reads as the shape it is.
+     */
+    private const val MaxWobble = 0.14f
+
+    /** The harmonics the wobble is built from, and how much of the deflection each carries (the weights sum to `1`). */
+    private val WobbleHarmonics = intArrayOf(3, 5, 7)
+    private val WobbleWeights = floatArrayOf(0.5f, 0.3f, 0.2f)
+
+    /**
+     * Stroke width as a share of the short side.
+     *
+     * **The one knob of theirs with no field here**, fixed at what their *Thickness* opens on — `5` of `1..100`,
+     * which measured `13px` on a 1080-wide frame. Their slider runs from a hairline to a weight that all but fills
+     * the shape, so this is a real axis given up rather than a rounding.
+     */
+    private const val StrokeFraction = 0.0125f
 }
