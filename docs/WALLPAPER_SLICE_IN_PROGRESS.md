@@ -46,7 +46,7 @@ Ours: the design chip is labelled **Cascade** in our studio's chip row.
 
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
-- [ ] 3. Drive theirs: full tab inventory with ranges and defaults
+- [x] 3. Drive theirs: full tab inventory with ranges and defaults
 - [ ] 4. Drive every knob to both ends, with the pixel measurements
 - [ ] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
@@ -82,3 +82,45 @@ stack is the first thing the drive has to settle, because it decides whether thi
 
 `arts/rotoro` is unrelated (grid-of-circles compositions), despite the name.
 
+
+### 3. Theirs — the tab inventory, and the identity finding
+
+**Nine knobs, not the six recorded**, and the row stops at *Last shape center*. No *Color mode* tab.
+
+| # | Tab | Kind | Default |
+|---|---|---|---|
+| 1 | Shape | segmented: Circle · **Star** · Triangle · Hexa… (scrolls; not driven to its end yet) | Star |
+| 2 | Mode | segmented: **Stroke** · Fill | Stroke |
+| 3 | Thickness | ruler | 5 |
+| 4 | Iterations | ruler | 10 |
+| 5 | Rotate delta | ruler | 57 |
+| 6 | Size | ruler | 16 |
+| 7 | Scale delta | ruler | 4 |
+| 8 | **First shape center** | four-arrow **nudge pad** | — |
+| 9 | **Last shape center** | four-arrow **nudge pad** | — |
+
+**The identity finding, and it is in those last two.** Theirs interpolates the shape's *centre* from a first position
+to a last one, so the copies **march across the frame** — at its default a diagonal trail of stars falling from
+top-right to bottom-left, each smaller and turned further than the one before. **Ours stacks every copy at one fixed
+centre**, so it draws a concentric rosette. Same ingredients, different picture; "Cascade" is meant literally.
+
+Everything else follows from that:
+
+- their **ground is the palette's lightest stop** and the shapes are stroked down the ramp as they fall (cream → tan →
+  brown → slate → blue). Ours grounds on the **darkest** stop.
+- their stroke is **much heavier** than ours' hairline — and it is a knob (*Thickness*), where ours is
+  `StrokeFraction = 0.0016` fixed.
+- their shape vocabulary includes **Circle** and **Star**; ours is regular 3..8-gons only, so it can draw neither.
+- *Rotate delta*, *Size* and *Scale delta* are knobs; ours has `RotateDelta`, `RadiusFraction` and `MinScale` as fixed
+  constants. **Five of ours' constants are knobs of theirs.**
+
+**The nudge pads are the trap the refdrive README documents** — a swipe on one silently does nothing, which reads as
+"this knob is dead". They must be **tapped**: ← ↑ ↓ → at `173 / 418 / 662 / 903`, all at `y = 2238`, hold to repeat.
+
+### Still to do on the drive (step 4)
+
+- Scroll the *Shape* strip to its end — how many shapes, and which.
+- *Mode* = Fill: what a filled cascade looks like (probably where the palette really shows).
+- Ranges and both ends for Thickness · Iterations · Rotate delta · Size · Scale delta.
+- The two nudge pads: how far they travel, and whether the interpolation is linear between them.
+- Whether the colour ramp is spent over the *cascade* (first shape to last) or over something else.
