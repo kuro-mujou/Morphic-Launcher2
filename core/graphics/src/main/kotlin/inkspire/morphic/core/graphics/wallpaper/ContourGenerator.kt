@@ -6,7 +6,6 @@ import android.graphics.Paint
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -49,6 +48,11 @@ import kotlin.random.Random
  * *Thickness boost* is fixed here at the reference's own default, [HighlightBoost], because a boost with no
  * highlighted level does nothing and the pair is one idea.
  *
+ * **The relief is lit and the map is inked, so the same ramp runs opposite ways in the two looks.** A survey map's
+ * ground is the palette's first stop and its lines climb away from it, so a high contour is the strongest ink; a
+ * relief has no exposed ground at all and its peaks are the sheets *catching the light*, so high is the palest. One
+ * resolver ([Ink]) either way — the caller says where on the ramp it wants to be.
+ *
  * **[DesignParams.colorLayout] is where the stops go, and it is why that field exists** — see [DesignParams]. Three
  * layouts, against the reference's five: *Islands* is not here because its render is not distinguishable from *Hills*
  * without knowing which loop belongs to which peak, and *First color* is not, because a single stop for every band
@@ -86,15 +90,24 @@ object ContourGenerator : Generator {
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
         val ground = palette.colorAt(0)
-        val tones = RampTones.aboveGround(palette)
         val canvas = Canvas(bitmap)
         canvas.drawColor(ground)
+
+        val levels = Amount.at(params.density)
+        val heights = levelHeights(levels, params.scale)
+        // The relief quantizes the whole field into one flat sheet per band, so it needs a rung for each of them or
+        // neighbouring sheets share a color and merge; the map only draws `levels` lines over bare ground and is
+        // happier landing on the palette's own stops. See RampTones.countFor.
+        val rungs = if (params.variant == VariantEmbossed) {
+            RampTones.countFor(palette.size, levels + 1)
+        } else {
+            RampTones.countFor(palette.size)
+        }
+        val tones = RampTones.aboveGround(palette, rungs)
         // A single-stop palette is all ground and has nothing to draw the map in — the bare ground is the honest
         // picture, and every path below would divide by a tone count of zero.
         if (tones.isEmpty()) return bitmap
 
-        val levels = Amount.at(params.density)
-        val heights = levelHeights(levels, params.scale)
         val terrain = terrainOf(width, height, params, seed)
         val ink = Ink(params, tones, terrain, seed, levels)
 
@@ -183,16 +196,6 @@ object ContourGenerator : Generator {
             val top = corner(c, r) + (corner(c + 1, r) - corner(c, r)) * tx
             val bottom = corner(c, r + 1) + (corner(c + 1, r + 1) - corner(c, r + 1)) * tx
             return top + (bottom - top) * ty
-        }
-
-        /**
-         * How fast the height changes per pixel here — what turns a distance in *elevation* into a distance in
-         * *pixels*, which is the whole of the relief's shadow. Central differences a pixel either side.
-         */
-        fun slope(px: Float, py: Float): Float {
-            val dx = (at(px + 1f, py) - at(px - 1f, py)) * 0.5f
-            val dy = (at(px, py + 1f) - at(px, py - 1f)) * 0.5f
-            return abs(dx) + abs(dy)
         }
     }
 
@@ -416,15 +419,22 @@ object ContourGenerator : Generator {
     // ---- the relief -------------------------------------------------------------------------------------------
 
     /**
-     * The *Embossed* look: every pixel filled by the band it falls in, darkened where it approaches the band above.
+     * The *Embossed* look: every pixel filled by the band it falls in, over a drop shadow cast by the sheets above it.
      *
-     * **The shadow is a paper cut, and it is measured.** Scanned down the reference's own render, a band multiplies
-     * to [MaxShadow] of itself at its boundary with the band *above* it and is untouched at the boundary with the
-     * band below — a sheet of paper laid over another, not a light with a direction. It recovers over
-     * [ShadowReach] of the frame's height whatever the band's own thickness, which is why the distance is measured in
-     * **pixels**: the elevation gap to the level above is divided by the local slope. (The same rule was measured on
-     * Flowing Blobs at a different depth and a different easing — the two are not one derivation, they are two
-     * measurements of two designs.)
+     * **The shadow is a real drop shadow — offset and blurred — not a darkening that rides each band's own edge.**
+     * That is the correction: an earlier version darkened a pixel by how near it sat to the level above, which puts a
+     * rim on the *inside* of every ring and gradients each band across its whole width, reading as an inner shadow on
+     * every shape rather than as one sheet lying over another. Measured off the reference instead: the shadow is the
+     * silhouette of everything **higher** than this pixel, shifted by [ShadowThrow] of the frame's short side **up and
+     * to the right**, softened over [ShadowBlur], multiplying to `0.80` where it is solid. So it falls *outside* the
+     * shape that casts it, onto the larger sheet around it, and each band stays flat everywhere else.
+     *
+     * **It is directional, unlike [MetaballsGenerator]'s.** That one was measured on a different design of theirs and
+     * hugs a blob's edge on every side; this one plainly has a light, from the lower left. Two measurements of two
+     * designs — deliberately not one shared derivation.
+     *
+     * **The bands are resolved into an array first**, because the shadow asks about a *different* pixel's band
+     * thirteen times over: recomputing the field there would be fourteen bilinear samples a pixel instead of one.
      */
     private fun emboss(
         bitmap: Bitmap,
@@ -435,37 +445,67 @@ object ContourGenerator : Generator {
         ink: Ink,
         depth: Float,
     ) {
+        val bands = IntArray(width * height)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                bands[y * width + x] = bandAt(terrain.at(x + PixelCenter, y + PixelCenter), heights)
+            }
+        }
+
         val shadow = depth.coerceIn(0f, 1f) * MaxShadow
-        val reach = height * ShadowReach
+        val shortSide = min(width, height).toFloat()
+        val throwPx = shortSide * ShadowThrow
+        val blurPx = shortSide * ShadowBlur
         val pixels = IntArray(width * height)
         for (y in 0 until height) {
             for (x in 0 until width) {
-                pixels[y * width + x] =
-                    reliefAt(x + PixelCenter, y + PixelCenter, terrain, heights, ink, shadow, reach)
+                val i = y * width + x
+                val band = bands[i]
+                // Inverted against the lines look on purpose: a relief is lit, so its peaks are the *lightest* sheet
+                // and the hollows the darkest, where a survey map's highest contour is its strongest ink.
+                val altitude = 1f - (band + PixelCenter) / (heights.size + 1f)
+                val color = ink.toneAt(x + PixelCenter, y + PixelCenter, altitude, band)
+                pixels[i] = if (shadow > 0f) {
+                    Shades.scale(color, 1f - shadow * cast(bands, width, height, x, y, throwPx, blurPx))
+                } else {
+                    color
+                }
             }
         }
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
     }
 
-    /** One pixel of the relief: its band's tone, darkened by how close it sits to the band above. */
+    /**
+     * How much of the blurred, shifted silhouette of the sheets above ([x], [y]) covers it — `0` in full light, `1`
+     * in full shadow.
+     *
+     * The blur is [ShadowTaps] read around the shifted point rather than a separable pass over the frame, because the
+     * thing being blurred is *per pixel*: what counts as "above" depends on which band the pixel receiving the shadow
+     * is in, so there is no one mask to blur.
+     */
     @Suppress("LongParameterList")
-    private fun reliefAt(
-        px: Float,
-        py: Float,
-        terrain: Terrain,
-        heights: FloatArray,
-        ink: Ink,
-        shadow: Float,
-        reach: Float,
-    ): Int {
-        val z = terrain.at(px, py)
-        val band = bandAt(z, heights)
-        val color = ink.toneAt(px, py, (band + 0.5f) / (heights.size + 1f), band)
-        // The topmost band has nothing above it to be cut out from, and so carries no shadow at all.
-        if (band >= heights.size || shadow <= 0f) return color
-        val slope = terrain.slope(px, py)
-        val toEdge = if (slope > 0f) (heights[band] - z) / slope else reach
-        return Shades.scale(color, 1f - shadow * (1f - Easing.smoothstep(toEdge / reach)))
+    private fun cast(
+        bands: IntArray,
+        width: Int,
+        height: Int,
+        x: Int,
+        y: Int,
+        throwPx: Float,
+        blurPx: Float,
+    ): Float {
+        val band = bands[y * width + x]
+        // The caster sits down and to the left of its shadow, so that is where the silhouette is read from.
+        val fromX = x - throwPx
+        val fromY = y + throwPx
+        var covered = 0
+        var tap = 0
+        while (tap < ShadowTaps.size) {
+            val sx = (fromX + ShadowTaps[tap] * blurPx).toInt().coerceIn(0, width - 1)
+            val sy = (fromY + ShadowTaps[tap + 1] * blurPx).toInt().coerceIn(0, height - 1)
+            if (bands[sy * width + sx] > band) covered++
+            tap += 2
+        }
+        return covered.toFloat() / (ShadowTaps.size / 2)
     }
 
     // ---- the color --------------------------------------------------------------------------------------------
@@ -604,11 +644,27 @@ object ContourGenerator : Generator {
     /** How much wider the highlighted level is drawn — the reference's *Thickness boost* at its own default. */
     private const val HighlightBoost = 2.4f
 
-    /** How dark a band goes where it meets the band above it, at full *Shadow* — measured off the reference. */
+    /** How dark a sheet goes under a solid shadow, at full *Shadow* — measured off the reference (a floor of ×0.80). */
     private const val MaxShadow = 0.4f
 
-    /** How far that shadow reaches back into the band, as a share of the frame's height — measured. */
-    private const val ShadowReach = 0.025f
+    /**
+     * How far the shadow is thrown along each axis, as a share of the frame's short side — measured at 20px on a
+     * 1080-wide frame, up and to the right, so the light is from the lower left.
+     */
+    private const val ShadowThrow = 0.0185f
+
+    /** How far the thrown silhouette is softened over — measured: solid to ~28px, gone by ~60px. */
+    private const val ShadowBlur = 0.0148f
+
+    /**
+     * Where the blurred silhouette is read, in units of [ShadowBlur] — the centre plus two hexagonal rings, which is
+     * fourteen steps of softness across the falloff. Fewer taps band the edge visibly at this shadow depth.
+     */
+    private val ShadowTaps = floatArrayOf(
+        0f, 0f,
+        0.5f, 0f, 0.25f, 0.433f, -0.25f, 0.433f, -0.5f, 0f, -0.25f, -0.433f, 0.25f, -0.433f,
+        1f, 0f, 0.5f, 0.866f, -0.5f, 0.866f, -1f, 0f, -0.5f, -0.866f, 0.5f, -0.866f,
+    )
 }
 
 /**

@@ -55,4 +55,25 @@ class RampTonesTest {
         assertEquals(0, RampTones.countFor(1))
         assertEquals(0, RampTones.aboveGround(Palette(listOf(0xFF123456.toInt()))).size)
     }
+
+    @Test
+    fun `a design that needs more rungs than the palette has gets them`() {
+        val two = Palette(listOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt()))
+        // The palette's own floor is three; a relief with seven sheets asks for seven and gets them.
+        assertEquals(3, RampTones.countFor(two.size))
+        assertEquals(7, RampTones.countFor(two.size, wanted = 7))
+        assertEquals(7, RampTones.aboveGround(two, RampTones.countFor(two.size, wanted = 7)).size)
+    }
+
+    @Test
+    fun `asking for fewer rungs than the palette offers changes nothing`() {
+        val six = Palette(List(6) { 0xFF000000.toInt() or (it * 40) })
+        assertEquals(RampTones.countFor(six.size), RampTones.countFor(six.size, wanted = 2))
+    }
+
+    @Test
+    fun `a single-stop palette still has no ramp, however many rungs a design wants`() {
+        val one = Palette(listOf(0xFF808080.toInt()))
+        assertEquals(0, RampTones.countFor(one.size, wanted = 9))
+    }
 }

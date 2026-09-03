@@ -33,14 +33,25 @@ internal object RampTones {
     fun countFor(stops: Int): Int = if (stops <= 1) 0 else max(stops - 1, Floor)
 
     /**
-     * The [countFor] tones of [palette] above its ground, from the one nearest the ground to its final stop.
+     * [countFor], raised to [wanted] where the *design* needs more rungs than the palette offers.
+     *
+     * **A floor the design sets, beside the one the palette sets, and for the same failure.** [Floor] exists because a
+     * two-stop palette leaves a design nothing to vary; this exists because a design can need more steps than any
+     * palette has — [ContourGenerator]'s relief quantizes its field into one band per level and draws each flat, so
+     * `7` bands over `3` tones merges most of them into one sheet and the relief is gone. Reading the ramp at seven
+     * rungs instead costs nothing and is the same trick one size up. Still `0` for a single-stop palette, which has
+     * no ramp at all.
+     */
+    fun countFor(stops: Int, wanted: Int): Int = if (stops <= 1) 0 else max(countFor(stops), wanted)
+
+    /**
+     * The [count] tones of [palette] above its ground, from the one nearest the ground to its final stop — as many as
+     * [countFor] asks for unless a design needs more of them.
      *
      * Empty for a single-stop palette, for [countFor]'s reason.
      */
-    fun aboveGround(palette: Palette): IntArray {
-        val count = countFor(palette.size)
-        return IntArray(count) { LinearGradientGenerator.colorAt((it + 1f) / count, palette) }
-    }
+    fun aboveGround(palette: Palette, count: Int = countFor(palette.size)): IntArray =
+        IntArray(count) { LinearGradientGenerator.colorAt((it + 1f) / count, palette) }
 
     /**
      * The mirror, for a design whose ground is the palette's **last** stop rather than its first — the dark end,
