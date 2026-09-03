@@ -235,10 +235,35 @@ and can only ever get smaller.
 **The shrink is linear at both driven settings** (constant subtraction per step, no trend in the differences), which
 agrees with §6 and rules out a geometric factor.
 
-**Not established:** where the neutral point sits, and the formula from knob to per-step delta. Two successive
-down-drags from `100` both landed straight back on the floor — the widths came back byte-identical to the `1` capture
-across all ten clusters — which is the drag overshoot the refdrive README warns about. Pinning the neutral needs a
-*short* drag or a tap on the ruler rather than a fling.
+### 8. Scale delta, pinned — and a correction to §7
+
+Driven again on a **fresh pick**, in short 100px drags (three knob units each) with the number read back off the panel
+every time, so this run is five points of one design rather than a comparison across picks:
+
+| Scale delta | 4 | 7 | 10 | 13 | 16 |
+|---|---|---|---|---|---|
+| per-step size change (px) | 70.9 | 56.2 | 41.6 | 26.7 | 12.0 |
+
+**Linear at `−4.9 px` per knob unit**, with the differences `−14.7 −14.6 −14.9 −14.7` over three units each — as clean
+a fit as this pass has produced. Extrapolated, the step reaches **zero at Scale delta ≈ 18**. The earlier pick (§7)
+gives `−4.83` per unit and a zero at `≈ 17`, from completely different captures — two independent confirmations, slopes
+agreeing to 1.5%.
+
+**So: Scale delta sets the size *difference* between the ends of the cascade, and it goes through zero at about 17.**
+Below that the copies change size fast, at 17-ish every copy is the same size, above it they change fast again the
+other way. One end stayed pinned at `825px` through all five captures while the other swept `187 → 717`, so the knob
+**pivots the cascade about one end** rather than scaling it as a whole.
+
+**Correction to §7.** That section read `100` as "the cascade grows" and the low end as "shrinks hard". The magnitude
+story is right; the *direction* claim was not. Which end of the cascade is the larger one differs **between picks** —
+this run at Scale delta `4` grew downward where §7's pick at the same `4` shrank downward — so direction is set by the
+first/last configuration and not by this knob. §7's `100` capture overflows the frame because the *magnitude* is large
+again past the neutral, not because the knob means "grow".
+
+**Method note worth keeping:** the earlier reading compared captures from two different picks without noticing, and
+their studio re-randomizes something on each pick (W11m found the same on Gradient Columns). **Read the number back
+off the panel every capture and keep a sweep inside one pick**, or a knob's own effect and the pick's randomization
+get attributed to each other.
 
 ---
 
@@ -246,7 +271,7 @@ across all ten clusters — which is the drag overshoot the refdrive README warn
 
 Analysis is far enough along to build from. What is genuinely still open, in priority order:
 
-1. **The neutral point of Scale delta** (above) — needs fine ruler control.
+1. ~~The neutral point of Scale delta~~ — **done, §8.** Zero at ≈17, slope `−4.9 px` per unit.
 2. **The two nudge pads' travel** — the *linearity* between the endpoints is established (§6); how far a single tap
    moves an endpoint, and what the endpoints' defaults are in frame coordinates, is not.
 3. **The *Shadow* knob under Mode = Fill** — confirm it replaces *Thickness*, and measure it.
