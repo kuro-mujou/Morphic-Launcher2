@@ -1,6 +1,8 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -10,6 +12,36 @@ import kotlin.random.Random
  * gap or overlap is a silently-wrong tiling no green build would catch.
  */
 class MondrianGeneratorTest {
+
+    /**
+     * The failure that killed this design at its own default: the color mode reduces every palette to **two** stops,
+     * and the old rule handed a two-stop palette the ground for every block — 96% bare paper under a ruling.
+     */
+    @Test
+    fun `a two-stop palette still has accents, and they are neither the ground nor the ink`() {
+        val ground = 0xFFF2E2C4.toInt()
+        val ink = 0xFF121E2B.toInt()
+        val accents = MondrianGenerator.accents(Palette(listOf(ground, ink)))
+        assertTrue("a two-stop palette must still accent", accents.isNotEmpty())
+        accents.forEach {
+            assertNotEquals("an accent must not be the ground", ground, it)
+            assertNotEquals("an accent must not be the ink", ink, it)
+        }
+    }
+
+    @Test
+    fun `a full palette accents with exactly its middle stops`() {
+        val stops = listOf(0xFFF2E2C4, 0xFFE6A15C, 0xFFC9603E, 0xFF2C6E6B, 0xFF1F3A4D, 0xFF121E2B).map { it.toInt() }
+        assertEquals(stops.subList(1, stops.size - 1), MondrianGenerator.accents(Palette(stops)))
+    }
+
+    @Test
+    fun `a single-stop palette has nothing to accent with, and every block is ground`() {
+        val only = 0xFF808080.toInt()
+        val accents = MondrianGenerator.accents(Palette(listOf(only)))
+        assertTrue(accents.isEmpty())
+        assertEquals(only, MondrianGenerator.blockColor(Random(1), Palette(listOf(only)), accents))
+    }
 
     @Test
     fun `density maps to the pass count range`() {

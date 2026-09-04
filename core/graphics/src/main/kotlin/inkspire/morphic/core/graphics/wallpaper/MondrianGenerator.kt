@@ -55,8 +55,9 @@ object MondrianGenerator : Generator {
             color = palette.colorAt(palette.size - 1)
         }
 
+        val accents = accents(palette)
         for (block in blocks) {
-            fill.color = blockColor(random, palette)
+            fill.color = blockColor(random, palette, accents)
             canvas.drawRect(block.left * width, block.top * height, block.right * width, block.bottom * height, fill)
             canvas.drawRect(block.left * width, block.top * height, block.right * width, block.bottom * height, ink)
         }
@@ -106,12 +107,29 @@ object MondrianGenerator : Generator {
     }
 
     /**
-     * A block's fill — the lightest stop most of the time (the ground), a vivid middle stop [AccentChance] of the time
-     * (the accent). Never the darkest stop, which is reserved for the ink between blocks.
+     * The tones a block may be accented with — the ramp between the ground and the ink, neither end included.
+     *
+     * **Read as a ramp rather than indexed into the stops, which is what killed the design at its own default.** The
+     * previous rule was "a stop between the first and the last", and it opened with `palette.size <= 2` returning the
+     * ground: the default color mode reduces every palette to **two** stops, so at the setting most people first see
+     * this design it had no accent at all and drew 96% bare ground under a ruling — a sheet of graph paper. That is
+     * the failure [RampTones] was extracted for, named there on Dot Grid and Flowing Blobs; the Mondrian was split out
+     * of Bauhaus in W11a and never picked it up. Reading the ramp costs nothing where there are stops to land on — a
+     * six-stop palette still yields exactly its four middle stops — and gives a two-stop palette two real tones of its
+     * own. The final tone is dropped because it *is* the ink, and a block the color of the ruling has no edges.
      */
-    private fun blockColor(random: Random, palette: Palette): Int {
-        if (palette.size <= 2 || random.nextFloat() > AccentChance) return palette.colorAt(0)
-        return palette.colorAt(1 + random.nextInt(palette.size - 2)) // a middle stop, excluding ground and ink
+    internal fun accents(palette: Palette): List<Int> = RampTones.aboveGround(palette).dropLast(1)
+
+    /**
+     * A block's fill — the lightest stop most of the time (the ground), one of [accents] [AccentChance] of the time.
+     * Never the darkest stop, which is reserved for the ink between blocks.
+     *
+     * A palette with no room for an accent at all (a single stop) draws every block on the ground, which is the honest
+     * picture rather than a fallback.
+     */
+    internal fun blockColor(random: Random, palette: Palette, accents: List<Int>): Int {
+        if (accents.isEmpty() || random.nextFloat() > AccentChance) return palette.colorAt(0)
+        return accents[random.nextInt(accents.size)]
     }
 
     /**
