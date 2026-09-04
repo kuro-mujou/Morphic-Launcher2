@@ -15,8 +15,10 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
-import kotlin.math.hypot
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -69,8 +71,9 @@ object RoundedTilesGenerator : Generator {
     override val style = DesignStyle(
         amount = Amount,
         scale = "Spacing",
+        irregularity = "Fan",
         roundness = "Length",
-        rotation = "Fan",
+        rotation = "Angle",
         depth = "Inner shadow",
         finish = VariantKnob("Blend", TileBlend.entries.map { it.label }),
     )
@@ -85,21 +88,36 @@ object RoundedTilesGenerator : Generator {
         val count = barCount(params.density)
         val blend = blendOf(params.finish)
         val random = Random(seed)
-        // Their *Rotation*: the fan's aim, seeded because their *Direction* took the field. A half turn covers every
-        // aim a set of bars has — a bar turned 180° is the same bar — so the draw needs no more than that.
-        val aim = random.nextFloat() * PI.toFloat()
-        // Long enough that a bar still crosses the frame when the fan has swung it onto the diagonal.
-        val reach = hypot(width.toFloat(), height.toFloat())
+        // Their *Rotation*: the whole rank's aim. A half turn covers every aim a set of bars has, since a bar turned
+        // 180° is the same bar — which is also what their own `0..100 → 0..180°` measured out to.
+        val aim = params.rotation.coerceIn(0f, 1f) * PI.toFloat()
+        // **Both extents are measured against the aim, not against the diagonal.** The rank has to fill the frame
+        // whichever way it points, and the frame is not square: laying the lanes across its diagonal instead spreads
+        // `Count` bars over `2630px` of a `1080px`-wide frame, so a vertical rank shows two and a half of them, each
+        // three times too fat. `across` is the frame's extent along the lane axis and `along` its extent down a bar.
+        val across = abs(sin(aim)) * width + abs(cos(aim)) * height
+        val along = abs(cos(aim)) * width + abs(sin(aim)) * height
+        // What the shuffle moves, now that the aim is a knob: which part of the rank the frame happens to show.
+        val phase = random.nextFloat() - 0.5f
         val lanes = lanes(count)
-        val pitch = reach / count
+        val pitch = across / count
         // Their *Spacing* is signed, so its low end **overlaps** the bars rather than merely closing the gaps — which
         // is the only setting where the blend knob has anything to combine.
         val thickness = pitch * (MaxShare - (MaxShare - MinShare) * params.scale.coerceIn(0f, 1f))
+        // **Squared, so the shipped look sits at the knob's middle.** Their *Margin* opens at `20` of `100` — a fifth
+        // off — where a straight reading would take half the length off at the default and leave the bars too stubby
+        // to cross once the fan opens.
+        val shorten = params.roundness.coerceIn(0f, 1f).let { it * it } * LengthSpan
         // **Floored at the thickness, which is what makes the knob's top a circle.** A capsule shorter than it is
         // wide is not a shorter capsule — it is one lying the other way, which is what a plain fraction of the frame
         // draws here and is not what the reference's own top does.
-        val length = max(thickness, reach * (1f - LengthSpan * params.roundness.coerceIn(0f, 1f)))
-        val fan = params.rotation.coerceIn(0f, 1f) * MaxFan
+        val length = max(thickness, along * LengthBase * (1f - shorten))
+        // **Cubed, and the curve is doing real work.** Theirs opens the fan at `0` — a plain parallel rank — where
+        // every fraction here opens at `0.5`, so a straight reading puts a hard fan at the default: the pencil's
+        // vertex lands within a frame's height and every bar piles into one bright knot, which reads as a peacock
+        // rather than as a rank of beams. Cubed, the default splays them a few degrees apart and the knob's top still
+        // crosses the rank right over itself.
+        val fan = params.irregularity.coerceIn(0f, 1f).let { it * it * it } * MaxFan
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
@@ -109,11 +127,17 @@ object RoundedTilesGenerator : Generator {
 
         canvas.save()
         canvas.translate(width / 2f, height / 2f)
+        canvas.rotate(Math.toDegrees(aim.toDouble()).toFloat())
         for (i in 0 until count) {
             canvas.save()
-            // Each bar turned a little further than the last is the whole fan; at `fan` zero they stay parallel.
-            canvas.rotate(Math.toDegrees((aim + fan * lanes[i]).toDouble()).toFloat())
-            val bar = RectF(-length / 2f, lanes[i] * reach - thickness / 2f, length / 2f, lanes[i] * reach + thickness / 2f)
+            // **Each bar turns about its own centre, and the centres do not move** — which is the whole of what makes
+            // this a fan rather than a pinwheel. Turning the frame per bar instead swings the *centre* round the
+            // middle as well as the bar, so the rank collapses into a splayed arc that never crosses itself, and the
+            // blend knob is left with nothing to combine. Isolated on three bars, theirs plainly keeps every centre
+            // on the lane line and tilts each one in place.
+            canvas.translate(0f, (lanes[i] + phase / count) * across)
+            canvas.rotate(Math.toDegrees((fan * lanes[i] * 2f).toDouble()).toFloat())
+            val bar = RectF(-length / 2f, -thickness / 2f, length / 2f, thickness / 2f)
             // The cap radius is half the thickness — a stadium, which is what makes a fully shortened bar a circle.
             val cap = thickness / 2f
             paint.shader = LinearGradient(
@@ -192,19 +216,30 @@ object RoundedTilesGenerator : Generator {
      *
      * The top is **over `1`** on purpose: theirs' *Spacing* is signed and its negative end overlaps the bars into one
      * another, which is the only place its blend knob shows. Ours' overlap is gentler than theirs, which runs all the
-     * way to a frame with no ground left in it.
+     * way to a frame with no ground left in it. The pair straddles `0.7` at the knob's middle, which is what theirs
+     * measures at its own default — bars a little over twice the width of the gaps between them.
      */
-    private const val MaxShare = 1.5f
+    private const val MaxShare = 1.25f
     private const val MinShare = 0.15f
 
-    /** How much of its length the roundness knob may take off a bar before the thickness floor catches it. */
+    /**
+     * A bar's full length as a multiple of the frame's extent down it, and how much of that the length knob may take
+     * off before the thickness floor catches it.
+     *
+     * **Over `1` because theirs overruns the frame at its default**: their bars leave the picture at both ends and
+     * read as beams, where a bar ending inside the frame reads as an object lying on it. Their *Margin* opens at a
+     * fifth off and the bars still cross the whole frame, so the length it is taking a fifth off must be longer than
+     * the frame is.
+     */
+    private const val LengthBase = 1.4f
     private const val LengthSpan = 0.97f
 
     /**
-     * The furthest a bar at the edge of the fan is turned from the middle one, in radians.
+     * The furthest the outermost bar is turned from the rank's aim, in radians.
      *
-     * A quarter turn either side is as far as the set can open before the outermost bars are perpendicular to the
-     * innermost, which is the point past which a fan stops reading as one.
+     * A quarter turn is as far as the set opens before the outermost bars are perpendicular to the middle one, which
+     * is the point past which a fan stops reading as one. The lane offset is doubled where this is used, since lanes
+     * run to `±0.5` and it is the *outermost* bar this bounds.
      */
     private const val MaxFan = PI.toFloat() / 2f
 
