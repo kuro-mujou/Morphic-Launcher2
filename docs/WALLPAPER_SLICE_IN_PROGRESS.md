@@ -48,7 +48,7 @@ Ours: the design chip is labelled **Truchet** in our studio's chip row.
 
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
-- [ ] 3. Drive theirs: full tab inventory with ranges and defaults
+- [x] 3. Drive theirs: full tab inventory with ranges and defaults
 - [ ] 4. Drive every knob to both ends — the numbers *and* what each does to the picture
 - [ ] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
@@ -87,3 +87,46 @@ diagonal line turned one of two ways, and `paintTile4`, which adds the two half-
 **But no painter there draws arcs**, so ours' quarter-circles are its own; and none draws a rounded bar either. What
 gart supplies is the *structure* — a grid of square tiles, one painter per tile — which is likely what theirs is
 built on too. Worth re-reading with a target once the drive says what a tile of theirs contains.
+
+### 3. Theirs — the inventory, and the identity finding is in *Direction*
+
+**Seven knobs, not the six recorded** (the note missed *Inner shadow*), and the row stops there. No *Color mode* tab.
+
+| # | Tab | Kind | Default |
+|---|---|---|---|
+| 1 | Count | ruler | **7** |
+| 2 | Margin | ruler | **20** |
+| 3 | Spacing | ruler | **44** |
+| 4 | Blend mode | segmented, **two**: Normal · **PLUS** | PLUS |
+| 5 | Rotation | ruler | **0** |
+| 6 | Direction | ruler | **0** |
+| 7 | **Inner shadow** | segmented: **Off** · On | Off |
+
+**Worth noting before anything else: "Blend mode" here is two options, where Soft Overlaps' is nine.** The name
+recurs across their designs and does not mean the same thing twice — the same warning the teardown already records
+for *Color distribution*.
+
+**The design is a fan of long rounded bars, and *Direction* is what makes it one.** At its default the bars are
+parallel and span the frame, which is why the picture opens as a stack of stripes and why the name looks wrong.
+Driving *Direction* to `22`, `45`, `68` spreads each bar to its own angle so they **radiate from a common origin** —
+and at that point the **rounded caps** come into the frame and the name explains itself. Ours draws a Truchet maze of
+quarter-arcs that *join* across a grid. There is no reading on which these are the same design.
+
+**Rotation is the whole fan's angle, and it is `0..100` mapped to `0..180°`.** Traced one gap right across the frame
+and fitted it (residual under a pixel):
+
+| Rotation | measured angle |
+|---|---|
+| 0 | `0.00°` |
+| 11 | `19.79°` |
+| 23 | `41.38°` |
+| 100 | `0.00°` |
+
+`19.79 / 11` and `41.38 / 23` are both **`1.799`**, so the knob is degrees scaled by `1.8`. Its top is `180°`, which
+for a stripe pattern draws the same geometry as `0` with the palette running the other way — and that is what an
+earlier note in this file mistook for a stale preview frame. It is not stale; `180°` is genuinely `0°`.
+
+**Method note.** `measure.py slope` could not read this: it takes the *first* boundary per column, and with diagonal
+bands that is a different band at each column, so it fitted noise (residuals of 200–500px). What works is tracing
+**one** gap — find a dark run at the centre column, then walk outward choosing the nearest run each step — which
+fits to half a pixel. Worth folding into `measure.py` if a third design needs it.
