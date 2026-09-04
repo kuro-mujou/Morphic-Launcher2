@@ -290,11 +290,21 @@ the guard, and a separate idea from this pass.
 **No dead knobs anywhere, checked.** Five of the nine render byte-identically at both ends of *irregularity*, but none
 of those five **declares** it, so the panel never offers it. The `DesignStyle` discipline has held.
 
-**Still open: does `GRADIENT_COLUMNS` earn its slot beside `LOUVERS`?** It is the weakest of the nine as a wallpaper
-even with its new direction — flat panels stepping a ramp, with no variation *along* the columns, next to a design
-that runs the ramp along each strip and slides it from strip to strip. The concrete fix (vary the columns along their
-length) is cheap; whether it is worth making rather than dropping the design is the author's call, so nothing was
-done. See **Open questions** below.
+| 10 | **`GRADIENT_COLUMNS` varied in nothing but its widths** — flat panels stepping a ramp sideways, with nothing at all moving along a column's long axis, next to `LOUVERS` which runs the ramp along each strip. It was the weakest of the nine as a wallpaper. *(Raised as an open question — keep it, vary it, or drop it — and answered **vary it** by the author)* | `c9286981`. A second shade falls *along* each column, so the set reads as light raking across panels. Both shades now hang off `depth` as **Relief**, since they are one fiction: `0` is genuinely flat, which the field's contract asks for and this design could not draw (the seam shadow was unconditional), `0.5` is the shadow it always drew, `1` a deep venetian-blind relief. The rake is a **brightness**, not a palette traversal — which is what keeps it from becoming Louvers — and it is **eased**, since a linear fall along columns whose palette already progresses linearly across makes the frame one bilinear field, i.e. `LINEAR_GRADIENT` in this design's clothes. Its axis is a second `frameAxis` a quarter turn on, so it turns with `rotation` for free |
+
+**Still open, and introduced by finding 5: a design declaring `rotation` no longer opens on its own identity.**
+`DesignParams.rotation` defaults to `0.5`, and both ramps map `0` to the direction they shipped with — so the *stored*
+default is now half a sweep away from it. `LINEAR_GRADIENT` opens as a right-to-left ramp rather than top-to-bottom,
+and `GRADIENT_COLUMNS` — a design named Columns — opens on **horizontal bands**. Both are defensible pictures and
+neither is broken, which is why nothing was changed on the spot; what is wrong is that the design's name and its
+default picture no longer agree.
+
+The tension is in the field itself and it cannot be resolved locally: `rotation`'s contract says **`0` is always
+untouched**, and the field's default *value* is `0.5`, and for these designs "untouched" and "shipped" are the **same
+angle** — where `irregularity` can honor both because *rigid* and *shipped* are different points. One of the two has
+to give, catalog-wide. Centering each sweep on the shipped direction (so `0.5` draws it, `0` is a quarter turn one
+way) fixes both defaults and every stored recipe at the cost of the contract's `0` clause; leaving it fixes the
+contract at the cost of two designs opening on something they are not called. See **Open questions**.
 
 ---
 
@@ -1096,11 +1106,14 @@ column.
    named (Polygon Cascade W11w, Ribbon Flow W11z, Flow Lines W11aa) is built and driven, and **Shape Trail** is
    not being built at all. See the checklist above.
 4. **Live Wallpaper** — they ship a Live Wallpaper tab. Still deferred, but it is first-class in their product.
-5. **Does `GRADIENT_COLUMNS` earn its slot beside `LOUVERS`?** — raised by the ours-only quality pass. Flat panels
-   stepping a ramp sideways, with no variation along the columns, against a design that runs the ramp *along* each
-   strip. Three answers: give it variation along the column length (cheap, and it is the only thing the design is
-   missing), leave it as the plain one of the pair, or drop it. Nothing was done pending the call, since the first and
-   the third are opposite work.
+5. ~~**Does `GRADIENT_COLUMNS` earn its slot beside `LOUVERS`?**~~ — **settled: keep it and vary it**, by the
+   author's call. Its columns now carry a raking light on the `depth` field. See the pass above.
 6. **Should a generator be able to declare the *period* of its angle?** — raised by the same pass. `LINEAR_GRADIENT`
    and `GRADIENT_COLUMNS` sweep a half turn rather than a full one only because the knob guard reads a full turn's two
    ends as a dead knob, and it is right to. Three directions of every ramp are unreachable until this is answered.
+7. **Does `rotation`'s `0` mean *untouched* or does its default `0.5` mean *shipped*?** — raised by the same pass, and
+   it is a catalog-wide call rather than a per-design one. The field's contract says `0` is untouched; the field's
+   default value is `0.5`. For a design whose rotation *is* its direction those are the same angle, so a design
+   declaring `rotation` now opens half a sweep from its own identity — `LINEAR_GRADIENT` as a right-to-left ramp,
+   `GRADIENT_COLUMNS` on horizontal bands. Centering each sweep on the shipped angle fixes both and costs the `0`
+   clause; leaving it keeps the clause and costs the two defaults.
