@@ -47,7 +47,7 @@ Ours: the design chip is labelled **Overlaps** in our studio's chip row.
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
 - [x] 3. Drive theirs: full tab inventory with ranges and defaults
-- [ ] 4. Drive every knob to both ends — the numbers *and* what each does to the picture
+- [x] 4. Drive every knob to both ends — the numbers *and* what each does to the picture
 - [ ] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
 - [ ] 7. Verify: unit tests, dead-knob guard, harness render, live studio
@@ -163,3 +163,31 @@ Now that the mechanism is known, the two candidates worth reading were read:
 
 So **gart is not where this mechanism is**, and the KDoc citation of `arts/monet` should go rather than be corrected
 to something else. The construction is a standard blob and needs no source beyond the two measurements above.
+
+### 6. The ten knobs, driven — ranges, defaults, and what each does
+
+Every one pushed to both ends, the number read back off the panel each time.
+
+| Knob | Range | Default | What it does, and what ours has |
+|---|---|---|---|
+| Count | **`1..10`** | 4 | Blobs. `1` is a single egg alone on the ground — a rigid end. Ours is `8..26`: its *whole range sits above theirs* and it can never draw the design's default, let alone one shape |
+| Blend mode | nine options | **Screen** | How overlaps combine, and it re-composes the picture completely — *Multiply* is dark and rich, *Color Burn* nearly black, *Plus* washed bright. Ours offers two |
+| Mode | Fill / Glow | **Fill** | **Ours is Glow, always** — see §4 |
+| Position jitter | `0..100` | 50 | How far centres leave a regular arrangement; at `0` they sit evenly spaced and symmetric. **Ours has this one** (*Jitter*) |
+| Radius | **`60..400`** | 300 | The blob's size. Ours has `MinRadius`/`MaxRadius` fixed. **Careful: driving it re-rolls the shape**, so bounding boxes at two settings are not the same blob and their ratio means nothing |
+| Size variation | `0..100` | 40 | The spread of sizes around *Radius*; `0` draws every blob identical, and climbing it makes most of them *smaller*, so it subtracts rather than spreading both ways |
+| Complexity | `3..16` | 8 | The blob's control points — §4 |
+| Irregularity | `0..100` | 25 | How far each is pushed off its radius; `0` is an exact ellipse — §4 |
+| Distance from centre | **`0..50`** | 0 | Pushes every blob radially *outward*, hollowing the middle of the frame |
+| Blur | `0..100` | 0 | A blur over the **whole composed picture**, not a per-shape softening: at `100` the shapes dissolve into one smooth wash |
+
+**Two of those are not really this design's to own.**
+
+- *Blur* is a whole-image grade, which is the same argument that sent Ribbed Glass's *Vibrancy* to the **Filters**
+  stage in W11v — and ours already has a Blur filter there, so building it per-design would be a second control over
+  one effect.
+- *Distance from centre* is a composition knob with a very small range (`0..50`) whose whole job is to hollow the
+  middle. Worth building only if a field is spare.
+
+**The ground agrees with ours**, as far as this palette shows: it measures `(50, 20, 11)`, darker than any of the
+four shapes, which is what `palette.colorAt(size - 1)` gives. Not confirmed against a light palette.
