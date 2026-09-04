@@ -49,8 +49,8 @@ Ours: the design chip is labelled **Truchet** in our studio's chip row.
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
 - [x] 3. Drive theirs: full tab inventory with ranges and defaults
-- [ ] 4. Drive every knob to both ends — the numbers *and* what each does to the picture
-- [ ] 5. Decide the knob mapping onto `DesignParams`
+- [x] 4. Drive every knob to both ends — the numbers *and* what each does to the picture
+- [x] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
 - [ ] 7. Verify: unit tests, dead-knob guard, harness render, live studio
 - [ ] 8. Fold into the teardown doc, delete this file, commit
@@ -130,3 +130,43 @@ earlier note in this file mistook for a stale preview frame. It is not stale; `1
 bands that is a different band at each column, so it fitted noise (residuals of 200–500px). What works is tracing
 **one** gap — find a dark run at the centre column, then walk outward choosing the nearest run each step — which
 fits to half a pixel. Worth folding into `measure.py` if a third design needs it.
+
+### 4. The seven knobs, driven
+
+| Knob | Range | Default | What it does |
+|---|---|---|---|
+| Count | `1..10` | 7 | The bars, which always fill the frame — so it sets their thickness too. At `1` a single bar covers the whole frame, and its rounded corners are the only thing that gives it away |
+| Margin | `0..100` | 20 | **Shortens every bar from both ends.** At `100` each has collapsed to a **circle**, which is the proof the shape is a *capsule*: a bar whose cap radius is half its thickness degenerates to a circle when its length reaches its thickness |
+| Spacing | **`−50..50`** | 44 | The gap between bars, and it is **signed** — negative overlaps them, and under the default blend the overlaps blow out into a bright wash with no ground showing at all |
+| Blend mode | Normal · **PLUS** | PLUS | Only visible where bars overlap, so at the default spacing the two are nearly identical and at negative spacing they are two different pictures |
+| Rotation | `0..100` → `0..180°` | 0 | The whole fan's angle — §3 |
+| Direction | `0..100` | 0 | **The fan.** `0` leaves every bar parallel; climbing gives each its own angle so they radiate from a common origin |
+| Inner shadow | **Off** · On | Off | A soft dark inset just inside each bar's edge |
+
+**Every bar also carries a gradient along its own length**, in every capture at every setting — the same construction
+Gradient Columns has, and the reason `LouversGenerator` exists here.
+
+### 5. The mapping, and the one decision that is not a mapping
+
+**This is built as a new design beside `TRUCHET`, not as a rebuild of it.** Ours is a Truchet maze of joined arcs and
+is a perfectly good picture that happens to have nothing to do with theirs; the established move is to build theirs
+beside it, as W11a did for the Mondrian, W11e for the Halftone and W11m for Louvers. That also means no stored recipe
+changes meaning.
+
+| Ours | Theirs | Why |
+|---|---|---|
+| `density` | Count `1..10` | Theirs' own range |
+| `scale` | Spacing | A bar's thickness within its lane — the *coverage wins* precedent from Diagonal Bands, Bauhaus and Dot Grid |
+| `roundness` | Margin | The bar's length read as how round it is: at `1` every bar has shortened to its own cap, which is a circle. The Mosaic's own case is "a narrow tile becomes a pill"; this is that axis one step further |
+| `rotation` | **Direction** | The fan spread — a rotation *per bar*, and the design's identity |
+| `depth` | Inner shadow | Their toggle read as an amount; `0` is off, which is the field's rigid end and theirs' default |
+| `finish` | Blend mode | Normal / Plus — the third consumer of that field |
+| *seeded* | Rotation | See below |
+
+**Two orientation knobs, one field, and the identity wins** — the same squeeze Soft Overlaps had in the organic-noise
+family. *Direction* takes `rotation` because it is what makes this a fan rather than a stack of stripes; the whole
+fan's **overall angle is seeded** instead, which is exactly what the cascade does with its heading, and it means a
+shuffle re-aims the picture.
+
+`irregularity`, `taper`, `depthScale`, `colorLayout` and `variant` are all unread — theirs has no organic knob, no
+size spread, no color layout and no sub-look, so declaring any of them would be offering a control that does nothing.
