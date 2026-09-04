@@ -46,7 +46,7 @@ Ours: the design chip is labelled **Overlaps** in our studio's chip row.
 
 - [x] 1. Read our generator, and record what it actually does
 - [x] 2. Read gart for the mechanism
-- [ ] 3. Drive theirs: full tab inventory with ranges and defaults
+- [x] 3. Drive theirs: full tab inventory with ranges and defaults
 - [ ] 4. Drive every knob to both ends — the numbers *and* what each does to the picture
 - [ ] 5. Decide the knob mapping onto `DesignParams`
 - [ ] 6. Build
@@ -91,3 +91,41 @@ Nothing else in `arts/` obviously matches either — checked the ones whose name
 Untouched and worth a look **once the drive says what the mechanism is**, rather than before: `bubbles/*` (which
 holds `Blobs`, `Spuma`, `Pinna`, `pebble`), `circledots`, `layers/*`. The rule is to read gart before *writing*, and
 what to read is decided by what theirs turns out to draw — so this stays open until step 3 lands.
+
+### 3. Theirs — the tab inventory, and the identity finding
+
+**Ten knobs, not the six recorded**, and the row stops at *Blur*. No *Color mode* tab.
+
+| # | Tab | Kind | Default |
+|---|---|---|---|
+| 1 | Count | ruler | **4** |
+| 2 | Blend mode | segmented, **nine**: Normal · **Screen** · Lighten · Plus · Overlay · Multiply · Darken · Color Burn · Color Dodge | Screen |
+| 3 | Mode | segmented: **Fill** · Glow | Fill |
+| 4 | Position jitter | ruler | 50 |
+| 5 | Radius | ruler | **300** |
+| 6 | Size variation | ruler | 40 |
+| 7 | **Complexity** | ruler | 8 |
+| 8 | **Irregularity** | ruler | 25 |
+| 9 | **Distance from c…** (centre) | ruler | 0 |
+| 10 | **Blur** | ruler | 0 |
+
+**The identity finding, and it is visible before any knob is touched: their shapes have *hard edges*.** Theirs is
+**four** enormous flat translucent forms — a rust round, a slate squircle, an orange round, a cream ellipse — laid
+over a dark ground, overlapping so the *colors* mix while every silhouette stays crisp. Ours draws seventeen discs
+that each fade to nothing at the rim, so it is a misty wash with no edge anywhere. The "soft" in *Soft Overlaps* is
+the **shapes** being soft — big, round, organic — and the *overlaps* being soft in color. It is not soft edges.
+
+Everything else follows from that:
+
+- **The shapes are generated blobs, not circles.** *Complexity* `8` and *Irregularity* `25` are two knobs that only
+  make sense on a closed curve built from lobes — nothing else in the list can be what makes the slate form a
+  squircle and the cream one an ellipse. Ours draws `drawCircle`, so it cannot make any of them.
+- **Their overlaps are a real blend mode, and the default is not Normal.** Nine of them, opening on **Screen** —
+  which is why the picture glows where forms cross. Ours offers Normal and Additive.
+- **`Mode: Fill / Glow` is a second look, and *Glow* is very likely what ours built.** A soft radial falloff is
+  exactly what a glow is; if so, ours has been drawing their alternate look as the whole design, and their default —
+  the flat, hard-edged one — is unreachable.
+- **Count `4` against ours' `17`.** Theirs is a composition of a few huge forms; ours is a scatter. Their *Radius*
+  opens at `300`, a big number whose unit the drive still has to settle.
+- **Four knobs have no counterpart at all**: *Complexity*, *Irregularity* (the blob's, not a scatter's),
+  *Distance from centre* and *Blur*. Ours' *Jitter* is their *Position jitter*.
