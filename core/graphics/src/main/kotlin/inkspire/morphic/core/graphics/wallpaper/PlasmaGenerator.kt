@@ -24,6 +24,19 @@ import kotlin.random.Random
  * loop (last stop back to the first) so there is no seam at the wrap. [DesignParams.density] sets the wave frequency —
  * broad swells or a busy ripple.
  *
+ * **[DesignParams.irregularity] warps the plane the waves are read on, and until the quality pass this design had no
+ * organic axis at all — it was frequency and nothing else, the fewest ways to change a picture in the catalog.** Four
+ * sines at one frequency interfere in a way that is perfectly regular however the phases fall, so the field always
+ * repeats itself across the frame and reads as a *pattern* rather than as a fluid. The warp is [DomainWarp], the same
+ * push [MetaballsGenerator] distorts its contours with, applied to the sample point before [sample] ever sees it —
+ * which is why that function is untouched and still tests the summed sinusoids alone.
+ *
+ * **The push is measured in *wavelengths*, not in frame widths, and that is the part that would be silently wrong.**
+ * The frequency knob spans a four-fold range, so a fixed frame distance is a barely-visible nudge at the broad end and
+ * complete noise at the busy end — the same knob doing two different things depending on a knob beside it. A share of
+ * `2π / frequency` is the same amount of *swell* wherever the frequency sits. `0` is the rigid interference this
+ * design has always drawn.
+ *
  * [sample] is pure and tested: the summed-sine field is arithmetic that is silently wrong (a flat or banded-wrong
  * wallpaper) with no bitmap needed to see it.
  */
@@ -31,7 +44,10 @@ object PlasmaGenerator : Generator {
 
     // A frequency rather than a count: the plasma draws no discrete things, so its amount is the one in the catalog
     // with nothing to number, and the panel shows it as a plain scale.
-    override val style = DesignStyle(amount = AmountKnob.Fraction("Frequency"))
+    override val style = DesignStyle(
+        amount = AmountKnob.Fraction("Frequency"),
+        irregularity = "Turbulence",
+    )
 
     /** The phase offsets that make one plasma still distinct from another — drawn once from the seed. */
     internal data class Phases(val x: Float, val y: Float, val diagonal: Float, val radial: Float)
@@ -39,6 +55,7 @@ object PlasmaGenerator : Generator {
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val phases = phases(seed)
         val frequency = frequency(params.density)
+        val warp = DomainWarp(seed xor WarpSeed, warpReach(params.irregularity, frequency), WarpFrequency)
         // The waves have to be the same size across the frame as down it — see [sample].
         val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
 
@@ -47,8 +64,10 @@ object PlasmaGenerator : Generator {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
+                // Warped in the same width-share metric the waves are read in, so the swirls are round on the screen.
+                val sy = ny * heightOverWidth
                 pixels[y * width + x] = LinearGradientGenerator.colorLooping(
-                    sample(nx, ny * heightOverWidth, frequency, phases),
+                    sample(warp.x(nx, sy), warp.y(nx, sy), frequency, phases),
                     palette,
                 )
             }
@@ -62,6 +81,19 @@ object PlasmaGenerator : Generator {
     /** The wave frequency [density] asks for — [MinFrequency] broad swells up to [MaxFrequency] a busy ripple. */
     internal fun frequency(density: Float): Float =
         MinFrequency + density.coerceIn(0f, 1f) * (MaxFrequency - MinFrequency)
+
+    /**
+     * How far the warp may push a sample point at this [irregularity], for waves at this [frequency] — a share of one
+     * **wavelength**, which is `2π / frequency`.
+     *
+     * **A distance in wavelengths rather than in frame widths, because the frequency knob spans a four-fold range.**
+     * The same push in frame units is a fifth of a swell at [MinFrequency] and most of one at [MaxFrequency], so the
+     * turbulence knob would mean something different at each end of the knob beside it — a design whose two sliders
+     * interact without saying so. Measured this way, half a wavelength is half a swell wherever the frequency sits.
+     * `0` is the rigid interference the design drew before the knob existed.
+     */
+    internal fun warpReach(irregularity: Float, frequency: Float): Float =
+        irregularity.coerceIn(0f, 1f) * MaxWarpWavelengths * (2f * PI.toFloat() / frequency)
 
     /** Four phase offsets in `0..2π` for [seed], so each seed is a different still of the same plasma. */
     internal fun phases(seed: Long): Phases {
@@ -99,4 +131,18 @@ object PlasmaGenerator : Generator {
     // Softened toward broad swells: the default density now opens on calm marbling rather than a busy ripple (W7).
     private const val MinFrequency = 6f
     private const val MaxFrequency = 26f
+
+    /** How far the warp pushes at full turbulence, in wavelengths — see [warpReach]. */
+    private const val MaxWarpWavelengths = 0.5f
+
+    /**
+     * How many warp cells span the frame's width — a handful, so the turbulence is a swirl through the plasma rather
+     * than grain on top of it. **Fixed rather than taken from the design's own frequency**, which is what
+     * [MetaballsGenerator] does: tying the two would shrink the swirls exactly as the swells shrink, and a knob that
+     * scales everything it could distort ends up distorting nothing.
+     */
+    private const val WarpFrequency = 3f
+
+    /** Keeps the warp fields off the stream the phases are drawn from, so turbulence does not re-roll the still. */
+    private const val WarpSeed = 0x6A09E667L
 }

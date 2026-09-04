@@ -90,10 +90,8 @@ object MetaballsGenerator : Generator {
         val gamma = Spread.entries[params.variant.coerceIn(0, Spread.entries.lastIndex)].gamma
         val shadow = params.depth.coerceIn(0f, 1f) * MaxShadow
         val frequency = MinFrequency + params.density.coerceIn(0f, 1f) * (MaxFrequency - MinFrequency)
-        val reach = params.irregularity.coerceIn(0f, 1f) * MaxDistortion
-        // Two independent fields, or the warp only ever pushes along the diagonal and the contours comb one way.
-        val alongX = PerlinNoise2d(seed xor WarpSaltX)
-        val alongY = PerlinNoise2d(seed xor WarpSaltY)
+        // Measured as a share of the frame, which is [DomainWarp]'s note: these contours are frame-sized things.
+        val warp = DomainWarp(seed, params.irregularity.coerceIn(0f, 1f) * MaxDistortion, frequency)
         // One color per band, resolved once: the ramp read at `bands` rungs, so a two-stop palette still has a ramp
         // and every rung of a long one lands on a stop of its own.
         val ink = IntArray(bands) {
@@ -105,8 +103,8 @@ object MetaballsGenerator : Generator {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                val warpedX = nx + reach * alongX.at(nx * frequency, ny * frequency)
-                val warpedY = ny + reach * alongY.at(nx * frequency, ny * frequency)
+                val warpedX = warp.x(nx, ny)
+                val warpedY = warp.y(nx, ny)
                 val step = (level(field(warpedX, warpedY, charges), gamma) * bands)
                     .coerceIn(0f, bands - Epsilon)
                 pixels[y * width + x] = shade(ink[step.toInt()], shadowAt(step - step.toInt(), shadow))
@@ -240,7 +238,4 @@ object MetaballsGenerator : Generator {
     /** The easing the shadow recovers across a band with — measured, not chosen. See [shadowAt]. */
     private const val ShadowEase = 2.5f
 
-    /** Keeps the two warp fields independent, so the push is not always along one diagonal. */
-    private const val WarpSaltX = 0x2545F491L
-    private const val WarpSaltY = 0x14057B7EL
 }
