@@ -70,4 +70,26 @@ class LinearGradientGeneratorTest {
 
         assertTrue("alpha should be mid, was ${mid ushr 24}", (mid ushr 24) in 126..129)
     }
+
+    /**
+     * The design drew a top-to-bottom ramp and nothing else until the quality pass, so `0` has to keep drawing exactly
+     * that — a stored recipe carries a rotation of `0` whether or not it ever saw the knob.
+     */
+    @Test
+    fun `an untouched angle is the straight-down ramp this design has always drawn`() {
+        assertEquals(90f, LinearGradientGenerator.degreesFor(0f), 1e-6f)
+    }
+
+    /**
+     * Half a turn, which reaches every *axis* — and knowingly not every direction, since a ramp is directed and its
+     * period is the whole circle. See the generator's class note; a full turn makes the knob's ends the same picture,
+     * which the knob guard fails on.
+     */
+    @Test
+    fun `the knob sweeps a half turn, reaching every axis`() {
+        assertEquals(270f, LinearGradientGenerator.degreesFor(1f), 1e-6f)
+        assertEquals(180f, LinearGradientGenerator.degreesFor(0.5f), 1e-6f)
+        assertEquals(90f, LinearGradientGenerator.degreesFor(-1f), 1e-6f) // clamped
+        assertEquals(270f, LinearGradientGenerator.degreesFor(2f), 1e-6f) // clamped
+    }
 }

@@ -19,6 +19,18 @@ import inkspire.morphic.core.model.wallpaper.Palette
  * Smart Launcher's *Shadow* knob adds. [DesignParams.density] sets the column count and [DesignParams.irregularity] their
  * width variation. Deterministic in [seed].
  *
+ * **[DesignParams.rotation] is which way the columns run, and until the quality pass they could only stand upright.**
+ * A design whose whole content is a direction had no control over it: every render was the same rank of vertical
+ * panels, and the knob is what makes a stack of horizontal bands or a diagonal sweep the same design rather than two
+ * more it does not have. `0` is the upright columns it has always drawn, and the knob sweeps a half turn. The axis is
+ * [frameAxis], the same one [DiagonalBandsGenerator] and [LouversGenerator] measure their angles on, so an angle means
+ * one thing across the catalog — and reading it costs the per-column fill, since a turned band is no longer one column
+ * of the screen.
+ *
+ * **Half a turn is a knowing limit here too**, for [LinearGradientGenerator]'s reason: these columns are a
+ * *progression* rather than a symmetric stripe pattern — low stop to high, with the shadow on one edge of each — so
+ * reversing the axis is a different picture, and reaching those takes a full turn the knob guard rejects.
+ *
  * [columnCount] is the only pure mapping of this design's own; the banding is tested in [Bands] and the ramp in
  * [LinearGradientGenerator], and the per-pixel shade is judged in the render harness.
  */
@@ -30,6 +42,7 @@ object GradientColumnsGenerator : Generator {
     override val style = DesignStyle(
         amount = Amount,
         irregularity = "Variation",
+        rotation = "Direction",
     )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
@@ -40,22 +53,26 @@ object GradientColumnsGenerator : Generator {
             LinearGradientGenerator.colorAt(i.toFloat() / (count - 1).coerceAtLeast(1), palette)
         }
 
+        val axis = frameAxis(params.rotation.coerceIn(0f, 1f) * HalfTurn, width, height)
         val pixels = IntArray(width * height)
-        for (x in 0 until width) {
-            val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-            val band = Bands.bandAt(nx, boundaries)
-            val left = if (band == 0) 0f else boundaries[band - 1]
-            val right = if (band < boundaries.size) boundaries[band] else 1f
-            val localT = if (right > left) (nx - left) / (right - left) else 0f
-            val color = Shades.scale(columnColors[band], edgeShade(localT))
-            // A column is one color top to bottom, so the whole vertical run is filled from a single computed pixel.
-            for (y in 0 until height) pixels[y * width + x] = color
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val along = axis.at(x.toFloat(), y.toFloat())
+                val band = Bands.bandAt(along, boundaries)
+                val low = if (band == 0) 0f else boundaries[band - 1]
+                val high = if (band < boundaries.size) boundaries[band] else 1f
+                val localT = if (high > low) (along - low) / (high - low) else 0f
+                pixels[y * width + x] = Shades.scale(columnColors[band], edgeShade(localT))
+            }
         }
 
         val bitmap = createBitmap(width, height)
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         return bitmap
     }
+
+    /** The sweep [DesignParams.rotation] takes the columns through — see the class note for why it is not a full one. */
+    private const val HalfTurn = 180f
 
     /** How many columns [density] asks for — a few broad panels up to a fine gradient. */
     internal fun columnCount(density: Float): Int = Amount.at(density)
