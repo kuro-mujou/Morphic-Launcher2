@@ -13,7 +13,7 @@ import kotlin.random.Random
  * **It is ours, and it is neither of the reference designs it used to claim.** Their *Modern Mosaic* is a packing of
  * **rounded rectangles** with a wide grout, and their *Vitrall* cuts the frame with **edge-to-edge chords** into long
  * shards — see [VitrallGenerator], which is that one. A Voronoi is the third thing: cells built *around points*, so
- * each is a compact blob of roughly its neighbours' size, with no rectangles and no shards. Worth keeping for exactly
+ * each is a compact blob of roughly its neighbors' size, with no rectangles and no shards. Worth keeping for exactly
  * that reason, and worth not naming after something else.
  *
  * **A nearest-seed diagram, not a polygon Voronoi — the same choice [TriangularFacetsGenerator] makes.** The textbook
@@ -23,9 +23,14 @@ import kotlin.random.Random
  * `O(pixels × sites)` with a few dozen sites — the same budget [MeshGradientGenerator] already spends.
  *
  * **The seams are what make it read as mosaic rather than as flat blobs.** A pixel whose nearest seed differs from a
- * four-neighbour's sits on a cell boundary and is painted the palette's darkest stop — the leading between panes of
+ * four-neighbor's sits on a cell boundary and is painted the palette's darkest stop — the leading between panes of
  * glass. Without them the cells, colored by height off one gradient, would melt together like a coarse
  * [MESH][MeshGradientGenerator].
+ *
+ * **Which is why a cell's fill stops short of that stop — see [fillCeiling].** The cells read the same ramp the
+ * leading is taken from, so the ones at the bottom of the frame arrived at the leading's own color and the mosaic
+ * lost its seams exactly there: flat blobs, which is the thing the seams exist to prevent, in the third of the frame
+ * where it is least noticeable as a *fault* and most noticeable as the design going soft.
  *
  * **Each cell is the palette gradient at its seed's height, jittered a shade** (via [LinearGradientGenerator.colorAt],
  * so a mosaic and a plain gradient of the same palette agree about the ramp — the shared derivation Facets keeps too).
@@ -57,7 +62,7 @@ object VoronoiGenerator : Generator {
         val sites = sites(siteCount(params.density), params.irregularity, palette, seed, heightOverWidth)
         val seam = palette.colorAt(palette.size - 1) // the darkest stop by convention — the leading between cells
 
-        // Which seed owns each pixel, one pass, so the next pass can find a boundary by comparing neighbours.
+        // Which seed owns each pixel, one pass, so the next pass can find a boundary by comparing neighbors.
         val owner = IntArray(width * height)
         for (y in 0 until height) {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
@@ -86,7 +91,7 @@ object VoronoiGenerator : Generator {
     /**
      * [count] seeds for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when even, a
      * scatter when irregular), each cell colored by the palette gradient at the seed's height nudged by up to
-     * [ColorJitter] so cells at the same height still separate.
+     * [ColorJitter] so cells at the same height still separate, over the span [fillCeiling] leaves it.
      *
      * The shade jitter runs on a **salted stream of its own**, independent of the position stream, so it stays fixed as
      * the position knob slides. (A cell's *base* color still tracks its height, by design — a cell that moves down the
@@ -102,12 +107,31 @@ object VoronoiGenerator : Generator {
     ): List<Site> {
         val positions = PointScatter.gridJitter(count, irregularity, seed, heightOverWidth)
         val shadeRandom = Random(seed xor ColorSalt)
+        val ceiling = fillCeiling(palette.size)
         return List(count) { i ->
             val x = positions[i * 2]
             val y = positions[i * 2 + 1]
             val shade = (shadeRandom.nextFloat() * 2f - 1f) * ColorJitter
-            Site(x, y, LinearGradientGenerator.colorAt((y + shade).coerceIn(0f, 1f), palette))
+            Site(x, y, LinearGradientGenerator.colorAt((y + shade).coerceIn(0f, 1f) * ceiling, palette))
         }
+    }
+
+    /**
+     * How far down the ramp a cell's fill may reach, for a palette of [stops] — the scale a `0..1` position is read
+     * through, so the darkest cell lands one tone short of the seam instead of on it.
+     *
+     * **The step is [RampTones]', not one of this design's own.** That object already answers "the ramp *below* the
+     * ground" for a design whose ground is the palette's last stop, which is exactly what the seam is here; taking
+     * its tone count and stopping at the last of them is the same arithmetic used continuously, so a mosaic and a
+     * design drawing [RampTones.belowGround] agree about where the ground begins. Inventing a margin here instead
+     * would be a second answer to a question already settled, and one nothing would notice had drifted.
+     *
+     * A palette with no ramp below its ground answers `1`: everything it has *is* the seam color, and there is no
+     * scale that separates a cell from it.
+     */
+    internal fun fillCeiling(stops: Int): Float {
+        val tones = RampTones.countFor(stops)
+        return if (tones <= 1) 1f else (tones - 1f) / tones
     }
 
     /**
