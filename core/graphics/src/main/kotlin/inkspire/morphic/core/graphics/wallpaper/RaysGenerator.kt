@@ -34,6 +34,8 @@ object RaysGenerator : Generator {
         val cx = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
         val cy = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
         val rays = rayCount(params.density)
+        // The bearing has to be taken on the screen rather than in the unit square — see [wedge].
+        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
 
         val pixels = IntArray(width * height)
         for (y in 0 until height) {
@@ -41,7 +43,8 @@ object RaysGenerator : Generator {
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
                 // A flat palette stop per wedge, cycling — the hard step between stops is the ray edge.
-                pixels[y * width + x] = palette.colorAt(wedge(nx, ny, cx, cy, rays) % palette.size)
+                pixels[y * width + x] =
+                    palette.colorAt(wedge(nx, ny, cx, cy, rays, heightOverWidth) % palette.size)
             }
         }
 
@@ -56,9 +59,16 @@ object RaysGenerator : Generator {
     /**
      * Which wedge the bearing from ([cx], [cy]) to ([nx], [ny]) falls in, `0 until [rays]`. The angle from `atan2`
      * (`-π..π`) is normalized to `0..1` first, so the wedges tile the full turn and the first meets the last cleanly.
+     *
+     * **The bearing is taken on the screen, which [heightOverWidth] is the whole of.** Both coordinates arrive as
+     * shares of their own side, so a step of `0.1` down a 1080×2400 frame is more than twice the pixels a step of
+     * `0.1` across it — and an `atan2` of the two reads an angle that exists nowhere on the display. Wedges cut at
+     * equal angles in that space arrive on the phone wildly unequal: a fan of even rays comes out as a couple of broad
+     * blocks and a handful of slivers, which reads as an accident rather than as a starburst. Nothing reports it,
+     * because a fan of uneven rays is still a fan.
      */
-    internal fun wedge(nx: Float, ny: Float, cx: Float, cy: Float, rays: Int): Int {
-        val angle = atan2(ny - cy, nx - cx) // -π..π
+    internal fun wedge(nx: Float, ny: Float, cx: Float, cy: Float, rays: Int, heightOverWidth: Float): Int {
+        val angle = atan2((ny - cy) * heightOverWidth, nx - cx) // -π..π
         val normalized = (angle / (2f * PI.toFloat())) + 0.5f // 0..1
         return (normalized * rays).toInt().coerceIn(0, rays - 1)
     }

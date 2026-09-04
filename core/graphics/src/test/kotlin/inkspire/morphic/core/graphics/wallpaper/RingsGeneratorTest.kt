@@ -5,10 +5,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The ring count and the distance-to-loop mapping — the fraction must stay in `0..1` (it indexes the looped palette)
- * and must repeat once per unit of distance, or the rings never close.
+ * The ring count, the pitch, and the distance-to-loop mapping — the fraction must stay in `0..1` (it indexes the
+ * looped palette), must repeat once per ring, and must measure a distance that is round **on the screen**.
  */
 class RingsGeneratorTest {
+
+    /** A tall phone: 1080×2400. Every aspect-sensitive case is measured on one, since a square frame hides the bug. */
+    private val phone = 2400f / 1080f
 
     @Test
     fun `density maps to the ring count range`() {
@@ -19,16 +22,42 @@ class RingsGeneratorTest {
 
     @Test
     fun `the center reads as the start of the cycle`() {
-        assertEquals(0f, RingsGenerator.ringFraction(0.5f, 0.5f, cx = 0.5f, cy = 0.5f, rings = 10), 1e-6f)
+        val perUnit = RingsGenerator.ringsPerUnit(10, phone)
+        assertEquals(0f, RingsGenerator.ringFraction(0.5f, 0.5f, 0.5f, 0.5f, phone, perUnit), 1e-6f)
+    }
+
+    /**
+     * The bug this design carried until the quality pass: a `hypot` of two shares-of-their-own-side draws **ellipses**
+     * on any frame that is not square. Two points the same number of *pixels* from the centre — one across, one down —
+     * must land on the same ring; before the fix the one below it was more than two rings out.
+     */
+    @Test
+    fun `a ring is round on the screen, not in the unit square`() {
+        val perUnit = RingsGenerator.ringsPerUnit(10, phone)
+        val across = RingsGenerator.ringFraction(0.5f + 0.2f, 0.5f, 0.5f, 0.5f, phone, perUnit)
+        // The same pixel distance downward is a smaller share of the taller side, by exactly the aspect.
+        val down = RingsGenerator.ringFraction(0.5f, 0.5f + 0.2f / phone, 0.5f, 0.5f, phone, perUnit)
+        assertEquals(across, down, 1e-5f)
+    }
+
+    @Test
+    fun `the count is rings out to the far corner, whatever shape the frame is`() {
+        // Corner to corner is one diagonal, so the far corner sits exactly `rings` cycles from the near one.
+        for (aspect in listOf(1f, phone, 0.5f)) {
+            val perUnit = RingsGenerator.ringsPerUnit(10, aspect)
+            val corner = RingsGenerator.ringFraction(1f, 1f, 0f, 0f, aspect, perUnit)
+            assertEquals("aspect $aspect", 0f, corner, 1e-5f)
+        }
     }
 
     @Test
     fun `the fraction stays in the unit range`() {
+        val perUnit = RingsGenerator.ringsPerUnit(14, phone)
         var nx = 0f
         while (nx <= 1f) {
             var ny = 0f
             while (ny <= 1f) {
-                val f = RingsGenerator.ringFraction(nx, ny, cx = 0.3f, cy = 0.7f, rings = 14)
+                val f = RingsGenerator.ringFraction(nx, ny, 0.3f, 0.7f, phone, perUnit)
                 assertTrue("fraction left the unit range: $f", f in 0f..1f)
                 ny += 0.05f
             }
@@ -38,12 +67,9 @@ class RingsGeneratorTest {
 
     @Test
     fun `distances a whole ring apart map to the same phase`() {
-        // Two points on the x-axis from the center, one and two rings out, land at the same fraction (the ring repeats).
-        val cx = 0f
-        val cy = 0f
-        val rings = 10
-        val oneRing = RingsGenerator.ringFraction(1f / rings, 0f, cx, cy, rings)
-        val twoRings = RingsGenerator.ringFraction(2f / rings, 0f, cx, cy, rings)
+        val perUnit = RingsGenerator.ringsPerUnit(10, phone)
+        val oneRing = RingsGenerator.ringFraction(1f / perUnit, 0f, 0f, 0f, phone, perUnit)
+        val twoRings = RingsGenerator.ringFraction(2f / perUnit, 0f, 0f, 0f, phone, perUnit)
         assertEquals(oneRing, twoRings, 1e-5f)
     }
 }

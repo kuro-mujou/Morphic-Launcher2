@@ -55,13 +55,15 @@ object HalftoneGenerator : Generator {
         canvas.drawColor(palette.colorAt(0)) // lightest stop — the paper the screen is printed on
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         val maxRadius = min(cellPx, height.toFloat() / rows) / 2f
+        // The lattice is already frame-shaped; the field it reads has to be too — see [fieldAt].
+        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
 
         for (r in 0 until rows) {
             for (c in 0 until cols) {
                 // Each dot nudged off its cell centre by up to half a cell at full irregularity — a loosened screen.
                 val nx = ((c + 0.5f) / cols + (random.nextFloat() * 2f - 1f) * jitter / cols).coerceIn(0f, 1f)
                 val ny = ((r + 0.5f) / rows + (random.nextFloat() * 2f - 1f) * jitter / rows).coerceIn(0f, 1f)
-                val field = fieldAt(nx, ny, noise) // 0..1
+                val field = fieldAt(nx, ny * heightOverWidth, noise) // 0..1
                 val radius = radiusAt(field) * maxRadius
                 if (radius <= 0f) continue
                 // Color from the darker half of the ramp so a dot reads on the pale paper, deeper where the field is strong.
@@ -85,7 +87,15 @@ object HalftoneGenerator : Generator {
         return ((field - DotFloor) / (1f - DotFloor)).coerceIn(0f, 1f)
     }
 
-    /** The field at ([nx], [ny]) in `0..1` — one octave of noise mapped from `-1..1`. */
+    /**
+     * The field at ([nx], [ny]) in `0..1` — one octave of noise mapped from `-1..1`.
+     *
+     * **Both coordinates are shares of the frame's *width*, matching the lattice above.** The cells were already sized
+     * off the width and the rows counted to fit, so the dots sit on a square screen grid — but the field they read was
+     * sampled in the unit square, which stretched every cluster by the frame's proportions. The dots were round and
+     * the *picture they drew* was not, which is a mismatch between two derivations of the same geometry and exactly
+     * the divergence that hides.
+     */
     private fun fieldAt(nx: Float, ny: Float, noise: PerlinNoise2d): Float =
         ((noise.at(nx * Frequency, ny * Frequency) + 1f) / 2f).coerceIn(0f, 1f)
 

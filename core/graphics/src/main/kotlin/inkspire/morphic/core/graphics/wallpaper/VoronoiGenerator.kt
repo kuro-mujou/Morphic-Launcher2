@@ -51,7 +51,10 @@ object VoronoiGenerator : Generator {
     internal data class Site(val x: Float, val y: Float, val argb: Int)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val sites = sites(siteCount(params.density), params.irregularity, palette, seed)
+        // The cells have to be shaped by the screen at both steps: the lattice is laid for the frame and the
+        // ownership below is measured in it — see [nearestSite].
+        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
+        val sites = sites(siteCount(params.density), params.irregularity, palette, seed, heightOverWidth)
         val seam = palette.colorAt(palette.size - 1) // the darkest stop by convention — the leading between cells
 
         // Which seed owns each pixel, one pass, so the next pass can find a boundary by comparing neighbours.
@@ -60,7 +63,7 @@ object VoronoiGenerator : Generator {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                owner[y * width + x] = nearestSite(nx, ny, sites)
+                owner[y * width + x] = nearestSite(nx, ny, sites, heightOverWidth)
             }
         }
 
@@ -90,8 +93,14 @@ object VoronoiGenerator : Generator {
      * frame is colored for where it lands — so the salt keeps the shade stable, not the whole color.) One recipe is one
      * fixed mosaic.
      */
-    internal fun sites(count: Int, irregularity: Float, palette: Palette, seed: Long): List<Site> {
-        val positions = PointScatter.gridJitter(count, irregularity, seed)
+    internal fun sites(
+        count: Int,
+        irregularity: Float,
+        palette: Palette,
+        seed: Long,
+        heightOverWidth: Float = 1f,
+    ): List<Site> {
+        val positions = PointScatter.gridJitter(count, irregularity, seed, heightOverWidth)
         val shadeRandom = Random(seed xor ColorSalt)
         return List(count) { i ->
             val x = positions[i * 2]
@@ -102,17 +111,23 @@ object VoronoiGenerator : Generator {
     }
 
     /**
-     * The index of the seed nearest ([nx], [ny]) in the unit square — the pixel's cell.
+     * The index of the seed nearest ([nx], [ny]) — the pixel's cell.
      *
      * Compares squared distance (the square root is monotonic, so nearest by `d²` is nearest by `d`) and keeps the
      * **first** on a tie, so a pixel exactly between two seeds falls to the lower-indexed cell rather than flickering.
+     *
+     * **[heightOverWidth] is what makes "nearest" mean nearest *on the screen*.** Both coordinates arrive as shares of
+     * their own side, so without it the comparison runs in a space the frame stretches — and a Voronoi diagram of
+     * points in one metric drawn over points placed in another is not the diagram of the points you can see. It showed
+     * as cells wider than the lattice that made them, at every count, and it is only visible as a *wrongness* if you
+     * know which points are there.
      */
-    internal fun nearestSite(nx: Float, ny: Float, sites: List<Site>): Int {
+    internal fun nearestSite(nx: Float, ny: Float, sites: List<Site>, heightOverWidth: Float = 1f): Int {
         var best = 0
         var bestDistance = Float.MAX_VALUE
         for (i in sites.indices) {
             val dx = nx - sites[i].x
-            val dy = ny - sites[i].y
+            val dy = (ny - sites[i].y) * heightOverWidth
             val distance = dx * dx + dy * dy
             if (distance < bestDistance) {
                 bestDistance = distance

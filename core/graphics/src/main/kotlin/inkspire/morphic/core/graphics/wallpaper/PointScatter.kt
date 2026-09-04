@@ -34,10 +34,17 @@ object PointScatter {
      *
      * The random stream is consumed two draws per point regardless of [irregularity], so tuning the knob does not
      * reshuffle *which* points move — only how far — keeping a shuffle stable as the slider slides.
+     *
+     * **[aspect] is the frame's height over its width, for a consumer whose cells have to be square on the *screen*.**
+     * The default `1` keeps the lattice square in the unit square, which is what a design scattering forms across the
+     * frame wants — [SoftOverlapsGenerator]'s discs are placed and sized in that space. A design that then *measures*
+     * in pixels needs the other one: a placement and a metric that disagree about which neighbour is nearer draw cells
+     * that are neither the shape of the lattice nor the shape of the frame, which is what [VoronoiGenerator] did.
      */
-    fun gridJitter(count: Int, irregularity: Float, seed: Long): FloatArray {
+    fun gridJitter(count: Int, irregularity: Float, seed: Long, aspect: Float = 1f): FloatArray {
         val n = count.coerceAtLeast(1)
-        val cols = ceil(sqrt(n.toDouble())).toInt().coerceAtLeast(1)
+        // Columns for a lattice whose cells are square once the frame stretches it: a taller frame wants fewer of them.
+        val cols = ceil(sqrt(n / aspect.coerceAtLeast(MinAspect).toDouble())).toInt().coerceAtLeast(1)
         val rows = ceil(n.toDouble() / cols).toInt().coerceAtLeast(1)
         val jitter = irregularity.coerceIn(0f, 1f)
         val random = Random(seed)
@@ -57,4 +64,7 @@ object PointScatter {
         }
         return points
     }
+
+    /** A floor on [gridJitter]'s aspect, so a degenerate frame cannot ask for zero columns. */
+    private const val MinAspect = 0.01f
 }

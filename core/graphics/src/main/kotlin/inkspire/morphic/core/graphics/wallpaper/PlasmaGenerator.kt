@@ -39,14 +39,18 @@ object PlasmaGenerator : Generator {
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val phases = phases(seed)
         val frequency = frequency(params.density)
+        // The waves have to be the same size across the frame as down it — see [sample].
+        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
 
         val pixels = IntArray(width * height)
         for (y in 0 until height) {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                pixels[y * width + x] =
-                    LinearGradientGenerator.colorLooping(sample(nx, ny, frequency, phases), palette)
+                pixels[y * width + x] = LinearGradientGenerator.colorLooping(
+                    sample(nx, ny * heightOverWidth, frequency, phases),
+                    palette,
+                )
             }
         }
 
@@ -72,9 +76,14 @@ object PlasmaGenerator : Generator {
     }
 
     /**
-     * The plasma value at ([nx], [ny]) in the unit square, **wrapped to `0..1`** — the sum of four sine terms scaled to
-     * a loop. The radial term is measured from the center, which is what gives plasma its concentric heart rather than
-     * a purely woven look.
+     * The plasma value at ([nx], [ny]), **wrapped to `0..1`** — the sum of four sine terms scaled to a loop. The radial
+     * term is measured from the center, which is what gives plasma its concentric heart rather than a purely woven
+     * look.
+     *
+     * **Both coordinates are shares of the frame's *width*, so [ny] runs past `1` on a taller frame.** Passing the
+     * plain `y` share instead spreads the same number of wave cycles over a phone's whole height, which is more than
+     * twice the pixels the same count gets across it — every swell drawn two and a bit times taller than it is wide,
+     * and the radial term an ellipse. It reads as a smeared plasma rather than as a wrong one, which is why it stood.
      */
     internal fun sample(nx: Float, ny: Float, frequency: Float, phases: Phases): Float {
         val radial = hypot(nx - 0.5f, ny - 0.5f)
