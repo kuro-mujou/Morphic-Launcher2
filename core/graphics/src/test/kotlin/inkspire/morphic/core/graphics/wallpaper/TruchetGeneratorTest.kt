@@ -37,4 +37,17 @@ class TruchetGeneratorTest {
         val b = TruchetGenerator.orientations(10, 10, seed = 2L)
         assertTrue(!a.contentEquals(b))
     }
+
+    @Test
+    fun `the default thickness is the weight this design shipped with`() {
+        assertEquals(0.34f, TruchetGenerator.arcWidthFraction(0.5f), 0.005f)
+    }
+
+    @Test
+    fun `the thinnest setting is still a line, and the widest closes the maze`() {
+        assertTrue("a Truchet with no ink is a flat frame", TruchetGenerator.arcWidthFraction(0f) > 0f)
+        assertTrue("the widest arcs must meet", TruchetGenerator.arcWidthFraction(1f) > 0.8f)
+        assertEquals(TruchetGenerator.arcWidthFraction(0f), TruchetGenerator.arcWidthFraction(-1f), 1e-6f)
+        assertEquals(TruchetGenerator.arcWidthFraction(1f), TruchetGenerator.arcWidthFraction(2f), 1e-6f)
+    }
 }

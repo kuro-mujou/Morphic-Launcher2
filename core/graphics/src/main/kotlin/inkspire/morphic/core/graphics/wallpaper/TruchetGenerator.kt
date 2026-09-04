@@ -7,6 +7,7 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.random.Random
 
 /**
@@ -19,18 +20,23 @@ import kotlin.random.Random
  * run on across the grid with no breaks — the pattern is emergent, not authored. The arc color climbs the palette down
  * the frame so the maze shifts hue top to bottom, drawn over the lightest stop as a ground.
  *
- * **[DesignParams.density] sets the grid size** — a few bold loops or a fine weave. Deterministic in [seed]: every
- * cell's orientation is drawn from it.
+ * **[DesignParams.density] sets the grid size** — a few bold loops or a fine weave — and [DesignParams.scale] the
+ * weight of the line that draws them, which is a different picture at the same grid: a fine tracery, the ribbon this
+ * design shipped with, or a maze whose arcs swell until the ground between them is the pattern instead. Deterministic
+ * in [seed]: every cell's orientation is drawn from it.
  *
- * [orientations] is pure and tested — the per-cell coin flips are what a recipe reproduces, and their count and
- * determinism need no canvas.
+ * [orientations] and [arcWidthFraction] are pure and tested — the per-cell coin flips are what a recipe reproduces,
+ * and a line weight that quietly closed the maze would be a solid frame with a plausible reason.
  */
 object TruchetGenerator : Generator {
 
     /** What [DesignParams.density] resolves to for this design — the count, and the *Resolution* slider's own range. */
     private val Amount = AmountKnob.Count("Resolution", 4..14)
 
-    override val style = DesignStyle(amount = Amount)
+    override val style = DesignStyle(
+        amount = Amount,
+        scale = "Thickness",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val cols = gridSize(params.density)
@@ -45,7 +51,7 @@ object TruchetGenerator : Generator {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
-            strokeWidth = min(cellW, cellH) * ArcWidthFraction
+            strokeWidth = min(cellW, cellH) * arcWidthFraction(params.scale)
         }
         val radius = min(cellW, cellH) / 2f
 
@@ -92,10 +98,26 @@ object TruchetGenerator : Generator {
     }
 
     /** Every arc is a quarter circle, in degrees — a Truchet tile's arc runs corner to corner of one cell. */
+    /**
+     * How wide an arc is drawn at [scale], as a share of its cell — a tracery at `0`, and at `1` wide enough that the
+     * arcs meet across the cell and the ground reads as the pattern.
+     *
+     * Curved so the field's `0.5` lands on the weight this design shipped with, and floored so the thinnest setting is
+     * still a line rather than nothing — a Truchet with no ink is a flat frame, and the knob that produced it would
+     * look like a broken design rather than an empty one.
+     */
+    internal fun arcWidthFraction(scale: Float): Float =
+        MinArcWidth + (MaxArcWidth - MinArcWidth) * scale.coerceIn(0f, 1f).pow(ArcWidthCurve)
+
     private const val QuarterTurn = 90f
 
     /** Arc stroke as a fraction of the cell — thick enough to read as ribbons of the maze, not hairlines. */
-    private const val ArcWidthFraction = 0.34f
+    /** The arc's width as a share of its cell at [DesignParams.scale]'s two ends, and the exponent centring it. */
+    private const val MinArcWidth = 0.04f
+    private const val MaxArcWidth = 0.9f
+
+    /** Chosen so the field's `0.5` resolves to `0.34` of a cell, the weight this design shipped with. */
+    private const val ArcWidthCurve = 1.52f
 
     /** The lowest point on the ramp an arc is colored from, so even the top row sits in the darker, legible half. */
     private const val ArcRampFloor = 0.45f
