@@ -3,6 +3,7 @@ package inkspire.morphic.core.graphics.wallpaper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 
 /**
  * The wedge count and the bearing-to-wedge mapping — the index must tile the full turn, never run off the palette, and
@@ -12,6 +13,9 @@ class RaysGeneratorTest {
 
     /** A tall phone: 1080×2400. Every aspect-sensitive case is measured on one, since a square frame hides the bug. */
     private val phone = 2400f / 1080f
+
+    /** An even fan of [rays] wedges — what the design draws at irregularity `0`. */
+    private fun even(rays: Int) = RaysGenerator.edges(rays, 0f, Random(1))
 
     @Test
     fun `density maps to the ray count range`() {
@@ -27,7 +31,7 @@ class RaysGeneratorTest {
         while (nx <= 1f) {
             var ny = 0f
             while (ny <= 1f) {
-                val w = RaysGenerator.wedge(nx, ny, 0.4f, 0.6f, rays, phone)
+                val w = RaysGenerator.wedge(nx, ny, 0.4f, 0.6f, even(rays), phone)
                 assertTrue("wedge $w out of range", w in 0 until rays)
                 ny += 0.05f
             }
@@ -47,9 +51,9 @@ class RaysGeneratorTest {
     @Test
     fun `a bearing off the axes is the one on the screen`() {
         val rays = 360
-        val right = RaysGenerator.wedge(0.5f + 0.2f, 0.5f, 0.5f, 0.5f, rays, phone)
+        val right = RaysGenerator.wedge(0.5f + 0.2f, 0.5f, 0.5f, 0.5f, even(rays), phone)
         // Equal pixel offsets across and down — a true 45° on the display, whatever the frame's proportions.
-        val diagonal = RaysGenerator.wedge(0.5f + 0.2f, 0.5f + 0.2f / phone, 0.5f, 0.5f, rays, phone)
+        val diagonal = RaysGenerator.wedge(0.5f + 0.2f, 0.5f + 0.2f / phone, 0.5f, 0.5f, even(rays), phone)
         assertEquals(45f, Math.floorMod(diagonal - right, rays).toFloat(), 1f)
     }
 
@@ -58,8 +62,32 @@ class RaysGeneratorTest {
         val rays = 8
         // Diagonally opposite points, one pixel-diagonal either side of the centre — half a turn, four wedges of eight.
         // Chosen off the ±π seam, where a wedge boundary legitimately sits, so this tests the mapping and not the edge.
-        val northEast = RaysGenerator.wedge(0.9f, 0.5f - 0.4f / phone, 0.5f, 0.5f, rays, phone)
-        val southWest = RaysGenerator.wedge(0.1f, 0.5f + 0.4f / phone, 0.5f, 0.5f, rays, phone)
+        val northEast = RaysGenerator.wedge(0.9f, 0.5f - 0.4f / phone, 0.5f, 0.5f, even(rays), phone)
+        val southWest = RaysGenerator.wedge(0.1f, 0.5f + 0.4f / phone, 0.5f, 0.5f, even(rays), phone)
         assertEquals(rays / 2, Math.floorMod(northEast - southWest, rays))
+    }
+
+    @Test
+    fun `unevenness zero is a fan of exactly equal wedges`() {
+        val edges = RaysGenerator.edges(8, 0f, Random(7))
+        edges.forEachIndexed { i, edge -> assertEquals(i / 8f, edge, 1e-6f) }
+    }
+
+    /**
+     * The edges have to stay in order and no wedge may collapse, or a ray turns inside out. Held by the travel bound
+     * alone rather than by a check, so it is worth pinning across counts and seeds.
+     */
+    @Test
+    fun `however uneven, the edges ascend and every wedge keeps a share`() {
+        for (rays in listOf(4, 7, 16)) {
+            for (seed in 1L..40L) {
+                val edges = RaysGenerator.edges(rays, 1f, Random(seed))
+                assertEquals("the fan has to start somewhere", 0f, edges[0], 1e-6f)
+                for (i in 1 until edges.size) {
+                    assertTrue("edge $i out of order at rays=$rays seed=$seed", edges[i] > edges[i - 1])
+                }
+                assertTrue("the last edge must leave the closing wedge room", edges.last() < 1f)
+            }
+        }
     }
 }

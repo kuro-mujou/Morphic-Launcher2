@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
+import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.random.Random
 
@@ -28,7 +29,10 @@ object RingsGenerator : Generator {
     /** What [DesignParams.density] resolves to for this design — the count, and the *Rings* slider's own range. */
     private val Amount = AmountKnob.Count("Rings", 4..18)
 
-    override val style = DesignStyle(amount = Amount)
+    override val style = DesignStyle(
+        amount = Amount,
+        irregularity = "Wobble",
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val random = Random(seed)
@@ -36,6 +40,9 @@ object RingsGenerator : Generator {
         val cx = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
         val cy = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
         val rings = ringCount(params.density)
+        // Drawn after the centre, so a stored recipe's rings stay where they were before the knob existed.
+        val harmonics = SeededHarmonics(WobbleWeights, WobbleHarmonics, random)
+        val amplitude = params.irregularity.coerceIn(0f, 1f) * MaxWobble
         // A ring has to be round on the screen rather than in the unit square — see [ringFraction].
         val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
         val perUnit = ringsPerUnit(rings, heightOverWidth)
@@ -45,8 +52,12 @@ object RingsGenerator : Generator {
             val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
+                // The bearing is taken in the same screen metric the distance is, or the lobes would be lopsided
+                // exactly where the rings used to be.
+                val bearing = atan2((ny - cy) * heightOverWidth, nx - cx)
+                val wobble = 1f + amplitude * harmonics.at(bearing)
                 pixels[y * width + x] = LinearGradientGenerator.colorLooping(
-                    ringFraction(nx, ny, cx, cy, heightOverWidth, perUnit),
+                    ringFraction(nx, ny, cx, cy, heightOverWidth, perUnit, wobble),
                     palette,
                 )
             }
@@ -70,6 +81,11 @@ object RingsGenerator : Generator {
      * wide, at every setting, for as long as the design has existed. [heightOverWidth] scales the vertical share back
      * into the horizontal one, which makes the metric isotropic, and [perUnit] carries the ring pitch — see
      * [ringsPerUnit]. Nothing reports it, because a field of concentric ellipses is still a plausible ripple.
+     *
+     * **[wobble] scales the measured distance, which is what keeps the rings from crossing.** A factor on the radius
+     * is a monotonic stretch along each bearing, so however far the lobes swing, ring `n` stays inside ring `n + 1` —
+     * where displacing each ring's radius by its own amount would let two of them meet and the ripple would tear. `1`
+     * is a perfect circle.
      */
     internal fun ringFraction(
         nx: Float,
@@ -78,8 +94,9 @@ object RingsGenerator : Generator {
         cy: Float,
         heightOverWidth: Float,
         perUnit: Float,
+        wobble: Float = 1f,
     ): Float {
-        val distance = hypot(nx - cx, (ny - cy) * heightOverWidth) * perUnit
+        val distance = hypot(nx - cx, (ny - cy) * heightOverWidth) * perUnit * wobble
         return distance - distance.toInt()
     }
 
@@ -99,4 +116,16 @@ object RingsGenerator : Generator {
 
     /** How far off the edge the center is kept, so the rings sweep across the frame rather than sitting in a corner. */
     private const val CenterInset = 0.15f
+
+    /**
+     * How far the radius may swing at [DesignParams.irregularity] `1`, as a share of itself.
+     *
+     * Well under `1`, so the factor can never reach zero and turn a ring inside out; at this ceiling the rings read as
+     * hand-drawn echoes rather than as a target, which is the whole point of giving a radial design an organic axis.
+     */
+    private const val MaxWobble = 0.22f
+
+    /** Which harmonics lobe the rings and how much each contributes — low ones, so a ring bends rather than crinkles. */
+    private val WobbleHarmonics = floatArrayOf(2f, 3f, 5f)
+    private val WobbleWeights = floatArrayOf(0.55f, 0.28f, 0.17f)
 }
