@@ -241,4 +241,16 @@ enum class WallpaperDesign {
      */
     @SerialName("modernMosaic")
     MODERN_MOSAIC,
+
+    /**
+     * A fan of long rounded bars sweeping across the frame, each carrying a gradient along its own length.
+     *
+     * **[TRUCHET]'s neighbour and not its rival.** That one tiles the frame with quarter-arcs that *join* into a maze;
+     * this lays a set of separate capsules side by side and gives each its own angle, so they radiate rather than
+     * connect. [DesignParams.rotation] is that fan — at `0` the bars stay parallel and the picture is a stack of
+     * stripes — and [DesignParams.roundness] is their length, which at `1` has shortened every one to its own cap and
+     * left a column of circles.
+     */
+    @SerialName("roundedTiles")
+    ROUNDED_TILES,
 }

@@ -257,33 +257,12 @@ class GeneratorRenderHarness {
     }
 
     /**
-     * Every design that reads [DesignParams.scale], at both ends — the family the other sweeps had left uncovered.
-     *
-     * It earned one on the Layered Waves rebuild, where `scale` is *Variation* and its `0` is the design's whole
-     * rigid end: the two band layouts go exactly even, so every crest goes flat and the frame is a stack of straight
-     * stripes. That is a claim about the picture, and nothing here could render it.
-     *
-     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     * [DesignParams.scale], at both ends — how much room a design's elements take, which on Rounded Tiles runs from
+     * bars overlapping into one another to thin ones on a wide ground.
      */
     @Test
-    fun renderScaleSweep() {
-        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
-        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
-        val designs = WallpaperDesign.entries.filter { Generators.forDesign(it).style.scale != null }
-
-        for (scale in floatArrayOf(0f, 1f)) {
-            for (design in designs) {
-                val bitmap = Generators.forDesign(design).render(
-                    width = 1080,
-                    height = 2400,
-                    palette = moded,
-                    params = DesignParams(scale = scale, colorMode = WallpaperColorMode.BICHROMATIC),
-                    seed = 42L,
-                )
-                save(resolver, "scale_${(scale * 100).toInt()}_${design.name}.png", bitmap)
-                bitmap.recycle()
-            }
-        }
+    fun renderScaleSweep() = sweepFraction("scale", floatArrayOf(0f, 1f), { it.scale }) { params, v ->
+        params.copy(scale = v)
     }
 
     /**
