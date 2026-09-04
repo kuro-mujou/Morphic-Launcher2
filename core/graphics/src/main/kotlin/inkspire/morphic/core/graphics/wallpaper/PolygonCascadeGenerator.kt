@@ -11,10 +11,8 @@ import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -154,23 +152,8 @@ object PolygonCascadeGenerator : Generator {
         val ring = ring(shape)
         val wobble = Wobble(params.irregularity.coerceIn(0f, 1f) * MaxWobble, random)
 
-        // Their two nudge pads, seeded — a heading and a run, the segment centred on the frame.
-        //
-        // **The heading is drawn uniformly in the frame's own space, not in the plane.** A uniform angle sends a
-        // cascade across a phone-shaped wallpaper as often as down it, and a run across leaves two thirds of the
-        // frame empty; stretching the draw by the frame's own proportions makes a tall frame mostly draw tall
-        // cascades without ever forbidding the others. The run is then a share of the frame's extent along whichever
-        // heading came up, so the long way round gets the long travel.
-        val bearing = random.nextFloat() * TwoPi
-        val across = cos(bearing) * width
-        val down = sin(bearing) * height
-        val span = hypot(across, down)
-        val headingX = across / span
-        val headingY = down / span
-        val run = (abs(headingX) * width + abs(headingY) * height) *
-            (MinRun + random.nextFloat() * (MaxRun - MinRun))
-        val firstX = width / 2f - headingX * run / 2f
-        val firstY = height / 2f - headingY * run / 2f
+        // Their two nudge pads, seeded — see [TweenRun], which Flow Lines shares.
+        val march = tweenRun(width, height, random)
 
         val firstRadius = shortSide * (MinSize + (MaxSize - MinSize) * params.scale.coerceIn(0f, 1f))
         val lastRadius = firstRadius * (1f - MaxTaper * params.taper.coerceIn(0f, 1f))
@@ -202,8 +185,8 @@ object PolygonCascadeGenerator : Generator {
             }
             val path = ringPath(
                 ring = ring,
-                cx = firstX + headingX * run * t,
-                cy = firstY + headingY * run * t,
+                cx = march.firstX + (march.lastX - march.firstX) * t,
+                cy = march.firstY + (march.lastY - march.firstY) * t,
                 radius = radius,
                 turn = if (shape == CascadeShape.CIRCLE) 0f else turn * t,
                 wobble = wobble,
@@ -317,16 +300,10 @@ object PolygonCascadeGenerator : Generator {
      * never which way — the seeded stream does not shift underneath it.
      */
     private class Wobble(private val amplitude: Float, random: Random) {
-        private val phases = FloatArray(WobbleHarmonics.size) { random.nextFloat() * TwoPi }
+        private val harmonics = SeededHarmonics(WobbleWeights, WobbleHarmonics, random)
 
         /** The factor the radius at [angle] is multiplied by — exactly `1` everywhere at amplitude zero. */
-        fun at(angle: Float): Float {
-            var sum = 0f
-            for (h in WobbleHarmonics.indices) {
-                sum += WobbleWeights[h] * sin(phases[h] + WobbleHarmonics[h] * angle)
-            }
-            return 1f + amplitude * sum
-        }
+        fun at(angle: Float): Float = 1f + amplitude * harmonics.at(angle)
     }
 
     private const val TwoPi = 2f * PI.toFloat()
@@ -357,10 +334,6 @@ object PolygonCascadeGenerator : Generator {
     /** How much of the first copy's size the taper may take at [DesignParams.depth] `1` — never all of it. */
     private const val MaxTaper = 0.92f
 
-    /** The cascade's run as a share of the frame's extent along its heading, at the two ends of the seed's draw. */
-    private const val MinRun = 0.55f
-    private const val MaxRun = 0.80f
-
     /**
      * The corner radius at full [DesignParams.roundness], as a share of a copy's own circumradius — the reference's
      * rectangle, whose corners measure `0.3` of its short side, lands almost exactly here.
@@ -390,7 +363,7 @@ object PolygonCascadeGenerator : Generator {
     private const val MaxWobble = 0.14f
 
     /** The harmonics the wobble is built from, and how much of the deflection each carries (the weights sum to `1`). */
-    private val WobbleHarmonics = intArrayOf(3, 5, 7)
+    private val WobbleHarmonics = floatArrayOf(3f, 5f, 7f)
     private val WobbleWeights = floatArrayOf(0.5f, 0.3f, 0.2f)
 
     /**
