@@ -81,9 +81,15 @@ import kotlinx.serialization.Serializable
  * ("a design exposing both a Coverage and a Spacing has two members of one family and one field, and the coverage
  * wins"); this is that field, for the half that loses.
  *
- * **`0` is no change**, in keeping with every other fraction here — a run whose elements are all one size — with the
- * far end shrinking away as it climbs. A design with no run, or one whose elements are all the same size by nature,
- * ignores it exactly as a size-less design ignores [scale].
+ * **`0` is no change**, in keeping with every other fraction here — every element the size [scale] asks for — with
+ * the departure growing as it climbs. A design whose elements are all one size by nature ignores it exactly as a
+ * size-less design ignores [scale].
+ *
+ * **Its second consumer widened it from a *run* to a *spread*, which is the shape it should have had.** The cascade
+ * spends it along a line, first copy to last; Soft Overlaps has no run at all and spends it as the reference's *Size
+ * variation* — how far each blob's size departs from [scale], at random. Both are "the elements are not all one
+ * size", both are `0` when they are, and neither is expressible as [scale]; that the first consumer happened to
+ * order its departure along a line is a fact about the cascade rather than about the field.
  *
  * **It exists because [depth] was the wrong place for it, and four designs say so.** The cascade's taper sat on
  * [depth] while that field is what Louvers, Metaballs, Waves and Topography's relief all spend on a knob they each
@@ -135,9 +141,9 @@ import kotlinx.serialization.Serializable
  *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
  * @property rotation which way the design points or how far it turns, `0..1` — `0` is untouched (square-on, every
  *   copy aligned) and `1` is as far as this design turns. A design with no orientation ignores it. See the class note.
- * @property taper how much the design's elements change size along its run, `0..1` — `0` is no change at all (every
- *   element the size [scale] asks for) and `1` is the far end shrunk almost away. A design with no run ignores it.
- *   See the class note.
+ * @property taper how far the design's elements depart in size from [scale], `0..1` — `0` is no departure at all
+ *   (every element exactly that size); a design orders the departure along its run or spreads it at random, as it
+ *   likes. A design whose elements are all one size ignores it. See the class note.
  * @property finish which of a design's *finishes* is chosen, by index — how its marks are painted (outlined or
  *   filled, and how they blend), as against [variant]'s what-shape and [colorLayout]'s where-the-colors-go. `0` is
  *   the design's own default finish; a design that paints one way ignores it. See the class note.

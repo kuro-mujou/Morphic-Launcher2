@@ -25,9 +25,9 @@ import kotlin.math.roundToInt
  * @property scale the design's own word for its size knob (*Spread*, *Size*, *Margin*), driven by
  *   [DesignParams.scale] — null where the design's elements have no size to set. A label rather than a knob, for
  *   [irregularity]'s reason: the control is always the same `0..1` fraction and only the word changes.
- * @property taper the design's own word for the size at the far end of its run (*Taper*, *End area*, *End spread*),
- *   driven by [DesignParams.taper] — null where the design has no run, which is most of them. A label, for
- *   [irregularity]'s reason.
+ * @property taper the design's own word for how far its elements depart in size from [scale] (*Taper*,
+ *   *Size variation*, *End area*), driven by [DesignParams.taper] — null where a design's elements are all one size.
+ *   A label, for [irregularity]'s reason.
  * @property irregularity the design's own word for its organic-noise knob (*Curl*, *Scatter*, *Refraction*), driven by
  *   [DesignParams.irregularity] — null where the design is rigid by nature and ignores it. **A label rather than a
  *   knob**, because unlike the amount this control is the same everywhere: a `0..1` fraction, rigid to chaotic. Only
