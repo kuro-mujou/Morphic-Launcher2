@@ -123,4 +123,56 @@ class VoronoiGeneratorTest {
         // Nothing but ground: no scale separates a cell from the seam, so the ramp is left alone.
         assertEquals(1f, VoronoiGenerator.fillCeiling(1), 1e-6f)
     }
+
+    /**
+     * The layouts have to be three pictures, not one — the failure a chooser can carry silently, since a layout that
+     * quietly draws its neighbor's picture still looks like a mosaic.
+     */
+    @Test
+    fun `each color layout paints a different set of cells`() {
+        val drawn = (0..2).map { layout ->
+            VoronoiGenerator.sites(24, 0.5f, palette, seed = 11L, layout = layout).map { it.argb }
+        }
+
+        assertTrue("radial drew what vertical drew", drawn[0] != drawn[1])
+        assertTrue("scattered drew what vertical drew", drawn[0] != drawn[2])
+        assertTrue("scattered drew what radial drew", drawn[1] != drawn[2])
+    }
+
+    /**
+     * Picking a layout must move the colors and nothing else. The cells themselves come off a stream of their own, so
+     * a layout that drew from it — even once — would rearrange the whole mosaic underneath a knob labelled *Colors*.
+     */
+    @Test
+    fun `a layout moves the colors and leaves the cells where they are`() {
+        val places = (0..2).map { layout ->
+            VoronoiGenerator.sites(24, 0.5f, palette, seed = 11L, layout = layout).map { it.x to it.y }
+        }
+
+        assertEquals(places[0], places[1])
+        assertEquals(places[0], places[2])
+    }
+
+    /**
+     * The radial layout measures on the screen, not in the unit square — so on a tall frame a cell directly above the
+     * middle and one the same number of *pixels* to its side read the same place on the ramp. Measured off-axis for
+     * [RaysGeneratorTest]'s reason would not help here; what shows the bug is the two axes disagreeing at equal pixel
+     * distances, which is exactly what the unit square gets wrong.
+     */
+    @Test
+    fun `the radial layout measures its distance on the screen`() {
+        val phone = 2400f / 1080f
+        val across = VoronoiGenerator.rampPosition(1, 0.5f + 0.3f, 0.5f, 0f, phone)
+        val down = VoronoiGenerator.rampPosition(1, 0.5f, 0.5f + 0.3f / phone, 0f, phone)
+
+        assertEquals(across, down, 1e-5f)
+    }
+
+    /** The middle of the frame opens the ramp and a corner closes it, which is what makes the radial layout a bloom. */
+    @Test
+    fun `the radial layout runs from the middle of the frame to its corner`() {
+        val phone = 2400f / 1080f
+        assertEquals(0f, VoronoiGenerator.rampPosition(1, 0.5f, 0.5f, 0f, phone), 1e-6f)
+        assertEquals(1f, VoronoiGenerator.rampPosition(1, 0f, 0f, 0f, phone), 1e-5f)
+    }
 }

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
+import kotlin.math.hypot
 import kotlin.random.Random
 
 /**
@@ -32,12 +33,15 @@ import kotlin.random.Random
  * lost its seams exactly there: flat blobs, which is the thing the seams exist to prevent, in the third of the frame
  * where it is least noticeable as a *fault* and most noticeable as the design going soft.
  *
- * **Each cell is the palette gradient at its seed's height, jittered a shade** (via [LinearGradientGenerator.colorAt],
+ * **Each cell is the palette gradient somewhere along it, jittered a shade** (via [LinearGradientGenerator.colorAt],
  * so a mosaic and a plain gradient of the same palette agree about the ramp — the shared derivation Facets keeps too).
+ * *Where* along it is [DesignParams.colorLayout] — see [rampPosition]. Until the quality pass there was no such
+ * chooser and the answer was always the seed's **height**: a good layout, and for a design whose whole subject is
+ * where its cells sit, a thin one to be the only one — every design driven against the reference got the pick.
  * [DesignParams.density] sets how many cells there are, and [DesignParams.irregularity] how *evenly* they are placed:
  * the seeds come from [PointScatter], a lattice at low irregularity (an even honeycomb) scattering to a crazed one at
- * high. Deterministic in [seed]: seed positions and their color jitter are drawn from seeded
- * `Random`s, so a recipe reproduces and a shuffle is a new seed.
+ * high. Deterministic in [seed]: seed positions, their color jitter and the scattered layout's draws are taken from
+ * seeded `Random`s, so a recipe reproduces and a shuffle is a new seed.
  *
  * [siteCount], [sites] and [nearestSite] are pure and tested — which seed owns a pixel is index arithmetic that is
  * silently wrong (a wallpaper of one flat color) long before a bitmap could show it.
@@ -50,6 +54,7 @@ object VoronoiGenerator : Generator {
     override val style = DesignStyle(
         amount = Amount,
         irregularity = "Irregularity",
+        colorLayout = VariantKnob("Colors", listOf("Vertical", "Radial", "Scattered")),
     )
 
     /** One seed: where it sits in the unit square, and the flat color its cell is filled with. */
@@ -59,7 +64,14 @@ object VoronoiGenerator : Generator {
         // The cells have to be shaped by the screen at both steps: the lattice is laid for the frame and the
         // ownership below is measured in it — see [nearestSite].
         val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
-        val sites = sites(siteCount(params.density), params.irregularity, palette, seed, heightOverWidth)
+        val sites = sites(
+            siteCount(params.density),
+            params.irregularity,
+            palette,
+            seed,
+            heightOverWidth,
+            params.colorLayout,
+        )
         val seam = palette.colorAt(palette.size - 1) // the darkest stop by convention — the leading between cells
 
         // Which seed owns each pixel, one pass, so the next pass can find a boundary by comparing neighbors.
@@ -90,13 +102,16 @@ object VoronoiGenerator : Generator {
 
     /**
      * [count] seeds for [seed] — positions from [PointScatter.gridJitter] at [irregularity] (a lattice when even, a
-     * scatter when irregular), each cell colored by the palette gradient at the seed's height nudged by up to
-     * [ColorJitter] so cells at the same height still separate, over the span [fillCeiling] leaves it.
+     * scatter when irregular), each cell colored by the palette gradient where [layout] puts it ([rampPosition]),
+     * nudged by up to [ColorJitter] so two cells landing on the same place still separate, over the span
+     * [fillCeiling] leaves them.
      *
-     * The shade jitter runs on a **salted stream of its own**, independent of the position stream, so it stays fixed as
-     * the position knob slides. (A cell's *base* color still tracks its height, by design — a cell that moves down the
-     * frame is colored for where it lands — so the salt keeps the shade stable, not the whole color.) One recipe is one
-     * fixed mosaic.
+     * The shade jitter and the scattered layout's draws each run on a **salted stream of their own**, independent of
+     * the position stream, so they stay fixed as the position knob slides. (A cell's *base* color still tracks where
+     * it sits, by design — a cell that moves is colored for where it lands — so the salt keeps the shade stable, not
+     * the whole color.) The scatter is drawn for every cell whatever the layout is, for the same reason one wedge of
+     * [RaysGenerator] draws whatever its knob says: a stream that advanced only sometimes would make one layout's
+     * colors depend on which layout had been asked for.
      */
     internal fun sites(
         count: Int,
@@ -104,17 +119,46 @@ object VoronoiGenerator : Generator {
         palette: Palette,
         seed: Long,
         heightOverWidth: Float = 1f,
+        layout: Int = LayoutVertical,
     ): List<Site> {
         val positions = PointScatter.gridJitter(count, irregularity, seed, heightOverWidth)
         val shadeRandom = Random(seed xor ColorSalt)
+        val scatterRandom = Random(seed xor ScatterSalt)
         val ceiling = fillCeiling(palette.size)
         return List(count) { i ->
             val x = positions[i * 2]
             val y = positions[i * 2 + 1]
             val shade = (shadeRandom.nextFloat() * 2f - 1f) * ColorJitter
-            Site(x, y, LinearGradientGenerator.colorAt((y + shade).coerceIn(0f, 1f) * ceiling, palette))
+            val scattered = scatterRandom.nextFloat()
+            val along = rampPosition(layout, x, y, scattered, heightOverWidth) + shade
+            Site(x, y, LinearGradientGenerator.colorAt(along.coerceIn(0f, 1f) * ceiling, palette))
         }
     }
+
+    /**
+     * Where on the ramp a cell at ([x], [y]) reads, `0..1`, for [layout] — before the shade jitter and before
+     * [fillCeiling] scales the result.
+     *
+     * - **Vertical** is the seed's height, which is what this design drew before it had a chooser at all, so `0`
+     *   leaves every stored recipe on the mosaic it was saved as.
+     * - **Radial** is its distance from the middle of the frame over the distance to a corner, so the palette opens
+     *   at the center and darkens outward — a bloom rather than a wash, and the layout that stops the mosaic reading
+     *   as a gradient someone cut up.
+     * - **Scattered** is [scattered], a draw of its own, so a cell's color says nothing about where it sits. That is
+     *   the stained-glass reading, and the only one of the three where a cell's neighbors are no guide to it.
+     *
+     * **The radial distance is measured on the screen, not in the unit square** — [heightOverWidth] for
+     * [nearestSite]'s reason, and it shows more here than there: without it the bloom would be an ellipse on a phone
+     * while the cells around it stayed round, which reads as the color and the geometry belonging to two different
+     * pictures.
+     */
+    internal fun rampPosition(layout: Int, x: Float, y: Float, scattered: Float, heightOverWidth: Float): Float =
+        when (layout) {
+            LayoutRadial ->
+                hypot(x - Center, (y - Center) * heightOverWidth) / hypot(Center, Center * heightOverWidth)
+            LayoutScattered -> scattered
+            else -> y
+        }
 
     /**
      * How far down the ramp a cell's fill may reach, for a palette of [stops] — the scale a `0..1` position is read
@@ -178,4 +222,19 @@ object VoronoiGenerator : Generator {
 
     /** Salts the shade-jitter stream apart from position generation, so it stays fixed as the irregularity knob slides. */
     private const val ColorSalt = 0x9E3779B9L
+
+    /** Salts the scattered layout's stream apart from both the others, so picking a layout moves nothing but color. */
+    private const val ScatterSalt = 0x517CC1B7L
+
+    /** The middle of the frame, which the *Radial* layout measures from. */
+    private const val Center = 0.5f
+
+    /** [DesignParams.colorLayout] selecting the ramp read down the frame — what this design drew before the chooser. */
+    private const val LayoutVertical = 0
+
+    /** [DesignParams.colorLayout] selecting the ramp read outward from the middle of the frame. */
+    private const val LayoutRadial = 1
+
+    /** [DesignParams.colorLayout] selecting a place on the ramp per cell, unrelated to where the cell sits. */
+    private const val LayoutScattered = 2
 }
